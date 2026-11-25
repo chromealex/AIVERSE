@@ -15,6 +15,50 @@ python3 tools/skills/catalog.py plan --skills meta-economy,meta-social --side cl
 а не интерпретатор произвольного GDD. Для неоднозначных запросов выбирайте точные IDs
 из результатов поиска. Клиентский план не подключает серверные политики.
 
+## World Processes — 10 отдельных скиллов
+
+Все десять механик регистрируются через **существующий**
+`tools/skills/catalog.py` в едином `skills/catalog.json`.
+Отдельного ручного индекса нет. Общий скилл
+`aiverse-world-processes` используется для композиции нескольких
+механик, специализированный — для работы с одной системой.
+
+| Система | ID скилла | Назначение |
+|---|---|---|
+| ECHO | `aiverse-echo` | Зоны, порталы и игровая слышимость |
+| FRACTURE | `aiverse-fracture` | Опоры, связи, обрушения |
+| AETHER | `aiverse-aether` | Газ, дым, кислород, вентиляция |
+| MORPH | `aiverse-morph` | Деформации, пружины, импульсы |
+| CROWD | `aiverse-crowd` | Толпы, слоты, NavMesh |
+| IMPRINT | `aiverse-imprint` | Следы, запах, перенос и затухание |
+| CIRCUIT | `aiverse-circuit` | Электросети и устройства |
+| GRANULAR | `aiverse-granular` | Сыпучий материал, сетки, TerraWeave |
+| EVOLVE | `aiverse-evolve` | Экологические регионы, PHYSIS |
+| SOCIETY | `aiverse-society` | Знания, слухи и события NPC |
+
+Примеры маршрутизации:
+
+```sh
+python3 tools/skills/catalog.py search "деформации пружина"
+python3 tools/skills/catalog.py search "npc rumors trust"
+python3 tools/skills/catalog.py plan --skills aiverse-circuit,aiverse-evolve --side both
+python3 tools/skills/catalog.py check
+```
+
+В каталоге они помечены как `domain: gameplay`, `side: tools`,
+`runtime: none`, поскольку подключают **существующие native ECS
+компоненты**, а не создают десять новых CMake-библиотек.
+В прикладном проекте нужно компилировать модуль
+`examples/native/world_processes/` и подключать его через
+`rules.json.nativeModules`. Для визуальной/физической интеграции
+выбираются только уже существующие владельцы (Box3D, PHYSIS,
+TerraWeave, Renderer3D), не автоматически весь движок.
+
+**Текущий статус:** исходники этапов 11–28 и скиллы сохранены в
+черновом PR #112. Проверка сборкой и визуальный QA отложены
+по запросу пользователя; старые зелёные тесты не подтверждают
+новые механики. До тестов не переводить PR из DRAFT.
+
 ## Мета-сервер
 
 ```cmake

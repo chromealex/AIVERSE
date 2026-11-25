@@ -1,9 +1,13 @@
 #include "apps/editor/core/DocumentLightIdentity.h"
 #include "MapDoc.h"
+#include "ProjectFileEdits.h"
+#include "engine/pack/Sha256.h"
 #include "TerrainOps.h"
 #include <cstring>
 #include "engine/view/game/GameTerrainDetail.h"
 #include <algorithm>
+#include <atomic>
+#include <stdexcept>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
@@ -18,6 +22,10 @@
 namespace aiverse::editor {
 
 namespace {
+std::string mapFileHash(const std::string& bytes){
+    const auto hash=pack::sha256(bytes.data(),bytes.size());
+    return pack::toHex(hash.data(),hash.size());
+}
 // keys the structured part owns; everything else round-trips through `extra`
 const char* kOwnedKeys[] = {"name", "size", "roadsOnly", "players", "terrain", "fields", "regions", "entities", "roads", "world"};
 bool owned(const std::string& k) {
@@ -89,9 +97,10 @@ void MapDoc::reset(int w, int h) {
     data.w = w; data.h = h;
     ensureLayers();
     path.clear();
+    savedFileHashes_.clear();savedFileBaselineValid_=false;
     dirty = false;
     ++revision;
-    undo_.clear(); redo_.clear();
+    undo_.clear(); redo_.clear();historyEpoch_=newHistoryEpoch();historyPersistenceWarning_.clear();
 }
 
 std::string MapDoc::cornersPath(const std::string& mapFile, const std::string& rel) {
@@ -116,13 +125,23 @@ std::string MapDoc::cornersFileName() const {
     return "maps/" + stem + ".r16";
 }
 
-bool MapDoc::load(const std::string& file, std::string* err) {
+bool MapDoc::load(const std::string& file, std::string* err) {return loadImpl(file,err,true);}
+bool MapDoc::loadImpl(const std::string& file, std::string* err,bool restoreHistory) {
     try {
-        Json j = Json::parseFile(file);
+        namespace fs=std::filesystem;
+        std::map<fs::path,std::string> hashes;
+        bool complete=true;
+        const auto absolute=[](const std::string& p){return fs::absolute(p).lexically_normal();};
+        const auto raw=readProjectFileBytes(absolute(file));
+        hashes.emplace(absolute(file),mapFileHash(raw));
+        Json j = Json::parse(raw);
         auto read = [&](const std::string& rel, std::string& out) {
-            std::ifstream f(cornersPath(file, rel), std::ios::binary);
-            if (!f) return false;
-            out.assign(std::istreambuf_iterator<char>(f), {});
+            const auto target=absolute(cornersPath(file,rel));
+            try{out=readProjectFileBytes(target);}
+            catch(const std::exception&){complete=false;return false;}
+            const auto digest=mapFileHash(out);
+            const auto [it,inserted]=hashes.emplace(target,digest);
+            if(!inserted&&it->second!=digest)throw std::runtime_error("Map sidecar changed while loading");
             return true;
         };
         if (!game::applyCornersFile(j, read, err)) return false;
@@ -134,7 +153,7 @@ bool MapDoc::load(const std::string& file, std::string* err) {
                 if (!dj || !dj->isObject() || dj->has("blob") || !dj->has("file")) continue;
                 std::string bytes;
                 if (read(dj->getStr("file"), bytes)) dj->set("blob", Json::string(std::move(bytes)));
-                else if (err) *err = "world body detail: cannot read '" + dj->getStr("file") + "' (dropped)";
+                else {complete=false;if(err)*err="world body detail: cannot read '"+dj->getStr("file")+"' (dropped)";}
             }
         if (!loadJson(j, err)) return false;
         // visual detail heightmap (+ splat): kept as int16 / RGBA8 for editing, written back by save()
@@ -145,9 +164,11 @@ bool MapDoc::load(const std::string& file, std::string* err) {
             if (game::terrain::loadMapDetail(j, read, ds, sp, &derr)) {
                 data.detailScale = ds.k; data.detail = game::terrain::detailToInt16(ds); data.detailSplat = std::move(sp);
                 data.detailFile = dj.getStr("file");
-            } else if (err) *err = derr;   // map still opens; the detail is dropped
+            } else {complete=false;if(err)*err=derr;} // map still opens; the detail is dropped
         }
         path = file;
+        savedFileHashes_=std::move(hashes);savedFileBaselineValid_=complete&&(!err||err->empty());
+        if(restoreHistory)restoreHistoryCheckpoint();
         return true;
     } catch (const std::exception& e) {
         if (err) *err = e.what();
@@ -265,8 +286,9 @@ bool MapDoc::loadJson(const Json& j, std::string* err) {
         ensureDocumentLightIds(d.extra,true);
         data = std::move(d);
         dirty = false;
+        savedFileHashes_.clear();savedFileBaselineValid_=false;
         ++revision;
-        undo_.clear(); redo_.clear();
+        undo_.clear(); redo_.clear();historyEpoch_=newHistoryEpoch();historyPersistenceWarning_.clear();
         return true;
     } catch (const std::exception& e) {
         if (err) *err = e.what();
@@ -402,16 +424,123 @@ Json MapDoc::toJson() const {
     return j;
 }
 
+std::vector<ProjectFileEdit> MapDoc::stageExistingSave(const std::filesystem::path& project){
+    return stageSave(project,path,false);
+}
+std::vector<ProjectFileEdit> MapDoc::stageSave(const std::filesystem::path& project,const std::string& file,bool allowCreation){
+    namespace fs=std::filesystem;
+    if(file.empty()||compoundBefore_)throw std::runtime_error("Choose a map file outside an active compound edit");
+    const auto root=fs::canonical(project);
+    const auto targetMap=fs::absolute(file).lexically_normal();
+    const auto mapRelative=targetMap.lexically_relative(root);
+    if(mapRelative.empty()||*mapRelative.begin()!="maps"||targetMap.extension()!=".json")
+        throw std::runtime_error("Choose a map within the project maps directory");
+    const bool newIdentity=path.empty()||fs::absolute(path).lexically_normal()!=targetMap;
+    if(!newIdentity&&!savedFileBaselineValid_)throw std::runtime_error("Map baseline unavailable; reopen the saved map before coordinated save");
+    if(newIdentity){
+        if(!allowCreation||fs::exists(fs::symlink_status(targetMap)))
+            throw std::runtime_error("Save As requires a vacant map output");
+        data.cornersFile.clear();data.detailFile.clear();
+        for(auto& b:data.bodies){b.cornersFile.clear();b.detailFile.clear();}
+        if(!path.empty()){undo_.clear();redo_.clear();historyEpoch_=newHistoryEpoch();}
+    }
+    path=targetMap.string();
+    std::vector<ProjectFileEdit> edits;
+    std::set<fs::path> targets;
+    std::map<fs::path,std::string> nextHashes;
+    size_t bytes=0;
+    const auto append=[&](const std::string& file,const std::string& after){
+        const auto target=fs::absolute(file).lexically_normal();
+        const auto rel=target.lexically_relative(root);
+        const auto status=fs::symlink_status(target);
+        const bool exists=fs::exists(status);
+        const auto ext=target.extension().string();
+        if(rel.empty()||rel.is_absolute()||*rel.begin()!="maps"||
+           (ext!=".json"&&ext!=".r16"&&ext!=".splat")||
+           !fs::is_directory(fs::symlink_status(target.parent_path()))||
+           fs::canonical(target.parent_path())!=target.parent_path()||
+           (exists&&(!fs::is_regular_file(status)||fs::canonical(target)!=target))||
+           (!exists&&!allowCreation)||(newIdentity&&exists))
+            throw std::runtime_error("Unsafe or occupied coordinated map output: "+file);
+        if(!targets.insert(target).second)throw std::runtime_error("Duplicate map sidecar target: "+file);
+        constexpr size_t limit=128u*1024u*1024u;
+        if(after.size()>limit-bytes||(exists&&fs::file_size(target)>limit-bytes-after.size()))
+            throw std::runtime_error("Coordinated map save exceeds snapshot budget");
+        auto before=exists?readProjectFileBytes(target):std::string{};
+        if(!newIdentity){
+            const auto loaded=savedFileHashes_.find(target);
+            if((exists&&(loaded==savedFileHashes_.end()||loaded->second!=mapFileHash(before)))||
+               (!exists&&loaded!=savedFileHashes_.end()))
+                throw std::runtime_error("Map or sidecar changed since load: "+file);
+        }
+        nextHashes.emplace(target,mapFileHash(after));
+        if(before.size()>limit-bytes-after.size())throw std::runtime_error("Coordinated map save exceeds snapshot budget");
+        bytes+=before.size()+after.size();
+        edits.push_back({target,std::move(before),after,{},0,!exists});
+    };
+    for(auto [a,b]:data.roads)
+        for(int i:{a,b})if(data.entities.at(size_t(i)).id.empty())
+            data.entities.at(size_t(i)).id=uniqueId(data.entities.at(size_t(i)).type);
+    auto j=toJson();
+    const auto take=[&](Json& owner,const char* fileKey,const char* blobKey){
+        if(!owner.has(blobKey))return;
+        append(cornersPath(path,owner.getStr(fileKey)),owner[blobKey].str());
+        owner.erase(blobKey);
+    };
+    if(auto* t=j.find("terrain")){
+        take(*t,"cornersFile","cornersBlob");
+        if(t->has("cornersFile"))data.cornersFile=t->getStr("cornersFile");
+        if(auto* detail=t->find("detail")){
+            take(*detail,"file","blob");take(*detail,"splat","splatBlob");
+            data.detailFile=detail->getStr("file");
+        }
+    }
+    if(auto* world=j.find("world");world&&world->find("bodies"))
+        for(size_t i=0;i<world->find("bodies")->size();++i){
+            auto* t=world->find("bodies")->at(i).find("terrain");
+            if(!t)continue;
+            if(auto* detail=t->find("detail")){
+                take(*detail,"file","blob");
+                if(i<data.bodies.size())data.bodies[i].detailFile=detail->getStr("file");
+            }
+            take(*t,"cornersFile","cornersBlob");
+            if(i<data.bodies.size()&&t->has("cornersFile"))data.bodies[i].cornersFile=t->getStr("cornersFile");
+        }
+    append(path,j.dump()+"\n");
+    // Guard removed sidecars as well: an external change must not be
+    // hidden by editing a map so that it no longer references that file.
+    if(!newIdentity)for(const auto& [target,hash]:savedFileHashes_){
+        if(targets.count(target))continue;
+        const auto rel=target.lexically_relative(root);
+        constexpr size_t limit=128u*1024u*1024u;
+        if(rel.empty()||*rel.begin()!="maps"||
+           !fs::is_regular_file(fs::symlink_status(target))||fs::canonical(target)!=target||
+           fs::file_size(target)>(limit-bytes)/2)
+            throw std::runtime_error("Unsafe or oversized retained map dependency");
+        auto before=readProjectFileBytes(target);
+        if(before.size()>(limit-bytes)/2||mapFileHash(before)!=hash)
+            throw std::runtime_error("Removed map dependency changed since load");
+        bytes+=before.size()*2;edits.push_back({target,before,before});
+    }
+    savedFileHashes_=std::move(nextHashes);savedFileBaselineValid_=true;
+    return edits;
+}
+
 bool MapDoc::save(const std::string& file, std::string* err) {
+    std::shared_ptr<void> historyLock;
+    try{historyLock=beginHistorySave(file);}
+    catch(const std::exception& e){if(err)*err=e.what();return false;}
+    savedFileBaselineValid_=false; // legacy save may fail after writing a sidecar
     for (auto [a, b] : data.roads) // roads need ids on their endpoints
         for (int i : {a, b}) if (data.entities[size_t(i)].id.empty()) data.entities[size_t(i)].id = uniqueId(data.entities[size_t(i)].type);
     const std::string oldPath = path, oldCorners = data.cornersFile;
     path = file;  // the default corners file name follows the map file
     namespace fs = std::filesystem;
     std::error_code ec;
-    if (!oldPath.empty() && !fs::equivalent(oldPath, file, ec)) { // "save as": own files
+    const bool saveAs=!oldPath.empty()&&!fs::equivalent(oldPath,file,ec);
+    if (saveAs) { // "save as": own files
         data.cornersFile.clear(); data.detailFile.clear();
-        for (auto& b : data.bodies) b.detailFile.clear();
+        for (auto& b : data.bodies){b.cornersFile.clear();b.detailFile.clear();}
     }
     Json j = toJson();
     if (Json* t = j.find("terrain"); t && t->has("cornersBlob")) {
@@ -461,22 +590,70 @@ bool MapDoc::save(const std::string& file, std::string* err) {
     if (!f) { if (err) *err = "cannot write " + file; path = oldPath; return false; }
     f << j.dump() << "\n";
     if (!f) { if (err) *err = "write failed"; return false; }
+    f.close();
+    if(!f){if(err)*err="cannot close map file";path=oldPath;return false;}
+    // The history marker cannot be retired before the actual map and any
+    // referenced terrain sidecars have reached the filesystem flush boundary.
+    try{
+        auto flush=[&](const Json& terrain){
+            const auto corners=terrain.getStr("cornersFile");
+            if(!corners.empty())syncProjectFilePath(cornersPath(file,corners));
+            const auto& detail=terrain["detail"];
+            for(const char* key:{"file","splat"}){
+                const auto name=detail.getStr(key);
+                if(!name.empty())syncProjectFilePath(cornersPath(file,name));
+            }
+        };
+        flush(j["terrain"]);
+        for(const auto& body:j["world"]["bodies"].items())flush(body["terrain"]);
+        syncProjectFilePath(file);syncProjectFilePath(fs::absolute(file).parent_path());
+    }catch(const std::exception& e){if(err)*err=e.what();path=oldPath;return false;}
     dirty = false;
+    if(saveAs){undo_.clear();redo_.clear();historyEpoch_=newHistoryEpoch();}
+    saveHistoryCheckpoint();
     return true;
 }
 
-void MapDoc::beginEdit() {
-    ensureLayers(); // a map that was never created/loaded still has layers sized to w*h
-    undo_.push_back(data);
-    // whole-document snapshots: keep ~256 MB at most (a 2048x2048 map is ~36 MB per snapshot)
-    const size_t snap = size_t(data.w * data.h) * 8 + data.corners.size() * 2 + data.detail.size() * 2 + data.detailSplat.size() + 1024;
+void MapDoc::pushUndo(MapData&& before) {
+    // Process-unique editor-only IDs survive stack trimming, undo and redo.
+    const uint64_t id=nextHistoryId();
+    undo_.reserve(undo_.size()+1);
+    undo_.push_back({std::move(before),id,{}});lastHistoryId_=id;
+    const size_t snap = size_t(data.w) * size_t(data.h) * 8 + data.corners.size() * 2 + data.detail.size() * 2 + data.detailSplat.size() + 1024;
     const size_t keep = std::clamp<size_t>((size_t(256) << 20) / snap, 4, 200);
     while (undo_.size() > keep) undo_.erase(undo_.begin());
     redo_.clear();
-    touched();
 }
-void MapDoc::undo() { if (undo_.empty()) return; redo_.push_back(data); data = undo_.back(); undo_.pop_back(); touched(); }
-void MapDoc::redo() { if (redo_.empty()) return; undo_.push_back(data); data = redo_.back(); redo_.pop_back(); touched(); }
+void MapDoc::beginCompound(){
+    if(compoundBefore_)throw std::logic_error("Nested map compound edit");
+    ensureLayers();
+    compoundBefore_.emplace(data);compoundDirty_=dirty;compoundChanged_=false;
+}
+void MapDoc::commitCompound(){
+    if(!compoundBefore_)throw std::logic_error("No map compound edit");
+    if(compoundChanged_)pushUndo(std::move(*compoundBefore_));
+    compoundBefore_.reset();compoundChanged_=false;
+}
+void MapDoc::cancelCompound() noexcept {
+    if(!compoundBefore_)return;
+    if(compoundChanged_){data=std::move(*compoundBefore_);dirty=compoundDirty_;++revision;}
+    compoundBefore_.reset();compoundChanged_=false;
+}
+void MapDoc::beginEdit() {
+    ensureLayers();
+    if(compoundBefore_){compoundChanged_=true;touched();return;}
+    MapData before=data;pushUndo(std::move(before));touched();
+}
+void MapDoc::undo() {
+    if(compoundBefore_)throw std::logic_error("Undo during compound edit");
+    if(undo_.empty())return;
+    redo_.push_back({data,undo_.back().id,undo_.back().label});data=std::move(undo_.back().data);undo_.pop_back();touched();
+}
+void MapDoc::redo() {
+    if(compoundBefore_)throw std::logic_error("Redo during compound edit");
+    if(redo_.empty())return;
+    undo_.push_back({data,redo_.back().id,redo_.back().label});data=std::move(redo_.back().data);redo_.pop_back();touched();
+}
 
 std::string MapDoc::uniqueId(const std::string& base) const {
     for (int i = 1;; ++i) {

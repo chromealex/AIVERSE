@@ -43,6 +43,7 @@ Simulation::Simulation(SimConfig cfg, std::unique_ptr<GameModule> module)
       dt_(Fixed::fromRatio(1, tickRate_)) {}
 
 void Simulation::setup(const Json& rules, const Json& map) {
+    ++stateRestoreSerial_;
     players_.clear();
     const Json& ps = map["players"];
     for (size_t i = 0; i < ps.size(); ++i) {
@@ -95,6 +96,8 @@ void Simulation::present(std::vector<SimEvent> events) {
 
 void Simulation::step() {
     if(!module_->readyToStep(*this))return;
+    const bool captureStep=profileWindowActive();
+    const int64_t stepStart=captureStep?profClock_():0;
     events_.clear();
 
     auto it = pending_.find(tick_);
@@ -127,6 +130,10 @@ void Simulation::step() {
         }
     }
     ++tick_;
+    if(captureStep&&profileWindowActive()){
+        profileSteps_.push_back(profClock_()-stepStart);
+        if(profileSteps_.size()>=profileTarget_)endProfileWindow();
+    }
 }
 
 int Simulation::advance(double realSeconds, int maxTicks) {
@@ -150,6 +157,7 @@ void Simulation::saveState(SimSnapshot& out) {
 }
 
 void Simulation::loadState(const SimSnapshot& in) {
+    ++stateRestoreSerial_;
     world_ = in.world;
     rng_ = in.rng;
     tick_ = in.tick;
@@ -169,7 +177,7 @@ constexpr uint32_t kSaveMagic = 0x56535452;   // "RTSV"
 // Version 7 (agent-bw-skills): skill objects (Area goal / arrived / deaths, Pulled pool); 4..6 remain readable.
 // Version 8 (agent-bw-skills): effect budgets, transfers (Transfer pool), status groups, loadout slots.
 // Version 9: the RTS module's frozen match outcome (a load after the match end restored no result: bots stopped).
-constexpr uint32_t kSaveVersion = 11;
+constexpr uint32_t kSaveVersion = 12; // v11 stores seat controllers, v12 also stores edited terrain.
 void hashControllers(Hasher& h, const std::vector<PlayerInfo>& players) {
     for (const auto& p : players) if (p.controller != defaultController(p.slot)) {
         h.u32(0x53454154); h.u32(p.slot); h.u32(uint32_t(p.controller));
@@ -179,7 +187,7 @@ void hashControllers(Hasher& h, const std::vector<PlayerInfo>& players) {
 void io(Archive& a, Command& c) { a(c.tick, c.player, c.flags, c.type, c.seq, c.units, c.target, c.point, c.param, c.args); }   // found by ADL
 void io(Archive& a, PlayerInfo& p) {
     a(p.slot, p.name, p.team, p.alive);
-    if (a.formatVersion >= 11) {
+    if (a.formatVersion >= 11 && !a.legacyPlanetV11) {
         uint8_t kind = uint8_t(p.controller);
         a(kind);
         if (kind > uint8_t(SeatController::Computer)) a.fail();
@@ -193,8 +201,10 @@ std::string Simulation::serialize() {
     const bool nondefaultSeats = std::any_of(players_.begin(), players_.end(), [](const auto& p) {
         return p.controller != defaultController(p.slot);
     });
-    uint32_t magic = kSaveMagic, version = nondefaultSeats ? kSaveVersion : (persistentEcs_.empty() ? 9 : 10), rate = tickRate_;
-    a.formatVersion = version;
+    uint32_t magic = kSaveMagic, version = nondefaultSeats ? 11u : (persistentEcs_.empty() ? 9 : 10), rate = tickRate_;
+    version = std::max(version,module_->minimumSaveVersion(*this));
+    if(version>kSaveVersion)return {};
+    a.formatVersion=version;
     uint64_t seed = cfg_.seed, st = rng_.state(), inc = rng_.increment();
     a(magic, version, seed, rate, tick_, st, inc, players_, pending_, executed_, seqByPlayer_);
     World::EntityState es = world_.entityState();
@@ -209,16 +219,33 @@ std::string Simulation::serialize() {
 bool Simulation::deserialize(const std::string& bytes, std::string* err) {
     auto fail=[&](const std::string& why){if(err)*err=why;return false;};
     Archive a(bytes);
-    uint32_t magic=0,version=0,rate=0,tick=0;
-    uint64_t seed=0,st=0,inc=0;
+    uint32_t magic=0,version=0,rate=0;
+    uint64_t seed=0;
     a(magic,version,seed,rate);
     if(!a.ok() || magic!=kSaveMagic)return fail("not a save state");
     if(version<4 || version>kSaveVersion)
         return fail("save state version "+std::to_string(version)+", reads 4.."+std::to_string(kSaveVersion));
+    if(rate!=tickRate_)return fail("tick rate differs");
+    if (version == 11) {
+        Archive legacy = a;
+        if (deserializeArchive(a, version, err)) return true;
+        legacy.legacyPlanetV11 = true;
+        if (deserializeArchive(legacy, version, nullptr)) {
+            if (err) err->clear();
+            return true;
+        }
+        return false;
+    }
+    return deserializeArchive(a, version, err);
+}
+
+bool Simulation::deserializeArchive(Archive& a, uint32_t version, std::string* err) {
+    auto fail=[&](const std::string& why){if(err)*err=why;return false;};
+    uint32_t tick=0;
+    uint64_t st=0,inc=0;
     a.formatVersion=version;
     if(version<10 && !persistentEcs_.empty())
         return fail("save predates native ECS v10 schema");
-    if(rate!=tickRate_)return fail("tick rate differs");
     std::vector<PlayerInfo> players;
     std::map<uint32_t,std::vector<Command>> pending;
     std::vector<Command> executed;
@@ -254,6 +281,7 @@ bool Simulation::deserialize(const std::string& bytes, std::string* err) {
         seqByPlayer_=oldSeq;
         events_=oldEvents;
         accumulator_=oldAccumulator;
+        ++stateRestoreSerial_;
         for(auto& hook:stateRestoredHooks_)hook(*this);
         return fail(why);
     };
@@ -271,6 +299,8 @@ bool Simulation::deserialize(const std::string& bytes, std::string* err) {
         if(!module_->serializeState(*this,a) || !a.ok())
             return restore("corrupt module state");
         PersistentEcsRegistry::LoadedHash sourceHash;
+        if (a.legacyPlanetV11 && module_->minimumSaveVersion(*this) != 12)
+            return restore("missing legacy planetary terrain payload");
         if(version>=10 && !persistentEcs_.serialize(a,world_,err,&sourceHash))
             return restore(err && !err->empty()?*err:"invalid native ECS schema");
         uint64_t savedChecksum=0; a(savedChecksum);
@@ -283,11 +313,11 @@ bool Simulation::deserialize(const std::string& bytes, std::string* err) {
         if (original.value() != savedChecksum)
             return restore(sourceHash.migrated ? "original checksum mismatch during native ECS migration"
                                                : "state checksum mismatch after loading (different rules or map?)");
+        ++stateRestoreSerial_;
         for(auto& hook:stateRestoredHooks_)hook(*this);
     } catch(const std::exception& e) {
         return restore(std::string("failed to deserialize state: ")+e.what());
     }
-    (void)seed;
     return true;
 }
 

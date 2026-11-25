@@ -40,3 +40,17 @@ category is implemented when only its foundational API exists.
 Build selection: `AIVERSE::lib_graphs`; native OBJECT modules call
 `aiverse_native_use_libraries(target graphs)`. Only this header library and its
 declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.
+
+WeightedGraph/WeightedEdge, dijkstra, graphPath, dfs and weakComponents now live in engine/core/Graphs.h. Nonnegative uint64 costs; UINT64_MAX reserved; overflowing paths ignored. DFS follows declared adjacency order; weak components label by smallest vertex. No tests yet.
+
+Added aStar (admissible uint64 heuristic, only goal path guaranteed optimal), stronglyConnected (iterative Kosaraju, minimum vertex labels), minimumSpanningForest (Kruskal, checked cost). No build/tests. Next flow algorithms.
+
+Flow API: engine/core/GraphFlow.h, graphFlow with Maximum or MinimumCost, integral capacities, edgeFlow in input order, explicit augmentation budget and negative residual cycle rejection. Partial result when budget exhausted. No tests yet.
+
+GraphAnalysis.h: bellmanFord, floydWarshall (max 1024 vertices), graphCuts (iterative undirected multigraph bridges/articulation). Signed paths with negativeCycle=true must not be treated as valid shortest paths. Arithmetic overflow returns nullopt. No tests yet.
+
+## Shared multi-source weighted paths (World Processes Stage 85)
+`engine/core/Graphs.h`: `multiSourceDijkstra(WeightedGraph, vector<WeightedSeed>, maxCost)` returns optional MultiSourcePaths (distance and stable uint64 sourceId per vertex). Seeds carry vertex, nonnegative initial cost and source ID. Equal costs prefer the smaller source ID even through zero-cost cycles. Inclusive maxCost must be below kInfiniteCost; invalid vertices, infinite edge costs and out-of-budget seeds reject, overflowing/beyond-cutoff extensions are skipped. Unreachable distance is kInfiniteCost; sourceId is meaningful only for reachable vertices. This is a label query, not a parent tree. ECHO uses it for max-intensity attenuation without a traversal per source. No new graph library target; tests in ecs_echo_acoustics_test.cpp, not run.
+
+## Stage 95: finite-budget directed power allocation
+`GraphSupportCache::labels()` exposes derived canonical weak-component labels until update/reset. `GraphPowerAllocation.h` accepts ordered PowerVertex supply/demand/enabled plus directed Graph; returns optional powered bits and PowerAllocationActivity. Exact normalized graph + vertex inputs, local component BFS in stable generator/neighbor order, no shared budget across weak components. Reset on vertex identity remapping. Cache is nonpersistent and exact after restored inputs; no cached logic signals. Full input scan remains; only changed components rerun generator traversal. No test execution yet.

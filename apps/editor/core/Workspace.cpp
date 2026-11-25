@@ -1,5 +1,6 @@
 #include "ModelingOps.h"
 #include "Workspace.h"
+#include <aiverselib/runtime/WorkBudget.h>
 #include "ShaderGraphOps.h"
 #include "AnimationOps.h"
 #include "GeometryOps.h"
@@ -42,6 +43,8 @@ namespace aiverse::editor { void registerPhysisOps(Workspace&); }
 #include "NativeBuildOps.h"
 #include "Projects.h"
 #include "ProjectFile.h"
+#include "ProjectFileEdits.h"
+#include "ProjectHistoryPersistence.h"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -121,12 +124,6 @@ bool erasePath(Json& j, const std::string& path) {
     if (last.index >= 0) { if (!parent->isArray() || size_t(last.index) >= parent->size()) return false; parent->eraseAt(size_t(last.index)); return true; }
     return parent->erase(last.key);
 }
-bool writeText(const std::string& f, const std::string& text, std::string* err) {
-    std::ofstream out(f, std::ios::binary);
-    if (!out) { if (err) *err = "cannot write " + f; return false; }
-    out << text;
-    return bool(out);
-}
 Json ok(Json extra = Json::object()) { extra.set("ok", Json::fromBool(true)); return extra; }
 Json str(const std::string& s) { return Json::string(s); }
 Json num(double v) { return Json::number(v, 3); }
@@ -173,9 +170,16 @@ std::string Project::rulesPath() const { return dir + "/" + manifest.getStr("rul
 
 bool Project::load(const std::string& d, std::string* err) {
     try {
-        Json m = Json::parseFile(d + "/game.json");
+        recoverProjectFileEdits(d);
+        if(fs::exists(fs::path(d)/".aiverse-cache"/"studio-history-batch"))
+            throw std::runtime_error("Pending coordinated asset history recovery; open in native Studio");
+        auto manifestText = readProjectFileBytes(fs::path(d)/"game.json");
+        Json m;
+        try {m=Json::parse(manifestText);}
+        catch(const JsonError& e){throw JsonError(d+"/game.json: "+e.what());}
         JsonOrigin origin;
         Json r = composeJson(d + "/" + m.getStr("rules", "rules.json"), fileReader(), &origin);
+        auto rawRulesText=origin.text;
         {   // what saveRules would write for each file now: a save rewrites only the files an edit changed
             auto parts = splitComposed(r, origin);
             for (size_t i = 0; i < parts.size(); ++i) origin.text[i] = parts[i].second.dump() + "\n";
@@ -183,8 +187,22 @@ bool Project::load(const std::string& d, std::string* err) {
         game::Rules parsed;
         if(m.getStr("module", "game")=="actor")actor::readConfig(r);else parsed=game::loadRules(r);   // == actorSession() of the manifest being loaded
         dir = d; manifest = std::move(m); rulesJson = std::move(r); rulesOrigin = std::move(origin); rules = std::move(parsed);
+        savedRulesText=std::move(rawRulesText);savedManifestText=std::move(manifestText);
         rulesError.clear();
         rulesDirty = manifestDirty = false;
+        documentHistory=ProjectHistory{};historyRequiresReload=false;
+        savedHistoryCheckpoint.reset();historyPersistenceWarning.clear();
+        try{
+            savedHistoryCheckpoint=readProjectHistoryCheckpoint(dir);
+            if(savedHistoryCheckpoint){
+                ProjectHistoryBaseline baseline;
+                const auto root=fs::canonical(dir);
+                baseline.emplace("game.json",*savedManifestText);
+                for(size_t i=0;i<rulesOrigin.files.size();++i)
+                    baseline.emplace(fs::canonical(rulesOrigin.files[i]).lexically_relative(root).generic_string(),savedRulesText.at(i));
+                documentHistory=decodeProjectHistory(dir,*savedHistoryCheckpoint,baseline);
+            }
+        }catch(const std::exception& e){historyPersistenceWarning=e.what();}
         return true;
     } catch (const std::exception& e) {
         if (err) *err = e.what();
@@ -195,18 +213,86 @@ bool Project::reloadRules() {
     try { if(actorSession()){actor::readConfig(rulesJson);rules=game::Rules{};}else rules = game::loadRules(rulesJson); rulesError.clear(); return true; }
     catch (const std::exception& e) { rulesError = e.what(); return false; }
 }
-bool Project::saveRules(std::string* err) {
-    if (rulesOrigin.files.empty()) rulesOrigin.files.push_back(rulesPath());
-    // every entry goes back to the file it came from; files whose content did not change are not touched
-    auto parts = splitComposed(rulesJson, rulesOrigin);
-    for (size_t i = 0; i < parts.size(); ++i) {
-        const std::string text = parts[i].second.dump() + "\n";
-        if (auto it = rulesOrigin.text.find(i); it != rulesOrigin.text.end() && it->second == text) continue;
-        if (!writeText(parts[i].first, text, err)) return false;
-        rulesOrigin.text[i] = text;
+void Project::applyHistoryTransaction(const std::vector<ProjectFileEdit>& edits,ProjectHistory next){
+    if(next.versionToken()==documentHistory.versionToken()){
+        applyProjectFileEdits(dir,edits);return;
     }
-    rulesDirty = false;
-    return true;
+    auto plan=edits;
+    auto checkpoint=prepareProjectHistoryCheckpoint(dir,savedHistoryCheckpoint,next);
+    // Initialization is a safe empty baseline, even if publication fails.
+    if(!savedHistoryCheckpoint)savedHistoryCheckpoint=checkpoint.before;
+    auto bytes=checkpoint.after;
+    plan.push_back(std::move(checkpoint));
+    applyProjectFileEdits(dir,plan);
+    documentHistory=std::move(next);savedHistoryCheckpoint=std::move(bytes);
+    historyPersistenceWarning.clear();
+}
+std::vector<ProjectFileEdit> Project::stageDirtySave(){
+    if(!rulesDirty&&!manifestDirty)return {};
+    if(dir.empty()||!savedManifestText)throw std::runtime_error("Project documents must be loaded before saving");
+    const auto previous=Json::parse(*savedManifestText);
+    const bool topology=previous.getStr("rules","rules.json")!=manifest.getStr("rules","rules.json")||
+                        previous.getStr("module","game")!=manifest.getStr("module","game");
+    if(rulesDirty&&(topology||historyRequiresReload))
+        throw std::runtime_error("Reopen after changing the rules source or module before saving rules");
+    auto manifestBytes=*savedManifestText;
+    if(manifestDirty&&previous.dump()!=manifest.dump())manifestBytes=manifest.dump()+"\n";
+    std::vector<ProjectFileEdit> edits={{fs::path(dir)/"game.json",*savedManifestText,manifestBytes}};
+    if(rulesDirty){
+        const auto parts=splitComposed(rulesJson,rulesOrigin);
+        if(rulesOrigin.files.empty()||parts.size()!=savedRulesText.size()||
+           fs::weakly_canonical(rulesOrigin.files.front())!=fs::weakly_canonical(rulesPath()))
+            throw std::runtime_error("Rules file set changed; reopen the project");
+        for(size_t i=0;i<parts.size();++i){
+            const auto normalized=parts[i].second.dump()+"\n";
+            const auto before=savedRulesText.at(i);
+            const auto after=rulesOrigin.text.at(i)==normalized?before:normalized;
+            edits.push_back({parts[i].first,before,after});
+            savedRulesText[i]=after;rulesOrigin.text[i]=normalized;
+        }
+    }else if(manifestDirty&&!topology){
+        for(size_t i=0;i<rulesOrigin.files.size();++i){
+            const auto& bytes=savedRulesText.at(i);edits.push_back({rulesOrigin.files[i],bytes,bytes});
+        }
+    }
+    auto next=documentHistory;
+    next.record(std::vector<ProjectFileEdit>(edits),{});
+    if(next.versionToken()!=documentHistory.versionToken()){
+        auto checkpoint=prepareProjectHistoryCheckpoint(dir,savedHistoryCheckpoint,next);
+        savedHistoryCheckpoint=checkpoint.after;
+        edits.push_back(std::move(checkpoint));
+        documentHistory=std::move(next);historyPersistenceWarning.clear();
+    }
+    savedManifestText=std::move(manifestBytes);
+    if(manifestDirty&&topology)historyRequiresReload=true;
+    rulesDirty=false;manifestDirty=false;
+    return edits;
+}
+bool Project::saveRules(std::string* err,const std::string& historyLabel) {
+    try {
+        if(!savedManifestText||rulesOrigin.files.empty())
+            throw std::runtime_error("Project documents must be loaded before saving rules");
+        const auto parts=splitComposed(rulesJson,rulesOrigin);
+        if(parts.size()!=savedRulesText.size() || fs::weakly_canonical(rulesOrigin.files.front())!=fs::weakly_canonical(rulesPath()))
+            throw std::runtime_error("Rules file set changed; reopen the project");
+        auto nextRaw=savedRulesText;
+        auto nextNormalized=rulesOrigin.text;
+        std::vector<ProjectFileEdit> edits={{fs::path(dir)/"game.json",*savedManifestText,*savedManifestText}};
+        for(size_t i=0;i<parts.size();++i) {
+            const auto text=parts[i].second.dump()+"\n";
+            const auto& before=savedRulesText.at(i);
+            const auto after=rulesOrigin.text.at(i)==text?before:text;
+            edits.push_back({parts[i].first,before,after});
+            nextRaw[i]=after;nextNormalized[i]=text;
+        }
+        const std::string noHistory;
+        auto history=documentHistory;
+        history.record(std::vector<ProjectFileEdit>(edits),historyRequiresReload?noHistory:historyLabel);
+        applyHistoryTransaction(edits,std::move(history));
+        savedRulesText=std::move(nextRaw);rulesOrigin.text=std::move(nextNormalized);
+        rulesDirty=false;
+        return true;
+    } catch(const std::exception& e) {if(err)*err=e.what();return false;}
 }
 std::vector<std::string> Project::rulesFiles() const {
     std::vector<std::string> out;
@@ -214,10 +300,117 @@ std::vector<std::string> Project::rulesFiles() const {
     if (out.empty()) out.push_back(manifest.getStr("rules", "rules.json"));
     return out;
 }
-bool Project::saveManifest(std::string* err) {
-    if (!writeText(dir + "/game.json", manifest.dump() + "\n", err)) return false;
-    manifestDirty = false;
-    return true;
+bool Project::saveManifest(std::string* err,const std::string& historyLabel) {
+    try {
+        if(!savedManifestText)throw std::runtime_error("Project manifest must be loaded before saving");
+        const auto previous=Json::parse(*savedManifestText);
+        const auto normalized=manifest.dump();
+        auto next=previous.dump()==normalized?*savedManifestText:normalized+"\n";
+        const bool topology=previous.getStr("rules","rules.json")!=manifest.getStr("rules","rules.json")||
+                            previous.getStr("module","game")!=manifest.getStr("module","game");
+        const bool mapList=previous["maps"].dump()!=manifest["maps"].dump();
+        std::vector<ProjectFileEdit> edits={{fs::path(dir)/"game.json",*savedManifestText,next}};
+        // A recorded manifest edit must include exact rules dependencies, so
+        // history cannot silently restore a manifest against external rule edits.
+        const bool tracked=!historyLabel.empty()&&!historyRequiresReload&&!topology&&!mapList;
+        if(tracked)for(size_t i=0;i<rulesOrigin.files.size();++i){
+            const auto& bytes=savedRulesText.at(i);
+            edits.push_back({rulesOrigin.files[i],bytes,bytes});
+        }
+        const std::string noHistory;
+        auto history=documentHistory;
+        history.record(std::vector<ProjectFileEdit>(edits),tracked?historyLabel:noHistory);
+        applyHistoryTransaction(edits,std::move(history));
+        savedManifestText=std::move(next);manifestDirty=false;
+        if(topology){historyRequiresReload=true;}
+        return true;
+    } catch(const std::exception& e){if(err)*err=e.what();return false;}
+}
+std::string Project::historyVersion() const {
+    return dir+"|project|"+documentHistory.versionToken();
+}
+Json Project::historyStatus() const {
+    Json out=Json::object(),steps=Json::array();
+    size_t i=0;
+    for(const auto& entry:documentHistory.steps()){
+        Json row=Json::object();row.set("label",str(entry.label));
+        row.set("done",Json::fromBool(i++<documentHistory.position()));steps.push(std::move(row));
+    }
+    out.set("scope",str("project"));out.set("steps",std::move(steps));
+    out.set("persistent",Json::fromBool(true));
+    if(!historyPersistenceWarning.empty())out.set("persistenceWarning",str(historyPersistenceWarning));
+    out.set("position",Json::number(int64_t(documentHistory.position())));
+    out.set("bytes",Json::number(int64_t(documentHistory.bytes())));
+    out.set("maxSteps",Json::number(int64_t(ProjectHistory::MaxSteps)));
+    out.set("maxBytes",Json::number(int64_t(ProjectHistory::MaxBytes)));
+    out.set("version",str(historyVersion()));
+    const bool blocked=dir.empty()||rulesDirty||manifestDirty||historyRequiresReload;
+    out.set("canUndo",Json::fromBool(!blocked&&documentHistory.canUndo()));
+    out.set("canRedo",Json::fromBool(!blocked&&documentHistory.canRedo()));
+    if(blocked)out.set("blockedReason",str(historyRequiresReload?"Reopen after changing rules source or module":"Open a project and save pending changes first"));
+    return out;
+}
+std::vector<ProjectFileEdit> Project::stageHistoryStep(bool redo) {
+        if(dir.empty()||rulesDirty||manifestDirty||historyRequiresReload||!savedManifestText)
+            throw std::runtime_error("Project history requires an open, saved project with unchanged rules source");
+        const auto& entry=documentHistory.next(redo);
+        auto edits=redo?entry.files:reverseProjectFileEdits(entry.files);
+        // Refuse unsaved owner mutations, even if a caller forgot to set a dirty flag.
+        if(manifest.dump()!=Json::parse(*savedManifestText).dump())throw std::runtime_error("Unsaved manifest changes");
+        const auto current=splitComposed(rulesJson,rulesOrigin);
+        if(current.size()!=rulesOrigin.files.size()||edits.size()!=current.size()+1)
+            throw std::runtime_error("Project history dependency set changed");
+        std::map<fs::path,const ProjectFileEdit*> target;
+        for(const auto& edit:edits){
+            if(!target.emplace(edit.path.lexically_normal(),&edit).second)
+                throw std::runtime_error("Duplicate project history dependency");
+        }
+        const auto manifestEdit=target.at((fs::path(dir)/"game.json").lexically_normal());
+        if(manifestEdit->before!=*savedManifestText)throw std::runtime_error("Manifest history baseline changed");
+        for(size_t i=0;i<current.size();++i){
+            if(current[i].second.dump()+"\n"!=rulesOrigin.text.at(i)||
+                target.at(fs::path(current[i].first).lexically_normal())->before!=savedRulesText.at(i))
+                throw std::runtime_error("Rules history baseline changed");
+        }
+        // Validate the complete target document with the same composition and
+        // game/actor loader BEFORE any disk writes, using only the typed plan.
+        auto nextManifest=Json::parse(manifestEdit->after);
+        if(!nextManifest.isObject()||
+           nextManifest.getStr("rules","rules.json")!=manifest.getStr("rules","rules.json")||
+           nextManifest.getStr("module","game")!=manifest.getStr("module","game")||
+           nextManifest["maps"].dump()!=manifest["maps"].dump())
+            throw std::runtime_error("Project history topology changed");
+        JsonOrigin nextOrigin;
+        auto nextRules=composeJson(rulesPath(),[&](const std::string& path,std::string& out){
+            const auto it=target.find(fs::path(path).lexically_normal());
+            if(it==target.end()||it->second==manifestEdit)return false;
+            out=it->second->after;return true;
+        },&nextOrigin);
+        if(nextOrigin.files!=rulesOrigin.files)throw std::runtime_error("Project history rules include set changed");
+        auto nextRaw=nextOrigin.text;
+        const auto parts=splitComposed(nextRules,nextOrigin);
+        for(size_t i=0;i<parts.size();++i)nextOrigin.text[i]=parts[i].second.dump()+"\n";
+        game::Rules nextParsed;
+        if(actorSession())actor::readConfig(nextRules);else nextParsed=game::loadRules(nextRules);
+        auto nextManifestText=manifestEdit->after;
+        manifest=std::move(nextManifest);rulesJson=std::move(nextRules);
+        rulesOrigin=std::move(nextOrigin);savedRulesText=std::move(nextRaw);
+        savedManifestText=std::move(nextManifestText);rules=std::move(nextParsed);
+        rulesError.clear();documentHistory.advance(redo);
+        return edits;
+}
+bool Project::historyStep(bool redo,const std::string& expectedVersion,std::string* err){
+    try{
+        if(expectedVersion!=historyVersion())throw std::runtime_error("Project history changed; refresh before navigating");
+        Project staged=*this;
+        const auto edits=staged.stageHistoryStep(redo);
+        applyHistoryTransaction(edits,std::move(staged.documentHistory));
+        staged.documentHistory=std::move(documentHistory);
+        staged.savedHistoryCheckpoint=std::move(savedHistoryCheckpoint);
+        staged.historyPersistenceWarning=std::move(historyPersistenceWarning);
+        *this=std::move(staged);
+        return true;
+    }catch(const std::exception& e){if(err)*err=e.what();return false;}
 }
 
 // ================================================================= workspace
@@ -452,7 +645,7 @@ Json Workspace::toolList() const {
     for (auto& o : ops_) {
         Json t = Json::object();
         t.set("name", str(o.name));
-        t.set("description", str(o.description));
+        t.set("description", str(o.description+(o.studioLinkOnly?" Requires authenticated HTML5 Studio link; no local fallback.":"")));
         Json s = o.schema.isObject() ? o.schema : Json::object();
         if (!s.has("type")) s.set("type", str("object"));
         if (!s.has("properties")) s.set("properties", Json::object());
@@ -546,6 +739,7 @@ void Workspace::registerCoreOps() {
                 Json entry = Json::object();
                 entry.set("name", str(op.name));
                 entry.set("guiOnly", Json::fromBool(op.guiOnly));
+                entry.set("studioLinkOnly", Json::fromBool(op.studioLinkOnly));
                 entry.set("inputSchema", op.schema.isObject() ? op.schema : Json::object());
                 entries.push(entry);
                 ++total;
@@ -556,6 +750,26 @@ void Workspace::registerCoreOps() {
             result.set("guiOnlyCount", Json::number(int64_t(guiOnly)));
             result.set("note", str("Registration only. Verify tools/call against the built MCP executable and active editor; compile-time capabilities and runtime dependencies may differ."));
             return result;
+        });
+    add("simulation_budget_plan", "Calculate deterministic recurring decision visits per tick and maximum revisit latency. Pure planning only; does not change rules or live simulation.",
+        R"({"type":"object","properties":{"count":{"type":"integer","minimum":0,"maximum":2000000000},"periodTicks":{"type":"integer","minimum":1,"maximum":36000},"maxVisitsPerTick":{"type":"integer","minimum":0,"maximum":2000000000}},"required":["count","periodTicks"],"additionalProperties":false})",
+        [](const Json& p){
+            auto read=[&](const char* key,uint32_t maximum,uint32_t minimum,bool required){
+                if(!p.has(key)&&!required)return uint32_t(0);
+                const auto& v=p[key];
+                if(!v.isNumber()||v.fx().raw%Fixed::kOne||v.integer()<minimum||uint64_t(v.integer())>maximum)
+                    throw std::runtime_error(std::string("invalid simulation budget field: ")+key);
+                return uint32_t(v.integer());
+            };
+            const auto count=read("count",2000000000,0,true);
+            const auto period=read("periodTicks",36000,1,true);
+            const auto cap=read("maxVisitsPerTick",2000000000,0,false);
+            const auto plan=lib::runtime::planRecurringWork(count,period,cap);
+            Json out=Json::object();
+            out.set("visitsPerTick",Json::number(int64_t(plan.visitsPerTick)));
+            out.set("maxRevisitTicks",Json::number(int64_t(plan.maxRevisitTicks)));
+            out.set("meetsPeriod",Json::fromBool(plan.meetsPeriod));
+            return out;
         });
     auto needProject = [this] { if (project.dir.empty()) throw std::runtime_error("no game is open: call open_game first"); };
     auto entityRef = [this](const Json& p) {
@@ -579,9 +793,10 @@ void Workspace::registerCoreOps() {
     };
     auto rulesChanged = [this](const std::string& what) {
         project.rulesDirty = true;
-        bool good = project.reloadRules();
+        if(!project.reloadRules()) throw std::runtime_error("rules rejected by the loader: " + project.rulesError);
+        std::string err;
+        if(!project.saveRules(&err,what)) throw std::runtime_error(err);
         note({Change::Rules, 0, 0, -1, -1, -1, what});
-        if (!good) throw std::runtime_error("rules rejected by the loader: " + project.rulesError);
     };
 
     // ---------------------------------------------------------------- games
@@ -674,14 +889,116 @@ void Workspace::registerCoreOps() {
     add("set_manifest", "Set a value in game.json (name, version, orientation, window, icon, maps, input, ...). Saved immediately. window = desktop window: {mode: windowed|fixed|maximized|fullscreen, width, height, minWidth, minHeight, keepAspect, allowFullscreen, macos|windows|linux: overrides}.",
         R"({"properties": {"path": {"type": "string"}, "value": {}}, "required": ["path", "value"]})", [this, needProject](const Json& p) {
             needProject();
+            Json backup=project.manifest;
             *jsonPath(project.manifest, ps(p, "path"), true) = p["value"];
             std::string err;
-            if (!project.saveManifest(&err)) throw std::runtime_error(err);
+            if (!project.saveManifest(&err,"Manifest: "+ps(p,"path"))) {project.manifest=std::move(backup);throw std::runtime_error(err);}
             Json r = ok();
             r.set("summary", str("game.json: " + ps(p, "path")));
             return r;
         });
 
+    add("project_history_status","Inspect bounded project document history (separate from map history).","{}",[this,needProject](const Json&){
+        needProject();return project.historyStatus();
+    });
+    add("project_history_step","Undo or redo one saved project document edit. Requires exact version from project_history_status; refuses conflicts.",
+        R"({"properties":{"direction":{"type":"string","enum":["undo","redo"]},"expectedVersion":{"type":"string"}},"required":["direction","expectedVersion"]})",
+        [this,needProject](const Json& p){
+            needProject();
+            const auto direction=p.getStr("direction");
+            if(direction!="undo"&&direction!="redo")throw std::runtime_error("Invalid project history direction");
+            if(!p["expectedVersion"].isString())throw std::runtime_error("Project history version required");
+            std::string err;
+            if(!project.historyStep(direction=="redo",p.getStr("expectedVersion"),&err))throw std::runtime_error(err);
+            note({Change::Rules,0,0,-1,-1,-1,"Project history: "+direction});
+            return project.historyStatus();
+        });
+    // Linked Studio-only asset operations. The standalone MCP registry
+    // advertises the schema, but the native session owns the actual mutation.
+    auto addLinked=[this](const char* name,const char* desc,const char* sch,OpFn fn){
+        registerOp({name,desc,schema(sch),std::move(fn),false,true});
+    };
+    const auto noLinkedForest=[](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");};
+    addLinked("studio_planet_forest_live","Read the completed local ECS forest snapshot for the current saved planetary map. No remote simulation, no mutation.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"mapPath":{"type":"string"},"expectedRevision":{"type":"string"}},"required":["expectedProject","mapPath","expectedRevision"],"additionalProperties":false})",noLinkedForest);
+    addLinked("studio_planet_scene_get","Read desired and rendered surface body and the current Scene orbit camera, with project/map/revision guards.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"mapPath":{"type":"string"},"expectedRevision":{"type":"string"}},"required":["expectedProject","mapPath","expectedRevision"],"additionalProperties":false})",noLinkedForest);
+    addLinked("studio_planet_scene_body_set","Select a surface body in linked Studio, or empty body for Auto. Changes only transient Scene state; wait for activeBody before camera edits.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"mapPath":{"type":"string"},"expectedRevision":{"type":"string"},"body":{"type":"string"}},"required":["expectedProject","mapPath","expectedRevision","body"],"additionalProperties":false})",noLinkedForest);
+    addLinked("studio_planet_scene_camera_set","Set the current planetary Scene orbit camera in body-local metres and radians. Transient view only; no ECS or document mutation.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"mapPath":{"type":"string"},"expectedRevision":{"type":"string"},"body":{"type":"string"},"target":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3},"distance":{"type":"number","minimum":2,"maximum":8192},"yaw":{"type":"number","minimum":-1000,"maximum":1000},"pitch":{"type":"number","minimum":-1.5707963,"maximum":1.5707963},"ortho":{"type":"boolean"}},"required":["expectedProject","mapPath","expectedRevision","body","target","distance","yaw","pitch","ortho"],"additionalProperties":false})",noLinkedForest);
+    addLinked("studio_asset_history","Read current linked Studio asset history and project identity.",
+        R"({"type":"object","properties":{},"additionalProperties":false})",[](const Json&)->Json{
+            throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");
+        });
+    addLinked("studio_asset_catalog","Read existing linked Studio content GUIDs and importer settings; no metadata creation.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"offset":{"type":"integer"},"limit":{"type":"integer"}},"required":["expectedProject"]})",[](const Json&)->Json{
+            throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");
+        });
+    addLinked("studio_asset_meta_patch","Change one existing asset importer setting through linked Studio history.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"expectedVersion":{"type":"string"},"guid":{"type":"string"},"key":{"type":"string"},"value":{}},"required":["expectedProject","expectedVersion","guid","key","value"]})",[](const Json&)->Json{
+            throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");
+        });
+    addLinked("studio_asset_folder_create","Create a content folder through linked Studio history.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"expectedVersion":{"type":"string"},"parent":{"type":"string"},"name":{"type":"string"}},"required":["expectedProject","expectedVersion","parent","name"]})",[](const Json&)->Json{
+            throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");
+        });
+    addLinked("studio_history_capabilities","Inspect linked Studio history policy for every registered MCP operation. Unverified means potential side effects, not safe bulk undo.",
+        R"({"type":"object","properties":{},"additionalProperties":false})",[](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_asset_move_preview","Review internal content move or rename by existing GUIDs; no external import.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"expectedVersion":{"type":"string"},"guids":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":64},"destination":{"type":"string"},"newName":{"type":"string"}},"required":["expectedProject","expectedVersion","guids","destination"]})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_asset_move_commit","Apply a reviewed linked Studio internal move using its token and explicit non-destructive decisions.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"expectedVersion":{"type":"string"},"token":{"type":"string"},"decisions":{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"action":{"type":"string","enum":["import","keep-both","skip"]}},"required":["id","action"]}}},"required":["expectedProject","expectedVersion","token","decisions"]})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_asset_dependencies","Read known direct or multi-hop dependency edges by existing GUID, paginated.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"guid":{"type":"string"},"depth":{"type":"integer","minimum":1,"maximum":16},"offset":{"type":"integer","minimum":0,"maximum":65536},"limit":{"type":"integer","minimum":1,"maximum":100},"direction":{"type":"string","enum":["all","incoming","outgoing"]},"expectedToken":{"type":"string"}},"required":["expectedProject","guid"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_asset_recovery_storage","Read linked Studio logical recovery storage and quota.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"}},"required":["expectedProject"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_asset_trash_list","Read paginated recovery records and retained-history protection.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"offset":{"type":"integer","minimum":0},"limit":{"type":"integer","minimum":1,"maximum":100}},"required":["expectedProject"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_asset_trash_restore_review","Review exact recovery record identity for restore only.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"id":{"type":"string"}},"required":["expectedProject","id"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_asset_trash_restore","Restore a reviewed recovery record. Clears asset history; requires explicit confirmation.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"id":{"type":"string"},"token":{"type":"string"},"expectedVersion":{"type":"string"},"confirmed":{"type":"boolean"}},"required":["expectedProject","id","token","expectedVersion","confirmed"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_asset_delete","Move an existing GUID to reversible project trash. Requires confirmation and current asset history.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"guid":{"type":"string"},"expectedVersion":{"type":"string"},"confirmed":{"type":"boolean"}},"required":["expectedProject","guid","expectedVersion","confirmed"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_asset_recovery_quota_set","Set retained trash quota in MiB with expected old value; zero means unlimited.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"expectedMiB":{"type":"integer","minimum":0,"maximum":1048576},"quotaMiB":{"type":"integer","minimum":0,"maximum":1048576}},"required":["expectedProject","expectedMiB","quotaMiB"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_asset_trash_cleanup_review","Review selected history-unprotected recovery slots for cleanup. Permanent purge remains native UI only.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"ids":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":50}},"required":["expectedProject","ids"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_agent_history_list","Read retained conversation history links and exact owner boundaries; no mutation.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"offset":{"type":"integer","minimum":0,"maximum":2000},"limit":{"type":"integer","minimum":1,"maximum":100}},"required":["expectedProject"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_agent_history_step","Undo or redo an exact retained agent edit at its current owner boundary. Stop the hosted agent first.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"scope":{"type":"string","enum":["map","project","assets"]},"historyId":{"type":"string"},"direction":{"type":"string","enum":["undo","redo"]},"expectedVersion":{"type":"string"},"confirmed":{"type":"boolean"}},"required":["expectedProject","scope","historyId","direction","expectedVersion","confirmed"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_agent_batch_preview","Review the exact fully tracked conversation batch for undo or redo. Stop the hosted agent first.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"direction":{"type":"string","enum":["undo","redo"]}},"required":["expectedProject","direction"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_agent_batch_apply","Apply a reviewed conversation batch using its exact token; stop the hosted agent first.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"direction":{"type":"string","enum":["undo","redo"]},"token":{"type":"string"},"confirmed":{"type":"boolean"}},"required":["expectedProject","direction","token","confirmed"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_owner_history","Read linked Map, Project and Assets owner history, version tokens, dirty flags and save availability.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"}},"required":["expectedProject"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_owner_history_step","Navigate one current native owner boundary. Requires exact owner version and confirmation; stop hosted agent first.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"scope":{"type":"string","enum":["map","project","assets"]},"direction":{"type":"string","enum":["undo","redo"]},"expectedVersion":{"type":"string"},"confirmed":{"type":"boolean"}},"required":["expectedProject","scope","direction","expectedVersion","confirmed"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_save_documents","Save the currently named map and dirty Project documents with native atomic checkpoints. No Save As or arbitrary file path.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"expectedMap":{"type":"string"},"expectedOwnerVersion":{"type":"string"},"confirmed":{"type":"boolean"}},"required":["expectedProject","expectedMap","expectedOwnerVersion","confirmed"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
+    addLinked("studio_asset_history_reset_review","Read a review of a damaged asset checkpoint. Archive/reset apply remains native UI only.",
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"}},"required":["expectedProject"],"additionalProperties":false})",
+        [](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");});
     // ---------------------------------------------------------------- rules
     add("rules_get", "Read rules.json or a part of it by path (e.g. 'types.footman', 'resources', 'triggers[0]'). No path = whole file. "
         "Rules split over files (rules.json \"include\") read as one document; \"extends\" entries are shown as written, "
@@ -728,11 +1045,10 @@ void Workspace::registerCoreOps() {
         R"({"properties": {"path": {"type": "string"}, "value": {}}, "required": ["path", "value"]})", [this, needProject, rulesChanged](const Json& p) {
             needProject();
             Json backup = project.rulesJson;
+            const bool wasDirty=project.rulesDirty;
             *jsonPath(project.rulesJson, ps(p, "path"), true) = p["value"];
             try { rulesChanged("Правила: " + ps(p, "path")); }
-            catch (...) { project.rulesJson = backup; project.reloadRules(); throw; }
-            std::string err;
-            if (!project.saveRules(&err)) throw std::runtime_error(err);
+            catch (...) { project.rulesJson = std::move(backup); project.reloadRules(); project.rulesDirty=wasDirty; throw; }
             Json r = ok();
             r.set("summary", str("Правила: " + ps(p, "path")));
             return r;
@@ -741,15 +1057,14 @@ void Workspace::registerCoreOps() {
         R"({"properties": {"path": {"type": "string"}, "value": {"type": "object"}}, "required": ["path", "value"]})", [this, needProject, rulesChanged](const Json& p) {
             needProject();
             Json backup = project.rulesJson;
+            const bool wasDirty=project.rulesDirty;
             std::function<void(Json&, const Json&)> merge = [&](Json& dst, const Json& src) {
                 if (!src.isObject() || !dst.isObject()) { dst = src; return; }
                 for (auto& [k, v] : src.members()) { Json* d = dst.find(k); if (d) merge(*d, v); else dst.set(k, v); }
             };
             merge(*jsonPath(project.rulesJson, ps(p, "path"), true), p["value"]);
             try { rulesChanged("Правила: " + ps(p, "path")); }
-            catch (...) { project.rulesJson = backup; project.reloadRules(); throw; }
-            std::string err;
-            if (!project.saveRules(&err)) throw std::runtime_error(err);
+            catch (...) { project.rulesJson = std::move(backup); project.reloadRules(); project.rulesDirty=wasDirty; throw; }
             Json r = ok();
             r.set("summary", str("Правила (слияние): " + ps(p, "path")));
             return r;
@@ -758,11 +1073,10 @@ void Workspace::registerCoreOps() {
         R"({"properties": {"path": {"type": "string"}}, "required": ["path"]})", [this, needProject, rulesChanged](const Json& p) {
             needProject();
             Json backup = project.rulesJson;
+            const bool wasDirty=project.rulesDirty;
             if (!erasePath(project.rulesJson, ps(p, "path"))) throw std::runtime_error("path not found");
             try { rulesChanged("Правила: удалено " + ps(p, "path")); }
-            catch (...) { project.rulesJson = backup; project.reloadRules(); throw; }
-            std::string err;
-            if (!project.saveRules(&err)) throw std::runtime_error(err);
+            catch (...) { project.rulesJson = std::move(backup); project.reloadRules(); project.rulesDirty=wasDirty; throw; }
             Json r = ok();
             r.set("summary", str("Правила: удалено " + ps(p, "path")));
             return r;
@@ -822,10 +1136,14 @@ void Workspace::registerCoreOps() {
                 if (!listed) {
                     Json e = Json::object();
                     e.set("file", str(rel)); e.set("title", str(ps(p, "title", map.data.name)));
+                    Json backup=project.manifest;
                     project.manifest.member("maps");
                     if (!project.manifest["maps"].isArray()) project.manifest.set("maps", Json::array());
                     project.manifest.find("maps")->push(e);
-                    project.saveManifest(&err);
+                    if(!project.saveManifest(&err)){
+                        project.manifest=std::move(backup);
+                        throw std::runtime_error("Map saved, but manifest update failed: "+err);
+                    }
                 }
             }
             Json r = ok();

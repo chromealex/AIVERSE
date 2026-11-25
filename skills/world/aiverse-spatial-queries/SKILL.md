@@ -39,3 +39,6 @@ category is implemented when only its foundational API exists.
 
 Runtime library: none. This recipe integrates an existing engine subsystem or runs host tools;
 it does not provide a separate runtime implementation. Pin the engine revision for that owner.
+
+## Common Spatial library
+For new algorithms use `AIVERSE::lib_spatial` and `<aiverselib/algorithms/Spatial.h>`, `Bvh.h`, `SpatialTree.h`. Read `skills/core/aiverse-spatial/SKILL.md` for API and determinism constraints. Existing GameCore queries retain their current behavior until explicitly migrated. EVOLVE already uses common BVH. No build/tests yet.

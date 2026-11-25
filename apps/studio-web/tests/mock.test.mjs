@@ -65,3 +65,29 @@ test('demo inspector groups entity fields into components and reorder keeps enti
   assert.deepEqual([...after].sort(), [...before].sort());
   assert.equal(moved.inspector?.id, 'player');
 });
+
+test('project history in demo is explicitly unavailable and cannot mutate files', async () => {
+  const h = await mockInvoke('studio.projectHistory', {});
+  assert.equal(h.scope,'project');
+  assert.deepEqual(h.steps,[]);
+  assert.equal(h.canUndo,false);
+  assert.equal(h.canRedo,false);
+  assert.match(h.blockedReason,/native Studio/);
+  await assert.rejects(mockInvoke('studio.projectHistoryStep',{direction:'undo',expectedVersion:h.version}),/native Studio/);
+});
+
+test('asset history demo is read-only',async()=>{
+  const h=await mockInvoke('studio.assetHistory',{});
+  assert.equal(h.scope,'assets');assert.equal(h.canUndo,false);
+  await assert.rejects(mockInvoke('studio.assetHistoryStep',{direction:'undo',expectedVersion:h.version}),/native Studio/);
+});
+
+test('browser demo cannot browse or mutate native asset recovery storage',async()=>{
+  await assert.rejects(mockInvoke('studio.assetTrashList',{expectedProject:'/project',offset:0,limit:50}),/native AIVERSE host/);
+  await assert.rejects(mockInvoke('studio.assetTrashApply',{expectedProject:'/project',id:'bad',action:'purge',token:'bad',expectedVersion:'bad',confirmed:true}),/native AIVERSE host/);
+});
+
+test('agent scoped history mutations require a native session',async()=>{
+  await assert.rejects(mockInvoke('studio.agentHistoryStep',{scope:'assets',historyId:'forged',expectedVersion:'stale',direction:'undo'}),/native Studio/);
+  await assert.rejects(mockInvoke('studio.agentUndoAll',{expectedVersion:'stale'}),/native Studio/);
+});

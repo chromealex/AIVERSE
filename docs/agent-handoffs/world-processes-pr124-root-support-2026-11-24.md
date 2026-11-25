@@ -1,0 +1,9 @@
+# PR #124 root-support acceptance repair — 2026-11-24
+
+Owner: World Processes / TerraWeave integration. Branch: `fix/pr124-arm64-acceptance`. Code commit: `ff40f3809` on top of `00b0a5e28` and its handoff.
+
+The authored planet native test exposed signed/unsigned multiplication in `engine/world/TerraWeaveVegetationSoil.h`: negative root-loss directions became large positive integers before accumulation. Cast the bounded loss to `int64_t` before multiplying by the signed direction. The existing `RootSupportRegistry` remains authoritative. In `tests/world_processes_gamecore_native_test.cpp`, use a 16-quantum bounded terrain edit: the previous one-quantum edit can have no measurable change under the owner's integer cm³ volume convention, which correctly returns no preview. Bounds remain [-100,100] height units. The test exercises negative root directions, GameCore terrain mutation, native map hydration, save and rollback.
+
+Actual verification at SHA `ff40f3809`: Mac x86_64 / AppleClang 17 / Debug / Box3D, command `bash tests/world_processes_native_acceptance.sh /Volumes/KINGSTON/AIVERSE-builds/pr124-finish/native 4`, exit **0**. Nine of nine CTests PASS. Evidence `/Volumes/KINGSTON/AIVERSE-builds/pr124-finish/native/world-processes-native-evidence/20261124T185719Z-38492/` (`summary.txt`, configure/build/test logs, JUnit). `git diff --check` PASS. No ARM64 rerun, Studio, MCP, browser, GPU, performance, full suite or merged-tree Mac gate on this SHA.
+
+Feature gate: implementation/architecture/dependencies/tests PASS for this bounded root-direction repair; persistence and headless GameCore fixture PASS. Native API unchanged; skill/MCP/Studio/inspector/graphs not changed here. Platforms only Mac CPU verified. Handoff and documentation present. Publishing and complete PR acceptance NOT RUN. Next: demo acceptance, then broader editor/CI/merged-tree gates.

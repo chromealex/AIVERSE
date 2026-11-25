@@ -4,8 +4,11 @@
 // victory, future blocks) is kept verbatim in `extra`, so the editor never drops data it doesn't
 // know about. Undo/redo are whole-document snapshots (maps are small).
 #pragma once
+#include "ProjectFileEdits.h"
 #include <cstdint>
 #include <map>
+#include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -140,6 +143,15 @@ public:
     bool load(const std::string& file, std::string* err);
     bool loadJson(const Json& j, std::string* err);
     bool save(const std::string& file, std::string* err);
+    // Prepare map outputs on a detached owner; no live writes.
+    std::vector<ProjectFileEdit> stageExistingSave(const std::filesystem::path& project);
+    std::vector<ProjectFileEdit> stageSave(const std::filesystem::path& project,const std::string& file,bool allowCreation);
+    std::shared_ptr<void> beginStagedSave(){return beginHistorySave(path);}
+    void finishStagedSave(){dirty=false;saveHistoryCheckpoint();}
+    // Atomic Studio save: caller retains the map lock through journal commit.
+    std::shared_ptr<void> lockAtomicSave();
+    ProjectFileEdit stageHistoryCheckpoint(const std::vector<ProjectFileEdit>& mapEdits);
+    void finishAtomicSave(){dirty=false;historyPersistenceWarning_.clear();}
     // Big maps carry their corners as terrain.cornersFile + an in-memory terrain.cornersBlob (what the
     // simulation loader reads); save() writes the blob to the .r16 file and never into the JSON.
     Json toJson() const;
@@ -179,11 +191,30 @@ public:
     size_t undoDepth() const { return undo_.size(); }
     size_t redoDepth() const { return redo_.size(); }
     void mergeUndoSince(size_t depth) { if (undo_.size() > depth + 1) undo_.resize(depth + 1); }
-    void abandonSince(size_t depth) { if (depth < undo_.size()) { data = undo_[depth]; undo_.resize(depth); touched(); } }
+    void abandonSince(size_t depth) { if (depth < undo_.size()) { data = undo_[depth].data; undo_.resize(depth); touched(); } }
+    // Native synchronous compound edit: history is published only on commit.
+    // No document replacement or undo/redo is permitted inside this scope.
+    class CompoundEdit {
+        MapDoc& doc_;
+        bool done_=false;
+    public:
+        explicit CompoundEdit(MapDoc& doc):doc_(doc){doc_.beginCompound();}
+        CompoundEdit(const CompoundEdit&)=delete;
+        CompoundEdit& operator=(const CompoundEdit&)=delete;
+        ~CompoundEdit(){if(!done_)doc_.cancelCompound();}
+        void commit(){doc_.commitCompound();done_=true;}
+    };
+    uint64_t historyMark() const {return lastHistoryId_;}
+    uint64_t undoId(size_t i) const {return undo_.at(i).id;}
+    uint64_t redoId(size_t i) const {return redo_.at(i).id;}
     bool canUndo() const { return !undo_.empty(); }
     bool canRedo() const { return !redo_.empty(); }
     void undo();
     void redo();
+    void setHistoryLabel(uint64_t id,const std::string& label);
+    std::string historyLabel(uint64_t id) const;
+    const std::string& historyPersistenceWarning() const {return historyPersistenceWarning_;}
+    const std::string& historyEpoch() const {return historyEpoch_;}
 
     // Checks against the rules, then a real simulation setup (catches everything the loader rejects).
     std::vector<Issue> validate(const game::Rules& rules, const Json& rulesJson) const;
@@ -195,7 +226,27 @@ private:
     void validateWorld(const game::Rules& rules, std::vector<Issue>& out) const;
     void mirror(bool point);
     void ensureLayers();
-    std::vector<MapData> undo_, redo_;
+    struct HistoryEntry {MapData data;uint64_t id=0;std::string label;};
+    bool loadImpl(const std::string& file,std::string* err,bool restoreHistory);
+    void restoreHistoryCheckpoint();
+    std::shared_ptr<void> beginHistorySave(const std::string& file);
+    void saveHistoryCheckpoint();
+    static uint64_t nextHistoryId();
+    static std::string newHistoryEpoch();
+    std::string historyEpoch_=newHistoryEpoch();
+    std::string historyPersistenceWarning_;
+    // Exact bytes observed by the loader, represented by SHA-256 per file.
+    // Independent of mutable map data and the history snapshot codec.
+    std::map<std::filesystem::path,std::string> savedFileHashes_;
+    bool savedFileBaselineValid_=false;
+    std::vector<HistoryEntry> undo_,redo_;
+    uint64_t lastHistoryId_=0;
+    std::optional<MapData> compoundBefore_;
+    bool compoundDirty_=false,compoundChanged_=false;
+    void beginCompound();
+    void commitCompound();
+    void cancelCompound() noexcept;
+    void pushUndo(MapData&& before);
 };
 
 } // namespace aiverse::editor

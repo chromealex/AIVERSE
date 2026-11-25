@@ -50,7 +50,10 @@ import HumanAppearancePanel from './generated/HumanAppearancePanel';
 import HumanCreatorPanel from './generated/HumanCreatorPanel';
 
 import WorldPersistencePanel from './WorldPersistencePanel';
+import WorldExplorerPanel from './generated/WorldExplorerPanel';
+import SimulationProfilerPanel from './generated/SimulationProfilerPanel';
 import TerraweaveGeneratorPanel from './generated/TerraweaveGeneratorPanel';
+import CavernsPanel from './generated/CavernsPanel';
 
 import CatalogPanel from './generated/CatalogPanel';
 
@@ -125,7 +128,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'build':
         return <BuildPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'rules':
-        return <RulesPanel projectPath={snapshot?.project.path ?? ''} onChanged={() => void invoke('studio.snapshot', {}).then(ctx.commitSnapshot).catch(() => {})}/>;
+        return <RulesPanel projectPath={snapshot?.project.path ?? ''} historyVersion={snapshot?.project.historyVersion} onChanged={() => void invoke('studio.snapshot', {}).then(ctx.commitSnapshot).catch(() => {})}/>;
       case 'scene':
         return <>
           <div className="viewport-toolbar">
@@ -166,8 +169,11 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'wind': return <WindPanel snapshot={snapshot}/>;
       case 'human_appearance': return <HumanAppearancePanel snapshot={snapshot}/>;
       case 'human_creator': return <HumanCreatorPanel snapshot={snapshot}/>;
+      case 'caverns': return <CavernsPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'terraweave_generator': return <TerraweaveGeneratorPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'catalog': return <CatalogPanel snapshot={snapshot}/>;
+      case 'world_explorer': return <WorldExplorerPanel snapshot={snapshot}/>;
+      case 'simulation_profiler': return <SimulationProfilerPanel snapshot={snapshot}/>;
       case 'world_persistence': return <WorldPersistencePanel projectPath={snapshot?.project.path ?? ''}/>;
       // AI_PANEL_CASES: add new panel renderers above this line.
       case 'game': return <GamePanel {...ctx}/>;

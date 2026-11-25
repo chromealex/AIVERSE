@@ -584,6 +584,14 @@ bool Scene::moveCharacter(BodyHandle h, const CharacterState& st, bool teleport)
     return true;
 }
 
+bool Scene::moveCharacterOriented(BodyHandle h,const CharacterState& st,b3Quat orientation,bool teleport){
+    auto* s=slot(h);
+    if(!s||s->motion!=Motion::Kinematic||!finite(st.position,kMaxCoord)||!validCharacterOrientation(orientation))return false;
+    if(teleport){b3Body_SetTransform(s->id,st.position,orientation);b3Body_SetLinearVelocity(s->id,{0,0,0});}
+    else b3Body_SetTargetTransform(s->id,b3WorldTransform{st.position,orientation},dt(),true);
+    return true;
+}
+
 void Scene::applyPushes(const std::vector<Push>& pushes) {
     for (const auto& p : pushes) {
         auto* s = slot(p.body);

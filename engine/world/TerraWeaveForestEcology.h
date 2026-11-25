@@ -280,6 +280,14 @@ struct ForestEcologyResult {
     uint64_t revision=0;
 };
 
+// Optional coordinate policy. The shared lifecycle owns age, stress,
+// mortality, seed attempts, identities and budgets. Geometry owns only
+// canopy queries and a candidate root placement. No persistent callbacks.
+struct ForestEcologyGeometry {
+    std::function<uint32_t(const AnchoredPlant&,uint32_t)> light;
+    std::function<std::optional<RootAnchor>(const AnchoredPlant&,AnchoredPlantId,int64_t,int64_t)> recruit;
+};
+
 // Plants must be a stable, rooted, interactable subset. O(N) index creation
 // occurs once PER ECOLOGY PERIOD (not each rendered frame); the costly shade,
 // health, seed and death evaluation is capped at maxPlantsPerStep.
@@ -292,10 +300,10 @@ inline ForestEcologyResult advanceForestEcology(
         const std::vector<ForestEcologySpecies>& species,
         const ForestEcologySoilSampler& soilHeight,
         ForestEcologyClimateSampler climate={},
-        ForestEcologySettings cfg={}) {
+        ForestEcologySettings cfg={},const ForestEcologyGeometry* geometry=nullptr) {
     validateForestEcologySettings(cfg);
     validateForestEcologyResource(forest);
-    if(!soilHeight || rooted.size()>cfg.maxTrackedPlants ||
+    if((geometry?(!geometry->light||!geometry->recruit):!soilHeight) || rooted.size()>cfg.maxTrackedPlants ||
        forest.plants.size()>cfg.maxTrackedPlants ||
        (forest.initialized && completedTick<forest.lastStepTick))
         throw std::invalid_argument("TerraWeave forest ecology budget/tick");
@@ -338,7 +346,8 @@ inline ForestEcologyResult advanceForestEcology(
     std::map<AnchoredPlantId,ForestEcologyPlantState> histories;
     for(const auto& record:next.plants)
         histories.emplace(record.id,record);
-    const ForestEcologyCanopyIndex canopy(plants,traits,histories);
+    std::optional<ForestEcologyCanopyIndex> canopy;
+    if(!geometry)canopy.emplace(plants,traits,histories);
     ForestEcologyResult result;
     if(plants.empty()){
         next.cursor=0;next.plants.clear();
@@ -382,8 +391,9 @@ inline ForestEcologyResult advanceForestEcology(
            environment.waterPermille>1000 ||
            environment.nutrientsPermille>1000)
             throw std::invalid_argument("TerraWeave forest climate range");
-        const uint32_t availableLight=canopy.lightAt(
-            plant,environment.sunPermille);
+        const uint32_t availableLight=geometry?geometry->light(plant,environment.sunPermille):
+            canopy->lightAt(plant,environment.sunPermille);
+        if(availableLight>environment.sunPermille)throw std::invalid_argument("TerraWeave invalid canopy light");
         const PlantEnvironment before=plant.environment;
         auto& env=plant.environment;
         if(env.matureTicks==0){
@@ -442,39 +452,38 @@ inline ForestEcologyResult advanceForestEcology(
                 const int64_t spread=policy.seedSpreadCm;
                 const int64_t dx=int64_t(hash%uint64_t(2*spread+1))-spread;
                 const int64_t dz=int64_t((hash>>31)%uint64_t(2*spread+1))-spread;
-                const int64_t px=plant.anchor.xCm+dx;
-                const int64_t pz=plant.anchor.zCm+dz;
-                constexpr int64_t margin=20000;
-                if(px>-kWorldLimitCm+margin &&
-                   px<kWorldLimitCm-margin &&
-                   pz>-kWorldLimitCm+margin &&
-                   pz<kWorldLimitCm-margin &&
-                   !canopy.occupied(px,pz) &&
-                   !std::any_of(seedlings.begin(),seedlings.end(),
-                       [&](const AnchoredPlant& s){
-                           const int64_t x=s.anchor.xCm-px;
-                           const int64_t z=s.anchor.zCm-pz;
-                           return x*x+z*z<120ll*120ll;
-                       })){
-                    const auto height=soilHeight(px,pz);
-                    const uint64_t newKey=detail::mix64(
-                        hash ^ 0x736565646c696e67ull);
-                    const AnchoredPlantId child{id.speciesId,
-                                               newKey?newKey:1ull};
-                    if(height && !occupiedIds.contains(child)){
-                        RootAnchor anchor=plant.anchor;
-                        anchor.plantKey=child.key;
-                        anchor.xCm=px;anchor.zCm=pz;
-                        anchor.plantedHeightCm=*height;
-                        AnchoredPlant newborn;
-                        newborn.anchor=anchor;
-                        newborn.environment={0,policy.matureTicks,
-                            policy.lifespanTicks,availableLight,
-                            env.waterPermille,env.nutrientsPermille};
-                        seedlings.push_back(newborn);
-                        occupiedIds.insert(child);
-                        result.born.push_back({child,id,px,pz,completedTick});
+                const uint64_t newKey=detail::mix64(hash ^ 0x736565646c696e67ull);
+                const AnchoredPlantId child{id.speciesId,newKey?newKey:1ull};
+                std::optional<RootAnchor> placement;
+                if(!occupiedIds.contains(child)){
+                    if(geometry)placement=geometry->recruit(plant,child,dx,dz);
+                    else {
+                        const int64_t px=plant.anchor.xCm+dx,pz=plant.anchor.zCm+dz;
+                        constexpr int64_t margin=20000;
+                        if(px>-kWorldLimitCm+margin&&px<kWorldLimitCm-margin&&
+                           pz>-kWorldLimitCm+margin&&pz<kWorldLimitCm-margin&&
+                           !canopy->occupied(px,pz)&&
+                           !std::any_of(seedlings.begin(),seedlings.end(),[&](const AnchoredPlant& s){
+                               const int64_t x=s.anchor.xCm-px,z=s.anchor.zCm-pz;
+                               return x*x+z*z<120ll*120ll;
+                           })){
+                            if(const auto height=soilHeight(px,pz)){
+                                auto anchor=plant.anchor;anchor.plantKey=child.key;
+                                anchor.xCm=px;anchor.zCm=pz;anchor.plantedHeightCm=*height;
+                                placement=anchor;
+                            }
+                        }
                     }
+                }
+                if(placement){
+                    if(placement->speciesId!=child.speciesId||placement->plantKey!=child.key||
+                       placement->roots!=plant.anchor.roots)
+                        throw std::invalid_argument("TerraWeave invalid recruit identity/profile");
+                    AnchoredPlant newborn;newborn.anchor=*placement;
+                    newborn.environment={0,policy.matureTicks,policy.lifespanTicks,availableLight,
+                        env.waterPermille,env.nutrientsPermille};
+                    seedlings.push_back(newborn);occupiedIds.insert(child);
+                    result.born.push_back({child,id,placement->xCm,placement->zCm,completedTick});
                 }
             }
         }

@@ -15,6 +15,7 @@ import CommandPalette from './components/CommandPalette';
 import PanelErrorBoundary from './components/PanelErrorBoundary';
 import { ProjectLoadingDialog, SceneLoadingStrip, sceneLoadingText, useProjectLoading } from './components/ProjectLoading';
 import StudioStatusBar from './components/StudioStatusBar';
+import EvolveGroupNumeric from './components/EvolveGroupNumeric';
 import WorkspaceTabs from './components/WorkspaceTabs';
 import type { StudioPanel } from './nestedDock';
 import type { StudioAsset, StudioEntity, StudioGameState, StudioInspector, StudioSnapshot } from './types';
@@ -77,7 +78,7 @@ export default function App() {
   const [loading, clearLoading] = useProjectLoading();
   // Requests answered while the native side opens a project are expected, not errors.
   useEffect(() => { if (error === 'Project is loading') setError(''); }, [error]);
-  useEffect(() => { if (!game?.active) resetLive(); }, [game?.active]); // live refs belong to one session
+  useEffect(() => { resetLive(); }, [game?.active,game?.epoch]); // live refs belong to one session
   const [connected] = useState(nativeConnected);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(() => !tourSeen());
@@ -476,8 +477,8 @@ export default function App() {
       { id: 'prefs', label: 'Preferences…', separator: true, onSelect: () => setSettingsOpen(true) },
     ] },
     { id: 'window', label: 'Window', items: () => {
-      const byTitle = (a: StudioPanel, b: StudioPanel) => STUDIO_PANEL_TITLES[a].localeCompare(STUDIO_PANEL_TITLES[b]);
       const isOpen = (panel: StudioPanel) => panelStack(dock, panel) !== null || !!floatOwner(floating, panel);
+      const byTitle = (a: StudioPanel, b: StudioPanel) => STUDIO_PANEL_TITLES[a].localeCompare(STUDIO_PANEL_TITLES[b]);
       const openPanels = STUDIO_PANELS.filter(isOpen).sort(byTitle);
       return [
       { id: 'find-window', label: 'Find Window…', onSelect: () => setPalette('/ ') },
@@ -603,6 +604,8 @@ export default function App() {
       are demonstrated locally. Native C++ Workspace and GPU renderer are not connected yet.</div>}
     {error && <div role="alert" className="error-banner">{error}
       <button onClick={() => setError('')} aria-label="Dismiss">×</button></div>}
+    {connected && project && selection.length > 1 &&
+      <EvolveGroupNumeric ids={selection} onApplied={refresh} onError={setError}/>}
     <NestedDockWorkspace tree={dock} setTree={setDock} renderPanel={renderPanel}
       onFloat={connected ? floatOut : undefined} onAdopt={adopt}/>
     {FLOAT ? <ProjectLoadingDialog state={loading} onClose={clearLoading}/> : <ProjectSplash state={loading} onClose={clearLoading} onHub={() => setHubOpen(true)}/>}

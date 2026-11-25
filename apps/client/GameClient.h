@@ -166,7 +166,14 @@ public:
     bool hostCanControl() const;
     bool hostPaused() const;
     bool hostCanStep() const;
+    size_t hostMapIndex() const{return mapIndex_;}
     bool setHostPaused(bool paused);
+    bool setHostSpeed(double speed);
+    bool hostCheckpoint(bool restore);
+private:
+    double hostSpeed_=0;
+    std::string hostCheckpoint_;
+public:
     bool requestHostStep();
 
 private:

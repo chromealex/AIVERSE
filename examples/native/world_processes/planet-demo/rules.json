@@ -1,0 +1,40 @@
+{
+  "victory": {
+    "mode": "survive",
+    "seconds": 300
+  },
+  "nativeModules": [
+    {
+      "id": "world_processes",
+      "config": {
+        "morphGravity": true,
+        "aetherStratification": true,
+        "crowdGravitySupport": true
+      }
+    }
+  ],
+  "types": {
+    "marker": {
+      "name": "Process station",
+      "health": {
+        "max": 10000
+      },
+      "view": {
+        "shape": "tower",
+        "scale": 0.5
+      }
+    },
+    "walker": {
+      "name": "Surface walker",
+      "health": {
+        "max": 10000
+      },
+      "move": {"speed": 3},
+      "sight": 10,
+      "view": {
+        "shape": "soldier",
+        "scale": 0.8
+      }
+    }
+  }
+}

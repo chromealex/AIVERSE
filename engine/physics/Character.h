@@ -68,4 +68,11 @@ b3Capsule characterCapsule(const CharacterParams& params);
 // position unchanged and zero the velocity.
 void stepCharacter(b3WorldId world, const CharacterParams& params, CharacterState& state, const CharacterInput& input,
                    float dt, Pushes* out = nullptr, BodyHandle self = kNoBody);
+// Same collision solver in a caller-selected rigid orientation. State, pushes
+// and Scene positions remain in world axes; input yaw is relative to the frame.
+// allowGround=false disables ground adhesion/jump even at contact (e.g. zero-g).
+bool stepCharacterOriented(b3WorldId world,const CharacterParams& params,CharacterState& state,
+    const CharacterInput& input,float dt,b3Quat orientation,bool allowGround,
+    Pushes* out=nullptr,BodyHandle self=kNoBody);
+bool validCharacterOrientation(b3Quat orientation);
 }

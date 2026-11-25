@@ -54,8 +54,13 @@ int main(int argc,char** argv){try{
         check(textured.model->images[0].rgba[i]<128&&textured.model->images[0].rgba[i]>30,"linear texture modulation");sampled=true;break;}
     check(sampled,"textured surface exists");source.model->images.clear();source.model->materials[0].baseTex=-1;
     namespace fs=std::filesystem;
-    const auto root=fs::temp_directory_path()/("aiverse-surface-proxy-test-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));fs::create_directories(root);
-    editor::Workspace ws;ws.project.dir=root.string();ws.project.rulesJson=Json::parse(R"({"types":{"wall":{"view":{"model":"wall.glb","scale":2,"geometry":{"occlusion":true}}}}})");
+    const auto root=fs::canonical(fs::temp_directory_path())/("aiverse-surface-proxy-test-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));fs::create_directories(root);
+    const auto projectRules=Json::parse(R"({"actor":{},"types":{"wall":{"view":{"model":"wall.glb","scale":2,"geometry":{"occlusion":true}}}}})");
+    {std::ofstream f(root/"game.json");f<<R"({"module":"actor","rules":"rules.json"})";}
+    {std::ofstream f(root/"rules.json");f<<projectRules.dump()<<'\n';}
+    editor::Workspace ws;
+    std::string loadError;
+    check(ws.project.load(root.string(),&loadError),"load project documents before saving rules");
     {std::ofstream f(root/"wall.glb",std::ios::binary);f<<exportGlb(*source.model);}
     auto request=Json::parse(R"({"model":"wall.glb","target":"models/wall_proxy.glb","mode":"plane","resolution":32})");
     auto baked=ws.call("geometry_proxy_bake",request);if(baked.has("error"))throw std::runtime_error(baked.dump());

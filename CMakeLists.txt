@@ -300,6 +300,8 @@ add_library(aiverse_game STATIC
     engine/game/ComputerPlayerTactics.cpp)
 target_link_libraries(aiverse_game PUBLIC aiverse_fps aiverse_voxelgame)   # actor / voxel systems: engine/actor, engine/voxel CMakeLists
 target_link_libraries(aiverse_game PUBLIC aiverse_engine)
+# Shared recurring work policy for data-driven population decisions.
+target_link_libraries(aiverse_game PRIVATE AIVERSE::lib_work_budget)
 # The one vehicle system of every host (docs/driving.md, AGENTS.md "no genre split"): components, the per-tick step,
 # the race adapter. The grid-map host (engine/game/Driving.cpp) and the metre-map host (engine/actor/ActorVehicles.cpp)
 # only implement its world queries.
@@ -1528,6 +1530,7 @@ target_link_libraries(aiverse_game_view PUBLIC aiverse_view_visibility)
 # from the game module into the engine, never back into an RTS implementation.
 target_link_libraries(aiverse_game_view PUBLIC AIVERSE::view)
 target_link_libraries(aiverse_game_view PUBLIC aiverse_world)   # GameWaterNereid.h: NEREID manifest parsing (engine/world)
+target_include_directories(aiverse_game_view PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libraries/include)
 
 # Helper: package content + platform metadata around an executable.
 include(platform/cmake/ThirdPartyNotices.cmake)
@@ -1765,10 +1768,12 @@ if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS)
     apps/editor/core/DataOps.cpp apps/editor/core/BalanceOps.cpp
     apps/editor/core/SimTools.cpp apps/editor/core/ScenarioOps.cpp apps/editor/core/SchemaOps.cpp apps/editor/core/PruneOps.cpp apps/editor/core/CampaignOps.cpp apps/editor/core/StrategicOps.cpp
     apps/editor/core/ToolchainOps.cpp apps/editor/core/WorldInspect.cpp)   # scenario_run, rules_lint, rules_schema keys
-    target_link_libraries(aiverse_editor_core PUBLIC aiverse_game)
+    target_link_libraries(aiverse_editor_core PUBLIC aiverse_game aiverse_pack) # Studio history uses shared SHA-256
+    target_sources(aiverse_editor_core PRIVATE apps/editor/core/ProjectFileEdits.cpp apps/editor/core/ProjectHistoryPersistence.cpp apps/editor/core/MapHistoryPersistence.cpp)
     target_link_libraries(aiverse_editor_core PUBLIC AIVERSE::lib_nereid_water)   # erosion zone ops (NereidErosion soils)
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_i18n)   # editor messages (editorText)
     target_link_libraries(aiverse_editor_core PUBLIC aiverse_postfx_data)   # postfx_* ops (postfx agent)
+    target_link_libraries(aiverse_editor_core PRIVATE AIVERSE::lib_work_budget)
     target_sources(aiverse_editor_core PRIVATE apps/editor/core/PrismaOps.cpp)
     target_sources(aiverse_editor_core PRIVATE apps/editor/core/LightBakeOps.cpp)   # lightbake_* ops (agent-lightbake)
     target_sources(aiverse_editor_core PRIVATE apps/editor/core/HumanCreatorOps.cpp)   # human_* ops (VIVID Human Creator)
@@ -2205,6 +2210,7 @@ endif()
 if(TARGET aiverse_editor_core) # lighting agent: light_* / lighting_set operations
     target_sources(aiverse_editor_core PRIVATE apps/editor/core/LightOps.cpp apps/editor/core/PhysisOps.cpp)
     target_sources(aiverse_editor_core PRIVATE apps/editor/core/PlanetOps.cpp apps/editor/core/PlanetDetailOps.cpp)   # planet-render agent: planet sculpt / paint
+    target_include_directories(aiverse_editor_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libraries/include) # shared planetary forest document validator
 endif()
 if(TARGET aiverse_tests) # lighting agent: GPU-free lighting logic under test
     target_sources(aiverse_tests PRIVATE engine/view/game/GameLightsData.cpp engine/render/QualityGovernor.cpp)
@@ -2589,6 +2595,9 @@ if(AIVERSE_BUILD_TESTS)
     add_executable(aiverse_library_tests tests/libraries/tests.cpp)
     target_link_libraries(aiverse_library_tests PRIVATE AIVERSE::libraries)
     add_test(NAME aiverse_library_tests COMMAND aiverse_library_tests)
+    add_executable(aiverse_library_noise_tests tests/libraries/noise_tests.cpp)
+    target_link_libraries(aiverse_library_noise_tests PRIVATE AIVERSE::lib_noise)
+    add_test(NAME library_noise COMMAND aiverse_library_noise_tests)
 endif()
 
 # Meta-game policies: CPU-only tests, usable independently of a game or GPU.
@@ -2856,6 +2865,43 @@ if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
     add_executable(aiverse_ecs_native_persistence_test tests/ecs_native_persistence_test.cpp)
     target_link_libraries(aiverse_ecs_native_persistence_test PRIVATE aiverse_engine)
     add_test(NAME ecs_native_persistence_test COMMAND aiverse_ecs_native_persistence_test)
+    # Optional ECHO zone/portal hearing: persistent ECS and dual-native-host regression.
+    add_executable(aiverse_ecs_echo_acoustics_test tests/ecs_echo_acoustics_test.cpp)
+    target_link_libraries(aiverse_ecs_echo_acoustics_test PRIVATE aiverse_engine AIVERSE::libraries)
+    add_test(NAME ecs_echo_acoustics_test COMMAND aiverse_ecs_echo_acoustics_test)
+    # FRACTURE structural support uses shared ECS authority; no genre-host dependency.
+    add_executable(aiverse_ecs_fracture_structure_test tests/ecs_fracture_structure_test.cpp)
+    target_link_libraries(aiverse_ecs_fracture_structure_test PRIVATE aiverse_engine AIVERSE::libraries)
+    add_test(NAME ecs_fracture_structure_test COMMAND aiverse_ecs_fracture_structure_test)
+    # AETHER persistent ECS gas species / PHYSIS bridge acceptance.
+    add_executable(aiverse_ecs_aether_gas_test tests/ecs_aether_gas_test.cpp)
+    target_link_libraries(aiverse_ecs_aether_gas_test PRIVATE aiverse_engine AIVERSE::libraries)
+    add_test(NAME ecs_aether_gas_test COMMAND aiverse_ecs_aether_gas_test)
+    if(AIVERSE_ENABLE_PHYSICS)
+        add_executable(aiverse_evolve_forest_demo examples/world/world_processes_native/EvolveForestDemo.cpp)
+        target_link_libraries(aiverse_evolve_forest_demo PRIVATE aiverse_engine AIVERSE::libraries AIVERSE::physics)
+    endif()
+    add_executable(aiverse_world_processes_inspector_test tests/world_processes_inspector_test.cpp)
+    target_link_libraries(aiverse_world_processes_inspector_test PRIVATE aiverse_engine AIVERSE::libraries)
+    add_test(NAME world_processes_inspector_test COMMAND aiverse_world_processes_inspector_test)
+    add_executable(aiverse_world_processes_authoring_test tests/world_processes_authoring_test.cpp)
+    target_link_libraries(aiverse_world_processes_authoring_test PRIVATE aiverse_engine AIVERSE::libraries)
+    add_test(NAME world_processes_authoring_test COMMAND aiverse_world_processes_authoring_test)
+    add_executable(aiverse_world_processes_map_hydration_test tests/world_processes_map_hydration_test.cpp)
+    target_link_libraries(aiverse_world_processes_map_hydration_test PRIVATE aiverse_engine AIVERSE::libraries)
+    add_test(NAME world_processes_map_hydration_test COMMAND aiverse_world_processes_map_hydration_test)
+    add_executable(aiverse_world_processes_linked_test tests/world_processes_linked_test.cpp)
+    target_link_libraries(aiverse_world_processes_linked_test PRIVATE aiverse_engine AIVERSE::libraries)
+    add_test(NAME world_processes_linked_test COMMAND aiverse_world_processes_linked_test)
+    # Optional real native game host, using the same fixture as the existing native RTS tests.
+    add_executable(aiverse_world_processes_gamecore_native_test tests/world_processes_gamecore_native_test.cpp)
+    target_link_libraries(aiverse_world_processes_gamecore_native_test PRIVATE aiverse_game AIVERSE::libraries)
+    if(TARGET AIVERSE::physics)
+        target_link_libraries(aiverse_world_processes_gamecore_native_test PRIVATE AIVERSE::physics)
+        target_compile_definitions(aiverse_world_processes_gamecore_native_test PRIVATE AIVERSE_PLANET_FOREST_PHYSICS_HOST=1)
+    endif()
+    target_compile_definitions(aiverse_world_processes_gamecore_native_test PRIVATE AIVERSE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME world_processes_gamecore_native_test COMMAND aiverse_world_processes_gamecore_native_test)
     add_executable(aiverse_ecs_cross_genre_timed_mechanics_test
         tests/ecs_cross_genre_timed_mechanics_test.cpp)
     target_link_libraries(aiverse_ecs_cross_genre_timed_mechanics_test PRIVATE
@@ -3195,6 +3241,14 @@ if(AIVERSE_ENABLE_PHYSICS)
             target_compile_options(aiverse_physics_scene_tests PRIVATE -Wall -Wextra)
         endif()
         add_test(NAME physics_scene COMMAND aiverse_physics_scene_tests ${PROJECT_SOURCE_DIR}/examples/physics/scene.json)
+        add_executable(aiverse_world_processes_planet_host_test tests/world_processes_planet_host_test.cpp)
+        target_link_libraries(aiverse_world_processes_planet_host_test PRIVATE aiverse_game aiverse_world aiverse_models aiverse_zstd_dec AIVERSE::libraries AIVERSE::physics)
+        add_test(NAME world_processes_planet_host_test COMMAND aiverse_world_processes_planet_host_test)
+        set_tests_properties(world_processes_planet_host_test PROPERTIES LABELS "PHYSICS;WorldProcesses")
+        add_executable(aiverse_planet_forest_visual_test tests/planet_forest_visual_test.cpp)
+        target_link_libraries(aiverse_planet_forest_visual_test PRIVATE aiverse_game_view aiverse_zstd_dec AIVERSE::libraries)
+        add_test(NAME planet_forest_visual COMMAND aiverse_planet_forest_visual_test)
+        set_tests_properties(planet_forest_visual PROPERTIES LABELS "WorldProcesses;TerraWeave")
     endif()
     if(AIVERSE_BUILD_PHYSICS_DEMO AND AIVERSE_DESKTOP)
         add_executable(aiverse_physics_demo examples/physics/main.cpp $<TARGET_OBJECTS:aiverse_runtime>)
@@ -4957,6 +5011,16 @@ if(AIVERSE_BUILD_TESTS AND TARGET aiversemcp AND Python3_EXECUTABLE)
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/lens_mcp_test.py
         $<TARGET_FILE:aiversemcp> ${CMAKE_CURRENT_SOURCE_DIR})
     set_tests_properties(lens_mcp_stdio PROPERTIES TIMEOUT 60)
+    add_test(NAME simulation_budget_mcp COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/simulation_budget_mcp_test.py
+        $<TARGET_FILE:aiversemcp> ${CMAKE_CURRENT_SOURCE_DIR})
+    set_tests_properties(simulation_budget_mcp PROPERTIES LABELS "MCP;World" TIMEOUT 60)
+    if(UNIX AND NOT CMAKE_CROSSCOMPILING)
+        add_test(NAME planet_forest_mcp_stdio COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/editor/planet_forest_mcp.py
+            --binary $<TARGET_FILE:aiversemcp> --engine ${CMAKE_CURRENT_SOURCE_DIR})
+        set_tests_properties(planet_forest_mcp_stdio PROPERTIES TIMEOUT 180 LABELS "MCP;WorldProcesses")
+    endif()
     add_test(NAME world_persistence_mcp_stdio COMMAND ${Python3_EXECUTABLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/world/world_persistence_mcp_test.py
         $<TARGET_FILE:aiversemcp> ${CMAKE_CURRENT_SOURCE_DIR})
@@ -5296,10 +5360,18 @@ if(AIVERSE_BUILD_TESTS AND TARGET aiverse_engine)
     set_tests_properties(region_entity_ledger_test PROPERTIES LABELS "World;ECS")
 endif()
 
+# Bounded shared simulation profiling, deterministic clock fixture.
+if(AIVERSE_BUILD_TESTS AND TARGET aiverse_engine)
+    add_executable(aiverse_simulation_profile_test tests/simulation_profile_test.cpp)
+    target_link_libraries(aiverse_simulation_profile_test PRIVATE aiverse_engine)
+    add_test(NAME simulation_profile_test COMMAND aiverse_simulation_profile_test)
+    set_tests_properties(simulation_profile_test PROPERTIES LABELS "ECS;EDITOR")
+endif()
+
 # Live ECS region attachment and authority-crossing fixture, without game assets.
 if(AIVERSE_BUILD_TESTS AND TARGET aiverse_engine)
     add_executable(aiverse_region_ecs_bridge_test tests/world/region_ecs_bridge_test.cpp)
-    target_link_libraries(aiverse_region_ecs_bridge_test PRIVATE aiverse_world)
+    target_link_libraries(aiverse_region_ecs_bridge_test PRIVATE aiverse_engine aiverse_world)
     add_test(NAME region_ecs_bridge_test COMMAND aiverse_region_ecs_bridge_test)
     set_tests_properties(region_ecs_bridge_test PROPERTIES LABELS "World;ECS")
 endif()
@@ -5311,6 +5383,14 @@ if(AIVERSE_BUILD_TESTS AND TARGET aiverse_engine)
     target_link_libraries(aiverse_region_cold_store_test PRIVATE aiverse_engine)
     add_test(NAME region_cold_store_test COMMAND aiverse_region_cold_store_test)
     set_tests_properties(region_cold_store_test PROPERTIES LABELS "World;ECS")
+endif()
+
+# S4: paused runtime vital adapter, independent native fixture.
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN AND TARGET aiverse_game)
+    add_executable(aiverse_runtime_vitals_test tests/runtime_vitals_test.cpp)
+    target_link_libraries(aiverse_runtime_vitals_test PRIVATE aiverse_game)
+    add_test(NAME runtime_vitals_test COMMAND aiverse_runtime_vitals_test)
+    set_tests_properties(runtime_vitals_test PROPERTIES LABELS "ECS;EDITOR")
 endif()
 
 # W1.4: real GameCore/NativeModule command -> shared region authority runtime.

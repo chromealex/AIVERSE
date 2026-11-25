@@ -676,11 +676,15 @@ void PlanetRenderer::draw(Renderer3D& r, const render::SphereViewFrame& fr, doub
             Chunk& c = b.chunks[size_t(ci)];
             // Generic View geometry bounds now own spherical horizon math;
             // the planet module still owns its own local frame and LOD tree.
-            if(horizon.hidden(c.dir,c.cosAngle,c.maxR)) {
+            const float seaRadius=pb.seaLevel>-1e8f?pb.radius+pb.seaLevel:0.f;
+            const bool mayHaveSea=seaRadius>0.f&&c.minR<seaRadius+1.2f;
+            const float outer=mayHaveSea?std::max(c.maxR,seaRadius):c.maxR;
+            const float bounds=c.boundR+(mayHaveSea?std::max(0.f,seaRadius-c.minR):0.f);
+            if(horizon.hidden(c.dir,c.cosAngle,outer)) {
                 ++stats_.culledHorizon;continue;
             }
             const float3 cv = C + rot.transformDir(c.center);
-            if (!frustum.visibleSphere(cv, c.boundR)) { ++stats_.culledFrustum; continue; }
+            if (!frustum.visibleSphere(cv, bounds)) { ++stats_.culledFrustum; continue; }
             const float d = std::max(length(cv - eye) - c.boundR, 0.0f);
             // detail grids: leaves are 16 samples (16 / k cells); 1.5 / k keeps triangles ~1.5x smaller on screen
             const float range = options.lodRange * float(1 << c.level) * (b.surf->detailScale() ? 1.5f / float(b.surf->detailScale()) : 1.0f);
@@ -812,7 +816,11 @@ void PlanetRenderer::draw(Renderer3D& r, const render::SphereViewFrame& fr, doub
     // ocean + atmosphere after the opaque scene (custom draws run after translucent meshes)
     struct OceanItem { const Chunk* c; float s, e; int body; };
     auto oceanItems = std::make_shared<std::vector<OceanItem>>();
-    for (auto& it : *items) if (it.c->hasSea) oceanItems->push_back({it.c, it.morphStart, it.morphEnd, it.body});
+    for (auto& it : *items) {
+        const auto& pb=world_.bodies[size_t(it.body)];
+        if(pb.seaLevel>-1e8f&&it.c->minR<pb.radius+pb.seaLevel+1.2f)
+            oceanItems->push_back({it.c,it.morphStart,it.morphEnd,it.body});
+    }
     if (ocean.valid() && !oceanItems->empty()) {
         r.drawCustom([this, &r, oceanItems, bodyU, ocean](gfx::Device& d) {
             d.setPipeline(ocean);

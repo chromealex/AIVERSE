@@ -9,11 +9,13 @@
 #include <mutex>
 #include <stdexcept>
 #include <utility>
+#include <optional>
 #include <thread>
 #include <map>
 #include <string>
 #include <vector>
 #include "MapDoc.h"
+#include "ProjectHistory.h"
 #include "engine/data/Json.h"
 #include "engine/game/GameData.h"
 #include "engine/data/JsonCompose.h"
@@ -28,13 +30,29 @@ struct Project {
     Json manifest = Json::object();
     Json rulesJson = Json::object();   // rules.json with its includes merged; "extends" kept as written
     JsonOrigin rulesOrigin;            // which file each part came from (saveRules writes it back there)
+    // Exact on-disk bytes, separate from normalized splitComposed comparison text.
+    std::map<size_t,std::string> savedRulesText;
+    std::optional<std::string> savedManifestText;
     game::Rules rules;
     std::string rulesError;       // last loader error (rules stay usable from the previous good state)
     bool rulesDirty = false, manifestDirty = false;
 
     bool load(const std::string& dir, std::string* err);
-    bool saveRules(std::string* err);
-    bool saveManifest(std::string* err);
+    bool saveRules(std::string* err,const std::string& historyLabel={});
+    bool saveManifest(std::string* err,const std::string& historyLabel={});
+    // Detached owner: prepare both dirty documents and the history checkpoint.
+    // The caller publishes the returned existing-file plan before swapping owners.
+    std::vector<ProjectFileEdit> stageDirtySave();
+    Json historyStatus() const;
+    bool historyStep(bool redo,const std::string& expectedVersion,std::string* err);
+    // Validate and advance a detached Project copy without writing any file.
+    std::vector<ProjectFileEdit> stageHistoryStep(bool redo);
+    ProjectHistory documentHistory;
+    std::optional<std::string> savedHistoryCheckpoint;
+    std::string historyPersistenceWarning;
+    bool historyRequiresReload=false;
+    void applyHistoryTransaction(const std::vector<ProjectFileEdit>& edits,ProjectHistory next);
+    std::string historyVersion() const;
     std::string rulesPath() const;
     std::vector<std::string> rulesFiles() const;   // rules.json + included files (relative to dir)
     // Legacy simulation host (game.json "module": rts | fps | voxel | genres | strategic). The hosts are being
@@ -65,7 +83,7 @@ struct Activity { double time = 0; std::string source, text; bool error = false;
 class Workspace {
 public:
     using OpFn = std::function<Json(const Json& params)>;
-    struct Op { std::string name, description; Json schema; OpFn fn; bool guiOnly = false; };
+    struct Op { std::string name, description; Json schema; OpFn fn; bool guiOnly = false; bool studioLinkOnly = false; };
 
     Workspace();
     ~Workspace();

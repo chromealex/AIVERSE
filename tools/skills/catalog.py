@@ -20,8 +20,23 @@ def load_meta():
 
 # Search vocabulary is routing metadata, not another copy of skill instructions.
 ALIASES = {
+ 'aiverse-geometry-algorithms':'polygon hull intersection',
+ 'aiverse-random':'random pcg sampling',
+ 'aiverse-spatial':'spatial grid hash bvh quadtree octree nearest radius segment пространство сетка дерево',
  'aiverse-persistent-world':'persistence wal checkpoint recovery backup world fork сохранение восстановление',
- 'aiverse-region-lifecycle':'region world streaming ledger ecs tombstone journal change tracking undo log dirty-only ownership diagnostics delta revision rollback hot cold регион стриминг',
+ 'aiverse-region-lifecycle':'region world streaming ledger ecs tombstone journal change tracking undo log dirty-only ownership diagnostics delta revision rollback hot cold регион стриминг сущность журнал simulation LOD decision cadence simulation budget',
+ 'aiverse-noise':'noise worley tileable gradient fbm fractal turbulence ridged derivatives billow vector domain warp curl jacobian simplex skew lattice batch aos soa sampling simd sse2 avx2 neon',
+ 'aiverse-world-processes':'world processes deterministic ecs world systems mechanics universal processes игровые мир процессы экосистем общие механики',
+ 'aiverse-echo':'echo acoustics hearing sound portal zone acoustic npc ear noise звук слышимость шум акустика порталы зоны',
+ 'aiverse-fracture':'fracture structural support collapse bond breaking destruction damage разрушение обрушение опоры балки связи',
+ 'aiverse-aether':'aether gas ventilation smoke toxin oxygen diffusion leak airflow газ вентиляция дым кислород токсин утечка',
+ 'aiverse-morph':'morph deform softbody spring vertex bend skin shape impact деформация мягкое тело пружина вершины импульс',
+ 'aiverse-crowd':'crowd navmesh routes formation agents slots path finding avoidance queue толпа маршруты путь навмеш очередь npc',
+ 'aiverse-imprint':'imprint tracks footprint scent residue trace trail decay diffusion следы запах отпечатки диффузия',
+ 'aiverse-circuit':'circuit power electric wires switches gates light doors motor pump сеть питание электричество провода выключатель двери',
+ 'aiverse-granular':'granular sand loose material grains sediment terrain dig fill brush песок осыпание грунт сыпучие земля',
+ 'aiverse-evolve':'evolve ecology region fertility succession pollution climate forest growth эволюция регион природа лес плодородие',
+ 'aiverse-society':'society npc knowledge rumors trust contact messages dialogue quest relations общество память слухи npc доверие отношения',
  'aiverse-character-locomotion':'wallrun wall-run wall slide walljump dash air dash grapple hook glide glider one-way platform drop through parkour паркур бег по стене рывок крюк кошка планирование односторонн платформ locomotion movement jump coyote slope ledge ladder swim climb mantle vault движение прыжок склон уступ лестница плавание лазание',
  'aiverse-ecs-shared-static':'ecs shared static immutable configuration prefab interned dedup memory snapshot rollback staticref sharedref scene read-only component component storage game editor общие статические компоненты префаб память конфиг дедупликация снапшот откат',
  'aiverse-voxel-world':'voxel voxels block blocks chunk chunks minecraft dig mine place raycast region save воксел блок чанк майнкрафт копат ставит регион',
@@ -303,16 +318,6 @@ def generate():
     entries.append(dict(id='aiverse-roads',package=None,path='skills/world/aiverse-roads/SKILL.md',domain='gameplay',
         summary='Spline roads: road types, map roadNetwork, editor tool and road_* ops, tiles, checks',
         side='tools',runtime='none',target=None,dependencies=[],backendDependencies=[],source='engine/roads/RoadNet.cpp'))
-    entries.append(dict(id='aiverse-persistent-world',package=None,
-        path='skills/world/aiverse-persistent-world/SKILL.md',domain='gameplay',
-        summary='Durable world ledger WAL, checkpoints, recovery, retention and backup forks',
-        side='simulation',runtime='none',target=None,dependencies=[],backendDependencies=[],
-        source='engine/world/PersistentWorldSession.h'))
-    entries.append(dict(id='aiverse-region-lifecycle',package=None,
-        path='skills/world/aiverse-region-lifecycle/SKILL.md',domain='gameplay',
-        summary='Shared deterministic region identity, atomic vehicle groups, ECS change journals, sparse undo transactions, admission and ownership diagnostics; authoritative decision LOD',
-        side='simulation',runtime='none',target=None,dependencies=[],backendDependencies=[],
-        source='engine/world/RegionEntityLedger.h'))
     # Native ECS opt-in engine feature, not a separately installed library.
     # Register it as a gameplay recipe (runtime=none) so skill routing reads
     # its native headers without inventing a duplicate CMake library target.
@@ -322,6 +327,34 @@ def generate():
         summary='Immutable SharedRef and StaticRef ECS configs, prefab dedup, snapshots and multi-world scene integration',
         side='tools',runtime='none',target=None,dependencies=[],backendDependencies=[],
         source='engine/sim/SharedStaticComponents.h'))
+    for name,summary,source,side in (
+        ('aiverse-spatial','Generic integer spatial grids, hashes, BVH and trees','libraries/include/aiverselib/algorithms/Spatial.h','tools'),
+        ('aiverse-persistent-world','Durable world ledger WAL, checkpoints, recovery, retention and backup forks','engine/world/PersistentWorldSession.h','simulation'),
+        ('aiverse-region-lifecycle','Shared deterministic region identity, atomic vehicle groups, ECS change journals, sparse undo transactions, admission and ownership diagnostics; authoritative decision LOD','engine/world/RegionEntityLedger.h','simulation')):
+        entries.append(dict(id=name,package=None,path=skill_path(name),domain='gameplay',
+            summary=summary,side=side,runtime='none',target=None,
+            dependencies=[],backendDependencies=[],requiresOwner=None,source=source))
+    # Native World Processes are opt-in ECS capabilities, not library packages.
+    # Gameplay recipes have runtime=none: do NOT invent a CMake library per
+    # skill or pull Box3D/PHYSIS/TerraWeave into unrelated games.
+    world_process_skills=[
+        ('aiverse-world-processes','Route ten genre-neutral ECS world mechanics to existing owners','WorldProcesses.h',[]),
+        ('aiverse-echo','ECHO hearing zones, portals and gameplay acoustic perception','EchoEcs.h',['aiverse-world-processes']),
+        ('aiverse-fracture','FRACTURE support bonds, collapse events and PHYSIS bridge','FractureEcs.h',['aiverse-world-processes']),
+        ('aiverse-aether','AETHER gas diffusion, smoke, ventilation and PHYSIS fire coupling','AetherEcs.h',['aiverse-world-processes']),
+        ('aiverse-morph','MORPH deformable nodes, springs and Box3D/Renderer3D adapters','MorphEcs.h',['aiverse-world-processes']),
+        ('aiverse-crowd','CROWD slot assignment, local avoidance and native NavMesh routes','CrowdEcs.h',['aiverse-world-processes']),
+        ('aiverse-imprint','IMPRINT persistent trails, scent and movement-driven trace cells','ImprintEcs.h',['aiverse-world-processes']),
+        ('aiverse-circuit','CIRCUIT powered logic gates, switches and real game devices','CircuitEcs.h',['aiverse-world-processes']),
+        ('aiverse-granular','GRANULAR loose solids, Studio grid authoring and TerraWeave transfer','GranularEcs.h',['aiverse-world-processes']),
+        ('aiverse-evolve','EVOLVE long-term regions, PHYSIS climate and TerraWeave ecology','EvolveEcs.h',['aiverse-world-processes']),
+        ('aiverse-society','SOCIETY trusted NPC knowledge, rumors and quest event triggers','SocietyEcs.h',['aiverse-world-processes']),
+    ]
+    for name,summary,source,deps in world_process_skills:
+        entries.append(dict(id=name,package=None,path=skill_path(name),domain='gameplay',
+            summary=summary,side='tools',runtime='none',target=None,
+            dependencies=deps,backendDependencies=[],
+            source='libraries/include/aiverselib/world/'+source))
     for name,summary,source in WORKFLOWS:
         entries.append(dict(id=name,package=None,path=skill_path(name),domain='workflow',summary=summary,
             side='tools',runtime='none',target=None,dependencies=[],backendDependencies=[],source=source))

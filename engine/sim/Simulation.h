@@ -72,6 +72,8 @@ public:
     // Save states: write / read the module's dynamic state (World pools and resources). The reading side runs
     // on a simulation set up from the same rules and map. Default: not supported.
     virtual bool serializeState(Simulation&, Archive&) { return false; }
+    // Optional module layout extension; zero keeps the legacy save selection.
+    virtual uint32_t minimumSaveVersion(const Simulation&) const { return 0; }
     // Called before the world is copied or hashed (rollback snapshots, checksums): a module that keeps
     // state outside the World lazily (scripting VM) writes it in now.
     virtual void prepareSnapshot(Simulation&) {}
@@ -111,6 +113,9 @@ struct SimConfig {
     uint32_t tickRate = 20;        // ticks per second
     uint32_t inputDelayTicks = 2;  // commands issued at tick T execute at T + delay (lockstep latency hiding)
     bool recordCommands = true;  // dedicated realtime servers may use an external bounded replay sink
+    // Host-only admission: never true on a Fixed lockstep peer. Setting it
+    // does not install any physics or make Box3D cross-platform deterministic.
+    bool singleAuthorityPhysics = false;
 };
 
 class Simulation {
@@ -185,15 +190,29 @@ public:
     std::string serialize();
     bool deserialize(const std::string& bytes, std::string* err = nullptr);
 
-    void addSystem(std::string name, SystemFn fn) { systems_.push_back({std::move(name), std::move(fn)}); }
+    void addSystem(std::string name, SystemFn fn) { invalidateProfileWindow(); systems_.push_back({std::move(name), std::move(fn)}); }
     void insertSystem(size_t at, std::string name, SystemFn fn) {
+        invalidateProfileWindow();
         systems_.insert(systems_.begin() + std::ptrdiff_t(std::min(at, systems_.size())), System{std::move(name), std::move(fn)});
     }
     // Replaces every system's function by wrap(name, fn) (e.g. a gate that skips gameplay systems).
-    template <class F> void wrapSystems(F&& wrap) { for (auto& s : systems_) s.fn = wrap(s.name, std::move(s.fn)); }
+    template <class F> void wrapSystems(F&& wrap) { invalidateProfileWindow(); for (auto& s : systems_) s.fn = wrap(s.name, std::move(s.fn)); }
     // Profiling (tools only, never affects the simulation): with a clock set, step() adds each system's
     // wall time (clock units, e.g. ns) to systemTime(i).
-    void setProfileClock(int64_t (*clock)()) { profClock_ = clock; profNs_.assign(systems_.size(), 0); }
+    void setProfileClock(int64_t (*clock)()) { invalidateProfileWindow(); profClock_ = clock; profNs_.assign(systems_.size(), 0); }
+    // Owner-thread tooling only. Bounded capture shares the existing timing clock;
+    // never replace a running headless profiler. History counts completed steps,
+    // not tick subtraction (rollback can change the simulation tick).
+    static constexpr uint32_t kMaxProfileSteps=120;
+    bool beginProfileWindow(int64_t (*clock)(),uint32_t steps) {
+        if(profClock_||!clock||!steps||steps>kMaxProfileSteps)return false;
+        profNs_.assign(systems_.size(),0);profileSteps_.clear();profileSteps_.reserve(steps);
+        profileTarget_=steps;profClock_=clock;return true;
+    }
+    void endProfileWindow() { if(profileWindowActive())profClock_=nullptr; }
+    bool profileWindowActive() const { return profileTarget_!=0&&profClock_!=nullptr; }
+    uint32_t profileWindowTarget() const { return profileTarget_; }
+    const std::vector<int64_t>& profileStepTimes() const { return profileSteps_; }
     size_t systemCount() const { return systems_.size(); }
     const std::string& systemName(size_t i) const { return systems_[i].name; }
     int64_t systemTime(size_t i) const { return i < profNs_.size() ? profNs_[i] : 0; }
@@ -214,6 +233,8 @@ public:
     GameModule& module() { return *module_; }
     const GameModule& module() const { return *module_; }
     uint32_t tick() const { return tick_; }
+    // Local presentation/cache discontinuity; excluded from snapshots and checksum.
+    uint64_t stateRestoreSerial() const { return stateRestoreSerial_; }
     Fixed dt() const { return dt_; }
     uint32_t tickRate() const { return tickRate_; }
     const SimConfig& config() const { return cfg_; }
@@ -226,6 +247,7 @@ public:
     int result() { return module_->result(*this); }
 
 private:
+    bool deserializeArchive(Archive& archive, uint32_t version, std::string* err);
     Hasher checksumHeader() const;
     struct System { std::string name; SystemFn fn; };
 
@@ -235,6 +257,7 @@ private:
     PersistentEcsRegistry persistentEcs_;
     Random rng_;
     uint32_t tick_ = 0;
+    uint64_t stateRestoreSerial_ = 0;
     uint32_t tickRate_ = 20;
     Fixed dt_;
     double accumulator_ = 0.0; // real-time only, never affects the simulation
@@ -242,6 +265,11 @@ private:
     std::vector<SystemFn> stateRestoredHooks_;
     int64_t (*profClock_)() = nullptr;
     std::vector<int64_t> profNs_;
+    uint32_t profileTarget_=0;
+    std::vector<int64_t> profileSteps_;
+    void invalidateProfileWindow() {
+        if(profileTarget_){endProfileWindow();profileTarget_=0;profileSteps_.clear();profNs_.clear();}
+    }
     std::map<uint32_t, std::vector<Command>> pending_;
     std::vector<Command> executed_;
     std::vector<SimEvent> events_;

@@ -53,6 +53,10 @@ back into AGENTS.md: this file holds only rules that apply to every agent.
 | climbing, legged locomotion | [docs/agents/surface-locomotion.md](docs/agents/surface-locomotion.md) — Procedural climbing, spider gaits and surface locomotion |
 
 
+## World Processes skill routing
+
+For ECHO, FRACTURE, AETHER, MORPH, CROWD, IMPRINT, CIRCUIT, GRANULAR, EVOLVE or SOCIETY, read the matching `skills/world/aiverse-<mechanic>/SKILL.md`. For cross-system work also read `skills/world/aiverse-world-processes/SKILL.md`. These opt-in ECS capabilities are indexed in the generated `skills/catalog.json` through `tools/skills/catalog.py`; do not maintain a second index or invent a CMake target per skill. Respect existing subsystem ownership and verify the latest stage handoff before claiming acceptance. The experimental World Processes PR #112 remains draft.
+
 For cross-subsystem work start with `skills/workflow/aiverse-orchestrator/SKILL.md` and search the catalog. For a new gameplay mechanic also load `skills/workflow/aiverse-new-mechanic/SKILL.md`. For all tasks read the latest applicable handoff.
 
 ## Mandatory feature delivery gate
