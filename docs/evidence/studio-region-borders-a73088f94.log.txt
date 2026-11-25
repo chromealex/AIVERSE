@@ -1,0 +1,19 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+    Start 585: studio_terrain_geometry
+1/2 Test #585: studio_terrain_geometry ..........Subprocess aborted***Exception:   1.43 sec
+AIVERSE test check failed: borders.stride>1 && borders.edges.size()<=32768 (/tmp/aiverse-studio-only/apps/studio-native/tests/StudioTerrainGeometryTests.cpp:43)
+
+    Start 589: studio_session
+2/2 Test #589: studio_session ...................   Passed   23.86 sec
+
+50% tests passed, 1 tests failed out of 2
+
+Label Time Summary:
+EDITOR    =  25.29 sec*proc (2 tests)
+
+Total Test time (real) =  25.32 sec
+
+The following tests FAILED:
+	585 - studio_terrain_geometry (Subprocess aborted)
+Errors while running CTest
