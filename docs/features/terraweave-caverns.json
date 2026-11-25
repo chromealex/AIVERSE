@@ -327,7 +327,8 @@
         "docs/agent-handoffs/building-caverns-integration-stage27-2026-11-25.md",
         "examples/world/terraweave_native/PlanetCavernsDemo.cpp",
         "tests/caverns/native_demo_smoke.py",
-        "docs/evidence/integrated-acceptance-3e2a609f0.json"
+        "docs/evidence/integrated-acceptance-3e2a609f0.json",
+        "docs/evidence/building-caverns-web-a2119fb21.json"
       ]
     },
     "tests": {
@@ -354,9 +355,10 @@
     },
     "publishing": {
       "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "note": "An offline browser demo, two captured frames and a bilingual devlog entry are staged on PR #190. Site publication awaits main integration.",
       "evidence": [
-        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+        "docs/evidence/building-caverns-web-a2119fb21.json",
+        "docs/devlog/entries/2026-11-25-world-building-caverns-web.json"
       ]
     }
   },
