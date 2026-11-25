@@ -145,3 +145,9 @@ Paths include apps/studio-native/StudioHost.cpp, StudioScene.cpp, apps/studio-we
 Evidence docs/evidence/studio-lens-native-1c0544842.json records lens_ops and studio_session. The production web build passed; main sync plus camera UI ran 285 web tests with zero failures. Studio Python discovery ran 55 with one skip. The Feature Gate validated the partial manifest. Final integration must still run the merged-tree Mac quick gate.
 
 Active LENS parity continuation. Use native preset keys for the Follow body and apply an authored draft lens to the navigable Scene camera only on explicit request. Validate both through the bundled desktop UI.
+
+## Follow camera and Scene navigation
+
+Implementation c94c7f595c7740dfd93c32ff55b66ec938bbc97b. LensCameraPanel.tsx reads the engine preset catalog via StudioTools.h, stores the preset and per-camera overrides, and retains unsaved documents with their expected revision while other tabs are active. The Scene owner in StudioHost.cpp and StudioScene.cpp applies the explicit Use in Scene command after initializing the target map camera. Normal preview commands still use the LensCamera drawable.
+
+Mac UI evidence: selected follow-speed, changed velocityLookAhead to 0.65, wrote cameras.json, and reloaded the record with rig.mode 2. Used an unsaved 17-degree camera in Scene, returned to Actors & Cameras and saved it. Copy Scene pose returned position [31.454,33.657,37.207] and quaternion [-0.397,0.247,0.112,0.877]. The saved FOV was 0.29670597283903605 radians. See docs/evidence/studio-lens-html5/follow-settings.png and the build-root captures/lens-applied-scene.png. Bundled Mac build and production web build passed, 285 web tests passed, native studio_session and lens_ops passed 2/2. Native evidence is docs/evidence/studio-lens-follow-c94c7f595.json. Remaining LENS work includes creation from Scene and the physical exposure/DoF readouts, followed by the remaining editor matrix and platform gates.
