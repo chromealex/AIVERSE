@@ -20,6 +20,27 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  const [history,dispatch]=useReducer(shaderHistory,emptyShaderHistory);
  const draft=history.graph;
  const [previewName,setPreviewName]=useState('');
+ const [gpuError,setGpuError]=useState('');
+ const lastPreviewProgram=useRef('');
+ const previewProgram=useMemo(()=>draft?JSON.stringify({...draft,nodes:draft.nodes?.map(({position,...node})=>node)}):'',[draft]);
+ useEffect(()=>{
+  if(!previewName||previewName!==selected||!previewProgram||previewProgram===lastPreviewProgram.current)return;
+  let active=true;
+  const timer=window.setTimeout(()=>{
+   lastPreviewProgram.current=previewProgram;
+   void invoke('studio.shaderGraphPreview',{name:selected,graph:JSON.parse(previewProgram),projectPath}).then(()=>{
+    if(active)setGpuError('');
+   }).catch(e=>{if(active)setGpuError('Preview shows the last compiled draft. '+String(e));});
+  },200);
+  return ()=>{active=false;window.clearTimeout(timer);};
+ },[previewName,selected,projectPath,previewProgram]);
+ useEffect(()=>{
+  setGpuError('');
+  if(!previewName)return;
+  return onNativeEvent((event,payload)=>{
+   if(event==='shader.previewError'&&payload&&typeof payload==='object'&&'message' in payload)setGpuError(String(payload.message));
+  });
+ },[previewName]);
  useEffect(()=>setPreviewName(''),[projectPath,selected]);
  const setDraft=(graph:StudioShaderGraphDocument['graph'])=>dispatch({type:'edit',graph});
  const finishDrag=()=>{drag.current=null;dispatch({type:'drop'});};
@@ -111,7 +132,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
   setBusy(true);setError('');
   try{
    await invoke('studio.shaderGraphPreview',{name:selected,graph:draft,projectPath});
-   setPreviewName(selected);setMessage('');
+   lastPreviewProgram.current=previewProgram;setGpuError('');setPreviewName(selected);setMessage('');
   }catch(e){setError(String(e));}finally{setBusy(false);}
  };
  const createGraph=async()=>{
@@ -166,7 +187,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
     {['material','postfx','particle'].map(d=><option key={d}>{d}</option>)}</select></label>
    <button disabled={busy||dirty||!newName}>Create graph</button>
   </form>}
-  {error&&<p className="graph-error" role="alert">{error}</p>}
+  {(error||gpuError)&&<p className="graph-error" role="alert">{error||gpuError}</p>}
   {pendingName&&<div className="graph-pending">
     <span>Discard unsaved changes and open {pendingName}?</span>
     <button onClick={discardAndSwitch}>Discard &amp; open</button>
@@ -194,8 +215,8 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
          value={chosenOp?.id??''} onChange={event=>setSelectedOp(event.target.value)}>
          {compatibleOps.map(op=><option key={op.id} value={op.id}>{op.id}</option>)}
        </select>
-       {(draft?.domain==='material'||draft?.domain==='postfx')&&<button disabled={busy} onClick={()=>void previewDraft()}>{previewName===selected?'Refresh preview':'Preview draft'}</button>}
-       {previewName===selected&&<button onClick={()=>setPreviewName('')}>Hide preview</button>}
+       {draft&&<button disabled={busy} aria-pressed={previewName===selected}
+         onClick={()=>previewName===selected?setPreviewName(''):void previewDraft()}>{previewName===selected?'Hide preview':'Preview draft'}</button>}
        <button disabled={!draft||busy||!chosenOp} onClick={createNode}>+ Node</button>
        <button disabled={!inspected||busy} onClick={deleteNode}>Delete node</button>
        <button disabled={!history.past.length||busy} onClick={()=>{dispatch({type:'undo'});setWireSource('');setError('');setMessage('');}}>Undo edit</button>

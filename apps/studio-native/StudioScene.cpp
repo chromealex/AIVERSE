@@ -168,6 +168,25 @@ bool axisParameter(float3 pivot,float3 a,float3 o,float3 d,float& t){
     t=(b*ew-dw)/denom; return std::isfinite(t);
 }
 }
+struct StudioScene::GraphParticlePreview {
+    explicit GraphParticlePreview(gfx::Device& device):device(device){}
+    ~GraphParticlePreview(){
+        system.shutdown();
+        for(const auto& [path,texture]:textures)device.destroyTexture(texture);
+    }
+    gfx::Device& device;
+    fx::ParticleSystem system;
+    std::map<std::string,gfx::TextureHandle> textures;
+    std::chrono::steady_clock::time_point lastFrame{};
+};
+std::string StudioScene::shaderPreviewError() const {
+    if(!graphPreviewError_.empty())return graphPreviewError_;
+    if(graphParticles_){
+        const auto& errors=graphParticles_->system.errors();
+        return errors.empty()?graphParticles_->system.lastError():errors.back();
+    }
+    return graphPreviewPost_?graphPreviewPost_->lastError():std::string{};
+}
 StudioScene::StudioScene(std::unique_ptr<gfx::Device> device)
     : device_(std::move(device)) {
     if (!device_) throw std::runtime_error("Scene GPU device unavailable");
@@ -591,6 +610,7 @@ StudioScene::~StudioScene() {
             renderer_.invalidateModelCachesFor(lightingModel_.get());
             releaseModel(*device_,*lightingModel_);lightingModel_.reset();
         }
+        graphParticles_.reset();
         if(graphPreviewPost_)graphPreviewPost_->shutdown();
         post_.shutdown();
         (void)facialGpu_.clear(*device_,renderer_);
@@ -1600,6 +1620,10 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     if (materialRevision_ != previewRevision) {
         materialRevision_ = previewRevision;
         graphPreviewError_.clear();
+        if(graphParticles_){
+            if(device_->waitForResourceIdle())graphParticles_.reset();
+            else graphPreviewError_="Cannot retire previous particle preview";
+        }
         if(graphPreviewPost_){
             if(device_->waitForResourceIdle()){graphPreviewPost_->shutdown();graphPreviewPost_.reset();}
             else graphPreviewError_="Cannot retire previous post effect preview";
@@ -1607,6 +1631,35 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         if (materialRequested && graphPreviewError_.empty()) {
             const bool graphDraft=previewFactors.has("studioGraphDraft")&&previewName.rfind("Shader Graph / ",0)==0;
             const Json& previewGraph=previewFactors["studioGraphDraft"];
+            if(graphDraft&&previewGraph.getStr("domain")=="particle"){
+                auto particles=std::make_unique<GraphParticlePreview>(*device_);
+                if(!particles->system.init(device_.get()))graphPreviewError_="Cannot initialize particle renderer";
+                else {
+                    particles->system.setTextureLoader([preview=particles.get(),root=projectRoot](const std::string& path,fx::FxTexture& out){
+                        auto found=preview->textures.find(path);
+                        if(found==preview->textures.end()){
+                            std::string bytes;std::vector<uint8_t> rgba;
+                            gfx::TextureDesc texture;
+                            if(!readPreviewAsset(root,path,bytes)||!render::decodeImage(bytes,texture.width,texture.height,rgba))return false;
+                            texture.data=rgba.data();texture.repeat=true;texture.mipmaps=true;texture.label=path.c_str();
+                            auto handle=preview->device.createTexture(texture);
+                            if(!handle.valid())return false;
+                            found=preview->textures.emplace(path,handle).first;
+                        }
+                        out={found->second,0,0,1,1};return true;
+                    });
+                    fx::EmitterDef emitter;emitter.shaderGraph=previewGraph;emitter.loop=true;
+                    emitter.rate={20,20};emitter.duration=2;emitter.life={1.2f,1.2f};
+                    emitter.speed={0.5f,1};emitter.size={0.25f,0.35f};
+                    fx::EffectDef effect;effect.emitters.push_back(std::move(emitter));
+                    const int id=particles->system.define("shader-preview",effect);
+                    if(id<0)graphPreviewError_=particles->system.errors().empty()?"Invalid particle graph":particles->system.errors().back();
+                    else {
+                        particles->system.play(id,{0,0,0});
+                        graphParticles_=std::move(particles);
+                    }
+                }
+            }
             if(graphDraft&&previewGraph.getStr("domain")=="postfx"){
                 auto chain=std::make_unique<render::Prisma>();
                 try{
@@ -1623,7 +1676,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                 }catch(const std::exception& e){chain->shutdown();graphPreviewError_=e.what();}
             }
             const bool materialGraph=graphDraft&&previewGraph.getStr("domain")=="material";
-            if (!materialSphere_ || materialGraph || materialSphere_->materials.at(0).shaderGraph) {
+            if (!graphParticles_ && (!materialSphere_ || materialGraph || materialSphere_->materials.at(0).shaderGraph)) {
                 render::MeshBuilder sphere;
                 sphere.color(render::rgba(255,255,255));
                 sphere.sphere({0,0,0},1.0f,32,48);
@@ -1655,7 +1708,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                     if(next)releasePreviewModel(*next);
                     graphPreviewError_=e.what();
                 }
-            }else{
+            }else if(!graphParticles_){
                 materialSphere_->materials.at(0)=studioPbrPreviewMaterial(previewFactors,previewName);
                 materialSphere_->markMaterialChanged();
             }
@@ -1681,6 +1734,23 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         }
         device_->beginFrame(framebufferWidth,framebufferHeight);
         StudioFrameScope scope{*device_};
+        if(graphParticles_&&graphPreviewError_.empty()){
+            const auto now=std::chrono::steady_clock::now();
+            auto& particles=*graphParticles_;
+            float dt=particles.lastFrame==std::chrono::steady_clock::time_point{}?0.1f:
+                std::min(0.1f,std::chrono::duration<float>(now-particles.lastFrame).count());
+            particles.lastFrame=now;
+            render::Camera cam;cam.target={0,.3f,0};cam.distance=3;cam.minDistance=.1f;
+            const auto projection=cam.proj(float(framebufferWidth)/framebufferHeight,device_->info().clipDepthZeroToOne);
+            particles.system.setView(cam,projection*cam.view(),framebufferWidth,framebufferHeight);
+            particles.system.update(dt);
+            gfx::PassDesc pass;pass.clearColor[0]=.07f;pass.clearColor[1]=.09f;pass.clearColor[2]=.135f;
+            device_->beginPass(pass);device_->setViewport({0,0,framebufferWidth,framebufferHeight});
+            particles.system.render({});
+            if(!particles.system.lastError().empty())lightingStatus_=particles.system.lastError();
+            if(!particles.system.errors().empty())lightingStatus_=particles.system.errors().back();
+            return;
+        }
         renderer_.beginScene(viewCamera(),framebufferWidth,framebufferHeight);
         renderer_.clearDynamicGiOverlay();
         renderer_.lighting=render::Lighting{};

@@ -391,6 +391,7 @@ void StudioHost::tickAssetPreview(StudioSurface surface) {
     auto& asset=shader?shaderSurface_:materialSurface_;
     const auto& title=shader?session_->previewGraphTitle():session_->previewMaterialName();
     if(!asset.placement.visible || title.empty() || !platform_.surfaceDrawable(surface))return;
+    std::string error;
     try {
         if(!renderThread_) {
             const char* threaded=std::getenv("AIVERSE_STUDIO_RENDER_THREAD");
@@ -404,11 +405,16 @@ void StudioHost::tickAssetPreview(StudioSurface surface) {
                     shader?session_->previewGraphFactors():session_->previewMaterialFactors(),
                     shader?session_->previewGraphRevision():session_->previewMaterialRevision(),
                     float(ws.project.rules.levelHeight.toDouble()),ws.project.dir);
+                if(shader)error=asset.renderer->shaderPreviewError();
             });
         });
     }catch(const std::exception& e){
-        platform_.log(std::string("Studio asset preview: ")+e.what());
+        error=e.what();platform_.log("Studio asset preview: "+error);
         surfaceDetached(surface);
+    }
+    if(shader&&asset.error!=error){
+        asset.error=error;
+        sendEvent("shader.previewError",error);
     }
 }
 void StudioHost::tickFx() {
@@ -1539,7 +1545,7 @@ void StudioHost::applyViewport(const Json& params) {
         NativeViewportPlacement placed;
         if(platform_.placeSurface(surface,rect,placed)){
             asset.placement=placed;
-            if(!placed.visible&&asset.renderer)onScene([&]{asset.renderer.reset();});
+            if(!placed.visible){asset.error.clear();if(asset.renderer)onScene([&]{asset.renderer.reset();});}
         }
         return;
     }

@@ -216,6 +216,7 @@ private:
     std::unique_ptr<StudioSession> session_;
     std::unique_ptr<StudioScene> preview_;             // created, used and destroyed on renderThread_
     struct AssetSurface {
+        std::string error;
         NativeViewportPlacement placement;
         std::unique_ptr<StudioScene> renderer;
     } materialSurface_, shaderSurface_;

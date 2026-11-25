@@ -258,6 +258,7 @@ public:
     uint64_t fxCompletedFrameSerial() const {return device_?device_->completedFrameSerial():0;}
     uint64_t fxSubmissionFence() const {return device_?device_->gpuSubmissionFence():0;}
     uint64_t fxCompletedFence() const {return device_?device_->gpuCompletedFence():0;}
+    std::string shaderPreviewError() const;
     const std::string& lightingStatus() const { return lightingStatus_; }
     // Preview wind for every rigged model (<model>.wind.json) + debug view.
     void setWindPreview(const StudioWindState& state) { wind_ = state; }
@@ -379,6 +380,8 @@ private:
     world::NereidManifestHost nereid_;
     double underwaterFrameTime_=0;
     render::Prisma post_;
+    struct GraphParticlePreview;
+    std::unique_ptr<GraphParticlePreview> graphParticles_;
     std::unique_ptr<render::Prisma> graphPreviewPost_;
     render::RenderLightingRuntime lightingRuntime_;
     std::unique_ptr<render::Model> lightingModel_;

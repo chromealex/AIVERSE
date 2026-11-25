@@ -190,9 +190,13 @@ uint16_t ParticleSystem::Impl::batchFor(const FxTexture& t, FxBlend blend, const
             }
             const std::string fs="precision highp float; layout(std140) uniform U0 {mat4 u_viewProj; vec4 u_fog; vec4 u_camPos; vec4 u_params;}; uniform sampler2D tex0; in mediump vec2 v_uv; in lowp vec4 v_col; in vec4 v_graph; in vec3 v_world; in vec4 v_clip; out vec4 o_color;\n"+declarations+gm+
                 "#define SG_SAMPLE(uv) texture(tex0,uv)\nvoid main(){vec2 sg_uv=v_uv,sg_screen=v_clip.xy/max(abs(v_clip.w),0.00001)*0.5+0.5;vec3 sg_world=v_world,sg_view=u_camPos.xyz-v_world;vec4 sg_color=v_col,sg_particle=v_graph;float sg_time=u_params.w;vec4 sg_input=texture(tex0,v_uv)*v_col;\n"+program.glsl+"vec4 c="+program.outputs.at("color")+";o_color="+(blend==FxBlend::Multiply?"vec4(mix(vec3(1.0),c.rgb,c.a),c.a)":"c")+";}";
-            replace(msl,"sampler s0 [[sampler(0)]])", "sampler s0 [[sampler(0)]],constant U0& u [[buffer(1)]]"+args+")");
+            // Graphs supply the entire fragment stage. Keep the shared particle
+            // vertex stage without depending on the default blend shader body.
+            msl.erase(msl.find("fragment half4 fs_main("));
+            msl+="fragment half4 fs_main(VOut in [[stage_in]], constant U0& u [[buffer(1)]], "
+                 "texture2d<half> tex0 [[texture(0)]], sampler s0 [[sampler(0)]]"+args+") {\n";
             const std::string code="\n#define SG_SAMPLE(uv) float4(tex0.sample(s0,uv))\n"+mm+"float2 sg_uv=in.uv,sg_screen=in.clip.xy/max(abs(in.clip.w),0.00001)*0.5+0.5;float3 sg_world=in.world,sg_view=u.camPos.xyz-in.world;float4 sg_color=float4(in.col),sg_particle=in.graph;float sg_time=u.params.w;float4 sg_input=float4(tex0.sample(s0,in.uv)*in.col);\n"+program.msl+"float4 c="+program.outputs.at("color")+";return half4("+(blend==FxBlend::Multiply?"float4(mix(float3(1.0),c.rgb,c.a),c.a)":"c")+");";
-            replace(msl,"    return tex0.sample(s0, in.uv) * in.col;",code);
+            msl+=code+"\n}\n";
             gfx::ShaderDesc sd;sd.glslVertex=vs.c_str();sd.glslFragment=fs.c_str();sd.msl=msl.c_str();sd.textureSlots=1+int(program.textures.size());sd.uniformSlots=1;
             batch.shader=dev->createShader(sd);
             if (!batch.shader.valid()) throw std::runtime_error(dev->lastError());

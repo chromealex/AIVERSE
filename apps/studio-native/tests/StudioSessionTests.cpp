@@ -201,6 +201,11 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(!call("studio.shaderGraphPreview",preview.dump().c_str()).has("error"));
        AIVERSE_TEST_CHECK(session.previewMaterialName()=="stone" && session.previewMaterialRevision()==materialRevision);
        AIVERSE_TEST_CHECK(session.previewGraphTitle()=="Shader Graph / studio_tint");
+       auto particle=Json::parse(R"({"version":1,"domain":"particle","nodes":[{"id":"age","op":"particleAge01"}],"outputs":{"color":"age"}})");
+       preview.set("graph",particle);
+       AIVERSE_TEST_CHECK(!call("studio.shaderGraphPreview",preview.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(session.previewGraphFactors()["studioGraphDraft"]==particle);
+       AIVERSE_TEST_CHECK(session.previewMaterialName()=="stone");
        preview.set("graph",Json::object());
        AIVERSE_TEST_CHECK(call("studio.shaderGraphPreview",preview.dump().c_str()).has("error"));
        AIVERSE_TEST_CHECK(!call("studio.materialPreview",R"({"name":""})").has("error"));
