@@ -2,3 +2,5 @@
 building-caverns-*.log.txt -text
 cpu-renderer-win-ci-regression.log.txt -text
 direct3d-windows-native.log.txt -text
+direct3d-windows-45609748449.log.txt -text
+cpu-renderer-desktop-final.log.txt -text

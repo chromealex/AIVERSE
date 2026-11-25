@@ -10,6 +10,7 @@
     "apps/modelview/main.cpp",
     "docs/agent-handoffs/cpu-renderer-initial.md",
     "docs/agent-handoffs/cpu-renderer-stage1.md",
+    "docs/agent-handoffs/render-backends-desktop-final.md",
     "docs/agent-handoffs/render-backends-sampled-textures.md",
     "docs/agent-handoffs/render-backends-windows-native.md",
     "docs/agents/feature-policy.json",
@@ -17,6 +18,9 @@
     "docs/devlog/entries/2026-11-25-render-backend-thumbnails.json",
     "docs/devlog/media/2026-11-25-render-backend-thumbnails/cpu-macos.png",
     "docs/devlog/systems.json",
+    "docs/evidence/.gitattributes",
+    "docs/evidence/cpu-renderer-desktop-final.json",
+    "docs/evidence/cpu-renderer-desktop-final.log.txt",
     "docs/evidence/cpu-renderer-stage2-pixels.json",
     "docs/evidence/cpu-renderer-stage2-pixels.log.txt",
     "docs/evidence/cpu-renderer-stage3-textures.json",
@@ -48,7 +52,7 @@
       "note": "Clip-space indexed triangles, per-pixel depth, textures and framebuffer readback exercised through the Device API.",
       "evidence": [
         "engine/gfx/cpu/GfxCpu.cpp",
-        "docs/evidence/cpu-renderer-win-ci-regression.json"
+        "docs/evidence/cpu-renderer-desktop-final.json"
       ]
     },
     "architecture": {
@@ -64,7 +68,7 @@
       "note": "Device creation, indexed geometry, sampled textures, capture and resource updates exercised through the public C++ interface.",
       "evidence": [
         "engine/gfx/cpu/GfxCpu.cpp",
-        "docs/evidence/cpu-renderer-win-ci-regression.json"
+        "docs/evidence/cpu-renderer-desktop-final.json"
       ]
     },
     "skill": {
@@ -111,7 +115,7 @@
       "status": "pass",
       "note": "Native macOS arm64 tests and model capture.",
       "evidence": [
-        "docs/evidence/cpu-renderer-win-ci-regression.json"
+        "docs/evidence/cpu-renderer-desktop-final.json"
       ]
     },
     "dependencies": {
@@ -135,14 +139,14 @@
       "note": "The documentation gives the native model capture command. The test exercises its rendering contract.",
       "evidence": [
         "docs/cpu-renderer.md",
-        "docs/evidence/cpu-renderer-win-ci-regression.json"
+        "docs/evidence/cpu-renderer-desktop-final.json"
       ]
     },
     "tests": {
       "status": "pass",
       "note": "Native Mac CTest covering device rasterization and textured model PNG.",
       "evidence": [
-        "docs/evidence/cpu-renderer-win-ci-regression.json"
+        "docs/evidence/cpu-renderer-desktop-final.json"
       ]
     },
     "handoff": {
@@ -177,6 +181,6 @@
     "studio_methods": []
   },
   "test_reports": [
-    "docs/evidence/cpu-renderer-win-ci-regression.json"
+    "docs/evidence/cpu-renderer-desktop-final.json"
   ]
 }
