@@ -2,6 +2,7 @@
 #include "engine/data/Json.h"
 namespace aiverse::editor::animation {
 Json makeGraph();
+Json rigItemPresets();
 Json makeNode(const std::string& kind,const std::string& id,const std::string& input="bind");
 Json makeContacts(const std::string& root,const std::string& foot);
 Json makeUnit(const std::string& op);

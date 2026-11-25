@@ -179,6 +179,10 @@ void authoredEntityWorkflow() {
        const auto animation=call("studio.op",R"({"op":"animation_graph_edit","params":{"action":"new"}})");
        AIVERSE_TEST_CHECK(!animation.has("error")&&!animation["result"].getBool("changed"));
        AIVERSE_TEST_CHECK(animation["result"]["result"]["graph"].getStr("output")=="bind");
+       const auto graphCatalog=call("studio.op",R"({"op":"animation_graph_list","params":{}})");
+       const auto& rigItems=graphCatalog["result"]["result"]["rigItemPresets"];
+       AIVERSE_TEST_CHECK(rigItems.size()==7&&rigItems["effectors"].getStr("target")=="target");
+       AIVERSE_TEST_CHECK(rigItems["joints"]["min"].size()==3&&rigItems["legs"].has("hip")&&rigItems["obstacles"].getStr("kind")=="box");
        const auto contacts=call("studio.op",R"({"op":"animation_graph_edit","params":{"action":"addContacts","id":"body","index":0,"graph":{"nodes":[{"id":"body","kind":"rig","units":[{"op":"fullBodyIK","bone":"hip","effectors":[{"bone":"toe"}]}]}]}}})");
        const auto& settings=contacts["result"]["result"]["graph"]["nodes"][0]["units"][0]["contacts"];
        AIVERSE_TEST_CHECK(settings["feet"][0].getStr("bone")=="toe"&&settings["capsules"][0].getStr("bone")=="hip");

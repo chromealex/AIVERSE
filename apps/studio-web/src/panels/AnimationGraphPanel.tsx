@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { invoke } from '../bridge';
-import RigInspector, {type RigUnit} from './RigInspector';
+import RigInspector, {type RigUnit,type ItemPresets} from './RigInspector';
 import './graphSurface.css';
 import './AnimationGraphPanel.css';
 
@@ -20,6 +20,7 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode}:{project
  const cacheKey=JSON.stringify([projectPath,rigMode]);
  const title=rigMode?'Animation Rig':'Animation Graph';
  const restored=drafts.get(cacheKey);
+ const [itemPresets,setItemPresets]=useState<ItemPresets>({});
  const [names,setNames]=useState<string[]>([]),[name,setName]=useState(restored?.name??''),[newName,setNewName]=useState('');
  const [draft,setDraft]=useState<Graph|null>(restored?.draft??null),[saved,setSaved]=useState<Graph|null>(restored?.saved??null);
  const [revision,setRevision]=useState(restored?.revision??'');
@@ -43,11 +44,11 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode}:{project
  },[cacheKey,name,dirty,draft,saved,revision]);
  async function op(method:string,params:Record<string,unknown>={}){
   const reply=await invoke('studio.op',{op:'animation_graph_'+method,params,expectedProject:projectPath});
-  return reply.result as {graph:Graph;graphs:string[];revision:string};
+  return reply.result as {graph:Graph;graphs:string[];rigItemPresets:ItemPresets;revision:string};
  }
  useEffect(()=>{
   let active=true;
-  if(projectPath)void op('list').then(r=>{if(active)setNames(r.graphs);}).catch(e=>{if(active)setError(String(e));});
+  if(projectPath)void op('list').then(r=>{if(active){setNames(r.graphs);setItemPresets(r.rigItemPresets??{});}}).catch(e=>{if(active)setError(String(e));});
   return ()=>{active=false;};
  },[projectPath]);
  async function run(fn:()=>Promise<void>){
@@ -121,7 +122,7 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode}:{project
       <button disabled={current.id===graph.output} onClick={()=>change(inScope({...graph,output:current.id}))}>Use as output</button>
       <button onClick={()=>void run(async()=>{await edit('remove',{id:current.id});select('');})}>Remove node</button></>}
     </fieldset>
-   </>:tab==='rig'?<RigInspector nodes={graph.nodes.filter(n=>n.kind==='rig')} selected={selection} select={select} busy={busy}
+   </>:tab==='rig'?<RigInspector presets={itemPresets} nodes={graph.nodes.filter(n=>n.kind==='rig')} selected={selection} select={select} busy={busy}
     addRig={()=>void run(async()=>{let i=1;while(positions.has('rig'+i))i++;await edit('add',{kind:'rig',id:'rig'+i});select('rig'+i);})}
     nativeEdit={(action,params)=>void run(()=>edit(action,params))}
     update={(id,units)=>patchNode(id,{units})}/>:<fieldset disabled={busy} className="anim-states">

@@ -140,7 +140,7 @@ Derived from actual AIVERSE_EDITOR_WINDOW registrations in apps/editor/windows. 
 | `agent` | `apps/editor/windows/AgentWindow.cpp` | Agent panel: Claude Code over the agent link, change list, Undo all, screenshots (109/110) |
 | `animation_assets` | `apps/editor/windows/AnimationAssetsWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) |
 | `animation_graph` | `apps/editor/windows/AnimationGraphWindow.cpp` | Visual pose nodes and wiring, graph scopes, state outputs, transitions and conditions, draft undo, native model validation, and revision-checked saves. Model playback in the panel and full rig tooling are pending. |
-| `animation_rig` | `apps/editor/windows/AnimationRigWindow.cpp` | Ordered rig units with native presets, nested parameter editing, contact setup, graph validation and save. Workspace operations available. Interactive skeleton preview and nested list insertion remain open. |
+| `animation_rig` | `apps/editor/windows/AnimationRigWindow.cpp` | Ordered rig units with native presets, nested parameter editing, contact setup, graph validation and save. Workspace operations available. Add and remove effectors, joints, legs, feet, capsules, balance masses and obstacles. Interactive skeleton preview remains open. |
 | `assets` | `apps/editor/windows/AssetsWindow.cpp` | Partial: GUID catalog/import/moves/conflict handling/import settings merged and native-tested (78–79); visual and full legacy parity pending |
 | `animation_attachments` | `apps/editor/windows/AttachmentAuthoringWindow.cpp` | Attachments panel: layout JSON via the engine codec; no live GPU preview (111) |
 | `branding` | `apps/editor/windows/BrandingWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) |

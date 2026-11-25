@@ -11,3 +11,9 @@
 .rig-bar,.rig-unit header,.rig-fields{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 .rig-bar{margin-bottom:10px;align-items:end}.rig-unit{padding:9px;margin-bottom:8px;border:1px solid var(--au-line);border-radius:5px;background:var(--au-panel-raised)}
 .rig-unit header{margin-bottom:8px}.rig-unit header strong{margin-right:auto}.rig-fields details{padding:5px}.rig-fields summary{cursor:pointer}.rig-fields input[type=checkbox]{width:auto}
+.rig-collection{flex:1 1 14em;min-width:0;padding:6px 8px;border:1px solid var(--au-line);border-radius:4px}.rig-collection header,.rig-item{display:flex;align-items:baseline;justify-content:space-between;gap:6px}.rig-item+.rig-item{border-top:1px solid var(--au-line)}.rig-item details{flex:1;min-width:0}
+.rig-unit>.rig-fields,.rig-subsection>.rig-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,108px),1fr));align-items:start;gap:9px}
+.rig-unit .rig-fields input:not([type=checkbox]){width:100%;min-width:0;box-sizing:border-box}
+.rig-subsection,.rig-collection{grid-column:1/-1}
+.rig-subsection[open]>summary{margin-bottom:8px}
+.rig-collection header{margin:0}.rig-collection header strong{font-weight:500}.rig-item{margin-top:5px;padding-top:3px}.rig-unit header strong{overflow-wrap:anywhere}
