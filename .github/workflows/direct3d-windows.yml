@@ -24,8 +24,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Record Windows and display adapters
         run: |
-          Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,BuildNumber
-          Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,PNPDeviceID
+          Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,BuildNumber | Format-List
+          Get-CimInstance Win32_VideoController | Select-Object Name,DriverVersion,PNPDeviceID | Format-List
       - name: Configure x64 native tests
         run: cmake --preset windows-msvc -DAIVERSE_FETCH_TEMPLATES=OFF -DAIVERSE_ASSIMP=OFF -DAIVERSE_BUILD_STUDIO_HTML5=OFF
       - name: Build Direct3D test executables

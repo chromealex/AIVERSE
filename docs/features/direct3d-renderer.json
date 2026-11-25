@@ -15,10 +15,15 @@
     "docs/agent-handoffs/direct3d-window-resize.md",
     "docs/agent-handoffs/render-backends-sampled-textures.md",
     "docs/agent-handoffs/render-backends-windows-native.md",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/entries/2026-11-25-render-backend-thumbnails.json",
+    "docs/devlog/media/2026-11-25-render-backend-thumbnails/direct3d11-warp.png",
+    "docs/devlog/media/2026-11-25-render-backend-thumbnails/direct3d9-hal.png",
     "docs/devlog/systems.json",
     "docs/direct3d.md",
     "docs/evidence/direct3d-windows-native.json",
     "docs/evidence/direct3d-windows-native.log.txt",
+    "docs/evidence/render-backend-thumbnail-performance.json",
     "docs/features/direct3d-renderer.json",
     "engine/gfx/Gfx.h",
     "engine/gfx/d3d/Direct3D.cpp",
@@ -28,7 +33,8 @@
     "skills/visuals/aiverse-modeling/SKILL.md",
     "tests/render/direct3d_device.cpp",
     "tests/render/direct3d_rhi.cpp",
-    "tests/render/headless_model_capture.py"
+    "tests/render/headless_model_capture.py",
+    "tests/render/thumbnail_workload.py"
   ],
   "traits": {
     "editable": false,
@@ -94,10 +100,11 @@
       "evidence": []
     },
     "performance": {
-      "status": "not_run",
-      "note": "The Windows suite measures correctness on small render targets. Representative GPU frame-time and memory measurements remain open.",
+      "status": "pass",
+      "note": "Five fresh process capture times on an indexed 16,384-triangle mesh, including loading, rendering and PNG encoding. Baseline for desktop previews; GPU-only frame time is outside this measurement.",
       "evidence": [
-        "docs/agent-handoffs/render-backends-windows-native.md"
+        "docs/evidence/render-backend-thumbnail-performance.json",
+        "tests/render/thumbnail_workload.py"
       ]
     },
     "platforms": {
@@ -152,10 +159,12 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Windows-native backend; browser playback cannot exercise the Direct3D API. Native capture publishing is pending.",
+      "status": "pass",
+      "note": "Bilingual development entry includes actual native captures and documents the desktop CLI and Windows API limits in WebGL. The release integrator deploys the validated site from main.",
       "evidence": [
-        "docs/direct3d.md"
+        "docs/devlog/entries/2026-11-25-render-backend-thumbnails.json",
+        "docs/devlog/media/2026-11-25-render-backend-thumbnails/direct3d9-hal.png",
+        "docs/devlog/media/2026-11-25-render-backend-thumbnails/direct3d11-warp.png"
       ]
     }
   },

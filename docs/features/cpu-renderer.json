@@ -12,7 +12,10 @@
     "docs/agent-handoffs/cpu-renderer-stage1.md",
     "docs/agent-handoffs/render-backends-sampled-textures.md",
     "docs/agent-handoffs/render-backends-windows-native.md",
+    "docs/agents/feature-policy.json",
     "docs/cpu-renderer.md",
+    "docs/devlog/entries/2026-11-25-render-backend-thumbnails.json",
+    "docs/devlog/media/2026-11-25-render-backend-thumbnails/cpu-macos.png",
     "docs/devlog/systems.json",
     "docs/evidence/cpu-renderer-stage2-pixels.json",
     "docs/evidence/cpu-renderer-stage2-pixels.log.txt",
@@ -23,13 +26,15 @@
     "docs/evidence/cpu-renderer-window-stage-regression.json",
     "docs/evidence/cpu-renderer-window-stage-regression.log.txt",
     "docs/evidence/cpu-renderer/arch.png",
+    "docs/evidence/render-backend-thumbnail-performance.json",
     "docs/features/cpu-renderer.json",
     "engine/gfx/Gfx.h",
     "engine/gfx/cpu/GfxCpu.cpp",
     "engine/render/graph/GraphGpuProfile.h",
     "skills/visuals/aiverse-modeling/SKILL.md",
     "tests/render/cpu_device.cpp",
-    "tests/render/headless_model_capture.py"
+    "tests/render/headless_model_capture.py",
+    "tests/render/thumbnail_workload.py"
   ],
   "traits": {
     "editable": false,
@@ -96,9 +101,10 @@
     },
     "performance": {
       "status": "pass",
-      "note": "Measured startup, model decoding, 512-square rasterization and PNG encoding in one CPU capture.",
+      "note": "Five fresh process capture times on an indexed 16,384-triangle mesh, including loading, rendering and PNG encoding. Baseline for desktop previews; GPU-only frame time is outside this measurement.",
       "evidence": [
-        "docs/agent-handoffs/render-backends-windows-native.md"
+        "docs/evidence/render-backend-thumbnail-performance.json",
+        "tests/render/thumbnail_workload.py"
       ]
     },
     "platforms": {
@@ -154,10 +160,11 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "The native thumbnail is recorded. Public release-site validation is pending.",
+      "status": "pass",
+      "note": "Bilingual development entry includes actual native captures and documents the desktop CLI and Windows API limits in WebGL. The release integrator deploys the validated site from main.",
       "evidence": [
-        "docs/cpu-renderer.md"
+        "docs/devlog/entries/2026-11-25-render-backend-thumbnails.json",
+        "docs/devlog/media/2026-11-25-render-backend-thumbnails/cpu-macos.png"
       ]
     }
   },
