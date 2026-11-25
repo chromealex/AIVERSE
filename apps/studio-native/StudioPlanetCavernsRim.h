@@ -1,6 +1,6 @@
 #pragma once
 #include "apps/editor/core/TerraWeavePlanetCavernsDoc.h"
-#include "engine/world/TerraWeaveCavernsOwnedRimGroup.h"
+#include "engine/world/TerraWeaveCavernsRimTransition.h"
 
 namespace aiverse::studio {
 // Local preview only: do not publish this chart-space plan as Earthworks

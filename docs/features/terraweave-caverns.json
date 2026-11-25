@@ -208,7 +208,8 @@
     "tests/terraweave_caverns_test.cpp",
     "tests/terraweave_caverns_volume_collision_nav_test.cpp",
     "tools/caverns-stage33-verify.sh",
-    "tools/caverns-stage59-mac.sh"
+    "tools/caverns-stage59-mac.sh",
+    "apps/studio-native/CMakeLists.txt"
   ],
   "traits": {
     "editable": true,
@@ -333,7 +334,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification. The merged Mac build exposed a Box3D usage requirement in native Studio Scene test consumers. Rebuild the affected targets and the quick gate.",
       "evidence": [
         "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
       ]

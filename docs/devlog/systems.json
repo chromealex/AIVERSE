@@ -122,8 +122,8 @@
           "status": "in-progress",
           "title": "Подземные полости TerraWeave",
           "titleEn": "TerraWeave Caverns",
-          "text": "Проверка подземной геометрии, навигации, входов и восстановления на объединённой ветке.",
-          "textEn": "Verify underground geometry, navigation, entrances and restore on the integrated branch."
+          "text": "Проверка подземной геометрии, навигации, входов, восстановления и предпросмотра в Studio на объединённой ветке.",
+          "textEn": "Verify underground geometry, navigation, entrances, restore and Studio preview consumers on the integrated branch."
         }
       ],
       "taglineEn": "Procedural terrain and nature",
