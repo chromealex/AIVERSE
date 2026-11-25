@@ -109,6 +109,7 @@ export interface StudioMapRegions {
   regions:Array<{letter:string;name:string;cells:number}>; coverage:string[]; stride:number; width:number; height:number;
 }
 export interface StudioMapProperties {
+  worldSpace?:{spawns:number;colliders:number};
   areas:Record<string,unknown>;
   surfaces:{id:string;size:number}[]; roster:MapPlayer[]; factions:{id:string;name:string}[]; resources:{id:string;name:string;initial:number}[];
   scope:StudioGraphDocumentScope; name:string; width:number; height:number; grid:boolean; maxSize:number;
@@ -119,7 +120,7 @@ export interface StudioMapChanges {name?:string;size?:[number,number];roadsOnly?
 export interface StudioSnapshot {
   graphDocument?: StudioGraphDocumentScope;
   project: { name: string; path: string; dirty: boolean; historyVersion?: string; assetHistoryVersion?: string };
-  scene: { name: string; mapProperties?:boolean; mapRegions?:boolean; groupings?:string[]; entities: StudioEntity[] };
+  scene: { name: string; mapProperties?:boolean; worldSpace?:boolean; mapRegions?:boolean; groupings?:string[]; entities: StudioEntity[] };
   selectedId: string | null;
   /** Whole selection, primary (selectedId) last. */
   selectedIds?: string[];

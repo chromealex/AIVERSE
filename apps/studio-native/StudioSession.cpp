@@ -743,13 +743,14 @@ static bool sameDocumentScope(const Json& supplied,const Json& current) {
 Json StudioSession::mapProperties(const Json& params,bool write) {
     auto& doc=ws_.map;
     auto& data=doc.data;
-    if(ws_.project.dir.empty() || data.worldSpace || !sameDocumentScope(params["scope"],graphDocumentScope()))
+    if(ws_.project.dir.empty() || !sameDocumentScope(params["scope"],graphDocumentScope()))
         throw std::runtime_error("Map changed. Reload its properties.");
     if(write){
         const auto& patch=params["changes"];
         if(!patch.isObject())throw std::runtime_error("Expected map property changes");
         for(const auto& [key,value]:patch.members()){
             if(key=="name" && value.isString() && !value.str().empty())continue;
+            if(data.worldSpace)throw std::runtime_error("Unsupported world-space scene property: "+key);
             if(key=="roadsOnly" && value.type()==Json::Type::Bool)continue;
             if(key=="victory" && (value.isNull() || value.isObject()))continue;
             if(key=="size" && value.isArray() && value.size()==2 && !data.planet()){
@@ -764,7 +765,10 @@ Json StudioSession::mapProperties(const Json& params,bool write) {
            (patch.has("roadsOnly") && patch.getBool("roadsOnly")!=data.roadsOnly)){
             if(resize)doc.resize(int(patch["size"][0].integer()),int(patch["size"][1].integer()));
             else doc.beginEdit();
-            if(patch.has("name"))data.name=patch.getStr("name");
+            if(patch.has("name")){
+                data.name=patch.getStr("name");
+                if(data.worldSpace)data.extra.set("name",patch["name"]);
+            }
             if(patch.has("roadsOnly"))data.roadsOnly=patch.getBool("roadsOnly");
             if(victory){
                 if(patch["victory"].isNull())data.extra.erase("victory");
@@ -775,7 +779,12 @@ Json StudioSession::mapProperties(const Json& params,bool write) {
     }
     Json out=Json::object();
     out.set("scope",graphDocumentScope());out.set("name",str(data.name));
-    out.set("width",num(data.w));out.set("height",num(data.h));out.set("grid",Json::fromBool(!data.planet()));
+    out.set("width",num(data.w));out.set("height",num(data.h));out.set("grid",Json::fromBool(!data.worldSpace && !data.planet()));
+    if(data.worldSpace){
+        Json world=Json::object();world.set("colliders",num(data.extra["colliders"].size()));
+        world.set("spawns",num(data.extra["spawns"].size()));
+        out.set("worldSpace",std::move(world));
+    }
     out.set("maxSize",num(game::kMaxMapSize));out.set("entities",num(data.entities.size()));out.set("players",num(data.players.size()));
     out.set("areas",data.extra["areas"].isObject()?data.extra["areas"]:Json::object());
     out.set("roadsOnly",Json::fromBool(data.roadsOnly));out.set("victory",data.extra["victory"]);
@@ -806,6 +815,7 @@ Json StudioSession::mapProperties(const Json& params,bool write) {
     out.set("surfaces",std::move(surfaces));
     out.set("roster",std::move(roster));out.set("factions",std::move(factions));out.set("resources",std::move(resources));
     if(params.getBool("validate")){
+        if(data.worldSpace)throw std::runtime_error("Grid map validation is unavailable for world-space scenes.");
         Json issues=Json::array();
         for(const auto& item:doc.validate(ws_.project.rules,ws_.project.rulesJson)){
             Json issue=Json::object();
@@ -947,7 +957,8 @@ Json StudioSession::snapshot() const {
     Json scene = Json::object();
     scene.set("name", str(ws_.map.data.name));
     scene.set("mapRegions",Json::fromBool(!ws_.map.data.worldSpace && !ws_.map.data.planet() && !ws_.project.dir.empty()));
-    scene.set("mapProperties",Json::fromBool(!ws_.map.data.worldSpace && !ws_.project.dir.empty()));
+    scene.set("mapProperties",Json::fromBool(!ws_.project.dir.empty()));
+    scene.set("worldSpace",Json::fromBool(ws_.map.data.worldSpace));
     Json rows = Json::array();
     const auto nodes = editor::enumerateDocumentSceneNodes(ws_.map);
     for (const auto& node : nodes) {

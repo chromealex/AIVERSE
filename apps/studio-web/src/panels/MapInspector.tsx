@@ -63,25 +63,27 @@ export function MapInspector({scope,onApply,onSelect,busy,view}:Props){
   };
   if(view==="areas")return <MapAreas data={data} revision={scope.revision} busy={busy} onApply={onApply}/>;
   if(view==="players")return <MapPlayers data={data} revision={scope.revision} busy={busy} onApply={onApply}/>;
-  return <form className="insp-map" aria-label="Map properties" onSubmit={e=>{e.preventDefault();void apply();}}>
+  return <form className="insp-map" aria-label={data.worldSpace?"Scene properties":"Map properties"} onSubmit={e=>{e.preventDefault();void apply();}}>
     <header><MapIcon size={19}/><div><h2>{data.name || 'Untitled map'}</h2>
-      <small>{data.entities} objects · {data.players} players</small></div></header>
+      <small>{data.worldSpace
+        ? `${data.worldSpace.colliders} colliders · ${data.worldSpace.spawns} spawn points`
+        : `${data.entities} objects · ${data.players} players`}</small></div></header>
     <fieldset disabled={busy||pending}>
-      <label>Map name<StudioInput value={fields.name} required onChange={e=>edit({name:e.target.value})}/></label>
+      <label>{data.worldSpace?"Scene name":"Map name"}<StudioInput value={fields.name} required onChange={e=>edit({name:e.target.value})}/></label>
       {data.grid && <div className="insp-map__size">{(['width','height'] as const).map(key=>
         <label key={key}>{key==='width'?'Width':'Height'} (cells)<StudioInput type="number" min={Math.min(8,base[key])} max={data.maxSize}
           step={1} required value={fields[key]} onChange={e=>edit({[key]:e.target.value})}/></label>)}</div>}
       {(fields.width!==String(base.width)||fields.height!==String(base.height)) &&
         <small>Resizing keeps the top-left terrain and clears visual terrain detail.</small>}
-      <label className="insp-map__toggle"><input type="checkbox" checked={fields.roadsOnly} onChange={e=>edit({roadsOnly:e.target.checked})}/>Movement only on roads</label>
+      {!data.worldSpace && <><label className="insp-map__toggle"><input type="checkbox" checked={fields.roadsOnly} onChange={e=>edit({roadsOnly:e.target.checked})}/>Movement only on roads</label>
       <details><summary>Victory override</summary>
         <label>Map victory JSON<textarea className="au-textarea" value={fields.victory} placeholder="Use project rules"
-          onChange={e=>edit({victory:e.target.value})}/></label></details>
+          onChange={e=>edit({victory:e.target.value})}/></label></details></>}
       {error && <p role="alert">{error}</p>}
       {stale && dirty && <p role="alert">The map has changed. Reload its properties before applying.</p>}
       <div className="insp-map__actions"><StudioButton type="submit" variant="primary" disabled={!dirty||stale}>Apply</StudioButton>
         {draft && <StudioButton onClick={()=>{setDraft(undefined);setReload(v=>v+1);}}>{stale?'Reload':'Discard'}</StudioButton>}
-        <StudioButton disabled={dirty||stale} onClick={()=>void validate()}>Validate map</StudioButton></div>
+        {!data.worldSpace && <StudioButton disabled={dirty||stale} onClick={()=>void validate()}>Validate map</StudioButton>}</div>
     </fieldset>
     {!dirty && data.scope.revision===scope.revision && data.issues && <section aria-label="Map validation"><h3>Validation</h3>
       {data.issues.length===0?<p>No issues found.</p>:<ul>{data.issues.map((issue,i)=><li key={i}>

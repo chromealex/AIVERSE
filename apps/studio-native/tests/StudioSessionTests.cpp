@@ -2278,6 +2278,44 @@ void entityWorkflow() {
 }
 }
 
+static void worldSceneInspectorProperties() {
+    using namespace aiverse;
+    namespace fs=std::filesystem;
+    const auto root=fs::canonical(fs::temp_directory_path())/("studio-world-scene-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto project=root/"fixture";
+    fs::create_directories(project);
+    std::ofstream(project/"game.json")<<R"({"module":"actor","rules":"rules.json","maps":[{"file":"map.json"}]})";
+    std::ofstream(project/"rules.json")<<"{}";
+    const Json original=Json::parse(R"({"colliders":[{"min":[0,0,0],"max":[1,1,1]}],"spawns":[[0,0,0],[4,0,4]],"custom":{"marker":7}})");
+    std::ofstream(project/"map.json")<<original.dump();
+    {
+        studio::StudioSession session(root.string(),project.string());
+        auto call=[&](const char* method,Json params=Json::object()){
+            Json req=Json::object();req.set("id",Json::number(int64_t(1)));req.set("method",Json::string(method));
+            req.set("params",std::move(params));return session.dispatch(req);
+        };
+        const auto initial=call("studio.snapshot")["result"];
+        AIVERSE_TEST_CHECK(initial["scene"].getBool("worldSpace")&&initial["scene"].getBool("mapProperties"));
+        Json params=Json::object();params.set("scope",initial["graphDocument"]);
+        const auto summary=call("studio.mapProperties",params)["result"];
+        AIVERSE_TEST_CHECK(!summary.getBool("grid")&&summary["worldSpace"].getInt("colliders")==1&&summary["worldSpace"].getInt("spawns")==2);
+        params.set("changes",Json::parse(R"({"name":"Partial","size":[20,18]})"));
+        AIVERSE_TEST_CHECK(call("studio.mapPropertiesSet",params).has("error")&&session.workspace().map.toJson()==original);
+        params.set("changes",Json::parse(R"({"name":"Harbor terminal"})"));
+        const auto renamed=call("studio.mapPropertiesSet",params)["result"];
+        AIVERSE_TEST_CHECK(renamed["scene"].getStr("name")=="Harbor terminal");
+        AIVERSE_TEST_CHECK(call("studio.mapPropertiesSet",params).has("error"));
+        params.set("scope",renamed["graphDocument"]);
+        const auto depth=session.workspace().map.undoDepth();
+        AIVERSE_TEST_CHECK(!call("studio.mapPropertiesSet",params).has("error")&&session.workspace().map.undoDepth()==depth);
+        AIVERSE_TEST_CHECK(!call("studio.undo").has("error")&&session.workspace().map.toJson()==original);
+        AIVERSE_TEST_CHECK(!call("studio.redo").has("error")&&!call("studio.save").has("error"));
+        editor::MapDoc disk;std::string error;Json expected=original;expected.set("name",Json::string("Harbor terminal"));
+        AIVERSE_TEST_CHECK(disk.load((project/"map.json").string(),&error)&&disk.toJson()==expected);
+    }
+    fs::remove_all(root);
+}
+
 static void actorProjectMapSelection() {
     using namespace aiverse;
     const auto read=[](const std::string& file,std::string& out) {
@@ -2324,6 +2362,7 @@ int main() {
     using namespace aiverse;
     aiverse::studio::StudioSession session(".");
     actorProjectMapSelection();
+    worldSceneInspectorProperties();
     localPlayToolContracts(session.workspace());
     bool playRejected=false;
     try { (void)studio::studioGameLaunch(session.workspace(),false); }

@@ -233,9 +233,9 @@ export default function InspectorPanel({ inspector: primary, selected, busy, ins
   return <div className="insp">
     {mapScope && <nav className="insp__views" aria-label="Inspector views">
       <button type="button" aria-pressed={!showMap} disabled={!selected && !inspector} onClick={()=>setMapView("object")}>Object</button>
-      <button type="button" aria-pressed={!!showMap && (mapView==="object" || mapView==="map")} onClick={()=>setMapView("map")}>Map</button>
-      <button type="button" aria-pressed={mapView==="players"} onClick={()=>setMapView("players")}>Players</button>
-      <button type="button" aria-pressed={mapView==="areas"} onClick={()=>setMapView("areas")}>Areas</button>
+      <button type="button" aria-pressed={!!showMap && (mapView==="object" || mapView==="map")} onClick={()=>setMapView("map")}>{snapshot.scene.worldSpace?"Scene":"Map"}</button>
+      {!snapshot.scene.worldSpace && <><button type="button" aria-pressed={mapView==="players"} onClick={()=>setMapView("players")}>Players</button>
+      <button type="button" aria-pressed={mapView==="areas"} onClick={()=>setMapView("areas")}>Areas</button></>}
       {snapshot?.scene.mapRegions && <button type="button" aria-pressed={mapView==="regions"} onClick={()=>setMapView("regions")}>Regions</button>}</nav>}
     {mapScope && mapView==="regions" ? <MapRegions key={JSON.stringify([mapScope.projectPath,mapScope.epoch,mapScope.mapPath])}
       scope={mapScope} busy={busy} onApply={commitSnapshot}/> : showMap && mapView!=="regions" ? <MapInspector view={mapView} key={JSON.stringify([mapScope.projectPath,mapScope.epoch,mapScope.mapPath])} scope={mapScope} busy={busy}
