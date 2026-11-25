@@ -91,6 +91,42 @@ public:
         return true;
     }
 
+    // Admission at the parking barrier. Seat actor IDs are owned by the
+    // host. Pending requests cannot be parked: the drive codec omits them.
+    static bool mayPark(const World& world,std::span<const Entity> members,
+                        const SeatEntityResolver& resolveSeat) {
+        std::set<uint64_t> group;
+        for(Entity e:members)group.insert(e.packed());
+        auto inside=[&](Entity e){return group.contains(e.packed());};
+        bool closed=true;
+        world.eachExistingConst<vehicles::VehicleDrive>([&](Entity car,const vehicles::VehicleDrive& drive){
+            if(!closed)return;
+            if(inside(car)){
+                VehicleRegionGroup occupied;
+                closed=drive.requests.empty() && gather(world,car,resolveSeat,occupied) &&
+                    std::all_of(occupied.members.begin(),occupied.members.end(),inside);
+                return;
+            }
+            if(inside(drive.driver)){closed=false;return;}
+            auto outside=[&](int64_t actor){
+                Entity e=resolveSeat ? resolveSeat(actor) : kNullEntity;
+                return world.alive(e) && !inside(e);
+            };
+            for(const auto& [seat,actor]:drive.seats.occupants){
+                (void)seat;
+                if(!outside(actor)){closed=false;return;}
+            }
+            for(const auto& request:drive.requests)
+                if(!outside(request.actor)){closed=false;return;}
+        });
+        for(Entity e:members){
+            const auto* passenger=world.tryGetConst<vehicles::VehicleOccupant>(e);
+            if(passenger && (!inside(passenger->vehicle) ||
+                             !world.tryGetConst<vehicles::VehicleDrive>(passenger->vehicle)))return false;
+        }
+        return closed;
+    }
+
     // Requires each member to have RegionStableIdentity + an authoritative position and to
     // belong to expected region. RegionEcsBridge validates ALL before changing
     // any owner; caller separately gates destination collision/nav readiness.

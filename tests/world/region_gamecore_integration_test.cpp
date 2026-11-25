@@ -5,6 +5,9 @@
 #include "engine/game/Components.h"
 #include "engine/data/JsonCompose.h"
 #include "engine/world/RegionLifecycleRuntime.h"
+#include "engine/world/VehicleRegionTransfer.h"
+#include "engine/actor/ActorComponents.h"
+#include <aiverselib/mechanics/InteractionPersistence.h>
 #include "tests/AlwaysCheck.h"
 #include <cstdint>
 #include <iostream>
@@ -39,6 +42,24 @@ public:
         auto admit=[](const Simulation&,w::Cell,std::span<const Entity>){return true;};
         w::RegionLifecycleRuntime::GuardedPolicy guarded{{},admit,admit};
         guarded.plan.addPaused<RegionWork>("fixture.region_work");
+        auto paused=[&]<class T>(const char* name){
+            if(!controller.registerComponent<T>(name,1) || !guarded.plan.addPaused<T>(name))
+                throw std::logic_error("mixed component codec registration");
+        };
+        paused.operator()<vehicles::VehicleDrive>("fixture.drive");
+        paused.operator()<vehicles::VehicleOccupant>("fixture.occupant");
+        paused.operator()<actor::LocomotionBody>("fixture.motor");
+        paused.operator()<lib::mechanics::BreakableInstance>("fixture.breakable");
+        sim.registerPersistentComponent<lib::mechanics::BreakableInstance>("fixture.breakable",1);
+        sim.registerPersistentComponent<actor::LocomotionBody>("fixture.motor",1);
+        guarded.mayPark=[](const Simulation& sim,w::Cell,std::span<const Entity> group){
+            auto resolve=[&](int64_t slot){
+                const auto& values=sim.world().resourceConst<g::NativeStore>()->modules.at(0).values;
+                const auto it=values.find("passenger");
+                return slot==7 && it!=values.end() ? Entity::fromPacked(uint64_t(it->second)) : kNullEntity;
+            };
+            return w::VehicleRegionTransfer::mayPark(sim.world(),group,resolve);
+        };
         guarded.references.addComponent<Links>([](const Links& links,auto report) {
             for(Entity entry:links.targets)report(entry);
         });
@@ -284,7 +305,72 @@ static void externalLinksDelayWholeGroup() {
     AIVERSE_TEST_CHECK(fresh->world().get<fixture::RegionWork>(second).assignment=="passenger");
 }
 
+static void mixedRegionSaveAndWake() {
+    auto game=make(true);
+    auto& ecs=game->world();
+    const Entity object=target(*game);
+    const Entity car=ecs.create();
+    const Entity passenger=ecs.create();
+    const Entity outsider=ecs.create();
+    const std::array members{object,car,passenger};
+    auto current=region(*game);
+    const Transform transform=ecs.get<Transform>(object);
+    for(Entity e:{car,passenger})ecs.add<Transform>(e,transform);
+    auto* ledger=ecs.resource<w::RegionEntityLedger>();
+    AIVERSE_TEST_CHECK(w::RegionEcsBridge::bindNew(ecs,*ledger,car,1002,current));
+    AIVERSE_TEST_CHECK(w::RegionEcsBridge::bindNew(ecs,*ledger,passenger,1003,current));
+    ecs.resource<g::NativeStore>()->modules.at(0).values["passenger"]=int64_t(passenger.packed());
+    vehicles::VehicleDrive drive;
+    drive.driver=passenger;
+    drive.seats.occupants={{1,7}};
+    ecs.add<vehicles::VehicleDrive>(car,drive);
+    vehicles::VehicleOccupant rider;
+    rider.vehicle=car;
+    ecs.add<vehicles::VehicleOccupant>(passenger,rider);
+    ecs.add<actor::LocomotionBody>(passenger,actor::LocomotionBody{});
+    ecs.add<lib::mechanics::BreakableInstance>(object,lib::mechanics::BreakableInstance{31,2,19,false});
+    ecs.add<fixture::Links>(outsider,fixture::Links{{object}});
+    AIVERSE_TEST_CHECK(w::RegionLifecycleRuntime::request(*game,current,false));
+    game->step();
+    AIVERSE_TEST_CHECK(ecs.resourceConst<w::RegionColdStore>()->size()==0);
+    ecs.remove<fixture::Links>(outsider);
+    for(int i=0;i<100;++i){
+        auto& world=game->world();
+        const w::Cell next{current.x+1,current.y,current.z};
+        AIVERSE_TEST_CHECK(w::RegionEcsBridge::transferGroup(world,*world.resource<w::RegionEntityLedger>(),
+                                                             members,current,next));
+        for(Entity e:members)world.get<Transform>(e).pos.x+=Fixed::fromInt(32);
+        if(i==0)AIVERSE_TEST_CHECK(w::RegionLifecycleRuntime::cancel(*game,current));
+        current=next;
+        AIVERSE_TEST_CHECK(w::RegionLifecycleRuntime::request(*game,current,false));
+        game->step();
+        AIVERSE_TEST_CHECK(world.resourceConst<w::RegionColdStore>()->size()==3);
+        AIVERSE_TEST_CHECK(!world.has<vehicles::VehicleDrive>(car) &&
+                           !world.has<actor::LocomotionBody>(passenger) &&
+                           !world.has<lib::mechanics::BreakableInstance>(object));
+        if(i%20==0){
+            auto restored=make(true);
+            std::string error;
+            AIVERSE_TEST_CHECK(restored->deserialize(game->serialize(),&error));
+            AIVERSE_TEST_CHECK(restored->checksum()==game->checksum());
+            game=std::move(restored);
+        }
+        AIVERSE_TEST_CHECK(w::RegionLifecycleRuntime::request(*game,current,true));
+        game->step();
+        auto& hot=game->world();
+        AIVERSE_TEST_CHECK(hot.resourceConst<w::RegionColdStore>()->size()==0);
+        AIVERSE_TEST_CHECK(hot.get<vehicles::VehicleDrive>(car).driver==passenger);
+        AIVERSE_TEST_CHECK(hot.get<vehicles::VehicleDrive>(car).seats.occupants.at(1)==7);
+        AIVERSE_TEST_CHECK(hot.get<vehicles::VehicleOccupant>(passenger).vehicle==car);
+        AIVERSE_TEST_CHECK(hot.has<actor::LocomotionBody>(passenger));
+        AIVERSE_TEST_CHECK(hot.get<lib::mechanics::BreakableInstance>(object).health==31);
+        AIVERSE_TEST_CHECK(hot.resourceConst<w::RegionEntityLedger>()->activeIn(current)==
+                           std::vector<w::RegionEntityId>({1001,1002,1003}));
+    }
+}
+
 int main() {
+    mixedRegionSaveAndWake();
     externalLinksDelayWholeGroup();
     idleRegionSchedulerDoesNotCopyColdState();
     blockedRequestDoesNotLoseActors();

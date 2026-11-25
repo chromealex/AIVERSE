@@ -403,3 +403,10 @@ links can park together. A crossing link keeps the queue head pending until
 the owner releases it. Enumerate every relevant type and field. Keep semantic
 IDs and resource-owned claims in mayPark. The scan runs only on attempted hot
 to cold transitions and costs one traversal per registered component type.
+
+For hosts with shared VehicleDrive, compose VehicleRegionTransfer::mayPark
+with the host's own parking predicate. Supply the same seat-to-Entity resolver
+used for ownership transfer. Pending seat actions and links across the group
+boundary block parking. Use RegionReferenceAdmission for additional component
+types. Choose parkable components only when the host can pause their consumers
+and keeps a canonical position and stable identity available during dormancy.
