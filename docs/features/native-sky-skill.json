@@ -20,6 +20,11 @@
     "skills/workflow/aiverse-orchestrator/SKILL.md",
     "docs/agent-handoffs/native-sky-skill-initial.md",
     "docs/agent-handoffs/native-sky-readme-count-2026-11-25.md",
+    "docs/agent-handoffs/native-sky-main-certification-2026-11-25.md",
+    "docs/evidence/native-sky-discovery.json",
+    "docs/evidence/native-sky-discovery.log.txt",
+    "docs/evidence/native-sky-main-5e5552437.json",
+    "docs/evidence/native-sky-main-5e5552437.log.txt",
     "docs/features/native-sky-skill.json"
   ],
   "traits": {
@@ -111,9 +116,9 @@
     },
     "tests": {
       "status": "pass",
-      "note": "Production catalog validates; realistic Russian and English queries rank the skill first and the client plan selects its recipe.",
+      "note": "On integrated main, the production catalog validates 303 skills, strict audit passes, Russian and English sky queries rank this skill first, all nine README files pass, and the site check reports zero errors.",
       "evidence": [
-        "docs/evidence/native-sky-discovery.json"
+        "docs/evidence/native-sky-main-5e5552437.json"
       ]
     },
     "handoff": {
@@ -145,6 +150,6 @@
     "studio_methods": []
   },
   "test_reports": [
-    "docs/evidence/native-sky-discovery.json"
+    "docs/evidence/native-sky-main-5e5552437.json"
   ]
 }
