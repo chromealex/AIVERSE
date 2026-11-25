@@ -2354,6 +2354,15 @@
           "textEn": "Bounded command codec, server-owned ECS actor authentication and landing checks, reusing existing network/physics owners."
         },
         {
+          "id": "open-world-mixed-residency",
+          "title": "Выгрузка смешанных групп региона",
+          "titleEn": "Mixed region group residency",
+          "text": "Проверка ссылок на группу при выгрузке, сохранение экипажа и состояния разрушаемых объектов.",
+          "textEn": "Guard region parking against crossing component links and preserve crew and breakable state.",
+          "status": "in-progress",
+          "target": null
+        },
+        {
           "id": "world-recurring-simulation-budget",
           "title": "Бюджет фоновой симуляции",
           "titleEn": "Recurring simulation budget",

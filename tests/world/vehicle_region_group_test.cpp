@@ -1,6 +1,7 @@
 #include "engine/world/VehicleRegionTransfer.h"
 #include "tests/AlwaysCheck.h"
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <iostream>
 #include <map>
@@ -47,6 +48,31 @@ struct Fixture {
         };
     }
 };
+void parkingRequiresClosedVehicleGroup() {
+    Fixture f;
+    const std::array full{f.car,f.driver,f.passenger};
+    const std::array partial{f.car,f.driver};
+    const std::array passengerOnly{f.passenger};
+    auto allows=[&](std::span<const Entity> group){
+        return w::VehicleRegionTransfer::mayPark(f.world,group,f.resolver());
+    };
+    AIVERSE_TEST_CHECK(allows(full));
+    AIVERSE_TEST_CHECK(!allows(partial));
+    AIVERSE_TEST_CHECK(!allows(passengerOnly));
+    auto& drive=f.world.get<vs::VehicleDrive>(f.car);
+    drive.requests.emplace_back().actor=102;
+    AIVERSE_TEST_CHECK(!allows(full));
+    drive.requests.clear();
+    vs::VehicleDrive pending;
+    pending.requests.emplace_back().actor=102;
+    f.world.add<vs::VehicleDrive>(f.otherCar,pending);
+    AIVERSE_TEST_CHECK(!allows(full));
+    f.world.remove<vs::VehicleDrive>(f.otherCar);
+    AIVERSE_TEST_CHECK(allows(full));
+    f.slots.erase(102);
+    AIVERSE_TEST_CHECK(!allows(full));
+}
+
 void groupingAndTransfer() {
     Fixture f;
     std::string reason;
@@ -136,6 +162,7 @@ void backwardsReferencesNotLost() {
 }
 }
 int main() {
+    parkingRequiresClosedVehicleGroup();
     groupingAndTransfer();
     failuresAreAtomic();
     backwardsReferencesNotLost();

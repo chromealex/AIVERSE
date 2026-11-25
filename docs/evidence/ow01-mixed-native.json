@@ -1,0 +1,14 @@
+{
+  "sha": "261ba47f06fd4f5f6feafc127641cb8dfffd7016",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/ow01-pr192-mac-f0b46a0ca",
+    "-R",
+    "^(region_gamecore_integration_test|vehicle_region_group_test)$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/ow01-mixed-native.log.txt",
+  "sha256": "e382de79f6bec832f2ca40be6ab8b80b33b9fbef6b423c62b129c2de91b0334b"
+}

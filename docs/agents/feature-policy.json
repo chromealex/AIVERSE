@@ -160,6 +160,17 @@
         "apps/studio-native/StudioWorldProcessesEditing.h",
         "libraries/include/aiverselib/world/WorldProcessesNativeModule.h"
       ]
+    },
+    "open-world-mixed-residency": {
+      "requires": [],
+      "roadmap": {
+        "system": "world",
+        "id": "open-world-mixed-residency"
+      },
+      "api_paths": [
+        "engine/world/RegionLifecycleRuntime.h",
+        "engine/world/VehicleRegionTransfer.h"
+      ]
     }
   },
   "claims": []
