@@ -13,6 +13,11 @@
     "docs/agent-handoffs/quake3-bsp-pvs.md",
     "docs/agents/feature-policy.json",
     "docs/devlog/systems.json",
+    "docs/evidence/.gitattributes",
+    "docs/evidence/quake3-bsp-egyptian-trouble.md",
+    "docs/evidence/quake3-bsp-egyptian-trouble.png",
+    "docs/evidence/quake3-bsp-openarena-metal-20261125.json",
+    "docs/evidence/quake3-bsp-openarena-metal-20261125.log.txt",
     "docs/features/quake3-bsp.json",
     "docs/models.md",
     "engine/render/BspShaderImages.h",
@@ -37,9 +42,12 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Texture and baked page binding stage in progress. Existing planar, patch and PVS tests passed.",
-      "evidence": []
+      "status": "pass",
+      "note": "IBSP geometry, PVS, static shader textures and per-face baked pages rendered on Metal.",
+      "evidence": [
+        "docs/evidence/quake3-bsp-openarena-metal-20261125.log.txt",
+        "docs/evidence/quake3-bsp-egyptian-trouble.png"
+      ]
     },
     "architecture": {
       "status": "pass",
@@ -68,19 +76,28 @@
       "evidence": []
     },
     "studio": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Native Studio catalog classifies BSP as a model; the Models panel routes model_info through studio.op.",
+      "evidence": [
+        "docs/agent-handoffs/quake3-bsp-materials.md",
+        "apps/studio-native/StudioAssetCatalog.cpp",
+        "apps/studio-web/src/panels/toolPanels.ts"
+      ]
     },
     "inspector": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Models panel exposes BSP fields from model_info. Native desktop pointer interaction has not been exercised.",
+      "evidence": [
+        "docs/agent-handoffs/quake3-bsp-materials.md"
+      ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The unmodified source map, its shader definitions and textures reopen from ordinary project files.",
+      "evidence": [
+        "docs/evidence/quake3-bsp-openarena-metal-20261125.log.txt",
+        "tests/render/prepare_openarena_bsp.py"
+      ]
     },
     "graphs": {
       "status": "not_applicable",
@@ -88,14 +105,19 @@
       "evidence": []
     },
     "performance": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Single Release Mac import measured 98.07 ms; authored camera PVS admitted 1408 of 3073 surfaces.",
+      "evidence": [
+        "docs/evidence/quake3-bsp-openarena-metal-20261125.log.txt"
+      ]
     },
     "platforms": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "macOS Metal passed. Windows MinGW compiled the importer and GI binding; a Windows runtime frame remains unverified.",
+      "evidence": [
+        "docs/agent-handoffs/quake3-bsp-materials.md",
+        "docs/evidence/quake3-bsp-openarena-metal-20261125.log.txt"
+      ]
     },
     "dependencies": {
       "status": "pass",
@@ -117,14 +139,18 @@
       ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Focused CPU importer regression and opt-in native OpenArena Metal differential test passed.",
+      "evidence": [
+        "docs/evidence/quake3-bsp-openarena-metal-20261125.json"
+      ]
     },
     "handoff": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Code SHA, capture, license, checks and integration scope recorded.",
+      "evidence": [
+        "docs/agent-handoffs/quake3-bsp-materials.md"
+      ]
     },
     "documentation": {
       "status": "pass",
@@ -135,8 +161,11 @@
     },
     "publishing": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "The native screenshot, credits, source link and reproduction are ready locally. Public site and standalone web demo are pending.",
+      "evidence": [
+        "docs/evidence/quake3-bsp-egyptian-trouble.png",
+        "docs/evidence/quake3-bsp-egyptian-trouble.md"
+      ]
     }
   },
   "integrations": {
@@ -154,5 +183,7 @@
       "studio.op"
     ]
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/quake3-bsp-openarena-metal-20261125.json"
+  ]
 }

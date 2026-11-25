@@ -1,0 +1,41 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/render-capabilities-20261125/mac
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/render-capabilities-20261125/mac/DartConfiguration.tcl
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/render-capabilities-20261125/mac/DartConfiguration.tcl
+Test project /Volumes/KINGSTON/AIVERSE-builds/render-capabilities-20261125/mac
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 29
+    Start  29: quake3_bsp
+
+29: Test command: /Volumes/KINGSTON/AIVERSE-builds/render-capabilities-20261125/mac/aiverse_quake3_bsp_tests
+29: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/render-capabilities-20261125/mac
+29: Test timeout computed to be: 10000000
+1/2 Test  #29: quake3_bsp .......................   Passed    1.65 sec
+test 336
+    Start 336: quake3_bsp_frame
+
+336: Test command: /Volumes/KINGSTON/AIVERSE-builds/render-capabilities-20261125/mac/aiverse_bsp_metal_frame
+336: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/render-capabilities-20261125/mac
+336: Test timeout computed to be: 120
+336: [metal-assets] libraries=0 sourceMisses=11 pipelines=16 pipelineFailures=0 archive=0 strict=0
+336: BSP import 98.07 ms; PVS cluster 211 admits 1408/3073 surfaces
+336: BSP surfaces=3073 textures=43
+336: BSP changed pixels of 400000: diffuse=400000 lightmap=396284
+2/2 Test #336: quake3_bsp_frame .................   Passed    5.10 sec
+
+The following tests passed:
+	quake3_bsp
+	quake3_bsp_frame
+
+100% tests passed, 0 tests failed out of 2
+
+Label Time Summary:
+BSP      =   5.10 sec*proc (1 test)
+GPU      =   5.10 sec*proc (1 test)
+Metal    =   5.10 sec*proc (1 test)
+
+Total Test time (real) =   6.80 sec
