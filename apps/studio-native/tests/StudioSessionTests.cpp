@@ -184,7 +184,13 @@ void authoredEntityWorkflow() {
        auto preview=Json::object();preview.set("projectPath",Json::string(session.workspace().project.dir));
        preview.set("name",Json::string("studio_tint"));preview.set("graph",graph["result"]["graph"]);
        AIVERSE_TEST_CHECK(!call("studio.shaderGraphPreview",preview.dump().c_str()).has("error"));
-       AIVERSE_TEST_CHECK(session.previewMaterialFactors()["studioGraphDraft"]==graph["result"]["graph"]);
+       AIVERSE_TEST_CHECK(session.previewGraphFactors()["studioGraphDraft"]==graph["result"]["graph"]);
+       AIVERSE_TEST_CHECK(!call("studio.materialPreview",R"({"name":"stone"})").has("error"));
+       AIVERSE_TEST_CHECK(session.previewMaterialName()=="stone");
+       const auto materialRevision=session.previewMaterialRevision();
+       AIVERSE_TEST_CHECK(!call("studio.shaderGraphPreview",preview.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(session.previewMaterialName()=="stone" && session.previewMaterialRevision()==materialRevision);
+       AIVERSE_TEST_CHECK(session.previewGraphTitle()=="Shader Graph / studio_tint");
        preview.set("graph",Json::object());
        AIVERSE_TEST_CHECK(call("studio.shaderGraphPreview",preview.dump().c_str()).has("error"));
        AIVERSE_TEST_CHECK(!call("studio.materialPreview",R"({"name":""})").has("error"));

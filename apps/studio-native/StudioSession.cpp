@@ -544,7 +544,6 @@ Json StudioSession::snapshot() const {
     return result;
 }
 void StudioSession::refreshMaterialPreview() {
-    previewGraphTitle_.clear();
     if (previewMaterialName_.empty()) {
         previewMaterialFactors_ = Json();
         ++previewMaterialRevision_;
@@ -585,7 +584,7 @@ Json StudioSession::openProject(const std::string& path) {
     pendingAssetTransfer_.reset();
     clearSelection();hidden_.clear();locked_.clear();
     facialPreview_.reset(); // project identity may change; never reuse prior GUID
-    previewMaterialName_.clear();
+    previewGraphTitle_.clear();previewGraphFactors_=Json();previewMaterialName_.clear();
     refreshMaterialPreview();
     return snapshot();
 }
@@ -1453,7 +1452,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
             } else if(method=="studio.humanCreatorPreview") {
                 if(params.getBool("enabled",true)) {
                     facialPreview_.bindCreator(humanCreator_.toDocument());
-                    previewMaterialName_.clear();refreshMaterialPreview();
+                    previewGraphTitle_.clear();previewGraphFactors_=Json();previewMaterialName_.clear();refreshMaterialPreview();
                 } else if(facialPreview_.creatorMode()) facialPreview_.reset();
             } else throw std::invalid_argument("Unknown Human Creator method");
             if(!ok)throw std::invalid_argument(error.empty()?"Human Creator edit rejected":error);
@@ -1495,7 +1494,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                         throw std::invalid_argument("Invalid appearance revision");
                     StudioAssetCatalog catalog(ws_.project.dir);catalog.rebuild();
                     facialPreview_.bindAppearance(catalog,params.getStr("guid"),uint64_t(rev.integer()),params["look"],params.has("face")?&params["face"]:nullptr);
-                    previewMaterialName_.clear();refreshMaterialPreview();
+                    previewGraphTitle_.clear();previewGraphFactors_=Json();previewMaterialName_.clear();refreshMaterialPreview();
                 }
                 auto info=Json::object();info.set("schema",vivid::HumanAppearance::schema());info.set("faceSchema",vivid::HumanFaceShape::schema());info.set("face",facialPreview_.face()?facialPreview_.face()->toJson():Json());
                 info.set("look",facialPreview_.appearance()?facialPreview_.appearance()->toJson():vivid::HumanAppearance{}.toJson());
@@ -1521,7 +1520,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     // Facial mode takes precedence over a previously opened
                     // material sphere, without mutating map/gameplay data.
                     Json result=facialPreview_.bind(catalog,guid,params["rig"]);
-                    previewMaterialName_.clear();
+                    previewGraphTitle_.clear();previewGraphFactors_=Json();previewMaterialName_.clear();
                     refreshMaterialPreview();
                     reply.set("result",std::move(result));
                 }
@@ -1650,9 +1649,9 @@ Json StudioSession::dispatchImpl(const Json& request) {
             Json request=Json::object();request.set("graph",graph);
             const auto validated=ws_.call("shader_graph_validate",request,"studio");
             if(validated.has("error"))throw std::runtime_error(validated.getStr("error"));
-            previewMaterialName_.clear();previewGraphTitle_="Shader Graph / "+name;
-            previewMaterialFactors_=Json::object();previewMaterialFactors_.set("studioGraphDraft",graph);
-            ++previewMaterialRevision_;
+            previewGraphTitle_="Shader Graph / "+name;
+            previewGraphFactors_=Json::object();previewGraphFactors_.set("studioGraphDraft",graph);
+            ++previewGraphRevision_;
             Json out=Json::object();out.set("name",str(previewGraphTitle_));reply.set("result",std::move(out));
         } else if (method == "studio.materialPreview") {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
@@ -2319,7 +2318,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 if (result.has("error")) throw std::runtime_error(result.getStr("error"));
                 ws_.map.touched();
             }
-            clearSelection();hidden_.clear();locked_.clear();previewMaterialName_.clear();refreshMaterialPreview();
+            clearSelection();hidden_.clear();locked_.clear();previewGraphTitle_.clear();previewGraphFactors_=Json();previewMaterialName_.clear();refreshMaterialPreview();
             reply.set("result",snapshot());
         } else if (method == "studio.entityCatalog") {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");

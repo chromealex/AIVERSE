@@ -1,7 +1,7 @@
 // AI-friendly rendering surface: keep App.tsx as the application shell.
 // For a new editor panel, register a typed panel ID in nestedDock.ts,
 // then insert one render case below. All data mutations still use Studio Bridge.
-import { useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import {
   Activity,
   Focus, RotateCcw
@@ -129,7 +129,6 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
         return <RulesPanel key={snapshot?.project.path} projectPath={snapshot?.project.path ?? ''} onChanged={() => void invoke('studio.snapshot', {}).then(ctx.commitSnapshot).catch(() => {})}/>;
       case 'scene':
         return <>
-          {snapshot?.previewMaterial&&<ScenePreviewControls title={snapshot.previewMaterial}/>}
           <div className="viewport-toolbar">
             <div className="viewport-tools">
               <SceneToolbar enabled={connected && sceneMode !== 'welcome'} projectPath={snapshot?.project.path ?? ''}/>
@@ -159,7 +158,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
         return <MaterialsPanel projectPath={snapshot?.project.path ?? ''}
           previewMaterial={snapshot?.previewMaterial}/>;
       case 'shader_graph':
-        return <ShaderGraphPanel projectPath={snapshot?.project.path ?? ''} previewTitle={snapshot?.previewMaterial}/>;
+        return <ShaderGraphPanel projectPath={snapshot?.project.path ?? ''}/>;
       case 'project': return <ProjectPanel {...ctx}/>;
       case 'facial_rig':
         return <FacialRigPanel projectPath={snapshot?.project.path ?? ''}/>;
@@ -176,13 +175,4 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'game': return <GamePanel {...ctx}/>;
       case 'animation': return <AnimationTimeline snapshot={snapshot} showPanel={ctx.showPanel}/>;
     }
-}
-
-function ScenePreviewControls({title}:{title:string}) {
- const [error,setError]=useState('');
- return <div className="viewport-toolbar">
-  <strong>{title}</strong>
-  <button type="button" onClick={()=>void invoke('studio.materialPreview',{name:''}).catch(e=>setError(String(e)))}>Return to map</button>
-  {error&&<span role="alert">{error}</span>}
- </div>;
 }

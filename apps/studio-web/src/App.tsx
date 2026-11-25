@@ -181,10 +181,6 @@ export default function App() {
       if(event==='spectrafx.packageStaged'){
         showPanelEvent('fx_graph');
       } else if (event === 'material.preview') {
-        if (typeof payload === 'object' && payload !== null &&
-            'message' in payload && String(payload.message)) {
-          showPanelEvent('scene');
-        }
         void refresh();
       } else if (event === 'viewport.hover') {
         setHoverId(payload && typeof payload === 'object' && 'message' in payload ? String(payload.message) : '');

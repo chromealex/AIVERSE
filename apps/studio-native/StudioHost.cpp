@@ -106,7 +106,7 @@ void StudioHost::shutdown() {
     game_.reset(); // hosted client and its device retire before the native surface
     if (renderThread_) {
         // The Scene and its GPU resources are released on their owner thread, then the thread stops.
-        try { renderThread_->invoke([&] { fxPreview_.reset(); preview_.reset(); }); } catch (const std::exception&) {}
+        try { renderThread_->invoke([&] { materialSurface_.renderer.reset(); shaderSurface_.renderer.reset(); fxPreview_.reset(); preview_.reset(); }); } catch (const std::exception&) {}
         renderThread_->stop();
         renderThread_.reset();
     }
@@ -299,6 +299,11 @@ void StudioHost::gameEvent(const platform::Event& event) {
 }
 void StudioHost::surfaceDetached(StudioSurface surface) {
     if (surface == StudioSurface::Scene) { placement_ = {}; readyEmitted_ = false; }
+    else if(surface==StudioSurface::Material || surface==StudioSurface::Shader) {
+        auto& asset=surface==StudioSurface::Material?materialSurface_:shaderSurface_;
+        asset.placement={};
+        if(asset.renderer)onScene([&]{asset.renderer.reset();});
+    }
     else if(surface == StudioSurface::Fx) {
         fxPlacement_={};fxSurfaceVisible_=false;
         cancelSpectraCapture();
@@ -380,6 +385,31 @@ void StudioHost::pollAgentRequests() {
         }
         onScene([&] { preview_->captureFacialThumbnail((out / (id + ".png")).string(), false); });
     } catch (const std::exception&) {}
+}
+void StudioHost::tickAssetPreview(StudioSurface surface) {
+    const bool shader=surface==StudioSurface::Shader;
+    auto& asset=shader?shaderSurface_:materialSurface_;
+    const auto& title=shader?session_->previewGraphTitle():session_->previewMaterialName();
+    if(!asset.placement.visible || title.empty() || !platform_.surfaceDrawable(surface))return;
+    try {
+        if(!renderThread_) {
+            const char* threaded=std::getenv("AIVERSE_STUDIO_RENDER_THREAD");
+            renderThread_=std::make_unique<StudioRenderThread>([this]{renderSceneFrame();},!(threaded&&std::string(threaded)=="0"));
+        }
+        onScene([&]{
+            platform_.sceneThreadScope([&]{
+                if(!asset.renderer)asset.renderer=std::make_unique<StudioScene>(platform_.createDevice(surface));
+                const auto& ws=session_->workspace();
+                asset.renderer->frame(asset.placement.pixelsW,asset.placement.pixelsH,ws.map,false,"",title,
+                    shader?session_->previewGraphFactors():session_->previewMaterialFactors(),
+                    shader?session_->previewGraphRevision():session_->previewMaterialRevision(),
+                    float(ws.project.rules.levelHeight.toDouble()),ws.project.dir);
+            });
+        });
+    }catch(const std::exception& e){
+        platform_.log(std::string("Studio asset preview: ")+e.what());
+        surfaceDetached(surface);
+    }
 }
 void StudioHost::tickFx() {
     if(!fxPlacement_.visible || !platform_.surfaceDrawable(StudioSurface::Fx))return;
@@ -478,6 +508,8 @@ void StudioHost::tick() {
     }
     tickAgentScreenshot();
     pollAgentRequests();
+    tickAssetPreview(StudioSurface::Material);
+    tickAssetPreview(StudioSurface::Shader);
     tickFx(); // dedicated native FX drawable continues even if Scene is hidden
     if (!placement_.visible || !platform_.surfaceDrawable(StudioSurface::Scene)) {
         session_->setFacialPreviewGpuStatus(false, "Native Scene viewport hidden or not drawable");
@@ -509,8 +541,7 @@ void StudioHost::tick() {
         // Character and material previews read live session state (facial binding, material drafts):
         // the UI thread waits for those frames. Everything else renders asynchronously.
         const bool facialBound = session_->facialPreviewBinding().bound();
-        const bool materialPreview = !session_->previewMaterialName().empty() && session_->previewMaterialFactors().isObject();
-        if (!facialBound && !materialPreview) { tickScene(); return; }
+        if (!facialBound) { tickScene(); return; }
         FrameOutputs out;
         const bool wantClips = (lightingStatusTicks_ % 30) == 0;
         std::vector<std::string> clips;
@@ -523,7 +554,7 @@ void StudioHost::tick() {
                 preview_->setWindPreview(session_->windPreview());
                 const auto& ws = session_->workspace();
                 preview_->frame(placement_.pixelsW, placement_.pixelsH, ws.map, ws.map.data.worldSpace, session_->selectedObjectId(),
-                    session_->previewMaterialName(), session_->previewMaterialFactors(), session_->previewMaterialRevision(),
+                    "", Json(), 0,
                     float(ws.project.rules.levelHeight.toDouble()), ws.project.dir, ws.project.rulesJson, &session_->facialPreviewBinding());
                 out.facialReady = preview_->facialReady();
                 out.facialError = preview_->facialError();
@@ -1502,6 +1533,16 @@ void StudioHost::applyViewport(const Json& params) {
         else if (game_) game_->suspend();
         return;
     }
+    if(id=="shader"||id=="material") {
+        const auto surface=id=="shader"?StudioSurface::Shader:StudioSurface::Material;
+        auto& asset=id=="shader"?shaderSurface_:materialSurface_;
+        NativeViewportPlacement placed;
+        if(platform_.placeSurface(surface,rect,placed)){
+            asset.placement=placed;
+            if(!placed.visible&&asset.renderer)onScene([&]{asset.renderer.reset();});
+        }
+        return;
+    }
     if(id=="fx") {
         NativeViewportPlacement placed;
         if(!platform_.placeSurface(StudioSurface::Fx,rect,placed))return;
@@ -1922,7 +1963,6 @@ void StudioHost::afterSessionReply(const Json& req, const Json& reply) {
         onScene([&] { preview_->resetCamera(); });
         mapSnapshot_.reset(); rulesSnapshot_.reset();
     }
-    if (method=="studio.shaderGraphPreview") sendEvent("material.preview",reply["result"].getStr("name"));
     if (method == "studio.materialPreview") sendEvent("material.preview", req["params"].getStr("name"));
     if (documentChangingMethods().count(method) || (method == "studio.op" && reply["result"].getBool("changed")))
         sendEvent("document.changed", "");

@@ -22,7 +22,7 @@
 
 namespace aiverse::studio {
 
-enum class StudioSurface { Scene, Game, Fx };
+enum class StudioSurface { Scene, Game, Fx, Material, Shader };
 
 // What a shell provides. Called on the main (UI) thread only, except runInBackground's work.
 class StudioHostPlatform {
@@ -179,6 +179,7 @@ private:
         std::vector<std::string> thumbnails; // Assets panel model thumbnails finished since the last frame
         uint32_t drawCalls = 0;
     };
+    void tickAssetPreview(StudioSurface surface);
     void tickFx();                     // UI thread: independent native FX surface
     void tickScene();                  // UI thread: snapshot inputs, kick the render thread, publish results
     void renderSceneFrame();           // render thread: one map frame
@@ -214,6 +215,10 @@ private:
     bool htmlComposite_ = false;
     std::unique_ptr<StudioSession> session_;
     std::unique_ptr<StudioScene> preview_;             // created, used and destroyed on renderThread_
+    struct AssetSurface {
+        NativeViewportPlacement placement;
+        std::unique_ptr<StudioScene> renderer;
+    } materialSurface_, shaderSurface_;
     std::unique_ptr<StudioScene> fxPreview_;           // separate GPU drawable + isolated camera; same owner render thread
     std::unique_ptr<StudioRenderThread> renderThread_;
     std::mutex renderIoMutex_;                         // guards renderInputs_ / renderOutputs_

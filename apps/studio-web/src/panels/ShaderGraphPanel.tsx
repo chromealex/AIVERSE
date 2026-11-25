@@ -4,10 +4,11 @@ import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import type { StudioShaderGraphDocument, StudioShaderGraphOp } from '../types';
 import { layoutShaderGraph, moveShaderGraphNode, addShaderGraphNode, removeShaderGraphNode, setShaderInput, setShaderOutput, shaderOutputNames, setShaderDomain, effectiveShaderValue, setShaderComponent } from './shaderGraphLayout';
 import {emptyShaderHistory,shaderHistory} from './shaderGraphHistory';
+import SpectraDockViewport from './SpectraDockViewport';
 import './graphSurface.css';
 import './ShaderGraphPanel.css';
 
-export default function ShaderGraphPanel({projectPath,previewTitle}:{projectPath:string;previewTitle?:string|null}) {
+export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  const [names,setNames]=useState<string[]>([]);
  const [operations,setOperations]=useState<StudioShaderGraphOp[]>([]);
  const [selectedOp,setSelectedOp]=useState('');
@@ -18,6 +19,8 @@ export default function ShaderGraphPanel({projectPath,previewTitle}:{projectPath
  const [document,setDocument]=useState<StudioShaderGraphDocument|null>(null);
  const [history,dispatch]=useReducer(shaderHistory,emptyShaderHistory);
  const draft=history.graph;
+ const [previewName,setPreviewName]=useState('');
+ useEffect(()=>setPreviewName(''),[projectPath,selected]);
  const setDraft=(graph:StudioShaderGraphDocument['graph'])=>dispatch({type:'edit',graph});
  const finishDrag=()=>{drag.current=null;dispatch({type:'drop'});};
  const drag=useRef<{id:string; x:number; y:number; originalX:number; originalY:number}|null>(null);
@@ -103,13 +106,12 @@ export default function ShaderGraphPanel({projectPath,previewTitle}:{projectPath
   if(next===draft){setError('This connection would create a cycle.');return;}
   setDraft(next);setSelectedNode(target);setWireSource('');setMessage('');setError('');
  };
- const previewDraft=async(stop:boolean)=>{
+ const previewDraft=async()=>{
   if(!draft||busy)return;
   setBusy(true);setError('');
   try{
-   if(stop)await invoke('studio.materialPreview',{name:''});
-   else await invoke('studio.shaderGraphPreview',{name:selected,graph:draft,projectPath});
-   setMessage(stop?'Returned to the map.':'Draft sent to the Scene GPU preview.');
+   await invoke('studio.shaderGraphPreview',{name:selected,graph:draft,projectPath});
+   setPreviewName(selected);setMessage('');
   }catch(e){setError(String(e));}finally{setBusy(false);}
  };
  const createGraph=async()=>{
@@ -192,8 +194,8 @@ export default function ShaderGraphPanel({projectPath,previewTitle}:{projectPath
          value={chosenOp?.id??''} onChange={event=>setSelectedOp(event.target.value)}>
          {compatibleOps.map(op=><option key={op.id} value={op.id}>{op.id}</option>)}
        </select>
-       {(draft?.domain==='material'||draft?.domain==='postfx')&&<button disabled={busy} onClick={()=>void previewDraft(false)}>Preview draft in Scene</button>}
-       {previewTitle?.startsWith('Shader Graph / ')&&<button disabled={busy} onClick={()=>void previewDraft(true)}>Return to map</button>}
+       {(draft?.domain==='material'||draft?.domain==='postfx')&&<button disabled={busy} onClick={()=>void previewDraft()}>{previewName===selected?'Refresh preview':'Preview draft'}</button>}
+       {previewName===selected&&<button onClick={()=>setPreviewName('')}>Hide preview</button>}
        <button disabled={!draft||busy||!chosenOp} onClick={createNode}>+ Node</button>
        <button disabled={!inspected||busy} onClick={deleteNode}>Delete node</button>
        <button disabled={!history.past.length||busy} onClick={()=>{dispatch({type:'undo'});setWireSource('');setError('');setMessage('');}}>Undo edit</button>
@@ -202,6 +204,7 @@ export default function ShaderGraphPanel({projectPath,previewTitle}:{projectPath
        <button disabled={!dirty||busy} onClick={discard}><RotateCcw size={13}/> Discard</button>
        <button disabled={!dirty||busy} onClick={()=>void save()}><Save size={13}/> Save graph</button>
       </div>
+      <div className="graph-workbench">
       <div className="graph-canvas-scroll graph-surface">
        <svg width={diagram.width} height={diagram.height} viewBox={'0 0 '+diagram.width+' '+diagram.height}
         role="group" aria-label={'Editable node layout for '+selected}
@@ -266,6 +269,8 @@ export default function ShaderGraphPanel({projectPath,previewTitle}:{projectPath
            onActivate={()=>connectInput(node.id,index,wireSource)}/>)}
         </g>)}
        </svg>
+      </div>
+      {previewName===selected&&<SpectraDockViewport id="shader" label="Shader draft GPU preview"/>}
       </div>
       {draft&&<div className="graph-bindings">
        {inspected&&<fieldset><legend>{inspected.id} · {inspected.op}</legend>

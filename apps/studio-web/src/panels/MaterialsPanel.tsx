@@ -8,6 +8,7 @@ import type { MaterialData, MaterialKey, MaterialLibrary, MaterialPatch, Materia
 import './MaterialsPanel.css';
 
 const EMPTY:MaterialLibrary={library:{}};
+import SpectraDockViewport from './SpectraDockViewport';
 export default function MaterialsPanel({projectPath,previewMaterial}:{projectPath:string;previewMaterial?:string|null}){
  const [library,setLibrary]=useState<MaterialLibrary>(EMPTY);
  const [name,setName]=useState('');
@@ -85,7 +86,7 @@ export default function MaterialsPanel({projectPath,previewMaterial}:{projectPat
   setPreviewing(true);setError('');
   try{
     await invoke('studio.materialPreview',{name:previewMaterial===name?'':name});
-    setMessage(previewMaterial===name?'Material preview cleared.':'PBR sphere selected in Scene view (textures/graphs excluded).');
+    setMessage(previewMaterial===name?'Material preview cleared.':'Showing saved PBR factors.');
   }catch(e){setError(e instanceof Error?e.message:String(e));}
   finally{setPreviewing(false);}
  };
@@ -106,6 +107,7 @@ export default function MaterialsPanel({projectPath,previewMaterial}:{projectPat
   {connected&&!projectPath&&<p className="materials-notice">Open a project to view the material library.</p>}
   {error&&<p role="alert" className="materials-error">{error}</p>}
   {message&&<p role="status" className="materials-notice">{message}</p>}
+  {name&&previewMaterial===name&&<SpectraDockViewport id="material" label="Material GPU preview"/>}
   <div className="materials-main">
    <aside className="materials-list">
     <button className="materials-new-button" disabled={!connected||!projectPath||busy}
@@ -148,8 +150,8 @@ export default function MaterialsPanel({projectPath,previewMaterial}:{projectPat
   <footer className="materials-footer">
    <span>{changes>0 ? changes+' pending PBR edits' : 'No pending edits'}</span>
    <button className="materials-preview" disabled={!connected||!projectPath||!name||changes>0||busy||previewing}
-     title="Preview basic PBR factors on the native Scene GPU sphere; texture and shader graph preview not supported"
-     onClick={()=>void preview()}><Eye size={14}/> {previewMaterial===name?'Exit PBR preview':'Preview in Scene'}</button>
+     title="Show the saved PBR factors on a GPU-rendered sphere"
+     onClick={()=>void preview()}><Eye size={14}/> {previewMaterial===name?'Hide preview':'Preview material'}</button>
    {pending!==null&&<button className="materials-discard" onClick={discard}>Discard &amp; switch</button>}
    <button className="materials-discard" onClick={discard} disabled={changes===0}>Discard</button>
    <button className="materials-apply" disabled={busy||loading||changes===0||!connected||!projectPath}

@@ -10,7 +10,9 @@ import './SpectraDockViewport.css';
  * camera and StudioScene. Both are serialized on the render-owner thread.
  * No fake browser pixels, WebGL duplicate or bitmap transport.
  */
-export default function SpectraDockViewport(){
+export default function SpectraDockViewport({id='fx',label='Native GPU particle preview'}:{
+  id?:'fx'|'shader'|'material';label?:string
+}={}){
   const ref=useRef<HTMLDivElement>(null);
   const native=nativeConnected();
   useEffect(()=>{
@@ -24,7 +26,7 @@ export default function SpectraDockViewport(){
         frame=0;
         if(disposed)return;
         const viewport=element.getBoundingClientRect();
-        const scroller=element.closest('.spectra-di__editor');
+        const scroller=element.closest('.spectra-di__editor,.graph-inspector,.materials-editor');
         const clipped=fxViewportRect(viewport,
           scroller?.getBoundingClientRect()??viewport,
           window.devicePixelRatio||1,
@@ -35,9 +37,9 @@ export default function SpectraDockViewport(){
         });
         const rect={...clipped,x:fit.x,y:fit.y,
           width:fit.width,height:fit.height,visible:clipped.visible&&fit.visible};
-        if(!viewportRectChanged('fx',rect))return;
-        void invoke('studio.viewportRect',{id:'fx',...rect}).catch(error=>{
-          forgetViewportRect('fx');
+        if(!viewportRectChanged(id,rect))return;
+        void invoke('studio.viewportRect',{id,...rect}).catch(error=>{
+          forgetViewportRect(id);
           console.warn('AIVERSE SpectraFX native viewport:',error);
         });
       });
@@ -57,16 +59,16 @@ export default function SpectraDockViewport(){
       window.removeEventListener('resize',publish);
       window.removeEventListener('scroll',publish,true);
       document.removeEventListener('visibilitychange',publish);
-      forgetViewportRect('fx');
-      void invoke('studio.viewportRect',{id:'fx',x:0,y:0,
+      forgetViewportRect(id);
+      void invoke('studio.viewportRect',{id,x:0,y:0,
         width:0,height:0,dpr:1,visible:false})
         .catch(()=>{});
       // Scene uses its own independent native surface and remains untouched
       // when this FX panel closes or moves to another window.
     };
-  },[native]);
-  return <div ref={ref} className="spectra-native__surface"
-    role="img" aria-label="Native GPU particle preview">
+  },[native,id]);
+  return <div ref={ref} className={id==='fx'?'spectra-native__surface':'asset-native-surface'}
+    role="img" aria-label={label}>
     {!native&&<div className="spectra-native__surface-hint">
       Native Metal/Vulkan preview is available in AIVERSE Studio, not the browser demo.
     </div>}
