@@ -19,3 +19,4 @@
 .lens-layout .lens-camera-picker{display:none}
 @container studio-page (max-width:559px){.lens-layout .lens-camera-picker{display:grid}.lens-layout aside{display:none}.lens-layout{gap:8px}}
 @container studio-page (min-width:560px){.lens-layout aside{position:sticky;top:0;max-height:100%;overflow:auto}}
+.lens-readings{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(124px,100%),1fr));gap:8px 16px;margin:12px 0 0;padding:10px 0 2px;border-top:1px solid var(--au-line);font-variant-numeric:tabular-nums}.lens-readings dt{color:var(--au-text-muted);font-size:var(--au-font-sm)}.lens-readings dd{margin:3px 0 0;font-weight:600}

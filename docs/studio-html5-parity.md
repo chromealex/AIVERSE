@@ -187,7 +187,7 @@ Derived from actual AIVERSE_EDITOR_WINDOW registrations in apps/editor/windows. 
 | `tools` | `apps/editor/windows/ToolsWindow.cpp` | Scene toolbar (Q/W/E/R, snap, pivot, bookmarks) and brushes |
 | `water` | `apps/editor/windows/WaterWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) + Scene river drawing (111) |
 | `static-geometry` | `apps/editor/windows/StaticGeometryWindow.cpp` | Static Geometry lists the configured scene and writes per-instance Auto/STRATA/LOD (47396ae81). Independent native processes verified saving all three modes to a custom scene path and reloading. Live renderer counters and selection decisions remain outstanding. |
-| `lens_cameras` | `apps/editor/windows/StudioCamerasWindow.cpp` | Actors & Cameras edits camera records and captures its own native preview to PNG. Mac docked and wide captures verified at two field-of-view settings. Follow presets and Use in Scene verified on macOS. Physical lens readouts, camera creation from Scene and Windows acceptance remain open. |
+| `lens_cameras` | `apps/editor/windows/StudioCamerasWindow.cpp` | Actors & Cameras edits camera records and captures its own native preview to PNG. Mac docked and wide captures verified at two field-of-view settings. Follow presets and Use in Scene verified on macOS. EV100 and depth of field, plus creation from orthographic and perspective Scene cameras, verified on macOS. Windows runtime acceptance remains open. |
 
 **2026-11-25 inventory check.** The original table covered 49 C++ registration files. Scanning apps/editor/windows for lines beginning with AIVERSE_EDITOR_WINDOW found 51, including the two rows above. HTML panel counts measure a different inventory: the workspace redesign checked 59 registered HTML panels at desktop and narrow widths. The acceptance gallery verifies opening and layout. See [workspace verification](handoff/studio-html5/workspace-redesign-2026-11-25.md) for fixture and platform limits.
 
@@ -231,3 +231,5 @@ Attachments stage: preserve both affine transforms while editing, publish draft 
 LENS camera authoring stage. Replace schema-only camera collection edits in Actors & Cameras with a responsive record list and native-validated draft editor. Preserve unknown fields, separate project and revision guards, and actual saved-file evidence. Camera output preview and recording require independent runtime acceptance.
 
 Camera navigation parity stage. Cover the Follow-body toggle, native preset list and editable framing, plus the explicit command that takes Scene to the selected camera.
+
+Current camera acceptance covers authoring from the active Scene projection and native physical-lens readouts for finite and infinite focus intervals.

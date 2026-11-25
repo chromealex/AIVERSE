@@ -53,6 +53,7 @@ export default function LensCameraPanel({project, operations,openScene}:{project
     }).catch(e=>{if(active)setPresetError(e instanceof Error?e.message:String(e));});
     return ()=>{active=false;};
   },[project]);
+  const [showOptics,setShowOptics]=useState(false);
   const [tab,setTab]=useState('Cameras');
   const [document,setDocument]=useState<Document|undefined>(()=>drafts.get(project)?.document);
   const [scene,setScene]=useState<CameraScene|undefined>(()=>drafts.get(project)?.scene);
@@ -94,13 +95,21 @@ export default function LensCameraPanel({project, operations,openScene}:{project
     setScene({...scene,cameras:scene.cameras.map(item=>item.id===selected?{...item,...patch}:item)});
     setNotice('');setError('');
   }
-  function create() {
+  async function create(fromScene:boolean) {
     if(!scene)return;
     const ids=new Set([...scene.cameras,...(document?.scene.cameras??[])].map(item=>item.id));
     let id=1;while(ids.has(id))id++;
     const keys=new Set(scene.cameras.map(item=>item.output?.key));
     let key=1;while(keys.has(key))key++;
     const item:CameraRecord={id,name:'Camera '+id,position:[0,12,18],camera:{projection:'perspective',fov:.75},output:{kind:'texture',key,width:512,height:512}};
+    if(fromScene){
+      setBusy(true);
+      try{
+        const pose=await invoke('studio.lensPreview',{project,copyScene:true});
+        if(!pose.camera||!pose.position||!pose.rotation)throw new Error('Open Scene to create a camera from its view');
+        Object.assign(item,{position:pose.position,rotation:pose.rotation,camera:pose.camera});
+      }catch(e){setError(e instanceof Error?e.message:String(e));return;}finally{setBusy(false);}
+    }
     setScene({...scene,cameras:[...scene.cameras,item]});setSelected(id);setNotice('');setError('');
   }
   function remove() {
@@ -115,7 +124,8 @@ export default function LensCameraPanel({project, operations,openScene}:{project
     <nav aria-label="Actors and cameras">{['Cameras','Operations'].map(name=><button key={name} className="au-button au-button--sm" aria-pressed={tab===name} onClick={()=>setTab(name)}>{name}</button>)}</nav>
     {tab==='Operations'?operations:<>
       <div className="lens-actions"><strong>Project cameras</strong>
-        <button className="au-button au-button--sm" disabled={busy||!scene} onClick={create}><Plus size={14}/>New camera</button>
+        <button className="au-button au-button--sm" disabled={busy||!scene} onClick={()=>void create(false)}><Plus size={14}/>New camera</button>
+        <button className="au-button au-button--sm" disabled={busy||!scene} onClick={()=>void create(true)}>New from Scene</button>
         <button className="au-button au-button--sm" disabled={busy||dirty} onClick={()=>void refresh(false)}>Reload</button>
         {dirty&&<button className="au-button au-button--sm" disabled={busy} onClick={()=>void refresh(false)}>Discard edits</button>}
         <button className="au-button au-button--sm au-button--primary" type="submit" form="lens-camera-form" disabled={busy||!dirty}><Save size={14}/>Save cameras</button>
@@ -134,9 +144,10 @@ export default function LensCameraPanel({project, operations,openScene}:{project
             {view.projection==='ortho'?<NumberField label="Orthographic half-height" value={view.orthographicHalfHeight??10} onValue={v=>viewField({orthographicHalfHeight:v})}/>:<NumberField label="Vertical FOV (degrees)" value={+(180*(view.fov??.75)/Math.PI).toFixed(4)} onValue={v=>viewField({fov:v*Math.PI/180})}/>}
             <NumberField label="Near clip" value={view.near??.1} onValue={v=>viewField({near:v})}/><NumberField label="Far clip" value={view.far??1000} onValue={v=>viewField({far:v})}/></div>
             <label className="lens-toggle"><input type="checkbox" checked={view.enabled??true} onChange={e=>viewField({enabled:e.target.checked})}/>Camera enabled</label>
-            <details className="lens-optics"><summary>Physical lens</summary>
+            <details className="lens-optics" onToggle={e=>setShowOptics(e.currentTarget.open)}><summary>Physical lens</summary>
               {lensSwitches.map(([key,label])=><label key={key} className="lens-toggle"><input type="checkbox" checked={lens[key]??false} onChange={e=>update({lens:{...camera.lens,[key]:e.target.checked}})}/>{label}</label>)}
               <div className="lens-fields">{optics.map(([key,label,fallback])=><NumberField key={key} label={label} value={lens[key]??fallback} onValue={v=>update({lens:{...camera.lens,[key]:v}})}/>)}</div>
+              {showOptics&&<LensReadings project={project} lens={camera.lens}/>}
             </details>
             <h4>Position</h4><div className="lens-fields">{['X','Y','Z'].map((axis,i)=><NumberField key={axis} label={'Position '+axis} value={camera.position?.[i]??0} onValue={v=>{const position=[...(camera.position??[0,0,0])];position[i]=v;update({position});}}/>)}</div>
             <h4>Output</h4><div className="lens-fields"><label>Target<select className="au-input" value={output.kind??'screen'} onChange={e=>outputField({kind:e.target.value})}><option value="screen">Screen</option><option value="texture">Render texture</option></select></label>
@@ -258,4 +269,41 @@ function CameraPreview({project,scene,camera,onChange,openScene}:{openScene:()=>
     {message&&<p className="lens-message is-error" role="alert">{message}</p>}
     {visible&&<SpectraDockViewport id="lensCamera" label="Selected camera preview"/>}
   </section>;
+}
+
+interface OpticalReadings {
+  ev100:number;
+  exposureStops:number;
+  nearMetres?:number;
+  farMetres?:number;
+  farInfinite?:boolean;
+  hyperfocalMetres?:number;
+}
+
+function LensReadings({project,lens}:{project:string;lens?:Lens}) {
+  const [values,setValues]=useState<OpticalReadings>();
+  const [error,setError]=useState('');
+  useEffect(()=>{
+    let active=true;
+    setValues(undefined);setError('');
+    const timer=window.setTimeout(async()=>{
+      try{
+        const {result}=await invoke('studio.op',{op:'lens_scene_validate',expectedProject:project,params:{
+          opticsId:1,scene:{version:1,cameras:[{id:1,camera:{},lens:lens??{}}]},
+        }});
+        const response=result as {optics?:OpticalReadings;error?:string};
+        if(!response.optics)throw new Error(response.error??'Lens readings unavailable');
+        if(active)setValues(response.optics);
+      }catch(e){if(active)setError(e instanceof Error?e.message:String(e));}
+    },120);
+    return ()=>{active=false;window.clearTimeout(timer);};
+  },[project,lens]);
+  if(error)return <p className="lens-message is-error" role="status">{error}</p>;
+  if(!values)return null;
+  return <dl className="lens-readings" aria-label="Physical lens readings">
+    <div><dt>EV100</dt><dd>{values.ev100.toFixed(2)}</dd></div>
+    <div><dt>Exposure</dt><dd>{values.exposureStops>0?'+':''}{values.exposureStops.toFixed(2)} stops</dd></div>
+    <div><dt>Sharp range</dt><dd>{values.nearMetres===undefined?'Unavailable':values.nearMetres.toFixed(2)+' m – '+(values.farInfinite?'∞':values.farMetres?.toFixed(2)+' m')}</dd></div>
+    {values.hyperfocalMetres!==undefined&&<div><dt>Hyperfocal distance</dt><dd>{values.hyperfocalMetres.toFixed(2)} m</dd></div>}
+  </dl>;
 }

@@ -2815,12 +2815,19 @@ Json StudioScene::lensViewPose() const {
     const auto rotation = render::cameraPoseRotation(view);
     auto array = [](std::initializer_list<float> values) {
         Json result = Json::array();
-        for (float value : values) result.push(Json::number(double(value)));
+        for (float value : values) result.push(Json::number(double(value),9));
         return result;
     };
     Json result = Json::object();
     result.set("position", array({eye.x, eye.y, eye.z}));
     result.set("rotation", array({rotation.x, rotation.y, rotation.z, rotation.w}));
+    Json projection=Json::object();
+    projection.set("projection",Json::string(view.ortho?"ortho":"perspective"));
+    projection.set("fov",Json::number(double(view.fovY),9));
+    projection.set("near",Json::number(double(view.zNear),9));
+    projection.set("far",Json::number(double(view.zFar),9));
+    projection.set("orthographicHalfHeight",Json::number(double(view.orthoHalfHeight()),9));
+    result.set("camera",std::move(projection));
     return result;
 }
 Json StudioScene::configureLensCamera(const Json& params) {

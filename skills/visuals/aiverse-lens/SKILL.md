@@ -26,6 +26,7 @@ The shared editor/MCP implementation is `apps/editor/core/LensOps.cpp`.
    For a camera that frames a moving target like a game camera, set `rig.mode` 2 (Follow) and a `"follow"`
    block starting from a preset (`lens_camera_presets` lists them): `{"preset": "follow-speed", "bounds": [x0, z0, x1, z1]}`.
    Game cameras (game.json `camera`, `topDown.camera`, rules `camera.chase` / `camera.firstPerson`) take the same presets.
+   To inspect optical readouts, pass an optional positive camera id as opticsId to lens_scene_validate. The optics result includes ev100, exposureStops, and valid focus limits in metres. Read farInfinite before farMetres.
 4. Use `lens_scene_set` for a complete scene replacement, or `lens_camera_delete`
    with id. Every write requires expectedRevision (or expectedScene) from the last
    read; a successful write returns the new `revision`. On conflict,

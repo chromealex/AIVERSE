@@ -13,7 +13,10 @@
     "apps/studio-web/src/types.ts",
     "apps/studio-web/src/panels/StudioPanelRenderer.tsx",
     "apps/studio-web/src/panels/SpectraDockViewport.tsx",
-    "docs/camera-system.md"
+    "docs/camera-system.md",
+    "apps/editor/core/LensOps.cpp",
+    "tests/lens_ops_test.cpp",
+    "skills/visuals/aiverse-lens/SKILL.md"
   ],
   "traits": {
     "editable": true,
@@ -55,12 +58,13 @@
     },
     "studio": {
       "status": "not_run",
-      "note": "Native preset with override, Scene camera handoff, retained draft, PNG export and validation checked in the Mac host. Physical readouts and camera creation from the Scene view still need parity.",
+      "note": "Mac desktop acceptance includes Follow overrides, navigating Scene, retained drafts, selected-camera PNG, creating cameras from both Scene projections, and native physical lens readouts. Windows runtime acceptance is outstanding.",
       "evidence": [
         "docs/evidence/studio-lens-html5/scene-and-camera.png",
         "docs/evidence/studio-lens-html5/camera-15deg.png",
         "docs/evidence/studio-lens-html5/camera-28deg.png",
-        "docs/evidence/studio-lens-html5/follow-settings.png"
+        "docs/evidence/studio-lens-html5/follow-settings.png",
+        "docs/evidence/studio-lens-html5/physical-optics.png"
       ]
     },
     "inspector": {
@@ -145,7 +149,8 @@
       "lens_scene_set",
       "lens_camera_set",
       "lens_camera_delete",
-      "lens_camera_presets"
+      "lens_camera_presets",
+      "lens_scene_validate"
     ],
     "studio_panels": [
       "actor"

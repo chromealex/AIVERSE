@@ -3,6 +3,7 @@
 #include "Workspace.h"
 #include "engine/core/Hash.h"
 #include "engine/sim/CameraSceneAsset.h"
+#include "engine/render/CameraLensPhysics.h"
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -62,7 +63,7 @@ SceneFile readSceneFile(const std::string& projectDir) {
     return file;
 }
 
-Json validateScene(const Json& scene) {
+static Json validateSceneWithOptics(const Json& scene,int64_t opticsId) {
     if (scene.dump(-1).size() > maxBytes) throw std::runtime_error("camera scene exceeds 1 MiB");
     World world;
     SceneHierarchy hierarchy;
@@ -72,6 +73,23 @@ Json validateScene(const Json& scene) {
     response.set("ok", Json::fromBool(valid));
     if (!valid) response.set("error", Json::string(error));
     else {
+        if(opticsId>0)world.eachExistingConst<CameraLensComponent>([&](Entity entity,const CameraLensComponent& lens) {
+            const auto* name=world.tryGetConst<CameraNameComponent>(entity);
+            if(!name || name->stableId!=uint64_t(opticsId))return;
+            const auto values=render::cameraLensValues(lens);
+            if(!render::cameraLensValuesValid(values))return;
+            Json readings=Json::object();
+            readings.set("ev100",Json::number(render::cameraLensEV100(values),8));
+            readings.set("exposureStops",Json::number(render::cameraLensExposureStops(values,lens.exposureCompensation.toDouble()),8));
+            const auto dof=render::cameraLensDepthOfField(values,1080);
+            if(dof.valid){
+                readings.set("nearMetres",Json::number(dof.nearMetres,8));
+                readings.set("hyperfocalMetres",Json::number(dof.hyperfocalMetres,8));
+                readings.set("farInfinite",Json::fromBool(dof.farInfinite));
+                if(!dof.farInfinite)readings.set("farMetres",Json::number(dof.farMetres,8));
+            }
+            response.set("optics",std::move(readings));
+        });
         response.set("normalizedScene", cameraSceneToJson(world));
         response.set("count", Json::number(int64_t(scene["cameras"].size())));
         bool clientCompatible = true;
@@ -81,6 +99,8 @@ Json validateScene(const Json& scene) {
     }
     return response;
 }
+
+Json validateScene(const Json& scene) { return validateSceneWithOptics(scene,0); }
 
 bool sameScene(const Json& a, const Json& b) {
     if (a.type() != b.type()) return false;
@@ -226,8 +246,8 @@ void registerLensOps(Workspace& ws) {
             return result;
         });
     add("lens_scene_validate", "Validate a v1 camera scene with the native loader, without changing files. normalizedScene exposes defaults/clamping; clientCompatible means texture-only outputs, not GPU acceptance.",
-        R"({"type":"object","properties":{"scene":{"type":"object"}},"required":["scene"]})",
-        [](const Json& p) { return validateScene(p["scene"]); });
+        R"({"type":"object","properties":{"scene":{"type":"object"},"opticsId":{"type":"integer","minimum":1,"description":"Include physical lens readouts for the selected camera id"}},"required":["scene"]})",
+        [](const Json& p) { return validateSceneWithOptics(p["scene"],p.getInt("opticsId")); });
     add("lens_scene_set", "Replace cameras.json after native validation. Requires expectedRevision (or expectedScene) from lens_scene_get; a stale one fails without writing. Saves immediately; no editor undo. Reload the LENS window/restart the client to consume it. Does not enable game.json lens.enabled.",
         sceneSetSchema.c_str(),
         [&ws](const Json& p) {

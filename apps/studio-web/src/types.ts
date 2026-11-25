@@ -821,7 +821,7 @@ export interface StudioResult {
   'studio.extensions': StudioExtensions;
   'studio.extensionAction': { command: Record<string, unknown> | null };
   'studio.extensionCreate': StudioExtensions;
-  'studio.lensPreview': {position?:number[];rotation?:number[]};
+  'studio.lensPreview': {position?:number[];rotation?:number[];camera?:{projection:string;fov:number;near:number;far:number;orthographicHalfHeight:number}};
   'studio.attachmentsPreview': {time?:number;children?:number;duration?:number;sockets?:string[]};
   'studio.attachmentsGet': StudioAttachmentsResult;
   'studio.attachmentsSet': StudioAttachmentsResult;
