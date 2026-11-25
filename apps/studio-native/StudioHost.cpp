@@ -106,7 +106,7 @@ void StudioHost::shutdown() {
     game_.reset(); // hosted client and its device retire before the native surface
     if (renderThread_) {
         // The Scene and its GPU resources are released on their owner thread, then the thread stops.
-        try { renderThread_->invoke([&] { facialRigSurface_.renderer.reset(); materialSurface_.renderer.reset(); shaderSurface_.renderer.reset(); fxPreview_.reset(); preview_.reset(); }); } catch (const std::exception&) {}
+        try { renderThread_->invoke([&] { appearanceSurface_.renderer.reset(); characterSurface_.renderer.reset(); facialRigSurface_.renderer.reset(); materialSurface_.renderer.reset(); shaderSurface_.renderer.reset(); fxPreview_.reset(); preview_.reset(); }); } catch (const std::exception&) {}
         renderThread_->stop();
         renderThread_.reset();
     }
@@ -299,8 +299,8 @@ void StudioHost::gameEvent(const platform::Event& event) {
 }
 void StudioHost::surfaceDetached(StudioSurface surface) {
     if (surface == StudioSurface::Scene) { placement_ = {}; readyEmitted_ = false; }
-    else if(surface==StudioSurface::Material || surface==StudioSurface::Shader || surface==StudioSurface::FacialRig) {
-        auto& asset=surface==StudioSurface::FacialRig?facialRigSurface_:surface==StudioSurface::Material?materialSurface_:shaderSurface_;
+    else if(surface>=StudioSurface::Material) {
+        auto& asset=assetSurface(surface);
         asset.placement={};
         if(asset.renderer)onScene([&]{asset.renderer.reset();});
     }
@@ -372,7 +372,7 @@ void StudioHost::pollAgentRequests() {
         if (id.empty() || id.size() > 40 || id.find_first_not_of("0123456789abcdefghijklmnopqrstuvwxyz-") != std::string::npos) return;
         const fs::path out = root / ".aiverse" / "agent-snapshots";
         fs::create_directories(out, ec);
-        if (!preview_ || !session_->facialPreviewBinding().bound()) {
+        if (!activeHumanRenderer() || !session_->facialPreviewBinding().bound()) {
             std::ofstream err(out / (id + ".error"));
             err << "Покажите персонажа во вьюпорте Character Creator";
             return;
@@ -383,33 +383,45 @@ void StudioHost::pollAgentRequests() {
             p.set("view", Json::string(view));
             (void)request("studio.humanCamera", p);
         }
-        onScene([&] { preview_->captureFacialThumbnail((out / (id + ".png")).string(), false); });
+        onScene([&] { activeHumanRenderer()->captureFacialThumbnail((out / (id + ".png")).string(), false); });
     } catch (const std::exception&) {}
 }
-void StudioHost::tickFacialRigPreview() {
-    auto& asset=facialRigSurface_;
-    auto& binding=session_->rigPreviewBinding();
-    if(!binding.bound())return;
-    if(!asset.placement.visible || !platform_.surfaceDrawable(StudioSurface::FacialRig)){
-        binding.setGpuStatus(false,"Facial Rig preview hidden");
-        return;
+StudioHost::AssetSurface& StudioHost::assetSurface(StudioSurface surface) {
+    switch(surface){
+    case StudioSurface::Material:return materialSurface_;
+    case StudioSurface::Shader:return shaderSurface_;
+    case StudioSurface::FacialRig:return facialRigSurface_;
+    case StudioSurface::Character:return characterSurface_;
+    case StudioSurface::Appearance:return appearanceSurface_;
+    default:throw std::invalid_argument("Invalid asset viewport");
     }
+}
+StudioScene* StudioHost::activeHumanRenderer(){
+    if(characterSurface_.placement.visible&&characterSurface_.renderer)return characterSurface_.renderer.get();
+    return appearanceSurface_.placement.visible?appearanceSurface_.renderer.get():nullptr;
+}
+void StudioHost::tickCharacterPreview(StudioSurface surface) {
+    auto& asset=assetSurface(surface);
+    const bool rig=surface==StudioSurface::FacialRig;
+    auto& binding=rig?session_->rigPreviewBinding():session_->humanPreviewBinding();
+    if(!binding.bound()||!asset.placement.visible||!platform_.surfaceDrawable(surface))return;
     try {
         if(!renderThread_){
             const char* threaded=std::getenv("AIVERSE_STUDIO_RENDER_THREAD");
             renderThread_=std::make_unique<StudioRenderThread>([this]{renderSceneFrame();},!(threaded&&std::string(threaded)=="0"));
         }
         onScene([&]{platform_.sceneThreadScope([&]{
-            if(!asset.renderer)asset.renderer=std::make_unique<StudioScene>(platform_.createDevice(StudioSurface::FacialRig));
+            if(!asset.renderer)asset.renderer=std::make_unique<StudioScene>(platform_.createDevice(surface));
             const auto& ws=session_->workspace();
             asset.renderer->frame(asset.placement.pixelsW,asset.placement.pixelsH,ws.map,false,"","",Json(),0,
                 float(ws.project.rules.levelHeight.toDouble()),ws.project.dir,ws.project.rulesJson,&binding);
+            if(!rig)session_->setFacialPreviewClips(asset.renderer->facialClips(),asset.renderer->facialBaseHeight());
             binding.setGpuStatus(asset.renderer->facialReady(),asset.renderer->facialError());
         });});
     }catch(const std::exception& e){
         binding.setGpuStatus(false,e.what());
         platform_.log(std::string("Studio facial rig preview: ")+e.what());
-        surfaceDetached(StudioSurface::FacialRig);
+        surfaceDetached(surface);
     }
 }
 void StudioHost::tickAssetPreview(StudioSurface surface) {
@@ -540,12 +552,15 @@ void StudioHost::tick() {
     }
     tickAgentScreenshot();
     pollAgentRequests();
-    tickFacialRigPreview();
+    tickCharacterPreview(StudioSurface::FacialRig);
+    tickCharacterPreview(StudioSurface::Character);
+    tickCharacterPreview(StudioSurface::Appearance);
+    if(!facialRigSurface_.placement.visible)session_->rigPreviewBinding().setGpuStatus(false,"Facial Rig preview hidden");
+    if(!activeHumanRenderer())session_->setFacialPreviewGpuStatus(false,"Character preview hidden");
     tickAssetPreview(StudioSurface::Material);
     tickAssetPreview(StudioSurface::Shader);
     tickFx(); // dedicated native FX drawable continues even if Scene is hidden
     if (!placement_.visible || !platform_.surfaceDrawable(StudioSurface::Scene)) {
-        session_->setFacialPreviewGpuStatus(false, "Native Scene viewport hidden or not drawable");
         return;
     }
     try {
@@ -571,41 +586,7 @@ void StudioHost::tick() {
                 preview_ = std::move(created);
             });
         }
-        // Character and material previews read live session state (facial binding, material drafts):
-        // the UI thread waits for those frames. Everything else renders asynchronously.
-        const bool facialBound = session_->facialPreviewBinding().bound();
-        if (!facialBound) { tickScene(); return; }
-        FrameOutputs out;
-        const bool wantClips = (lightingStatusTicks_ % 30) == 0;
-        std::vector<std::string> clips;
-        float baseHeight = 0;
-        renderThread_->flush(); // the last asynchronous map frame finished
-        renderThread_->invoke([&] {
-            platform_.sceneThreadScope([&] {
-                const auto ids = session_->selectedObjectIds();
-                preview_->setEditorState(std::set<std::string>(ids.begin(), ids.end()), session_->hiddenIds(), session_->lockedIds(), hoverId_);
-                preview_->setWindPreview(session_->windPreview());
-                const auto& ws = session_->workspace();
-                preview_->frame(placement_.pixelsW, placement_.pixelsH, ws.map, ws.map.data.worldSpace, session_->selectedObjectId(),
-                    "", Json(), 0,
-                    float(ws.project.rules.levelHeight.toDouble()), ws.project.dir, ws.project.rulesJson, &session_->facialPreviewBinding());
-                out.facialReady = preview_->facialReady();
-                out.facialError = preview_->facialError();
-                if (wantClips) { clips = preview_->facialClips(); baseHeight = preview_->facialBaseHeight(); }
-                out.lightingStatus = preview_->lightingStatus();
-                out.load = preview_->modelLoadProgress();
-                out.camera = preview_->cameraState();
-                out.thumbnails = preview_->takeFinishedThumbnails();
-                out.drawCalls = preview_->drawCalls();
-            });
-        });
-        {
-            // A map frame that finished before this one is superseded.
-            std::lock_guard<std::mutex> io(renderIoMutex_);
-            renderOutputsFresh_ = false;
-        }
-        if (wantClips) session_->setFacialPreviewClips(clips, baseHeight);
-        publishSceneFrame(out);
+        tickScene();
     } catch (const std::exception& e) {
         failScene(e.what());
     }
@@ -671,8 +652,6 @@ void StudioHost::renderSceneFrame() {
             preview_->setWindPreview(in.wind);
             preview_->frame(in.width, in.height, *in.map, in.fps, in.selected, "", Json::object(), 0,
                             in.levelHeight, in.project, *in.rules, nullptr);
-            out.facialReady = preview_->facialReady();
-            out.facialError = preview_->facialError();
             out.lightingStatus = preview_->lightingStatus();
             out.load = preview_->modelLoadProgress();
             out.camera = preview_->cameraState();
@@ -707,7 +686,6 @@ void StudioHost::publishSceneFrame(const FrameOutputs& out) {
         payload.set("path", Json::string(asset));
         sendEventPayload("asset.thumbnail", payload);
     }
-    session_->setFacialPreviewGpuStatus(out.facialReady, out.facialError);
     if ((lightingStatusTicks_++ % 60) == 0) sendEvent("lighting.status", out.lightingStatus);
     {
         // Scene model streaming progress (status bar / splash).
@@ -1058,35 +1036,45 @@ bool StudioHost::placeType(const std::string& type, double x, double y, double w
     sendEvent("selection.changed", "");
     return true;
 }
+void StudioHost::humanOrbit(StudioSurface surface,double dx,double dy) {
+    auto& asset=assetSurface(surface);
+    if(asset.renderer&&finite({dx,dy}))onScene([&]{asset.renderer->orbit(float(dx),float(dy));});
+}
+void StudioHost::humanZoom(StudioSurface surface,double amount) {
+    auto& asset=assetSurface(surface);
+    if(asset.renderer&&std::isfinite(amount))onScene([&]{asset.renderer->zoom(float(amount));});
+}
+bool StudioHost::humanPick(StudioSurface surface,double x,double y,double w,double h) {
+    auto& asset=assetSurface(surface);
+    if(projectLoading_||!asset.renderer||(!session_->sculptBrush().armed&&!session_->sculptBrush().regionPick))return false;
+    // Human Creator: a face blend region choice, or a sculpt brush stroke on the character.
+    const bool region = session_->sculptBrush().regionPick;
+    const auto& face = session_->facialPreviewBinding().face();
+    vivid::HumanFaceHit hit;
+    Json payload = Json::object();
+    std::string pickError;
+    if (face && onScene([&] { return asset.renderer->sculptPick(float(x), float(y), float(w), float(h), *face, hit, &pickError); })) {
+        Json p = Json::array();
+        for (float v : {hit.point.x, hit.point.y, hit.point.z}) p.push(Json::number(double(v), region ? 5 : 6));
+        payload.set("hit", Json::fromBool(true));
+        if (region) payload.set("point", std::move(p));
+        else {
+            Json params = Json::object(), n = Json::array();
+            for (float v : {hit.normal.x, hit.normal.y, hit.normal.z}) n.push(Json::number(double(v), 6));
+            params.set("point", std::move(p));
+            params.set("normal", std::move(n));
+            const Json outcome = request("studio.humanSculptStroke", std::move(params));
+            if (outcome.has("error")) payload.set("error", outcome["error"]);
+        }
+    } else {
+        payload.set("hit", Json::fromBool(false));
+        if (!pickError.empty()) payload.set("error", Json::string(pickError));
+    }
+    sendEventPayload(region ? "human.facePick" : "human.sculpt", payload);
+    return true;
+}
 void StudioHost::select(double x, double y, double w, double h, const std::string& mode) {
     if (projectLoading_ || !preview_) return;
-    if (session_->sculptBrush().regionPick || session_->sculptBrush().armed) {
-        // Human Creator: a face blend region choice, or a sculpt brush stroke on the character.
-        const bool region = session_->sculptBrush().regionPick;
-        const auto& face = session_->facialPreviewBinding().face();
-        vivid::HumanFaceHit hit;
-        Json payload = Json::object();
-        std::string pickError;
-        if (face && onScene([&] { return preview_->sculptPick(float(x), float(y), float(w), float(h), *face, hit, &pickError); })) {
-            Json p = Json::array();
-            for (float v : {hit.point.x, hit.point.y, hit.point.z}) p.push(Json::number(double(v), region ? 5 : 6));
-            payload.set("hit", Json::fromBool(true));
-            if (region) payload.set("point", std::move(p));
-            else {
-                Json params = Json::object(), n = Json::array();
-                for (float v : {hit.normal.x, hit.normal.y, hit.normal.z}) n.push(Json::number(double(v), 6));
-                params.set("point", std::move(p));
-                params.set("normal", std::move(n));
-                const Json outcome = request("studio.humanSculptStroke", std::move(params));
-                if (outcome.has("error")) payload.set("error", outcome["error"]);
-            }
-        } else {
-            payload.set("hit", Json::fromBool(false));
-            if (!pickError.empty()) payload.set("error", Json::string(pickError));
-        }
-        sendEventPayload(region ? "human.facePick" : "human.sculpt", payload);
-        return;
-    }
     const std::string objectId = onScene([&] { return preview_->pick(float(x), float(y), float(w), float(h),
         session_->workspace().map, session_->workspace().map.data.worldSpace); });
     // A modifier click on empty space keeps the current selection.
@@ -1566,9 +1554,9 @@ void StudioHost::applyViewport(const Json& params) {
         else if (game_) game_->suspend();
         return;
     }
-    if(id=="shader"||id=="material"||id=="facialRig") {
-        const auto surface=id=="facialRig"?StudioSurface::FacialRig:id=="shader"?StudioSurface::Shader:StudioSurface::Material;
-        auto& asset=id=="facialRig"?facialRigSurface_:id=="shader"?shaderSurface_:materialSurface_;
+    if(id=="shader"||id=="material"||id=="facialRig"||id=="character"||id=="appearance") {
+        const auto surface=id=="character"?StudioSurface::Character:id=="appearance"?StudioSurface::Appearance:id=="facialRig"?StudioSurface::FacialRig:id=="shader"?StudioSurface::Shader:StudioSurface::Material;
+        auto& asset=assetSurface(surface);
         NativeViewportPlacement placed;
         if(platform_.placeSurface(surface,rect,placed)){
             asset.placement=placed;
@@ -1591,6 +1579,21 @@ void StudioHost::applyViewport(const Json& params) {
 }
 Json StudioHost::viewportInput(const Json& input) {
     const std::string kind = input.getStr("kind");
+    const auto target=input.getStr("surface");
+    if(target=="character"||target=="appearance"){
+        const auto surface=target=="character"?StudioSurface::Character:StudioSurface::Appearance;
+        const auto& rect=assetSurface(surface).placement;
+        if(kind=="reference"||kind=="brushCursor"){platform_.humanReference(surface,input);return Json::object();}
+        if(!rect.visible||!platform_.surfaceDrawable(surface))return Json::object();
+        if(kind=="orbit")humanOrbit(surface,input["dx"].toDouble(),input["dy"].toDouble());
+        else if(kind=="zoom")humanZoom(surface,input["amount"].toDouble());
+        else if(kind=="pick"){
+            const auto x=input["x"].toDouble(),y=input["y"].toDouble();
+            if(finite({x,y})&&x>=0&&y>=0&&x<=1&&y<=1)
+                humanPick(surface,x*rect.width,y*rect.height,rect.width,rect.height);
+        }else throw std::runtime_error("Invalid character viewport input");
+        return Json::object();
+    }
     Json result = Json::object();
     // Pointer/keyboard navigation comes from HTML only in composite mode (the native view handles it
     // otherwise); toolbar commands work in both.
@@ -1744,15 +1747,15 @@ bool StudioHost::handleHostMethod(const Json& req) {
     });
     if (method == "studio.humanMakeupAlign") return answer([&] {
         // Makeup layers placed from the shown face (needs the GPU preview's CPU copy).
-        if (!preview_) throw std::runtime_error("Покажите персонажа во вьюпорте");
-        Json r = Json::object(); r.set("values", onScene([&] { return preview_->alignMakeup(session_->facialPreviewBinding()); })); return r;
+        if (!activeHumanRenderer()) throw std::runtime_error("Покажите персонажа во вьюпорте");
+        Json r = Json::object(); r.set("values", onScene([&] { return activeHumanRenderer()->alignMakeup(session_->facialPreviewBinding()); })); return r;
     });
     if (method == "studio.humanLookCapture") return answer([&] {
         // Preset card picture: the next character frame is cropped around the head and written beside the look.
-        if (!preview_ || !session_->facialPreviewBinding().bound())
+        if (!activeHumanRenderer() || !session_->facialPreviewBinding().bound())
             throw std::runtime_error("Покажите персонажа во вьюпорте, чтобы снять превью");
         const auto path = studioHumanLookThumbnailFile(session_->workspace().project.dir, params.getStr("name"), true);
-        onScene([&] { preview_->captureFacialThumbnail(path.string()); });
+        onScene([&] { activeHumanRenderer()->captureFacialThumbnail(path.string()); });
         Json r = Json::object(); r.set("ok", Json::fromBool(true)); return r;
     });
     if (method == "studio.spectraPreview")

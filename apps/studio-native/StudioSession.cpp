@@ -1453,7 +1453,6 @@ Json StudioSession::dispatchImpl(const Json& request) {
             } else if(method=="studio.humanCreatorPreview") {
                 if(params.getBool("enabled",true)) {
                     facialPreview_.bindCreator(humanCreator_.toDocument());
-                    previewGraphTitle_.clear();previewGraphFactors_=Json();previewMaterialName_.clear();refreshMaterialPreview();
                 } else if(facialPreview_.creatorMode()) facialPreview_.reset();
             } else throw std::invalid_argument("Unknown Human Creator method");
             if(!ok)throw std::invalid_argument(error.empty()?"Human Creator edit rejected":error);
@@ -1495,7 +1494,6 @@ Json StudioSession::dispatchImpl(const Json& request) {
                         throw std::invalid_argument("Invalid appearance revision");
                     StudioAssetCatalog catalog(ws_.project.dir);catalog.rebuild();
                     facialPreview_.bindAppearance(catalog,params.getStr("guid"),uint64_t(rev.integer()),params["look"],params.has("face")?&params["face"]:nullptr);
-                    previewGraphTitle_.clear();previewGraphFactors_=Json();previewMaterialName_.clear();refreshMaterialPreview();
                 }
                 auto info=Json::object();info.set("schema",vivid::HumanAppearance::schema());info.set("faceSchema",vivid::HumanFaceShape::schema());info.set("face",facialPreview_.face()?facialPreview_.face()->toJson():Json());
                 info.set("look",facialPreview_.appearance()?facialPreview_.appearance()->toJson():vivid::HumanAppearance{}.toJson());

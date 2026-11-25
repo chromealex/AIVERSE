@@ -33,7 +33,7 @@ export const WORKSPACE_INFO: Record<StudioWorkspace, WorkspaceInfo> = {
     left: ['hierarchy'], center: ['animation', 'anim_graph', 'anim_rig', 'facial_rig', 'scene'], right: ['inspector', 'anim_assets', 'model_anim', 'attachments'], bottom: ['assets', 'console'],
     legacy: [] },
   character: { id: 'character', title: 'Character', purpose: 'Digital humans', key: '7',
-    left: ['human_creator'], center: ['scene', 'facial_rig'], right: ['inspector', 'human_appearance'], bottom: ['assets', 'console'],
+    left: ['hierarchy'], center: ['human_creator', 'human_appearance', 'facial_rig', 'scene'], right: ['inspector'], bottom: ['assets', 'console'],
     leftRatio: .34, bodyRatio: .86, legacy: [] },
   logic: { id: 'logic', title: 'Logic', purpose: 'Rules, scripts, runtime', key: '5',
     left: ['hierarchy'], center: ['rules', 'scripts', 'game', 'scene'], right: ['runtime', 'inspector', 'input', 'overlays', 'actor', 'raid', 'balance', 'stats'], bottom: ['console', 'assets', 'agent'],

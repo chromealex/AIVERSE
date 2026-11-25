@@ -4,8 +4,6 @@ import { Box } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import { SCENE_TOOL_KEYS } from './SceneToolbar';
 import SceneAxisGizmo from './SceneAxisGizmo';
-import { brushPixels, onSculptBrush, sculptBrush, strokeSpacing } from '../panels/sculptBrushStore';
-import { onReferenceView, referenceView } from '../panels/referenceStore';
 import { dockDragActive, forgetViewportRect, viewportRectChanged, visibleViewport, watchDockDrag, watchOverlays } from '../nativeOverlay';
 import {
   DEFAULT_SCENE_CAMERA, dragZoomAmount, flyStep, isSceneCameraState, navigationFor, stepFlySpeed,
@@ -30,13 +28,6 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
   const [speedVisible, setSpeedVisible] = useState(false);
   const speedTimer = useRef(0);
   const [camera, setCamera] = useState<SceneCameraState>(DEFAULT_SCENE_CAMERA);
-  // Character Creator sculpt: drag paints strokes, a circle shows the brush.
-  const [brush, setBrushView] = useState(sculptBrush());
-  const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
-  const sculptDrag = useRef<{ x: number; y: number; busy: boolean; queued: { x: number; y: number } | null } | null>(null);
-  useEffect(() => onSculptBrush(setBrushView), []);
-  const [reference, setReference] = useState(referenceView());
-  useEffect(() => onReferenceView(setReference), []);
   const cameraRef = useRef(camera);
   cameraRef.current = camera;
   const native = nativeConnected();
@@ -223,20 +214,6 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
     flying.current=false;
     setNavigationActive(false);
   };
-  // One sculpt stroke per call; while the native side is busy only the latest
-  // cursor position is kept, so a fast drag never floods the bridge.
-  const stroke = (x: number, y: number, b: DOMRect) => {
-    const sd=sculptDrag.current;
-    if (sd?.busy) { sd.queued={ x, y }; return; }
-    if (sd) sd.busy=true;
-    void send({kind:'pick', x, y, width:b.width, height:b.height}).finally(() => {
-      const cur=sculptDrag.current;
-      if (!cur) return;
-      cur.busy=false;
-      const q=cur.queued; cur.queued=null;
-      if (q) stroke(q.x,q.y,b);
-    });
-  };
   const navigationReady = native && active && gpuReady;
   return <section ref={element} className={'viewport' + (native && active && gpuReady ? ' viewport-native' : '')}
     aria-label={native && active ? 'Native Scene viewport' : 'Viewport placeholder'}
@@ -247,13 +224,6 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
       event.currentTarget.focus();
       const mode=navigationFor(event.button,{alt:event.altKey,meta:event.metaKey});
       if (!mode || drag.current) return;
-      if (mode==='select' && sculptBrush().armed) {
-        const b=event.currentTarget.getBoundingClientRect();
-        sculptDrag.current={ x: event.clientX, y: event.clientY, busy: false, queued: null };
-        event.currentTarget.setPointerCapture(event.pointerId);
-        stroke(event.clientX-b.left,event.clientY-b.top,b);
-        return;
-      }
       if (mode!=='select') leaveAutoIso();
       if (mode==='look') flying.current=true;
       drag.current = { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY,
@@ -271,15 +241,6 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
       event.currentTarget.setPointerCapture(event.pointerId);
     }}
     onPointerMove={event => {
-      if (brush.armed) {
-        const b=event.currentTarget.getBoundingClientRect();
-        setCursor({ x: event.clientX-b.left, y: event.clientY-b.top });
-        const sd=sculptDrag.current;
-        if (sd && Math.hypot(event.clientX-sd.x,event.clientY-sd.y)>=strokeSpacing(brushPixels(brush.radius,b.height))) {
-          sd.x=event.clientX; sd.y=event.clientY;
-          stroke(event.clientX-b.left,event.clientY-b.top,b);
-        }
-      }
       const state=drag.current;
       if (!state || !composite() || !gpuReady) return;
       const dx=event.clientX-state.x,dy=event.clientY-state.y;
@@ -295,11 +256,6 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
       } else if (state.moved && state.mode!=='select') sendDelta(dx,dy,state.mode);
     }}
     onPointerUp={event => {
-      if (sculptDrag.current) {
-        sculptDrag.current=null;
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-        return;
-      }
       const state=drag.current;
       if (!state || event.button!==state.button) return;
       endDrag();
@@ -316,8 +272,7 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
         void send({kind:'pick', x:event.clientX-bounds.left,y:event.clientY-bounds.top,width:bounds.width,height:bounds.height});
       }
     }}
-    onPointerLeave={() => setCursor(null)}
-    onPointerCancel={() => { sculptDrag.current=null; endDrag(); }}
+    onPointerCancel={endDrag}
     onLostPointerCapture={() => { if (drag.current) endDrag(); }}
     onWheel={event => {
       if (!composite() || !active || !gpuReady) return;
@@ -330,14 +285,6 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
       {navigationActive?(flying.current?'Flythrough · WASD move · Q/E down/up · Shift faster · Wheel speed':'Navigating Scene')
         :'RMB fly (WASD/QE) · Alt+LMB orbit · MMB / Alt+Cmd+LMB pan · Wheel / Alt+RMB zoom · F focus'}
     </div>}
-    {navigationReady && reference.src && reference.visible && <img className="studio-reference-photo" src={reference.src} alt="" aria-hidden="true"
-      style={{ opacity: reference.opacity, height: (reference.scale * 100) + '%',
-        transform: `translate(calc(-50% + ${reference.x * 50}%), calc(-50% + ${reference.y * 50}%))${reference.mirror ? ' scaleX(-1)' : ''}` }}/>}
-    {navigationReady && brush.armed && cursor && (() => {
-      const h=element.current?.getBoundingClientRect().height ?? 600, r=brushPixels(brush.radius,h);
-      return <div className="studio-sculpt-brush" aria-hidden="true"
-        style={{ left: cursor.x-r, top: cursor.y-r, width: r*2, height: r*2 }}/>;
-    })()}
     {navigationReady && speedVisible && <div className="studio-scene-fly-speed" role="status">
       Camera speed ×{flySpeed.toFixed(flySpeed < 1 ? 2 : 1)}</div>}
     {navigationReady && <SceneAxisGizmo camera={camera}

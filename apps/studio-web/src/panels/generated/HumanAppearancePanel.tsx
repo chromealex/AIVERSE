@@ -1,3 +1,4 @@
+import CharacterViewport from '../CharacterViewport';
 import HumanPreviewAnimationControls from '../HumanPreviewAnimationControls';
 import HumanStudioLightingControls from '../HumanStudioLightingControls';
 import HumanFaceControls from '../HumanFaceControls';
@@ -25,7 +26,9 @@ export default function HumanAppearancePanel({snapshot}:{snapshot:StudioSnapshot
  return <StudioPanel className="studio-panel-human_appearance" title="VIVID Appearance" eyebrow="CHARACTER / LOOK DEVELOPMENT"
   subtitle="Skin, hair, eyes, fabric and body"
   footer={<StudioBadge tone={info?.preview.runtimeReady?'success':'neutral'}>{info?.preview.runtimeReady?'Native preview ready':'Preview pending'}</StudioBadge>}>
-  <div className="au-stack">
+  <div className="character-page">
+   {info?.preview.bound&&<CharacterViewport id="appearance" label="Character appearance preview"/>}
+   <div className="character-settings au-stack">
    {error&&<StudioAlert tone="danger">{error}</StudioAlert>}
    {status&&<StudioAlert>{status}</StudioAlert>}
    {info?.preview.bound&&!info.preview.runtimeReady&&<StudioAlert tone="warning">{info.preview.reason}</StudioAlert>}
@@ -85,6 +88,6 @@ export default function HumanAppearancePanel({snapshot}:{snapshot:StudioSnapshot
     </StudioSelect></StudioField>
     <StudioButton disabled={busy||!selected} onClick={()=>void run(async()=>{const result=await invoke('studio.humanAppearanceLoad',{name:selected});edit(result.look);setName(result.name);})}>Load profile</StudioButton>
    </StudioSection>
-  </div>
+  </div></div>
  </StudioPanel>;
 }

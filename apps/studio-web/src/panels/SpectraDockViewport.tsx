@@ -10,8 +10,8 @@ import './SpectraDockViewport.css';
  * camera and StudioScene. Both are serialized on the render-owner thread.
  * No fake browser pixels, WebGL duplicate or bitmap transport.
  */
-export default function SpectraDockViewport({id='fx',label='Native GPU particle preview'}:{
-  id?:'fx'|'shader'|'material'|'facialRig';label?:string
+export default function SpectraDockViewport({id='fx',label='Native GPU particle preview',onRect}:{
+  id?:'fx'|'shader'|'material'|'facialRig'|'character'|'appearance';label?:string;onRect?:(rect:{x:number;y:number;width:number;height:number})=>void
 }={}){
   const ref=useRef<HTMLDivElement>(null);
   const native=nativeConnected();
@@ -37,6 +37,7 @@ export default function SpectraDockViewport({id='fx',label='Native GPU particle 
         });
         const rect={...clipped,x:fit.x,y:fit.y,
           width:fit.width,height:fit.height,visible:clipped.visible&&fit.visible};
+        onRect?.(rect);
         if(!viewportRectChanged(id,rect))return;
         void invoke('studio.viewportRect',{id,...rect}).catch(error=>{
           forgetViewportRect(id);
@@ -66,7 +67,7 @@ export default function SpectraDockViewport({id='fx',label='Native GPU particle 
       // Scene uses its own independent native surface and remains untouched
       // when this FX panel closes or moves to another window.
     };
-  },[native,id]);
+  },[native,id,onRect]);
   return <div ref={ref} className={id==='fx'?'spectra-native__surface':'asset-native-surface'}
     role="img" aria-label={label}>
     {!native&&<div className="spectra-native__surface-hint">

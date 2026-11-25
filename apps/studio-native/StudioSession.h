@@ -41,6 +41,7 @@ public:
     void setWindSceneStats(Json stats) { windSceneStats_ = std::move(stats); }
     Json saveMapAs(const std::string& path); // trusted native Save panel only
     StudioFacialPreviewBinding& rigPreviewBinding() noexcept { return rigPreview_; }
+    StudioFacialPreviewBinding& humanPreviewBinding() noexcept { return facialPreview_; }
     const StudioFacialPreviewBinding& facialPreviewBinding() const noexcept {
         return facialPreview_;
     }

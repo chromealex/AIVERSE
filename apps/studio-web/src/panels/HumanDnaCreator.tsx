@@ -1,3 +1,4 @@
+import CharacterViewport from './CharacterViewport';
 // Digital Human Creator window: all tools/vivid-creator authoring sections in
 // Studio. Every edit is a validated native call (studio.humanCreator*); the
 // native StudioSession owns the document, undo history and project files, and
@@ -85,6 +86,20 @@ export default function HumanDnaCreator({ snapshot }: { snapshot: StudioSnapshot
     } catch (e) { if (gen === generation.current) setError(String(e)); }
     finally { if (gen === generation.current) setBusy(false); }
   }, []);
+  const pendingPreview=Boolean(info?.preview?.creator&&!info.preview.runtimeReady);
+  useEffect(()=>{
+    if(!pendingPreview)return;
+    let active=true,waiting=false;
+    const timer=window.setInterval(async()=>{
+      if(waiting)return;
+      waiting=true;
+      try{
+        const latest=await invoke('studio.humanCreatorInfo',{});
+        if(active)setInfo(old=>old?.preview?.revision===latest.preview?.revision?{...old!,preview:latest.preview}:old);
+      }catch{/* Next poll can recover from project changes. */}finally{waiting=false;}
+    },700);
+    return ()=>{active=false;window.clearInterval(timer);};
+  },[pendingPreview,project,info?.preview?.revision]);
   const refreshList = useCallback(() => {
     if (!project) return;
     void invoke('studio.humanCreatorList', {}).then(r => setSaved(r.humans)).catch(() => {});
@@ -193,7 +208,9 @@ export default function HumanDnaCreator({ snapshot }: { snapshot: StudioSnapshot
     </StudioSection>;
   };
 
-  return <div className="au-stack">
+  return <div className="character-page">
+      {previewOn&&<CharacterViewport id="character" label="Character DNA preview"/>}
+      <div className="character-settings au-stack">
       <div className="hc-row hc-toolbar">
         <strong>{String(dna.displayName ?? 'VIVID Human')}</strong>
         <StudioBadge tone={info.dirty ? 'warning' : 'neutral'}>{info.dirty ? 'Не сохранено' : 'Сохранено'}</StudioBadge>
@@ -223,5 +240,6 @@ export default function HumanDnaCreator({ snapshot }: { snapshot: StudioSnapshot
       <StudioTabs label="Creator sections" items={sections.map(s => ({ id: s.id, label: s.title.split(' / ')[0] }))}
         selected={current?.id ?? 'skin'} onChange={setTab}/>
       {body()}
+      </div>
     </div>;
 }

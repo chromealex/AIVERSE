@@ -234,6 +234,10 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(!call("studio.facialPreviewBind",rigRequest.dump().c_str()).has("error"));
        AIVERSE_TEST_CHECK(session.rigPreviewBinding().bound()&&!session.facialPreviewBinding().bound());
        AIVERSE_TEST_CHECK(session.previewGraphTitle()=="Shader Graph / studio_tint"&&session.previewMaterialName()=="stone");
+       AIVERSE_TEST_CHECK(!call("studio.humanCreatorPreview",R"({"enabled":true})").has("error"));
+       AIVERSE_TEST_CHECK(session.facialPreviewBinding().creatorMode()&&session.rigPreviewBinding().bound());
+       AIVERSE_TEST_CHECK(session.previewMaterialName()=="stone"&&session.previewGraphTitle()=="Shader Graph / studio_tint");
+       AIVERSE_TEST_CHECK(!call("studio.humanCreatorPreview",R"({"enabled":false})").has("error"));
        AIVERSE_TEST_CHECK(!call("studio.facialPreviewBind",R"({"guid":""})").has("error"));
        AIVERSE_TEST_CHECK(!session.rigPreviewBinding().bound());
        auto particle=Json::parse(R"({"version":1,"domain":"particle","nodes":[{"id":"age","op":"particleAge01"}],"outputs":{"color":"age"}})");

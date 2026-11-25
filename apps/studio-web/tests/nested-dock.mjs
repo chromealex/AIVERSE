@@ -18,7 +18,7 @@ test('default tree has 4 nested stacks and exactly one copy of each panel',()=>{
 });
 test('move reorders within a tab stack',()=>{
   const t=moveTab(defaultDockTree(),'animation','dock-center','scene');
-  assert.deepEqual(findDockStack(t,'dock-center').tabs,['animation','scene','game','materials','facial_rig','shader_graph','anim_graph','anim_rig','rules','build','scripts','snapshot_diff']);
+  assert.deepEqual(findDockStack(t,'dock-center').tabs,['animation','scene','game','materials','facial_rig','shader_graph','anim_graph','anim_rig','human_creator','human_appearance','rules','build','scripts','snapshot_diff']);
   assert.equal(findDockStack(t,'dock-center').active,'animation');
 });
 test('dragging panels across stacks retains identity',()=>{
@@ -162,20 +162,20 @@ test('Add Tab drops a closed panel into the stack that was clicked',()=>{
   assert.equal(findDockStack(added,'dock-left')?.active,'assets');
 });
 
-test('character editor never stays over the Scene viewport',async()=>{
-  const {moveCharacterEditorBesideScene}=await import('../src/nestedDock.ts');
-  const covered=moveTab(defaultDockTree(),'human_creator','dock-center');
-  assert.equal(panelStack(covered,'human_creator'),'dock-center');
-  assert.equal(panelStack(moveCharacterEditorBesideScene(covered),'human_creator'),'dock-right');
-  assert.equal(panelStack(defaultDockTree(),'human_creator'),'dock-right');
+test('character authoring panels share the central workspace and can be split for comparison',()=>{
+  const tree=defaultDockTree();
+  assert.equal(panelStack(tree,'human_creator'),'dock-center');
+  assert.equal(panelStack(tree,'human_appearance'),'dock-center');
+  const split=moveTab(tree,'human_appearance','dock-right');
+  assert.equal(panelStack(normalizeDockTree(split),'human_appearance'),'dock-right');
 });
 
-test('character studio preset: editor left, Scene stage, no bottom dock',async()=>{
+test('character studio opens Creator with embedded preview in the central stack',async()=>{
   const {characterDockTree}=await import('../src/nestedDock.ts');
   const t=normalizeDockTree(characterDockTree());
-  assert.equal(panelStack(t,'human_creator'),'dock-left');
-  assert.equal(findDockStack(t,'dock-left').active,'human_creator');
-  assert.equal(findDockStack(t,'dock-center').active,'scene');
+  assert.equal(panelStack(t,'human_creator'),'dock-center');
+  assert.equal(findDockStack(t,'dock-left').active,'hierarchy');
+  assert.equal(findDockStack(t,'dock-center').active,'human_creator');
   assert.equal(findDockStack(t,'dock-bottom'),null);
   assert.equal(panelStack(t,'assets'),null);
 });

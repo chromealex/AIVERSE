@@ -62,6 +62,22 @@ namespace studio = aiverse::studio;
 
 @interface StudioFxView : StudioMetalView
 @end
+@interface StudioCharacterSurface : NSView
+@property(nonatomic,strong) CALayer* photo;
+@property(nonatomic,strong) CALayer* brushRing;
+@property(nonatomic) CGFloat photoAspect,photoScale,photoX,photoY;
+@property(nonatomic) BOOL photoMirror;
+@end
+@implementation StudioCharacterSurface
+- (NSView*)hitTest:(NSPoint)point { (void)point;return nil; }
+- (void)layout {
+    [super layout];
+    CGFloat h=self.bounds.size.height*self.photoScale,w=h*self.photoAspect;
+    self.photo.bounds=CGRectMake(0,0,w,h);
+    self.photo.position=CGPointMake(NSMidX(self.bounds)+w*self.photoX*.5,NSMidY(self.bounds)-h*self.photoY*.5);
+    self.photo.transform=CATransform3DMakeScale(self.photoMirror?-1:1,1,1);
+}
+@end
 @interface StudioGameView : StudioMetalView { NSTrackingArea* tracking_; }
 @end
 
@@ -108,7 +124,7 @@ namespace studio = aiverse::studio;
     NSWindow* window_;
     WKWebView* web_;
     StudioMetalView* viewport_;
-    NSView* assetViews_[3];
+    NSView* assetViews_[5];
     StudioFxView* fxViewport_;
     StudioGameView* gameViewport_;
     StudioDeviceChromeView* gameChrome_;
@@ -156,12 +172,12 @@ public:
     }
     // The Scene's device is made on its render thread: the layers were captured on the main thread.
     void setLayers(void* scene, void* game, void* fx) {
-        for(int i=0;i<3;++i)assetLayers_[i]=(__bridge void*)shell_->assetViews_[i].layer;
+        for(int i=0;i<5;++i)assetLayers_[i]=(__bridge void*)shell_->assetViews_[i].layer;
         sceneLayer_=scene;gameLayer_=game;fxLayer_=fx;
     }
     std::unique_ptr<aiverse::gfx::Device> createDevice(studio::StudioSurface surface) override {
         return aiverse::gfx::createMetalDevice(
-            surface==studio::StudioSurface::FacialRig?assetLayers_[2]:surface==studio::StudioSurface::Shader?assetLayers_[1]:surface==studio::StudioSurface::Material?assetLayers_[0]:
+            surface>=studio::StudioSurface::Material?assetLayers_[int(surface)-int(studio::StudioSurface::Material)]:
             surface==studio::StudioSurface::Scene?sceneLayer_:
             surface==studio::StudioSurface::Fx?fxLayer_:gameLayer_);
     }
@@ -175,10 +191,41 @@ public:
         }
     }
     bool surfaceDrawable(studio::StudioSurface surface) override {
-        NSView* view=surface==studio::StudioSurface::FacialRig?shell_->assetViews_[2]:surface==studio::StudioSurface::Shader?shell_->assetViews_[1]:surface==studio::StudioSurface::Material?shell_->assetViews_[0]:surface==studio::StudioSurface::Scene?(NSView*)shell_->viewport_:
+        NSView* view=surface>=studio::StudioSurface::Material?shell_->assetViews_[int(surface)-int(studio::StudioSurface::Material)]:surface==studio::StudioSurface::Scene?(NSView*)shell_->viewport_:
             surface==studio::StudioSurface::Fx?(NSView*)shell_->fxViewport_:(NSView*)shell_->gameViewport_;
         NSWindow* window=view.window ?: shell_->window_;
         return !view.hidden && !window.isMiniaturized && window.visible;
+    }
+    void humanReference(studio::StudioSurface surface,const aiverse::Json& input) override {
+        auto* view=(StudioCharacterSurface*)shell_->assetViews_[int(surface)-int(studio::StudioSurface::Material)];
+        if(input.getStr("kind")=="brushCursor"){
+            CGFloat radius=std::clamp(input["radius"].toDouble(),0.,view.bounds.size.height);
+            [CATransaction begin];[CATransaction setDisableActions:YES];
+            view.brushRing.hidden=radius<=0;
+            view.brushRing.bounds=CGRectMake(0,0,2*radius,2*radius);
+            view.brushRing.cornerRadius=radius;
+            view.brushRing.position=CGPointMake(input["x"].toDouble()*view.bounds.size.width,(1-input["y"].toDouble())*view.bounds.size.height);
+            [CATransaction commit];
+            return;
+        }
+        if(input.has("image")){
+            const auto src=input.getStr("image");
+            NSImage* image=nil;
+            if(src.size()<32*1024*1024 && src.rfind("data:image/png;base64,",0)==0){
+                NSString* content=[NSString stringWithUTF8String:src.c_str()+22];
+                NSData* bytes=[[NSData alloc] initWithBase64EncodedString:content options:0];
+                if(bytes)image=[[NSImage alloc] initWithData:bytes];
+            }
+            view.photo.contents=image?(__bridge id)[image CGImageForProposedRect:nil context:nil hints:nil]:nil;
+            view.photoAspect=image&&image.size.height>0?image.size.width/image.size.height:1;
+        }
+        view.photo.opacity=std::clamp(input["opacity"].toDouble(),0.,1.);
+        view.photo.hidden=!input.getBool("visible")||!view.photo.contents;
+        view.photoScale=std::clamp(input["scale"].toDouble(),.1,2.);
+        view.photoX=std::clamp(input["x"].toDouble(),-1.,1.);
+        view.photoY=std::clamp(input["y"].toDouble(),-1.,1.);
+        view.photoMirror=input.getBool("mirror");
+        view.needsLayout=YES;
     }
     bool gameFocused() override {
         NSWindow* window=shell_->gameViewport_.window ?: shell_->window_;
@@ -283,7 +330,7 @@ private:
     __unsafe_unretained StudioShell* shell_;
     void* sceneLayer_=nullptr;
     void* gameLayer_=nullptr;
-    void* assetLayers_[3]={};
+    void* assetLayers_[5]={};
     void* fxLayer_=nullptr;
 };
 
@@ -735,9 +782,19 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
     fxViewport_.shell=self;fxViewport_.hidden=YES;
     [window_.contentView addSubview:fxViewport_
         positioned:(htmlComposite_?NSWindowBelow:NSWindowAbove) relativeTo:web_];
-    for(int i=0;i<3;++i){
-        NSView* view=[[NSView alloc] initWithFrame:NSZeroRect];
+    for(int i=0;i<5;++i){
+        NSView* view=i>=3?[[StudioCharacterSurface alloc] initWithFrame:NSZeroRect]:[[NSView alloc] initWithFrame:NSZeroRect];
         view.wantsLayer=YES;view.layer=[CAMetalLayer layer];view.hidden=YES;
+        if(i>=3){
+            StudioCharacterSurface* character=(StudioCharacterSurface*)view;
+            character.photo=[CALayer layer];character.photo.hidden=YES;
+            view.layer.masksToBounds=YES;
+            [view.layer addSublayer:character.photo];
+            character.brushRing=[CALayer layer];character.brushRing.hidden=YES;
+            character.brushRing.borderWidth=1.5;
+            character.brushRing.borderColor=NSColor.whiteColor.CGColor;
+            [view.layer addSublayer:character.brushRing];
+        }
         assetViews_[i]=view;
         [window_.contentView addSubview:view positioned:NSWindowAbove relativeTo:web_];
     }
@@ -974,10 +1031,10 @@ static NSString* studioFloatPanel(NSWindow* window,NSDictionary<NSString*,NSWind
         [window_.contentView addSubview:viewport_ positioned:(htmlComposite_ ? NSWindowBelow : NSWindowAbove) relativeTo:web_];
         core_->surfaceDetached(studio::StudioSurface::Scene);
     }
-    for(int i=0;i<3;++i)if(assetViews_[i].window==window){
+    for(int i=0;i<5;++i)if(assetViews_[i].window==window){
         NSView* view=assetViews_[i];[view removeFromSuperview];view.hidden=YES;
         [window_.contentView addSubview:view positioned:NSWindowAbove relativeTo:web_];
-        core_->surfaceDetached(i==2?studio::StudioSurface::FacialRig:i==0?studio::StudioSurface::Material:studio::StudioSurface::Shader);
+        core_->surfaceDetached(static_cast<studio::StudioSurface>(int(studio::StudioSurface::Material)+i));
     }
     if (fxViewport_.window==window) {
         [fxViewport_ removeFromSuperview];fxViewport_.hidden=YES;
@@ -1179,7 +1236,7 @@ static NSString* studioFloatPanel(NSWindow* window,NSDictionary<NSString*,NSWind
 // Returns NO for a stale report from a window that no longer hosts the view.
 - (BOOL)placeSurface:(studio::StudioSurface)surface rect:(const studio::ViewportRect&)rect out:(studio::NativeViewportPlacement&)out {
     WKWebView* host=currentWeb_ ?: web_;
-    NSView* view=surface==studio::StudioSurface::FacialRig?assetViews_[2]:surface==studio::StudioSurface::Shader?assetViews_[1]:surface==studio::StudioSurface::Material?assetViews_[0]:surface==studio::StudioSurface::Scene?(NSView*)viewport_:
+    NSView* view=surface>=studio::StudioSurface::Material?assetViews_[int(surface)-int(studio::StudioSurface::Material)]:surface==studio::StudioSurface::Scene?(NSView*)viewport_:
         surface==studio::StudioSurface::Fx?(NSView*)fxViewport_:(NSView*)gameViewport_;
     if (view.superview!=host.superview) {
         if (!rect.visible) return NO;
@@ -1219,6 +1276,7 @@ static NSString* studioFloatPanel(NSWindow* window,NSDictionary<NSString*,NSWind
 - (void)webView:(WKWebView*)view didFinishNavigation:(WKNavigation*)navigation {
     (void)navigation;
     NSLog(@"[studio-web] top-level navigation finished: %@",view.URL);
+    [view evaluateJavaScript:@"document.documentElement.classList.add('character-composite');" completionHandler:nil];
     if (htmlComposite_) [view evaluateJavaScript:@"document.documentElement.classList.add('native-composite');" completionHandler:nil];
     if (view==web_) core_->webReady();
 }

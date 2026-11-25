@@ -213,3 +213,5 @@ Record implementation commit, frontend panel, explicit native methods, normal/er
 Entity CRUD (69), packaging (70), map lifecycle (71), shared game host extraction (72) and remote asset/model/facial-rig convergence (78–79) have scoped automated evidence. Latest combined suite: native 25/25, web 85/85, Python 41/41; targeted recovery/picking follow-up 4/4. New Facial Rig panel is a partial authoring addition, not animation parity. Next: native interactive QA after Mac unlock, real game lifecycle using shared runtime ownership, then remaining matrix. No full-parity or main-merge claim is justified yet.
 
 Facial Rig preview migration: independent model binding, controls and drawable in the Facial Rig panel. Human Creator viewport migration tracked separately.
+
+Character Creator and VIVID Appearance render on separate native surfaces. The Scene frame receives no character binding. The HTML5 workspace hosts every docked and floating panel inside the same responsive page container. Individual visual acceptance is in progress. Windows preview input and photo overlay acceptance remain open.

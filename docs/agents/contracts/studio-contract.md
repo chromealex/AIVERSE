@@ -17,3 +17,7 @@ For any work under \`apps/studio-web\` or any new editor window, use the shared,
 - No raw hard-coded palette/button/input styles in new panels, no ImGui additions and no browser-side project file writes. Preserve the native Renderer3D Metal viewport and \`src/bridge.ts\` allowlist.
 - Work on \`feature/studio-html5\` for this migration, not \`main\`; verify \`npm run typecheck && npm run build\`, Python UI contracts, and macOS screenshots before claiming full parity.
 
+
+## HTML5 window layout
+
+Design every Studio window as a responsive HTML page, including docked and floating panels, graph editors, asset browsers and previews. Organize content around the primary task, use semantic controls and headings, and provide readable spacing and keyboard focus. Adapt to the actual panel width. Keep the authored canvas or preview and its controls usable in narrow docks. Each preview renders inside its owning tool. Check real window captures at representative sizes.

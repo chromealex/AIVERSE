@@ -22,7 +22,7 @@
 
 namespace aiverse::studio {
 
-enum class StudioSurface { Scene, Game, Fx, Material, Shader, FacialRig };
+enum class StudioSurface { Scene, Game, Fx, Material, Shader, FacialRig, Character, Appearance };
 
 // What a shell provides. Called on the main (UI) thread only, except runInBackground's work.
 class StudioHostPlatform {
@@ -39,6 +39,7 @@ public:
     // The native view is shown in a visible, not minimised window.
     virtual bool surfaceDrawable(StudioSurface surface) = 0;
     // The Game view has keyboard focus (input goes to the game).
+    virtual void humanReference(StudioSurface,const Json&) {}
     virtual bool gameFocused() = 0;
     // studio.viewportRect: move / show / hide the native view over the panel's DOM rect, in the web view that sent it.
     // Fill `out` (pixel size for the drawable). False: a stale report from a window that no longer hosts the view.
@@ -85,6 +86,9 @@ public:
     void runOnSceneThread(const std::function<void()>& fn) { if (renderThread_) renderThread_->invoke(fn); else fn(); }
     // Separate dedicated FX drawable; both GPU Scenes have the same owner
     // thread, but independent devices/swapchains and camera lifetimes.
+    bool humanPick(StudioSurface surface,double x,double y,double w,double h);
+    void humanOrbit(StudioSurface surface,double dx,double dy);
+    void humanZoom(StudioSurface surface,double amount);
     void fxCameraOrbit(double dx,double dy);
     void fxCameraZoom(double wheel);
     bool projectLoading() const { return projectLoading_; }
@@ -172,14 +176,14 @@ private:
     };
     // Results of the last finished Scene frame, consumed by the UI thread.
     struct FrameOutputs {
-        std::string error, facialError, lightingStatus;
-        bool facialReady = false;
+        std::string error, lightingStatus;
         StudioScene::LoadProgress load;
         StudioScene::CameraState camera;
         std::vector<std::string> thumbnails; // Assets panel model thumbnails finished since the last frame
         uint32_t drawCalls = 0;
     };
-    void tickFacialRigPreview();
+    void tickCharacterPreview(StudioSurface surface);
+    StudioScene* activeHumanRenderer();
     void tickAssetPreview(StudioSurface surface);
     void tickFx();                     // UI thread: independent native FX surface
     void tickScene();                  // UI thread: snapshot inputs, kick the render thread, publish results
@@ -220,7 +224,8 @@ private:
         std::string error;
         NativeViewportPlacement placement;
         std::unique_ptr<StudioScene> renderer;
-    } materialSurface_, shaderSurface_, facialRigSurface_;
+    } materialSurface_, shaderSurface_, facialRigSurface_, characterSurface_, appearanceSurface_;
+    AssetSurface& assetSurface(StudioSurface surface);
     std::unique_ptr<StudioScene> fxPreview_;           // separate GPU drawable + isolated camera; same owner render thread
     std::unique_ptr<StudioRenderThread> renderThread_;
     std::mutex renderIoMutex_;                         // guards renderInputs_ / renderOutputs_

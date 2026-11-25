@@ -225,7 +225,7 @@ public:
                                 width, height, nullptr, nullptr, instance, nullptr);
         if (!main_) { fatal("The main window could not be created"); return 1; }
         extendClientOverCaption(main_);
-        for (int i = 0; i < 6; ++i) {
+        for (int i = 0; i < 8; ++i) {
             surfaces_[i] = CreateWindowExW(0, kSurfaceClass, nullptr, WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN, 0, 0, 16, 16,
                                            main_, nullptr, instance, nullptr);
             SetWindowLongPtrW(surfaces_[i], GWLP_USERDATA, LONG_PTR(i));
@@ -559,6 +559,7 @@ public:
         WinShell* s = gShell;
         if (s && s->core_) {
             const int which = int(GetWindowLongPtrW(h, GWLP_USERDATA));
+            if(which>=6)return s->characterInput(h,msg,wp,lp,static_cast<studio::StudioSurface>(which));
             if(which>=3)return DefWindowProcW(h,msg,wp,lp);
             const LRESULT handled = which==0?s->sceneInput(h,msg,wp,lp):
                 which==1?s->gameInput(h,msg,wp,lp):
@@ -574,6 +575,26 @@ public:
     }
     // Dedicated native Vulkan FX child. It may only orbit/zoom its own
     // particle camera; it never routes to Scene selection, brush or ECS.
+    LRESULT characterInput(HWND h,UINT msg,WPARAM wp,LPARAM lp,studio::StudioSurface surface){
+        POINT p{GET_X_LPARAM(lp),GET_Y_LPARAM(lp)};
+        RECT rect{};GetClientRect(h,&rect);
+        switch(msg){
+        case WM_LBUTTONDOWN:case WM_RBUTTONDOWN:
+            SetFocus(h);SetCapture(h);fxLast_=p;
+            if(msg==WM_LBUTTONDOWN)core_->humanPick(surface,p.x,p.y,rect.right,rect.bottom);
+            return 0;
+        case WM_MOUSEMOVE:
+            if(GetCapture()==h&&(wp&(MK_LBUTTON|MK_RBUTTON))){
+                if(!(wp&MK_LBUTTON)||!core_->humanPick(surface,p.x,p.y,rect.right,rect.bottom))
+                    core_->humanOrbit(surface,p.x-fxLast_.x,p.y-fxLast_.y);
+                fxLast_=p;
+            }
+            return 0;
+        case WM_LBUTTONUP:case WM_RBUTTONUP:if(GetCapture()==h)ReleaseCapture();return 0;
+        case WM_MOUSEWHEEL:core_->humanZoom(surface,double(GET_WHEEL_DELTA_WPARAM(wp))/120.0*2.0);return 0;
+        default:return DefWindowProcW(h,msg,wp,lp);
+        }
+    }
     LRESULT fxInput(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         if(!core_)return -1;
         switch(msg) {
@@ -927,7 +948,7 @@ private:
             if ((*it)->hwnd == hwnd) { floats_.erase(it); return; }
     }
     void releaseSurfaces(HWND host) {
-        for (int i = 0; i < 6; ++i) {
+        for (int i = 0; i < 8; ++i) {
             HWND child = surfaces_[i];
             if (!child || GetParent(child) != host) continue;
             ShowWindow(child, SW_HIDE);
@@ -1294,7 +1315,7 @@ private:
     std::string project_;
     bool dev_ = false;
     HWND main_ = nullptr;
-    HWND surfaces_[6] = {}; // Scene, Game, FX
+    HWND surfaces_[8] = {}; // Scene, Game, FX
     Com<ICoreWebView2Controller> controller_;
     Com<ICoreWebView2> web_;
     std::unique_ptr<studio::StudioHost> core_;

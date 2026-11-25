@@ -156,7 +156,7 @@ function DockTabs({ node, tree, setTree, renderPanel, dragging, setDragging,
     </div>
     {menu && <StudioContextMenu x={menu.x} y={menu.y} label="Dock actions"
       items={dockMenu(menu.panel)} onClose={()=>setMenu(null)}/>}
-    <div className="nested-stack-body" role="tabpanel" aria-label={node.active ? STUDIO_PANEL_TITLES[node.active] : 'Empty dock'}>
+    <div className="nested-stack-body studio-page" data-panel={node.active} role="tabpanel" aria-label={node.active ? STUDIO_PANEL_TITLES[node.active] : 'Empty dock'}>
       {node.active ? renderPanel(node.active) : <div className="nested-empty">Drop a panel here</div>}
       {showEdges && <div className="nested-drop-zones">
         {(['left','right','top','bottom'] as const).map(edge=><div key={edge}

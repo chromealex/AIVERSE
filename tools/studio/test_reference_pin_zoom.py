@@ -203,7 +203,9 @@ class StudioReferencePinZoomTests(unittest.TestCase):
         self.assertIn('documentModelTimes_',api)
         self.assertIn('fs::last_write_time(current,modifiedError)',scene)
         self.assertIn('previousTime->second!=modified',scene)
-        self.assertIn('ws.project.dir, ws.project.rulesJson',host)
+        self.assertIn('in.project = ws.project.dir',host)
+        self.assertIn('std::make_shared<const Json>(ws.project.rulesJson)',host)
+        self.assertIn('in.levelHeight, in.project, *in.rules, nullptr',host)
 
     def test_rigid_cpu_model_triangle_picking_adapter(self):
         adapter=(ROOT/"apps/studio-native/StudioModelPicking.h").read_text(encoding="utf-8")
