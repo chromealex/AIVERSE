@@ -1521,7 +1521,7 @@ int main(){
             const auto result=transfer.apply(transfer.token(),{},{},&recorded,true,&staged);
             AIVERSE_TEST_CHECK(recorded&&result.getInt("repairedMaterialReferences")==1&&result.getInt("repairedResourceDocuments")==1);
             AIVERSE_TEST_CHECK(fs::exists(source)&&!fs::exists(dest)&&read(materials)==originalMaterials&&read(model)==originalModel);
-            auto next=history;next.recordMove(*recorded,"Move paint with references");
+            auto next=history;next.recordMove(editor::ProjectHistory::MovePlan(*recorded),"Move paint with references");
             const auto checkpoint=p/".aiverse-cache"/"asset-history.json";
             // A changed material baseline rejects publication without moving
             // the asset, repairing the model or creating the checkpoint.
@@ -1549,7 +1549,7 @@ int main(){
             std::optional<editor::ProjectHistory::MovePlan> renameHistory;
             rename.apply(rename.token(),{},{},&renameHistory,true,&renamed);
             AIVERSE_TEST_CHECK(renameHistory&&fs::exists(source));
-            auto renamedHistory=previous;renamedHistory.recordMove(*renameHistory,"Rename paint");
+            auto renamedHistory=previous;renamedHistory.recordMove(std::move(*renameHistory),"Rename paint");
             studioApplyHistoryBatch(p,renamed.relocations,renamed.documents,renamed.movingResources,&previous,&renamedHistory);
             AIVERSE_TEST_CHECK(fs::exists(p/"content"/"A"/"Tint.png")&&!fs::exists(source));
             AIVERSE_TEST_CHECK(Json::parseFile(model.string())["images"][0].getStr("uri")=="Tint.png");
