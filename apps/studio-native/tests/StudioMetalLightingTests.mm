@@ -25,6 +25,43 @@ int aiverseMain(int argc,char** argv) { @autoreleasepool {
         doc.data.extra.set("terrainPresentation",Json::string("legacy"));
         doc.data.extra.set("lights",Json::parse(R"([{"x":4,"z":4,"height":2,"radius":12,"intensity":6,"color":[1,0.3,0.1]}])"));
         const Json empty;
+        {
+            // A second Scene instance owns the Lighting panel drawable and camera.
+            // The document is shared read-only, as it is in the Studio host tick.
+            NSWindow* panel=[[NSWindow alloc] initWithContentRect:NSMakeRect(180,0,320,180)
+                styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+            CAMetalLayer* target=[CAMetalLayer layer];target.framebufferOnly=NO;
+            panel.contentView.wantsLayer=YES;panel.contentView.layer=target;[panel orderFront:nil];
+            studio::StudioScene preview(gfx::createMetalDevice((__bridge void*)target));
+            const auto original=doc.toJson();
+            const auto mainFrames=scene.framesDrawn();
+            double means[2]{};
+            for(int night=0;night<2;++night){
+                render::Lighting env;
+                if(night){env.sunIntensity=.02f;env.skyColor={.02f,.02f,.04f};env.groundColor={.01f,.01f,.02f};}
+                studio::PreviewDayLighting day;day.night=float(night);
+                preview.setWeatherPreview(env,day);
+                auto draw=[&]{preview.frame(320,180,doc,false,"","",empty,0);};
+                draw();
+                auto sample=std::make_shared<std::promise<std::vector<uint8_t>>>();
+                auto result=sample->get_future();
+                preview.captureNextFrame([sample](int,int,std::vector<uint8_t> rgba){sample->set_value(std::move(rgba));});
+                for(int i=0;i<50&&result.wait_for(std::chrono::milliseconds(4))!=std::future_status::ready;++i)draw();
+                if(result.wait_for(std::chrono::seconds(2))!=std::future_status::ready)throw std::runtime_error("Weather framebuffer timeout");
+                const auto pixels=result.get();
+                if(pixels.size()!=320*180*4)throw std::runtime_error("Weather framebuffer size");
+                std::ofstream file(std::filesystem::path(argv[1])/(night?"weather-night.ppm":"weather-day.ppm"),std::ios::binary);
+                file<<"P6\n320 180\n255\n";
+                for(size_t i=0;i<pixels.size();i+=4){
+                    file.write(reinterpret_cast<const char*>(pixels.data()+i),3);
+                    means[night]+=pixels[i]+pixels[i+1]+pixels[i+2];
+                }
+                means[night]/=320*180*3;
+            }
+            std::cout<<"Independent weather framebuffer means "<<means[0]<<" "<<means[1]<<"\n";
+            if(means[0]-means[1]<2 || !(doc.toJson()==original) || scene.framesDrawn()!=mainFrames)
+                throw std::runtime_error("Weather preview did not render independently");
+        }
         bool fps=false;
         auto frame=[&](){scene.frame(160,160,doc,fps,"","",empty,0);};
         std::vector<uint8_t> litPixels,unlitPixels;

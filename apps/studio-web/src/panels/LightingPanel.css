@@ -29,6 +29,6 @@
 .lighting-weather{padding:12px 14px;border-block:1px solid var(--au-line);color:var(--au-text)}
 .lighting-weather summary{font-weight:600;cursor:pointer}
 .lighting-weather .asset-native-surface{margin-block:10px}
-.lighting-weather label{display:grid;grid-template-columns:minmax(68px,1fr) minmax(54px,2fr) 40px;align-items:center;gap:8px}
-.lighting-weather output{text-align:end;font-variant-numeric:tabular-nums}
+.lighting-weather label{display:grid;grid-template-columns:minmax(68px,1fr) minmax(54px,2fr) 5ch;align-items:center;gap:8px}
+.lighting-weather output{white-space:nowrap;text-align:end;font-variant-numeric:tabular-nums}
 .lighting-weather button{margin-top:8px}

@@ -40,6 +40,13 @@ int main() {
     AIVERSE_TEST_CHECK(!doc["lighting"].has("preset") && doc["lighting"].has("storm"));
     auto inherited=editFpsLighting(doc,"studio.lightingSet",Json::parse(R"({"key":"remove","value":true})"));
     AIVERSE_TEST_CHECK(!inherited.has("lighting") && inherited["lights"]==doc["lights"]);
+    auto weather=editFpsLighting(doc,"studio.lightingSet",Json::parse(R"({"key":"weather","value":{"time":0,"clouds":0.3,"storm":0.2}})"));
+    AIVERSE_TEST_CHECK(weather["lighting"]["storm"].toDouble()==.2 && weather["lighting"]["clouds"].toDouble()==.3);
+    AIVERSE_TEST_CHECK(weather["lighting"]["dayLength"].isNumber() && weather["lighting"]["dayLength"].toDouble()==0);
+    bool invalidWeather=false;
+    try{(void)editFpsLighting(doc,"studio.lightingSet",Json::parse(R"({"key":"weather","value":{"time":0,"clouds":2,"storm":0.2}})"));}
+    catch(const std::exception&){invalidWeather=true;}
+    AIVERSE_TEST_CHECK(invalidWeather);
     const Json before=doc;
     bool rejected=false;
     try { (void)editFpsLighting(doc,"studio.lightingSet",Json::parse(R"({"key":"storm","value":2})")); }

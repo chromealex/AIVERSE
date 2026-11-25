@@ -1,0 +1,10 @@
+{
+  "sha": "5d4a0d1d3195f64a15202a8d402bd4e1e3557dd3",
+  "argv": [
+    "bash",
+    "/tmp/lighting-panel-qa.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-light-weather-frames.log.txt",
+  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

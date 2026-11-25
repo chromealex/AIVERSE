@@ -869,7 +869,7 @@ void StudioHost::tick() {
     if(weatherEnvironment_ && lightingSurface_.placement.visible && platform_.surfaceDrawable(StudioSurface::Lighting)) {
         if(session_->graphDocumentScope().getStr("epoch")!=weatherEpoch_) {
             weatherEnvironment_.reset();
-            surfaceDetached(StudioSurface::Lighting);
+            if(lightingSurface_.renderer)onScene([&]{lightingSurface_.renderer.reset();});
         } else try {
             if(!renderThread_){
                 const char* threaded=std::getenv("AIVERSE_STUDIO_RENDER_THREAD");
