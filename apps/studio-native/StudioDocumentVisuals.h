@@ -17,6 +17,7 @@ struct StudioDocumentProxy {
     render::float4 color{.67f,.75f,.84f,1};
     float yaw = 0;
     bool light = false;
+    bool orientedCollider = false;
     render::float3 boundsMin{}, boundsMax{};
 
     void calculateBounds() {
@@ -71,6 +72,7 @@ inline std::vector<StudioDocumentProxy> studioDocumentProxies(
                 const Json& half=(*object)["half"];
                 if(!half.isArray() || half.size()<3)continue;
                 p.half={float(half[0].toDouble()),float(half[1].toDouble()),float(half[2].toDouble())};
+                p.orientedCollider=true;
                 p.yaw=float((*object)["yaw"].toDouble()*6.283185307179586);
             } else {
                 const Json& lo=(*object)["min"], &hi=(*object)["max"];

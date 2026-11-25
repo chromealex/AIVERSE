@@ -708,12 +708,13 @@ private:
     struct TransformDrag {
         int axis = -1; TransformTool tool = TransformTool::Move; std::string id;
         render::float3 pivot{}, dir{}; render::float3 axes[3]{};
+        std::optional<uint64_t> expectedRevision;
         float startT = 0, startX = 0, lengthPx = 1, worldLength = 1, value = 0;
         float startAngle = 0, lastAngle = 0, accumulated = 0; bool facing = false; render::float2 screenPivot{};
         render::float3 planeNormal{}, startHit{}, moveOffset{}; // Move: world offset (axis or plane)
         render::float3 startVec{}; bool snapping = false;     // Rotate: ring direction under the press, snap active
     } drag_;
-    bool selectedIsLight_ = false, selectedAxesValid_ = false;
+    bool selectedIsLight_ = false, selectedAxesValid_ = false, selectedOrientedCollider_ = false;
     std::set<std::string> selection_, hidden_, locked_;
     LoadProgress loadProgress_;
     bool modelsPending_ = false;

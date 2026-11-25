@@ -2195,14 +2195,14 @@ int StudioScene::transformGizmoHit(float x,float y,float width,float height) con
     // Plane squares (all tools): Move = drag in the plane, Scale = both plane axes,
     // Rotate = turn about the plane's normal (same as that axis's ring).
     for(int n=0;n<3;++n){
-        if(planetMode_&&tool_==TransformTool::Rotate&&n!=1)continue;
+        if((planetMode_||selectedOrientedCollider_)&&tool_==TransformTool::Rotate&&n!=1)continue;
         float2 q[4];
         if(planeQuad(view,selectedPivot_,axes,n,h.worldLength,width,height,q)&&insideQuad(q,x,y))
             return tool_==TransformTool::Rotate?n:4+n;
     }
     if(tool_==TransformTool::Rotate) {
         for(int a=0;a<3;++a){
-            if(planetMode_&&a!=1)continue;
+            if((planetMode_||selectedOrientedCollider_)&&a!=1)continue;
             float3 u,v;ringBasis(axes[a],u,v);float2 prev{};bool hasPrev=false;
             for(int i=0;i<=kRingSegments;++i){
                 const float t=6.2831853f*float(i)/float(kRingSegments);
@@ -2234,6 +2234,7 @@ bool StudioScene::beginTransformDrag(float x,float y,float width,float height) {
     float3 axes[3];handleAxes(axes);
     const auto h=axisHandles(view,selectedPivot_,axes,width,height);
     TransformDrag d;d.axis=axis;d.tool=tool_;d.id=selectedId_;d.pivot=selectedPivot_;
+    if(selectedOrientedCollider_)d.expectedRevision=terrainRevision_;
     for(int a=0;a<3;++a)d.axes[a]=axes[a];
     d.dir=axis<3?axes[axis]:float3{1,1,1};d.lengthPx=h.lengthPx;d.worldLength=h.worldLength;
     d.startX=x;d.value=tool_==TransformTool::Scale?1.0f:0.0f;
@@ -2371,6 +2372,7 @@ std::optional<StudioScene::TransformCommit> StudioScene::endTransformDrag() {
     if(drag_.axis<0)return std::nullopt;
     TransformCommit c;c.id=drag_.id;c.tool=drag_.tool;c.axis=drag_.axis;
     if(planetMode_)c.expectedRevision=planetTransformRevision_;
+    else c.expectedRevision=drag_.expectedRevision;
     if(drag_.tool==TransformTool::Move)c.move=drag_.moveOffset;
     else if(drag_.tool==TransformTool::Rotate)c.degrees=drag_.value;
     else c.factor=drag_.value;
@@ -2393,7 +2395,7 @@ void StudioScene::drawTransformGizmo(const render::Camera& view,int width,int he
     const float u=std::min(W,H)*0.16f/110.0f;
     auto drawPlanes=[&](){
         for(int n=0;n<3;++n){
-            if(planetMode_&&tool_==TransformTool::Rotate&&n!=1)continue;
+            if((planetMode_||selectedOrientedCollider_)&&tool_==TransformTool::Rotate&&n!=1)continue;
             float2 q[4];if(!planeQuad(view,pivot,axes,n,h.worldLength,W,H,q))continue;
             const bool hot=dragging&&(drag_.axis==4+n||(tool_==TransformTool::Rotate&&drag_.axis==n));
             const uint32_t base=hot?active:colors[n];
@@ -2406,7 +2408,7 @@ void StudioScene::drawTransformGizmo(const render::Camera& view,int width,int he
         drawPlanes();
         const float3 toEye=normalize(view.eye()-pivot);
         for(int a=0;a<3;++a){
-            if(planetMode_&&a!=1)continue;
+            if((planetMode_||selectedOrientedCollider_)&&a!=1)continue;
             const bool hot=dragging&&drag_.axis==a;
             float3 bu,bv;ringBasis(axes[a],bu,bv);
             float2 prev{};bool hasPrev=false;
@@ -3694,7 +3696,8 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         const mat4 preview=dragged?dragPreview():mat4{};
         const float3 offset=dragged&&drag_.tool==TransformTool::Move?drag_.moveOffset:float3{};
         if(entity.id==selectedId) {
-            selectedPivot_=entity.light?entity.center:float3{entity.center.x,entity.boundsMin.y,entity.center.z};
+            selectedOrientedCollider_=entity.orientedCollider;
+            selectedPivot_=(entity.light||entity.orientedCollider)?entity.center:float3{entity.center.x,entity.boundsMin.y,entity.center.z};
             selectedPivotValid_=true;selectedIsLight_=entity.light;
             selectedAxesValid_=false;
         }
@@ -4112,7 +4115,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     }
     applyPendingSceneLens();
     stepTween();selectedId_=selectedId;selectedPivotValid_=false;selectedBoxValid_=false;
-    selectedAxesValid_=false;selectedIsLight_=false;
+    selectedAxesValid_=false;selectedIsLight_=false;selectedOrientedCollider_=false;
     // Use the existing transform gizmo for authored rigid models. Yaw is
     // about the radial vertical (not arbitrary global Y); scale is along
     // actual model axes. Pitch/roll edits remain numeric-only.
