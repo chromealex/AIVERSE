@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { RotateCcw, Search } from 'lucide-react';
 import { invoke } from '../bridge';
-import { StudioField, StudioSelect } from '../ui';
+import { StudioButton, StudioField, StudioSelect } from '../ui';
 import type { StudioRules } from '../types';
 import { RULE_GROUPS, parseRuleInput, typeValues, type RuleValue } from './rulesSchema';
 import { fuzzyScore } from '../commandSearch';
@@ -9,18 +9,18 @@ import './RulesPanel.css';
 import PlanetForestPanel from './PlanetForestPanel';
 
 /** Rules: unit types as a form of known fields (validated by the game loader on every write). */
-export default function RulesPanel({ projectPath, historyVersion, onChanged }: { projectPath: string; historyVersion?: string; onChanged: () => void }) {
+export default function RulesPanel({ projectPath, historyVersion, onChanged, openActorSettings }: { projectPath: string; openActorSettings?: () => void; historyVersion?: string; onChanged: () => void }) {
   const [forestOpen,setForestOpen]=useState(false);
   const [rules, setRules] = useState<StudioRules | null>(null);
   const [typeId, setTypeId] = useState('');
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [section,setSection]=useState<'types'|'triggers'|'damageTable'|'global'|'document'>('types');
+  const [section,setSection]=useState<'types'|'triggers'|'damageTable'|'global'|'document'>(openActorSettings ? 'document' : 'types');
   const [raw, setRaw] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
-    setRules(null); setError(''); setRaw(null); setSection('types');
+    setRules(null); setError(''); setRaw(null);
     if (!projectPath) return;
     void invoke('studio.rules', {}).then(r => { if (live) { setRules(r); setTypeId(id => id && id in r.types ? id : Object.keys(r.types)[0] ?? ''); } })
       .catch(e => { if (live) setError(e instanceof Error ? e.message : String(e)); });
@@ -58,6 +58,11 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged }: {
   const extendsBase = typeId && rules ? (rules.types[typeId] as { extends?: unknown })?.extends : undefined;
   return <div className="rules-container"><div className="rules">
     <aside className="rules__list">
+      {openActorSettings && <div className="rules__section">
+        <strong>Actor settings</strong>
+        <span>Simulation, movement and loadout</span>
+        <StudioButton onClick={openActorSettings}>Open Actors &amp; Cameras</StudioButton>
+      </div>}
       <label className="rules__section">Rule section
         <select value={section} disabled={busy||(section!=='types'&&raw!==null)} onChange={event=>{
           setForestOpen(false);setSection(event.target.value as typeof section); setRaw(null);setError('');
