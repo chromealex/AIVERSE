@@ -52,7 +52,7 @@
       "sha256": "435b8f5aa5b9e55ea6042434828e2981db0030d095bbc7a25a59abfcd0874086"
     }
   ],
-  "macos_arm64": [
+  "macos_arm64_host_x86_64_binary": [
     {
       "backend": "cpu",
       "triangles": 16384,
@@ -71,5 +71,5 @@
     }
   ],
   "windows_configuration": "GitHub windows-2022 x64; MSVC Release",
-  "macos_configuration": "Local arm64, CMake single-config clang build, CMAKE_BUILD_TYPE empty. Machine, storage and build configuration differ; do not benchmark these machines against each other."
+  "macos_configuration": "Apple Silicon host, x86_64 executable under Rosetta, CMake single-config clang build, CMAKE_BUILD_TYPE empty. Machine, storage and build configuration differ; do not benchmark these machines against each other."
 }

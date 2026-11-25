@@ -113,7 +113,7 @@
     },
     "platforms": {
       "status": "pass",
-      "note": "Native macOS arm64 tests and model capture.",
+      "note": "CPU tests and model capture ran on Apple Silicon with the x86_64 macOS executable under Rosetta.",
       "evidence": [
         "docs/evidence/cpu-renderer-desktop-final.json"
       ]
