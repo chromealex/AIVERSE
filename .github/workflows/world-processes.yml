@@ -31,6 +31,10 @@ on:
       - '.github/workflows/world-processes.yml'
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   focused-native:
     runs-on: ubuntu-24.04

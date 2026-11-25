@@ -3088,6 +3088,15 @@
           "titleEn": "One loading screen in every project",
           "text": "Экран загрузки движка теперь и в FPS, и в воксельных проектах; проект в game.json оставляет его, меняет отдельные поля, ставит свой или убирает совсем.",
           "textEn": "The engine loading screen now also runs in FPS and voxel projects; in game.json a project keeps it, changes single fields, sets its own or removes it entirely."
+        },
+        {
+          "status": "done",
+          "date": "2026-11-25",
+          "target": null,
+          "title": "Ограничить очередь проверок GitHub Actions",
+          "titleEn": "Bound the GitHub Actions check queue",
+          "text": "Новые коммиты PR отменяют устаревшие проверки той же ветки; публикация сайта сохраняется.",
+          "textEn": "New PR commits cancel stale checks for the same branch while site publication remains unaffected."
         }
       ]
     },
