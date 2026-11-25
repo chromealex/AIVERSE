@@ -2353,6 +2353,13 @@
    ],
    "roadmap": [
     {
+     "id": "studio-only-editor",
+     "status": "in-progress",
+     "target": null,
+     "title": "HTML Studio — единственный редактор",
+     "titleEn": "HTML Studio as the sole editor"
+    },
+    {
      "id": "studio-graph-legibility",
      "status": "done",
      "date": "2026-11-25",
