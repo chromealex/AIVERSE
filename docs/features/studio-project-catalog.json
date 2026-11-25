@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/panels/MapPlayers.tsx",
     "apps/studio-web/src/panels/MapInspector.tsx",
     "apps/studio-web/src/panels/InspectorPanel.tsx",
     "apps/studio-web/src/panels/InspectorPanel.css",
