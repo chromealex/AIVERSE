@@ -106,9 +106,9 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'terrain': case 'water': case 'roads': case 'tiles': case 'generate':
       case 'effects': case 'lightbake': case 'models': case 'overlays': case 'branding':
       case 'fields': case 'physis': case 'actor': case 'raid': case 'balance': case 'fx_functions': case 'modeling':
-      case 'anim_assets': case 'anim_rig': case 'model_anim': case 'project_import':
+      case 'anim_assets': case 'model_anim': case 'project_import':
         return <ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
-      case 'anim_graph': return <AnimationGraphPanel key={snapshot?.project.path} projectPath={snapshot?.project.path??''} tools={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
+      case 'anim_graph': case 'anim_rig': return <AnimationGraphPanel key={panel+snapshot?.project.path} rigMode={panel==='anim_rig'} projectPath={snapshot?.project.path??''} tools={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
       case 'fx_library': return <SpectraLibraryPanel key={snapshot?.project.path ?? ''} projectPath={snapshot?.project.path ?? ''} showPanel={ctx.showPanel}/>;
       case 'fx_graph': return <SpectraDataInterfacesPanel projectPath={snapshot?.project.path ?? ''}
         onSaved={()=>void invoke('studio.snapshot',{}).then(ctx.commitSnapshot).catch(()=>{})}/>;

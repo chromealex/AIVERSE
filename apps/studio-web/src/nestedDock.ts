@@ -45,7 +45,7 @@ export const STUDIO_PANEL_TITLES: Record<StudioPanel,string> = {
   modeling: "Modeling",
   anim_assets: "Animation Clips",
   anim_graph: "Animation Graph",
-  anim_rig: "Rig",
+  anim_rig: "Animation Rig",
   model_anim: "Model Animation",
   project_import: "Import Project",
   human_creator: "Character Creator",
@@ -97,7 +97,7 @@ export const STUDIO_PANEL_HOME: Record<StudioPanel,string> = {
   modeling: "dock-right",
   anim_assets: "dock-right",
   anim_graph: "dock-center",
-  anim_rig: "dock-right",
+  anim_rig: "dock-center",
   model_anim: "dock-right",
   project_import: "dock-right",
   human_creator: "dock-right",
@@ -137,8 +137,8 @@ export function defaultDockTree(): DockTree {
     split('split-body-left','horizontal',.19,
       stack('dock-left',['hierarchy','project'],'hierarchy'),
       split('split-body-right','horizontal',.72,
-        stack('dock-center',['scene','game','materials','animation','facial_rig','shader_graph','anim_graph','rules','build','scripts','snapshot_diff'],'scene'),
-        stack('dock-right',['inspector','human_creator','lighting','runtime','nereid_flow','human_appearance','wind','history','terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','input','overlays','branding','asset_audit','fields','physis','actor','raid','balance','fx_graph','fx_library','fx_functions','modeling','anim_assets','anim_rig','model_anim','project_import','stats','extensions','attachments','terraweave_generator','catalog','world_persistence','static_geometry'],'inspector'))),
+        stack('dock-center',['scene','game','materials','animation','facial_rig','shader_graph','anim_graph','anim_rig','rules','build','scripts','snapshot_diff'],'scene'),
+        stack('dock-right',['inspector','human_creator','lighting','runtime','nereid_flow','human_appearance','wind','history','terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','input','overlays','branding','asset_audit','fields','physis','actor','raid','balance','fx_graph','fx_library','fx_functions','modeling','anim_assets','model_anim','project_import','stats','extensions','attachments','terraweave_generator','catalog','world_persistence','static_geometry'],'inspector'))),
     stack('dock-bottom',['assets','console','agent','frame_capture','texture_resources'],'assets')) };
 }
 function traverse(node: DockNode, visitor: (n: DockNode)=>void): void {

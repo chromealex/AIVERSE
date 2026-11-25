@@ -7,3 +7,7 @@
 .anim-canvas{min-height:155px;flex:1;overflow:auto}.anim-canvas svg{display:block}.anim-canvas g[role=button]{touch-action:none;cursor:grab}.anim-port{fill:var(--au-accent)}.anim-transition{width:100%;border-top:1px solid var(--au-line)}
 .anim-condition{display:flex;flex-wrap:wrap;align-items:center;gap:6px;border-left:2px solid var(--au-accent);padding-left:8px}
 .anim-canvas.graph-surface{background-color:var(--au-canvas);background-image:radial-gradient(circle,var(--au-line-strong) 1px,transparent 1px);background-size:20px 20px}
+.anim-editor>fieldset.rig-editor{display:block;min-width:0}
+.rig-bar,.rig-unit header,.rig-fields{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.rig-bar{margin-bottom:10px;align-items:end}.rig-unit{padding:9px;margin-bottom:8px;border:1px solid var(--au-line);border-radius:5px;background:var(--au-panel-raised)}
+.rig-unit header{margin-bottom:8px}.rig-unit header strong{margin-right:auto}.rig-fields details{padding:5px}.rig-fields summary{cursor:pointer}.rig-fields input[type=checkbox]{width:auto}

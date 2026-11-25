@@ -36,7 +36,7 @@ void validate(const Workspace& w,const Json& g){auto m=loadAnimationModel(w,g.ge
 std::unique_ptr<render::Model> loadAnimationModel(const Workspace& w,const std::string& file){if(file.empty())throw std::runtime_error("select a model");auto reader=[&w](const std::string& p,std::string& out){auto f=contained(w,p);std::ifstream stream(f,std::ios::binary);if(!stream)return false;out.assign(std::istreambuf_iterator<char>(stream),{});return true;};auto m=render::loadModel(file,reader);if(!m)throw std::runtime_error("cannot load animation model");return m;}
 void registerAnimationOps(Workspace& ws){auto schema=Json::parse(R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"expected":{"type":"object"},"expectedRevision":{"type":"string"},"target":{"type":"string"}}})");
     ws.registerOp({"animation_graph_edit","Edit a graph draft using the native animation document operations without saving it.",
-        Json::parse(R"({"type":"object","properties":{"action":{"type":"string"},"graph":{"type":"object"},"scope":{"type":"string"},"id":{"type":"string"},"kind":{"type":"string"},"source":{"type":"string"},"port":{"type":"string"},"name":{"type":"string"}},"required":["action"]})"),
+        Json::parse(R"({"type":"object","properties":{"action":{"type":"string"},"graph":{"type":"object"},"scope":{"type":"string"},"id":{"type":"string"},"kind":{"type":"string"},"source":{"type":"string"},"index":{"type":"integer"},"port":{"type":"string"},"name":{"type":"string"}},"required":["action"]})"),
         [](const Json& p){
             const auto action=p.getStr("action");
             if(action=="new")return result(animation::makeGraph());
@@ -53,7 +53,28 @@ void registerAnimationOps(Workspace& ws){auto schema=Json::parse(R"({"type":"obj
             if(action=="connect")animation::connect(*graph,p.getStr("source"),id,p.getStr("port"));
             else if(action=="remove")animation::remove(*graph,id);
             else if(action=="rename")animation::rename(*graph,id,p.getStr("name"));
-            else if(action=="add"){
+            else if(action=="addUnit"||action=="addContacts"){
+                auto& nodes=graph->member("nodes").itemsMut();
+                auto node=std::find_if(nodes.begin(),nodes.end(),[&](const Json& n){return n.getStr("id")==id&&n.getStr("kind")=="rig";});
+                if(node==nodes.end())throw std::runtime_error("Select a rig node");
+                auto& units=node->member("units");
+                if(!units.isArray())throw std::runtime_error("Rig has invalid units");
+                if(action=="addContacts"){
+                    const int index=p.getInt("index",-1);
+                    if(index<0||size_t(index)>=units.size())throw std::runtime_error("Select a rig unit");
+                    auto& unit=units.at(index);
+                    if(unit.getStr("op")!="fullBodyIK"||unit.has("contacts"))throw std::runtime_error("Contacts require a full body IK unit without contacts");
+                    const auto root=unit.getStr("bone");
+                    unit.set("contacts",animation::makeContacts(root,unit["effectors"][0].getStr("bone",root)));
+                }else{
+                    static const std::set<std::string> kinds={"transform","copy","aim","twoBoneIK","limit","fullBodyIK","surfaceLocomotion"};
+                    const auto kind=p.getStr("kind");
+                    if(!kinds.count(kind)||units.size()>=64)throw std::runtime_error("Invalid rig operation or rig is full");
+                    units.push(animation::makeUnit(kind));
+                    if(kind=="surfaceLocomotion"&&!(*graph)["parameters"].has("velocity"))
+                        graph->member("parameters").set("velocity",Json::parse("[0,0,0]"));
+                }
+            }else if(action=="add"){
                 static const std::set<std::string> kinds={"bind","clip","blend","additive","rig","stack","twoBoneIK","subgraph","motionMatching","native"};
                 const auto kind=p.getStr("kind");
                 if(!kinds.count(kind)||id.empty())throw std::runtime_error("Invalid animation node");

@@ -179,6 +179,12 @@ void authoredEntityWorkflow() {
        const auto animation=call("studio.op",R"({"op":"animation_graph_edit","params":{"action":"new"}})");
        AIVERSE_TEST_CHECK(!animation.has("error")&&!animation["result"].getBool("changed"));
        AIVERSE_TEST_CHECK(animation["result"]["result"]["graph"].getStr("output")=="bind");
+       const auto contacts=call("studio.op",R"({"op":"animation_graph_edit","params":{"action":"addContacts","id":"body","index":0,"graph":{"nodes":[{"id":"body","kind":"rig","units":[{"op":"fullBodyIK","bone":"hip","effectors":[{"bone":"toe"}]}]}]}}})");
+       const auto& settings=contacts["result"]["result"]["graph"]["nodes"][0]["units"][0]["contacts"];
+       AIVERSE_TEST_CHECK(settings["feet"][0].getStr("bone")=="toe"&&settings["capsules"][0].getStr("bone")=="hip");
+       const auto surface=call("studio.op",R"({"op":"animation_graph_edit","params":{"action":"addUnit","kind":"surfaceLocomotion","id":"body","graph":{"nodes":[{"id":"body","kind":"rig","units":[]}]}}})");
+       const auto& surfaceGraph=surface["result"]["result"]["graph"];
+       AIVERSE_TEST_CHECK(surfaceGraph["parameters"]["velocity"].size()==3&&surfaceGraph["nodes"][0]["units"][0].getStr("op")=="surfaceLocomotion");
        Json save=Json::object(),args=Json::object();
        args.set("name",Json::string("pose_revision"));
        args.set("graph",animation["result"]["result"]["graph"]);

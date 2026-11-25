@@ -30,7 +30,7 @@ export const WORKSPACE_INFO: Record<StudioWorkspace, WorkspaceInfo> = {
     left: ['hierarchy'], center: ['scene', 'materials', 'shader_graph'], right: ['inspector', 'lighting', 'postfx', 'effects', 'lightbake', 'models', 'modeling', 'fx_graph', 'fx_library', 'fx_functions', 'wind'], bottom: ['assets', 'console', 'texture_resources'],
     legacy: [] },
   animate: { id: 'animate', title: 'Animate', purpose: 'Rigs, clips, graphs', key: '4',
-    left: ['hierarchy'], center: ['animation', 'anim_graph', 'facial_rig', 'scene'], right: ['inspector', 'anim_assets', 'anim_rig', 'model_anim', 'attachments'], bottom: ['assets', 'console'],
+    left: ['hierarchy'], center: ['animation', 'anim_graph', 'anim_rig', 'facial_rig', 'scene'], right: ['inspector', 'anim_assets', 'model_anim', 'attachments'], bottom: ['assets', 'console'],
     legacy: [] },
   character: { id: 'character', title: 'Character', purpose: 'Digital humans', key: '7',
     left: ['human_creator'], center: ['scene', 'facial_rig'], right: ['inspector', 'human_appearance'], bottom: ['assets', 'console'],

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { invoke } from '../bridge';
+import RigInspector, {type RigUnit} from './RigInspector';
 import './graphSurface.css';
 import './AnimationGraphPanel.css';
 
-type Node = {id:string;kind:string;position?:number[];a?:string;b?:string;input?:string;clip?:string;weight?:number};
+type Node = {id:string;kind:string;position?:number[];a?:string;b?:string;input?:string;clip?:string;units?:RigUnit[];weight?:number};
 type Condition = {parameter:string;op?:string;value?:number};
 type Transition = {to:string;fade?:number;after?:number;when:Condition[]|Record<string,never>};
 type State = {id:string;output:string;transitions?:Transition[]};
@@ -15,15 +16,17 @@ const ports=(n:Node):('a'|'b'|'input')[]=>n.kind==='additive'||n.kind==='blend'?
 const position=(n:Node,i:number)=>({x:n.position?.[0]??24+190*(i%3),y:n.position?.[1]??24+90*Math.floor(i/3)});
 const nodeOptions=(nodes:Node[])=>nodes.map(n=><option key={n.id}>{n.id}</option>);
 
-export default function AnimationGraphPanel({projectPath,tools}:{projectPath:string;tools:ReactNode}){
- const restored=drafts.get(projectPath);
+export default function AnimationGraphPanel({projectPath,tools,rigMode}:{projectPath:string;tools:ReactNode;rigMode:boolean}){
+ const cacheKey=JSON.stringify([projectPath,rigMode]);
+ const title=rigMode?'Animation Rig':'Animation Graph';
+ const restored=drafts.get(cacheKey);
  const [names,setNames]=useState<string[]>([]),[name,setName]=useState(restored?.name??''),[newName,setNewName]=useState('');
  const [draft,setDraft]=useState<Graph|null>(restored?.draft??null),[saved,setSaved]=useState<Graph|null>(restored?.saved??null);
  const [revision,setRevision]=useState(restored?.revision??'');
  const [past,setPast]=useState<Graph[]>([]),[scope,setScope]=useState(''),[selection,select]=useState('');
  const [nodeName,setNodeName]=useState('');
  useEffect(()=>setNodeName(selection),[selection]);
- const [kind,setKind]=useState('clip'),[tab,setTab]=useState<'nodes'|'states'|'tools'>('nodes');
+ const [kind,setKind]=useState('clip'),[tab,setTab]=useState<'nodes'|'states'|'rig'|'tools'>(rigMode?'rig':'nodes');
  const [stateId,setStateId]=useState(''),[stateName,setStateName]=useState('');
  const [parameter,setParameter]=useState(''),[notice,setNotice]=useState('');
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -35,9 +38,9 @@ export default function AnimationGraphPanel({projectPath,tools}:{projectPath:str
  const dirty=JSON.stringify(saved)!==JSON.stringify(draft);
  const drag=useRef<{id:string;x:number;y:number;left:number;top:number;before:Graph}|null>(null);
  useEffect(()=>{
-  if(dirty&&draft)drafts.set(projectPath,{name,draft,saved,revision});
-  else drafts.delete(projectPath);
- },[projectPath,name,dirty,draft,saved,revision]);
+  if(dirty&&draft)drafts.set(cacheKey,{name,draft,saved,revision});
+  else drafts.delete(cacheKey);
+ },[cacheKey,name,dirty,draft,saved,revision]);
  async function op(method:string,params:Record<string,unknown>={}){
   const reply=await invoke('studio.op',{op:'animation_graph_'+method,params,expectedProject:projectPath});
   return reply.result as {graph:Graph;graphs:string[];revision:string};
@@ -75,8 +78,8 @@ export default function AnimationGraphPanel({projectPath,tools}:{projectPath:str
  const xs=[...positions.values()].map(p=>p.x),ys=[...positions.values()].map(p=>p.y);
  const left=Math.min(0,...xs)-12,top=Math.min(0,...ys)-12;
  const width=Math.max(360,...xs.map(x=>x+180))-left,height=Math.max(155,...ys.map(y=>y+70))-top;
- return <section className="anim-editor" aria-label="Animation Graph">
-  <header><strong>Animation Graph</strong><select aria-label="Animation graph asset" value={name} disabled={busy||dirty} onChange={e=>void run(()=>load(e.target.value))}>
+ return <section className="anim-editor" aria-label={title}>
+  <header><strong>{title}</strong><select aria-label="Animation graph asset" value={name} disabled={busy||dirty} onChange={e=>void run(()=>load(e.target.value))}>
    <option value="" disabled>Select graph</option>{names.map(n=><option key={n}>{n}</option>)}</select>
    <button aria-label="Reload animation graph" disabled={busy||dirty||!projectPath} onClick={()=>void run(async()=>{setNames((await op('list')).graphs);if(name)await load(name);})}>Reload</button>
    <input aria-label="New graph name" placeholder="New graph name" value={newName} onChange={e=>setNewName(e.target.value)}/>
@@ -84,7 +87,7 @@ export default function AnimationGraphPanel({projectPath,tools}:{projectPath:str
     const id=newName;const initial=await op('edit',{action:'new'});await op('set',{name:id,graph:initial.graph});
     setNames((await op('list')).graphs);await load(id);setNewName('');
    })}>Create graph</button></header>
-  <nav aria-label="Graph views">{(['nodes','states','tools'] as const).map(t=><button key={t} aria-pressed={t===tab} onClick={()=>setTab(t)}>{t==='nodes'?'Pose graph':t==='states'?'States':'Operations'}</button>)}</nav>
+  <nav aria-label="Graph views">{(['nodes','states','rig','tools'] as const).map(t=><button key={t} aria-pressed={t===tab} onClick={()=>setTab(t)}>{t==='nodes'?'Pose graph':t==='states'?'States':t==='rig'?'Rig units':'Operations'}</button>)}</nav>
   {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
   {tab==='tools'?tools:!graph?<p>{projectPath?'Open or create an animation graph.':'Open a project to edit animation graphs.'}</p>:<>
    <div className="anim-actions"><select aria-label="Graph scope" value={scope} disabled={busy} onChange={e=>{setScope(e.target.value);select('');setStateId('');}}>
@@ -118,7 +121,10 @@ export default function AnimationGraphPanel({projectPath,tools}:{projectPath:str
       <button disabled={current.id===graph.output} onClick={()=>change(inScope({...graph,output:current.id}))}>Use as output</button>
       <button onClick={()=>void run(async()=>{await edit('remove',{id:current.id});select('');})}>Remove node</button></>}
     </fieldset>
-   </>:<fieldset disabled={busy} className="anim-states">
+   </>:tab==='rig'?<RigInspector nodes={graph.nodes.filter(n=>n.kind==='rig')} selected={selection} select={select} busy={busy}
+    addRig={()=>void run(async()=>{let i=1;while(positions.has('rig'+i))i++;await edit('add',{kind:'rig',id:'rig'+i});select('rig'+i);})}
+    nativeEdit={(action,params)=>void run(()=>edit(action,params))}
+    update={(id,units)=>patchNode(id,{units})}/>:<fieldset disabled={busy} className="anim-states">
     <label>New state<input value={stateName} onChange={e=>setStateName(e.target.value)}/></label>
     <button disabled={!stateName.trim()||states.some(s=>s.id===stateName.trim())||states.length>=64} onClick={()=>{const id=stateName.trim();change(inScope({...graph,states:[...states,{id,output:graph.output,transitions:[]}]}));setStateId(id);setStateName('');}}>Add state</button>
     <label>Scalar parameter<input value={parameter} placeholder="speed" onChange={e=>setParameter(e.target.value)}/></label>
