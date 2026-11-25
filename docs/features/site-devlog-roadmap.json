@@ -16,6 +16,8 @@
     "docs/evidence/site-devlog-roadmap-current.log.txt",
     "docs/evidence/site-devlog-roadmap-main203.json",
     "docs/evidence/site-devlog-roadmap-main203.log.txt",
+    "docs/evidence/site-publish-git233-d35abba0b.json",
+    "docs/evidence/site-publish-git233-d35abba0b.log.txt",
     "docs/features/site-devlog-roadmap.json",
     "site/_layout.html",
     "site/devlog.js",
@@ -115,8 +117,8 @@
       "evidence": []
     },
     "tests": {
-      "status": "not_run",
-      "note": "Existing site checks passed; Git 2.33 publisher compatibility must be verified on this stage.",
+      "status": "pass",
+      "note": "On Git 2.33.0, a full publisher dry run checked 72 entries, built 152 pages in both languages and staged the complete generated tree without the temporary Git wrapper. The branch/clean-main preconditions were bypassed only to exercise the committed candidate; no remote push occurred in this check.",
       "evidence": [
         "docs/evidence/site-devlog-roadmap-main203.json"
       ]
@@ -136,8 +138,8 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "The site was published from main using a temporary Git wrapper; the standard publisher must be verified on Git 2.33.",
+      "status": "pass",
+      "note": "The prior main site was published and Pages deployed successfully; the new Git 2.33 fallback completed a full dry run through commit creation without a wrapper. A live standard publisher run follows after this fix reaches main.",
       "evidence": [
         "docs/agent-handoffs/site-devlog-roadmap-initial.md"
       ]
@@ -152,5 +154,7 @@
     "studio_panels": [],
     "studio_methods": []
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/site-publish-git233-d35abba0b.json"
+  ]
 }
