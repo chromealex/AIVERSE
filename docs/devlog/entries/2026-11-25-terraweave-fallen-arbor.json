@@ -9,7 +9,7 @@
   ],
   "status": "in-progress",
   "verified": "Кадр получен в нативной Studio на macOS с Metal. На Terra дерево с ключом 7 упало и остановилось. На тике 780 инспектор показал спящее физическое тело.",
-  "limits": "Ветви используют позу общей капсулы ствола. Физика рассчитывает столкновение целого дерева.",
+  "limits": "Ветви используют позу общей капсулы ствола. Физика рассчитывает столкновение целого дерева. Просмотр этой сцены доступен в нативном редакторе Studio.",
   "branch": "integrate/pr124-current-main-20261125",
   "commit": "cbca316c2",
   "media": [
@@ -27,5 +27,5 @@
     "In the Planet and Moon example, enable forest physics and give the species a fromArbor recipe. In Rules, open Planet forest and select Show live forest in Scene. The blue outline shows the collision capsule so you can check how the trunk rests on the surface."
   ],
   "verifiedEn": "Captured in native Studio on macOS with Metal. Tree 7 fell and settled on Terra. At tick 780 the inspector reported a sleeping body.",
-  "limitsEn": "Branches follow the trunk capsule. Physics resolves contact for the tree as a single body."
+  "limitsEn": "Branches follow the trunk capsule. Physics resolves contact for the tree as a single body. This Scene view is available in the native Studio editor."
 }
