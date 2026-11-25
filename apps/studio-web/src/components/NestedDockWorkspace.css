@@ -32,6 +32,7 @@
 .nested-tab>span[role=tab]{cursor:grab}
 @media(max-width:850px){.nested-toolbar>span{display:none}}
 /* HTML-over-Metal: do not paint an opaque parent behind the transparent scene. */
+html.native-composite .nested-workspace-root:has(.viewport-native),
 html.native-composite .nested-stack:has(.viewport-native),
 html.native-composite .nested-stack:has(.viewport-native) .nested-stack-body{
   background:transparent!important;
