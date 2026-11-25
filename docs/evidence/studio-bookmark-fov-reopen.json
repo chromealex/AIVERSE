@@ -1,0 +1,10 @@
+{
+  "sha": "3b5fd0aff3dc601a1ad4d442b1187ced74988982",
+  "argv": [
+    "bash",
+    "/tmp/bookmark-fov-qa.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-bookmark-fov-reopen.log.txt",
+  "sha256": "3559beb14cc87b0a7752c8dd89eefcbb47d6a68a883086927dc6dadfed7bb9f1"
+}
