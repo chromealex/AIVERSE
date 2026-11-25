@@ -1,0 +1,12 @@
+2026-11-25 23:24:14.416 AiverseStudioHTML5[29992:81600688] [studio-web] JS: CROSS bindingproof DONE_1
+2026-11-25 23:24:14.416 AiverseStudioHTML5[29992:81600688] [studio-web] JS: CROSS bindingproof VERIFIED assign, disconnect, undo and explicit save
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/shader-bindings-qa-t9UdwW/Catalog.app/Contents/MacOS/aiversemcp: replacing existing signature
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/shader-bindings-qa-t9UdwW/Catalog.app: replacing existing signature
+2026-11-25 23:24:18.606 AiverseStudioHTML5[30042:81601539] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/shader-bindings-qa-t9UdwW/Catalog.app/Contents/Resources/studio-web
+2026-11-25 23:24:18.777 AiverseStudioHTML5[30042:81601539] [studio-web] served index.html (6862 bytes)
+2026-11-25 23:24:18.779 AiverseStudioHTML5[30042:81601539] [studio-web] served assets/index-DUDtNoWT.js (1506897 bytes)
+2026-11-25 23:24:18.817 AiverseStudioHTML5[30042:81601539] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-25 23:24:19.166 AiverseStudioHTML5[30042:81601539] [studio-web] served index.html (6862 bytes)
+2026-11-25 23:24:19.168 AiverseStudioHTML5[30042:81601539] [studio-web] served assets/index-DUDtNoWT.js (1506897 bytes)
+2026-11-25 23:24:19.204 AiverseStudioHTML5[30042:81601539] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html?window=bindingproof&panels=shader_graph
+2026-11-25 23:24:19.560 AiverseStudioHTML5[30042:81601539] [studio-web] JS: CROSS bindingproof FAIL Too little visible graph: 30
