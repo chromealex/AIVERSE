@@ -49,3 +49,4 @@
 .hier__group button:hover,.hier__group button:focus-visible{background:var(--au-hover);color:var(--au-text)}
 .hier__disclosure{display:inline-grid;place-items:center;flex:none;width:22px;height:22px;border:0;border-radius:4px;padding:0;background:none;color:var(--au-text-muted);cursor:pointer}
 .hier__disclosure:hover{color:var(--au-text);background:var(--au-hover)}
+.hier__row[data-nested-leaf]::before{content:"";flex:0 0 22px}

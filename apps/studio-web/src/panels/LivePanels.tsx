@@ -78,7 +78,7 @@ export function LiveHierarchy({project,groupings,selection,onSelected}:{project?
           onClick={()=>navigate([...path,g.name])}><ChevronRight size={13}/><b>{g.name}</b><small>{g.count}</small></button>)}
         {!page.groups.length && <p className="live__empty">No matching groups.</p>}
       </div> : <div role="listbox" aria-label="Live entities" className="live-hier__rows">
-        {page.rows.map(row => <div key={row.ref} role="presentation" className="live-hier__entry"
+        {page.rows.map(row => <div key={row.ref} role="presentation" className="live-hier__entry" data-depth={row.depth}
           style={row.depth===undefined?undefined:{paddingInlineStart:Math.min(row.depth,16)*12}}>
           {!!row.children && <button type="button" className="hier__disclosure" aria-expanded={!collapsed.includes(row.ref)}
             aria-label={(collapsed.includes(row.ref)?'Expand ':'Collapse ')+row.name}

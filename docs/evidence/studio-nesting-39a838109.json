@@ -1,0 +1,14 @@
+{
+  "sha": "39a838109820138773ab834caed1c09e6c2d974a",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^studio_session$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-nesting-39a838109.log.txt",
+  "sha256": "35945938654c4e062010c132f96232042855aaf317a7102600b4cba6427a6bc0"
+}

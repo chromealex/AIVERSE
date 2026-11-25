@@ -46,3 +46,4 @@
 .live-hier__entry{display:flex;align-items:center;flex:none}
 .live-hier__entry>.live-hier__row{flex:1;min-width:0}
 .live-hier__entry>.hier__disclosure[aria-expanded="true"] svg{transform:rotate(90deg)}
+.live-hier__entry[data-depth]:not(:has(>.hier__disclosure))::before{content:"";flex:0 0 22px}
