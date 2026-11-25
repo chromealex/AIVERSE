@@ -1376,6 +1376,16 @@ void authoredEntityWorkflow() {
    {
        const auto info=call("studio.agentInfo");
        AIVERSE_TEST_CHECK(!info.has("error") && info["result"]["port"].integer()>0);
+       AIVERSE_TEST_CHECK(!info["result"].getBool("hasWizardBrief"));
+       std::ofstream(project/"WIZARD_TASK.md")<<"Review the harbor markets.";
+       Json briefRequest=Json::object();
+       briefRequest.set("briefForProject",Json::string(session.workspace().project.dir));
+       const auto brief=call("studio.agentInfo",briefRequest.dump().c_str());
+       AIVERSE_TEST_CHECK(brief["result"].getBool("hasWizardBrief") &&
+           brief["result"].getStr("wizardBrief")=="Review the harbor markets." &&
+           !brief["result"].getBool("running"));
+       AIVERSE_TEST_CHECK(call("studio.agentInfo",R"({"briefForProject":"different-project"})").has("error"));
+       std::filesystem::remove(project/"WIZARD_TASK.md");
        const int port=int(info["result"]["port"].integer());
        std::string token;
        AIVERSE_TEST_CHECK(editor::net::readAgentToken(port,token));

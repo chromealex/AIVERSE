@@ -235,7 +235,7 @@ export interface StudioHub { recent: Array<{ dir: string; name: string; lastOpen
 export interface StudioAgentChange { op: string; args: string; ok: boolean; undoable: boolean; position: number; error?: string;
   scope?:'map'|'project'|'assets'|'untracked'; historyId?:string; historyVersion?:string; applied?:boolean; canUndo?:boolean; canRedo?:boolean }
 export interface StudioAgentBatch {direction:'undo'|'redo';available:boolean;reason?:string;token?:string;steps?:Array<{scope:'map'|'project'|'assets';historyId:string}>}
-export interface StudioAgentInfo { lines: string[]; total: number; running: boolean; port: number; clients: number; changes: StudioAgentChange[];
+export interface StudioAgentInfo { hasWizardBrief?: boolean; wizardBrief?: string; lines: string[]; total: number; running: boolean; port: number; clients: number; changes: StudioAgentChange[];
   startPosition: number; historyVersion?:string; batchUndo?:StudioAgentBatch; batchRedo?:StudioAgentBatch; cli: string; mcp: boolean; conversation: boolean; result?: string }
 // World maintenance uses decimal strings for uint64 values, never JS numbers.
 export interface StudioWorldRegion {cell:[number,number,number];live:number;materialized:number}
@@ -595,7 +595,7 @@ export interface StudioParams {
   'studio.inputSet': { asset: StudioInputAsset };
   'studio.assetAudit': Record<string,never>;
   /** Agent panel: transcript lines from `from`, change list, link status. */
-  'studio.agentInfo': { from?: number };
+  'studio.agentInfo': { from?: number; briefForProject?: string };
   'studio.worldProcessDiagnostics': {budget:number;focus?:string};
   'studio.evolveState': Record<string, never>;
   'studio.evolveLayer': {layer?: EvolveLayer;live?:boolean;granularCellCm?:number;liveGravity?:boolean;aetherLayer?:AetherLayer;liveFracture?:boolean;liveMorph?:boolean;liveEcho?:boolean;liveCrowd?:boolean;liveCircuit?:boolean;liveSociety?:boolean;liveForest?:boolean};

@@ -18,6 +18,7 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
   const [info, setInfo] = useState<StudioAgentInfo | null>(null);
   const [lines, setLines] = useState<string[]>([]);
   const [prompt, setPrompt] = useState('');
+  const [editingBrief, setEditingBrief] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [navigating,setNavigating]=useState(false);
@@ -45,11 +46,32 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
   useEffect(() => onNativeEvent(event => { if (event === 'agent.changed' || event === 'document.changed') void poll(); }), [poll]);
   useEffect(() => { if(projectPath)void poll(); },[snapshot,poll,projectPath]);
   useEffect(() => { const el = scroller.current; if (el) el.scrollTop = el.scrollHeight; }, [lines.length]);
+  const composer = useRef<HTMLTextAreaElement>(null);
+  const promptBytes = new TextEncoder().encode(prompt.trim()).length;
+  const loadBrief = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const response = await invoke('studio.agentInfo', { from: total.current, briefForProject: projectPath });
+      if (!response.wizardBrief) throw new Error('Wizard brief unavailable');
+      setEditingBrief(true);
+      setPrompt(response.wizardBrief);
+      requestAnimationFrame(() => {
+        const field = composer.current;
+        if (field) {
+          field.focus();
+          field.setSelectionRange(0, 0);
+          field.scrollTop = 0;
+        }
+      });
+    } catch (e) { setError(message(e)); }
+    finally { setBusy(false); }
+  };
   const send = async () => {
     const text = prompt.trim();
-    if (!text || info?.running) return;
+    if (!text || busy || promptBytes > 20000 || info?.running) return;
     setBusy(true);
-    try { apply(await invoke('studio.agentStart', { prompt: text, from: total.current })); setPrompt(''); setError(''); }
+    try { apply(await invoke('studio.agentStart', { prompt: text, from: total.current })); setPrompt(''); setEditingBrief(false); setError(''); }
     catch (e) { setError(message(e)); }
     finally { setBusy(false); }
   };
@@ -99,7 +121,7 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
   const changes = info?.changes ?? [];
   const edits = changes.filter(c => c.ok);
   const canUndoAll = !!info?.historyVersion && info.startPosition >= 0 && edits.some(c => c.undoable) && !info.running && !navigating;
-  return <div className="agent">
+  return <div className={editingBrief && !lines.length ? "agent agent--draft" : "agent"}>
     <div className="agent__head">
       <Bot size={14}/>
       <span className={'agent__pill' + (info?.cli ? ' is-ok' : ' is-warn')} title={info?.cli || 'claude CLI not found'}>
@@ -160,12 +182,18 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
         </div>)}
       </aside>}
     </div>
+    {info?.hasWizardBrief && !prompt && !info.running && <div className="agent__brief">
+      <div><strong>Game wizard brief</strong><small>WIZARD_TASK.md</small></div>
+      <StudioButton size="sm" disabled={busy} onClick={() => void loadBrief()}>Load draft</StudioButton>
+    </div>}
+    {promptBytes > 20000 && <div className="agent__error" role="status">Shorten the draft to 20,000 UTF-8 bytes to send ({promptBytes.toLocaleString()} bytes).</div>}
+    {editingBrief && <div className="agent__draft-title"><strong>Game wizard brief</strong><small>WIZARD_TASK.md</small></div>}
     <div className="agent__composer">
-      <textarea className="au-input" rows={2} placeholder={info?.conversation ? 'Follow up… (⌘↩ to send)' : 'Ask the agent… (⌘↩ to send)'}
-        value={prompt} onChange={e => setPrompt(e.target.value)} onKeyDown={onKey} disabled={!!info?.running}/>
+      <textarea ref={composer} aria-label="Agent request" className="au-input" rows={prompt.includes('\n') ? 5 : 2} placeholder={info?.conversation ? 'Follow up… (⌘↩ to send)' : 'Ask the agent… (⌘↩ to send)'}
+        value={prompt} onChange={e => { setPrompt(e.target.value); if (!e.target.value) setEditingBrief(false); }} onKeyDown={onKey} disabled={busy || !!info?.running}/>
       {info?.running
         ? <button type="button" className="au-button au-button--sm" onClick={() => void stop()}><Square size={12}/>Stop</button>
-        : <button type="button" className="au-button au-button--sm au-button--primary" disabled={busy || !prompt.trim()} onClick={() => void send()}>
+        : <button type="button" className="au-button au-button--sm au-button--primary" disabled={busy || !prompt.trim() || promptBytes > 20000} onClick={() => void send()}>
             {busy ? <StudioLoader size={16}/> : <Send size={13}/>}Send</button>}
     </div>
   </div>;

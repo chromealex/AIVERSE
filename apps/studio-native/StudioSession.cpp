@@ -1906,6 +1906,25 @@ Json StudioSession::agentRequest(const std::string& method, const Json& params) 
     const int64_t from=std::max<int64_t>(0,params["from"].integer(0));
     for(size_t i=size_t(std::min<int64_t>(from,int64_t(agentLines_.size())));i<agentLines_.size();++i)lines.push(str(agentLines_[i]));
     out.set("lines",lines);out.set("total",num(int64_t(agentLines_.size())));
+    const fs::path briefPath = fs::path(ws_.project.dir) / "WIZARD_TASK.md";
+    std::error_code briefError;
+    const bool hasBrief = fs::is_regular_file(fs::symlink_status(briefPath, briefError));
+    out.set("hasWizardBrief", Json::fromBool(hasBrief));
+    if (method == "studio.agentInfo" && params.has("briefForProject")) {
+        if (params.getStr("briefForProject") != ws_.project.dir)
+            throw std::runtime_error("The active project changed");
+        if (!hasBrief) throw std::runtime_error("Wizard brief unavailable");
+        constexpr size_t limit = 1024 * 1024;
+        if (fs::file_size(briefPath) > limit) throw std::runtime_error("Open WIZARD_TASK.md in a text editor (over 1 MiB)");
+        std::ifstream input(briefPath, std::ios::binary);
+        if (!input) throw std::runtime_error("Cannot open WIZARD_TASK.md");
+        std::string brief(limit + 1, '\0');
+        input.read(brief.data(), brief.size());
+        if (!input.eof() || input.bad()) throw std::runtime_error("Cannot read the complete wizard brief");
+        brief.resize(size_t(input.gcount()));
+        if (brief.empty()) throw std::runtime_error("WIZARD_TASK.md is empty");
+        out.set("wizardBrief", str(brief));
+    }
     out.set("running",Json::fromBool(agentRun_.running()));
     out.set("port",num(int64_t(agentServer_.port())));
     out.set("clients",num(int64_t(agentServer_.clients())));

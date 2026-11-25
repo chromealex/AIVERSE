@@ -6,12 +6,13 @@ import { StudioLoader } from '../ui';
 import WizardDictation from './WizardDictation';
 import { GameWizardSettings, wizardPages, type WizardPage } from './GameWizardSettings';
 
-export default function GameWizard({ visible, onOpened, onBusy }: { visible: boolean; onOpened: (snapshot: StudioSnapshot) => void; onBusy: (busy: boolean) => void }) {
+export default function GameWizard({ visible, onOpened, onBusy }: { visible: boolean; onOpened: (snapshot: StudioSnapshot, openAgent?: boolean) => void; onBusy: (busy: boolean) => void }) {
   const [dictating, setDictating] = useState(false);
   const [page, setPage] = useState<WizardPage>('Concept');
   const [artUrl, setArtUrl] = useState('');
   const [artName, setArtName] = useState('');
   const [fetching, setFetching] = useState(false);
+  const [openAgent, setOpenAgent] = useState(false);
   const [creating, setCreating] = useState(false);
   const [options, setOptions] = useState<StudioResult['studio.wizardOptions']>();
   const [draft, setDraft] = useState<WizardPlanInput>();
@@ -75,7 +76,7 @@ export default function GameWizard({ visible, onOpened, onBusy }: { visible: boo
     setCreating(true); onBusy(true); setError('');
     try {
       const result = await invoke('studio.wizardCreate', draft);
-      if (result.snapshot) onOpened(result.snapshot);
+      if (result.snapshot) onOpened(result.snapshot, openAgent);
     } catch (e) { setError(String(e)); }
     finally { setCreating(false); onBusy(false); }
   }
@@ -128,6 +129,8 @@ export default function GameWizard({ visible, onOpened, onBusy }: { visible: boo
       </dl>
       <label className="wizard__verify"><input type="checkbox" checked={draft.verifyLevels} disabled={creating}
         onChange={e => setDraft({ ...draft, verifyLevels: e.target.checked })}/>Verify levels with bots</label>
+      <label className="wizard__verify"><input type="checkbox" checked={openAgent} disabled={creating}
+        onChange={e => setOpenAgent(e.target.checked)}/>Open Agent to review the game brief</label>
       <button type="button" disabled={dictating || creating || fetching} className="au-button au-button--primary" onClick={() => void create()}>
         {creating && <StudioLoader size={14}/>}Create game in folder…</button></> : <p>Preview the plan to see the matching template, tutorial and levels.</p>}
     </aside>

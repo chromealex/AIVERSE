@@ -601,7 +601,7 @@ export default function App() {
     {dockHover && <div className="dock-drop-hint" data-native-overlay role="status">Release to dock the window's tabs here</div>}
     {tourOpen && !FLOAT && <WelcomeTour onClose={() => setTourOpen(false)}/>}
     {hubOpen && !FLOAT && <StudioDialog className="hub-modal" label="Project hub" onDismiss={() => setHubOpen(false)}>
-      <ProjectHub onOpened={next => { setHubOpen(false); setInspectorPin(null); setSnapshot(next); }} openOther={() => { setHubOpen(false); void openProject(); }}/></StudioDialog>}
+      <ProjectHub onOpened={(next, openAgent) => { setHubOpen(false); setInspectorPin(null); setSnapshot(next); if (openAgent) showPanel('agent'); }} openOther={() => { setHubOpen(false); void openProject(); }}/></StudioDialog>}
     <StudioStatusBar snapshot={snapshot} connected={connected} game={game} action={sceneAction || sceneLoadingText(loading)}
       onOpenConsole={() => { showPanel('console');
         window.setTimeout(() => window.dispatchEvent(new CustomEvent('studio:console-filter', { detail: 'error' })), 0); }}/>

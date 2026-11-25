@@ -43,3 +43,13 @@
 .agent__batch-scopes,.agent__batch-actions{display:flex;gap:var(--au-space-2);flex-wrap:wrap;align-items:center}
 .agent__batch-scopes{font-size:var(--au-font-xs);color:var(--au-text-muted)}
 .agent__batch-actions{justify-content:flex-end}
+
+.agent__brief{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:8px 10px;border-top:1px solid var(--au-line)}
+.agent__brief strong,.agent__brief small{display:block}
+.agent__brief small{color:var(--au-text-muted)}
+.agent__draft-title{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:10px 12px 4px}
+.agent__draft-title small{color:var(--au-text-muted)}
+.agent--draft .agent__body{display:none}
+.agent--draft .agent__composer{flex:1;min-height:0;flex-direction:column;align-items:stretch;border:0}
+.agent--draft .agent__composer textarea{width:100%;min-height:32px;max-height:none;resize:none;line-height:1.55}
+.agent--draft .agent__composer button{align-self:flex-end}

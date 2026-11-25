@@ -133,7 +133,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'frame_capture': return <FrameCapturePanel snapshot={snapshot}/>;
       case 'texture_resources': return <TextureResourcesPanel snapshot={snapshot}/>;
       case 'snapshot_diff': return <SnapshotDiffPanel snapshot={snapshot}/>;
-      case 'agent': return <AgentPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
+      case 'agent': return <AgentPanel key={snapshot?.project.path} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'asset_audit': return <AuditPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'history':
         return <HistoryPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
@@ -161,7 +161,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
             </span>
           </div>
           {sceneMode === 'welcome' ?
-            <ProjectHub onOpened={ctx.commitSnapshot} openOther={() => void openProject()}/> :
+            <ProjectHub onOpened={(next, openAgent) => { ctx.commitSnapshot(next); if (openAgent) ctx.showPanel('agent'); }} openOther={() => void openProject()}/> :
             <ViewportPlaceholder title="Scene viewport" active/>}
         </>;
       case 'console':

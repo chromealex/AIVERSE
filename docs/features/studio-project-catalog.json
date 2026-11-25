@@ -5,6 +5,7 @@
   "changed_paths": [
     "apps/studio-web/src/components/ProjectHub.tsx",
     "apps/studio-web/src/components/GameWizard.tsx",
+    "apps/studio-web/src/panels/AgentPanel.tsx",
     "apps/studio-web/src/components/GameWizardSettings.tsx",
     "apps/studio-web/src/components/WizardDictation.tsx",
     "apps/studio-native/StudioWizardDictation.h",
@@ -134,7 +135,8 @@
     "skills": [],
     "mcp_tools": [],
     "studio_panels": [
-      "project"
+      "project",
+      "agent"
     ],
     "studio_methods": [
       "studio.project",
@@ -146,7 +148,8 @@
       "studio.wizardArt",
       "studio.wizardFetchArt",
       "studio.wizardDictation",
-      "studio.wizardCreate"
+      "studio.wizardCreate",
+      "studio.agentInfo"
     ]
   },
   "test_reports": [
