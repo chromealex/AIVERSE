@@ -1,0 +1,38 @@
+{
+  "id": "2026-11-25-studio-hierarchy-groups",
+  "date": "2026-11-25",
+  "system": "studio",
+  "status": "in-progress",
+  "branch": "studio-only-editor",
+  "commit": "5dcfca4d7",
+  "author": null,
+  "links": [],
+  "title": "Поиск объектов по компонентам в Hierarchy",
+  "titleEn": "Finding objects by component in Hierarchy",
+  "summary": "В списке Group by можно выбрать категорию, происхождение или компонент. Эти режимы доступны и на карте, и во время игры.",
+  "summaryEn": "Use Group by to browse objects by category, origin or component, both on the map and during play.",
+  "body": [
+    "Раскройте группу компонента, чтобы увидеть все объекты с этим компонентом. Если у объекта несколько компонентов, выделение видно в каждой раскрытой группе.",
+    "Проект может добавить свои группировки, например по полю скрипта и владельцу. В режиме Live можно открыть вложенную группу, выбрать сущность и вернуться к списку по строке пути."
+  ],
+  "bodyEn": [
+    "Expand a component to see every object that owns it. Selecting an object highlights it in each expanded group it belongs to.",
+    "Projects can add groupings such as a script field followed by owner. In Live, open a nested group, select an entity and use the path to return to its ancestors."
+  ],
+  "verified": "В отдельном окне Studio на macOS выбранный дуб виден в группах «Положение» и «Владелец». В живой симуляции открыта группа Scouts.",
+  "verifiedEn": "In a detached macOS Studio window, the selected oak appears under both position and owner. The live simulation capture shows the Scouts group.",
+  "limits": "Проверка на Windows ещё предстоит. Возможность показана в окнах редактора на macOS.",
+  "limitsEn": "Windows verification is pending. The captures show the native macOS editor.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-hierarchy-groups/hierarchy-builtins.png",
+      "caption": "Один дуб выделен в двух группах компонентов",
+      "captionEn": "The same oak selected in two component groups"
+    },
+    {
+      "src": "docs/evidence/studio-project-catalog/hierarchy-live-groups.png",
+      "caption": "Живые сущности в группе Scouts",
+      "captionEn": "Live entities in the Scouts group"
+    }
+  ]
+}

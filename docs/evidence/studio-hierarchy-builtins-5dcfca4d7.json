@@ -1,0 +1,14 @@
+{
+  "sha": "5dcfca4d7c51ed22f1880342cfbc115020ea2e1b",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^studio_session$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-hierarchy-builtins-5dcfca4d7.log.txt",
+  "sha256": "b4c5cfdf26b1c0aea7840f3d69067fe84ba568ec3f8a1e5fa79d28a07048d34e"
+}
