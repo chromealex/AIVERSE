@@ -180,14 +180,6 @@ export default function ShaderGraphPanel({projectPath,documentEpoch}:{projectPat
    setSelected(newName);setCreating(false);setNewName('');
   }catch(e){setError(String(e));}finally{setBusy(false);}
  };
- const applyGraph=async()=>{
-  if(busy||dirty||!draft)return;
-  setBusy(true);setMessage('');setError('');
-  try{
-   await invoke('studio.op',{expectedProject:projectPath,op:'shader_graph_apply',params:{name:selected,target,scope,emitter}});
-   setMessage('Applied '+selected+' to '+(draft.domain==='postfx'?scope+' post effects':target)+'.');
-  }catch(e){setError(String(e));}finally{setBusy(false);}
- };
  const validate=async()=>{
   if(!draft||busy)return;
   setBusy(true);setError('');setMessage('');
@@ -197,16 +189,25 @@ export default function ShaderGraphPanel({projectPath,documentEpoch}:{projectPat
   }catch(e){setError(e instanceof Error?e.message:String(e));}
   finally{setBusy(false);}
  };
- const save=async()=>{
-  if(!draft||!document||!selected||busy||!dirty)return;
+ const save=async(applyAfterSave=false)=>{
+  if(!draft||!document||!selected||busy||(!dirty&&!applyAfterSave))return;
   setBusy(true);setError('');setMessage('');
+  let saved=document;
   try{
-   const result=await invoke('studio.shaderGraphSave',{name:selected,graph:draft,expected:document.originalJson??document.graph,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch});
-   if(saveScope.current.projectPath!==projectPath||saveScope.current.selected!==selected)return;
-   setDocument(result);resetDraft(structuredClone(result.graph));
-   setMessage('Graph saved to shaders/'+selected+'.json. MapDoc Undo does not apply.');
-  }catch(e){setError(e instanceof Error?e.message:String(e));}
-  finally{setBusy(false);}
+   if(dirty){
+    saved=await invoke('studio.shaderGraphSave',{name:selected,graph:draft,expected:document.originalJson??document.graph,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch});
+    if(saveScope.current.projectPath!==projectPath||saveScope.current.selected!==selected)return;
+    setDocument(saved);resetDraft(structuredClone(saved.graph));
+   }
+   if(applyAfterSave){
+    await invoke('studio.op',{expectedProject:projectPath,expectedDocumentEpoch:documentEpoch,op:'shader_graph_apply',
+     params:{name:selected,target,scope,emitter,expectedSource:saved.originalJson}});
+    setMessage('Applied '+selected+' to '+(draft.domain==='postfx'?scope+' post effects':target)+'.');
+   }else setMessage('Graph saved to shaders/'+selected+'.json. MapDoc Undo does not apply.');
+  }catch(e){
+   const reason=e instanceof Error?e.message:String(e);
+   setError(saved!==document?'Graph saved. Application failed: '+reason:reason);
+  }finally{setBusy(false);}
  };
  const discard=()=>{if(document){resetDraft(structuredClone(document.graph));setMessage('Draft discarded.');setError('');}};
  return <section className="studio-shader-graphs">
@@ -329,15 +330,14 @@ export default function ShaderGraphPanel({projectPath,documentEpoch}:{projectPat
          }}><option value="" disabled={channel==='color'}>Unassigned</option>{sourceOptions}</select>
         </label>)}
        </fieldset></details>
-       <details><summary>Apply saved graph</summary><form className="graph-asset-form"
-         onSubmit={event=>{event.preventDefault();void applyGraph();}}>
+       <details><summary>Apply to target</summary><form className="graph-asset-form"
+         onSubmit={event=>{event.preventDefault();void save(true);}}>
         {draft.domain==='postfx'?<label>Post effects<select value={scope} onChange={e=>setScope(e.target.value)}>
          <option value="game">Game</option><option value="map">Current map</option></select></label>
         :<label>{draft.domain==='particle'?'Particle effect':'Material'}<input required value={target} onChange={e=>setTarget(e.target.value)}/></label>}
         {draft.domain==='particle'&&<label>Emitter index<input type="number" min="0" step="1" required
          value={Number.isFinite(emitter)?emitter:''} onChange={e=>setEmitter(e.target.valueAsNumber)}/></label>}
-        <button disabled={busy||dirty||(draft.domain!=='postfx'&&!target.trim())}>Apply graph</button>
-        {dirty&&<span>Save changes before applying.</span>}
+        <button disabled={busy||(draft.domain!=='postfx'&&!target.trim())}>{dirty?'Save & apply':'Apply graph'}</button>
        </form></details>
       </div>}
      </> : <div className="graph-empty">No graph loaded.</div>}

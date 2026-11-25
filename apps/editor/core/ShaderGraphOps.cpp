@@ -69,7 +69,7 @@ Json result(const Json& g) {
 }
 }
 void registerShaderGraphOps(Workspace& ws) {
-    const auto schema=Json::parse(R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"expected":{"type":["object","null"]},"target":{"type":"string"},"emitter":{"type":"integer"},"scope":{"type":"string"}}})");
+    const auto schema=Json::parse(R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"expected":{"type":["object","null"]},"expectedSource":{"type":"string"},"target":{"type":"string"},"emitter":{"type":"integer"},"scope":{"type":"string"}}})");
     ws.registerOp({"shader_graph_catalog","Supported operations and domains; all ports are RGBA vectors, scalar constants splat.",Json::object(),[](const Json&){
         Json r=Json::object(),ops=Json::array();for(auto& op:render::graph::catalog()) {Json n=Json::object();n.set("id",Json::string(op.id));n.set("inputs",Json::number(int64_t(op.inputs)));n.set("vertex",Json::fromBool(op.vertex));Json domains=Json::array();for(auto d:{"material","postfx","particle"})if(render::graph::supports(op,d))domains.push(Json::string(d));n.set("domains",domains);ops.push(n);}r.set("nodes",ops);r.set("domains",Json::parse(R"(["material","postfx","particle"] )"));return r;
     }});
@@ -97,7 +97,10 @@ void registerShaderGraphOps(Workspace& ws) {
         tx.replace(text,256*1024);return r;
     }});
     ws.registerOp({"shader_graph_apply","Apply a saved graph snapshot: target=material library name or existing particle effect name, emitter=0 by default; postfx scope=game|map. Reapply after edits.",schema,[&ws](const Json& p){
-        const auto g=load(ws,p.getStr("name"));const auto program=render::graph::compile(g);Json q=Json::object();
+        const auto g=load(ws,p.getStr("name"));
+        if(p.has("expectedSource") && p.getStr("expectedSource")!=g.dump())
+            throw std::runtime_error("Shader Graph changed before application; reload the graph before retrying.");
+        const auto program=render::graph::compile(g);Json q=Json::object();
         if(program.domain=="material") {q.set("name",p["target"]);q.set("merge",Json::fromBool(true));Json m=Json::object();m.set("shaderGraph",g);q.set("material",m);return ws.call("material_set",q);}
         if(program.domain=="postfx") {q.set("type",Json::string("shaderGraph"));q.set("graph",g);q.set("scope",Json::string(p.getStr("scope","game")));return ws.call("postfx_add",q);}
         const std::string name=p.getStr("target");
