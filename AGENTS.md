@@ -10,6 +10,7 @@ Read this file completely before changing anything. The linked contracts are bin
 - Integrate each completed feature or integration branch into `main` with a squash: one final commit per branch, including its code, tests, docs and handoffs. Keep the branch's stage commits and handoff history intact; do not rewrite or force-push it. Never use a regular merge commit or fast-forward that brings the branch's individual commits into `main`.
 - Before implementation update roadmap, feature delivery record and feature manifest. After every stage commit a separate handoff with exact SHA, paths, real test evidence and next step, including failed stages.
 - Never claim unrun tests passed. The merged-tree Mac quick gate remains mandatory before main. Build outputs and caches go to /Volumes/KINGSTON; no silent fallback on Mac.
+- For local verification, build the smallest targets that exercise the changed code, then run the relevant tests. Reuse a compatible build tree on KINGSTON so unchanged objects and libraries stay compiled. Follow the target-selection and cache rules in [Build and testing](docs/agents/contracts/build-testing.md); focused checks do not replace the merged-tree Mac quick gate.
 - Every applicable feature exposes native API, skill, MCP and Studio, with appropriate persistence, tests and examples. Visible features require real captures and web demos subject to the publishing contract.
 - Current release: 3.0.0 released; next 3.1.0. MAIN integrator owns release tags and publication.
 

@@ -13,10 +13,18 @@ namespace aiverse::platform {
 inline std::string templatesDir(const std::string& engineDir) {
     namespace fs = std::filesystem;
     if (const char* e = std::getenv("AIVERSE_TEMPLATES_DIR"); e && *e) return e;
-    std::error_code ec;
-    if (!engineDir.empty() && fs::is_directory(fs::path(engineDir) / "templates", ec)) return (fs::path(engineDir) / "templates").string();
+    const auto hasTemplates = [](const fs::path& dir) {
+        std::error_code ec;
+        if (!fs::is_directory(dir, ec)) return false;
+        for (fs::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec)) {
+            if (fs::is_regular_file(it->path() / "game.json", ec)) return true;
+            if (ec) return false;
+        }
+        return false;
+    };
+    if (!engineDir.empty() && hasTemplates(fs::path(engineDir) / "templates")) return (fs::path(engineDir) / "templates").string();
 #ifdef AIVERSE_TEMPLATES_DIR   // the folder this build was configured with (CMake AIVERSE_TEMPLATES_DIR)
-    if (fs::is_directory(AIVERSE_TEMPLATES_DIR, ec)) return AIVERSE_TEMPLATES_DIR;
+    if (hasTemplates(AIVERSE_TEMPLATES_DIR)) return AIVERSE_TEMPLATES_DIR;
 #endif
     if (const char* h = std::getenv("AIVERSE_PACKAGES_HOME"); h && *h) return (fs::path(h) / "templates").string();
 #ifdef _WIN32
