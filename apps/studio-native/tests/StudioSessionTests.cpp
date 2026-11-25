@@ -3,6 +3,7 @@
 #include "apps/editor/AuthoringComponents.h"
 #include "tests/TestCheck.h"
 #include "apps/studio-native/StudioGameLaunch.h"
+#include "engine/actor/Project.h"
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/studio-native/StudioGameDevice.h"
 #include "apps/studio-native/StudioRuntimeInspect.h"
@@ -661,6 +662,21 @@ void entityWorkflow() {
 }
 }
 
+static void actorProjectMapSelection() {
+    using namespace aiverse;
+    const auto read=[](const std::string& file,std::string& out) {
+        if(file=="game.json") out=R"({"module":"actor","maps":[{"file":"first.json"},{"file":"second.json"}]})";
+        else if(file=="rules.json") out="{}";
+        else if(file=="first.json" || file=="second.json") out=Json::string(file).dump();
+        else return false;
+        return true;
+    };
+    AIVERSE_TEST_CHECK(actor::readProject(read).map.str()=="first.json");
+    AIVERSE_TEST_CHECK(actor::readProject(read,1).map.str()=="second.json");
+    bool invalid=false;
+    try {(void)actor::readProject(read,2);} catch(const JsonError&) {invalid=true;}
+    AIVERSE_TEST_CHECK(invalid);
+}
 static void localPlayToolContracts(aiverse::editor::Workspace& ws) {
     using namespace aiverse;
     auto call = [&](const char* name, const Json& args) { return ws.call(name, args, "editor"); };
@@ -691,6 +707,7 @@ static void localPlayToolContracts(aiverse::editor::Workspace& ws) {
 int main() {
     using namespace aiverse;
     aiverse::studio::StudioSession session(".");
+    actorProjectMapSelection();
     localPlayToolContracts(session.workspace());
     bool playRejected=false;
     try { (void)studio::studioGameLaunch(session.workspace(),false); }

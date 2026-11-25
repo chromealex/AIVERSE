@@ -10,6 +10,7 @@
 namespace aiverse::studio {
 struct StudioGameLaunch {
     std::string project; std::optional<size_t> map;
+    bool actorSession=false;
     std::string sourceMap;
     uint64_t sourceRevision=0;
     // "Play from here": first match camera (target x, z; distance; pitch, yaw in degrees), Scene view's.
@@ -17,12 +18,12 @@ struct StudioGameLaunch {
 };
 inline StudioGameLaunch studioGameLaunch(const editor::Workspace& ws,bool currentMap) {
     if (ws.project.dir.empty()) throw std::runtime_error("Open a project before Play");
-    if (ws.project.actorSession()) throw std::runtime_error("Play of actor-session projects needs the actor-session client; Studio host migration is pending (G1)");
     if (ws.map.dirty || ws.project.rulesDirty || ws.project.manifestDirty)
         throw std::runtime_error("Save changes before Play");
     const auto missing=editor::missingNativeModules(ws.project.rulesJson,editor::compiledNativeIds());
     if (!missing.empty()) throw std::runtime_error("This Studio build lacks project native module: "+missing.front());
     StudioGameLaunch plan{};
+    plan.actorSession=ws.project.actorSession();
     plan.project=ws.project.dir;
     if (currentMap) {
         if (ws.map.path.empty()) throw std::runtime_error("Save the current map before Play");

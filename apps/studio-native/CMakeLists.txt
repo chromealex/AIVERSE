@@ -46,6 +46,11 @@ else()
         message(FATAL_ERROR "HTML5 bundle missing: build on KINGSTON and set AIVERSE_STUDIO_WEB_DIST")
     endif()
 endif()
+if(TARGET aiverse_studio)
+    target_sources(aiverse_studio PRIVATE ../fps/client.cpp)
+    target_compile_definitions(aiverse_studio PRIVATE AIVERSE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+    target_link_libraries(aiverse_studio PRIVATE aiverse_authority aiverse_render2d aiverse_roads_view AIVERSE::MotionWeave AIVERSE::View)
+endif()
 # Portable Studio image codec contract: compile the actual private stb
 # implementation using diagnostics as errors, not a globally disabled -W
 # category. Exercise real lossless PNG and lossy JPEG memory roundtrips.

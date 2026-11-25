@@ -20,7 +20,12 @@
     "apps/studio-native/tests/StudioSessionTests.cpp",
     "docs/editor-native-ecs-inspector.md",
     "CMakeLists.txt",
-    "apps/editor/core/StudioPlayTools.cpp"
+    "apps/editor/core/StudioPlayTools.cpp",
+    "apps/fps/client.cpp",
+    "apps/fps/HostedActorClient.h",
+    "engine/actor/Project.h",
+    "apps/studio-native/StudioGameLaunch.h",
+    "apps/studio-native/CMakeLists.txt"
   ],
   "traits": {
     "editable": false,
@@ -31,7 +36,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "note": "G1 is in scope. Use the existing actor client and loopback authority for local Studio Play and capture the actual region ledger.",
       "evidence": [
         "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
       ]
