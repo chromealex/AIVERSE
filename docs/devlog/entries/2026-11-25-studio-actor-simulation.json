@@ -1,0 +1,31 @@
+{
+  "id": "2026-11-25-studio-actor-simulation",
+  "date": "2026-11-25",
+  "system": "studio",
+  "status": "in-progress",
+  "branch": "studio-only-editor",
+  "commit": "d1a22e1d5",
+  "author": null,
+  "links": [],
+  "title": "Настройки симуляции в Actors & Cameras",
+  "titleEn": "Simulation settings in Actors & Cameras",
+  "summary": "Три ползунка управляют частотой симуляции, частотой сетевых снимков и лимитом игроков.",
+  "summaryEn": "Three sliders set the tick rate, network snapshot rate and player limit.",
+  "body": [
+    "Откройте Simulation. Частота снимков ограничена частотой симуляции. Save settings записывает изменения в правила проекта."
+  ],
+  "bodyEn": [
+    "Open Simulation. The tick rate sets the upper bound for network snapshots. Save settings writes your changes to the project rules."
+  ],
+  "verified": "На macOS сохранены значения 40 Гц, 40 Гц и 24 игрока. Остальные правила и карта сохранились без изменений.",
+  "verifiedEn": "Saved 40 Hz, 40 Hz and 24 players on macOS. All other rules and the map were preserved.",
+  "limits": "Визуальная проверка Windows предстоит.",
+  "limitsEn": "Windows visual verification remains pending.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-actor-simulation/actor-simulation.png",
+      "caption": "Настройки проекта Arena",
+      "captionEn": "Arena simulation settings"
+    }
+  ]
+}

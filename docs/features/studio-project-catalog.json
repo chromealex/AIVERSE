@@ -199,6 +199,7 @@
     "skills": ["aiverse-map-build"],
     "mcp_tools": ["player_set", "player_remove", "map_area", "region_paint", "region_list", "region_name"],
     "studio_panels": [
+      "actor",
       "scene",
       "tiles",
       "inspector",
@@ -206,6 +207,8 @@
       "agent"
     ],
     "studio_methods": [
+      "studio.rulesDocumentSave",
+      "studio.rulesDocument",
       "studio.mapProperties",
       "studio.mapPropertiesSet",
       "studio.mapPlayer",
@@ -273,6 +276,7 @@
     "docs/evidence/studio-region-borders-4a2613ab0.json",
     "docs/evidence/studio-scene-area-d466fcd4d.json",
     "docs/evidence/studio-composite-area-c216efd40.json",
-    "docs/evidence/studio-world-scene-fafcd1d9a.json"
+    "docs/evidence/studio-world-scene-fafcd1d9a.json",
+    "docs/evidence/studio-actor-simulation-d1a22e1d5.json"
   ]
 }
