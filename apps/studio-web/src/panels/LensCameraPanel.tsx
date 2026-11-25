@@ -13,12 +13,21 @@ const optics = [
 const lensSwitches = [['physicalFov','Use physical field of view'],['driveExposure','Drive exposure'],['driveDepthOfField','Drive depth of field']] as const;
 type Lens = Partial<Record<typeof optics[number][0],number> & Record<typeof lensSwitches[number][0],boolean>>;
 
+const followFields = [
+  ['pitch','Follow pitch (degrees)',58],['yaw','Follow yaw (degrees)',0],['distance','Follow distance',20],
+  ['smoothing','Follow smoothing',6],['velocityLookAhead','Velocity lead (seconds)',0],
+  ['maxLookAhead','Maximum lead',0],['fov','Follow FOV (degrees)',0],
+] as const;
+type FollowBody = {preset?:string} & Partial<Record<typeof followFields[number][0],number>>;
+interface FollowPreset {name:string;body:string;keys:FollowBody}
+
 interface CameraRecord {
   id: number;
   name?: string;
   position?: number[];
   rotation?: number[];
   lens?: Lens;
+  follow?: FollowBody;
   rig?: {mode?:number;enabled?:boolean;trackTarget?:boolean;offset?:number[];distance?:number;yaw?:number;pitch?:number;smoothing?:number};
   update?: {mode?:number;everyNFrames?:number;rateHz?:number};
   stack?: {overlay?:boolean;order?:number;opacity?:number};
@@ -29,15 +38,32 @@ interface CameraRecord {
 interface CameraScene { cameras: CameraRecord[] }
 interface Document { scene: CameraScene; revision: string; ok: boolean; error?: string; normalizedScene: CameraScene }
 
-export default function LensCameraPanel({project, operations}:{project:string; operations:ReactNode}) {
+// A dock tab unmounts when Scene is focused. Keep only unsaved camera documents
+// and their original revisions so that returning to the tab preserves edits.
+const drafts=new Map<string,{document:Document;scene:CameraScene;selected?:number}>();
+
+export default function LensCameraPanel({project, operations,openScene}:{project:string; operations:ReactNode;openScene:()=>void}) {
+  const [presets,setPresets]=useState<FollowPreset[]>([]);
+  const [presetError,setPresetError]=useState('');
+  useEffect(()=>{
+    if(!project)return;
+    let active=true;
+    void invoke('studio.op',{op:'lens_camera_presets',expectedProject:project,params:{}}).then(({result})=>{
+      if(active)setPresets((result as {presets:FollowPreset[]}).presets.filter(p=>p.body==='follow'));
+    }).catch(e=>{if(active)setPresetError(e instanceof Error?e.message:String(e));});
+    return ()=>{active=false;};
+  },[project]);
   const [tab,setTab]=useState('Cameras');
-  const [document,setDocument]=useState<Document>();
-  const [scene,setScene]=useState<CameraScene>();
-  const [selected,setSelected]=useState<number>();
+  const [document,setDocument]=useState<Document|undefined>(()=>drafts.get(project)?.document);
+  const [scene,setScene]=useState<CameraScene|undefined>(()=>drafts.get(project)?.scene);
+  const [selected,setSelected]=useState<number|undefined>(()=>drafts.get(project)?.selected);
   const [busy,setBusy]=useState(false);
   const [notice,setNotice]=useState('');
   const [error,setError]=useState('');
   const dirty=scene!==document?.scene;
+  useLayoutEffect(()=>{
+    if(document&&scene&&dirty)drafts.set(project,{document,scene,selected});
+  },[project,document,scene,selected,dirty]);
   const camera=scene?.cameras.find(item=>item.id===selected);
   const normalized=document?.normalizedScene.cameras.find(item=>item.id===selected);
   const view={...normalized?.camera,...camera?.camera};
@@ -50,6 +76,7 @@ export default function LensCameraPanel({project, operations}:{project:string; o
     return response;
   }
   function accept(response:Document) {
+    if(drafts.get(project)?.scene===scene)drafts.delete(project);
     setDocument(response);setScene(response.scene);
     setSelected(id=>response.scene.cameras.some(item=>item.id===id)?id:response.scene.cameras[0]?.id);
   }
@@ -61,7 +88,7 @@ export default function LensCameraPanel({project, operations}:{project:string; o
     } catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   }
-  useEffect(()=>{if(project)void refresh(false);},[project]);
+  useEffect(()=>{if(project&&!drafts.has(project))void refresh(false);},[project]);
   function update(patch:Partial<CameraRecord>) {
     if(!scene||!camera)return;
     setScene({...scene,cameras:scene.cameras.map(item=>item.id===selected?{...item,...patch}:item)});
@@ -90,7 +117,7 @@ export default function LensCameraPanel({project, operations}:{project:string; o
       <div className="lens-actions"><strong>Project cameras</strong>
         <button className="au-button au-button--sm" disabled={busy||!scene} onClick={create}><Plus size={14}/>New camera</button>
         <button className="au-button au-button--sm" disabled={busy||dirty} onClick={()=>void refresh(false)}>Reload</button>
-        {dirty&&<button className="au-button au-button--sm" disabled={busy} onClick={()=>{if(document)accept(document);setError('');setNotice('');}}>Discard edits</button>}
+        {dirty&&<button className="au-button au-button--sm" disabled={busy} onClick={()=>void refresh(false)}>Discard edits</button>}
         <button className="au-button au-button--sm au-button--primary" type="submit" form="lens-camera-form" disabled={busy||!dirty}><Save size={14}/>Save cameras</button>
       </div>
       {(error||notice)&&<p className={'lens-message '+(error?'is-error':'')} role={error?'alert':'status'}>{error||notice}</p>}
@@ -101,7 +128,7 @@ export default function LensCameraPanel({project, operations}:{project:string; o
           {!camera?<p>{busy?'Loading cameras…':scene?'Create a camera to configure its view and output.':'Camera scene unavailable.'}</p>:<fieldset disabled={busy}>
             <div className="lens-title"><label>Camera name<input className="au-input" value={camera.name??''} onChange={e=>update({name:e.target.value})}/></label>
               <button type="button" aria-label="Remove selected camera" title="Remove selected camera" className="au-button au-button--icon" onClick={remove}><Trash2 size={15}/></button></div>
-            <CameraPreview key={camera.id} project={project} scene={scene!} camera={camera} onChange={update}/>
+            <CameraPreview openScene={openScene} key={camera.id} project={project} scene={scene!} camera={camera} onChange={update}/>
             <h4>View</h4>
             <div className="lens-fields"><label>Projection<select className="au-input" value={view.projection??'perspective'} onChange={e=>viewField({projection:e.target.value})}><option value="perspective">Perspective</option><option value="ortho">Orthographic</option></select></label>
             {view.projection==='ortho'?<NumberField label="Orthographic half-height" value={view.orthographicHalfHeight??10} onValue={v=>viewField({orthographicHalfHeight:v})}/>:<NumberField label="Vertical FOV (degrees)" value={+(180*(view.fov??.75)/Math.PI).toFixed(4)} onValue={v=>viewField({fov:v*Math.PI/180})}/>}
@@ -115,7 +142,7 @@ export default function LensCameraPanel({project, operations}:{project:string; o
             <h4>Output</h4><div className="lens-fields"><label>Target<select className="au-input" value={output.kind??'screen'} onChange={e=>outputField({kind:e.target.value})}><option value="screen">Screen</option><option value="texture">Render texture</option></select></label>
             {output.kind==='texture'&&<><NumberField label="Texture key" value={output.key??0} onValue={v=>outputField({key:v})}/><NumberField label="Width" value={output.width??0} onValue={v=>outputField({width:v})}/><NumberField label="Height" value={output.height??0} onValue={v=>outputField({height:v})}/></>}</div>
             {output.kind==='texture'&&<div className="lens-flags">{([['hdr','HDR',false],['depth','Depth buffer',true]] as const).map(([key,label,fallback])=><label key={key} className="lens-toggle"><input type="checkbox" checked={output[key]??fallback} onChange={e=>outputField({[key]:e.target.checked})}/>{label}</label>)}</div>}
-            <CameraOptions camera={camera} normalized={normalized} onChange={update}/>
+            <CameraOptions presets={presets} presetError={presetError} camera={camera} normalized={normalized} onChange={update}/>
           </fieldset>}
         </form>
       </div>
@@ -130,7 +157,7 @@ function NumberField({label,value,onValue}:{label:string;value:number;onValue:(v
   return <label>{label}<input className="au-input" type="number" step="any" required value={text} onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)} onChange={e=>{setText(e.target.value);if(Number.isFinite(e.target.valueAsNumber))onValue(e.target.valueAsNumber);}}/></label>;
 }
 
-function CameraOptions({camera,normalized,onChange}:{camera:CameraRecord;normalized?:CameraRecord;onChange:(patch:Partial<CameraRecord>)=>void}) {
+function CameraOptions({camera,normalized,onChange,presets,presetError}:{presets:FollowPreset[];presetError:string;camera:CameraRecord;normalized?:CameraRecord;onChange:(patch:Partial<CameraRecord>)=>void}) {
   const rig={...normalized?.rig,...camera.rig};
   const refresh={...normalized?.update,...camera.update};
   const viewport={...normalized?.viewport,...camera.viewport};
@@ -144,6 +171,21 @@ function CameraOptions({camera,normalized,onChange}:{camera:CameraRecord;normali
       <div className="lens-fields">{['X','Y','Z'].map((axis,i)=><NumberField key={axis} label={'Rig offset '+axis} value={(rig.offset??[0,2,-5])[i]} onValue={v=>{const offset=[...(rig.offset??[0,2,-5])];offset[i]=v;editRig({offset});}}/>)}</div>
       <div className="lens-fields">{([['distance','Distance',5],['yaw','Yaw (rad)',0],['pitch','Pitch (rad)',0],['smoothing','Smoothing',8]] as const).map(([key,label,base])=><NumberField key={key} label={label} value={rig[key]??base} onValue={v=>editRig({[key]:v})}/>)}</div>
       <label className="lens-toggle"><input type="checkbox" checked={rig.trackTarget??true} onChange={e=>editRig({trackTarget:e.target.checked})}/>Track target</label>
+    </details>
+    <details className="lens-optics"><summary>Follow body</summary>
+      <label className="lens-toggle"><input type="checkbox" checked={!!camera.follow} onChange={e=>onChange(e.target.checked?{rig:{...camera.rig,mode:2},follow:{}}:{follow:undefined})}/>Use Follow body</label>
+      {camera.follow&&<>
+        <label>Follow preset<select className="au-input" value={camera.follow.preset??''} onChange={e=>{
+          const preset=presets.find(item=>item.name===e.target.value);
+          if(!preset)return;
+          const previous=presets.find(item=>item.name===camera.follow?.preset);
+          const overrides={...previous?.keys,...camera.follow};delete overrides.preset;
+          for(const key of Object.keys(preset.keys))delete overrides[key as keyof FollowBody];
+          onChange({follow:{preset:preset.name,...overrides}});
+        }}><option disabled value="">Choose a preset</option>{presets.map(p=><option key={p.name}>{p.name}</option>)}</select></label>
+        {presetError&&<p role="alert">{presetError}</p>}
+        <div className="lens-fields">{followFields.map(([key,label,base])=><NumberField key={key} label={label} value={camera.follow?.[key]??presets.find(p=>p.name===camera.follow?.preset)?.keys[key]??base} onValue={v=>onChange({follow:{...camera.follow,[key]:v}})}/>)}</div>
+      </>}
     </details>
     <details className="lens-optics"><summary>Refresh and composition</summary>
       <div className="lens-fields"><label>Refresh policy<select className="au-input" value={refresh.mode??0} onChange={e=>onChange({update:{...camera.update,mode:Number(e.target.value)}})}>
@@ -159,7 +201,7 @@ function CameraOptions({camera,normalized,onChange}:{camera:CameraRecord;normali
   </>;
 }
 
-function CameraPreview({project,scene,camera,onChange}:{project:string;scene:CameraScene;camera:CameraRecord;onChange:(patch:Partial<CameraRecord>)=>void}) {
+function CameraPreview({project,scene,camera,onChange,openScene}:{openScene:()=>void;project:string;scene:CameraScene;camera:CameraRecord;onChange:(patch:Partial<CameraRecord>)=>void}) {
   const [visible,setVisible]=useState(false);
   const [publishedCamera,setPublishedCamera]=useState('');
   const draftSignature=useMemo(()=>JSON.stringify(camera),[camera]);
@@ -194,6 +236,11 @@ function CameraPreview({project,scene,camera,onChange}:{project:string;scene:Cam
     try{await invoke('studio.lensPreview',{project,capture:true,id:camera.id});}
     catch(e){setCapturing(false);setMessage(e instanceof Error?e.message:String(e));}
   }
+  async function useInScene(){
+    setBusy(true);setMessage('');
+    try{await invoke('studio.lensPreview',{project,useInScene:true,document:scene,id:camera.id});if(mounted.current)openScene();}
+    catch(e){setMessage(e instanceof Error?e.message:String(e));}finally{setBusy(false);}
+  }
   async function copyView(){
     setBusy(true);setMessage('');
     try{
@@ -204,6 +251,7 @@ function CameraPreview({project,scene,camera,onChange}:{project:string;scene:Cam
   return <section ref={preview} className="lens-model-preview"><div className="lens-flags">
     <button className="au-button au-button--sm" type="button" disabled={busy||capturing} onClick={()=>void publish()}>{published?'Update preview':'Preview camera'}</button>
     <button className="au-button au-button--sm" type="button" disabled={busy} onClick={()=>void copyView()}>Copy Scene pose</button>
+    <button className="au-button au-button--sm" type="button" disabled={busy||capturing} onClick={()=>void useInScene()}>Use in Scene</button>
     {published&&<button className="au-button au-button--sm" type="button" disabled={busy||capturing||needsUpdate} title={needsUpdate?'Update the preview to capture your changes':'Save the displayed camera frame to captures/lens'} onClick={()=>void capture()}>{capturing?'Capturing…':'Capture PNG'}</button>}</div>
     {needsUpdate&&<p className="lens-message" role="status">Camera settings changed. Update the preview to capture this view.</p>}
     {saved&&!needsUpdate&&<p className="lens-message" role="status">{saved}</p>}

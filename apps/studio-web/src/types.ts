@@ -602,7 +602,7 @@ export interface StudioParams {
   'studio.extensions': Record<string,never>;
   'studio.extensionAction': { id: string; value?: string | number | boolean };
   'studio.extensionCreate': Record<string,never>;
-  'studio.lensPreview': {project:string;close?:boolean;copyScene?:boolean;capture?:boolean;document?:unknown;id?:number};
+  'studio.lensPreview': {project:string;close?:boolean;copyScene?:boolean;useInScene?:boolean;capture?:boolean;document?:unknown;id?:number};
   'studio.attachmentsPreview': {project:string;close?:boolean;status?:boolean;document?:StudioAttachmentDoc;playing?:boolean;time?:number;yaw?:number;pitch?:number};
   'studio.attachmentsGet': { path?: string; project?:string };
   'studio.attachmentsSet': { path?: string; project?:string; expected?:StudioAttachmentDoc|null; document: StudioAttachmentDoc };

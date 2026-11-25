@@ -2016,6 +2016,24 @@ void StudioScene::startTween(render::float3 target,float distance,float yaw,floa
     tween_.fromPitch=camera_.pitch;tween_.toPitch=pitch;
     tween_.start=std::chrono::steady_clock::now();
 }
+void StudioScene::applyPendingSceneLens() {
+    if (!pendingSceneLens_) return;
+    const auto view=*pendingSceneLens_;
+    pendingSceneLens_.reset();
+    const auto eye=view.eye();
+    const auto forward=view.rotation.rotate({0,0,-1});
+    const float distance=view.ortho ? view.orthoHalfHeight()/std::tan(view.fovY*.5f) : 12.f;
+    camera_.distance=std::clamp(distance,camera_.minDistance,camera_.maxDistance);
+    camera_.target=eye+forward*camera_.distance;
+    camera_.yaw=std::atan2(-forward.x,-forward.z);
+    camera_.pitch=std::asin(std::clamp(-forward.y,-1.f,1.f));
+    camera_.usePose=false;
+    camera_.ortho=view.ortho;
+    camera_.fovY=view.fovY;
+    autoIso_=false;
+    tween_.active=false;
+    lastFrameSignature_=0;
+}
 void StudioScene::stepTween() {
     if(!tween_.active)return;
     const float seconds=std::chrono::duration<float>(std::chrono::steady_clock::now()-tween_.start).count();
@@ -2820,7 +2838,8 @@ Json StudioScene::configureLensCamera(const Json& params) {
         const auto* lens = world.tryGetConst<CameraLensComponent>(entity);
         if (lens && lens->physicalFov && render::validCameraLens(*lens))
             selected.camera.fovY = 2.f * std::atan(float(lens->sensorHeightMm.toDouble()/(2.*lens->focalLengthMm.toDouble())));
-        lensCamera_ = selected.camera;
+        if(params.getBool("useInScene")) pendingSceneLens_=selected.camera;
+        else lensCamera_=selected.camera;
         lastFrameSignature_ = 0;
         sceneCacheValid_ = false;
         return Json::object();
@@ -3516,6 +3535,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         lastMapWidth_ = map.w;
         lastMapHeight_ = map.h;
     }
+    applyPendingSceneLens();
     stepTween();
     const auto view=viewCamera();
     spectraSources_.synchronize(*device_,doc,projectRoot,hidden_,levelHeight,showTerrain,&nereid_.scene());
@@ -4036,6 +4056,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
         camera_.target={};camera_.distance=planetPreview_?std::max(2.f,planetPreview_->extent*3.f):16.f;
         camera_.yaw=.55f;camera_.pitch=.35f;camera_.ortho=false;tween_.active=false;cameraInitialized_=true;
     }
+    applyPendingSceneLens();
     stepTween();selectedId_=selectedId;selectedPivotValid_=false;selectedBoxValid_=false;
     selectedAxesValid_=false;selectedIsLight_=false;
     // Use the existing transform gizmo for authored rigid models. Yaw is

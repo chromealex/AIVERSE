@@ -3598,6 +3598,9 @@ void StudioHost::handleMessage(const std::string& json) {
             Json result = Json::object();
             if (lens && params.getBool("capture")) {
                 captureLensFrame(params.getInt("id"));
+            } else if (lens && params.getBool("useInScene")) {
+                ensureScene();
+                result=onScene([&] { return preview_->configureLensCamera(params); });
             } else if (lens && params.getBool("copyScene")) {
                 if (!preview_) throw std::runtime_error("Open Scene to copy its camera");
                 result = onScene([&] { return preview_->lensViewPose(); });

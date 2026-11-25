@@ -55,11 +55,12 @@
     },
     "studio": {
       "status": "not_run",
-      "note": "Dedicated authoring, preview, PNG and invalid-state acceptance on Mac. Remaining legacy route checks are tracked in the parity matrix.",
+      "note": "Native preset with override, Scene camera handoff, retained draft, PNG export and validation checked in the Mac host. Physical readouts and camera creation from the Scene view still need parity.",
       "evidence": [
         "docs/evidence/studio-lens-html5/scene-and-camera.png",
         "docs/evidence/studio-lens-html5/camera-15deg.png",
-        "docs/evidence/studio-lens-html5/camera-28deg.png"
+        "docs/evidence/studio-lens-html5/camera-28deg.png",
+        "docs/evidence/studio-lens-html5/follow-settings.png"
       ]
     },
     "inspector": {
@@ -142,7 +143,8 @@
       "lens_scene_get",
       "lens_scene_set",
       "lens_camera_set",
-      "lens_camera_delete"
+      "lens_camera_delete",
+      "lens_camera_presets"
     ],
     "studio_panels": [
       "actor"

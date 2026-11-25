@@ -673,6 +673,8 @@ private:
     bool spectraDockHdr_=false;
     render::Camera camera_;
     std::optional<render::Camera> lensCamera_;
+    std::optional<render::Camera> pendingSceneLens_;
+    void applyPendingSceneLens();
     render::AdaptiveShadowResolution shadowResolution_;
     bool cameraInitialized_ = false;
     // Short eased transition for focus / axis snaps; any direct input cancels it.
