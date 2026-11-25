@@ -144,9 +144,13 @@
       "evidence": []
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Studio retains drafts and selections. Native owners validate, compare guarded originals and persist assets. Building and Caverns graph views inspect scoped owner projections. Native graph probes distinguish headless, attached and GPU availability. The four-domain Studio roundtrip exercised the ownership boundary.",
+      "evidence": [
+        "docs/agent-handoffs/studio-guarded-graph-roundtrip-2026-11-25.md",
+        "docs/agent-handoffs/feature-gate-stage50-graph-integration-review-2026-11-24.md",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt"
+      ]
     },
     "native_api": {
       "status": "not_run",
@@ -159,8 +163,8 @@
       "evidence": [
         "skills/workflow/aiverse-graph-authoring/SKILL.md",
         "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md",
-        "docs/evidence/feature-gate-a0b8fad0a-catalog.log.txt",
-        "docs/evidence/feature-gate-a0b8fad0a-skill-audit.log.txt",
+        "docs/evidence/feature-gate-647255066-catalog.log.txt",
+        "docs/evidence/feature-gate-647255066-skill-audit.log.txt",
         "skills/workflow/aiverse-graph-authoring/SKILL.md"
       ]
     },
@@ -174,20 +178,29 @@
       "note": "Pending implementation or actual verification. Native Studio on Mac generated a building GLB and displayed its independent preview and authored room graph. The Caverns inspector was verified after a document identity fix. At 460ce965c the Studio TypeScript check, 256 web cases and 55 Python contract cases (one skipped) passed. Live native acceptance is tracked separately.",
       "evidence": [
         "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md",
-        "docs/evidence/feature-gate-a0b8fad0a-typecheck.log.txt",
-        "docs/evidence/feature-gate-a0b8fad0a-web.log.txt",
-        "docs/evidence/feature-gate-a0b8fad0a-studio-contracts.log.txt"
+        "docs/evidence/feature-gate-647255066-typecheck.log.txt",
+        "docs/evidence/feature-gate-647255066-web.log.txt",
+        "docs/evidence/feature-gate-647255066-studio-contracts.log.txt"
       ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The Shader Graph inspector selected the tint node, changed its R component and saved the same three-node graph. The native Building and Caverns inspectors show scoped owner projections.",
+      "evidence": [
+        "docs/agent-handoffs/studio-guarded-graph-roundtrip-2026-11-25.md",
+        "docs/evidence/studio-graph-647255066/stale-edit.png",
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md",
+        "docs/evidence/studio-play-ad676e70c/caverns.png"
+      ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Studio saved and reloaded four native graph domains. Shader Graph preserved external writer changes through an actual WKWebView inspector. SpectraFX, texture and animation also refused a stale save and returned the winner on readback. Building and Caverns retain their native asset/scene owners.",
+      "evidence": [
+        "docs/agent-handoffs/studio-guarded-graph-roundtrip-2026-11-25.md",
+        "docs/evidence/studio-graph-647255066/stale-edit.png",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt"
+      ]
     },
     "graphs": {
       "status": "not_run",
@@ -256,12 +269,12 @@
       ]
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification. Previous Feature Gate branch evidence: Reviewed existing feature/graph authoring contract and workflow skill; documented scope and outstanding owner acceptance requirements in stage handoff.",
+      "status": "pass",
+      "note": "The graph authoring skill and native Workspace example describe guarded edits and owner capabilities. The integrated handoff documents the four actual Studio save paths and the supported headless probes.",
       "evidence": [
-        "docs/agents/graph-framework.md",
+        "docs/agent-handoffs/studio-guarded-graph-roundtrip-2026-11-25.md",
         "skills/workflow/aiverse-graph-authoring/SKILL.md",
-        "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md"
+        "docs/agent-handoffs/feature-gate-stage49-acceptance-2026-11-24.md"
       ]
     },
     "publishing": {
@@ -356,13 +369,13 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-a0b8fad0a-contracts.json",
-    "docs/evidence/feature-gate-a0b8fad0a-catalog.json",
-    "docs/evidence/feature-gate-a0b8fad0a-skill-audit.json",
-    "docs/evidence/feature-gate-a0b8fad0a-feature-suite.json",
-    "docs/evidence/feature-gate-a0b8fad0a-native-project.json",
-    "docs/evidence/feature-gate-a0b8fad0a-web.json",
-    "docs/evidence/feature-gate-a0b8fad0a-studio-contracts.json",
-    "docs/evidence/feature-gate-a0b8fad0a-typecheck.json"
+    "docs/evidence/feature-gate-647255066-contracts.json",
+    "docs/evidence/feature-gate-647255066-catalog.json",
+    "docs/evidence/feature-gate-647255066-skill-audit.json",
+    "docs/evidence/feature-gate-647255066-feature-suite.json",
+    "docs/evidence/feature-gate-647255066-native-project.json",
+    "docs/evidence/feature-gate-647255066-web.json",
+    "docs/evidence/feature-gate-647255066-studio-contracts.json",
+    "docs/evidence/feature-gate-647255066-typecheck.json"
   ]
 }
