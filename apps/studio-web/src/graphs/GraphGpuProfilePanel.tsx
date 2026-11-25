@@ -4,12 +4,12 @@ import {StudioAlert,StudioButton,StudioSection} from '../ui';
 import {object} from './nativeGraphAdapters';
 import type {GraphObject} from './nativeGraphAdapters';
 
-export default function GraphGpuProfilePanel({projectPath}:{projectPath:string}){
+export default function GraphGpuProfilePanel({documentEpoch,projectPath}:{documentEpoch?:string;projectPath:string}){
  const [report,setReport]=useState<GraphObject|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [textureGroupDetail,setTextureGroupDetail]=useState(false);
  const epoch=useRef(0),lock=useRef(false);
  useEffect(()=>{epoch.current++;lock.current=false;setReport(null);setBusy(false);setError('');
-  return()=>{epoch.current++;lock.current=false};},[projectPath]);
+  return()=>{epoch.current++;lock.current=false};},[projectPath,documentEpoch]);
  const run=async(action:'start'|'read'|'stop')=>{
   if(lock.current||!projectPath)return;
   lock.current=true;setBusy(true);setError('');const token=epoch.current;

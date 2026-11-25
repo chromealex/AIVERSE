@@ -1,0 +1,3 @@
+# Stage 74 — cooperative project asset writer lock
+
+Parent 6d87bc86, PR #183. Add project-local exclusive directory lock with owner-thread nested acquisition and fail-closed stale lock. Cover GraphAssetTransaction, native texture source/save/bake/generate, Studio catalog rebuild/metadata update, building publication, selected Studio asset transfer and material mutations, move recovery and internal sidecar repair. Lock does not cover arbitrary external writers or all direct asset writing paths; do not expose repair as public RPC until coverage audited. No automatic stale lock deletion. Build/tests NOT RUN. Main untouched.

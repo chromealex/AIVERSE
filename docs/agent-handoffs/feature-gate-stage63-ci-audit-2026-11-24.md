@@ -1,0 +1,3 @@
+# Stage 63 — integration CI audit
+
+Pinned parent 5e7568fc9b45af8618f9551dc2282e22fd274058, PR #183. Feature Gate previously targeted only main; enable integration/** PR targets too. Repair unclosed PHYSIS CTest regex in Studio validation. Remove stale GraphDiagnostics.tsx path from graph manifest; GraphDiagnosticsPanel.tsx remains declared. Track Studio workflow in Feature Gate manifest. All 12 existing pinned-parent workflow runs were queued/pending at inspection. New source changes not executed; no PASS claim. Next: review exact new HEAD CI and fix actual failures, independently run native/MCP/visual acceptance. No owner or main branch changes.

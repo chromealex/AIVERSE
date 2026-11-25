@@ -94,6 +94,7 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
   if (method === 'studio.materialPreview') {
     throw Error('GPU material preview requires the native AIVERSE host');
   }
+  if (method === 'studio.materialPublicationQuarantine' || method === 'studio.materialPublicationRestore' || method === 'studio.materialPublicationRetry' || method === 'studio.materialPublicationRepair' || method === 'studio.materialPublicationFinalize' || method === 'studio.materialPublicationRollbackPreview' || method === 'studio.materialPublicationRollbackEmpty') throw Error('Recovery requires a native project');
   if (method === 'studio.materialPatch' || method === 'studio.materialCreate') {
     throw Error('Editing materials requires the native AIVERSE host');
   }

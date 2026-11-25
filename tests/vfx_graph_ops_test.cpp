@@ -2,6 +2,7 @@
 // No GPU or genre module required. Uses the same Workspace::call entry as MCP.
 #include "apps/editor/core/Workspace.h"
 #include "apps/editor/core/TextureGraphGpuPreview.h"
+#include "apps/editor/core/TexturePublicationJournal.h"
 #include "cloth/FakeDevice.h"
 #include <set>
 #include "engine/render/graph/GraphTelemetry.h"
@@ -332,6 +333,59 @@ int main() {
         auto invalid=call("fx_volume_probe",args);
         requireGraphTest(invalid.has("error")||!invalid.getBool("ok"),"probe tick cap");
         requireGraphTest(!fs::exists(root/"fx"),"volume probe must not write files");
+        editor::TexturePublicationJournal intent(root,"fixture","color");
+        const auto pending=call("texture_graph_publications_get",Json::object());
+        requireGraphTest(pending["publications"].size()==1,"texture intent not reported");
+        requireGraphTest(pending["publications"][size_t(0)].getStr("status")=="incomplete_or_active","wrong pending status");
+        fs::create_directories(root/"content"/"textures");
+        const auto file=root/"content"/"textures"/"fixture_color.png";
+        {std::ofstream out(file,std::ios::binary);out<<"abc";}
+        Json files=Json::array(),record=Json::object();record.set("file",Json::string("payload"));
+        record.set("sha256",Json::string("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"));files.push(record);intent.evidence(files);
+        requireGraphTest(call("texture_graph_publications_get",Json::object())["publications"][size_t(0)].getStr("status")=="destination_matches_evidence","hash verification failed");
+        {std::ofstream out(file,std::ios::binary|std::ios::trunc);out<<"changed";}
+        requireGraphTest(call("texture_graph_publications_get",Json::object())["publications"][size_t(0)].getStr("status")=="destination_evidence_mismatch","changed bytes accepted");
+        const auto finalize=Json::parse(R"({"id":"image-fixture.color"})");
+        requireGraphTest(call("texture_graph_publication_finalize",finalize).has("error"),"mismatched publication finalized");
+        {std::ofstream out(file,std::ios::binary|std::ios::trunc);out<<"abc";}
+        requireGraphTest(call("texture_graph_publication_finalize",finalize).getBool("ok"),"verified publication not finalized");
+        requireGraphTest(fs::exists(file),"finalization removed asset");
+        fs::remove(file);
+        requireGraphTest(call("texture_graph_publications_get",Json::object())["publications"].size()==0,"completed intent retained");
+    }
+    {
+        editor::TexturePublicationJournal intent(root,"quarantine_fixture","color");
+        fs::create_directory(intent.stage());
+        {std::ofstream out(intent.stage()/"payload",std::ios::binary);out<<"unfinished";}
+        const auto args=Json::parse(R"({"id":"image-quarantine_fixture.color"})");
+        const auto quarantined=call("texture_graph_publication_quarantine",args);
+        requireGraphTest(quarantined.getBool("ok"),"isolated quarantine rejected");
+        const auto saved=root/".aiverse-cache"/"texture-publications-quarantine"/quarantined.getStr("quarantineId")/"journal"/"stage"/"payload";
+        requireGraphTest(fs::is_regular_file(saved)&&!fs::exists(intent.stage()),"quarantine lost staged bytes");
+        requireGraphTest(!fs::exists(root/"content"/"textures"/"quarantine_fixture_color.png"),"quarantine published content");
+        const auto list=call("texture_graph_quarantine_get",Json::object());
+        requireGraphTest(list["quarantine"].size()==1,"quarantine entry missing");
+        Json restore=Json::object();restore.set("id",quarantined["quarantineId"]);
+        requireGraphTest(call("texture_graph_quarantine_restore",restore).getBool("ok"),"quarantine restore failed");
+        requireGraphTest(fs::is_regular_file(intent.stage()/"payload"),"restore lost payload");
+        requireGraphTest(call("texture_graph_publication_resume",args).has("error"),"incomplete stage published");
+        {std::ofstream out(intent.stage()/"payload",std::ios::binary|std::ios::trunc);out<<"abc";}
+        intent.evidence(Json::parse(R"([{"file":"payload","sha256":"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"}])"));
+        requireGraphTest(call("texture_graph_publication_resume",args).getBool("ok"),"verified stage resume failed");
+        requireGraphTest(fs::is_regular_file(root/"content"/"textures"/"quarantine_fixture_color.png"),"resumed file missing");
+    }
+    {
+        auto material=Json::parse(R"({"name":"fixture_material","material":{"roughness":0.5},"createOnly":true})");
+        requireGraphTest(call("material_set",material).getBool("ok"),"create-only material failed");
+        requireGraphTest(call("material_set",material).has("error"),"create-only overwrote existing material");
+        const auto file=root/"materials.json";const auto before=Json::parseFile(file.string());
+        const auto lock=fs::path(file.string()+".aiverse-write-lock");fs::create_directory(lock);
+        requireGraphTest(call("material_delete",Json::parse(R"({"name":"fixture_material"})")).has("error"),"material delete ignored writer lock");
+        requireGraphTest(Json::parseFile(file.string())==before,"busy writer modified material library");
+        fs::remove(lock);
+        requireGraphTest(call("material_delete",Json::parse(R"({"name":"fixture_material"})")).getBool("ok"),"material delete failed");
+        material.set("createOnly",Json::fromBool(false));material.set("requireExisting",Json::fromBool(true));
+        requireGraphTest(call("material_set",material).has("error"),"patch recreated deleted material");
     }
     const Json graph = Json::parse(R"JSON({
       "version":1,

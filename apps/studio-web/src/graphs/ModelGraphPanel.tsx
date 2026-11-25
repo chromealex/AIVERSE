@@ -13,8 +13,8 @@ import type {Positioned} from './graphSelection';
 import {modelProjection,connectModelParent,modelingReply,object,replaceAnimationEntry,animationProjection,connectAnimationPose,addAnimationTransition,geometryProjection,connectGeometryOperand,setGeometryBoolean,moveGeometryModifier,geometryModifierKinds,addGeometryModifier,removeGeometryModifier,modelMaterialIds,bindModelMaterial} from './nativeGraphAdapters';
 import type {GraphObject} from './nativeGraphAdapters';
 
-const op=async(name:string,params:GraphObject={})=>(await invoke('studio.op',{op:name,params})).result;
-export default function ModelGraphPanel({projectPath}:{projectPath:string}){
+export default function ModelGraphPanel({documentEpoch,projectPath}:{documentEpoch?:string;projectPath:string}){
+ const op=async(name:string,params:GraphObject={})=>(await invoke('studio.op',{op:name,params,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch})).result;
  const [names,setNames]=useState<string[]>([]),[name,setName]=useState('');
  const [original,setOriginal]=useState<GraphObject|null>(null),[draft,setDraft]=useState<GraphObject|null>(null);
  const [revision,setRevision]=useState(0),[mode,setMode]=useState<'model'|'geometry'|'pose'|'states'>('model');
@@ -46,7 +46,7 @@ export default function ModelGraphPanel({projectPath}:{projectPath:string}){
    setNames(result.models.filter((n):n is string=>typeof n==='string'));
   });
   return ()=>{if(epoch.current===token)epoch.current++};
- },[projectPath]);
+ },[projectPath,documentEpoch]);
  useEffect(()=>{setJson(entry?JSON.stringify(entry,null,2):'')},[entry]);
  const open=(asset:string)=>void run(async live=>{if(!asset||dirty)return;
   const r=modelingReply(await op('modeling_get',{name:asset}));if(!live())return;

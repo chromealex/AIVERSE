@@ -1,0 +1,3 @@
+# Stage 75 — OS-owned project asset lease
+
+Parent de47b5e3, PR #183. Replace persistent directory reservation with persistent regular file and OS lease: POSIX flock (nonblocking, nofollow, close-on-exec), Windows exclusive CreateFileW handle (reject reparse points). Kernel releases handle on process exit; never unlink lock inode. Old Stage 74 directory locks are rejected and require offline inspection; older clients must not be used concurrently. Nested same-thread lease preserved. Thread contention/reacquisition fixture authored. No cross-process crash test, platform build, public repair RPC, quarantine or rollback yet. Main untouched.

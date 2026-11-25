@@ -1,0 +1,3 @@
+# Stage 78 — isolated texture publication quarantine
+
+Parent 2b0b5fce, PR #183. New texture journals version 2 own staging under .aiverse-cache, outside content. Native CPU/GPU single and set publication share this staging. Explicit texture_graph_publication_quarantine relocates only v2 unpublished journal+stage via one rename under writer lease; published destination or legacy intent cannot be quarantined. Preserve bytes and evidence; no automatic deletion. Legacy content-stage paths block new publication and need offline inspection. Quarantine restore, material rollback, full writer audit and actual tests remain pending. Cross-filesystem publication can fail closed. Main untouched.

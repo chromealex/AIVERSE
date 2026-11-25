@@ -5,7 +5,7 @@ import {object} from './nativeGraphAdapters';
 import GraphGpuProfilePanel from './GraphGpuProfilePanel';
 import type {GraphObject} from './nativeGraphAdapters';
 
-export default function GraphLiveSnapshotPanel({domain,projectPath}:{domain:'motionweave'|'spectrafx';projectPath:string}){
+export default function GraphLiveSnapshotPanel({documentEpoch,domain,projectPath}:{documentEpoch?:string;domain:'motionweave'|'spectrafx';projectPath:string}){
  const [entity,setEntity]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [profile,setProfile]=useState<GraphObject|null>(null);
  const [watch,setWatch]=useState<GraphObject|null>(null),[frame,setFrame]=useState(0);
@@ -14,13 +14,13 @@ export default function GraphLiveSnapshotPanel({domain,projectPath}:{domain:'mot
  const epoch=useRef(0),lock=useRef(false);
  useEffect(()=>{epoch.current++;setSnapshot(null);setWatch(null);setProfile(null);setError('');setBusy(false);lock.current=false;
   return()=>{epoch.current++;lock.current=false};
- },[projectPath,domain,entity]);
+ },[projectPath,domain,entity,documentEpoch]);
  const read=async()=>{
   if(lock.current||!projectPath||domain==='motionweave'&&!/^[0-9]{1,20}$/.test(entity))return;
   lock.current=true;setBusy(true);setError('');setSnapshot(null);
   const token=epoch.current;
   try{
-   const r=(await invoke('studio.op',{op:'graph_live_snapshot',params:{domain,...(domain==='motionweave'?{entity,captureHistory}:{})}})).result;
+   const r=(await invoke('studio.op',{op:'graph_live_snapshot',params:{domain,...(domain==='motionweave'?{entity,captureHistory}:{})},expectedProject:projectPath,expectedDocumentEpoch:documentEpoch})).result;
    if(token!==epoch.current)return;
    if(!object(r)||r.domain!==domain||typeof r.available!=='boolean')throw new Error('Invalid live snapshot response');
    setSnapshot(r);
@@ -32,7 +32,7 @@ export default function GraphLiveSnapshotPanel({domain,projectPath}:{domain:'mot
   lock.current=true;setBusy(true);setError('');
   const token=epoch.current;
   try{
-   const r=(await invoke('studio.op',{op:'graph_live_watch',params:{action,...(action==='start'?{domain,entity:domain==='spectrafx'?'preview':entity}:{})}})).result;
+   const r=(await invoke('studio.op',{op:'graph_live_watch',params:{action,...(action==='start'?{domain,entity:domain==='spectrafx'?'preview':entity}:{})},expectedProject:projectPath,expectedDocumentEpoch:documentEpoch})).result;
    if(token!==epoch.current)return;
    if(!object(r)||typeof r.available!=='boolean')throw new Error('Invalid watch response');
    setWatch(r);setFrame(Math.max(0,Array.isArray(r.frames)?r.frames.length-1:0));
@@ -43,7 +43,7 @@ export default function GraphLiveSnapshotPanel({domain,projectPath}:{domain:'mot
   if(lock.current||!projectPath||! /^[0-9]{1,20}$/.test(entity))return;
   lock.current=true;setBusy(true);setError('');const token=epoch.current;
   try{
-   const r=(await invoke('studio.op',{op:'graph_live_profile',params:{action,entity}})).result;
+   const r=(await invoke('studio.op',{op:'graph_live_profile',params:{action,entity},expectedProject:projectPath,expectedDocumentEpoch:documentEpoch})).result;
    if(token!==epoch.current)return;
    if(!object(r)||typeof r.available!=='boolean')throw new Error('Invalid live profile response');
    setProfile(r);
@@ -67,7 +67,7 @@ export default function GraphLiveSnapshotPanel({domain,projectPath}:{domain:'mot
    <div className="au-row" style={{flexWrap:'wrap'}}>{(['enable','read','reset','disable'] as const).map(action=><StudioButton key={action} size="sm" disabled={busy||!projectPath||! /^[0-9]{1,20}$/.test(entity)} onClick={()=>void profileAction(action)}>{action}</StudioButton>)}</div>
    {profile&&<>{profile.available===false?<small>{String(profile.reason??'No matching active profile')}</small>:<pre style={{maxHeight:320,overflow:'auto'}}>{JSON.stringify(profile,null,2)}</pre>}</>}
   </StudioSection>}
-  <GraphGpuProfilePanel projectPath={projectPath}/>
+  <GraphGpuProfilePanel projectPath={projectPath} documentEpoch={documentEpoch}/>
   {error&&<StudioAlert tone="danger">{error}</StudioAlert>}
   {snapshot&&<>{snapshot.available===false?<StudioAlert>{String(snapshot.reason??'Owner unavailable')}</StudioAlert>:<pre>{JSON.stringify(snapshot,null,2)}</pre>}</>}
  </StudioSection>;

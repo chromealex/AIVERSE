@@ -11,7 +11,7 @@ import type { MaterialData, MaterialKey, MaterialLibrary, MaterialPatch, Materia
 import './MaterialsPanel.css';
 
 const EMPTY:MaterialLibrary={library:{}};
-export default function MaterialsPanel({projectPath,previewMaterial,textureOnly=false,openTextureGraph}:{projectPath:string;previewMaterial?:string|null;textureOnly?:boolean;openTextureGraph?:()=>void}){
+export default function MaterialsPanel({documentEpoch,projectPath,previewMaterial,textureOnly=false,openTextureGraph}:{documentEpoch?:string;projectPath:string;previewMaterial?:string|null;textureOnly?:boolean;openTextureGraph?:()=>void}){
  const [library,setLibrary]=useState<MaterialLibrary>(EMPTY);
  const [name,setName]=useState('');
  const [query,setQuery]=useState('');
@@ -98,6 +98,54 @@ export default function MaterialsPanel({projectPath,previewMaterial,textureOnly=
   }catch(e){setError(e instanceof Error?e.message:String(e));}
   finally{setPreviewing(false);}
  };
+ const repair=async(publication:string,path:string)=>{
+  if(busy||loading||!connected||!projectPath||!documentEpoch||changes>0)return;
+  setBusy(true);setError('');
+  try{
+   const response=await invoke('studio.materialPublicationRepair',{name:publication,filename:path.split('/').pop()??'',expectedProject:projectPath,expectedDocumentEpoch:documentEpoch});
+   if(!response.restored)throw Error('Metadata recovery rejected');
+   setLibrary(current=>({...current,pendingPublications:response.pendingPublications}));
+   setMessage('Original metadata restored. Refresh Assets after all missing sidecars are repaired.');
+  }catch(e){setError(e instanceof Error?e.message:String(e))}
+  finally{setBusy(false)}
+ };
+ const [rollbackReport,setRollbackReport]=useState<import('../types').StudioResult['studio.materialPublicationRollbackPreview']|null>(null);
+ const rollback=async(publication:string,commit=false)=>{
+  if(busy||loading||!connected||!projectPath||!documentEpoch||changes>0)return;
+  setBusy(true);setError('');
+  const args={name:publication,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch};
+  try{
+   if(commit){
+    const result=await invoke('studio.materialPublicationRollbackEmpty',args);
+    if(!result.rolledBack)throw Error('Rollback rejected');
+    setLibrary(current=>({...current,pendingPublications:result.pendingPublications}));
+    setRollbackReport(null);setMessage('Empty publication journal archived; no assets removed.');
+   }else setRollbackReport(await invoke('studio.materialPublicationRollbackPreview',args));
+  }catch(e){setError(e instanceof Error?e.message:String(e))}
+  finally{setBusy(false)}
+ };
+ const recoverPublication=async(action:'quarantine'|'restore'|'retry',id:string)=>{
+  if(busy||loading||!connected||!projectPath||!documentEpoch||changes>0)return;
+  setBusy(true);setError('');
+  const scope={expectedProject:projectPath,expectedDocumentEpoch:documentEpoch};
+  try{
+   if(action==='retry')await invoke('studio.materialPublicationRetry',{...scope,name:id});
+   else await invoke(action==='quarantine'?'studio.materialPublicationQuarantine':'studio.materialPublicationRestore',{...scope,id});
+   setMessage(action==='retry'?'Publication retried using the recorded recipe and current style. Original stage retained in quarantine.':'Publication journal moved; no assets removed.');
+  }catch(e){setError(e instanceof Error?e.message:String(e))}
+  finally{setBusy(false);reload()}
+ };
+ const finalize=async(publication:string)=>{
+  if(busy||loading||!connected||!projectPath||!documentEpoch||changes>0)return;
+  setBusy(true);setError('');
+  try{
+   const response=await invoke('studio.materialPublicationFinalize',{name:publication,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch});
+   if(!response.finalized)throw Error('Publication finalization rejected');
+   setLibrary(current=>({...current,pendingPublications:response.pendingPublications}));
+   setMessage('Verified publication journal archived. Assets unchanged.');
+  }catch(e){setError(e instanceof Error?e.message:String(e))}
+  finally{setBusy(false)}
+ };
  const discard=()=>{
   setDraft({});
   if(pending!==null){setName(pending);setPending(null);}
@@ -115,6 +163,21 @@ export default function MaterialsPanel({projectPath,previewMaterial,textureOnly=
   {connected&&!projectPath&&<p className="materials-notice">Open a project to view the material library.</p>}
   {error&&<p role="alert" className="materials-error">{error}</p>}
   {message&&<p role="status" className="materials-notice">{message}</p>}
+  {library.publicationInspectionError&&<p role="alert" className="materials-error">Publication inspection: {library.publicationInspectionError}</p>}
+  {!!library.pendingPublications?.length&&<details className="materials-warning">
+   <summary>Pending material publications ({library.pendingPublications.length})</summary>
+   <p>Recovery inspection. Restore only missing metadata from recorded evidence. No files are removed automatically.</p>
+   {library.pendingPublications.map(p=><div key={p.name}>
+    <strong>{p.name}</strong> — {p.status==='material_committed'?'Material committed':p.status==='material_conflict'?'Material conflict':'Incomplete or active'}
+    <StudioButton size="sm" disabled={busy||loading||!connected||!documentEpoch||changes>0} onClick={()=>void rollback(p.name)}>Inspect rollback</StudioButton>
+    {rollbackReport?.name===p.name&&<div><small>{rollbackReport.blockers.length?rollbackReport.blockers.map(b=>b.kind+': '+b.owner).join(' · '):'No recorded blockers'}</small>{rollbackReport.journalOnlyRollbackAllowed&&<StudioButton size="sm" disabled={busy||loading||changes>0} onClick={()=>void rollback(p.name,true)}>Archive empty transaction</StudioButton>}<p>Scanned {rollbackReport.coverage?.scanned??0} files; skipped {rollbackReport.coverage?.skipped??0}.{rollbackReport.coverage?.truncated?' Scan incomplete.':''} Dynamic and binary dependencies are not verified. Content removal requires manual dependency review.</p></div>}
+    {p.quarantinable&&<StudioButton size="sm" disabled={busy||loading||changes>0||!connected||!documentEpoch} onClick={()=>void recoverPublication('quarantine',p.name)}>Quarantine unpublished stage</StudioButton>}
+    {p.retryable&&<StudioButton size="sm" disabled={busy||loading||changes>0||!connected||!documentEpoch} onClick={()=>void recoverPublication('retry',p.name)}>Regenerate using recorded recipe</StudioButton>}
+    {p.finalizable&&<StudioButton size="sm" disabled={busy||loading||!connected||!documentEpoch||changes>0} onClick={()=>void finalize(p.name)}>Finalize verified publication</StudioButton>}
+    {p.assets.map(a=><div key={a.path}>{a.path}: {!a.present?'missing texture':!a.metadataPresent?'missing metadata':!a.guidMatches?'GUID mismatch':a.hashMatches===false?'texture hash mismatch':a.hashMatches===true?'texture, hash and GUID match':'texture and GUID present; hash unverified'}{a.recoverable&&<StudioButton size="sm" disabled={busy||loading||!connected||!documentEpoch||changes>0} onClick={()=>void repair(p.name,a.path)}>Restore original metadata</StudioButton>}</div>)}
+   </div>)}
+  </details>}
+  {!!library.quarantinedPublications?.length&&<details className="materials-warning"><summary>Quarantined material publications ({library.quarantinedPublications.length})</summary>{library.quarantinedPublications.map(p=><div key={p.id}>{p.id}{p.reason&&<small> — {p.reason}</small>}{p.restorable&&<StudioButton size="sm" disabled={busy||loading||changes>0||!connected||!documentEpoch} onClick={()=>void recoverPublication('restore',p.id)}>Restore to pending</StudioButton>}</div>)}</details>}
   <div className="materials-main">
    <aside className="materials-list">
     <button className="materials-new-button" disabled={!connected||!projectPath||busy}
@@ -157,7 +220,7 @@ export default function MaterialsPanel({projectPath,previewMaterial,textureOnly=
       {(textureOnly?(['texture'] as const):(['properties','dependencies','quick'] as const)).map(mode=><StudioButton key={mode} size="sm" aria-pressed={materialMode===mode} disabled={mode!=='properties'&&(!connected||!projectPath)} onClick={()=>setMaterialMode(mode)}>{mode==='properties'?'Properties':mode==='texture'?'Texture Graph':mode==='dependencies'?'Dependencies':'Quick texture'}</StudioButton>)}
       {!textureOnly&&<StudioButton size="sm" disabled={!connected||!projectPath} onClick={openTextureGraph}>Open Texture Graph</StudioButton>}
      </div>
-     {connected&&projectPath&&<div hidden={materialMode==='properties'} className="materials-graph-host"><MaterialGraphPanel name={name} material={selected} draft={draft} projectPath={projectPath} disabled={busy||loading} onEdit={edit} mode={materialMode}/></div>}
+     {connected&&projectPath&&<div hidden={materialMode==='properties'} className="materials-graph-host"><MaterialGraphPanel documentEpoch={documentEpoch} name={name} material={selected} draft={draft} projectPath={projectPath} disabled={busy||loading} onEdit={edit} mode={materialMode}/></div>}
      <div className="materials-fields" hidden={materialMode!=='properties'}>
       {props.map(field=><PropertyField key={name+':'+field.key} property={field}
        disabled={busy||!connected||!projectPath} onChange={v=>edit(field.key,v)}/>)}

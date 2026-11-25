@@ -1,4 +1,6 @@
 #include "MaterialOps.h"
+#include "GraphAssetTransaction.h"
+#include "TexturePublicationJournal.h"
 
 #include <algorithm>
 #include <cmath>
@@ -204,19 +206,17 @@ Json loadMaterialLibrary(const Workspace& ws) {
     }
 }
 
+static void saveMaterialLibraryLocked(Workspace& ws, const graph_asset::Transaction& tx, const Json& lib, const std::string& what) {
+    Json doc=Json::object();
+    if(fs::exists(tx.target())) doc=Json::parseFile(tx.target().string());
+    if(!doc.isObject()) throw std::runtime_error("Invalid material library");
+    doc.set("materials",lib);
+    tx.replace(doc.dump(2)+"\n",16*1024*1024);
+    ws.note({Change::Rules,0,0,-1,-1,-1,what});
+}
 void saveMaterialLibrary(Workspace& ws, const Json& lib, const std::string& what) {
-    Json doc = Json::object();
-    doc.set("materials", lib);
-    const fs::path f = fs::path(ws.project.dir) / "materials.json";
-    {
-        std::ofstream o(f.string() + ".tmp", std::ios::binary);
-        o << doc.dump(2) << "\n";
-        if (!o) throw std::runtime_error("cannot write " + f.string());
-    }
-    std::error_code ec;
-    fs::rename(f.string() + ".tmp", f, ec);
-    if (ec) throw std::runtime_error("cannot write " + f.string() + ": " + ec.message());
-    ws.note({Change::Rules, 0, 0, -1, -1, -1, what});   // views rebuild with the library
+    graph_asset::Transaction tx(fs::path(ws.project.dir)/"materials.json",ws.project.dir);
+    saveMaterialLibraryLocked(ws,tx,lib,what);
 }
 
 static Json publishGraphExr(Workspace& ws,const std::string& name,int width,int height,const char* suffix,const char* output,const std::vector<uint8_t>& exr){
@@ -252,6 +252,7 @@ Json publishTextureGraphEnvironment(Workspace& ws,const std::string& name,int si
 }
 Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::string& output,const render::Image& image){
     needProject(ws);
+    ProjectAssetWriteLock projectLock(ws.project.dir);
     if(!render::texture_graph::safeId(name))throw std::invalid_argument("invalid texture name");
     if(render::texture_graph::outputKind(output)==render::texture_graph::Kind::Radiance)throw std::invalid_argument("radiance must be exported as EXR");
     if(image.width<8||image.width>1024||image.height!=image.width||image.rgba.size()!=size_t(image.width)*image.height*4)
@@ -260,14 +261,21 @@ Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::s
     if(fs::is_symlink(root/"content")||fs::is_symlink(dir))throw std::runtime_error("texture destination symlink rejected");
     fs::create_directories(dir);
     const std::string rel="content/textures/"+name+"_"+output+".png";
-    const auto dest=root/rel,stage=fs::path(dest.string()+".stage");
-    if(fs::exists(dest)||fs::is_symlink(dest)||!fs::create_directory(stage))throw std::runtime_error("texture already exists or staging busy");
+    const auto dest=root/rel;
+    const auto legacyStage=fs::path(dest.string()+".stage");
+    if(fs::exists(legacyStage)||fs::is_symlink(legacyStage))throw std::runtime_error("Legacy staging requires offline inspection");
+    if(fs::exists(dest)||fs::is_symlink(dest))throw std::runtime_error("texture already exists");
+    TexturePublicationJournal journal(root,name,output);
+    const auto stage=journal.stage();
+    if(!fs::create_directory(stage)){journal.finish();throw std::runtime_error("texture staging busy");}
     struct Cleanup {fs::path dir;~Cleanup(){std::error_code ec;fs::remove_all(dir,ec);}} cleanup{stage};
     std::string png;
     if(!stbi_write_png_to_func([](void* ctx,void* data,int size){static_cast<std::string*>(ctx)->append(static_cast<const char*>(data),size_t(size));},&png,image.width,image.height,4,image.rgba.data(),image.width*4)||png.empty())throw std::runtime_error("PNG encode failed");
     const auto temp=stage/"payload";
     {std::ofstream stream(temp,std::ios::binary);stream.write(png.data(),std::streamsize(png.size()));stream.close();if(!stream)throw std::runtime_error("PNG write failed");}
+    Json evidence=Json::array(),record=Json::object();record.set("file",Json::string("payload"));record.set("sha256",Json::string(publicationFileSha256(temp)));evidence.push(record);journal.evidence(evidence);
     fs::create_hard_link(temp,dest);
+    journal.finish();
     ws.note({Change::Rules,0,0,-1,-1,-1,"Texture graph bake: "+rel});
     Json r=okJson();r.set("path",Json::string(rel));r.set("output",Json::string(output));r.set("size",Json::number(int64_t(image.width)));return r;
 }
@@ -445,7 +453,7 @@ render::texture_graph::ImageResolver textureGraphImageResolver(const Workspace& 
 }
 
 Json publishTextureGraphSet(Workspace& ws,const std::string& name,const Json& graph,const Json& overrides,const std::vector<render::Image>& images,const std::vector<std::string>& backends){
-    needProject(ws);const auto program=render::texture_graph::compile(graph,overrides,textureGraphImageResolver(ws));
+    needProject(ws);ProjectAssetWriteLock projectLock(ws.project.dir);const auto program=render::texture_graph::compile(graph,overrides,textureGraphImageResolver(ws));
     if(program.outputs.count("radiance"))throw std::invalid_argument("mixed HDR/PNG sets require separate EXR export");
     if(images.size()!=program.outputs.size()||backends.size()!=images.size())throw std::invalid_argument("incomplete texture set");
     for(size_t i=0;i<images.size();++i){
@@ -456,8 +464,13 @@ Json publishTextureGraphSet(Workspace& ws,const std::string& name,const Json& gr
         if(!render::texture_graph::safeId(name))throw std::invalid_argument("invalid texture set name");
         const auto root=fs::canonical(ws.project.dir),dir=root/"content"/"textures";
         if(fs::is_symlink(root/"content")||fs::is_symlink(dir))throw std::runtime_error("texture directory symlink rejected");
-        fs::create_directories(dir);const auto dest=dir/name,stage=dir/("."+name+".stage");
-        if(fs::exists(dest)||fs::is_symlink(dest)||!fs::create_directory(stage))throw std::runtime_error("texture set exists or staging busy");
+        fs::create_directories(dir);const auto dest=dir/name;
+        const auto legacyStage=dir/("."+name+".stage");
+        if(fs::exists(legacyStage)||fs::is_symlink(legacyStage))throw std::runtime_error("Legacy staging requires offline inspection");
+        if(fs::exists(dest)||fs::is_symlink(dest))throw std::runtime_error("texture set exists");
+        TexturePublicationJournal journal(root,name,"");
+        const auto stage=journal.stage();
+        if(!fs::create_directory(stage)){journal.finish();throw std::runtime_error("texture set staging busy");}
         struct Cleanup {fs::path dir;~Cleanup(){std::error_code ec;fs::remove_all(dir,ec);}} cleanup{stage};
         Json files=Json::array();size_t i=0;
         for(const auto& [output,index]:program.outputs){
@@ -472,7 +485,12 @@ Json publishTextureGraphSet(Workspace& ws,const std::string& name,const Json& gr
         // Cooperating publishers share the exclusive stage directory.
         // No promise against an external process creating an empty destination.
         if(fs::exists(dest)||fs::is_symlink(dest))throw std::runtime_error("destination appeared during bake");
+        Json evidence=Json::array();
+        auto recordFile=[&](const std::string& file){Json record=Json::object();record.set("file",Json::string(file));record.set("sha256",Json::string(publicationFileSha256(stage/file)));evidence.push(record);};
+        for(const auto& [output,index]:program.outputs){(void)index;recordFile(output+".png");}
+        recordFile("texture-set.json");journal.evidence(evidence);
         fs::rename(stage,dest);
+        journal.finish();
         ws.note({Change::Rules,0,0,-1,-1,-1,"Texture graph set: "+name});
         Json r=okJson();r.set("files",files);r.set("size",Json::number(int64_t(program.size)));r.set("manifest",Json::string("content/textures/"+name+"/texture-set.json"));return r;
 
@@ -616,12 +634,15 @@ void registerMaterialOps(Workspace& ws) {
             " merge: true keeps the existing keys and changes only the given ones.",
         R"J({"properties": {"name": {"type": "string", "description": "e.g. steel, rusty_iron, team_cloth"},
             "material": {"type": "object", "description": "material keys (see description)"},
-            "merge": {"type": "boolean"}}, "required": ["name", "material"]})J", [w](const Json& p) {
+            "merge": {"type": "boolean"}, "createOnly": {"type":"boolean"}, "requireExisting":{"type":"boolean"}}, "required": ["name", "material"]})J", [w](const Json& p) {
             needProject(*w);
             const std::string name = p.getStr("name");
             if (name.empty() || name.find_first_of(" \t/\\\"") != std::string::npos) throw std::runtime_error("material name must be one word (letters, digits, _ -)");
             Json mat = p["material"];
+            graph_asset::Transaction tx(fs::path(w->project.dir)/"materials.json",w->project.dir);
             Json lib = loadMaterialLibrary(*w);
+            if(p.getBool("createOnly")&&lib.has(name))throw std::runtime_error("Material already exists");
+            if(p.getBool("requireExisting")&&!lib[name].isObject())throw std::runtime_error("Material no longer exists");
             if (p.getBool("merge") && lib[name].isObject()) {
                 Json cur = lib[name];
                 for (const auto& [k, v] : mat.members()) cur.set(k, v);
@@ -638,7 +659,7 @@ void registerMaterialOps(Workspace& ws) {
                     !fs::exists(gameFile(*w, mat.getStr(k)))) warnings.push_back(std::string(k) + " '" + mat.getStr(k) + "' does not exist yet");
             const bool existed = lib.has(name);
             lib.set(name, mat);
-            saveMaterialLibrary(*w, lib, std::string(existed ? "Материал изменён: " : "Материал создан: ") + name);
+            saveMaterialLibraryLocked(*w, tx, lib, std::string(existed ? "Материал изменён: " : "Материал создан: ") + name);
             Json r = okJson();
             r.set("summary", Json::string(std::string(existed ? "Материал изменён: " : "Материал создан: ") + name));
             r.set("warnings", strs(warnings));
@@ -649,6 +670,7 @@ void registerMaterialOps(Workspace& ws) {
         R"({"properties": {"name": {"type": "string"}, "force": {"type": "boolean"}}, "required": ["name"]})", [w](const Json& p) {
             needProject(*w);
             const std::string name = p.getStr("name");
+            graph_asset::Transaction tx(fs::path(w->project.dir)/"materials.json",w->project.dir);
             Json lib = loadMaterialLibrary(*w);
             if (!lib.has(name)) throw std::runtime_error("no library material '" + name + "'");
             std::vector<std::string> users;
@@ -662,7 +684,7 @@ void registerMaterialOps(Workspace& ws) {
             for (const auto& [k, v] : lib.members()) if (k != name && usesMaterial(v, name)) users.push_back("material " + k);
             if (!users.empty() && !p.getBool("force")) throw std::runtime_error("material '" + name + "' is used by " + users[0] + (users.size() > 1 ? " and others" : "") + " (force: true deletes it anyway)");
             lib.erase(name);
-            saveMaterialLibrary(*w, lib, "Материал удалён: " + name);
+            saveMaterialLibraryLocked(*w, tx, lib, "Материал удалён: " + name);
             Json r = okJson();
             r.set("usedBy", strs(users));
             return r;
@@ -756,6 +778,12 @@ void registerMaterialOps(Workspace& ws) {
         if(overwrite)fs::rename(temp,file);
         else fs::create_hard_link(temp,file); // exclusive creation, never overwrite existing asset
     };
+    add("texture_graph_publications_get","Inspect pending CPU/GPU texture publication intents; never delete or repair assets.",R"({"type":"object","additionalProperties":false})",[w](const Json&){needProject(*w);Json r=okJson();r.set("publications",TexturePublicationJournal::inspect(fs::canonical(w->project.dir)));return r;});
+    add("texture_graph_publication_finalize","Archive verified texture publication journal; no asset deletion.",R"({"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false})",[w](const Json& p){needProject(*w);TexturePublicationJournal::finalize(fs::canonical(w->project.dir),p.getStr("id"));return okJson();});
+    add("texture_graph_publication_quarantine","Move an isolated unpublished texture intent to project-local quarantine; never move published assets.",R"({"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false})",[w](const Json& p){needProject(*w);Json r=okJson();r.set("quarantineId",Json::string(TexturePublicationJournal::quarantine(fs::canonical(w->project.dir),p.getStr("id"))));return r;});
+    add("texture_graph_quarantine_get","List isolated texture publication quarantine entries.",R"({"type":"object","additionalProperties":false})",[w](const Json&){needProject(*w);Json r=okJson();r.set("quarantine",TexturePublicationJournal::inspectQuarantine(fs::canonical(w->project.dir)));return r;});
+    add("texture_graph_quarantine_restore","Restore quarantined journal to pending state without publishing files.",R"({"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false})",[w](const Json& p){needProject(*w);Json r=okJson();r.set("publicationId",Json::string(TexturePublicationJournal::restoreQuarantine(fs::canonical(w->project.dir),p.getStr("id"))));return r;});
+    add("texture_graph_publication_resume","Publish a complete verified isolated stage to a vacant destination.",R"({"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false})",[w](const Json& p){needProject(*w);TexturePublicationJournal::resume(fs::canonical(w->project.dir),p.getStr("id"));w->note({Change::Rules,0,0,-1,-1,-1,"Recovered texture publication"});return okJson();});
     auto textureCache=std::make_shared<render::texture_graph::EvaluationCache>();
     const std::string graphSchema=R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"expected":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"textureName":{"type":"string"},"overrides":{"type":"object"},"format":{"enum":["png","bc1","bc3","bc4","bc5","bc7","astc4x4","astc6x6","exr","bc6h","bc6hs"]},"mipmaps":{"type":"boolean"}}})";
     add("texture_graph_cache","Inspect or clear this Workspace texture evaluation cache.",R"({"properties":{"clear":{"type":"boolean"}}})",[w,textureCache](const Json& p){textureCache->selectProject(w->project.dir);if(p.getBool("clear"))textureCache->clear();return textureCache->status();});
@@ -795,6 +823,7 @@ void registerMaterialOps(Workspace& ws) {
         auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object(),textureGraphImageResolver(*w));Json r=okJson();r.set("nodes",Json::number(int64_t(program.nodes.size())));r.set("size",Json::number(int64_t(program.size)));return r;
     });
     add("texture_graph_set","Save validated graph; existing source requires matching expected document. No texture bake.",graphSchema,[w,graphPath,readGraph,publish](const Json& p){
+        needProject(*w);ProjectAssetWriteLock projectLock(w->project.dir);
         render::texture_graph::compile(p["graph"],Json::object(),textureGraphImageResolver(*w));auto file=graphPath(p.getStr("name"));
         bool exists=fs::exists(file);
         if(exists&&(!p["expected"].isObject()||!(readGraph(file)==p["expected"])))throw std::runtime_error("texture graph changed; reload before save");
@@ -896,7 +925,7 @@ void registerMaterialOps(Workspace& ws) {
         const auto lib=loadMaterialLibrary(*w);
         if(lib.has(name)||!lib[base].isObject())throw std::runtime_error("variant name exists or base material missing");
         // Reuse the native library writer, not a separate runtime material format.
-        Json args=Json::object();args.set("name",Json::string(name));args.set("material",material);
+        Json args=Json::object();args.set("name",Json::string(name));args.set("material",material);args.set("createOnly",Json::fromBool(true));
         auto r=w->call("material_set",args,"texture-graph");
         if(r.getBool("ok"))r.set("note",Json::string("Baked variant; configure texture importer metadata separately. Existing material library owner concurrency applies."));
         return r;
@@ -908,6 +937,7 @@ void registerMaterialOps(Workspace& ws) {
         "material_apply (texture, normalMap, teamMask) and uvScale for tiling.",
         std::string(R"({"properties": )") + patternSchema().dump(-1) + R"(, "required": ["pattern"]})", [w](const Json& p) {
             needProject(*w);
+            ProjectAssetWriteLock projectLock(w->project.dir);
             render::Image img;
             render::generateTexture(p, img);
             std::string rel = p.getStr("path");
