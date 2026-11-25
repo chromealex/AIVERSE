@@ -23,7 +23,8 @@
     "apps/editor/core/Workspace.cpp",
     "docs/editor-native-ecs-inspector.md",
     "CMakeLists.txt",
-    "apps/editor/core/StudioPlayTools.cpp"
+    "apps/editor/core/StudioPlayTools.cpp",
+    "apps/studio-native/StudioAgentHistoryPolicy.h"
   ],
   "traits": {
     "editable": true,
