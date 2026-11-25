@@ -1,3 +1,4 @@
+import RagdollPanel from './RagdollPanel';
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { invoke } from '../bridge';
 import './AnimationAssetsPanel.css';
@@ -11,7 +12,8 @@ async function operation<T>(project:string, op:string, params:Record<string,unkn
 }
 
 export default function AnimationAssetsPanel({project,tools}:{project:string;tools:ReactNode}) {
-  const [advanced,setAdvanced]=useState(false);
+  const [tab,setTab]=useState<'avatar'|'ragdoll'|'tools'>('avatar');
+  const advanced=tab==='tools';
   const [catalog,setCatalog]=useState<Catalog>({names:[],roles:[]});
   const [models,setModels]=useState<string[]>([]);
   const [nodes,setNodes]=useState<string[]>([]);
@@ -67,9 +69,10 @@ export default function AnimationAssetsPanel({project,tools}:{project:string;too
   const sameModel=!!draft && model===draft.model;
   const feedback=<>{busy&&<p role="status">Working…</p>}{message&&<p role="status">{message}</p>}{error&&<p role="alert">{error}</p>}</>;
   return <div className="avatar-page"><header><h2>Animation Assets</h2><nav aria-label="Animation asset tools">
-    <button aria-pressed={!advanced} onClick={()=>setAdvanced(false)}>Humanoid avatar</button>
-    <button disabled={dirty||busy} aria-pressed={advanced} onClick={()=>setAdvanced(true)}>Asset tools</button>
-  </nav></header>{advanced ? tools : <>
+    <button aria-pressed={tab==='avatar'} onClick={()=>setTab('avatar')}>Humanoid avatar</button>
+    <button disabled={busy} aria-pressed={tab==='ragdoll'} onClick={()=>setTab('ragdoll')}>Ragdoll</button>
+    <button disabled={dirty||busy} aria-pressed={advanced} onClick={()=>setTab('tools')}>Asset tools</button>
+  </nav></header><RagdollPanel project={project} avatar={draft} avatarName={name} active={tab==='ragdoll'}/>{advanced ? tools : tab==='avatar' && <>
     <fieldset disabled={busy}><div className="avatar-source">
       <section><h3>Avatar file</h3><label>Asset name<input list={listId+'-files'} placeholder="hero" value={name} onChange={e=>setName(e.target.value)}/></label>
         <datalist id={listId+'-files'}>{catalog.names.map(n=><option key={n} value={n}/>)}</datalist>
