@@ -1409,7 +1409,8 @@
           "titleEn": "DLSS: build and check the NGX adapter on Windows with RTX"
         },
         {
-          "status": "in-progress",
+          "status": "done",
+          "date": "2026-11-25",
           "title": "Пользовательские цепочки проходов и временных текстур",
           "titleEn": "Author pass chains and intermediate render textures",
           "id": "prisma-authored-compositor"
@@ -3116,7 +3117,8 @@
           "status": "in-progress"
         },
         {
-          "status": "in-progress",
+          "status": "done",
+          "date": "2026-11-25",
           "title": "Редактируемые объёмные CSG-модели",
           "titleEn": "Editable volumetric CSG models",
           "text": "Построение поверхности объекта из примитивов, текстур плотности и шума.",
@@ -3407,7 +3409,8 @@
       "doc": "docs/models.md",
       "roadmap": [
         {
-          "status": "in-progress",
+          "status": "done",
+          "date": "2026-11-25",
           "id": "model-triplanar",
           "title": "Трипланарные материалы моделей и срезов CSG без UV",
           "titleEn": "Triplanar materials on models and UV-free CSG cut surfaces"
@@ -3427,7 +3430,8 @@
           "titleEn": "Load Quake III BSP levels with cluster visibility, textures and baked lightmaps"
         },
         {
-          "status": "in-progress",
+          "status": "done",
+          "date": "2026-11-25",
           "id": "material-techniques",
           "title": "Техники материалов по расстоянию и возможностям GPU",
           "titleEn": "Select material techniques by distance and GPU capabilities"
@@ -3440,7 +3444,8 @@
           "date": "2026-11-25"
         },
         {
-          "status": "in-progress",
+          "status": "done",
+          "date": "2026-11-25",
           "id": "renderer-sdk",
           "title": "Доступ к рендереру из Python, C# и Java",
           "titleEn": "Use the renderer from Python, C# and Java"
