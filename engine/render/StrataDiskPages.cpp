@@ -46,6 +46,7 @@ bool get32(std::istream& in,uint32_t& value) {
     }
     return true;
 }
+#if !defined(__EMSCRIPTEN__)
 bool get64(std::istream& in,uint64_t& value) {
     value=0;
     for(unsigned i=0;i<8;++i) {
@@ -55,6 +56,7 @@ bool get64(std::istream& in,uint64_t& value) {
     }
     return true;
 }
+#endif
 void mix(uint64_t& hash,uint32_t value) {
     for(unsigned k=0;k<4;++k){
         hash^=uint8_t(value>>(8*k));

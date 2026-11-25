@@ -3723,7 +3723,7 @@ if(AIVERSE_BUILD_TESTS AND AIVERSE_PLATFORM STREQUAL "linux"
     target_include_directories(aiverse_gles_texture_array_gpu_test
         PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(aiverse_gles_texture_array_gpu_test
-        PRIVATE aiverse_runtime EGL GLESv2)
+        PRIVATE aiverse_client_runtime EGL GLESv2)
     add_test(NAME gles_texture_array_gpu COMMAND aiverse_gles_texture_array_gpu_test)
     set_tests_properties(gles_texture_array_gpu PROPERTIES
         LABELS "TextureRHI;GLES;GPU" TIMEOUT 45)

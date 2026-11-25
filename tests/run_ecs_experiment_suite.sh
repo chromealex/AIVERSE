@@ -96,7 +96,7 @@ NEREID_WORLD_MANIFEST=(
 # Renderer/JSON contracts do not create a graphics Device or window.
 compile_run ecs-nereid-renderer-contract -Ilibraries/include \
     tests/ecs_nereid_renderer_contract_test.cpp "${NEREID_CORE[@]}" \
-    "${NEREID_WORLD_MANIFEST[@]}"
+    "${NEREID_WORLD_MANIFEST[@]}" engine/render/MeshBuilder.cpp
 compile_run ecs-nereid-confluence-contract -Ilibraries/include \
     tests/ecs_nereid_confluence_contract_test.cpp "${NEREID_CORE[@]}" \
     "${NEREID_WORLD_MANIFEST[@]}"

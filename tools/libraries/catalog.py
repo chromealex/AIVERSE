@@ -20,7 +20,7 @@ def main():
             assert p['id'] not in ids, 'duplicate id'
             ids.add(p['id'])
             assert p['layer'] in ('simulation', 'presentation', 'tools')
-            assert p['status'] in ('cpp-foundation', 'engine-reference', 'cpp-subsystem', 'tool-workflow')
+            assert p['status'] in ('cpp-foundation', 'engine-reference', 'cpp-subsystem', 'tool-workflow', 'experimental')
             for field in ('source', 'skill'):
                 assert (ROOT/p[field]).is_file(), p[field]
             assert f"name: {Path(p['skill']).parent.name}\n" in (ROOT/p['skill']).read_text()

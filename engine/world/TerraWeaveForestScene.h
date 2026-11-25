@@ -9,7 +9,7 @@
 #include "engine/world/TerraWeaveExclusions.h"
 #include "engine/world/TerraWeaveVegetationSoil.h"
 #include <algorithm>
-#include <atomic>
+#include "engine/core/PublishedSharedSnapshot.h"
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -211,7 +211,7 @@ public:
             for (const world::Cell& cell : asyncCatalog_)
                 async_->remove(cell, [](world::Cell) {});
             asyncCatalog_.clear();
-            std::atomic_store_explicit(&asyncSnapshot_, captureSnapshot(), std::memory_order_release);
+            asyncSnapshot_.store(captureSnapshot());
         }
     }
 
@@ -731,7 +731,7 @@ public:
             async_.reset();
             asyncCatalog_.clear();
         }
-        std::atomic_store_explicit(&asyncSnapshot_, std::shared_ptr<const GenerationSnapshot>{}, std::memory_order_release);
+        asyncSnapshot_.store({});
     }
     ~TerraWeaveForestScene() { shutdownAsync(); }
     const ArborForestAdapter& adapter() const { return adapter_; }
@@ -855,7 +855,7 @@ private:
         residentStarted_ = true;
         observer_ = camera;
         if (!async_) {
-            std::atomic_store_explicit(&asyncSnapshot_, captureSnapshot(), std::memory_order_release);
+            asyncSnapshot_.store(captureSnapshot());
             world::StreamLimits limits;
             limits.residentChunks = settings_.maxResidentChunks;
             limits.residentBytes = asyncReservation_ * settings_.maxResidentChunks;
@@ -864,7 +864,7 @@ private:
                 limits, asyncReservation_ * (settings_.maxPendingJobs + 1u),
                 settings_.maxPendingJobs,
                 [this](world::Cell cell) -> world::AsyncChunkStream::Payload {
-                    const auto snap = std::atomic_load_explicit(&asyncSnapshot_, std::memory_order_acquire);
+                    const auto snap = asyncSnapshot_.load();
                     if (!snap) return {};
                     auto result = std::make_shared<PreparedPatch>();
                     result->revision = snap->revision;
@@ -960,10 +960,8 @@ private:
     bool residentStarted_ = false;
     bool gpuUploaded_ = false;
     size_t asyncReservation_ = 0;
-    // C++20 atomic<shared_ptr> specialization is unavailable in some
-    // Apple libc++ SDK configurations. Atomic shared_ptr free functions
-    // provide the same acquire/release snapshot publication semantics.
-    std::shared_ptr<const GenerationSnapshot> asyncSnapshot_{};
+    // Publish immutable snapshots across the owner and worker threads.
+    PublishedSharedSnapshot<GenerationSnapshot> asyncSnapshot_;
     std::unique_ptr<world::AsyncChunkStream> async_;
     std::set<world::Cell> asyncCatalog_;
 };

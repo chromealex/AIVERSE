@@ -383,7 +383,6 @@ int32_t onKey(AInputEvent* ev) {
 
 // Mouse / touchpad (Chromebooks, Samsung DeX, OTG mice): real buttons, hover and wheel instead of touches.
 int32_t onMouse(AInputEvent* ev) {
-    auto& S = state();
     const int32_t code = AMotionEvent_getAction(ev) & AMOTION_EVENT_ACTION_MASK;
     Event e;
     e.x = AMotionEvent_getX(ev, 0) / g_density; e.y = AMotionEvent_getY(ev, 0) / g_density;
@@ -416,7 +415,6 @@ int32_t onInput(android_app*, AInputEvent* ev) {
     if (AInputEvent_getType(ev) == AINPUT_EVENT_TYPE_KEY) return onKey(ev);
     if (AInputEvent_getType(ev) != AINPUT_EVENT_TYPE_MOTION) return 0;
     if (AMotionEvent_getToolType(ev, 0) == AMOTION_EVENT_TOOL_TYPE_MOUSE) return onMouse(ev);
-    auto& S = state();
     int32_t action = AMotionEvent_getAction(ev);
     int32_t code = action & AMOTION_EVENT_ACTION_MASK;
     size_t idx = size_t((action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK) >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT);

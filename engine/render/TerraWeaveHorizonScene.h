@@ -15,6 +15,7 @@
 #include "engine/render/Renderer3D.h"
 #include "engine/world/AsyncChunkStream.h"
 #include "engine/render/TerraWeaveForestAdapter.h"
+#include "engine/core/PublishedSharedSnapshot.h"
 #include <atomic>
 #include <cstdint>
 #include <chrono>
@@ -119,7 +120,7 @@ public:
                                 settings_.middleTileCm/2;
                 // Retain a coherent generation+surface snapshot per job.
                 // An old generation is never served from the current cache.
-                const auto generation=std::atomic_load_explicit(&sources_,std::memory_order_acquire);
+                const auto generation=sources_.load();
                 const uint64_t revision=generation?generation->revision:0;
                 result->sourceRevision=revision; // reject obsolete prepared jobs
                 std::shared_ptr<const HorizonBake> baked;
@@ -194,7 +195,7 @@ public:
                     }
                     if(settings_.maxCachedRegions){
                         std::lock_guard lock(cacheMutex_);
-                        if(std::atomic_load_explicit(&sources_,std::memory_order_acquire)==generation){
+                        if(sources_.load()==generation){
                             cache_[cell]={baked,revision,++cacheTick_};
                             while(cache_.size()>settings_.maxCachedRegions){
                                 auto old=cache_.begin();
@@ -238,7 +239,7 @@ public:
             generation->previous=activeBake_;
             generation->edited.assign(edited.begin(),edited.end());
         }
-        std::atomic_store_explicit(&sources_,std::shared_ptr<const SourceGeneration>(generation),std::memory_order_release);
+        sources_.store(std::move(generation));
         {
             std::lock_guard lock(cacheMutex_);
             cache_.clear(); // old source generation must never escape
@@ -1115,9 +1116,8 @@ private:
     int64_t originXcm_=0,originZcm_=0;
     size_t clusters_=0,terrainQuads_=0;
     HorizonRuntimeStats runtime_{};
-    // Portable to Apple libc++ where atomic<shared_ptr> is unavailable.
-    // Worker snapshots still use acquire/release atomic shared_ptr free functions.
-    std::shared_ptr<const SourceGeneration> sources_{};
+    // Coherent immutable generations, portable to Apple libc++.
+    PublishedSharedSnapshot<SourceGeneration> sources_;
     uint64_t sourceRevision_=0; // update thread only
     mutable std::mutex cacheMutex_;
     std::map<world::Cell,CacheEntry> cache_;
