@@ -402,11 +402,6 @@ void VulkanDevice::endCompute() {
 bool VulkanDevice::readBufferAsync(BufferHandle handle,size_t size,BufferReadFn callback){
     return readBufferRangeAsync(handle,0,size,std::move(callback));
 }
-bool VulkanDevice::readBufferRangeAsync(BufferHandle handle,size_t offset,size_t size,
-                                   BufferReadFn callback) {
-    return readBufferRangeAsync(handle,0,size,std::move(callback));
-}
-
 bool VulkanDevice::readBufferRangeAsync(BufferHandle handle,size_t offset,size_t size,BufferReadFn callback) {
     if(!healthy_ || !recording_ || inPass_ || activeComputeId_ ||
        !callback || !handle.valid() || !size || (offset&3u) || (size&3u) || size>(64u*1024u) ||

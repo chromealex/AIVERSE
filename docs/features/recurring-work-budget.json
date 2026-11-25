@@ -20,7 +20,8 @@
     "tests/libraries/runtime_tests.cpp",
     "tests/simulation_budget_mcp_test.py",
     "tests/tests_traffic.inc",
-    "tools/mcp/audit_registry.py"
+    "tools/mcp/audit_registry.py",
+    "engine/sim/RecurringWork.h"
   ],
   "traits": {
     "editable": true,
@@ -38,7 +39,7 @@
     },
     "architecture": {
       "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "note": "Remove the upward engine-to-library dependency while keeping the public library API and the original deterministic cursor logic.",
       "evidence": [
         "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
       ]

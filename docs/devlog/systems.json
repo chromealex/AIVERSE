@@ -1922,8 +1922,8 @@
           "id": "world-recurring-simulation-budget",
           "title": "Бюджет фоновой симуляции",
           "titleEn": "Recurring simulation budget",
-          "text": "Детерминированные порции обновлений и настройка бюджета дискретных решений населения.",
-          "textEn": "Deterministic recurring work slices and configurable population decision budget.",
+          "text": "Детерминированные порции обновлений и настройка бюджета дискретных решений населения. Общий планировщик доступен движку и библиотеке без обратной зависимости.",
+          "textEn": "Deterministic recurring work slices and configurable population decision budget. Share the scheduler between engine and library without an upward dependency.",
           "status": "in-progress"
         },
         {
