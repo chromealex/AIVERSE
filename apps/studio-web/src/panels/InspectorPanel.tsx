@@ -179,12 +179,13 @@ export default function InspectorPanel({ inspector: primary, selected, busy, ins
   };
   const setMany = (component: StudioInspectorComponent, values: Record<string, FieldValue> | null) => {
     if (!inspector || !values || !Object.keys(values).length) return;
-    void run(() => invoke('studio.setProperties', targetIds
-      ? { entityIds: targetIds, componentId: component.id, values }
-      : { entityId: inspector.id, componentId: component.id, values }));
+    void run(() => invoke('studio.setProperties', {
+      ...(targetIds ? { entityIds: targetIds } : { entityId: inspector.id }),
+      scope: component.scope, componentId: component.id, values,
+    }));
   };
   const change = (component: StudioInspectorComponent, key: string, value: FieldValue) => {
-    if (targetIds) setMany(component, { [key]: value });
+    if (targetIds || component.scope) setMany(component, { [key]: value });
     else void changeProperty(key, value, component.id);
   };
   const menuItems = (component: StudioInspectorComponent): StudioMenuItem[] => [

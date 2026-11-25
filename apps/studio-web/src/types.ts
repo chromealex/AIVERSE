@@ -28,7 +28,7 @@ export interface StudioFacialPreviewBinding {
 }
 
 export type StudioProperty = import('./propertyLogic').FieldDescriptor;
-export interface StudioInspectorComponent { id: string; title: string; note?: string; properties: StudioProperty[] }
+export interface StudioInspectorComponent { scope?: StudioGraphDocumentScope; id: string; title: string; note?: string; properties: StudioProperty[] }
 /** Entity header + its document components (Transform, Mesh Renderer, Light…). */
 /** Add Component entry: `native` adds via studio.componentAdd; `light`/`water` run an editor action. */
 export interface StudioComponentCatalogItem { id: string; title: string; group: string; hint: string; action: 'native' | 'light' | 'water'; available: boolean; reason?: string }
@@ -584,7 +584,7 @@ export interface StudioParams {
   'studio.componentCatalog': { entityId: string };
   'studio.componentAdd': { entityId: string; componentId: string };
   'studio.componentRemove': { entityId: string; componentId: string };
-  'studio.setProperties': { entityId?: string; entityIds?: string[]; componentId?: string; values: Record<string, string | number | boolean> };
+  'studio.setProperties': { scope?: StudioGraphDocumentScope; entityId?: string; entityIds?: string[]; componentId?: string; values: Record<string, string | number | boolean> };
   'studio.entitiesDelete': { entityIds: string[] };
   'studio.entitiesDuplicate': { entityIds: string[] };
   'studio.entityFlags': { entityIds: string[]; hidden?: boolean; locked?: boolean };

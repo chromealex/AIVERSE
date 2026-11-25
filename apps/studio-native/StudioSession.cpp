@@ -670,8 +670,20 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
             for(const auto& descriptor:editor::documentComponents(ws_.map,node.ref)) {
                 if(descriptor.kind==editor::DocumentComponentKind::Transform)continue;
                 Json data,fields=Json::array();
-                if(editor::readDocumentComponent(ws_.map,node.ref,descriptor.kind,data))
+                if(editor::readDocumentComponent(ws_.map,node.ref,descriptor.kind,data)){
+                    if(std::string_view(descriptor.id)=="BoxCollider" && data["min"].size()==3 && data["max"].size()==3){
+                        for(const auto* bound:{"min","max"})for(size_t axis=0;axis<3;++axis){
+                            const auto key=std::string(bound)+"XYZ"[axis];
+                            const auto label=std::string(bound==std::string("min")?"Minimum ":"Maximum ")+"XYZ"[axis];
+                            fields.push(numericProp(key.c_str(),label.c_str(),data[bound][axis]));
+                        }
+                        auto box=component(descriptor.id,descriptor.title,fields);
+                        box.set("scope",graphDocumentScope());
+                        components.push(std::move(box));
+                        continue;
+                    }
                     for(const auto& [key,item]:data.members())fields.push(genericField(key,item));
+                }
                 components.push(component(descriptor.id,descriptor.title,fields,"Read-only in Studio."));
             }
         }
@@ -5178,7 +5190,38 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 for(const auto& id:targets)if(locked_.contains(id)||hidden_.contains(id))throw std::runtime_error("Transform requires editable entity");
             }
             const std::string componentId=params.getStr("componentId");
-            if(lib::worldprocess::linked::supports(componentId) ||
+            if(componentId=="BoxCollider"){
+                if(!ws_.map.data.worldSpace || !sameDocumentScope(params["scope"],graphDocumentScope()))
+                    throw std::runtime_error("Map changed. Reload collider properties.");
+                Json staged=ws_.map.toJson();
+                auto& colliders=staged.member("colliders");
+                std::set<std::string> remaining(targets.begin(),targets.end());
+                if(remaining.size()!=targets.size())throw std::runtime_error("Duplicate collider target.");
+                for(size_t i=0;i<colliders.size();++i){
+                    const auto id=nodeId(ws_.map,editor::DocumentEntityRef::fpsCollider(i));
+                    if(!remaining.erase(id))continue;
+                    auto& box=colliders.at(i);
+                    if(locked_.contains(id) || hidden_.contains(id) || box.has("yaw") ||
+                       box["min"].size()!=3 || box["max"].size()!=3)
+                        throw std::runtime_error("Select an editable axis-aligned box.");
+                    for(const auto& [key,value]:values.members()){
+                        const auto axis=key.size()==4?std::string_view("XYZ").find(key.back()):std::string_view::npos;
+                        const auto bound=key.substr(0,3);
+                        if((bound!="min" && bound!="max") || axis==std::string_view::npos || !value.isNumber())
+                            throw std::runtime_error("Invalid collider coordinate.");
+                        box.member(bound).at(axis)=value;
+                    }
+                    for(size_t axis=0;axis<3;++axis)
+                        if(box["min"][axis].toDouble()>=box["max"][axis].toDouble())
+                            throw std::runtime_error("Each minimum must be less than its maximum.");
+                }
+                if(!remaining.empty())throw std::runtime_error("Collider no longer exists.");
+                if(staged!=ws_.map.toJson()){
+                    Json args=Json::object();args.set("map",std::move(staged));
+                    const auto applied=ws_.call("actor_set",args,"studio");
+                    if(applied.has("error"))throw std::runtime_error(applied.getStr("error"));
+                }
+            }else if(lib::worldprocess::linked::supports(componentId) ||
                lib::worldprocess::extendedLinks::supports(componentId)) {
                 // Validate the complete new component on every target BEFORE
                 // mutating the map. Switching both bond ends in one paste
