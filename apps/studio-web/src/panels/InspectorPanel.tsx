@@ -256,6 +256,11 @@ export default function InspectorPanel({ inspector: primary, selected, busy, ins
         {lock}
       </div>
       <div className="insp__meta"><span>{inspector.kind}</span><code title="Document entity ID">{inspector.id}</code></div>
+      {multi && ids?.length === 2 && snapshot?.graphDocument && typeof snapshot.selectedRoad === 'boolean' &&
+        <button type="button" disabled={busy || snapshot.mode !== 'edit'} className="au-btn"
+          onClick={() => void run(() => invoke('studio.selectedRoadSet', {
+            ids, scope: snapshot.graphDocument!, linked: !snapshot.selectedRoad
+          }))}>{snapshot.selectedRoad ? 'Remove movement road' : 'Connect with movement road'}</button>}
       {inspector.components.filter(c=>c.id==='EvolveRegion').map(component=><EcologyPresetEditor key="evolve-preset" busy={busy} apply={values=>setMany(component,values)}/>)}
       {inspector.components.map(component => <ComponentCard key={inspector.id + ':' + component.id}
         component={component} entityId={inspector.id} busy={busy}

@@ -688,8 +688,10 @@ bool MapDoc::toggleRoad(int a, int b) {
     if (a == b || a < 0 || b < 0 || a >= int(data.entities.size()) || b >= int(data.entities.size())) return false;
     beginEdit();
     auto key = std::make_pair(std::min(a, b), std::max(a, b));
-    auto it = std::find(data.roads.begin(), data.roads.end(), key);
-    if (it != data.roads.end()) { data.roads.erase(it); return false; }
+    auto end = std::remove_if(data.roads.begin(), data.roads.end(), [&](const auto& road) {
+        return road == key || (road.first == key.second && road.second == key.first);
+    });
+    if (end != data.roads.end()) { data.roads.erase(end, data.roads.end()); return false; }
     data.roads.push_back(key);
     for (int i : {a, b}) if (data.entities[size_t(i)].id.empty()) data.entities[size_t(i)].id = uniqueId(data.entities[size_t(i)].type);
     return true;

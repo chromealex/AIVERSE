@@ -149,6 +149,7 @@ private:
     std::vector<std::string> selection_;          // extra selected ids (primary kept in selected_)
     std::set<std::string> hidden_, locked_;
     void selectOnly(const std::string& id) { selected_=id; selection_.clear(); }
+    bool selectedRoad(const std::vector<std::string>& ids, int& a, int& b, bool& linked) const;
     void clearSelection() { selected_.clear(); selection_.clear(); }
     bool documentHas(const std::string& id) const;
     void dropOrdinalFlags(); // positional ids shift after structural edits

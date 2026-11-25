@@ -358,6 +358,18 @@ std::vector<std::string> StudioSession::selectedObjectIds() const {
     out.push_back(selected_);
     return out;
 }
+bool StudioSession::selectedRoad(const std::vector<std::string>& ids, int& a, int& b, bool& linked) const {
+    const auto& map = ws_.map;
+    if (ids.size() != 2 || map.data.worldSpace || map.data.planet()) return false;
+    for (const auto& id : ids) if (locked_.contains(id) || hidden_.contains(id)) return false;
+    a = studioMapEntityIndex(ids[0], map);
+    b = studioMapEntityIndex(ids[1], map);
+    if (a < 0 || b < 0 || a == b) return false;
+    linked = std::any_of(map.data.roads.begin(), map.data.roads.end(), [&](const auto& road) {
+        return (road.first == a && road.second == b) || (road.first == b && road.second == a);
+    });
+    return true;
+}
 void StudioSession::dropOrdinalFlags() {
     auto prune=[](std::set<std::string>& set){for(auto it=set.begin();it!=set.end();)it=it->rfind("entity:@",0)==0?std::next(it):set.erase(it);};
     prune(hidden_);prune(locked_);
@@ -1042,7 +1054,13 @@ Json StudioSession::snapshot() const {
         }
     }
     result.set("selectedId", valid ? str(selected_) : Json());
-    {Json ids=Json::array();for(const auto& id:selectedObjectIds())ids.push(str(id));result.set("selectedIds",std::move(ids));}
+    const auto selectedIds = selectedObjectIds();
+    Json ids = Json::array();
+    for (const auto& id : selectedIds) ids.push(str(id));
+    result.set("selectedIds", std::move(ids));
+    int roadA, roadB;
+    bool linked;
+    if (selectedRoad(selectedIds, roadA, roadB, linked)) result.set("selectedRoad", Json::fromBool(linked));
     result.set("properties", std::move(fields));
     result.set("components",std::move(componentViews));
     result.set("entityProperties",std::move(entityFields));
@@ -2324,7 +2342,7 @@ std::string StudioSession::historyLabel(const std::string& method, const Json& p
         return key.empty() ? "Edit "+(comp.empty()?std::string("properties"):comp) : "Set "+key;
     }
     static const std::pair<const char*,const char*> names[]={
-        {"studio.mapRegionName","Rename map region"},{"studio.mapArea","Edit map area"},{"studio.mapPlayer","Edit map players"},{"studio.mapPropertiesSet","Edit map properties"},{"studio.entityCreate","Create object"},{"studio.entityDelete","Delete"},{"studio.entitiesDelete","Delete"},
+        {"studio.selectedRoadSet","Edit movement road"},{"studio.mapRegionName","Rename map region"},{"studio.mapArea","Edit map area"},{"studio.mapPlayer","Edit map players"},{"studio.mapPropertiesSet","Edit map properties"},{"studio.entityCreate","Create object"},{"studio.entityDelete","Delete"},{"studio.entitiesDelete","Delete"},
         {"studio.entityDuplicate","Duplicate"},{"studio.entitiesDuplicate","Duplicate"},{"studio.entityMove","Reorder"},
         {"studio.assetPlace","Place asset"},{"studio.componentAdd","Add component"},{"studio.componentRemove","Remove component"},
         {"studio.lightAdd","Add light"},{"studio.lightUpdate","Edit light"},{"studio.lightDelete","Delete light"},
@@ -4243,6 +4261,27 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             ++graphDocumentEpoch_;
             clearSelection();hidden_.clear();locked_.clear();previewGraphTitle_.clear();previewGraphFactors_=Json();previewMaterialName_.clear();refreshMaterialPreview();
             reply.set("result",snapshot());
+        } else if (method == "studio.selectedRoadSet") {
+            const auto selection = selectedObjectIds();
+            const auto& ids = params["ids"];
+            int a, b;
+            bool linked;
+            if (ws_.project.dir.empty() || !sameDocumentScope(params["scope"], graphDocumentScope()) ||
+                !selectedRoad(selection, a, b, linked) || !ids.isArray() || ids.size() != 2 ||
+                ids[0].str() != selection[0] || ids[1].str() != selection[1])
+                throw std::runtime_error("Select the same two editable objects on the current map.");
+            if (params["linked"].boolean(false) != params["linked"].boolean(true))
+                throw std::runtime_error("Choose whether to connect the objects.");
+            if (linked != params["linked"].boolean()) {
+                Json args = Json::object();
+                args.set("a", num(a));
+                args.set("b", num(b));
+                const auto response = ws_.call("road_toggle", args, "studio");
+                if (response.has("error")) throw std::runtime_error(response.getStr("error"));
+                selection_ = {nodeId(ws_.map, editor::DocumentEntityRef::mapEntity(size_t(a)))};
+                selected_ = nodeId(ws_.map, editor::DocumentEntityRef::mapEntity(size_t(b)));
+            }
+            reply.set("result", snapshot());
         } else if(method=="studio.mapRegions" || method=="studio.mapRegionName"){
             if(ws_.project.dir.empty() || !sameDocumentScope(params["scope"],graphDocumentScope()))
                 throw std::runtime_error("Map changed. Reload the region.");
