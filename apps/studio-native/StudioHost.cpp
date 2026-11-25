@@ -106,7 +106,7 @@ void StudioHost::shutdown() {
     game_.reset(); // hosted client and its device retire before the native surface
     if (renderThread_) {
         // The Scene and its GPU resources are released on their owner thread, then the thread stops.
-        try { renderThread_->invoke([&] { materialSurface_.renderer.reset(); shaderSurface_.renderer.reset(); fxPreview_.reset(); preview_.reset(); }); } catch (const std::exception&) {}
+        try { renderThread_->invoke([&] { facialRigSurface_.renderer.reset(); materialSurface_.renderer.reset(); shaderSurface_.renderer.reset(); fxPreview_.reset(); preview_.reset(); }); } catch (const std::exception&) {}
         renderThread_->stop();
         renderThread_.reset();
     }
@@ -299,8 +299,8 @@ void StudioHost::gameEvent(const platform::Event& event) {
 }
 void StudioHost::surfaceDetached(StudioSurface surface) {
     if (surface == StudioSurface::Scene) { placement_ = {}; readyEmitted_ = false; }
-    else if(surface==StudioSurface::Material || surface==StudioSurface::Shader) {
-        auto& asset=surface==StudioSurface::Material?materialSurface_:shaderSurface_;
+    else if(surface==StudioSurface::Material || surface==StudioSurface::Shader || surface==StudioSurface::FacialRig) {
+        auto& asset=surface==StudioSurface::FacialRig?facialRigSurface_:surface==StudioSurface::Material?materialSurface_:shaderSurface_;
         asset.placement={};
         if(asset.renderer)onScene([&]{asset.renderer.reset();});
     }
@@ -385,6 +385,32 @@ void StudioHost::pollAgentRequests() {
         }
         onScene([&] { preview_->captureFacialThumbnail((out / (id + ".png")).string(), false); });
     } catch (const std::exception&) {}
+}
+void StudioHost::tickFacialRigPreview() {
+    auto& asset=facialRigSurface_;
+    auto& binding=session_->rigPreviewBinding();
+    if(!binding.bound())return;
+    if(!asset.placement.visible || !platform_.surfaceDrawable(StudioSurface::FacialRig)){
+        binding.setGpuStatus(false,"Facial Rig preview hidden");
+        return;
+    }
+    try {
+        if(!renderThread_){
+            const char* threaded=std::getenv("AIVERSE_STUDIO_RENDER_THREAD");
+            renderThread_=std::make_unique<StudioRenderThread>([this]{renderSceneFrame();},!(threaded&&std::string(threaded)=="0"));
+        }
+        onScene([&]{platform_.sceneThreadScope([&]{
+            if(!asset.renderer)asset.renderer=std::make_unique<StudioScene>(platform_.createDevice(StudioSurface::FacialRig));
+            const auto& ws=session_->workspace();
+            asset.renderer->frame(asset.placement.pixelsW,asset.placement.pixelsH,ws.map,false,"","",Json(),0,
+                float(ws.project.rules.levelHeight.toDouble()),ws.project.dir,ws.project.rulesJson,&binding);
+            binding.setGpuStatus(asset.renderer->facialReady(),asset.renderer->facialError());
+        });});
+    }catch(const std::exception& e){
+        binding.setGpuStatus(false,e.what());
+        platform_.log(std::string("Studio facial rig preview: ")+e.what());
+        surfaceDetached(StudioSurface::FacialRig);
+    }
 }
 void StudioHost::tickAssetPreview(StudioSurface surface) {
     const bool shader=surface==StudioSurface::Shader;
@@ -514,6 +540,7 @@ void StudioHost::tick() {
     }
     tickAgentScreenshot();
     pollAgentRequests();
+    tickFacialRigPreview();
     tickAssetPreview(StudioSurface::Material);
     tickAssetPreview(StudioSurface::Shader);
     tickFx(); // dedicated native FX drawable continues even if Scene is hidden
@@ -1539,9 +1566,9 @@ void StudioHost::applyViewport(const Json& params) {
         else if (game_) game_->suspend();
         return;
     }
-    if(id=="shader"||id=="material") {
-        const auto surface=id=="shader"?StudioSurface::Shader:StudioSurface::Material;
-        auto& asset=id=="shader"?shaderSurface_:materialSurface_;
+    if(id=="shader"||id=="material"||id=="facialRig") {
+        const auto surface=id=="facialRig"?StudioSurface::FacialRig:id=="shader"?StudioSurface::Shader:StudioSurface::Material;
+        auto& asset=id=="facialRig"?facialRigSurface_:id=="shader"?shaderSurface_:materialSurface_;
         NativeViewportPlacement placed;
         if(platform_.placeSurface(surface,rect,placed)){
             asset.placement=placed;

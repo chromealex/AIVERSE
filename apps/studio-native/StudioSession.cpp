@@ -583,6 +583,7 @@ Json StudioSession::openProject(const std::string& path) {
     (void)studioContentRoot(ws_.project.dir);
     pendingAssetTransfer_.reset();
     clearSelection();hidden_.clear();locked_.clear();
+    rigPreview_.reset();
     facialPreview_.reset(); // project identity may change; never reuse prior GUID
     previewGraphTitle_.clear();previewGraphFactors_=Json();previewMaterialName_.clear();
     refreshMaterialPreview();
@@ -1512,16 +1513,12 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 // A clear operation detaches all staged controls without
                 // touching the Scene GPU device or the document's saved rig.
                 if(guid.empty()) {
-                    facialPreview_.reset();
-                    reply.set("result",facialPreview_.describe());
+                    rigPreview_.reset();
+                    reply.set("result",rigPreview_.describe());
                 } else {
                     StudioAssetCatalog catalog(ws_.project.dir);
                     catalog.rebuild();
-                    // Facial mode takes precedence over a previously opened
-                    // material sphere, without mutating map/gameplay data.
-                    Json result=facialPreview_.bind(catalog,guid,params["rig"]);
-                    previewGraphTitle_.clear();previewGraphFactors_=Json();previewMaterialName_.clear();
-                    refreshMaterialPreview();
+                    Json result=rigPreview_.bind(catalog,guid,params["rig"]);
                     reply.set("result",std::move(result));
                 }
             } else if(method=="studio.facialPreviewControls") {
@@ -1529,11 +1526,11 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 if(!revision.isNumber() || revision.toDouble()<0 ||
                    revision.toDouble()!=double(revision.integer()))
                     throw std::runtime_error("Invalid facial selection revision");
-                reply.set("result",facialPreview_.controls(
+                reply.set("result",rigPreview_.controls(
                     uint64_t(revision.integer()),params["values"],
                     params["vectors"]));
             } else {
-                reply.set("result",facialPreview_.describe());
+                reply.set("result",rigPreview_.describe());
             }
         } else if (method == "studio.facialRigList" ||
                    method == "studio.facialRigGet" ||

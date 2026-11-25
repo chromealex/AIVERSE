@@ -11,7 +11,7 @@ import './SpectraDockViewport.css';
  * No fake browser pixels, WebGL duplicate or bitmap transport.
  */
 export default function SpectraDockViewport({id='fx',label='Native GPU particle preview'}:{
-  id?:'fx'|'shader'|'material';label?:string
+  id?:'fx'|'shader'|'material'|'facialRig';label?:string
 }={}){
   const ref=useRef<HTMLDivElement>(null);
   const native=nativeConnected();
@@ -26,7 +26,7 @@ export default function SpectraDockViewport({id='fx',label='Native GPU particle 
         frame=0;
         if(disposed)return;
         const viewport=element.getBoundingClientRect();
-        const scroller=element.closest('.spectra-di__editor,.graph-inspector,.materials-editor');
+        const scroller=element.closest('.spectra-di__editor,.graph-inspector,.materials-editor,.au-panel__body');
         const clipped=fxViewportRect(viewport,
           scroller?.getBoundingClientRect()??viewport,
           window.devicePixelRatio||1,

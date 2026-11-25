@@ -40,6 +40,7 @@ public:
     const StudioWindState& windPreview() const { return wind_; }
     void setWindSceneStats(Json stats) { windSceneStats_ = std::move(stats); }
     Json saveMapAs(const std::string& path); // trusted native Save panel only
+    StudioFacialPreviewBinding& rigPreviewBinding() noexcept { return rigPreview_; }
     const StudioFacialPreviewBinding& facialPreviewBinding() const noexcept {
         return facialPreview_;
     }
@@ -118,7 +119,7 @@ private:
     void clearSelection() { selected_.clear(); selection_.clear(); }
     bool documentHas(const std::string& id) const;
     void dropOrdinalFlags(); // positional ids shift after structural edits
-    StudioFacialPreviewBinding facialPreview_;
+    StudioFacialPreviewBinding facialPreview_, rigPreview_;
     vivid::HumanCreatorWorkbench humanCreator_;
     SculptBrush sculpt_;
     std::map<std::string,Json> wardrobeInfoCache_; // humanWardrobeInfo by path+mtime

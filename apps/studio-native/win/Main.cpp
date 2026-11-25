@@ -225,7 +225,7 @@ public:
                                 width, height, nullptr, nullptr, instance, nullptr);
         if (!main_) { fatal("The main window could not be created"); return 1; }
         extendClientOverCaption(main_);
-        for (int i = 0; i < 5; ++i) {
+        for (int i = 0; i < 6; ++i) {
             surfaces_[i] = CreateWindowExW(0, kSurfaceClass, nullptr, WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN, 0, 0, 16, 16,
                                            main_, nullptr, instance, nullptr);
             SetWindowLongPtrW(surfaces_[i], GWLP_USERDATA, LONG_PTR(i));
@@ -927,7 +927,7 @@ private:
             if ((*it)->hwnd == hwnd) { floats_.erase(it); return; }
     }
     void releaseSurfaces(HWND host) {
-        for (int i = 0; i < 5; ++i) {
+        for (int i = 0; i < 6; ++i) {
             HWND child = surfaces_[i];
             if (!child || GetParent(child) != host) continue;
             ShowWindow(child, SW_HIDE);
@@ -1294,7 +1294,7 @@ private:
     std::string project_;
     bool dev_ = false;
     HWND main_ = nullptr;
-    HWND surfaces_[5] = {}; // Scene, Game, FX
+    HWND surfaces_[6] = {}; // Scene, Game, FX
     Com<ICoreWebView2Controller> controller_;
     Com<ICoreWebView2> web_;
     std::unique_ptr<studio::StudioHost> core_;

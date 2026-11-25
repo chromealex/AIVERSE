@@ -227,6 +227,15 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(!call("studio.shaderGraphPreview",preview.dump().c_str()).has("error"));
        AIVERSE_TEST_CHECK(session.previewMaterialName()=="stone" && session.previewMaterialRevision()==materialRevision);
        AIVERSE_TEST_CHECK(session.previewGraphTitle()=="Shader Graph / studio_tint");
+       Json rigRequest=Json::parse(R"({"rig":{"version":1,"morphs":[{"parameter":"jawOpen","node":"Face","target":"jawOpen"}],"rig":[]}})");
+       const auto rigAssets=call("studio.assets");
+       for(const auto& asset:rigAssets["result"]["files"].items())
+           if(asset.getStr("path")=="rock.glb")rigRequest.set("guid",asset["guid"]);
+       AIVERSE_TEST_CHECK(!call("studio.facialPreviewBind",rigRequest.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(session.rigPreviewBinding().bound()&&!session.facialPreviewBinding().bound());
+       AIVERSE_TEST_CHECK(session.previewGraphTitle()=="Shader Graph / studio_tint"&&session.previewMaterialName()=="stone");
+       AIVERSE_TEST_CHECK(!call("studio.facialPreviewBind",R"({"guid":""})").has("error"));
+       AIVERSE_TEST_CHECK(!session.rigPreviewBinding().bound());
        auto particle=Json::parse(R"({"version":1,"domain":"particle","nodes":[{"id":"age","op":"particleAge01"}],"outputs":{"color":"age"}})");
        preview.set("graph",particle);
        AIVERSE_TEST_CHECK(!call("studio.shaderGraphPreview",preview.dump().c_str()).has("error"));

@@ -22,6 +22,8 @@ const defaultMorph=():FacialMorphBinding=>({
   gain:1, bias:0, halfLife:0.06, blend:'override'
 });
 
+import SpectraDockViewport from './SpectraDockViewport';
+
 export default function FacialRigPanel({projectPath}:{projectPath:string}) {
   const connected=nativeConnected();
   const [names,setNames]=useState<string[]>([]);
@@ -254,6 +256,7 @@ export default function FacialRigPanel({projectPath}:{projectPath:string}) {
           {binding?.bound&&<StudioBadge>{binding.path}</StudioBadge>}
         </div>
         {binding?.bound&&<>
+          <SpectraDockViewport id="facialRig" label="Facial rig GPU preview"/>
           <p className="facial-footnote">Native binding revision {binding.revision}.
             Input changes are staged until explicitly sent.</p>
           <div className="facial-native-controls">
@@ -300,15 +303,12 @@ export default function FacialRigPanel({projectPath}:{projectPath:string}) {
         {binding?.runtimeReady?
           <StudioAlert tone="success" title="Native facial frame submitted">
             <span className="facial-preview-note"><Eye size={14}/>
-              The actual imported model is rendered through Studio's Metal Renderer3D
-              using MotionWeave's facial rig and one Animator pose.
-              This is not yet a passed pixel, Vulkan/GLES or performance test.
+              The imported model is using the current facial controls.
             </span>
           </StudioAlert>:
           <StudioAlert tone="warning" title="Native facial preview">
             {binding?.reason??'Choose a model, then bind the facial draft.'}
-            The renderer reports readiness only after a real Metal frame;
-            no synthetic browser character is displayed.
+
           </StudioAlert>}
       </StudioSection>
       {error&&<StudioAlert tone="danger" title="Cannot complete action">{error}</StudioAlert>}
