@@ -1,0 +1,17 @@
+{
+  "id": "org.aiverse.demos.selection_targeting",
+  "name": "Selection and targeting",
+  "version": "1.0",
+  "module": "game",
+  "rules": "rules.json",
+  "maps": [
+    {
+      "file": "maps/range.json",
+      "title": "Training range"
+    }
+  ],
+  "selectionShortcut": {
+    "type": "scout",
+    "label": "Select scout"
+  }
+}

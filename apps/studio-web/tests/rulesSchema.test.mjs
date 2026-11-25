@@ -22,3 +22,11 @@ test('inputs: blank inherits, numbers validated', () => {
   assert.equal(parseRuleInput(f, 'abc').ok, false);
   assert.deepEqual(parseRuleInput({ ...f, type: 'boolean' }, true), { ok: true, value: true });
 });
+
+test('selection flag defaults on and preserves inherited false', () => {
+  const row = (own, resolved) => typeValues('tree', own, resolved, []).find(v => v.field.path === 'selectable');
+  assert.equal(row({}, {}).field.defaultValue, true);
+  assert.equal(row({}, { selectable: false }).resolved, false);
+  assert.equal(row({}, { selectable: false }).inherited, true);
+  assert.equal(row({ selectable: true }, { selectable: true }).own, true);
+});

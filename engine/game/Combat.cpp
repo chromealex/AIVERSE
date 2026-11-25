@@ -10,6 +10,8 @@
 #include "engine/mechanics/MultiTargetSelection.h"
 #include <algorithm>
 #include <map>
+#include <limits>
+#include <tuple>
 
 namespace aiverse::game {
 using namespace detail;
@@ -65,6 +67,7 @@ void GameCore::sysTargeting(Simulation& sim) {
         const bool hf = gs.grid.hf;
         Entity best;
         Fixed bestD{};
+        std::tuple<bool, int, uint64_t> bestScanKey;
         // elliptical range (weapon rangeAspect): the sight ellipse squashed along z
         const Fixed aspect = t.weapons.empty() ? kOne : t.weapons[0].rangeAspect;
         gs.hash.query(tr.pos, sight, [&](Entity cand) {
@@ -86,6 +89,13 @@ void GameCore::sysTargeting(Simulation& sim) {
             if (rules_.heights.blockVision && !(ct.layer & kLayerAir) && (hf || levelAt(sim, cp) > myLevel) && !isVisible(sim, o.player, cp) &&
                 !(radarAcq && sensors->tracked(sim, cand, o.player))) return;
             if (doomed(cand)) return;   // targeting.overkill: shots in flight already kill it
+            if (rules_.acquisitionOrder == AcquisitionOrder::RowMajor) {
+                // Compare map cells, independent of spatial-hash bucket size and traversal.
+                const int cell = gs.grid.cellOf(cp);
+                const auto key = std::make_tuple(ct.weapons.empty(), cell < 0 ? std::numeric_limits<int>::max() : cell, cand.packed());
+                if (!best.valid() || key < bestScanKey) { best = cand; bestScanKey = key; }
+                return;
+            }
             if (ct.weapons.empty()) d += Fixed::fromInt(4); // prefer things that can shoot back
             if (!best.valid() || d < bestD) { best = cand; bestD = d; }
         });

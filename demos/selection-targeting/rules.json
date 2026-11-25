@@ -1,0 +1,58 @@
+{
+  "ai": {
+    "controller": "scripted"
+  },
+  "victory": {
+    "mode": "score",
+    "seconds": 1800,
+    "keyLoses": false
+  },
+  "fogOfWar": {
+    "mode": "none"
+  },
+  "targeting": {
+    "acquireOrder": "rowMajor"
+  },
+  "types": {
+    "scout": {
+      "name": "Scout",
+      "sight": 20,
+      "move": {
+        "speed": 2
+      },
+      "weapons": [
+        {
+          "range": 16,
+          "damage": 1,
+          "cooldown": 3,
+          "projectileSpeed": 4
+        }
+      ],
+      "view": {
+        "shape": "ranged"
+      }
+    },
+    "oak": {
+      "name": "Scenery oak",
+      "selectable": false,
+      "invulnerable": true,
+      "view": {
+        "shape": "tree"
+      }
+    },
+    "target": {
+      "name": "Training dummy",
+      "health": {
+        "max": 10000
+      },
+      "view": {
+        "shape": "generic",
+        "color": [
+          1,
+          0.6,
+          0.2
+        ]
+      }
+    }
+  }
+}

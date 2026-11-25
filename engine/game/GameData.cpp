@@ -240,8 +240,14 @@ Rules loadRules(const Json& j) {
         r.heights.rangePerLevel = h.getFx("rangePerLevel");
         r.heights.damagePerLevel = h.getFx("damagePerLevel");
     }
-    if (const Json& tg = j["targeting"]; tg.isObject()) r.overkill = tg.getBool("overkill", false);
-    else if (j.has("targeting")) throw std::runtime_error("targeting: expected an object");
+    if (const Json& tg = j["targeting"]; tg.isObject()) {
+        r.overkill = tg.getBool("overkill", false);
+        const std::string order = tg.getStr("acquireOrder", "nearest");
+        if (tg.has("acquireOrder") && !tg["acquireOrder"].isString())
+            fail("targeting.acquireOrder", "expected nearest or rowMajor");
+        if (order == "rowMajor") r.acquisitionOrder = AcquisitionOrder::RowMajor;
+        else if (order != "nearest") fail("targeting.acquireOrder", "expected nearest or rowMajor");
+    } else if (j.has("targeting")) throw std::runtime_error("targeting: expected an object");
 
     if (const Json& a = j["ai"]; a.isObject()) parseAIKnobs(a, r.ai, "ai");   // computer player knobs (agent-ai-terrain)
     if (const Json& tr = j["terrain"]; tr.isObject()) { // other keys of the block are visual (view)
@@ -456,6 +462,9 @@ Rules loadRules(const Json& j) {
             t.armorType = armorIdx(h.getStr("armorType", "none"));
         }
         t.invulnerable = tj.getBool("invulnerable", false);
+        if (tj.has("selectable") && tj["selectable"].type() != Json::Type::Bool)
+            fail(where + ".selectable", "expected a boolean");
+        t.selectable = tj.getBool("selectable", true);
         for (const Json& b : tj["walls"].items()) {
             if (!b.isArray() || b.size() != 4) fail(where + " walls", "[x, z, w, d]");
             t.walls.push_back({b[0].fx(), b[1].fx(), b[2].fx(), b[3].fx()});

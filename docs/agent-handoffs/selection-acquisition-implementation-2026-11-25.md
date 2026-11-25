@@ -1,0 +1,7 @@
+# Selection and acquisition implementation
+
+Code and project fixture: 7e2f3869856a8b583d11119c6a2beb36a2106c74 (feature/aiv198_selection_acquisition). Plans and initial manifests: ef240af5b. Paths are listed in docs/features/unit-selection-eligibility.json and docs/features/automatic-target-acquisition-order.json.
+
+Selection uses the simulated type in the client and exposes the authored field types.<id>.selectable on the Rules form. The selectable default is true on both native and Studio paths. Automatic targeting exposes targeting.acquireOrder; nearest retains the historical score/iteration behavior and rowMajor orders eligible candidates by armed status, cell index from the active map surface, then packed entity ID. Explicit player-targeted commands retain existing simulation semantics.
+
+Checks on the implementation tree: Apple arm64 TypeScript 5 compiler (apps/studio-web/node_modules/typescript/bin/tsc --noEmit) OK; rulesSchema.test.mjs, 3/3 pass with Node 22; both structural manifests accepted by tools/agents/check_feature.py. The first typecheck found a missing acquisition field in the browser preview fixture; corrected before the passing run. Native aiverse_tests and aiverse_client, Web example, native Studio tests, live MCP registration, captures and final merged-tree quick suite still pending. Native and web builds use isolated directories /Volumes/KINGSTON/AIVERSE-builds/selection-aiv198-mac and selection-aiv198-web.

@@ -205,6 +205,7 @@ struct UnitType {
     uint16_t armorType = 0;
     Fixed regen{};
     bool invulnerable = false;
+    bool selectable = true;                    // player selection and pointer picking
     // body / movement
     Fixed radius = Fixed::fromRatio(1, 2);     // body radius: collisions, pathing clearance, edge-to-edge ranges
     Fixed visionBlock{};                       // "vision": {"blocks": h} — sight blocker of that height over its cells (trees, walls)
@@ -590,7 +591,10 @@ struct TrapDef {
 };
 
 struct ProgressionRules;   // ProgressionData.h
+enum class AcquisitionOrder { Nearest, RowMajor };
+
 struct Rules {
+    AcquisitionOrder acquisitionOrder = AcquisitionOrder::Nearest;
     // One-based IDs for opt-in strongest-wins timed stat modifier groups.
     std::vector<std::string> modifierGroups;
     // Optional final movement speed bounds; absent keys preserve legacy behavior.

@@ -2,6 +2,8 @@
   "schema": 1,
   "features": {
     "native-simulation-checks": {"requires": [], "roadmap": {"system": "agents", "id": "native-simulation-checks"}, "api_paths": ["apps/editor/core/NativeBuildOps.h"]},
+    "automatic-target-acquisition-order": {"requires": [], "roadmap": {"system": "gameplay", "id": "automatic-target-acquisition-order"}, "api_paths": ["engine/game/GameData.h"]},
+    "unit-selection-eligibility": {"requires": [], "roadmap": {"system": "gameplay", "id": "unit-selection-eligibility"}, "api_paths": ["engine/game/GameData.h"]},
     "terraweave-meadow-grass": {
       "requires": [],
       "roadmap": {"system": "terraweave", "id": "terraweave-meadow-grass"},
