@@ -12,17 +12,36 @@
     "apps/studio-web/src/panels/MaterialsPanel.tsx",
     "apps/studio-web/src/panels/materialSchema.ts",
     "apps/studio-web/src/types.ts",
+    "demos/model-triplanar/README.md",
+    "demos/model-triplanar/content/rock_basecolor_repeat.png",
+    "demos/model-triplanar/content/rock_normal_repeat.png",
+    "demos/model-triplanar/game.json",
+    "demos/model-triplanar/maps/gallery.json",
+    "demos/model-triplanar/materials.json",
+    "demos/model-triplanar/models/sculpt.glb",
+    "demos/model-triplanar/rules.json",
+    "demos/model-triplanar/scripts/view/gallery.lua",
+    "demos/model-triplanar/ui/hud/gallery.rml",
     "docs/agent-handoffs/model-triplanar-authoring.md",
     "docs/agent-handoffs/model-triplanar-initial.md",
+    "docs/agent-handoffs/model-triplanar-integration-review.md",
     "docs/agent-handoffs/model-triplanar-metal.md",
     "docs/agent-handoffs/model-triplanar-stone-csg.md",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/entries/2026-11-25-render-model-triplanar.json",
     "docs/devlog/systems.json",
     "docs/evidence/model-triplanar-colour.png",
+    "docs/evidence/model-triplanar-grid.cpp",
+    "docs/evidence/model-triplanar-grid.log.txt",
+    "docs/evidence/model-triplanar-integration-ready.json",
+    "docs/evidence/model-triplanar-integration-ready.log.txt",
     "docs/evidence/model-triplanar-late-cut.json",
     "docs/evidence/model-triplanar-metal.json",
     "docs/evidence/model-triplanar-metal.log.txt",
     "docs/evidence/model-triplanar-projected.png",
     "docs/evidence/model-triplanar-repeat.png",
+    "docs/evidence/model-triplanar-reviewed.json",
+    "docs/evidence/model-triplanar-reviewed.log.txt",
     "docs/evidence/model-triplanar-stone-csg.png",
     "docs/evidence/model-triplanar-stone-wider-cut.png",
     "docs/evidence/model-triplanar-studio.json",
@@ -115,10 +134,12 @@
       ]
     },
     "performance": {
-      "status": "not_run",
-      "note": "Compiler verifies the 3/6-fetch costs. Device frame-time profiling pending.",
+      "status": "pass",
+      "note": "400 model instances, 60 measured Metal frames. See paired off/on submission, GPU, draw, allocation and tracked memory results.",
       "evidence": [
-        "docs/evidence/model-triplanar-metal.log.txt"
+        "docs/evidence/model-triplanar-grid.log.txt",
+        "docs/evidence/model-triplanar-grid.cpp",
+        "docs/agent-handoffs/model-triplanar-integration-review.md"
       ]
     },
     "platforms": {
@@ -143,15 +164,19 @@
       ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The small gallery includes a freshly carved model, project material, repeatable textures and camera controls.",
+      "evidence": [
+        "demos/model-triplanar/README.md",
+        "docs/agent-handoffs/model-triplanar-integration-review.md"
+      ]
     },
     "tests": {
       "status": "pass",
       "note": "Shader Graph and the Metal integration test passed.",
       "evidence": [
-        "docs/evidence/model-triplanar-metal.json"
+        "docs/evidence/model-triplanar-metal.json",
+        "docs/evidence/model-triplanar-reviewed.json"
       ]
     },
     "handoff": {
@@ -198,7 +223,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/model-triplanar-metal.json",
-    "docs/evidence/model-triplanar-studio.json"
+    "docs/evidence/model-triplanar-reviewed.json"
   ]
 }
