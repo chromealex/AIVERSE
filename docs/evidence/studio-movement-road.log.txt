@@ -1,0 +1,7 @@
+2026-11-25 23:55:11.784 AiverseStudioHTML5[48681:81722416] [studio-web] JS: CROSS main DONE_1
+2026-11-25 23:55:11.784 AiverseStudioHTML5[48681:81722416] [studio-web] JS: CROSS main VERIFIED selected in Hierarchy, connected pair, preserved selection, rejected stale remove, undo/redo/save
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/movement-road-qa-5o4jiz/Catalog.app/Contents/MacOS/aiversemcp: replacing existing signature
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/movement-road-qa-5o4jiz/Catalog.app: replacing existing signature
+2026-11-25 23:55:21.785 AiverseStudioHTML5[48944:81724453] [studio-web] JS: CROSS main DONE_2
+2026-11-25 23:55:21.785 AiverseStudioHTML5[48944:81724453] [studio-web] JS: CROSS main VERIFIED reopened, removed through Inspector and saved
+Saved endpoint IDs: ['outpost_1', 'scout_1'] ; removal preserved entities and game settings.

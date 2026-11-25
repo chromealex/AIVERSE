@@ -9,7 +9,7 @@ import type { StudioComponentCatalogItem, StudioInspectorComponent, StudioProper
 import { invoke } from '../bridge';
 import PropertyField from '../components/PropertyField';
 import GranularGridEditor from '../components/GranularGridEditor';
-import { StudioContextMenu, StudioEmptyState, StudioIconButton, StudioLoader, type StudioMenuItem } from '../ui';
+import { StudioButton, StudioContextMenu, StudioEmptyState, StudioIconButton, StudioLoader, type StudioMenuItem } from '../ui';
 import { canRemove, canReset, copyValues, mergeInspectors, missingOption, pasteValues, resetValues, type CopiedComponent, type FieldValue } from './inspectorActions';
 import type { StudioInspector } from '../types';
 import { fuzzyScore } from '../commandSearch';
@@ -257,10 +257,10 @@ export default function InspectorPanel({ inspector: primary, selected, busy, ins
       </div>
       <div className="insp__meta"><span>{inspector.kind}</span><code title="Document entity ID">{inspector.id}</code></div>
       {multi && ids?.length === 2 && snapshot?.graphDocument && typeof snapshot.selectedRoad === 'boolean' &&
-        <button type="button" disabled={busy || snapshot.mode !== 'edit'} className="au-btn"
+        <StudioButton size="sm" variant="secondary" disabled={busy || snapshot.mode !== 'edit'}
           onClick={() => void run(() => invoke('studio.selectedRoadSet', {
             ids, scope: snapshot.graphDocument!, linked: !snapshot.selectedRoad
-          }))}>{snapshot.selectedRoad ? 'Remove movement road' : 'Connect with movement road'}</button>}
+          }))}>{snapshot.selectedRoad ? 'Remove movement road' : 'Connect with movement road'}</StudioButton>}
       {inspector.components.filter(c=>c.id==='EvolveRegion').map(component=><EcologyPresetEditor key="evolve-preset" busy={busy} apply={values=>setMany(component,values)}/>)}
       {inspector.components.map(component => <ComponentCard key={inspector.id + ':' + component.id}
         component={component} entityId={inspector.id} busy={busy}
