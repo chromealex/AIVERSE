@@ -4,13 +4,23 @@
   "owner": "render",
   "changed_paths": [
     "CMakeLists.txt",
+    "apps/modelview/HeadlessModelCapture.cpp",
+    "apps/modelview/HeadlessModelCapture.h",
+    "apps/modelview/cpu_capture.cpp",
+    "apps/modelview/main.cpp",
     "docs/agent-handoffs/direct3d-renderer-initial.md",
     "docs/agent-handoffs/direct3d-renderer-stage1.md",
+    "docs/agent-handoffs/direct3d-renderer-stage2.md",
     "docs/devlog/systems.json",
+    "docs/direct3d.md",
     "docs/features/direct3d-renderer.json",
+    "engine/gfx/Gfx.h",
     "engine/gfx/d3d/Direct3D.cpp",
     "engine/gfx/d3d/Direct3D.h",
-    "tests/render/direct3d_device.cpp"
+    "engine/gfx/d3d/GfxDirect3D.cpp",
+    "engine/render/graph/GraphGpuProfile.h",
+    "tests/render/direct3d_device.cpp",
+    "tests/render/direct3d_rhi.cpp"
   ],
   "traits": {
     "editable": false,

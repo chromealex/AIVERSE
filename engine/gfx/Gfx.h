@@ -48,7 +48,7 @@ using ShaderHandle = Handle<struct ShaderTag>;
 using ComputeHandle = Handle<struct ComputeTag>;
 using PipelineHandle = Handle<struct PipelineTag>;
 
-enum class Backend { Metal, GLES3, GL33, Vulkan, Cpu };
+enum class Backend { Metal, GLES3, GL33, Vulkan, Cpu, Direct3D9, Direct3D11 };
 // Pending != failed: a renderer must never infer GPU fence failure
 // from normal in-flight work or elapsed frame counters.
 enum class ResourceRetirementStatus : uint8_t {
@@ -579,6 +579,9 @@ struct ShaderDesc {
     const char* label = nullptr;
     bool linearTarget = false; // internal variant: AIVERSE_HDR=1, selected for RGBA16F passes
     CpuShader cpu = CpuShader::None;
+    // Native Direct3D source with vs_main and ps_main. Input TEXCOORDn maps to attribute location n.
+    const char* hlsl9 = nullptr;  // vs_3_0 / ps_3_0
+    const char* hlsl11 = nullptr; // vs_4_0 / ps_4_0
 };
 
 // Vulkan shader resource ABI. Other backends keep their native slot contracts.

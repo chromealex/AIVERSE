@@ -56,18 +56,26 @@ public:
     bool begin(const std::array<float,4>& clear,std::string& error) override {
         if(active){error="Direct3D 11 pass already active";return false;}
         if(!validClear(clear,error))return false;
+        if(!beginLoad(error))return false;
+        context->ClearRenderTargetView(view.Get(),clear.data());
+        return true;
+    }
+    bool beginLoad(std::string& error) override {
+        if(active){error="Direct3D 11 pass already active";return false;}
         auto* target=view.Get();
         context->OMSetRenderTargets(1,&target,nullptr);
         D3D11_VIEWPORT viewport{0,0,float(width),float(height),0,1};
         context->RSSetViewports(1,&viewport);
-        context->ClearRenderTargetView(view.Get(),clear.data());
         active=true;error.clear();return true;
     }
-    bool readRgba(std::vector<uint8_t>& pixels,std::string& error) override {
+    bool end(std::string& error) override {
         if(!active){error="no active Direct3D 11 pass";return false;}
+        active=false;context->OMSetRenderTargets(0,nullptr,nullptr);
+        error.clear();return true;
+    }
+    bool readRgba(std::vector<uint8_t>& pixels,std::string& error) override {
+        if(active && !end(error))return false;
         std::vector<uint8_t> result(size_t(width)*height*4);
-        active=false;
-        context->OMSetRenderTargets(0,nullptr,nullptr);
         context->CopyResource(staging.Get(),color.Get());
         D3D11_MAPPED_SUBRESOURCE mapped{};
         if(!checked(context->Map(staging.Get(),0,D3D11_MAP_READ,0,&mapped),"Map(readback)",error))return false;
@@ -117,17 +125,24 @@ public:
         if(active){error="Direct3D 9 pass already active";return false;}
         if(!validClear(clear,error))return false;
         auto byte=[&](int i){return DWORD(std::lround(clear[i]*255));};
+        if(!beginLoad(error))return false;
+        if(checked(device->Clear(0,nullptr,D3DCLEAR_TARGET,D3DCOLOR_ARGB(byte(3),byte(0),byte(1),byte(2)),1,0),"Clear",error))return true;
+        std::string ignored;end(ignored);return false;
+    }
+    bool beginLoad(std::string& error) override {
+        if(active){error="Direct3D 9 pass already active";return false;}
         if(!checked(device->SetRenderTarget(0,target.Get()),"SetRenderTarget",error) ||
-           !checked(device->Clear(0,nullptr,D3DCLEAR_TARGET,D3DCOLOR_ARGB(byte(3),byte(0),byte(1),byte(2)),1,0),"Clear",error) ||
            !checked(device->BeginScene(),"BeginScene",error))return false;
         active=true;error.clear();return true;
     }
-    bool readRgba(std::vector<uint8_t>& pixels,std::string& error) override {
+    bool end(std::string& error) override {
         if(!active){error="no active Direct3D 9 pass";return false;}
+        active=false;return checked(device->EndScene(),"EndScene",error);
+    }
+    bool readRgba(std::vector<uint8_t>& pixels,std::string& error) override {
+        if(active && !end(error))return false;
         std::vector<uint8_t> result(size_t(width)*height*4);
-        active=false;
-        if(!checked(device->EndScene(),"EndScene",error) ||
-           !checked(device->GetRenderTargetData(target.Get(),staging.Get()),"GetRenderTargetData",error))return false;
+        if(!checked(device->GetRenderTargetData(target.Get(),staging.Get()),"GetRenderTargetData",error))return false;
         D3DLOCKED_RECT mapped{};
         if(!checked(staging->LockRect(&mapped,nullptr,D3DLOCK_READONLY),"LockRect(readback)",error))return false;
         for(int y=0;y<height;++y) {
