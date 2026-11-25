@@ -49,3 +49,11 @@ Build root `/Volumes/KINGSTON/AIVERSE-builds/studio-workspace-redesign`. The aud
 ### Joint verification with SpectraFX main
 
 Main 0e7e2ddd9 added SpectraFX Library and expanded Graph during the original gate. The first candidate built and its gate was superseded during CTest. On the combined checkout all 195 web tests and 50 Python Studio contracts passed with the production bundle. All 59 registered panels rendered at 1440 and 240 CSS pixels (118 browser captures). The added Library and expanded Graph had no horizontal dock overflow at either width.
+
+### Delivered to main
+
+Squash 05f1be7367e89a6e42385f0802f3c1f53607e1c0 is on main. The Mac build included the native Cocoa/Metal host and the matching production web bundle. The Survivors fixture opened all 59 windows by exact name, verified the selected accessible tab and captured its contents. The gallery under the KINGSTON build root contains all 59 native panes and both browser widths. The window picker listed 59 entries and its keyboard flow, dock menu, saved layouts and modal shortcuts passed.
+
+Full report: /Volumes/KINGSTON/AIVERSE-builds/studio-workspace-redesign/all-tests/test-reports/20261125-003629-19740/summary.txt. Configure, build and CTest passed. Of 503 registered tests, 502 passed in CTest and the opt-in LENS Metal pixel test passed separately with AIVERSE_LENS_METAL_VALIDATE=1. Two earlier attempts hit the 600-second skill_library_isolation limit. With a compiler cache for nested builds all 22 real isolation configurations passed in 184.20 seconds with the original timeout. All 195 web tests and 50 Python contracts passed. Native Windows was not run.
+
+Published site tree e893ea2f3 includes both localizations, the roadmap entry and two native editor frames. Pages deployment run 45521793017. No action remains for feature integration.
