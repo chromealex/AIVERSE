@@ -1,0 +1,144 @@
+{
+  "schema": 1,
+  "id": "mac-build-test-runner",
+  "owner": "Builds and platforms",
+  "changed_paths": [
+    "CMakeLists.txt",
+    "apps/client/ClientFx.h",
+    "apps/studio-native/CMakeLists.txt",
+    "docs/agent-handoffs/unified-test-runner.md",
+    "docs/devlog/systems.json",
+    "docs/agents/feature-policy.json",
+    "run-tests.sh",
+    "tests/run_ecs_gameplay_compare.sh",
+    "tests/test_unified_runner.py",
+    "third_party/notices.json"
+  ],
+  "traits": {
+    "editable": false,
+    "simulation": false,
+    "visible": false,
+    "runtime": false
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Repaired Mac consumer includes, parity prerequisites, Python selection and license packaging.",
+      "evidence": [
+        "CMakeLists.txt",
+        "run-tests.sh",
+        "third_party/notices.json"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Existing CMake targets and the existing test registry retain ownership.",
+      "evidence": [
+        "apps/studio-native/CMakeLists.txt",
+        "tests/run_ecs_gameplay_compare.sh"
+      ]
+    },
+    "native_api": {
+      "status": "not_applicable",
+      "note": "The patch changes build inputs and verification commands.",
+      "evidence": []
+    },
+    "skill": {
+      "status": "not_applicable",
+      "note": "The patch adds no authoring operation.",
+      "evidence": []
+    },
+    "mcp": {
+      "status": "not_applicable",
+      "note": "No agent tool is introduced.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_applicable",
+      "note": "The native Studio dependency changes only its compilation.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_applicable",
+      "note": "There are no new editable properties.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_applicable",
+      "note": "No saved data format changes.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "No graph schema or operation changes.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_applicable",
+      "note": "Compiler inputs and test process selection have no new runtime workload.",
+      "evidence": []
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "Local Apple Silicon Release bundles and Debug tests exercised the packaging and runner changes.",
+      "evidence": [
+        "docs/agent-handoffs/unified-test-runner.md"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Studio and the standalone client compile with the vendored Box3D headers. The runner reuses the configured Python.",
+      "evidence": [
+        "CMakeLists.txt",
+        "run-tests.sh"
+      ]
+    },
+    "headless": {
+      "status": "not_applicable",
+      "note": "There is no new simulation behavior. Existing parity coverage is documented in the handoff.",
+      "evidence": []
+    },
+    "examples": {
+      "status": "not_applicable",
+      "note": "The existing runner and package templates exercise the repaired paths.",
+      "evidence": []
+    },
+    "tests": {
+      "status": "pass",
+      "note": "The regression suite exercises configured interpreter paths, runner failures and registry arguments. The handoff also records native, web and parity results.",
+      "evidence": [
+        "tests/test_unified_runner.py",
+        "docs/agent-handoffs/unified-test-runner.md"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "The build handoff identifies source revisions, failures, commands and artifacts.",
+      "evidence": [
+        "docs/agent-handoffs/unified-test-runner.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "The build roadmap and runner handoff record the delivery.",
+      "evidence": [
+        "docs/devlog/systems.json",
+        "docs/agent-handoffs/unified-test-runner.md"
+      ]
+    },
+    "publishing": {
+      "status": "not_applicable",
+      "note": "This build repair adds no visible feature or public release.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [],
+    "mcp_tools": [],
+    "studio_panels": [],
+    "studio_methods": []
+  },
+  "test_reports": [
+    "docs/evidence/mac-build-test-runner-b6cbc.json"
+  ]
+}

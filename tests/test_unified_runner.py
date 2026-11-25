@@ -88,6 +88,14 @@ class UnifiedRunnerTests(unittest.TestCase):
         self.assertIn("PASS extra-sample", result.stdout)
         self.assertTrue(list((self.root / "build/fixture/test-reports").glob("*/summary.txt")))
 
+    def test_python_suite_uses_configured_interpreter(self):
+        self.write_tool("configured python", "#!/bin/sh\necho CONFIGURED_PYTHON\n")
+        (self.root / "build/fixture/test-python.txt").write_text(str(self.bin_dir / "configured python") + "\n")
+        (self.root / "tests/extra-test-suites.txt").write_text("sample|python3|tests/sample.sh|\n")
+        result = self.invoke("--no-build")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("CONFIGURED_PYTHON", result.stdout)
+
     def test_ctest_failure_is_reported_without_hiding_extras(self):
         result = self.invoke("--no-build", extras={"FAKE_CTEST_EXIT": "7"})
         self.assertEqual(result.returncode, 1, result.stdout)

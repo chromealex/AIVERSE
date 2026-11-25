@@ -3,6 +3,8 @@
 # The sidecar metadata files are authoritative. This SQLite database is a
 # regenerable local GUID index; no data is migrated into the game runtime.
 # Shared host (StudioHost) + one thin shell per OS: mac/ (Cocoa, WKWebView, Metal), win/ (Win32, WebView2, Vulkan).
+# Shared terrain preview headers expose Caverns collision value types.
+include_directories("${PROJECT_SOURCE_DIR}/third_party/box3d/include")
 set(AIVERSE_STUDIO_SOURCES StudioHost.cpp StudioScene.cpp StudioGameSurface.cpp StudioFacialGpuPreview.cpp
     StudioSession.cpp StudioAssetCatalog.cpp StudioAssetTransfers.cpp)
 set(AIVERSE_STUDIO_WEB_DIST "${PROJECT_SOURCE_DIR}/apps/studio-web/dist" CACHE PATH "Built Studio web assets")

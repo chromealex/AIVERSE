@@ -118,6 +118,9 @@ set(AIVERSE_TEMPLATES_DIR "${_aiverse_templates_default}" CACHE PATH "Installed 
 file(TO_CMAKE_PATH "${AIVERSE_TEMPLATES_DIR}" AIVERSE_TEMPLATES_DIR)
 option(AIVERSE_FETCH_TEMPLATES "Install the template packages at configure time when they are missing" ON)
 find_package(Python3 COMPONENTS Interpreter QUIET)
+if(AIVERSE_BUILD_TESTS)
+    file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/test-python.txt" CONTENT "$<$<BOOL:${Python3_Interpreter_FOUND}>:${Python3_EXECUTABLE}\n>")
+endif()
 if(AIVERSE_FETCH_TEMPLATES AND NOT EXISTS "${AIVERSE_TEMPLATES_DIR}/skirmish/game.json")
     if(Python3_Interpreter_FOUND)
         message(STATUS "Installing the template packages into ${AIVERSE_TEMPLATES_DIR}")
@@ -2635,6 +2638,8 @@ set(AIVERSE_CLIENT_CORE_SOURCES apps/client/ClientLoading.cpp apps/client/GameCl
 foreach(t ${AIVERSE_GAME_CLIENT_TARGETS})
     if(TARGET ${t})
         target_link_libraries(${t} PRIVATE aiverse_content_reader)   # streamed world: worker-thread project reader
+        # GameClient uses Caverns payload types even with optional physics disabled.
+        target_include_directories(${t} PRIVATE "${PROJECT_SOURCE_DIR}/third_party/box3d/include")
         target_sources(${t} PRIVATE apps/client/GameClient.cpp)
         target_sources(${t} PRIVATE apps/client/ClientBaked.cpp)   # agent-lightbake
     endif()

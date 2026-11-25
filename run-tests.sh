@@ -207,6 +207,9 @@ if (( RUN_EXTRA )); then
             *) die "Unsupported suite runner for $name: $runner" ;;
         esac
         case "$args" in *'|'*) die "Extra pipe in suite $name" ;; esac
+        if [[ "$runner" == python3 && -s "$BUILD_DIR/test-python.txt" ]]; then
+            IFS= read -r runner < "$BUILD_DIR/test-python.txt"
+        fi
         suite_count=$((suite_count + 1))
         suite_args=()
         if [[ -n "$args" ]]; then
