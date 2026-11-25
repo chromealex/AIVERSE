@@ -1,0 +1,11 @@
+{
+  "sha": "c581bd5993cb5344b68342b8782ed4bec619a215",
+  "argv": [
+    "sh",
+    "-ec",
+    "python3 tests/native_simulation_checks_mcp.py /Volumes/KINGSTON/AIVERSE-builds/aiv202-native-checks/aiversemcp . && python3 tools/mcp/audit_registry.py /Volumes/KINGSTON/AIVERSE-builds/aiv202-native-checks/aiversemcp --engine . --feature-manifest docs/features/native-simulation-checks.json"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/native-simulation-checks-macos.log.txt",
+  "sha256": "0a156f5f3cd67c0fd10d195158afbb8d3af181df646a7b5f5ee2c3f0ddae6af0"
+}
