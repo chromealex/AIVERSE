@@ -20,6 +20,8 @@
     "docs/en/prisma.md",
     "docs/evidence/prisma-authored-compositor-metal-20261125.json",
     "docs/evidence/prisma-authored-compositor-metal-20261125.log.txt",
+    "docs/evidence/prisma-compositor-inspector.png",
+    "docs/evidence/prisma-compositor-inspector.txt",
     "docs/evidence/prisma-compositor-webgl.txt",
     "docs/features/prisma-authored-compositor.json",
     "docs/handoffs/prisma-stage-authored-compositor.md",
@@ -77,24 +79,34 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The compiled MCP registry contains both operations. Fresh stdio processes read the saved graph and reject invalid or stale writes.",
+      "evidence": [
+        "docs/evidence/prisma-compositor-inspector.txt"
+      ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The production React PostFxPanel saved a custom threshold through studio.op and reloaded it in Chromium against native MCP.",
+      "evidence": [
+        "docs/evidence/prisma-compositor-inspector.png",
+        "docs/evidence/prisma-compositor-inspector.txt"
+      ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Loaded the glow example in the panel, confirmed invalid JSON disables saving, changed the threshold, saved and reloaded the three passes.",
+      "evidence": [
+        "docs/evidence/prisma-compositor-inspector.png",
+        "docs/evidence/prisma-compositor-inspector.txt"
+      ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Verified the game graph on disk after process restart. A map override, explicit disable and inheritance survived independent save/reopen cycles.",
+      "evidence": [
+        "docs/evidence/prisma-compositor-inspector.txt"
+      ]
     },
     "graphs": {
       "status": "pass",
