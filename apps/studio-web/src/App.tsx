@@ -16,7 +16,6 @@ import CommandPalette from './components/CommandPalette';
 import PanelErrorBoundary from './components/PanelErrorBoundary';
 import { ProjectLoadingDialog, SceneLoadingStrip, sceneLoadingText, useProjectLoading } from './components/ProjectLoading';
 import StudioStatusBar from './components/StudioStatusBar';
-import EvolveGroupNumeric from './components/EvolveGroupNumeric';
 import WorkspaceTabs from './components/WorkspaceTabs';
 import type { StudioPanel } from './nestedDock';
 import type { StudioAsset, StudioEntity, StudioInspector, StudioSnapshot } from './types';
@@ -598,8 +597,6 @@ export default function App() {
       are demonstrated locally. Native C++ Workspace and GPU renderer are not connected yet.</div>}
     {error && <div role="alert" className="error-banner">{error}
       <button onClick={() => setError('')} aria-label="Dismiss">×</button></div>}
-    {connected && project && selection.length > 1 &&
-      <EvolveGroupNumeric ids={selection} onApplied={refresh} onError={setError}/>}
     <NestedDockWorkspace tree={dock} setTree={setDock} renderPanel={renderPanel}
       onFloat={connected ? floatOut : undefined} onAdopt={adopt}/>
     {FLOAT ? <ProjectLoadingDialog state={loading} onClose={clearLoading}/> : <ProjectSplash state={loading} onClose={clearLoading} onHub={() => setHubOpen(true)}/>}

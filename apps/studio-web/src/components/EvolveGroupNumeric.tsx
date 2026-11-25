@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { invoke, onNativeEvent } from '../bridge';
+import { StudioButton, StudioInput, StudioSelect } from '../ui';
+import type { StudioGraphDocumentScope } from '../types';
 let previewRevision = 0;
 const previewOwner = `evolve-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-type Props = { ids: string[]; onApplied: () => Promise<void>; onError: (message: string) => void };
+type Props = { scope:StudioGraphDocumentScope; ids: string[]; onApplied: () => Promise<void>; onError: (message: string) => void };
 const integer = (value: string): number | null => {
   if (!/^-?\d+$/.test(value.trim())) return null;
   const n = Number(value);
@@ -11,7 +13,7 @@ const integer = (value: string): number | null => {
 };
 
 /** Exact typed authoring; native StudioSession validates all selected areas. */
-export default function EvolveGroupNumeric({ ids, onApplied, onError }: Props) {
+export default function EvolveGroupNumeric({ ids, scope, onApplied, onError }: Props) {
   const [open, setOpen] = useState(false);
   const [scaleX, setScaleX] = useState('100');
   const [scaleZ, setScaleZ] = useState('100');
@@ -91,7 +93,7 @@ export default function EvolveGroupNumeric({ ids, onApplied, onError }: Props) {
     setPending(true);
     try {
       await invoke('studio.worldProcessAreaBatchResize', {
-        entityIds: ids, axis: 'both', pivot,
+        scope, entityIds: ids, axis: 'both', pivot,
         scaleNumerator: x, scaleDenominator: 100,
         scaleNumeratorZ: z, scaleDenominatorZ: 100,
         ...(pivot === 'custom' ? { pivotXcm: px, pivotZcm: pz } : {})
@@ -101,24 +103,24 @@ export default function EvolveGroupNumeric({ ids, onApplied, onError }: Props) {
       onError(error instanceof Error ? error.message : String(error));
     } finally { setPending(false); }
   };
-  return <section className="evolve-numeric" data-native-overlay aria-label="EVOLVE group scale">
-    <button type="button" onClick={() => setOpen(v => !v)} aria-expanded={open}>
+  return <section className="evolve-numeric" aria-label="EVOLVE group scale">
+    <StudioButton onClick={() => setOpen(v => !v)} aria-expanded={open}>
       EVOLVE · Scale {ids.length} regions
-    </button>
+    </StudioButton>
     {open && <div className="evolve-numeric__fields">
-      <label>Scale X (%)<input type="number" min="1" max="1000000" step="1" value={scaleX} onChange={e => setScaleX(e.target.value)}/></label>
-      <label>Scale Z (%)<input type="number" min="1" max="1000000" step="1" value={scaleZ} onChange={e => setScaleZ(e.target.value)}/></label>
-      <label>Pivot<select value={pivot} onChange={e => setPivot(e.target.value as typeof pivot)}>
+      <label>Scale X (%)<StudioInput type="number" min="1" max="1000000" step="1" value={scaleX} onChange={e => setScaleX(e.target.value)}/></label>
+      <label>Scale Z (%)<StudioInput type="number" min="1" max="1000000" step="1" value={scaleZ} onChange={e => setScaleZ(e.target.value)}/></label>
+      <label>Pivot<StudioSelect value={pivot} onChange={e => setPivot(e.target.value as typeof pivot)}>
         <option value="shared">Group centroid</option><option value="individual">Each center</option>
         <option value="custom">Custom world position</option>
-      </select></label>
+      </StudioSelect></label>
       {pivot === 'custom' && <>
-        <label>Pivot X (cm)<input type="number" step="1" value={pivotX} onChange={e => setPivotX(e.target.value)}/></label>
-        <label>Pivot Z (cm)<input type="number" step="1" value={pivotZ} onChange={e => setPivotZ(e.target.value)}/></label>
+        <label>Pivot X (cm)<StudioInput type="number" step="1" value={pivotX} onChange={e => setPivotX(e.target.value)}/></label>
+        <label>Pivot Z (cm)<StudioInput type="number" step="1" value={pivotZ} onChange={e => setPivotZ(e.target.value)}/></label>
       </>}
-      <button type="button" disabled={pending} onClick={() => void submit()}>
+      <StudioButton disabled={pending} onClick={() => void submit()}>
         {pending ? 'Applying…' : 'Apply group scale'}
-      </button>
+      </StudioButton>
     </div>}
   </section>;
 }

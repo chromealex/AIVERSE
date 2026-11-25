@@ -14,6 +14,7 @@ import { canRemove, canReset, copyValues, mergeInspectors, missingOption, pasteV
 import type { StudioInspector } from '../types';
 import { fuzzyScore } from '../commandSearch';
 import type { StudioPanelContext } from './StudioPanelRenderer';
+import EvolveGroupNumeric from '../components/EvolveGroupNumeric';
 import './InspectorPanel.css';
 
 const ICONS: Record<string, typeof Box> = {
@@ -256,6 +257,10 @@ export default function InspectorPanel({ inspector: primary, selected, busy, ins
         {lock}
       </div>
       <div className="insp__meta"><span>{inspector.kind}</span><code title="Document entity ID">{inspector.id}</code></div>
+      {!inspectorPinned && snapshot?.canScaleEvolveRegions && snapshot.graphDocument && snapshot.selectedIds &&
+        <EvolveGroupNumeric key={JSON.stringify([snapshot.graphDocument.epoch,snapshot.selectedIds])}
+          ids={snapshot.selectedIds} scope={snapshot.graphDocument} onError={reportError}
+          onApplied={async () => commitSnapshot(await invoke('studio.snapshot',{}))}/>}
       {multi && ids?.length === 2 && snapshot?.graphDocument && typeof snapshot.selectedRoad === 'boolean' &&
         <StudioButton size="sm" variant="secondary" disabled={busy || snapshot.mode !== 'edit'}
           onClick={() => void run(() => invoke('studio.selectedRoadSet', {

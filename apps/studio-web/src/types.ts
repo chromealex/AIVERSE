@@ -125,6 +125,7 @@ export interface StudioSnapshot {
   /** Whole selection, primary (selectedId) last. */
   selectedIds?: string[];
   selectedRoad?: boolean;
+  canScaleEvolveRegions?: boolean;
   properties: StudioProperty[];
   entityProperties?: StudioProperty[];
   components?: Array<{ id: string; title: string; properties: StudioProperty[] }>;
@@ -494,7 +495,7 @@ export interface StudioParams {
   };
   'studio.worldProcessAreaPreview': {owner:string;revision:number;selectionKey:string;clear?:boolean;scaleNumerator?:number;scaleNumeratorZ?:number;pivot?:'shared'|'individual'|'custom';pivotXcm?:number|null;pivotZcm?:number|null};
   'studio.worldProcessGroupPivot': Record<string,never>;
-  'studio.worldProcessAreaBatchResize': {entityIds:string[];axis:'x'|'z'|'both';pivot:'shared'|'individual'|'custom';scaleNumerator:number;scaleDenominator:number;scaleNumeratorZ?:number;scaleDenominatorZ?:number;pivotXcm?:number|null;pivotZcm?:number|null};
+  'studio.worldProcessAreaBatchResize': {scope?:StudioGraphDocumentScope;entityIds:string[];axis:'x'|'z'|'both';pivot:'shared'|'individual'|'custom';scaleNumerator:number;scaleDenominator:number;scaleNumeratorZ?:number;scaleDenominatorZ?:number;pivotXcm?:number|null;pivotZcm?:number|null};
   'studio.wind':Record<string,never>;
   'studio.windSet':Partial<WindSettings>;
   'studio.nereidFlow':Record<string,never>;

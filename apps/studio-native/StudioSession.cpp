@@ -987,6 +987,12 @@ Json StudioSession::hierarchyGroups(const Json& params) {
     result.set("paths",std::move(paths));
     return result;
 }
+static bool scalableEvolveRegion(const editor::DocEntity& entity) {
+    const auto& components = entity.extra["components"];
+    return components["EvolveRegion"].isObject() &&
+           lib::worldprocess::extended::validate("EvolveArea",components["EvolveArea"]);
+}
+
 Json StudioSession::snapshot() const {
     Json result = Json::object();
     Json project = Json::object();
@@ -1058,6 +1064,12 @@ Json StudioSession::snapshot() const {
     Json ids = Json::array();
     for (const auto& id : selectedIds) ids.push(str(id));
     result.set("selectedIds", std::move(ids));
+    if (!ws_.map.data.planet() && selectedIds.size() >= 2 && selectedIds.size() <= 256 &&
+        std::all_of(selectedIds.begin(), selectedIds.end(), [&](const auto& id) {
+            if (!id.starts_with("entity:@") || locked_.contains(id) || hidden_.contains(id)) return false;
+            const int index = studioMapEntityIndex(id, ws_.map);
+            return index >= 0 && scalableEvolveRegion(ws_.map.data.entities[size_t(index)]);
+        })) result.set("canScaleEvolveRegions", Json::fromBool(true));
     int roadA, roadB;
     bool linked;
     if (selectedRoad(selectedIds, roadA, roadB, linked)) result.set("selectedRoad", Json::fromBool(linked));
@@ -4787,6 +4799,8 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             reply.set("result", buildRequest(method, params));
         } else if(method=="studio.worldProcessAreaBatchResize"){
             if(ws_.map.data.planet())throw std::runtime_error("Planet regions use local east/south numeric extents; planar group pivot unavailable");
+            if (params.has("scope") && !sameDocumentScope(params["scope"],graphDocumentScope()))
+                throw std::runtime_error("Map changed. Review the selected regions.");
             // All selected regions are validated and staged before one Undo.
             const auto& ids=params["entityIds"];
             const auto& numerator=params["scaleNumerator"];
@@ -4835,8 +4849,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 const int index=indexFor(id);
                 auto candidate=ws_.map.data.entities[std::size_t(index)];
                 Json area=candidate.extra["components"]["EvolveArea"];
-                if(!candidate.extra["components"]["EvolveRegion"].isObject()||
-                   !lib::worldprocess::extended::validate("EvolveArea",area))
+                if(!scalableEvolveRegion(candidate))
                     throw std::runtime_error("Selected entity lacks valid EVOLVE area");
                 if(!area.has("offsetXcm"))area.set("offsetXcm",Json::number(int64_t(0)));
                 if(!area.has("offsetZcm"))area.set("offsetZcm",Json::number(int64_t(0)));

@@ -89,6 +89,7 @@
     "apps/studio-native/StudioHost.cpp",
     "apps/studio-web/src/components/sceneBookmarks.ts",
     "apps/editor/core/LegacyCameraBookmarks.h",
+    "apps/studio-web/src/components/EvolveGroupNumeric.tsx",
     "apps/studio-web/src/components/MovementRoadTool.tsx",
     "apps/studio-native/StudioScene.h",
     "apps/studio-native/StudioSession.cpp",
