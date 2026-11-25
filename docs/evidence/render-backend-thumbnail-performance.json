@@ -1,0 +1,75 @@
+{
+  "scene": "Closed torus knot; 256 rings × 32 sides, two triangles per face",
+  "method": "One warm-up, five fresh native processes per backend. Wall time includes process startup, device and shader creation, OBJ/MTL import, raster, readback and uncompressed 512 x 512 PNG write. Times are not isolated GPU frame timings.",
+  "windows_ci": "https://github.com/chromealex/AIVERSE/actions/runs/45609159189",
+  "windows_server_2022_x64": [
+    {
+      "backend": "cpu",
+      "triangles": 16384,
+      "width": 512,
+      "height": 512,
+      "samples_ms": [
+        100.6,
+        100.46,
+        102.15,
+        103.31,
+        102.24
+      ],
+      "median_ms": 102.15,
+      "foreground": 43368,
+      "sha256": "ae366cbd5321179e55ccbb41c484f13ac4e7e04f6f2cfde2c574cf56bf165607"
+    },
+    {
+      "backend": "d3d9",
+      "triangles": 16384,
+      "width": 512,
+      "height": 512,
+      "samples_ms": [
+        102.6,
+        96.5,
+        96.94,
+        96.82,
+        97.08
+      ],
+      "median_ms": 96.94,
+      "foreground": 43370,
+      "sha256": "d23bad6ec678c36b9288d921d7e92b71519bedcb607fcdfcca6df7c93e27f56f"
+    },
+    {
+      "backend": "d3d11-warp",
+      "triangles": 16384,
+      "width": 512,
+      "height": 512,
+      "samples_ms": [
+        94.51,
+        94.5,
+        94.24,
+        97.35,
+        93.46
+      ],
+      "median_ms": 94.5,
+      "foreground": 43370,
+      "sha256": "435b8f5aa5b9e55ea6042434828e2981db0030d095bbc7a25a59abfcd0874086"
+    }
+  ],
+  "macos_arm64": [
+    {
+      "backend": "cpu",
+      "triangles": 16384,
+      "width": 512,
+      "height": 512,
+      "samples_ms": [
+        1093.34,
+        1129.72,
+        1247.95,
+        1235.57,
+        1320.05
+      ],
+      "median_ms": 1235.57,
+      "foreground": 43368,
+      "sha256": "ae366cbd5321179e55ccbb41c484f13ac4e7e04f6f2cfde2c574cf56bf165607"
+    }
+  ],
+  "windows_configuration": "GitHub windows-2022 x64; MSVC Release",
+  "macos_configuration": "Local arm64, CMake single-config clang build, CMAKE_BUILD_TYPE empty. Machine, storage and build configuration differ; do not benchmark these machines against each other."
+}
