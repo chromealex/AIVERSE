@@ -158,7 +158,7 @@ public:
     void gameSuspend() { if (game_) game_->suspend(); }
     // A native view went back to the main window (its floating window closed): hidden until the UI reports its rect.
     void surfaceDetached(StudioSurface surface);
-    Json gameState();
+    Json gameState(bool includeScriptErrors = false);
 
 private:
     // The render thread owns the Scene and its GPU resources: every Scene call from the UI thread runs

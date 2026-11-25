@@ -22,7 +22,7 @@ public:
     void frame(int width,int height,float pointsW,float pointsH,double dt,bool focused);
     void suspend();
     void event(const platform::Event& event);
-    Json state() const;
+    Json state(bool includeScriptErrors = false) const;
     std::function<Json(uint64_t)> buildingGraphReader();
     Json regions() const;
     Json profile(const std::string& action,uint32_t steps);

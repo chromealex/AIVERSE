@@ -38,3 +38,9 @@
 .transcript-line{display:grid;grid-template-columns:4ch minmax(0,1fr);gap:12px;padding:2px 12px;font:12px/1.55 ui-monospace,monospace}
 .transcript-line>span{text-align:right;color:var(--au-text-faint);user-select:none}
 .transcript-line code{font:inherit;white-space:pre-wrap;overflow-wrap:anywhere}
+
+.console__list .log-row{padding:6px 8px;line-height:1.5;align-items:baseline}
+.console__list .log-row>span{color:var(--au-text-muted)}
+.console__list .console__text{color:inherit;overflow-wrap:anywhere}
+.console__list .log-error{color:var(--au-danger)}
+.console__list .log-warning{color:var(--au-warning)}

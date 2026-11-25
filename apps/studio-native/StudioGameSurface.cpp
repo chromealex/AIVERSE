@@ -19,6 +19,7 @@
 #include "engine/sim/Simulation.h"
 #include "engine/sim/CommonComponents.h"
 #include "engine/game/GameCore.h"
+#include "engine/game/Script.h"
 #include "engine/world/WorldPersistenceDiagnostics.h"
 #include "engine/world/SimulationLod.h"
 #include "apps/studio-native/StudioRuntimeEdit.h"
@@ -439,7 +440,7 @@ Json StudioGameSurface::editRuntime(const Json& params){
     runtimeDebugEdited_=true;
     Json out=Json::object();out.set("field",changed);out.set("runtimeDebugEdited",Json::fromBool(true));return out;
 }
-Json StudioGameSurface::state() const {
+Json StudioGameSurface::state(bool includeScriptErrors) const {
     Json out=Json::object();out.set("device",profile_.json());
     out.set("active",Json::fromBool(actor_ || host_->active()));
     out.set("epoch",Json::string(std::to_string(runtimeEpoch_)));
@@ -453,6 +454,21 @@ Json StudioGameSurface::state() const {
     out.set("error",Json::string(error_));
     auto* sim=liveSimulation();
     out.set("tick",Json::number(int64_t(sim?sim->tick():0)));
+    if (includeScriptErrors && sim) {
+        const auto* game = dynamic_cast<const game::GameCore*>(&sim->module());
+        const auto* scripts = game ? game->scripts() : nullptr;
+        if (scripts && scripts->errorCount() > 0) {
+            Json errors = Json::array();
+            for (const auto& entry : scripts->log()) {
+                if (!entry.error) continue;
+                Json row = Json::object();
+                row.set("tick", Json::number(int64_t(entry.tick)));
+                row.set("text", Json::string(entry.text));
+                errors.push(std::move(row));
+            }
+            out.set("scriptErrors", std::move(errors));
+        }
+    }
     return out;
 }
 }

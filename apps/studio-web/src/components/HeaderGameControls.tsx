@@ -17,7 +17,7 @@ export default function HeaderGameControls({enabled,onPlay,onError,onState}:{
     let live=true,inFlight=false;
     const refresh=async()=>{
       if(inFlight)return;inFlight=true;
-      try {const next=await invoke('studio.gameState',{});if(live)setState(next);}
+      try {const next=await invoke('studio.gameState',{scriptErrors:true});if(live)setState(next);}
       catch {} finally {inFlight=false;}
     };
     void refresh();const timer=window.setInterval(refresh,500);

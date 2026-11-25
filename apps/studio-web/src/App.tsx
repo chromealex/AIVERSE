@@ -335,7 +335,7 @@ export default function App() {
       setInspectorPin(null); // create/delete/duplicate or map replacement invalidates positional pins
       setSnapshot(value);
     }, setBusy, commitSnapshot: setSnapshot, showPanel: panel => showPanel(panel), reportError: setError,
-    playing: !!game?.active
+    scriptErrors: game?.scriptErrors, playing: !!game?.active
   })}</PanelErrorBoundary>;
 
   const project = connected && !!snapshot?.project.path;

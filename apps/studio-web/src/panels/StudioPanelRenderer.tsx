@@ -84,6 +84,7 @@ export interface StudioPanelContext {
   /** Apply a snapshot from an Inspector action without dropping the Inspector pin. */
   commitSnapshot: (value: StudioSnapshot) => void;
   /** A game runs in the Game panel: Hierarchy / Inspector offer the live view. */
+  scriptErrors?: { tick:number; text:string }[];
   playing?: boolean;
   showPanel: (panel: StudioPanel) => void;
   reportError: (message: string) => void;
@@ -160,7 +161,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
             <ViewportPlaceholder title="Scene viewport" active/>}
         </>;
       case 'console':
-        return <ConsolePanel key={snapshot?.project.path} project={snapshot?.project.path ?? ''} logs={snapshot?.logs ?? []} select={id => select(id)}/>;
+        return <ConsolePanel key={snapshot?.project.path} project={snapshot?.project.path ?? ''} logs={snapshot?.logs ?? []} scriptErrors={ctx.scriptErrors} select={id => select(id)}/>;
       case 'lighting':
         return <LightingPanel projectPath={snapshot?.project.path ?? ''} selectedId={snapshot?.selectedId ?? null} onSelect={select}/>;
       case 'materials':

@@ -8,8 +8,8 @@ import BuildOutput from './ConsoleBuildOutput';
 import './ConsolePanel.css';
 
 /** Console: editor/agent activity with level and source filters; entity ids and files are links. */
-export default function ConsolePanel({ logs, select, project }: {
-  project: string; logs: StudioLog[]; select: (id: string | null) => Promise<void>;
+export default function ConsolePanel({ logs, select, project, scriptErrors }: {
+  scriptErrors?: { tick:number; text:string }[]; project: string; logs: StudioLog[]; select: (id: string | null) => Promise<void>;
 }) {
   const [mode,setMode] = useState('Activity');
   const [level, setLevel] = useState<ConsoleLevel>('all');
@@ -27,8 +27,12 @@ export default function ConsolePanel({ logs, select, project }: {
   }, []);
   const visible = useMemo(() => {
     const start = cleared ? logs.lastIndexOf(cleared) + 1 : 0;
-    return logs.slice(Math.max(0, start));
-  }, [logs, cleared]);
+    const activity = logs.slice(Math.max(0, start));
+    for (const { tick, text } of scriptErrors ?? []) {
+      activity.push({level:'error', source:'Lua', time:String(tick), text:`Tick ${tick} · ${text}`});
+    }
+    return activity;
+  }, [logs, cleared, scriptErrors]);
   const counts = levelCounts(visible);
   const shown = filterLogs(visible, { level, source, query });
   useEffect(() => { if (follow.current && list.current) list.current.scrollTop = list.current.scrollHeight; }, [shown.length]);

@@ -6,7 +6,7 @@ export default function StudioStatusBar({ snapshot, connected, game, action = ''
   snapshot: StudioSnapshot | null; connected: boolean; game: StudioGameState | null; action?: string; onOpenConsole: () => void;
 }) {
   const logs = snapshot?.logs ?? [];
-  const errors = logs.filter(l => l.level === 'error').length;
+  const errors = logs.filter(l => l.level === 'error').length + (game?.scriptErrors?.length ?? 0);
   const warnings = logs.filter(l => l.level === 'warning').length;
   const map = snapshot?.scene.name || snapshot?.project.name || '';
   return <footer className="statusbar studio-statusbar">

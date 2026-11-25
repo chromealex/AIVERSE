@@ -340,8 +340,8 @@ bool StudioHost::confirmClose() {
 }
 
 // ---------------------------------------------------------------- tick
-Json StudioHost::gameState() {
-    if (game_) {auto out=game_->state();out.set("canReviewPlayChanges",Json::fromBool(game_->canReview(session_->workspace())));return out;}
+Json StudioHost::gameState(bool includeScriptErrors) {
+    if (game_) {auto out=game_->state(includeScriptErrors);out.set("canReviewPlayChanges",Json::fromBool(game_->canReview(session_->workspace())));return out;}
     auto out = Json::parse(R"({"paused":false,"canControl":false,"canStep":false,"active":false,"loading":false,"progress":0,"inMatch":false,"tick":0,"error":""})");
     out.set("device", StudioGameDevice{}.json());
     return out;
@@ -3338,7 +3338,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
                 wpLiveSnapshot_=Json();wpLiveRefresh_=0;rebuildOverlay();
             }
         }
-        return gameState();
+        return gameState(method == "studio.gameState" && params.getBool("scriptErrors"));
     });
     if (method == "studio.hubTemplates") {
         // The catalog query runs aiverse_pkg.py over the network: keep the UI thread free.

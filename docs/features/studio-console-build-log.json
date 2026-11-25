@@ -5,7 +5,10 @@
   "changed_paths": [
     "apps/editor/core/Workspace.cpp",
     "apps/studio-native/StudioSession.cpp",
-    "apps/studio-web/src/panels/ConsolePanel.tsx"
+    "apps/studio-web/src/panels/ConsolePanel.tsx",
+    "apps/studio-native/StudioGameSurface.cpp",
+    "apps/studio-native/StudioHost.cpp",
+    "apps/studio-web/src/components/StudioStatusBar.tsx"
   ],
   "traits": {
     "editable": false,
@@ -129,7 +132,8 @@
     ],
     "studio_methods": [
       "studio.buildLog",
-      "studio.buildReveal"
+      "studio.buildReveal",
+      "studio.gameState"
     ]
   },
   "test_reports": [
