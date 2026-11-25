@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="ru">
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Building Graph / Caverns · AIVERSE</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      background: #121817;
+      color: #ecede6;
+      font:
+        16px/1.45 'Inter',
+        -apple-system,
+        Arial,
+        sans-serif;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 40px;
+      border-bottom: 1px solid #39423e;
+      padding: 13px 4%;
+    }
+    strong {
+      letter-spacing: 0.13em;
+      font-size: 17px;
+    }
+    nav {
+      display: flex;
+      gap: 5px;
+    }
+    button,
+    select {
+      font: inherit;
+      color: inherit;
+      background: #25302a;
+      border: 1px solid #4a584d;
+      border-radius: 5px;
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible {
+      outline: 3px solid #ffcb79;
+    }
+    button[aria-pressed='true'] {
+      color: #1c241b;
+      background: #cde8ad;
+      border-color: #cde8ad;
+    }
+    main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+      min-height: calc(100vh - 66px);
+    }
+    #viewport {
+      position: relative;
+      min-height: 480px;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      display: block;
+      touch-action: none;
+    }
+    aside {
+      background: #1b2320;
+      padding: 30px 24px;
+      border-left: 1px solid #39423e;
+    }
+    h1 {
+      font-size: 30px;
+      line-height: 1.1;
+      letter-spacing: -1px;
+      margin: 0 0 12px;
+    }
+    p {
+      color: #ccd4c9;
+    }
+    label {
+      display: block;
+      margin: 22px 0 8px;
+      font-weight: 600;
+    }
+    select,
+    input[type='range'] {
+      width: 100%;
+    }
+    input {
+      accent-color: #cde8ad;
+    }
+    small {
+      display: block;
+      color: #aebbb0;
+    }
+    figure {
+      margin: 22px 0;
+    }
+    figure img {
+      width: 100%;
+      border-radius: 6px;
+    }
+    figcaption {
+      font-size: 13px;
+      color: #c2cac1;
+    }
+    #viewTools {
+      position: absolute;
+      bottom: 14px;
+      left: 18px;
+      right: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+    }
+    #viewTools span {
+      background: #16211de6;
+      padding: 6px 10px;
+      border-radius: 4px;
+    }
+    #status {
+      color: #cde8ad;
+      min-height: 1.5em;
+    }
+    a {
+      color: #d5e9b8;
+    }
+    hr {
+      border: 0;
+      border-top: 1px solid #39423e;
+      margin: 24px 0;
+    }
+    details {
+      margin-top: 18px;
+    }
+    summary {
+      cursor: pointer;
+    }
+    code {
+      font-size: 0.9em;
+    }
+    button:disabled {
+      opacity: 0.6;
+    }
+    [hidden] {
+      display: none !important;
+    }
+    @media (max-width: 750px) {
+      main {
+        display: block;
+      }
+      #viewport {
+        min-height: 0;
+        height: 54svh;
+      }
+      aside {
+        border-left: 0;
+        border-top: 1px solid #39423e;
+        padding: 20px;
+      }
+      header {
+        gap: 16px;
+        padding: 10px;
+      }
+      #viewTools span {
+        max-width: 60%;
+      }
+    }
+    #viewport {
+      position: sticky;
+      top: 0;
+      height: calc(100svh - 65px);
+    }
+    .fieldrow {
+      display: flex;
+      gap: 8px;
+    }
+    .fieldrow label {
+      flex: 1;
+      min-width: 0;
+      font-size: 13px;
+    }
+    input[type='number'],
+    textarea {
+      width: 100%;
+      color: inherit;
+      background: #25302a;
+      border: 1px solid #4a584d;
+      border-radius: 5px;
+      font: inherit;
+      padding: 6px;
+      box-sizing: border-box;
+    }
+    textarea {
+      font: 12px monospace;
+    }
+    form label {
+      margin: 12px 0 4px;
+    }
+    form button {
+      margin-top: 14px;
+      background: #cde8ad;
+      color: #192319;
+      font-weight: 600;
+      width: 100%;
+    }
+    #buildMessage {
+      margin-top: 5px;
+    }
+    aside {
+      padding-top: 20px;
+    }
+    @media (max-width: 750px) {
+      #viewport {
+        position: relative;
+        height: 46svh;
+      }
+    }
+  </style>
+  <header>
+    <strong>AIVERSE</strong>
+    <nav aria-label="Демонстрации">
+      <button id="building" aria-pressed="true">Building Graph</button
+      ><button id="caves" aria-pressed="false">Caverns</button>
+    </nav>
+  </header>
+  <main>
+    <section id="viewport" aria-label="Трёхмерная сцена">
+      <canvas aria-label="Вращаемая 3D-модель"></canvas>
+      <div id="viewTools">
+        <span>Поворот — перетаскивание · масштаб — колесо</span><button id="reset">Сбросить вид</button>
+      </div>
+    </section>
+    <aside>
+      <section id="buildingPanel">
+        <h1>Генератор зданий</h1>
+        <form id="settings">
+          <label for="style">Архитектурный стиль</label
+          ><select id="style"></select>
+          <label for="role">Тип здания</label
+          ><select id="role"></select>
+          <div class="fieldrow">
+            <label
+              >Ширина, м<input
+                id="width"
+                type="number"
+                min="1"
+                max="160"
+                step=".1"
+                value="24"
+                required /></label
+            ><label
+              >Высота, м<input
+                id="height"
+                type="number"
+                min="1"
+                max="160"
+                step=".1"
+                value="12"
+                required /></label
+            ><label
+              >Глубина, м<input id="depth" type="number" min="1" max="160" step=".1" value="18" required
+            /></label>
+          </div>
+          <div class="fieldrow">
+            <label
+              >Seed<input
+                id="seed"
+                type="number"
+                min="0"
+                max="2147483647"
+                step="1"
+                value="482733"
+                required /></label
+            ><label
+              >Текстуры<select id="quality">
+                <option>128</option>
+                <option selected>256</option>
+                <option>512</option>
+              </select></label
+            >
+          </div>
+          <details id="layout">
+            <summary>Планировка и крыша</summary>
+            <label for="template">Стартовая планировка</label
+            ><select id="template">
+              <option value="">Исходный пример</option>
+              <option value="residence">Жилой дом</option>
+              <option value="market">Рынок</option>
+              <option value="administration">Администрация</option>
+              <option value="warehouse">Склад</option>
+              <option value="workshop">Мастерская</option>
+              <option value="hall">Зал</option>
+            </select>
+            <div class="fieldrow">
+              <label>Этажи<input type="number" id="floors" min="1" max="12" value="1" /></label
+              ><label>Комнаты X<input type="number" id="roomsX" min="1" max="8" value="1" /></label
+              ><label>Комнаты Z<input type="number" id="roomsZ" min="1" max="8" value="1" /></label>
+            </div>
+            <label for="roof">Форма крыши</label
+            ><select id="roof">
+              <option value="flat">Плоская</option>
+              <option value="gable">Двускатная</option>
+              <option value="shed">Односкатная</option>
+              <option value="hip">Вальмовая</option>
+              <option value="barrel">Цилиндрическая</option>
+              <option value="dome">Купол</option>
+              <option value="terrace">Терраса</option>
+              <option value="pagoda">Пагода</option>
+            </select>
+            <label
+              >Подъём крыши, м<input id="rise" type="number" min="0" max="40" step=".1" value="0"
+            /></label>
+            <label for="interior">Интерьер</label
+            ><select id="interior">
+              <option value="none">Без интерьера</option>
+              <option value="residential">Жилой</option>
+              <option value="office">Офис</option>
+              <option value="industrial">Промышленный</option>
+              <option value="commercial">Торговый</option>
+              <option value="mixed">Смешанный</option>
+            </select>
+            <label><input type="checkbox" id="sliding" checked /> Сдвижная секция крыши</label>
+            <label for="featureRow">Двери, окна и проходы</label
+            ><select id="featureRow"></select>
+            <div class="fieldrow">
+              <label
+                >Тип<select id="featureKind">
+                  <option value="large-gate">Ворота</option>
+                  <option value="small-gate">Малые ворота</option>
+                  <option value="personnel-door">Дверь</option>
+                  <option value="window">Окно</option>
+                  <option value="stairs">Лестница</option>
+                  <option value="elevator">Лифт</option>
+                </select></label
+              ><label
+                >Сторона<select id="featureSide">
+                  <option value="front">Передняя</option>
+                  <option value="back">Задняя</option>
+                  <option value="left">Левая</option>
+                  <option value="right">Правая</option>
+                </select></label
+              >
+            </div>
+            <div class="fieldrow">
+              <label>Количество<input id="featureCount" type="number" min="1" max="16" value="1" /></label
+              ><label>Ширина, м<input id="featureW" type="number" step=".1" min=".1" /></label
+              ><label>Высота, м<input id="featureH" type="number" step=".05" min="0" /></label>
+            </div>
+            <div class="fieldrow">
+              <button type="button" id="addFeature">Добавить окно</button
+              ><button type="button" id="dropFeature">Удалить</button>
+            </div>
+            <details>
+              <summary>Параметры элементов в JSON</summary>
+              <textarea id="features" rows="5" spellcheck="false"></textarea>
+            </details>
+          </details>
+          <button id="generate" type="submit">Сгенерировать</button
+          ><small id="buildMessage" aria-live="polite"></small>
+        </form>
+        <figure id="planFigure">
+          <svg
+            id="plan"
+            viewBox="-1 -1 26 20"
+            role="img"
+            aria-label="План комнаты и проёмов"
+            style="display: block; width: 100%; height: 140px"
+          ></svg>
+          <figcaption>План проёмов · вид сверху</figcaption>
+        </figure>
+        <label for="socket">Элемент здания</label
+        ><select id="socket">
+          <option value="">Всё здание</option>
+        </select>
+        <p id="socketInfo"></p>
+        <hr />
+        <small id="spec"></small>
+        <p>
+          <a id="downloadModel" download="scifi-custom-482733.glb">Скачать GLB</a> ·
+          <a id="downloadRecipe" href="building.recipe.json" download>Рецепт JSON</a>
+        </p>
+      </section>
+      <section id="cavePanel" hidden>
+        <h1>Камера и шахта</h1>
+        <p>
+          Поверхность подземной полости. Добавьте выемку или заполните часть камеры у её восточной стенки.
+        </p>
+        <label for="mode">Штамп</label
+        ><select id="mode">
+          <option value="0">Исходная камера</option>
+          <option value="1">Carve — выемка</option>
+          <option value="2">Fill — заполнение</option></select
+        ><label for="radius">Радиус · <output id="radiusText">150 см</output></label
+        ><input id="radius" type="range" min="50" max="200" step="10" value="150" disabled /><small
+          >Шаг сетки 25 см. Геометрию пересчитывает TerraWeave Caverns в WebAssembly.</small
+        >
+      </section>
+      <p id="status" role="status">Загрузка модели…</p>
+    </aside>
+  </main>
+  <script src="catalog.js"></script>
+  <script src="buildings.js"></script>
+  <script src="caverns.js"></script>
+  <script src="viewer.js"></script>
+</html>

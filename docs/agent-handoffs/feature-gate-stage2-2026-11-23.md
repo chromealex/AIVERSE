@@ -1,0 +1,6 @@
+# Feature gate stage 2
+
+Branch: feature/aiv20261123_feature_gate
+Implementation SHA before self-manifest: 0f61a265a8581b79e3ccaa674b423fa2e1a6e0e4
+
+Added exact-path PR coverage, explicit feature traits and conditional required checks, GitHub Actions workflow, negative coverage tests, and self-manifest with pending verification. Paths: AGENTS.md, tools/agents/check_feature.py, tools/agents/audit_compliance.py, tools/agents/feature_manifest.schema.json, tools/skills/catalog.py, skills/catalog.json, skills/workflow/aiverse-new-feature/SKILL.md, tests/feature_gate_test.py, tests/extra-test-suites.txt, .github/workflows/feature-gate.yml, docs/agents/feature-contract.md, docs/devlog/systems.json, docs/features/feature-gate.json. No runtime or save changes. Tests and Actions: NOT RUN in connector session. Branch protection not configured. The strict gate should reject the pending self-manifest until verified; this is intentional. Next: run unit tests and catalog checks, review changed-path coverage and evidence authenticity, complete self-manifest with actual evidence, verify Actions and Mac merged-tree tests, configure required status check with owner approval, then modularize AGENTS.md without losing rules. No merge performed.

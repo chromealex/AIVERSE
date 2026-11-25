@@ -275,6 +275,7 @@ void GameView::drawPlanets(Renderer3D& r, const GameScene& s, double time, const
         std::fprintf(stderr, "[planet] t=%.0f transit %d orbit-units %d on-other-bodies %d\n", s.seconds, tr, orbit, moon);
     }
     planets_.draw(r, pframe_, s.seconds, planetCam_.body(), blend);
+    drawPlanetCaves(r,pframe_,s.seconds);
     if (dev_ && rules_ && planetGroundFx_.draw(*dev_, r, planets_, pframe_, s, time, vision, grid, groundFx_, *rules_))
         for (size_t bi = 0; bi < Wd.bodies.size(); ++bi) { // rock dug out (seen): the terrain under it becomes ground
             if (!Wd.bodies[bi].surface()) continue;

@@ -33,6 +33,7 @@ public:
         if(scene.worldCellSizeMetres()!=terrain.terrainCellSizeMetres())
             throw std::invalid_argument(
                 "TerraWeave WorldScene and runtime tile sizes mismatch");
+        if(!terrain.surfaceGroupReady())return false;
         const auto cells=terrain.residentCells();
         const bool tileSetChanged=(cells!=replaced_);
         if(tileSetChanged){
@@ -41,7 +42,7 @@ public:
         }
         if(terrain.pendingTiles()!=0)return false;
         const uint64_t revision=terrain.soilRevision();
-        if(published_ && revision==publishedRevision_ &&
+        if(published_ && revision==publishedRevision_ && terrain.surfaceEpoch()==publishedSurfaceEpoch_ &&
            !tileSetChanged)
             return true;
 
@@ -73,7 +74,7 @@ public:
         auto snapshot=terrain.presentationSnapshot();
         scene.setVegetationTerrainSnapshot(std::move(snapshot),
                                            std::move(edits));
-        publishedRevision_=revision;
+        publishedRevision_=revision;publishedSurfaceEpoch_=terrain.surfaceEpoch();
         published_=true;
         return true;
     }
@@ -85,13 +86,13 @@ public:
         scene.setReplacedTerrainTiles({});
         scene.setVegetationTerrainSnapshot(nullptr,{});
         replaced_.clear();
-        publishedRevision_=0;
+        publishedRevision_=0;publishedSurfaceEpoch_=0;
         published_=false;
     }
 
 private:
     std::vector<world::Cell> replaced_;
-    uint64_t publishedRevision_=0;
+    uint64_t publishedRevision_=0,publishedSurfaceEpoch_=0;
     bool published_=false;
 };
 

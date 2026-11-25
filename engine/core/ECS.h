@@ -131,7 +131,9 @@ public:
         // Do not clone the giant sparse index on ordinary component writes.
         if(e.index<sparseCow_->size() && (*sparseCow_)[e.index]!=kNone) {
             T& current=dataAt((*sparseCow_)[e.index]);
-            current=T{std::forward<Args>(args)...};
+            // Naming the aggregate avoids a GCC 13 gimplifier ICE for Combat.
+            T replacement{std::forward<Args>(args)...};
+            current=std::move(replacement);
             return current;
         }
         ensureUnique(sparseCow_);

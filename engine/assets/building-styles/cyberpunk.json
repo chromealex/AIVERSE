@@ -1,0 +1,1126 @@
+{
+  "id": "cyberpunk",
+  "name": "Cyberpunk · neon megacity",
+  "materials": {
+    "hull": {
+      "color": [
+        0.12,
+        0.14,
+        0.2
+      ],
+      "metallic": 0.49,
+      "roughness": 0.38,
+      "surfacePattern": "concrete",
+      "surfaceSeed": 3000,
+      "uvScale": [
+        2.5,
+        2.5
+      ],
+      "normalScale": 0.65,
+      "occlusionStrength": 1
+    },
+    "plate": {
+      "color": [
+        0.2,
+        0.24,
+        0.31
+      ],
+      "metallic": 0.49,
+      "roughness": 0.51,
+      "surfacePattern": "metal",
+      "surfaceSeed": 3001,
+      "uvScale": [
+        2.5,
+        2.5
+      ],
+      "normalScale": 0.65,
+      "occlusionStrength": 1
+    },
+    "rust": {
+      "color": [
+        0.39,
+        0.21,
+        0.12
+      ],
+      "metallic": 0.16,
+      "roughness": 0.9,
+      "surfacePattern": "rust",
+      "surfaceSeed": 152,
+      "uvScale": [
+        2,
+        2
+      ],
+      "normalScale": 0.65,
+      "occlusionStrength": 1
+    },
+    "trim": {
+      "color": [
+        0.18,
+        0.21,
+        0.28
+      ],
+      "metallic": 0.49,
+      "roughness": 0.38,
+      "surfacePattern": "metal",
+      "surfaceSeed": 3003,
+      "uvScale": [
+        2.5,
+        2.5
+      ],
+      "normalScale": 0.65,
+      "occlusionStrength": 1
+    },
+    "pipe": {
+      "color": [
+        0.27,
+        0.24,
+        0.2
+      ],
+      "metallic": 0.8,
+      "roughness": 0.47,
+      "surfacePattern": "metal",
+      "surfaceSeed": 151,
+      "uvScale": [
+        2,
+        2
+      ],
+      "normalScale": 0.65,
+      "occlusionStrength": 1
+    },
+    "seam": {
+      "color": [
+        0.06,
+        0.08,
+        0.1
+      ],
+      "metallic": 0.49,
+      "roughness": 0.51,
+      "surfacePattern": "circuit",
+      "surfaceSeed": 3004,
+      "uvScale": [
+        2.5,
+        2.5
+      ],
+      "normalScale": 0.65,
+      "occlusionStrength": 1
+    },
+    "inside": {
+      "color": [
+        0.46,
+        0.39,
+        0.29
+      ],
+      "metallic": 0.02,
+      "roughness": 0.84,
+      "surfacePattern": "concrete",
+      "surfaceSeed": 149,
+      "uvScale": [
+        2,
+        2
+      ],
+      "normalScale": 0.65,
+      "occlusionStrength": 1
+    },
+    "deck": {
+      "color": [
+        0.2,
+        0.24,
+        0.31
+      ],
+      "metallic": 0.49,
+      "roughness": 0.64,
+      "surfacePattern": "metal",
+      "surfaceSeed": 3005,
+      "uvScale": [
+        2.5,
+        2.5
+      ],
+      "normalScale": 0.65,
+      "occlusionStrength": 1
+    },
+    "hazardY": {
+      "color": [
+        0.68,
+        0.52,
+        0.21
+      ],
+      "metallic": 0.08,
+      "roughness": 0.7,
+      "surfacePattern": "paint",
+      "surfaceSeed": 159,
+      "uvScale": [
+        2,
+        2
+      ],
+      "normalScale": 0.65,
+      "occlusionStrength": 1
+    },
+    "hazardK": {
+      "color": [
+        0.08,
+        0.08,
+        0.07
+      ],
+      "metallic": 0.03,
+      "roughness": 0.78,
+      "surfacePattern": "paint",
+      "surfaceSeed": 160,
+      "uvScale": [
+        2,
+        2
+      ],
+      "normalScale": 0.65,
+      "occlusionStrength": 1
+    },
+    "glass": {
+      "color": [
+        0.23,
+        0.29,
+        0.33
+      ],
+      "metallic": 0.08,
+      "roughness": 0.14,
+      "surfacePattern": "glass",
+      "surfaceSeed": 153,
+      "uvScale": [
+        2,
+        2
+      ],
+      "normalScale": 0.65,
+      "occlusionStrength": 1
+    },
+    "glassLit": {
+      "color": [
+        0.19,
+        0.26,
+        0.29
+      ],
+      "metallic": 0.12,
+      "roughness": 0.2,
+      "surfacePattern": "glass",
+      "surfaceSeed": 154,
+      "uvScale": [
+        2,
+        2
+      ],
+      "normalScale": 0.65,
+      "occlusionStrength": 1,
+      "emissive": [
+        0.9,
+        0.05,
+        0.9
+      ],
+      "emissiveStrength": 2.4
+    },
+    "warn": {
+      "color": [
+        0.31,
+        0.16,
+        0.08
+      ],
+      "metallic": 0.02,
+      "roughness": 0.54,
+      "surfacePattern": "ceramic",
+      "surfaceSeed": 157,
+      "uvScale": [
+        2,
+        2
+      ],
+      "normalScale": 0.65,
+      "occlusionStrength": 1,
+      "emissive": [
+        0.9,
+        0.05,
+        0.9
+      ],
+      "emissiveStrength": 3
+    },
+    "red": {
+      "color": [
+        0.42,
+        0.1,
+        0.08
+      ],
+      "metallic": 0.04,
+      "roughness": 0.41,
+      "surfacePattern": "ceramic",
+      "surfaceSeed": 161,
+      "uvScale": [
+        2,
+        2
+      ],
+      "normalScale": 0.65,
+      "occlusionStrength": 1,
+      "emissive": [
+        1,
+        0.12,
+        0.06
+      ],
+      "emissiveStrength": 2.1
+    },
+    "team": {
+      "color": [
+        0.7,
+        0.09,
+        0.48
+      ],
+      "metallic": 0.12,
+      "roughness": 0.58,
+      "surfacePattern": "circuit",
+      "surfaceSeed": 158,
+      "uvScale": [
+        2,
+        2
+      ],
+      "normalScale": 0.65,
+      "occlusionStrength": 1
+    },
+    "exhaust": {
+      "color": [
+        0.29,
+        0.17,
+        0.1
+      ],
+      "metallic": 0.1,
+      "roughness": 0.62,
+      "surfacePattern": "rust",
+      "surfaceSeed": 162,
+      "uvScale": [
+        2,
+        2
+      ],
+      "normalScale": 0.65,
+      "occlusionStrength": 1,
+      "emissive": [
+        1,
+        0.35,
+        0.09
+      ],
+      "emissiveStrength": 2
+    },
+    "accent": {
+      "color": [
+        0.7,
+        0.09,
+        0.48
+      ],
+      "metallic": 0.49,
+      "roughness": 0.64,
+      "surfacePattern": "circuit",
+      "surfaceSeed": 3002,
+      "uvScale": [
+        2.5,
+        2.5
+      ],
+      "normalScale": 0.65,
+      "occlusionStrength": 1
+    },
+    "light": {
+      "color": [
+        0.53,
+        0.35,
+        0.22
+      ],
+      "metallic": 0.1,
+      "roughness": 0.38,
+      "surfacePattern": "ceramic",
+      "surfaceSeed": 155,
+      "uvScale": [
+        2,
+        2
+      ],
+      "normalScale": 0.65,
+      "occlusionStrength": 1,
+      "emissive": [
+        0.9,
+        0.05,
+        0.9
+      ],
+      "emissiveStrength": 6
+    },
+    "sign": {
+      "color": [
+        0.53,
+        0.35,
+        0.22
+      ],
+      "metallic": 0.1,
+      "roughness": 0.6,
+      "surfacePattern": "brick",
+      "surfaceSeed": 156,
+      "uvScale": [
+        2,
+        2
+      ],
+      "normalScale": 0.65,
+      "occlusionStrength": 1,
+      "emissive": [
+        0.9,
+        0.05,
+        0.9
+      ],
+      "emissiveStrength": 5
+    }
+  },
+  "palettes": [
+    {
+      "hull": [
+        0.12,
+        0.14,
+        0.2
+      ],
+      "plate": [
+        0.2,
+        0.24,
+        0.31
+      ],
+      "accent": [
+        0.7,
+        0.09,
+        0.48
+      ],
+      "team": [
+        0.7,
+        0.09,
+        0.48
+      ]
+    },
+    {
+      "hull": [
+        0.2,
+        0.24,
+        0.31
+      ],
+      "plate": [
+        0.12,
+        0.14,
+        0.2
+      ],
+      "accent": [
+        0.18,
+        0.55,
+        0.52
+      ],
+      "team": [
+        0.7,
+        0.09,
+        0.48
+      ]
+    },
+    {
+      "hull": [
+        0.08399999999999999,
+        0.098,
+        0.13999999999999999
+      ],
+      "plate": [
+        0.7,
+        0.09,
+        0.48
+      ],
+      "accent": [
+        0.2,
+        0.24,
+        0.31
+      ],
+      "team": [
+        0.12,
+        0.14,
+        0.2
+      ]
+    }
+  ],
+  "proportions": {
+    "window": [
+      2.1,
+      1.1,
+      2.4,
+      3.2
+    ],
+    "door": [
+      2.5,
+      3
+    ],
+    "floorHeight": 4.2,
+    "floors": [
+      1,
+      4
+    ]
+  },
+  "shell": "seam",
+  "interior": "inside",
+  "roof": "deck",
+  "panels": {
+    "material": "plate",
+    "accent": "accent",
+    "accentChance": 0.5,
+    "size": [
+      1.9,
+      1.6
+    ],
+    "gap": 0.07,
+    "depth": [
+      0.03,
+      0.12
+    ]
+  },
+  "base": {
+    "material": "hull",
+    "height": 0.7,
+    "depth": 0.4
+  },
+  "band": {
+    "material": "plate",
+    "height": 0.36,
+    "depth": 0.25
+  },
+  "corners": {
+    "material": "hull",
+    "width": 0.65,
+    "depth": 0.35,
+    "chamfer": 0.2
+  },
+  "window": {
+    "frame": "trim",
+    "glass": "glass",
+    "lit": "glassLit",
+    "litChance": 0.9,
+    "width": 0.16,
+    "depth": 0.2
+  },
+  "door": {
+    "frame": "hull",
+    "width": 0.36,
+    "depth": 0.28,
+    "canopy": "plate",
+    "canopyDepth": 1.1,
+    "canopyHeight": 0.25
+  },
+  "parapet": {
+    "material": "hull",
+    "height": 1.1,
+    "width": 0.45
+  },
+  "roofBlocks": {
+    "material": "hull",
+    "count": [
+      2,
+      4
+    ],
+    "width": [
+      0.16,
+      0.4
+    ],
+    "depth": [
+      0.16,
+      0.4
+    ],
+    "height": [
+      1.4,
+      3.5
+    ],
+    "light": {
+      "material": "light",
+      "height": 0.07,
+      "chance": 0.4
+    }
+  },
+  "crown": {
+    "material": "hull",
+    "height": 0.35,
+    "out": 0.48
+  },
+  "ribs": {
+    "material": "trim",
+    "width": 0.22,
+    "depth": 0.28,
+    "chance": 0.45
+  },
+  "sign": {
+    "material": "sign",
+    "frame": "trim",
+    "chance": 0.95,
+    "width": 0.6,
+    "depth": 0.4,
+    "height": [
+      0.3,
+      0.6
+    ]
+  },
+  "props": [
+    {
+      "kind": "mast",
+      "material": "plate",
+      "count": [
+        1,
+        3
+      ],
+      "size": [
+        [
+          0.08,
+          0.12
+        ],
+        [
+          2.5,
+          5
+        ],
+        [
+          0.08,
+          0.12
+        ]
+      ],
+      "tip": {
+        "material": "light",
+        "height": 0.08,
+        "chance": 0.8
+      }
+    },
+    {
+      "kind": "box",
+      "material": "trim",
+      "count": [
+        1,
+        3
+      ],
+      "size": [
+        [
+          0.8,
+          1.5
+        ],
+        [
+          0.5,
+          1.2
+        ],
+        [
+          0.8,
+          1.5
+        ]
+      ],
+      "tip": {
+        "material": "light",
+        "height": 0.08,
+        "chance": 0.8
+      }
+    },
+    {
+      "kind": "dish",
+      "material": "trim",
+      "count": [
+        1,
+        3
+      ],
+      "size": [
+        [
+          1.6,
+          2.4
+        ],
+        [
+          1.2,
+          2.1
+        ],
+        0
+      ],
+      "tip": {
+        "material": "light",
+        "height": 0.08,
+        "chance": 0.8
+      }
+    }
+  ],
+  "structure": {
+    "hull": "hull",
+    "plate": "plate",
+    "team": "team",
+    "dark": "trim",
+    "pad": "deck",
+    "glow": "warn",
+    "beacon": "red",
+    "exhaust": "exhaust",
+    "window": "glassLit"
+  },
+  "buttresses": {
+    "material": "hull",
+    "width": 0.6,
+    "out": 1,
+    "height": 0.65,
+    "chance": 0.25
+  },
+  "pipes": {
+    "material": "pipe",
+    "bracket": "trim",
+    "radius": 0.12,
+    "chance": 0.36
+  },
+  "structures": {
+    "residence": {
+      "size": [
+        12,
+        11
+      ],
+      "height": [
+        6.5,
+        7.5
+      ],
+      "massing": "spire",
+      "taper": 0,
+      "chamfer": 0.2,
+      "roofRise": 0.35,
+      "bands": 3,
+      "teamChance": 0.16,
+      "modules": {
+        "count": [
+          0,
+          0
+        ],
+        "width": [
+          0.2,
+          0.3
+        ],
+        "depth": [
+          0.4,
+          0.6
+        ],
+        "height": [
+          0.5,
+          0.65
+        ]
+      },
+      "tower": {
+        "chance": 0
+      },
+      "door": {
+        "width": 0.42,
+        "height": 0.6,
+        "count": 1
+      },
+      "legs": false,
+      "thrusters": 0,
+      "pad": 0.65,
+      "props": [],
+      "forms": [],
+      "body": "stacked",
+      "facadeBay": 1.638,
+      "facadeStorey": 2.9,
+      "glazingFraction": 0.8,
+      "profileRoofScale": 0.8
+    },
+    "hall": {
+      "size": [
+        18,
+        18
+      ],
+      "height": [
+        7.5,
+        8.5
+      ],
+      "massing": "spire",
+      "taper": 0,
+      "chamfer": 0.2,
+      "roofRise": 0.35,
+      "bands": 4,
+      "teamChance": 0.16,
+      "modules": {
+        "count": [
+          0,
+          0
+        ],
+        "width": [
+          0.2,
+          0.3
+        ],
+        "depth": [
+          0.4,
+          0.6
+        ],
+        "height": [
+          0.5,
+          0.65
+        ]
+      },
+      "tower": {
+        "chance": 0
+      },
+      "door": {
+        "width": 0.3,
+        "height": 0.5,
+        "count": 2
+      },
+      "legs": false,
+      "thrusters": 0,
+      "pad": 0.65,
+      "props": [],
+      "forms": [],
+      "body": "facet",
+      "facadeBay": 2.898,
+      "facadeStorey": 4.9,
+      "glazingFraction": 0.704,
+      "profileRoofScale": 0.64
+    },
+    "workshop": {
+      "size": [
+        16,
+        11
+      ],
+      "height": [
+        5.5,
+        6.5
+      ],
+      "massing": "twin-bay",
+      "taper": 0,
+      "chamfer": 0.2,
+      "roofRise": 0.35,
+      "bands": 2,
+      "teamChance": 0.16,
+      "modules": {
+        "count": [
+          0,
+          0
+        ],
+        "width": [
+          0.2,
+          0.3
+        ],
+        "depth": [
+          0.4,
+          0.6
+        ],
+        "height": [
+          0.5,
+          0.65
+        ]
+      },
+      "tower": {
+        "chance": 0
+      },
+      "door": {
+        "width": 0.32,
+        "height": 0.7,
+        "count": 2
+      },
+      "legs": false,
+      "thrusters": 0,
+      "pad": 0.65,
+      "props": [
+        {
+          "kind": "tank",
+          "material": "pipe",
+          "count": [
+            1,
+            2
+          ],
+          "size": [
+            [
+              1.4,
+              2
+            ],
+            [
+              1.2,
+              2
+            ],
+            0
+          ]
+        }
+      ],
+      "forms": [],
+      "body": "flat",
+      "facadeBay": 2.415,
+      "facadeStorey": 4.1,
+      "glazingFraction": 0.552,
+      "profileRoofScale": 0.544
+    },
+    "watchtower": {
+      "size": [
+        10,
+        10
+      ],
+      "height": [
+        7,
+        11
+      ],
+      "massing": "terraced",
+      "taper": 0,
+      "chamfer": 0.2,
+      "roofRise": 0.35,
+      "bands": 2,
+      "teamChance": 0.16,
+      "door": {
+        "count": 0
+      },
+      "legs": false,
+      "pad": 0.65,
+      "props": [],
+      "forms": [],
+      "thrusters": 0,
+      "tower": {
+        "chance": 0
+      },
+      "body": "spire",
+      "modules": {
+        "count": [
+          0,
+          0
+        ],
+        "width": [
+          0.2,
+          0.3
+        ],
+        "depth": [
+          0.4,
+          0.6
+        ],
+        "height": [
+          0.5,
+          0.65
+        ]
+      },
+      "facadeBay": 1.386,
+      "facadeStorey": 3.8,
+      "glazingFraction": 0.52,
+      "profileRoofScale": 0.96
+    },
+    "market": {
+      "size": [
+        18,
+        14
+      ],
+      "height": [
+        5.5,
+        7
+      ],
+      "massing": "spire",
+      "taper": 0,
+      "chamfer": 0.2,
+      "roofRise": 0.35,
+      "bands": 4,
+      "teamChance": 0.16,
+      "modules": {
+        "count": [
+          0,
+          0
+        ],
+        "width": [
+          0.2,
+          0.3
+        ],
+        "depth": [
+          0.4,
+          0.6
+        ],
+        "height": [
+          0.5,
+          0.65
+        ]
+      },
+      "tower": {
+        "chance": 0
+      },
+      "door": {
+        "width": 0.22,
+        "height": 0.42,
+        "count": 2
+      },
+      "legs": false,
+      "thrusters": 0,
+      "pad": 0.65,
+      "props": [],
+      "forms": [],
+      "body": "flat",
+      "facadeBay": 2.31,
+      "facadeStorey": 3.6,
+      "glazingFraction": 0.85,
+      "profileRoofScale": 0.6
+    },
+    "administration": {
+      "size": [
+        16,
+        14
+      ],
+      "height": [
+        8,
+        10
+      ],
+      "massing": "spire",
+      "taper": 0,
+      "chamfer": 0.2,
+      "roofRise": 0.35,
+      "bands": 3,
+      "teamChance": 0.16,
+      "modules": {
+        "count": [
+          0,
+          0
+        ],
+        "width": [
+          0.2,
+          0.3
+        ],
+        "depth": [
+          0.4,
+          0.6
+        ],
+        "height": [
+          0.5,
+          0.65
+        ]
+      },
+      "tower": {
+        "chance": 0
+      },
+      "door": {
+        "width": 0.22,
+        "height": 0.42,
+        "count": 1
+      },
+      "legs": false,
+      "thrusters": 0,
+      "pad": 0.65,
+      "props": [],
+      "forms": [],
+      "body": "stacked",
+      "facadeBay": 1.89,
+      "facadeStorey": 3.3,
+      "glazingFraction": 0.85,
+      "profileRoofScale": 0.72
+    },
+    "warehouse": {
+      "size": [
+        24,
+        18
+      ],
+      "height": [
+        7,
+        9
+      ],
+      "massing": "twin-bay",
+      "taper": 0,
+      "chamfer": 0.2,
+      "roofRise": 0.35,
+      "bands": 2,
+      "teamChance": 0.16,
+      "modules": {
+        "count": [
+          0,
+          0
+        ],
+        "width": [
+          0.2,
+          0.3
+        ],
+        "depth": [
+          0.4,
+          0.6
+        ],
+        "height": [
+          0.5,
+          0.65
+        ]
+      },
+      "tower": {
+        "chance": 0
+      },
+      "door": {
+        "width": 0.24,
+        "height": 0.55,
+        "count": 2
+      },
+      "legs": false,
+      "thrusters": 0,
+      "pad": 0.65,
+      "props": [
+        {
+          "kind": "tank",
+          "material": "pipe",
+          "count": [
+            1,
+            2
+          ],
+          "size": [
+            [
+              1.4,
+              2
+            ],
+            [
+              1.2,
+              2
+            ],
+            0
+          ]
+        }
+      ],
+      "forms": [],
+      "body": "shed",
+      "facadeBay": 3.57,
+      "facadeStorey": 5.3,
+      "glazingFraction": 0.416,
+      "profileRoofScale": 0.44
+    },
+    "temple": {
+      "size": [
+        16,
+        16
+      ],
+      "height": [
+        10,
+        14
+      ],
+      "massing": "terraced",
+      "taper": 0,
+      "chamfer": 0.2,
+      "roofRise": 0.35,
+      "bands": 2,
+      "teamChance": 0.16,
+      "door": {
+        "count": 1,
+        "width": 0.22,
+        "height": 0.42
+      },
+      "legs": false,
+      "pad": 0.65,
+      "props": [],
+      "forms": [],
+      "thrusters": 0,
+      "tower": {
+        "chance": 0
+      },
+      "body": "facet",
+      "modules": {
+        "count": [
+          0,
+          0
+        ],
+        "width": [
+          0.2,
+          0.3
+        ],
+        "depth": [
+          0.4,
+          0.6
+        ],
+        "height": [
+          0.5,
+          0.65
+        ]
+      },
+      "facadeBay": 2.604,
+      "facadeStorey": 5.8,
+      "glazingFraction": 0.584,
+      "profileRoofScale": 0.92
+    }
+  },
+  "interiorGrammar": {
+    "form": "faceted",
+    "support": "rail",
+    "fixture": "strip",
+    "decor": "terminal",
+    "finish": "inside",
+    "frame": "seam",
+    "accent": "accent",
+    "emitter": "light",
+    "lightTint": [
+      0.66,
+      0.85,
+      1
+    ],
+    "lightGain": 1.25
+  }
+}

@@ -4,7 +4,7 @@ export type MaterialData=Record<string,unknown>;
 export interface MaterialLibrary {library:Record<string,MaterialData>}
 export const MATERIAL_EDIT_KEYS=[
   'metallic','roughness','thinTransmission','shadowDiffusion','sssStrength','sssScale','sssThickness','sssColor','cutoff','teamStrength','occlusionStrength',
-  'emissiveStrength','normalScale','doubleSided','unlit','castShadow',
+  'emissiveStrength','normalScale','uvScale','uvOffset','doubleSided','unlit','castShadow',
   'receiveShadow','vertexColors','alpha','team','description',
   'texture','normalMap','emissiveMap','teamMask','metallicRoughnessMap','occlusionMap'
 ] as const;
@@ -39,6 +39,8 @@ const fields:Array<Omit<MaterialField,'value'|'editable'>>=[
  {key:'occlusionStrength',label:'Occlusion strength',type:'number',min:0,max:1,step:.01},
  {key:'emissiveStrength',label:'Emissive strength',type:'number',min:0,max:100,step:.1},
  {key:'normalScale',label:'Normal scale',type:'number',min:0,max:16,step:.1},
+ {key:'uvScale',label:'UV scale (U,V)',type:'text',description:'Two finite values separated by a comma, e.g. 2,2.'},
+ {key:'uvOffset',label:'UV offset (U,V)',type:'text',description:'Two finite values separated by a comma, e.g. 0,0.'},
  {key:'doubleSided',label:'Double sided',type:'boolean'},
  {key:'unlit',label:'Unlit',type:'boolean'},
  {key:'castShadow',label:'Cast shadow',type:'boolean'},
@@ -56,14 +58,14 @@ const fields:Array<Omit<MaterialField,'value'|'editable'>>=[
 ];
 const defaults:Record<MaterialKey,FieldValue>={
  metallic:0,roughness:1,thinTransmission:0,shadowDiffusion:0,sssStrength:0,sssScale:.5,sssThickness:0,sssColor:'1,1,1',cutoff:.5,teamStrength:1,occlusionStrength:1,
- emissiveStrength:0,normalScale:1,doubleSided:false,unlit:false,castShadow:true,
+ emissiveStrength:0,normalScale:1,uvScale:'1,1',uvOffset:'0,0',doubleSided:false,unlit:false,castShadow:true,
  receiveShadow:true,vertexColors:false,alpha:'opaque',team:'none',description:'',
  texture:'',normalMap:'',emissiveMap:'',teamMask:'',metallicRoughnessMap:'',occlusionMap:''
 };
 export function materialFields(material:MaterialData,patch:MaterialPatch={}):MaterialField[]{
  return fields.map(field=>{
-  const source=field.key==='sssColor'&&Array.isArray(material.sssColor)
-   ? material.sssColor.slice(0,3).join(',') : material[field.key];
+  const source=(field.key==='sssColor'||field.key==='uvScale'||field.key==='uvOffset')&&Array.isArray(material[field.key])
+   ? (material[field.key] as unknown[]).join(',') : material[field.key];
   const expected=field.type==='text'||field.type==='asset'?'string':field.type;
   const valid=typeof source===expected&&(typeof source!=='number'||Number.isFinite(source));
   const value=patch[field.key]??(valid?source as FieldValue:defaults[field.key]);

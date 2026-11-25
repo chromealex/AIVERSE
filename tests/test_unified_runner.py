@@ -29,6 +29,8 @@ class UnifiedRunnerTests(unittest.TestCase):
         )
         self.bin_dir = self.root / "fake-bin"
         self.bin_dir.mkdir()
+        # Fake-tool tests exercise the portable runner without a real disk.
+        self.write_tool("uname", "#!/usr/bin/env bash\necho Linux\n")
         self.write_tool("ctest",
             "#!/usr/bin/env bash\n"
             "printf 'FAKE_CTEST_ARGS:%s\\n' \"$*\"\n"
@@ -57,6 +59,15 @@ class UnifiedRunnerTests(unittest.TestCase):
             cwd=self.root, env=env, text=True,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,
         )
+
+    def test_local_mac_missing_kingston_stops_before_tools(self):
+        self.write_tool("uname", "#!/usr/bin/env bash\necho Darwin\n")
+        self.write_tool("mount", "#!/usr/bin/env bash\nexit 0\n")
+        result = self.invoke("--quick", extras={"GITHUB_ACTIONS": ""})
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("KINGSTON is not mounted and writable", result.stdout)
+        self.assertNotIn("FAKE_CMAKE_ARGS", result.stdout)
+        self.assertNotIn("FAKE_CTEST_ARGS", result.stdout)
 
     def test_bash_syntax(self):
         subprocess.run(["bash", "-n", str(self.root / "run-tests.sh")], check=True)

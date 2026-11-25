@@ -33,6 +33,42 @@
 #include <exception>
 
 namespace aiverse::game {
+void GameView::clearSharedAnimationProfile() {
+    if(genericView_)genericView_->clearAnimationProfile();
+}
+Json GameView::sharedAnimationProfile(uint64_t entityKey,uint64_t worldEpoch,const std::string& action) {
+    Json r=Json::object();r.set("available",Json::fromBool(false));
+    if(action=="disable"&&!framePublication_.active()&&genericView_&&genericView_->profileMatches(entityKey,worldEpoch)){
+        genericView_->clearAnimationProfile();r.set("reason",Json::string("Profiling disabled"));return r;
+    }
+    if(framePublication_.active()||!framePublication_.published().ready()||!genericView_||
+       !sharedAnimationGraphDiagnostic(entityKey,worldEpoch).getBool("available")){
+        r.set("reason",Json::string("Current committed common View instance unavailable"));return r;
+    }
+    if(action=="enable"){
+        if(!genericView_->enableAnimationProfile(entityKey,worldEpoch))return r;
+    }else if(action=="reset"){
+        if(!genericView_->resetAnimationProfile(entityKey,worldEpoch))return r;
+    }else if(action=="disable")return r;
+    else if(action!="read")throw std::invalid_argument("unknown live profile action");
+    return genericView_->animationProfileReport(entityKey,worldEpoch);
+}
+Json GameView::sharedAnimationGraphDiagnostic(uint64_t entityKey,uint64_t worldEpoch,graph_telemetry::History* history) const {
+    Json unavailable=Json::object();unavailable.set("available",Json::fromBool(false));
+    const auto it=anims_.find(entityKey);
+    if(!genericView_||it==anims_.end()||!it->second.genericViewPose||
+       it->second.genericViewId!=entityKey||it->second.seen!=frame_||
+       !it->second.last.entity.valid()||it->second.last.entity.packed()!=entityKey)
+        return unavailable;
+    auto sample=genericView_->animationTelemetry(entityKey,worldEpoch);
+    if(!sample)return unavailable;
+    if(history){
+        sample->value.set("historyCaptured",Json::fromBool(history->publish(sample->identity,sample->sequence,sample->value)));
+        sample->value.set("history",history->read(sample->identity));
+    }
+    return std::move(sample->value);
+}
+
 namespace {
 // Resident memory of this process (MB), for the benchmark panel.
 double processResidentMB() {

@@ -1,5 +1,5 @@
 /* Shared drawing surface for the shader and SpectraFX topology editors. */
-.graph-canvas-scroll.graph-surface, .spectra-canvas__viewport.graph-surface {
+.au-graph-canvas.graph-surface, .graph-canvas-scroll.graph-surface, .spectra-canvas__viewport.graph-surface {
   background-color: var(--au-canvas);
   background-image: radial-gradient(circle, var(--au-line) 1px, transparent 1px);
   background-size: 20px 20px;

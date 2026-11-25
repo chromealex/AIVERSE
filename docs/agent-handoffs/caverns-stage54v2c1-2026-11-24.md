@@ -1,0 +1,12 @@
+# Caverns Stage54v2c1 — scoped deterministic ECS navigation
+
+Date 2026-11-24. Branch `integration/caverns-studio-stage54c-20261124`. Starting HEAD 38cded3d; roadmap 1915f99d; shared lifecycle 3e8b661d; planetary adapters 71fde58c; code/test/docs HEAD `06d6339de82b6d37956431e06ffb464682e1ebd0`.
+
+- Shared navigation provider has stable scope ID (default zero). Native candidate leases require provider scope == region; no native revisions stored in persistent ECS.
+- Existing CaveRouteFollower, CaveRouteIntent and CaveSteeringRequest schemas retained. Opt-in CaveRouteScope v1 persists region ID. Existing motor-neutral installer supports per-entity scoped immutable source/search; same resolved provider accompanies synchronous query. Scope mismatch marks route stale, clears steering; reassignment clears prior route. Router stamps scope; route assignment rejects foreign result even at equal SDF/env revisions. Exact goal appended after route validation. No Transform writer.
+- `engine/world/TerraWeaveCavernsPlanetEcsNavigation.h` captures canonical gameplay coverage from deterministic lattice config and frozen ECS; adapts authoritative motor position and authorized goal to chart, delegates to existing router. `TerraWeaveCavernsPlanetMotion.h` checks scope and actual start-to-request leg. Native host still owns admission and collision.
+- Existing registered planetary authority fixture adds calls to A*/HPA*/Flow/Hybrid in wall field and equal-epoch region mismatch/reassignment cases. Pathfinding skill updated.
+
+Evidence: source commits only. Native compile/CTest, save/load/rollback, actual simulation motor system, platform/CPU performance, headless and catalog validation NOT RUN. No new editable schema or graph UI; MCP/Studio/inspector regressions NOT RUN. Persistent scope component separately registered only for scoped installer; actual serialization tests pending. No native device/renderer changes, no visible capture. Main unchanged. Mac KINGSTON gate pending.
+
+Remaining Stage54v2c2: build real committed native navigation lease registry with prepare/commit/abort/retire and distinct canonical environment source; connect current lease checks to existing host motor admission, refresh environment revisions from actual authority, invalidate derived caches on rollback. Verify scoped fixed-tick installer and persistence in a real host, ensure all direct solver paths stamp scope where used outside router. No default GameCore migration or actual gameplay publication claimed. Stage55 native/Studio QA remains.

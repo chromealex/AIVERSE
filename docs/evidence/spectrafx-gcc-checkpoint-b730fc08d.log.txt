@@ -1,0 +1,82 @@
+aarch64-unknown-linux-gnu-g++ (GCC) 13.3.0
+Copyright (C) 2023 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+/Volumes/KINGSTON/AIVERSE-builds/caverns-stage59/stage30-linux/SpectraGpuParticles.o: ELF 64-bit LSB relocatable, ARM aarch64, version 1 (GNU/Linux), not stripped
+[  0%] Built target aiverse_ufbx
+[  0%] Built target aiverse_meshoptimizer_lod
+[  0%] Built target aiverse_imgui
+[  0%] Built target aiverse_zstd
+[ 12%] Built target aiverse_pack
+[ 12%] Built target aiverse_engine
+[ 37%] Built target aiverse_lua
+[ 37%] Built target aiverse_strata_builder
+[ 37%] Built target aiverse_shader_graph
+[ 37%] Built target aiverse_atlas
+[ 50%] Built target aiverse_world
+[ 62%] Built target aiverse_plugins
+[ 75%] Built target aiverse_fx
+[ 75%] Built target aiverse_postfx_data
+[ 75%] Built target aiverse_render2d
+[ 87%] Built target aiverse_models
+[ 87%] Built target aiverse_strata_model_adapter
+[ 87%] Built target aiverse_strata_gpu_scene
+[ 87%] Built target aiverse_strata_view
+[ 87%] Built target aiverse_strata_disk
+[ 87%] Built target aiverse_strata_gpu_culling
+[ 87%] Built target aiverse_strata_render_routing
+[ 87%] Built target aiverse_strata_portable
+[100%] Built target aiverse_runtime
+[100%] Built target aiverse_spectrafx_metal_allocator_test
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/caverns-stage59/0f4394d81d798f28bfdf6b5e43991057a9e7636b
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/caverns-stage59/0f4394d81d798f28bfdf6b5e43991057a9e7636b/DartConfiguration.tcl
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/caverns-stage59/0f4394d81d798f28bfdf6b5e43991057a9e7636b/DartConfiguration.tcl
+Test project /Volumes/KINGSTON/AIVERSE-builds/caverns-stage59/0f4394d81d798f28bfdf6b5e43991057a9e7636b
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 331
+    Start 331: spectrafx_metal_allocator
+
+331: Test command: /Volumes/KINGSTON/AIVERSE-builds/caverns-stage59/0f4394d81d798f28bfdf6b5e43991057a9e7636b/aiverse_spectrafx_metal_allocator_test
+331: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/caverns-stage59/0f4394d81d798f28bfdf6b5e43991057a9e7636b
+331: Test timeout computed to be: 300
+331: [metal-assets] libraries=0 sourceMisses=2 pipelines=26 pipelineFailures=0 archive=0 strict=0
+331: PASS allocator cap=256 procedural=0 growth=0 shrink=0 bytes=124004 elapsed_ms=40.19 (includes QA readbacks)
+331: PASS allocator cap=65536 procedural=0 growth=8 shrink=1 bytes=127076 elapsed_ms=226.77 (includes QA readbacks)
+331: PASS allocator cap=262144 procedural=0 growth=10 shrink=1 bytes=127076 elapsed_ms=418.69 (includes QA readbacks)
+331: PASS LOD procedural=0 far=72 rejected=184
+331: PASS real indirect billboard pixels procedural=0
+331: PASS live compaction procedural=0
+331: PASS owned checkpoint procedural=0
+331: PASS allocator cap=256 procedural=1 growth=0 shrink=0 bytes=90224 elapsed_ms=26.00 (includes QA readbacks)
+331: PASS allocator cap=65536 procedural=1 growth=8 shrink=1 bytes=90224 elapsed_ms=217.18 (includes QA readbacks)
+331: PASS allocator cap=262144 procedural=1 growth=10 shrink=1 bytes=90224 elapsed_ms=375.14 (includes QA readbacks)
+331: PASS LOD procedural=1 far=72 rejected=184
+331: PASS real indirect billboard pixels procedural=1
+331: PASS live compaction procedural=1
+331: PASS owned checkpoint procedural=1
+331: PASS shared immutable SDF GPU payload
+331: PASS packed SDF atlas offsets, contacts and fence quarantine
+331: PASS dense GPU volume parity, SDF mask, impulse, lifecycle and budget
+331: PASS dense volume HDR emission, depth clipping and empty field
+331: PASS scene volume anchors, impulse, revision and detach
+331: PASS shared budget peak=524288 denied=2
+331: PASS production Metal allocator acceptance
+1/1 Test #331: spectrafx_metal_allocator ........   Passed    2.39 sec
+
+The following tests passed:
+	spectrafx_metal_allocator
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+MetalGPU     =   2.39 sec*proc (1 test)
+RHI          =   2.39 sec*proc (1 test)
+SpectraFX    =   2.39 sec*proc (1 test)
+
+Total Test time (real) =   2.54 sec
