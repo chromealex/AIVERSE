@@ -2354,7 +2354,8 @@
    "roadmap": [
     {
      "id": "studio-graph-legibility",
-     "status": "in-progress",
+     "status": "done",
+     "date": "2026-11-25",
      "target": null,
      "title": "Читаемые узлы и связи графов",
      "titleEn": "Readable graph nodes and connections"
