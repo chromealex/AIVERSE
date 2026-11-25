@@ -5,6 +5,20 @@
   "changed_paths": [
     "apps/client/ClientFx.cpp",
     "apps/editor/Editor.cpp",
+    "apps/studio-web/src/panels/rulesSchema.ts",
+    "apps/studio-web/tests/rulesSchema.test.mjs",
+    "demos/projectile-impact-height/fx/fx.json",
+    "demos/projectile-impact-height/fx/trace.json",
+    "demos/projectile-impact-height/game.json",
+    "demos/projectile-impact-height/maps/range.json",
+    "demos/projectile-impact-height/models/launcher.obj",
+    "demos/projectile-impact-height/models/target.obj",
+    "demos/projectile-impact-height/rules.json",
+    "docs/agent-handoffs/projectile-impact-height-initial.md",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/systems.json",
+    "docs/features/projectile-impact-height.json",
+    "docs/models.md",
     "engine/fx/GameFx.cpp",
     "engine/fx/GameFx.h",
     "engine/view/game/GameLook.cpp",
@@ -28,19 +42,27 @@
       "evidence": []
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The ECS projectile remains authoritative. Presentation interpolates existing scene transforms, and particles read the displayed point.",
+      "evidence": [
+        "engine/view/game/GameView.cpp",
+        "engine/fx/GameFx.cpp"
+      ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "GameView::projectileImpactPathPoint and straightShotPoint expose current presentation data and interpolation.",
+      "evidence": [
+        "engine/view/game/GameView.h",
+        "engine/view/game/ProjectileAppearance.h"
+      ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The look authoring recipe specifies the target setting and side-view check.",
+      "evidence": [
+        "skills/visuals/aiverse-look/SKILL.md"
+      ]
     },
     "mcp": {
       "status": "not_run",
@@ -88,9 +110,12 @@
       "evidence": []
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "A small interactive range has two targets and a bright trail. The existing headless host ran the scene for 10s and reported 7 attacks.",
+      "evidence": [
+        "demos/projectile-impact-height/rules.json",
+        "demos/projectile-impact-height/maps/range.json"
+      ]
     },
     "tests": {
       "status": "not_run",
@@ -103,9 +128,11 @@
       "evidence": []
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The models guide documents units, defaults and supported flight paths.",
+      "evidence": [
+        "docs/models.md"
+      ]
     },
     "publishing": {
       "status": "not_run",
@@ -114,10 +141,19 @@
     }
   },
   "integrations": {
-    "skills": [],
-    "mcp_tools": [],
-    "studio_panels": [],
-    "studio_methods": []
+    "skills": [
+      "aiverse-look"
+    ],
+    "mcp_tools": [
+      "rules_get",
+      "rules_merge"
+    ],
+    "studio_panels": [
+      "rules"
+    ],
+    "studio_methods": [
+      "studio.rulesSet"
+    ]
   },
   "test_reports": []
 }

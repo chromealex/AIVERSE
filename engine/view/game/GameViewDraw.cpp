@@ -425,8 +425,15 @@ void GameView::drawTracers(Renderer3D& r, float dt, const MapGrid* grid) {
     tracers_.erase(std::remove_if(tracers_.begin(), tracers_.end(), [](const Tracer& s) { return s.age >= 1; }), tracers_.end());
 }
 
+bool GameView::projectileImpactPathPoint(Entity projectile, float3& point) const {
+    const auto it = anims_.find(projectile.packed());
+    if (it == anims_.end() || !it->second.straightImpact || it->second.seen != frame_) return false;
+    point = it->second.last.pos;
+    return true;
+}
+
 void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o, float dt,
-                              float3 up, bool useMuzzle) {
+                              float3 up, bool useMuzzle, const MapGrid* grid) {
     EntityAnim& ps = anims_[key];
     ps.seen = frame_;
     if(o.shooterType<looks_.size())ps.type=o.shooterType;
@@ -434,6 +441,7 @@ void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o,
     ps.phase+=step;
     if (!ps.launched) {
         ps.launched = true;
+        ps.lastPos = o.pos;
         ps.launch = {0, 0, 0};
         auto src = o.source.valid() ? anims_.find(o.source.packed()) : anims_.end();
         if (useMuzzle && src != anims_.end() && src->second.initialized && src->second.type < looks_.size() &&
@@ -447,11 +455,29 @@ void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o,
             }
             events_.push_back({"launch", o.source, s.type, s.last.owner, o.pos + ps.launch});
         }
-    } else {
+    } else if (!ps.straightImpact) {
         // converge onto the simulated path across the ground; the height stays: a shot flies at the height of the
         // muzzle it left (the simulation moves projectiles just above the ground)
         const float k = std::exp(-dt * 7.0f);
         ps.launch = {ps.launch.x * k, ps.launch.y, ps.launch.z * k};
+    }
+    if (grid && o.shotTargetType < looks_.size()) {
+        const auto& target = looks_[o.shotTargetType];
+        if (target.impactHeight >= 0) {
+            ps.straightImpact = true;
+            const float surface = target.structure || target.air
+                ? heightAt(*grid, o.target.x, o.target.z) : groundAt(*grid, o.target.x, o.target.z);
+            const float base = o.poseHasY ? o.poseY : surface;
+            ps.last.target = {o.target.x, base + (target.air ? target.flyHeight : 0.f) + target.impactHeight, o.target.z};
+        }
+    }
+    float3 point = o.pos + ps.launch;
+    float3 direction = o.facing;
+    if (ps.straightImpact) {
+        const float3 muzzle = ps.lastPos + ps.launch;
+        point = view_adapter::straightShotPoint(ps.lastPos, muzzle, o.pos, ps.last.target);
+        direction = ps.last.target - muzzle;
+        ps.last.pos = point;
     }
     float size = 1;
     const TypeLook::ProjectileLook* appearance=nullptr;
@@ -471,8 +497,9 @@ void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o,
         // Custom models follow the authoritative 3D trajectory, not the
         // legacy ball's permanent muzzle-height offset.
         const float3 offset=useMuzzle?ps.launch*std::exp(-ps.phase*7.f):float3{};
-        if(length(o.facing)>1e-6f)ps.attackDirection=o.facing;
-        draw.world=view_adapter::projectileFlightFrame(o.pos+offset,ps.attackDirection,up)*
+        if (!ps.straightImpact) point = o.pos + offset;
+        if(length(direction)>1e-6f)ps.attackDirection=direction;
+        draw.world=view_adapter::projectileFlightFrame(point,ps.attackDirection,up)*
             mat4::scale({size,size,size})*cfg.axisFix;
         draw.tint=cfg.tint;
         draw.flags=kDrawNoCastShadow;
@@ -491,7 +518,7 @@ void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o,
     if(size>0) {
         ::aiverse::view::MeshObject packet;
         packet.mesh=&projectile_;
-        packet.world=mat4::translate(o.pos+ps.launch)*
+        packet.world=mat4::translate(point)*
                      mat4::scale({size,size,size});
         packet.color={1,0.95f,0.8f,1};
         packet.flags=kDrawUnlit;

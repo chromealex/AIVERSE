@@ -402,6 +402,7 @@ deformed on the GPU from a float texture; weights come from the node / mesh defa
   `carry` = resource id or `"any"`: shown while carrying it, `weapon` = weapon id of the type: shown while the
   hero holds that weapon, rules `arsenal`). Materials named `*team*` take the
   team colour.
+- **impactHeight**: Set `view.impactHeight` on a target type (for example `0.45`) to place the endpoint of a straight, targeted shot that many world units above its base. The shot starts at the shooter's muzzle when available, otherwise at the first observed simulation position. Its model, built-in ball and trail share the line. A moving target updates the endpoint. Omitting the field preserves the existing presentation. Applies to ordinary flat-map targeted flight; programmed and ballistic flight keep their own paths.
 - **muzzle**: projectiles of this type start at that point and converge onto their simulated path across the
   ground (within ~0.3 s) while keeping the muzzle's height; a `launch` view event is reported there. The game's
   effects follow it too (GameFx with `setAttackOriginFn` = `GameView::muzzleOf`, set by the client and the editor):

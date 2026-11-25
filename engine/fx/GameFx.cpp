@@ -460,6 +460,8 @@ void GameFx::update(Simulation& sim, const std::vector<SceneObject>* scene, floa
         }
         const uint64_t key = o.entity.packed();
         if (o.isProjectile) {   // trail follows the interpolated projectile
+            float3 point;
+            const bool fitted = projectilePoint_ && projectilePoint_(o.entity, point);
             auto it = trails_.find(key);
             if (it == trails_.end()) {
                 auto* pr = w.alive(o.entity) ? w.tryGet<Projectile>(o.entity) : nullptr;
@@ -467,17 +469,17 @@ void GameFx::update(Simulation& sim, const std::vector<SceneObject>* scene, floa
                 const Binding& b = pr && su && pr->weapon>=0 && size_t(su->type)<types_.size() && size_t(pr->weapon)<types_[su->type].weapons.size() && types_[su->type].weapons[size_t(pr->weapon)].trail.set ? types_[su->type].weapons[size_t(pr->weapon)].trail : trailFor(su ? int(su->type) : -1);
                 if (!b.valid()) { trails_[key] = {{}, frame_}; continue; }   // remembered: no lookup every frame
                 float3 offset{}, muzzle, dir;
-                if (!place_ && pr && attackOrigin_ && attackOrigin_(pr->source, muzzle, dir)) {
+                if (!fitted && !place_ && pr && attackOrigin_ && attackOrigin_(pr->source, muzzle, dir)) {
                     offset = muzzle - o.pos;
                     if (render::length(offset) > 8) offset = {};   // stale pose: do not start from afar
                 }
-                trails_[key] = {ps_->play(b.effect, o.pos + offset, up, b.scale), frame_, b.clear, offset};
+                trails_[key] = {ps_->play(b.effect, fitted ? point : o.pos + offset, up, b.scale), frame_, b.clear, offset};
             } else {
                 Attached& a = it->second;
                 a.frame = frame_;
                 const float k = std::exp(-std::max(0.0f, dt) * 7.0f);   // GameView::drawProjectile's convergence
                 a.offset = {a.offset.x * k, a.offset.y, a.offset.z * k};
-                ps_->move(a.h, o.pos + a.offset);
+                ps_->move(a.h, fitted ? point : o.pos + a.offset);
             }
             continue;
         }

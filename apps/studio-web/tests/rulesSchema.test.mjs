@@ -22,3 +22,11 @@ test('inputs: blank inherits, numbers validated', () => {
   assert.equal(parseRuleInput(f, 'abc').ok, false);
   assert.deepEqual(parseRuleInput({ ...f, type: 'boolean' }, true), { ok: true, value: true });
 });
+
+test('projectile impact height is editable on a new type, including zero', () => {
+  const row = typeValues('target', {}, {}, []).find(v => v.field.path === 'view.impactHeight');
+  assert.equal(row.path, 'types.target.view.impactHeight');
+  assert.deepEqual(parseRuleInput(row.field, '0'), { ok: true, value: 0 });
+  assert.equal(parseRuleInput(row.field, '-1').ok, false);
+  assert.deepEqual(parseRuleInput(row.field, ''), { ok: true, value: null });
+});

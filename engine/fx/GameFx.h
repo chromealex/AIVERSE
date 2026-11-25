@@ -68,6 +68,7 @@ public:
     void setHeightFn(std::function<float(float x, float z)> fn) { height_ = std::move(fn); }
     using NodeFn = std::function<bool(Entity,const std::string&,render::mat4&)>;
     void setNodeFn(NodeFn fn) { node_=std::move(fn); }
+    void setProjectilePointFn(std::function<bool(Entity,fx::float3&)> fn) { projectilePoint_=std::move(fn); }
     void setAttackOriginFn(std::function<bool(Entity,fx::float3&,fx::float3&)> fn) { attackOrigin_=std::move(fn); }
     void setPlayerColorFn(std::function<fx::float4(int player)> fn) { playerColor_ = std::move(fn); }
     // Curved worlds (planets), optional; unset = flat behaviour. place(simPos, lift, out, up): where an effect
@@ -133,6 +134,7 @@ private:
     std::vector<std::string> warnings_;
     std::shared_ptr<Collector> collector_;
     std::function<float(float, float)> height_;
+    std::function<bool(Entity,fx::float3&)> projectilePoint_;
     std::function<bool(Entity,fx::float3&,fx::float3&)> attackOrigin_;
     std::function<fx::float4(int)> playerColor_;
     PlaceFn place_;

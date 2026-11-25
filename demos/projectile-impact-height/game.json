@@ -1,0 +1,13 @@
+{
+  "id": "org.aiverse.demos.projectile_height",
+  "name": "Projectile impact heights",
+  "version": "1.0",
+  "module": "game",
+  "rules": "rules.json",
+  "maps": [
+    {
+      "file": "maps/range.json",
+      "title": "Choose a target"
+    }
+  ]
+}
