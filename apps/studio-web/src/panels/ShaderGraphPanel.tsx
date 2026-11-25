@@ -16,7 +16,7 @@ import {DraftHistory} from '../graphs/graphFramework';
 import {StudioButton,StudioInput,StudioSelect,StudioSection} from '../ui';
 import './ShaderGraphPanel.css';
 
-export default function ShaderGraphPanel({projectPath,documentEpoch}:{projectPath:string;documentEpoch?:string}) {
+export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{projectPath:string;documentEpoch?:string;mapPath?:string}) {
  const [names,setNames]=useState<string[]>([]);
  const [operations,setOperations]=useState<StudioShaderGraphOp[]>([]);
  const [selectedOp,setSelectedOp]=useState('');
@@ -67,6 +67,7 @@ export default function ShaderGraphPanel({projectPath,documentEpoch}:{projectPat
  const [newDomain,setNewDomain]=useState('material');
  const [target,setTarget]=useState('');
  const [scope,setScope]=useState('game');
+ const mapName=mapPath?.split(/[\\/]/).pop() || 'Current map';
  const [emitter,setEmitter]=useState(0);
  const [message,setMessage]=useState('');
  const [search,setSearch]=useState('');
@@ -200,9 +201,11 @@ export default function ShaderGraphPanel({projectPath,documentEpoch}:{projectPat
     setDocument(saved);resetDraft(structuredClone(saved.graph));
    }
    if(applyAfterSave){
-    await invoke('studio.op',{expectedProject:projectPath,expectedDocumentEpoch:documentEpoch,op:'shader_graph_apply',
+    const applyToMap=draft.domain==='postfx'&&scope==='map';
+    await invoke('studio.op',{expectedProject:projectPath,expectedDocumentEpoch:documentEpoch,expectedMap:applyToMap?mapPath:undefined,op:'shader_graph_apply',
      params:{name:selected,target,scope,emitter,expectedSource:saved.originalJson}});
-    setMessage('Applied '+selected+' to '+(draft.domain==='postfx'?scope+' post effects':target)+'.');
+    setMessage(applyToMap?'Applied '+selected+' to '+mapName+'. Save the map to keep this change.':
+     'Applied '+selected+' to '+(draft.domain==='postfx'?'game post effects':target)+'.');
    }else setMessage('Graph saved to shaders/'+selected+'.json. MapDoc Undo does not apply.');
   }catch(e){
    const reason=e instanceof Error?e.message:String(e);
@@ -333,7 +336,7 @@ export default function ShaderGraphPanel({projectPath,documentEpoch}:{projectPat
        <details><summary>Apply to target</summary><form className="graph-asset-form"
          onSubmit={event=>{event.preventDefault();void save(true);}}>
         {draft.domain==='postfx'?<label>Post effects<select value={scope} onChange={e=>setScope(e.target.value)}>
-         <option value="game">Game</option><option value="map">Current map</option></select></label>
+         <option value="game">Game</option><option value="map">{mapName}</option></select></label>
         :<label>{draft.domain==='particle'?'Particle effect':'Material'}<input required value={target} onChange={e=>setTarget(e.target.value)}/></label>}
         {draft.domain==='particle'&&<label>Emitter index<input type="number" min="0" step="1" required
          value={Number.isFinite(emitter)?emitter:''} onChange={e=>setEmitter(e.target.valueAsNumber)}/></label>}

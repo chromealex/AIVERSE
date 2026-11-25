@@ -180,7 +180,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'texture_graph':
         return <MaterialsPanel documentEpoch={snapshot?.graphDocument?.epoch} textureOnly projectPath={snapshot?.project.path ?? ''} previewMaterial={snapshot?.previewMaterial}/>;
       case 'shader_graph':
-        return <ShaderGraphPanel key={snapshot?.graphDocument?.epoch} documentEpoch={snapshot?.graphDocument?.epoch} projectPath={snapshot?.project.path ?? ''}/>;
+        return <ShaderGraphPanel mapPath={snapshot?.graphDocument?.mapPath} key={snapshot?.graphDocument?.epoch} documentEpoch={snapshot?.graphDocument?.epoch} projectPath={snapshot?.project.path ?? ''}/>;
       case 'project': return <ProjectPanel key={snapshot?.project.path} {...ctx}/>;
       case 'facial_rig':
         return <FacialRigPanel projectPath={snapshot?.project.path ?? ''}/>;

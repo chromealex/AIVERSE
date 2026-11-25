@@ -3576,6 +3576,9 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                !params["expectedMap"].isString() || params.getStr("expectedMap")!=(ws_.map.path.empty()?"":ws_.relative(ws_.map.path))))
                 throw std::runtime_error("Caverns project/map changed; refresh the panel");
             Json input=params["params"].isObject()?params["params"]:Json::object();
+            if(op=="shader_graph_apply" && input.getStr("scope")=="map" && params.has("expectedMap") &&
+               (!params["expectedMap"].isString() || params.getStr("expectedMap")!=ws_.map.path))
+                throw std::runtime_error("Map changed before shader application; check the current map and retry.");
             const bool graphWrite=op=="fx_graph_set" || op=="texture_graph_set" || op=="animation_graph_set";
             if(graphWrite && input["expected"].isString())
                 input.set("expected",graphOriginal(input["expected"]));
