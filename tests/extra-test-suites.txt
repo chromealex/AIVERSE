@@ -11,3 +11,4 @@ unified-runner-smoke|python3|tests/test_unified_runner.py|
 feature-gate|python3|tests/feature_gate_test.py|
 agent-contracts|python3|tools/agents/check_contracts.py|
 site-web-demos|python3|tests/site_web_demos.py|
+checksum-runner|python3|tests/checksums/runner_test.py|
