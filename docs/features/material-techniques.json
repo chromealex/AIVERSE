@@ -18,16 +18,25 @@
     "docs/agent-handoffs/material-techniques-authoring-20261125.md",
     "docs/agent-handoffs/material-techniques-cost.md",
     "docs/agent-handoffs/material-techniques-initial.md",
+    "docs/agent-handoffs/material-techniques-integration-review.md",
     "docs/agent-handoffs/material-techniques-metal-20261125.md",
     "docs/agent-handoffs/material-techniques-studio-20261125.md",
     "docs/agent-handoffs/material-techniques-web-20261125.md",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/entries/2026-11-25-render-material-techniques.json",
     "docs/devlog/systems.json",
     "docs/evidence/material-techniques-far.png",
+    "docs/evidence/material-techniques-grid.cpp",
+    "docs/evidence/material-techniques-grid.log.txt",
     "docs/evidence/material-techniques-inspection.png",
     "docs/evidence/material-techniques-inspector.png",
+    "docs/evidence/material-techniques-integration-ready.json",
+    "docs/evidence/material-techniques-integration-ready.log.txt",
     "docs/evidence/material-techniques-mcp-20261125.json",
     "docs/evidence/material-techniques-mcp-20261125.log.txt",
     "docs/evidence/material-techniques-near.png",
+    "docs/evidence/material-techniques-reviewed.json",
+    "docs/evidence/material-techniques-reviewed.log.txt",
     "docs/evidence/material-techniques-runtime-20261125.json",
     "docs/evidence/material-techniques-runtime-20261125.log.txt",
     "docs/evidence/material-techniques-selection-20261125.json",
@@ -123,10 +132,12 @@
       ]
     },
     "performance": {
-      "status": "not_run",
-      "note": "Isolated CPU selector cost measured. Remaining large-scene GPU timing and draw-count acceptance pending.",
+      "status": "pass",
+      "note": "400 model instances, 60 measured Metal frames. See paired off/on submission, GPU, draw, allocation and tracked memory results.",
       "evidence": [
-        "docs/agent-handoffs/material-techniques-cost.md"
+        "docs/evidence/material-techniques-grid.log.txt",
+        "docs/evidence/material-techniques-grid.cpp",
+        "docs/agent-handoffs/material-techniques-integration-review.md"
       ]
     },
     "platforms": {
@@ -170,7 +181,8 @@
       "note": "Both model policy and actual Metal readback passed.",
       "evidence": [
         "docs/evidence/material-techniques-runtime-20261125.json",
-        "docs/evidence/material-techniques-runtime-20261125.log.txt"
+        "docs/evidence/material-techniques-runtime-20261125.log.txt",
+        "docs/evidence/material-techniques-reviewed.json"
       ]
     },
     "handoff": {
@@ -191,10 +203,12 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Real screenshots and a runnable local Web demo exist. Integration and public deployment are pending.",
+      "status": "pass",
+      "note": "Bilingual devlog and actual near/far WebGL captures. The small playable Web game was built and its Near, Far and Reset controls were verified.",
       "evidence": [
-        "docs/agent-handoffs/material-techniques-web-20261125.md"
+        "docs/devlog/entries/2026-11-25-render-material-techniques.json",
+        "docs/agent-handoffs/material-techniques-web-20261125.md",
+        "demos/material-techniques/game.json"
       ]
     }
   },
@@ -215,7 +229,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/material-techniques-runtime-20261125.json",
-    "docs/evidence/material-techniques-mcp-20261125.json"
+    "docs/evidence/material-techniques-reviewed.json"
   ]
 }
