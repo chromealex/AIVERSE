@@ -27,6 +27,8 @@
     "docs/evidence/render-seven-combined-preview.log.txt",
     "docs/evidence/render-seven-final-mac.json",
     "docs/evidence/render-seven-final-mac.log.txt",
+    "docs/evidence/render-seven-verified-main-mac.json",
+    "docs/evidence/render-seven-verified-main-mac.log.txt",
     "docs/features/prisma-authored-compositor.json",
     "docs/handoffs/prisma-stage-authored-compositor.md",
     "docs/prisma.md",
@@ -164,7 +166,8 @@
       "evidence": [
         "docs/evidence/prisma-authored-compositor-metal-20261125.json",
         "docs/evidence/render-seven-combined-preview.json",
-        "docs/evidence/render-seven-final-mac.json"
+        "docs/evidence/render-seven-final-mac.json",
+        "docs/evidence/render-seven-verified-main-mac.json"
       ]
     },
     "handoff": {
@@ -207,6 +210,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/render-seven-final-mac.json"
+    "docs/evidence/render-seven-verified-main-mac.json"
   ]
 }

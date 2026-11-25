@@ -24,6 +24,8 @@
     "docs/evidence/render-seven-combined-preview.log.txt",
     "docs/evidence/render-seven-final-mac.json",
     "docs/evidence/render-seven-final-mac.log.txt",
+    "docs/evidence/render-seven-verified-main-mac.json",
+    "docs/evidence/render-seven-verified-main-mac.log.txt",
     "docs/features/modeling-volume-csg.json",
     "docs/handoff/studio-html5/modeling-volume-csg.md",
     "docs/modeling.md",
@@ -155,7 +157,8 @@
       "evidence": [
         "docs/evidence/modeling-volume-csg-rebuild-20261125.log.txt",
         "docs/evidence/render-seven-combined-preview.json",
-        "docs/evidence/render-seven-final-mac.json"
+        "docs/evidence/render-seven-final-mac.json",
+        "docs/evidence/render-seven-verified-main-mac.json"
       ]
     },
     "handoff": {
@@ -200,6 +203,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/render-seven-final-mac.json"
+    "docs/evidence/render-seven-verified-main-mac.json"
   ]
 }

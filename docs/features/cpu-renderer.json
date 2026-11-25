@@ -35,6 +35,8 @@
     "docs/evidence/render-seven-combined-preview.log.txt",
     "docs/evidence/render-seven-final-mac.json",
     "docs/evidence/render-seven-final-mac.log.txt",
+    "docs/evidence/render-seven-verified-main-mac.json",
+    "docs/evidence/render-seven-verified-main-mac.log.txt",
     "docs/features/cpu-renderer.json",
     "engine/gfx/Gfx.h",
     "engine/gfx/cpu/GfxCpu.cpp",
@@ -152,7 +154,8 @@
       "evidence": [
         "docs/evidence/cpu-renderer-desktop-final.json",
         "docs/evidence/render-seven-combined-preview.json",
-        "docs/evidence/render-seven-final-mac.json"
+        "docs/evidence/render-seven-final-mac.json",
+        "docs/evidence/render-seven-verified-main-mac.json"
       ]
     },
     "handoff": {
@@ -187,6 +190,6 @@
     "studio_methods": []
   },
   "test_reports": [
-    "docs/evidence/render-seven-final-mac.json"
+    "docs/evidence/render-seven-verified-main-mac.json"
   ]
 }

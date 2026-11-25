@@ -16,6 +16,8 @@
     "docs/evidence/render-seven-combined-preview.log.txt",
     "docs/evidence/render-seven-final-mac.json",
     "docs/evidence/render-seven-final-mac.log.txt",
+    "docs/evidence/render-seven-verified-main-mac.json",
+    "docs/evidence/render-seven-verified-main-mac.log.txt",
     "docs/evidence/renderer-sdk-arch.png",
     "docs/evidence/renderer-sdk-integration-ready.json",
     "docs/evidence/renderer-sdk-integration-ready.log.txt",
@@ -157,7 +159,8 @@
         "docs/agent-handoffs/renderer-sdk-languages.md",
         "docs/evidence/renderer-sdk-reviewed.json",
         "docs/evidence/render-seven-combined-preview.json",
-        "docs/evidence/render-seven-final-mac.json"
+        "docs/evidence/render-seven-final-mac.json",
+        "docs/evidence/render-seven-verified-main-mac.json"
       ]
     },
     "handoff": {
@@ -193,6 +196,6 @@
     "studio_methods": []
   },
   "test_reports": [
-    "docs/evidence/render-seven-final-mac.json"
+    "docs/evidence/render-seven-verified-main-mac.json"
   ]
 }
