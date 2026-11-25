@@ -1,12 +1,11 @@
 import { useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { ChevronDown, LayoutGrid } from 'lucide-react';
 import {
   deleteLayoutPreset, factoryPresets, layoutDownloadName, parseLayoutFile, readSavedPresets,
   resetWorkspaceLayouts, saveLayoutPreset, serializeLayoutFile, type LayoutPreset,
 } from '../layoutPresets.ts';
 import type { DockTree } from '../nestedDock.ts';
-import { StudioContextMenu, type StudioMenuItem } from '../ui';
+import { StudioContextMenu, StudioDialog, type StudioMenuItem } from '../ui';
 import { WORKSPACE_INFO, workspaceDockTree, type StudioWorkspace } from '../workspaces.ts';
 import './LayoutMenu.css';
 
@@ -87,8 +86,8 @@ export default function LayoutMenu({ workspace, dock, onApply, onError }: {
       }}/>
     {open && rect && <StudioContextMenu x={rect.right - 248} y={rect.bottom + 2} anchor={buttonRef.current}
       minWidth={248} label="Layout" items={items} onClose={() => setOpen(false)}/>}
-    {naming && createPortal(<div className="layout-name-backdrop" onMouseDown={() => setNaming(false)}>
-      <form className="layout-name" role="dialog" aria-label="Save Layout" style={{ left: box.x, top: box.y }}
+    {naming && <StudioDialog className="layout-name-backdrop" label="Save Layout" onDismiss={() => setNaming(false)}>
+      <form className="layout-name" style={{ left: box.x, top: box.y }}
         onMouseDown={event => event.stopPropagation()}
         onSubmit={event => {
           event.preventDefault();
@@ -105,6 +104,6 @@ export default function LayoutMenu({ workspace, dock, onApply, onError }: {
           <button type="submit" disabled={!name.trim()}>Save</button>
         </div>
       </form>
-    </div>, document.body)}
+    </StudioDialog>}
   </>;
 }

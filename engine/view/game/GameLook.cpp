@@ -120,6 +120,11 @@ const Model* GameView::modelOf(uint16_t type, size_t choice) const {
     return type < looks_.size() && choice < looks_[type].models.size() ? looks_[type].models[choice].model : nullptr;
 }
 
+const Model* GameView::projectileModelOf(uint16_t type,size_t weapon) const {
+    if(type>=looks_.size()||weapon>=looks_[type].projectiles.size())return nullptr;
+    return looks_[type].projectiles[weapon].model;
+}
+
 GameView::TypeLook::GroundShadow GameView::parseGroundShadow(const Json& gs) {
     TypeLook::GroundShadow S;
     if (!gs.isObject() || !gs["image"].isString()) return S;
@@ -160,6 +165,36 @@ void GameView::buildLook(gfx::Device& dev, const UnitType& t, TypeLook& L) {
             bool found = false;
             for (size_t i = 0; i < t.weapons.size(); ++i) if (t.weapons[i].id == wid) { L.projectileScale[i] = std::max(0.0f, num(x, 1)); found = true; }
             if (!found) warn(t, "projectileScale: the type has no weapon '" + wid + "'");
+        }
+    }
+    // Projectile models borrow the same cache and retirement owner as unit models.
+    if (v.has("projectiles")) {
+        if (!v["projectiles"].isObject()) {
+            warn(t,"projectiles: expected object keyed by weapon ID");
+            if(strictAppearanceReload_)throw std::runtime_error("invalid projectiles appearance");
+        } else {
+            L.projectiles.resize(t.weapons.size());
+            for (const auto& [id, authored] : v["projectiles"].members()) {
+                try {
+                    const auto it=std::find_if(t.weapons.begin(),t.weapons.end(),
+                        [&](const WeaponDef& weapon){return weapon.id==id;});
+                    if(it==t.weapons.end())throw std::runtime_error("unknown weapon '"+id+"'");
+                    auto& shot=L.projectiles[size_t(it-t.weapons.begin())];
+                    shot.config=view_adapter::parseProjectileAppearance(authored);
+                    shot.model=loadModelCached(dev,t,shot.config.model);
+                    if(!shot.model)throw std::runtime_error("could not load model '"+shot.config.model+"'");
+                    if(!shot.config.clip.empty()) {
+                        shot.clip=shot.model->findClip(shot.config.clip);
+                        if(shot.clip<0) {
+                            warn(t,"projectiles."+id+": missing clip '"+shot.config.clip+"'; using bind pose");
+                            if(strictAppearanceReload_)throw std::runtime_error("projectile clip not found");
+                        }
+                    }
+                } catch(const std::exception& error) {
+                    warn(t,"projectiles."+id+": "+error.what());
+                    if(strictAppearanceReload_)throw;
+                }
+            }
         }
     }
     L.flyHeight = num(v["flyHeight"], 2.4f);
@@ -292,6 +327,22 @@ void GameView::buildLook(gfx::Device& dev, const UnitType& t, TypeLook& L) {
     const std::string cons = v.getStr("construction", buildStages ? "stages" : "grow");
     L.construction = cons == "dissolve" ? Construction::Dissolve : cons == "stages" ? Construction::Stages : Construction::Grow;
     if (cons != "grow" && cons != "dissolve" && cons != "stages") warn(t, "construction must be grow, dissolve or stages");
+    const Json& flash = v["hitFlash"];
+    if (flash.type() == Json::Type::Bool) {
+        if (!v.getBool("hitFlash")) L.hitFlashStrength = 0;
+    } else if (flash.isObject()) {
+        L.hitFlashStrength = std::max(0.f, num(flash["strength"], 0.3f));
+        L.hitFlashDuration = std::max(0.f, num(flash["duration"], 0.3f));
+        const auto& rgb = flash["color"];
+        if (flash.has("color")) {
+            if (rgb.isArray() && rgb.size() == 3 && rgb[0].isNumber() && rgb[1].isNumber() && rgb[2].isNumber()) {
+                uint32_t packed = 0;
+                for (size_t i = 0; i < 3; ++i)
+                    packed = (packed << 8) | uint32_t(std::lround(std::clamp(num(rgb[i], 1), 0.f, 1.f) * 255.f));
+                L.hitFlashColor = packed + 1;
+            } else warn(t, "hitFlash.color expects three RGB values");
+        }
+    } else if (!flash.isNull()) warn(t, "hitFlash expects a boolean or an object");
     const bool dis = v.getBool("dissolve", false);
     L.dissolveSpawn = v.getBool("dissolveSpawn", dis);
     L.dissolveDeath = v.getBool("dissolveDeath", dis);
@@ -427,6 +478,7 @@ bool GameView::warmPipelines(render::Renderer3D& renderer, uint16_t type) {
     const auto& look=looks_[type];
     for(const auto& choice:look.models) if(choice.model) ready=renderer.warmModelPipelines(*choice.model,&choice.materials) && ready;
     for(const auto& choice:look.lods) if(choice.model) ready=renderer.warmModelPipelines(*choice.model,&choice.materials) && ready;
+    for(const auto& shot:look.projectiles) if(shot.model) ready=renderer.warmModelPipelines(*shot.model,&shot.model->materials) && ready;
     return ready;
 }
 
@@ -453,7 +505,7 @@ void GameView::trimTypes(const std::vector<bool>& keep, bool compact) {
     if (genericView_ && !sourceIds.empty())
         genericView_->forgetSources(sourceIds);
     for (auto it=anims_.begin();it!=anims_.end();) {
-        if (!keep[it->second.type]) it=anims_.erase(it); else ++it;
+        if (it->second.type>=keep.size() || !keep[it->second.type]) it=anims_.erase(it); else ++it;
     }
     // Large projects can keep hundreds of model assets. A hash set makes
     // reclamation linear instead of repeatedly scanning the entire keep list.
@@ -467,6 +519,7 @@ void GameView::trimTypes(const std::vector<bool>& keep, bool compact) {
         for(const auto& c:look.models)visit(c);
         for(const auto& c:look.lods)visit(c);
         for(const auto& s:look.stages)visit(s.choice);
+        for(const auto& shot:look.projectiles)if(shot.model)used.insert(shot.model);
     }
     const size_t released=resources_.trimUnused(*dev_,used,
         [this](const render::Model* model) {
@@ -568,6 +621,7 @@ size_t GameView::reloadModelSources(const std::vector<std::string>& sources) {
                 for(const auto& choice:look.models)hit |= choiceUsesStale(choice);
                 for(const auto& choice:look.lods)hit |= choiceUsesStale(choice);
                 for(const auto& stage:look.stages)hit |= choiceUsesStale(stage.choice);
+                for(const auto& shot:look.projectiles)hit |= stale.contains(shot.model);
                 // A failed/null load may currently render a built-in shape.
                 // Source dependencies are also read from the authored tree,
                 // including LODs, stages and attachments not currently loaded.
@@ -800,6 +854,12 @@ bool GameView::reloadAppearanceTypes(const std::set<size_t>& types,
                 for(const auto& choice:candidate.models)warm(choice);
                 for(const auto& choice:candidate.lods)warm(choice);
                 for(const auto& stage:candidate.stages)warm(stage.choice);
+                for(const auto& shot:candidate.projectiles)if(shot.model) {
+                    const auto status=appearancePipelineValidator_(*shot.model,shot.model->materials);
+                    if(status==render::Renderer3D::PipelineWarmStatus::Failed)
+                        throw std::runtime_error("projectile GPU pipeline compilation failed");
+                    pending|=status==render::Renderer3D::PipelineWarmStatus::Pending;
+                }
                 if(pending) {
                     gpuAppearancePending_=true;
                     throw std::runtime_error(

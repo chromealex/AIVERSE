@@ -24,6 +24,10 @@ public:
     // Optional enclosing format context. UINT32_MAX means the current unversioned layout.
     // This value is not serialized by Archive itself; the owner reads/writes its version header.
     uint32_t formatVersion = UINT32_MAX;
+    // Pre-integration planetary v11 contained terrain but omitted seat controllers.
+    bool legacyPlanetV11 = false;
+    // Module-declared hash layout of the state just read, for verification before migration.
+    uint32_t moduleHashVersion = UINT32_MAX;
     bool writing() const { return out_ != nullptr || hash_ != nullptr; }
     bool ok() const { return ok_; }
     void fail() { ok_ = false; }

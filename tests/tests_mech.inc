@@ -796,6 +796,18 @@ TEST(mech_rounds) {
 // ---------------------------------------------------------------- UD: unit designs from chassis + parts
 #ifdef AIVERSE_TESTS_EDITOR_CORE
 #include "apps/editor/core/SchemaOps.h"
+TEST(rules_lint_recognizes_view_script_roots) {
+    Json rules = Json::parse(R"({"types":{"scout":{"health":{"max":10}}},"viewScripts":["scripts/view/hud.lua"]})");
+    Json map = Json::parse(flatMap(20, 20, R"(,"viewScripts":["scripts/view/map.lua"])"));
+    std::string error;
+    CHECK(editor::lintGameData(rules, map, &error).size() == 0);
+    CHECK(error.empty());
+    rules.set("viewScrips", Json::array());
+    const Json issues = editor::lintGameData(rules, map, &error);
+    CHECK(error.empty() && issues.size() == 1);
+    CHECK(issues[size_t(0)].getStr("path") == "viewScrips");
+}
+
 #endif
 TEST(mech_designs) {
     std::string rules = std::string(R"({"resources": {"gold": {"start": 1000}}, )") + kVic + R"(,

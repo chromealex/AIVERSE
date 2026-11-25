@@ -32,7 +32,7 @@ struct CameraOverhead {
     bool present = false, ortho = false, rotate = true;
     float pitch = 0.95f, yaw = 0, fovY = 0.75f;      // radians
     float zoom = -1, zoomMin = -1, zoomMax = -1;    // in the units above, -1 = keep
-    float pixelsPerCell = 0;
+    float pixelsPerCell = 0, designAspect = 0;
 };
 
 inline CameraOverhead overheadCameraFrom(const Json& manifest) {
@@ -47,6 +47,7 @@ inline CameraOverhead overheadCameraFrom(const Json& manifest) {
     c.fovY = std::clamp(num("fov", 43.0f), 5.0f, 120.0f) * kCameraDeg;
     c.zoom = num("zoom", -1); c.zoomMin = num("zoomMin", -1); c.zoomMax = num("zoomMax", -1);
     c.pixelsPerCell = num("pixelsPerCell", 0);
+    c.designAspect = std::max(0.f, num("designAspect", 0));
     c.rotate = j.getBool("rotate", !c.ortho);
     return c;
 }
@@ -60,6 +61,7 @@ inline float overheadDistanceFor(const CameraOverhead& c, float zoom) {
 // returns true; otherwise the caller's framing distance stays.
 inline bool applyOverheadCamera(const CameraOverhead& c, Camera& cam, float viewHeightPx) {
     if (!c.present) return false;
+    cam.designAspect = c.designAspect;
     cam.ortho = c.ortho;
     cam.pitch = c.pitch;
     cam.yaw = c.yaw;

@@ -10,6 +10,7 @@
 #include "engine/core/FixedMath.h"
 #include "engine/data/Json.h"
 #include <stdexcept>
+#include <functional>
 #include <vector>
 #include <string>
 #include <utility>
@@ -99,10 +100,13 @@ inline SphereWaterSample sampleWaterSphere(Entity entity, const WaterSphereCompo
 
 // Highest priority wins, then the larger surface, then the smallest Entity id. Only bodies whose shell
 // (up to the surface) contains the probe or whose surface it is above are considered: the nearest sea.
-inline SphereWaterSample sampleSphereWater(const World& world, Vec3 position, Fixed seconds = {}) {
+// Optional exact simulation-centre filter for body-local presentation probes.
+// The canonical unfiltered query retains identical selection semantics.
+inline SphereWaterSample sampleSphereWaterFiltered(const World& world, Vec3 position, Fixed seconds,
+                                                   const Vec3* center) {
     SphereWaterSample best;
     world.eachExistingConst<WaterSphereComponent>([&](Entity entity, const WaterSphereComponent& s) {
-        if (!world.alive(entity)) return;
+        if (!world.alive(entity) || (center && !(s.center==*center))) return;
         const SphereWaterSample c = sampleWaterSphere(entity, s, position, world.tryGetConst<WaterSphereWavesComponent>(entity), seconds);
         if (!c.found) return;
         const bool better = !best.found || c.priority > best.priority ||
@@ -113,6 +117,9 @@ inline SphereWaterSample sampleSphereWater(const World& world, Vec3 position, Fi
         if (better) best = c;
     });
     return best;
+}
+inline SphereWaterSample sampleSphereWater(const World& world, Vec3 position, Fixed seconds = {}) {
+    return sampleSphereWaterFiltered(world,position,seconds,nullptr);
 }
 
 // Buoyancy along the radial up (the plane policy of computeWaterForces with "up" taken from the sample).
@@ -128,8 +135,10 @@ inline WaterForceComponent computeSphereWaterForces(const SphereWaterSample& sam
 }
 
 // Read: WaterSphere + WaterProbe. Write: WaterSphereContact only. Place after the probe system.
-inline void addSphereWaterSamplingSystem(Simulation& sim, std::string name) {
-    sim.addSystem(std::move(name), [](Simulation& current) {
+using SphereWaterSampler=std::function<SphereWaterSample(const World&,Vec3,Fixed)>;
+inline void addSphereWaterSamplingSystem(Simulation& sim, std::string name,
+                                         SphereWaterSampler sampler={}) {
+    sim.addSystem(std::move(name), [sampler=std::move(sampler)](Simulation& current) {
         World& world = current.world();
         if (!world.countExisting<WaterSphereContactComponent>()) return;
         auto* contacts = &world.pool<WaterSphereContactComponent>();   // detach the COW pool before writing
@@ -140,7 +149,8 @@ inline void addSphereWaterSamplingSystem(Simulation& sim, std::string name) {
             const auto* probe = read.tryGetConst<WaterProbeComponent>(e);
             auto& contact = contacts->dataAt(i);
             const Fixed seconds = current.dt() * Fixed::fromInt(int64_t(current.tick()));
-            contact.sample = probe ? sampleSphereWater(read, probe->position, seconds) : SphereWaterSample{};
+            contact.sample = probe ? (sampler ? sampler(read,probe->position,seconds) :
+                sampleSphereWater(read, probe->position, seconds)) : SphereWaterSample{};
             contact.sampledTick = current.tick();
         }
     });

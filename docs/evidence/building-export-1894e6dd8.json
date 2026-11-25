@@ -1,0 +1,15 @@
+{
+  "sha": "1894e6dd8befba05c9acf95316488449af90768d",
+  "argv": [
+    "python3.12",
+    "tools/buildings/qa_batch_20.py",
+    "--compile",
+    "--exporter",
+    "/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage21-fixed/aiverse_building_export",
+    "--out",
+    "/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage21-fixed/recipes"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/building-export-1894e6dd8.log.txt",
+  "sha256": "1826c33c10529af6963fbbd9bba9aaa0eb8d4ff7ffb77d2dfb2307217fb10c48"
+}

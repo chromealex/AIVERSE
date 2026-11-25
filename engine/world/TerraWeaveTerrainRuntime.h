@@ -48,6 +48,40 @@ public:
            resolution_<2 || resolution_>129)
             throw std::invalid_argument("TerraWeave runtime terrain tile geometry");
     }
+    // Optional topology derivation (e.g. Caverns). The owning host binds
+    // a frozen validated snapshot and a monotonic transient epoch at the
+    // real reader-exclusion barrier. No callback may mutate terrain state.
+    using SurfaceTransform=std::function<TerrainPatch(TerrainPatch)>;
+    void setSurfaceTopology(uint64_t epoch,SurfaceTransform transform){
+        if(!epoch||epoch<=surfaceEpoch_||!transform)
+            throw std::invalid_argument("TerraWeave surface epoch must increase");
+        auto next=pending_;
+        for(const auto& [cell,resident]:residents_){(void)resident;next.insert_or_assign(cell,earth_.revision());}
+        surfaceTransform_=std::move(transform);surfaceEpoch_=epoch;pending_.swap(next);
+        surfaceGroupCells_.clear();surfaceGroupExclusive_={};surfaceGroupSoilRevision_=0;
+    }
+    // A certified group must remain pinned, with the same soil snapshot,
+    // until all its resident replacements and downstream owners are ready.
+    void setSurfaceGroupTopology(uint64_t epoch,uint64_t soilRevision,
+            std::set<world::Cell> cells,SurfaceTransform transform,
+            std::function<bool()> exclusive){
+        if(cells.empty()||cells.size()>64||soilRevision!=earth_.revision()||!exclusive||!exclusive())
+            throw std::invalid_argument("TerraWeave surface group requires frozen soil and exclusive readers");
+        setSurfaceTopology(epoch,std::move(transform));
+        surfaceGroupCells_.swap(cells);surfaceGroupSoilRevision_=soilRevision;
+        surfaceGroupExclusive_=std::move(exclusive);
+    }
+    uint32_t terrainResolution()const noexcept{return resolution_;}
+    bool surfaceGroupReady()const noexcept{
+        if(surfaceGroupCells_.empty())return true;
+        if(surfaceGroupSoilRevision_!=earth_.revision()||!pending_.empty()||residents_.size()!=surfaceGroupCells_.size())return false;
+        for(const auto& cell:surfaceGroupCells_){
+            const auto it=residents_.find(cell);
+            if(it==residents_.end()||!it->second.resident()||it->second.surfaceEpoch()!=surfaceEpoch_||it->second.revision()!=surfaceGroupSoilRevision_)return false;
+        }
+        return true;
+    }
+    uint64_t surfaceEpoch()const noexcept{return surfaceEpoch_;}
     // Optional observer of committed tiles, e.g. dynamic GI geometry
     // (world::GiTerraWeaveResidentBridge). `published` runs after a tile's
     // model and collision were swapped in (patch = what was published);
@@ -187,14 +221,18 @@ public:
                 throw std::invalid_argument("TerraWeave tiles are X/Z columns");
             needed.insert(tile);
         }
+        if(!surfaceGroupCells_.empty()&&(needed!=surfaceGroupCells_||earth_.revision()!=surfaceGroupSoilRevision_))
+            throw std::logic_error("TerraWeave surface group pins/soil changed: reconcile a new certified group");
+        if(!surfaceGroupCells_.empty()&&!surfaceGroupReady()&&(!surfaceGroupExclusive_||!surfaceGroupExclusive_()))
+            throw std::logic_error("TerraWeave surface group publication requires exclusive readers");
         std::map<world::Cell,SparseTerrainView> visualPlan;
-        for(const auto& tile:adaptive) {
+        if(!surfaceTransform_)for(const auto& tile:adaptive) {
             if(!needed.contains(tile.cell) ||
                tile.resolution<2 || tile.resolution>129 ||
                !visualPlan.emplace(tile.cell,tile).second)
                 throw std::invalid_argument("TerraWeave invalid adaptive terrain plan");
         }
-        if(!adaptive.empty() && visualPlan.size()!=needed.size())
+        if(!surfaceTransform_&&!adaptive.empty() && visualPlan.size()!=needed.size())
             throw std::invalid_argument("TerraWeave incomplete adaptive terrain plan");
         // A camera move can require re-meshing with no soil mutation.
         // Do not publish the same stale LOD when neighbor edge ratios changed.
@@ -263,8 +301,15 @@ public:
                         break; // keep prior GPU model safely resident
                     notified=std::move(visual);
                 }else{
-                    const TerrainPatch& patch=notified.emplace(bakeEarthworksTerrainPatch(
-                        earth_,tile,cellSizeMetres_,resolution_));
+                    auto baked=bakeEarthworksTerrainPatch(earth_,tile,cellSizeMetres_,resolution_);
+                    if(surfaceTransform_){
+                        const auto soilRevision=baked.sourceRevision;
+                        baked=surfaceTransform_(std::move(baked));
+                        if(baked.cell!=tile||baked.sourceRevision!=soilRevision||baked.surfaceEpoch!=surfaceEpoch_||
+                           baked.presentationOnly||baked.resolution!=resolution_||baked.cellSizeMetres!=cellSizeMetres_||!validTerrainPatchTopology(baked))
+                            throw std::logic_error("TerraWeave invalid surface transform result");
+                    }
+                    const TerrainPatch& patch=notified.emplace(std::move(baked));
                     if(!slot->second.publish(
                             device,spatial,colliders_,patch,ids(tile),
                             material,uvScale,visual?&*visual:nullptr,
@@ -345,6 +390,7 @@ public:
     // when a live patch is drawn, or z-fighting will occur.
     void draw(render::Renderer3D& renderer,
               TerrainPatchRenderOriginCm origin={}) const {
+        if(!surfaceGroupReady())return;
         for(const auto& [cell,patch]:residents_){
             (void)cell;patch.submit(renderer,origin);
         }
@@ -359,6 +405,10 @@ public:
     bool refreshNavMesh(nav::Mesh& mesh,
                         const EarthworksNavSource& source,
                         std::string* error=nullptr) const {
+        if(!surfaceGroupReady()){
+            if(error)*error="TerraWeave surface group is not fully published";
+            return false;
+        }
         std::vector<RectCm> dirty;
         for(const auto& change:retiredDirty_)dirty.push_back(change.bounds);
         for(const auto& [cell,resident]:residents_){
@@ -367,7 +417,30 @@ public:
                 dirty.push_back(change.bounds);
         }
         if(dirty.empty())return true;
-        return refreshEarthworksNav(mesh,source,dirty,error);
+        if(!surfaceEpoch_)return refreshEarthworksNav(mesh,source,dirty,error);
+        if(!pending_.empty()){
+            if(error)*error="TerraWeave surface topology is not fully published";
+            return false;
+        }
+        const auto cfg=source.config();
+        // Only published tile footprints participate. A solid or rejected
+        // shaft must not create an invented surface nav exclusion.
+        auto cutAware=source.withAdditionalBlocked([this,cfg](int32_t x,int32_t z){
+            const int64_t ax=cfg.originXcm+int64_t(x)*cfg.cellCm;
+            const int64_t az=cfg.originZcm+int64_t(z)*cfg.cellCm;
+            const int64_t bx=ax+cfg.cellCm,bz=az+cfg.cellCm;
+            const int64_t span=int64_t(cellSizeMetres_)*100;
+            const auto floor=[](int64_t n,int64_t d){return n/d-(n%d<0?1:0);};
+            for(int64_t tz=floor(az,span);tz<=floor(bz-1,span);++tz)
+                for(int64_t tx=floor(ax,span);tx<=floor(bx-1,span);++tx){
+                    const auto it=residents_.find({int32_t(tx),0,int32_t(tz)});
+                    if(it==residents_.end())continue;
+                    for(const auto& h:it->second.surfaceHoles())
+                        if(ax<h.maxX&&h.minX<bx&&az<h.maxZ&&h.minZ<bz)return true;
+                }
+            return false;
+        });
+        return refreshEarthworksNav(mesh,cutAware,dirty,error);
     }
 
     std::vector<TerrainPatchDirtyRegion> takeTerrainDirty(){
@@ -452,6 +525,11 @@ private:
     NereidEarthworksBridge water_;
     int32_t cellSizeMetres_=256;
     uint32_t resolution_=33;
+    SurfaceTransform surfaceTransform_;
+    std::set<world::Cell> surfaceGroupCells_;
+    std::function<bool()> surfaceGroupExclusive_;
+    uint64_t surfaceGroupSoilRevision_=0;
+    uint64_t surfaceEpoch_=0;
     TerrainCollisionPublisher colliders_;
     GrassPatchRenderer grassRhi_{};
     std::map<world::Cell,TerrainPatchResident> residents_;

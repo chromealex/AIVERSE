@@ -24,6 +24,7 @@ namespace aiverse::platform {
 #if defined(__ANDROID__) || (defined(__APPLE__) && TARGET_OS_IPHONE)
 bool setPointerLock(bool) { return false; }
 bool pointerLocked() { return false; }
+bool setCursorImage(const uint8_t*, int, int, int, int) { return false; }
 #endif
 
 

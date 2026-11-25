@@ -1,0 +1,11 @@
+{
+  "sha": "1748b1027049ce559ae92edb3c80ec30a2dc7804",
+  "argv": [
+    "python3.12",
+    "-c",
+    "import json, subprocess, sys\nfrom pathlib import Path\nsubprocess.run([sys.executable,'tools/skills/audit.py','--strict'],check=True)\nreports=sorted(Path('docs/evidence').glob('*-b954cd47a.json'))+[Path('docs/evidence/building-export-1894e6dd8.json')]\nfor path in reports:\n    print(f'Running {path.name}',flush=True)\n    argv=json.loads(path.read_bytes())['argv']\n    if path.name.startswith('building-live-owner-'):\n        # Studio creates a project descriptor on open. Keep it in an isolated fixture.\n        argv[-1]=argv[-1].replace(\"port=Path(temp)/'port'\", \"import shutil\\n project=Path(temp)/'project'\\n shutil.copytree(root/'examples/projectiles',project)\\n port=Path(temp)/'port'\").replace(\"str(root/'examples/projectiles')\",\"str(project)\")\n    subprocess.run(argv,check=True)"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/integration-acceptance-1748b1027.log.txt",
+  "sha256": "fd2b7ce4f253e8b3c02c3bd84df3b6146330b3ca2c6683b60bde7e2d921519c5"
+}

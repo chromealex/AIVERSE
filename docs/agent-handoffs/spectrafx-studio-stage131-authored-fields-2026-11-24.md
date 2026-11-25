@@ -1,0 +1,11 @@
+# Stage 131 — authored Studio environment publication
+
+Branch: feature/spectrafx-html5-data-interfaces-20261123
+Plan: 38f8018e13d83389dd1a94b5a38aac2f20318ec5
+Implementation: 85d4755210d8b1d5059a2ef7f0e6b866e68ae7e8
+
+Implemented automatic native Studio registry publication for supported flat edit maps. StudioSpectraFields copies at most 257x257 terrain preview corner values and evaluates the actual triangle diagonal and decimation used by the mesh. Data is unavailable outside map bounds or when terrain is hidden/unsupported. NEREID provider copies configured scene water surface declarations and uses existing coversWaterBody / considerWaterCandidate policy with river grade, authored currents and vortices. Stable authored water IDs provide tie ordering; no new water simulation or authority. Live confluence/cascade/flood/obstruction state is not represented by this edit-only provider.
+
+StudioScene passes current authored terrain configuration and NEREID scene into StudioSpectraSources; document revision and terrain settings invalidate the registry. Explicit host registry overrides remain supported, clear to resume automatic publication, and project/map replacement resets it. Unsupported world-space/planet documents clear flat source mirrors. No simulated PHYSIS data is fabricated in edit mode. The native spherical terrain/water adapters from stage 128 remain available but this Studio edit scene does not yet publish them. Actual committed gameplay-world snapshots and automatically evaluated socket authoring remain open.
+
+Paths: apps/studio-native/StudioSpectraFields.h, StudioSpectraSources.h, StudioScene.cpp, tests/StudioTerrainGeometryTests.cpp, existing skill, roadmap and subsystem notes. No persisted schema, shader ABI, new MCP operation or UI widget. Regression source covers triangle height, clearance, outside-map, hidden/planet rejection and absent PHYSIS. No compilation, CTest, hardware or visual QA executed (owner requested implementation first). No main sync or merge performed. No readiness claim. Next: real gameplay host registry publication with lifecycle/tick identity, then remaining collision, geometry and audio functionality; consider invalidation when water configuration changes independently of document revision.

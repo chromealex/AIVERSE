@@ -26,6 +26,7 @@
 #include "../render/GpuOwnedMemory.h"
 #include "FxEffect.h"
 #include "SpectraFxView.h"
+#include "SpectraSceneCollision.h"
 
 namespace aiverse::render { class GpuResourceRetirement; }
 namespace aiverse::fx {
@@ -117,12 +118,19 @@ public:
     const std::string& lastError() const { return error_; }
 
     void setQuality(FxQuality q);
+    // Low, medium, high. A negative entry restores the engine default.
+    void setParticleBudgets(std::array<int,3> budgets);
+    static constexpr int maxConfiguredParticles = 65536;
     FxQuality quality() const { return quality_; }
     void setFileReader(FileReader r) { reader_ = std::move(r); }
     void setTextureLoader(TextureLoader l);
     void setMeshLoader(MeshLoader l);
     // Ground height for "collision" (world y = 0 without it): GameView::heightAt in the apps.
     void setGroundHeight(std::function<float(float x, float z)> fn);
+    // Owner thread: immutable callbacks in particle simulation coordinates.
+    void setSceneCollisionRegistry(std::shared_ptr<const SceneCollisionRegistry> registry,
+                                   uint32_t maxQueries=8192);
+    SceneCollisionStats sceneCollisionStats() const;
     // Wind (world units / s^2) acting on emitters with "externalForces" (Unity wind zones).
     void setWind(float3 wind);
     // Towards the sun: shading of mesh particles (Renderer3D::lighting.sunDir).
@@ -168,14 +176,28 @@ public:
     // This does NOT recompile the effect/graph or mutate gameplay ECS.
     bool setProgramParameter(FxHandle h, uint32_t slot, float value,
                              bool affectExisting = false);
+    struct ModelInstance {
+        FxHandle handle;
+        int effect;
+        render::mat4 world;
+        float time;
+        float4 tint;
+    };
+    void modelInstances(std::vector<ModelInstance>& out) const;
     void move(FxHandle h, float3 pos);                 // attached effects (trails, burning buildings)
     void move(FxHandle h, float3 pos, float3 dir);
     void stop(FxHandle h);                             // stops emitting; live particles fade out
     void kill(FxHandle h);                             // stops and removes its particles at once
     bool playing(FxHandle h) const;                    // still emitting (its particles may outlive it)
+    struct InstanceTelemetry { uint64_t serial=0; int effect=-1; uint32_t particles=0; bool emitting=false; float time=0; };
+    // Owner-thread snapshot of a single actual CPU instance, no particle traversal.
+    InstanceTelemetry instanceTelemetry(FxHandle h) const;
+    uint64_t telemetryUpdateSerial() const {return telemetryUpdateSerial_;}
     bool alive(FxHandle h) const;                      // instance exists: emitting or still owns live particles
     void emitManual(FxHandle h);                       // fires the "manual" sub-emitters of its live particles
     void clear();                                      // everything (new match)
+    // Explicit presentation-only CPU replay seed; clears live particles and UID history.
+    void resetDeterministicSeed(uint32_t seed);
 
     // Generic camera/view packet: no dependency on an RTS or FPS camera.
     void setView(const SpectraFxView& view);
@@ -225,9 +247,12 @@ private:
     std::unique_ptr<Impl> impl_;
     render::GpuResourceRetirement* gpuRetirement_ = nullptr;
     FxQuality quality_ = FxQuality::Medium;
+    std::array<int,3> particleBudgets_{-1,-1,-1};
+    QualityLimits effectiveLimits(FxQuality q) const;
     FileReader reader_;
     std::vector<std::string> errors_;
     FxStats stats_;
+    uint64_t telemetryInstanceSerial_=0,telemetryUpdateSerial_=0;
     std::string error_;
 };
 

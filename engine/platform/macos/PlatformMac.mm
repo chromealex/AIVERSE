@@ -19,11 +19,43 @@ using aiverse::platform::detail::state;
 
 static std::unique_ptr<gfx::Device> g_device;
 static NSWindow* g_window = nil;
+static NSCursor* g_gameCursor = nil;
 static bool g_pointerLocked = false;
 // Strong owner of the app delegate: NSApp.delegate is weak, and once the timer is invalidated
 // nothing else retains it (a freed delegate crashed in -tick when the window closed).
 static id g_delegate = nil;
 static std::chrono::steady_clock::time_point g_last;
+
+// AIVERSE_BACKGROUND=1: a run that must not disturb the person at the Mac (agents, CI, scripted captures).
+// No Dock icon, no activation, no key window; the window is ordered in behind every other window and
+// placed beyond all screens, so it renders (and AIVERSE_SCREENSHOT works) without ever being seen.
+// It gets no mouse or keyboard input. Unset, "0" or empty: the normal foreground window.
+static bool backgroundRun() {
+    static const bool on = [] {
+        const char* v = std::getenv("AIVERSE_BACKGROUND");
+        return v && *v && std::strcmp(v, "0") != 0;
+    }();
+    return on;
+}
+
+// AppKit keeps titled windows on a screen (constrainFrameRect); a background run needs the frame it asked for.
+@interface AiverseBackgroundWindow : NSWindow
+@end
+@implementation AiverseBackgroundWindow
+- (NSRect)constrainFrameRect:(NSRect)frame toScreen:(NSScreen*)screen { return frame; }
+- (BOOL)canBecomeKeyWindow { return NO; }
+- (BOOL)canBecomeMainWindow { return NO; }
+@end
+
+// Bottom-left corner for a window of the given size that lies outside every screen.
+static NSPoint offscreenOrigin(NSSize size) {
+    CGFloat minX = 0, minY = 0;
+    for (NSScreen* s in NSScreen.screens) {
+        minX = MIN(minX, NSMinX(s.frame));
+        minY = MIN(minY, NSMinY(s.frame));
+    }
+    return NSMakePoint(minX - size.width - 4000, minY - size.height - 4000);
+}
 
 static uint8_t modsFrom(NSEventModifierFlags f) {
     uint8_t m = 0;
@@ -73,6 +105,10 @@ static void updateSizes(NSView* view) {
 @end
 
 @implementation AiverseView
+- (void)resetCursorRects {
+    [super resetCursorRects];
+    if (g_gameCursor) [self addCursorRect:self.bounds cursor:g_gameCursor];
+}
 - (BOOL)isFlipped { return YES; }
 - (BOOL)acceptsFirstResponder { return YES; }
 - (BOOL)wantsUpdateLayer { return YES; }
@@ -168,7 +204,8 @@ static void updateSizes(NSView* view) {
     NSRect frame = NSMakeRect(0, 0, cfg.width, cfg.height);
     NSWindowStyleMask style = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable;
     if (cfg.resizable || cfg.windowMode == AppConfig::WindowMode::Fullscreen) style |= NSWindowStyleMaskResizable;   // AppKit fullscreen needs a resizable window
-    g_window = [[NSWindow alloc] initWithContentRect:frame styleMask:style backing:NSBackingStoreBuffered defer:NO];
+    Class windowClass = backgroundRun() ? [AiverseBackgroundWindow class] : [NSWindow class];
+    g_window = [[windowClass alloc] initWithContentRect:frame styleMask:style backing:NSBackingStoreBuffered defer:NO];
     // game.json "window": minimum size, aspect lock, whether the green button / Ctrl+Cmd+F go fullscreen
     if (cfg.minWidth > 0 || cfg.minHeight > 0) g_window.contentMinSize = NSMakeSize(MAX(cfg.minWidth, 1), MAX(cfg.minHeight, 1));
     if (cfg.keepAspect && cfg.resizable) g_window.contentAspectRatio = NSMakeSize(cfg.width, cfg.height);
@@ -182,16 +219,23 @@ static void updateSizes(NSView* view) {
     g_window.backgroundColor = [NSColor colorWithSRGBRed:S.cfg.clearColor[0] green:S.cfg.clearColor[1] blue:S.cfg.clearColor[2] alpha:1];
     self.view = [[AiverseView alloc] initWithFrame:frame];
     g_window.contentView = self.view;
-    [g_window center];
+    if (backgroundRun()) [g_window setFrameOrigin:offscreenOrigin(g_window.frame.size)];
+    else [g_window center];
     updateSizes(self.view);
     g_device = gfx::createMetalDevice((__bridge void*)self.view.layer);
     if (S.cb.init) S.cb.init(*g_device);   // before the window becomes key: no events reach an uninitialised app
-    if (cfg.windowMode == AppConfig::WindowMode::Maximized && cfg.resizable && g_window.screen)
-        [g_window setFrame:g_window.screen.visibleFrame display:NO];   // "maximized": the whole visible screen, still a window
-    [g_window makeKeyAndOrderFront:nil];
-    [g_window makeFirstResponder:self.view];
-    [NSApp activateIgnoringOtherApps:YES];
-    if (cfg.windowMode == AppConfig::WindowMode::Fullscreen) [g_window toggleFullScreen:nil];   // native fullscreen (own Space)
+    if (backgroundRun()) {
+        // the asked size, behind everything, off every screen; window modes (maximized / fullscreen) are not applied
+        [g_window orderBack:nil];
+        [g_window makeFirstResponder:self.view];
+    } else {
+        if (cfg.windowMode == AppConfig::WindowMode::Maximized && cfg.resizable && g_window.screen)
+            [g_window setFrame:g_window.screen.visibleFrame display:NO];   // "maximized": the whole visible screen, still a window
+        [g_window makeKeyAndOrderFront:nil];
+        [g_window makeFirstResponder:self.view];
+        [NSApp activateIgnoringOtherApps:YES];
+        if (cfg.windowMode == AppConfig::WindowMode::Fullscreen) [g_window toggleFullScreen:nil];   // native fullscreen (own Space)
+    }
     updateSizes(self.view);
     g_last = std::chrono::steady_clock::now();
     const char* benchmark=std::getenv("AIVERSE_BENCH_UNCAPPED");
@@ -285,7 +329,7 @@ static void updateSizes(NSView* view) {
 - (void)application:(NSApplication*)app openURLs:(NSArray<NSURL*>*)urls {
     for (NSURL* u in urls)
         if (u.isFileURL && u.path) detail::requestOpenFile(u.path.UTF8String);
-    if (g_window) [NSApp activateIgnoringOtherApps:YES];
+    if (g_window && !backgroundRun()) [NSApp activateIgnoringOtherApps:YES];
 }
 - (BOOL)windowShouldClose:(NSWindow*)w {
     Event e; e.type = EventType::QuitRequested; detail::dispatch(e);
@@ -318,6 +362,25 @@ static void updateMacSafeArea() {
 @end
 
 namespace aiverse::platform {
+bool setCursorImage(const uint8_t* pixels, int w, int h, int x, int y) {
+    if (!g_window) return false;
+    NSCursor* next = nil;
+    if (pixels) {
+        if (w < 1 || h < 1 || w > 256 || h > 256 || x < 0 || y < 0 || x >= w || y >= h) return false;
+        NSBitmapImageRep* rep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:nil pixelsWide:w pixelsHigh:h
+            bitsPerSample:8 samplesPerPixel:4 hasAlpha:YES isPlanar:NO colorSpaceName:NSDeviceRGBColorSpace
+            bitmapFormat:NSBitmapFormatAlphaNonpremultiplied bytesPerRow:4*w bitsPerPixel:32];
+        if (!rep.bitmapData) return false;
+        std::memcpy(rep.bitmapData, pixels, size_t(w)*h*4);
+        NSImage* image = [[NSImage alloc] initWithSize:NSMakeSize(w,h)];
+        [image addRepresentation:rep];
+        next = [[NSCursor alloc] initWithImage:image hotSpot:NSMakePoint(x,y)];
+    }
+    g_gameCursor = next;
+    [g_window invalidateCursorRectsForView:g_window.contentView];
+    [(next ?: [NSCursor arrowCursor]) set];
+    return true;
+}
 bool pointerLocked() { return g_pointerLocked; }
 bool setPointerLock(bool enabled) {
     if (enabled == g_pointerLocked) return true;
@@ -329,7 +392,7 @@ bool setPointerLock(bool enabled) {
 
 namespace detail {
 void applyFullscreen(bool on) {
-    if (!g_window) return;
+    if (!g_window || backgroundRun()) return;   // a background run never takes a Space
     bool now = (g_window.styleMask & NSWindowStyleMaskFullScreen) != 0;
     if (on != now) [g_window toggleFullScreen:nil]; // native Spaces fullscreen; delegate updates state
 }
@@ -369,7 +432,8 @@ int run(const AppConfig& cfg, AppCallbacks cb) {
         // openURLs requests as well
         [[NSUserDefaults standardUserDefaults] registerDefaults:@{@"NSTreatUnknownArgumentsAsOpen": @"NO"}];
         [NSApplication sharedApplication];
-        [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+        // background run: no Dock icon, no menu bar, never the active app
+        [NSApp setActivationPolicy:backgroundRun() ? NSApplicationActivationPolicyAccessory : NSApplicationActivationPolicyRegular];
         // Minimal menu so Cmd+Q works.
         NSMenu* bar = [NSMenu new];
         NSMenuItem* appItem = [NSMenuItem new];

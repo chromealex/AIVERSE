@@ -13,7 +13,7 @@ namespace {
 
 constexpr const char* kCueNames[] = {
     "attack", "hit", "miss", "died", "spawned", "ready", "buildPlaced", "buildDone", "gathered", "captured",
-    "levelUp", "ability", "upgraded", "sold", "regionClaimed", "wave", "trail", "damaged",
+    "levelUp", "ability", "upgraded", "sold", "regionClaimed", "wave", "trail", "damaged", "chainJump",
 };
 static_assert(sizeof(kCueNames) / sizeof(kCueNames[0]) == size_t(FxCue::Count), "cue names out of sync");
 constexpr const char* kCategories[] = {"structure", "air", "unit"};
@@ -24,7 +24,16 @@ bool cueFromName(const std::string& s, FxCue& out) {
     return false;
 }
 
-constexpr int kMaxCombatEffectsPerFrame = 48;   // big battles: bound the work, the budget does the rest
+int readLimit(const Json& object, const char* key, int fallback, int maximum,
+              std::vector<std::string>& warnings) {
+    if (!object.has(key)) return fallback;
+    const auto& value = object[key];
+    const int64_t n = value.integer(-1);
+    if (value.isNumber() && n >= 0 && n <= maximum && value.toDouble() == double(n))
+        return int(n);
+    warnings.push_back(std::string("limits.") + key + ": expected integer 0.." + std::to_string(maximum));
+    return fallback;
+}
 
 float fl(Fixed f) { return float(f.toDouble()); }
 float3 toF(const Vec3& v) { return {fl(v.x), fl(v.y), fl(v.z)}; }
@@ -46,16 +55,33 @@ GameFx::Binding GameFx::resolve(const Json& v, const std::string& where) {
     if (v.isString()) name = v.str();
     else if (v.isObject()) {
         for (auto& [k, x] : v.members())
-            if (k != "effect" && k != "height" && k != "scale" && k != "teamColor" && k != "below" && k != "upright" && k != "clear")
+            if (k != "effect" && k != "height" && k != "scale" && k != "teamColor" && k != "below" && k != "upright" && k != "clear" && k != "node" && k != "offset" && k != "inheritRotation" && k != "inheritScale" && k != "anchor" && k != "mode" && k != "lifetime" && k != "color")
                 warnings_.push_back(where + ": unknown field '" + k + "'");
         name = v["effect"].str();
+        b.beam = v.getStr("mode") == "beam";
+        b.lifetime = std::clamp(float(v.getFx("lifetime", Fixed::fromRatio(1,5)).toDouble()), .001f, 60.f);
+        b.beamColor = uint32_t(v.getInt("color", b.beamColor));
         b.height = float(v.getFx("height").toDouble());
         b.scale = float(v.getFx("scale", Fixed::fromInt(1)).toDouble());
         b.below = float(v.getFx("below", Fixed::fromRatio(1, 2)).toDouble());
         b.teamColor = v.getBool("teamColor");
         b.upright = v.getBool("upright");
         b.clear = v.getBool("clear");
+        if(v.has("node") && !v["node"].isString())warnings_.push_back(where+": node must be a name");
+        else b.node=v.getStr("node");
+        if(v.has("offset")) {
+            const auto& o=v["offset"];
+            if(o.isArray()&&o.size()==3&&o[0].isNumber()&&o[1].isNumber()&&o[2].isNumber())
+                b.offset={fl(o[0].fx()),fl(o[1].fx()),fl(o[2].fx())};
+            else warnings_.push_back(where+": offset must be three numbers");
+        }
+        b.inheritRotation=v.getBool("inheritRotation");
+        b.inheritScale=v.getBool("inheritScale");
+        const auto anchor=v.getStr("anchor","subject");
+        b.targetNode=anchor=="target";
+        if(anchor!="subject"&&anchor!="target")warnings_.push_back(where+": anchor must be subject or target");
     }
+    if (b.beam && name.empty()) return b;
     if (name.empty()) { warnings_.push_back(where + ": expected an effect name or { \"effect\": ... }"); return b; }
     const size_t before = ps_->errors().size();
     b.effect = ps_->effect(name);
@@ -72,12 +98,30 @@ bool GameFx::init(fx::ParticleSystem& ps, const Rules& rules, const Json& bank, 
     warnings_.clear();
     global_ = {};
     category_ = {};
+    chainBindings_.clear();
     types_.assign(rules.types.size(), TypeFx{});
+    statusBindings_.assign(rules.statuses.size(), {});
+    for (size_t i = 0; i < rules.statuses.size(); ++i) {
+        const auto& status = rules.statuses[i];
+        if (status.view.has("effect"))
+            statusBindings_[i] = resolve(status.view, "statuses." + status.id + ".view");
+    }
     auto fail = [&](const std::string& m) { if (error) *error = "fx.json: " + m; return false; };
+    const auto& limits = bank["limits"];
+    const auto& particles = limits["particles"];
+    if (bank.has("limits") && !limits.isObject()) warnings_.push_back("limits: expected object");
+    if (limits.has("particles") && !particles.isObject()) warnings_.push_back("limits.particles: expected object");
+    combatLimit_ = readLimit(limits,"combatPerFrame",48,65536,warnings_);
+    std::array<int,3> budgets{};
+    for (size_t i = 0; i < budgets.size(); ++i) {
+        const char* tier = fx::qualityName(fx::FxQuality(size_t(fx::FxQuality::Low) + i));
+        budgets[i] = readLimit(particles,tier,-1,fx::ParticleSystem::maxConfiguredParticles,warnings_);
+    }
+    ps.setParticleBudgets(budgets);
     if (bank.isNull()) return true;   // a game without effects
     if (!bank.isObject()) return fail("expected an object");
     for (auto& [k, v] : bank.members())
-        if (k != "events" && k != "types" && k != "weapons" && k != "abilities" && k != "comment") warnings_.push_back("fx.json: unknown section '" + k + "'");
+        if (k != "events" && k != "types" && k != "weapons" && k != "abilities" && k != "limits" && k != "chainJumps" && k != "comment") warnings_.push_back("fx.json: unknown section '" + k + "'");
 
     for (auto& [key, v] : bank["events"].members()) {
         const size_t dot = key.find('.');
@@ -89,6 +133,12 @@ bool GameFx::init(fx::ParticleSystem& ps, const Rules& rules, const Json& bank, 
         if (it == std::end(kCategories)) { warnings_.push_back("events." + key + ": category must be structure, air or unit"); continue; }
         category_[size_t(c)][size_t(it - std::begin(kCategories))] = resolve(v, "events." + key);
     }
+
+    const auto& jumps = bank["chainJumps"];
+    for (const auto& payload : rules.payloads)
+        for (const auto& effect : payload)
+            if (effect.kind == EffectKind::Chain && !effect.chainFx.empty() && jumps.has(effect.chainFx))
+                chainBindings_[effect.payload] = resolve(jumps[effect.chainFx], "chainJumps." + effect.chainFx);
 
     const Json& weaponsById = bank["weapons"];
     const Json& abilitiesById = bank["abilities"];
@@ -168,12 +218,30 @@ const GameFx::Binding& GameFx::trailFor(int type, int weapon) const {
     return lookup(type, FxCue::Trail);
 }
 
-bool GameFx::playAt(const Binding& b, const Vec3& pos, int type, float3 dir, int owner) {
+bool GameFx::nodePlacement(const Binding& b, Entity entity, float3& pos, float3& dir, float& scale) const {
+    if(b.node.empty()||!node_||!entity.valid())return false;
+    render::mat4 frame;
+    if(!node_(entity,b.node,frame))return false;
+    pos=frame.transformPoint(b.offset);
+    const float3 axis{frame.at(0,1),frame.at(1,1),frame.at(2,1)};
+    if(b.inheritRotation&&render::length(axis)>1e-6f)dir=render::normalize(axis);
+    if(b.inheritScale) {
+        const float sx=render::length(float3{frame.at(0,0),frame.at(1,0),frame.at(2,0)});
+        const float sy=render::length(axis);
+        const float sz=render::length(float3{frame.at(0,2),frame.at(1,2),frame.at(2,2)});
+        scale*=(sx+sy+sz)/3.f;
+    }
+    return true;
+}
+
+bool GameFx::playAt(const Binding& b, const Vec3& pos, int type, float3 dir, int owner, Entity anchor) {
     if (!b.valid() || !ps_) return false;
     if (b.upright) dir = {0, 1, 0};
     float3 p = toF(pos);
     const bool air = type >= 0 && size_t(type) < rules_->types.size() && (rules_->types[size_t(type)].layer & kLayerAir);
-    if (place_) { // curved worlds: lift along the local up, directions given with +Y up turn with it
+    float scale=b.scale;
+    if (nodePlacement(b,anchor,p,dir,scale)) { /* already in particle space */ }
+    else if (place_) { // curved worlds: lift along the local up, directions given with +Y up turn with it
         float3 up;
         if (!place_(p, b.height + (air ? kAirHeight : 0.0f), p, up)) { ++rejected_; return false; }
         if (dir.y > 0.999f) dir = up;
@@ -184,7 +252,7 @@ bool GameFx::playAt(const Binding& b, const Vec3& pos, int type, float3 dir, int
     }
     float4 tint{1, 1, 1, 1};
     if (b.teamColor && owner > 0 && playerColor_) tint = playerColor_(owner);
-    if (!ps_->play(b.effect, p, dir, b.scale, tint).valid()) return false;
+    if (!ps_->play(b.effect, p, dir, scale, tint).valid()) return false;
     ++played_;
     return true;
 }
@@ -199,6 +267,7 @@ void GameFx::attach(Simulation& sim, uint8_t viewer) {
         if (auto c = weak.lock(); c && c->enabled) c->events.insert(c->events.end(), s.events().begin(), s.events().end());
     });
     played_ = 0;
+    skippedCombatEvents_ = 0;
 }
 
 void GameFx::detach() {
@@ -208,8 +277,38 @@ void GameFx::detach() {
         for (auto& [k, a] : trails_) ps_->stop(a.h);
         for (auto& [k, a] : damaged_) ps_->stop(a.h);
     }
+    for (const auto& entry : viewAnchors_) ps_->stop(entry.second.handle);
+    viewAnchors_.clear();
+    for (const auto& link : chains_) ps_->stop(link.particles);
+    chains_.clear();
+    for (const auto& entry : statusLoops_) ps_->stop(entry.second.h);
+    statusLoops_.clear();
     trails_.clear();
     damaged_.clear();
+}
+
+void GameFx::updateViewAnchors(const std::vector<ViewEffect>& effects) {
+    if (!ps_) return;
+    for (auto& entry : viewAnchors_) entry.second.seen = false;
+    for (const auto& effect : effects) {
+        if (effect.intensity <= 0) continue;
+        auto& anchor = viewAnchors_[{effect.entity.packed(), effect.slot}];
+        anchor.seen = true;
+        if (anchor.effect != effect.effect) {
+            ps_->stop(anchor.handle);
+            anchor.effect = effect.effect;
+            anchor.handle = {};
+        }
+        if (ps_->playing(anchor.handle)) ps_->move(anchor.handle, effect.pos);
+        else anchor.handle = ps_->play(effect.effect, effect.pos, {0, 1, 0}, effect.intensity);
+    }
+    for (auto it = viewAnchors_.begin(); it != viewAnchors_.end();) {
+        if (it->second.seen) ++it;
+        else {
+            ps_->stop(it->second.handle);
+            it = viewAnchors_.erase(it);
+        }
+    }
 }
 
 void GameFx::handle(Simulation& sim, const SimEvent& ev) {
@@ -234,7 +333,7 @@ void GameFx::handle(Simulation& sim, const SimEvent& ev) {
         return render::length(d) > 1e-3f ? render::normalize(d) : up;
     };
 
-    switch (ev.type) {
+    switch (weaponCueEventType(ev.type, ev.flags)) {
     case kEvAttack: {
         const int t = typeOf(ev.a);
         const Binding* b = nullptr;
@@ -243,11 +342,39 @@ void GameFx::handle(Simulation& sim, const SimEvent& ev) {
         if (ev.a.valid() && ev.value >= 0 && ev.value < 255) { if (lastWeapon_.size() > 4096) lastWeapon_.clear(); lastWeapon_[ev.a.packed()] = uint8_t(ev.value); }
         const auto& binding=b?*b:lookup(t,FxCue::Attack);
         float3 muzzle,direction;
-        if(binding.valid()&&attackOrigin_&&attackOrigin_(ev.a,muzzle,direction)){
+        if(!binding.node.empty())playAt(binding,ev.pos,t,toward(ev.a,ev.b),ev.player,binding.targetNode?ev.b:ev.a);
+        else if(binding.valid()&&attackOrigin_&&attackOrigin_(ev.a,muzzle,direction)){
             float4 tint{1,1,1,1};
             if(binding.teamColor&&ev.player>0&&playerColor_)tint=playerColor_(ev.player);
             if(ps_->play(binding.effect,muzzle,direction,binding.scale,tint).valid())++played_;
         }else playAt(binding,ev.pos,t,toward(ev.a,ev.b),ev.player);
+        break;
+    }
+    case kEvChainJump: {
+        if (!ev.chain || chains_.size() >= 4096) break;
+        auto found = chainBindings_.find(ev.chain->payload);
+        const auto& b = found == chainBindings_.end() ? lookup(-1, FxCue::ChainJump) : found->second;
+        if (!b.beam && !b.valid()) break;
+        if (viewer_ && viewer_ != ev.player && !mod->isVisible(sim, viewer_, ev.chain->origin)) break;
+        auto placeEnd = [&](const Vec3& position, float3& out) {
+            out = toF(position);
+            if (place_) {
+                float3 normal;
+                return place_(toF(position), b.height, out, normal);
+            }
+            out.y += b.height + (height_ ? height_(out.x, out.z) : 0.f);
+            return true;
+        };
+        float3 from, to;
+        if (!placeEnd(ev.chain->origin, from) || !placeEnd(ev.pos, to)) break;
+        const auto delta = to - from;
+        if (render::length(delta) <= 1e-5f) break;
+        fx::FxHandle particles;
+        if (b.valid()) particles = ps_->play(b.effect, from, render::normalize(delta), b.scale);
+        if (b.beam || particles.valid()) {
+            chains_.push_back({from, to, 0.f, b.lifetime, b.scale, b.beamColor, b.beam, particles});
+            ++played_;
+        }
         break;
     }
     case kEvShotEnd: {   // a = shooter, value = weapon index
@@ -264,28 +391,29 @@ void GameFx::handle(Simulation& sim, const SimEvent& ev) {
             if (last != lastWeapon_.end() && last->second < types_[size_t(src)].weapons.size() && types_[size_t(src)].weapons[last->second].hit.set) b = &types_[size_t(src)].weapons[last->second].hit;
             else for (auto& wf : types_[size_t(src)].weapons) if (wf.hit.set) { b = &wf.hit; break; }
         }
-        playAt(b ? *b : lookup(src, FxCue::Hit), ev.pos, typeOf(ev.a), toward(ev.a, ev.b), ev.player);
+        playAt(b ? *b : lookup(src, FxCue::Hit), ev.pos, typeOf(ev.a), toward(ev.a, ev.b), ev.player, ev.a);
         break;
     }
     case kEvMiss: playAt(lookup(typeOf(ev.a), FxCue::Miss), ev.pos, -1, up, ev.player); break;
-    case kEvDied: playAt(lookup(int(ev.value), FxCue::Died), ev.pos, int(ev.value), up, ev.player); break;
-    case kEvSpawned: playAt(lookup(int(ev.value), FxCue::Spawned), ev.pos, int(ev.value), up, ev.player); break;
-    case kEvTrainDone: playAt(lookup(int(ev.value), FxCue::Ready), ev.pos, int(ev.value), up, ev.player); break;
-    case kEvBuildPlaced: playAt(lookup(int(ev.value), FxCue::BuildPlaced), ev.pos, int(ev.value), up, ev.player); break;
-    case kEvBuildDone: playAt(lookup(int(ev.value), FxCue::BuildDone), ev.pos, int(ev.value), up, ev.player); break;
-    case kEvGathered: playAt(lookup(typeOf(ev.a), FxCue::Gathered), ev.pos, -1, up, ev.player); break;
-    case kEvCaptured: playAt(lookup(typeOf(ev.a), FxCue::Captured), ev.pos, typeOf(ev.a), up, ev.player); break;
-    case kEvLevelUp: playAt(lookup(typeOf(ev.a), FxCue::LevelUp), ev.pos, typeOf(ev.a), up, ev.player); break;
+    case kEvDied: playAt(lookup(int(ev.value), FxCue::Died), ev.pos, int(ev.value), up, ev.player, ev.a); break;
+    case kEvSpawned: playAt(lookup(int(ev.value), FxCue::Spawned), ev.pos, int(ev.value), up, ev.player, ev.a); break;
+    case kEvTrainDone: playAt(lookup(int(ev.value), FxCue::Ready), ev.pos, int(ev.value), up, ev.player, ev.a); break;
+    case kEvBuildPlaced: playAt(lookup(int(ev.value), FxCue::BuildPlaced), ev.pos, int(ev.value), up, ev.player, ev.a); break;
+    case kEvBuildDone: playAt(lookup(int(ev.value), FxCue::BuildDone), ev.pos, int(ev.value), up, ev.player, ev.a); break;
+    case kEvGathered: playAt(lookup(typeOf(ev.a), FxCue::Gathered), ev.pos, -1, up, ev.player, ev.a); break;
+    case kEvCaptured: playAt(lookup(typeOf(ev.a), FxCue::Captured), ev.pos, typeOf(ev.a), up, ev.player, ev.a); break;
+    case kEvLevelUp: playAt(lookup(typeOf(ev.a), FxCue::LevelUp), ev.pos, typeOf(ev.a), up, ev.player, ev.a); break;
     case kEvAbility: {
         const int t = typeOf(ev.a);
         const Binding* b = nullptr;
         if (t >= 0 && ev.value >= 0 && size_t(ev.value) < types_[size_t(t)].abilities.size() && types_[size_t(t)].abilities[size_t(ev.value)].set)
             b = &types_[size_t(t)].abilities[size_t(ev.value)];
-        playAt(b ? *b : lookup(t, FxCue::Ability), ev.pos, -1, up, ev.player);
+        const auto& binding=b?*b:lookup(t,FxCue::Ability);
+        playAt(binding,ev.pos,-1,up,ev.player,binding.targetNode?ev.b:ev.a);
         break;
     }
-    case kEvUpgraded: playAt(lookup(int(ev.value), FxCue::Upgraded), ev.pos, int(ev.value), up, ev.player); break;
-    case kEvSold: playAt(lookup(int(ev.value), FxCue::Sold), ev.pos, int(ev.value), up, ev.player); break;
+    case kEvUpgraded: playAt(lookup(int(ev.value), FxCue::Upgraded), ev.pos, int(ev.value), up, ev.player, ev.a); break;
+    case kEvSold: playAt(lookup(int(ev.value), FxCue::Sold), ev.pos, int(ev.value), up, ev.player, ev.a); break;
     case kEvRegionClaimed: playAt(lookup(-1, FxCue::RegionClaimed), ev.pos, -1, up, ev.player); break;
     case kEvWave: if (ev.player != 0) playAt(lookup(-1, FxCue::Wave), ev.pos, -1, up, ev.player); break;
     default: break;
@@ -295,13 +423,25 @@ void GameFx::handle(Simulation& sim, const SimEvent& ev) {
 void GameFx::update(Simulation& sim, const std::vector<SceneObject>* scene, float dt) {
     if (!ps_) return;
     ++frame_;
+    for (auto it = chains_.begin(); it != chains_.end();) {
+        it->elapsed += std::max(0.f, dt);
+        const float progress = std::min(1.f, it->elapsed / it->lifetime);
+        if (!it->beam) ps_->move(it->particles, render::lerp(it->from, it->to, progress));
+        if (progress >= 1.f) {
+            ps_->stop(it->particles);
+            it = chains_.erase(it);
+        } else ++it;
+    }
     if (collector_) {
         std::vector<SimEvent> events;
         events.swap(collector_->events);
         int combat = 0;
         for (auto& ev : events) {
-            const bool isCombat = ev.type == kEvAttack || ev.type == kEvHit || ev.type == kEvMiss;
-            if (isCombat && ++combat > kMaxCombatEffectsPerFrame) continue;
+            const bool isCombat = weaponCueEventType(ev.type, ev.flags) == kEvAttack || ev.type == kEvHit || ev.type == kEvMiss;
+            if (isCombat) {
+                if (combat >= combatLimit_) { ++skippedCombatEvents_; continue; }
+                ++combat;
+            }
             handle(sim, ev);
         }
     }
@@ -341,29 +481,53 @@ void GameFx::update(Simulation& sim, const std::vector<SceneObject>* scene, floa
             }
             continue;
         }
+        if (const auto* statuses = w.alive(o.entity) ? w.tryGet<Statuses>(o.entity) : nullptr) {
+            for (const auto& status : statuses->list) {
+                if (status.def >= statusBindings_.size() || (status.until && status.until <= sim.tick())) continue;
+                const Binding& binding = statusBindings_[status.def];
+                if (!binding.valid()) continue;
+                auto& loop = statusLoops_[{key, status.def}];
+                float3 pos = o.pos + binding.offset + up * binding.height, dir = up;
+                float scale = binding.scale;
+                nodePlacement(binding, o.entity, pos, dir, scale);
+                if (ps_->playing(loop.h)) ps_->move(loop.h, pos, dir);
+                else {
+                    const float4 tint = binding.teamColor && playerColor_ ? playerColor_(o.owner) : float4{1,1,1,1};
+                    loop.h = ps_->play(binding.effect, pos, dir, scale, tint);
+                }
+                loop.frame = frame_;
+                loop.clear = binding.clear;
+            }
+        }
         if (o.build < 1 || o.type >= types_.size()) continue;
         const Binding& b = lookup(int(o.type), FxCue::Damaged);
         if (!b.valid()) continue;
         auto it = damaged_.find(key);
         if (o.hp < b.below && o.hp > 0) {
-            float3 p = o.pos + up * b.height;
-            if (it == damaged_.end() || !ps_->playing(it->second.h)) damaged_[key] = {ps_->play(b.effect, p, up, b.scale), frame_};
-            else { it->second.frame = frame_; ps_->move(it->second.h, p); }
+            float3 p = o.pos + up * b.height, dir=up;
+            float scale=b.scale;
+            nodePlacement(b,o.entity,p,dir,scale);
+            if (it == damaged_.end() || !ps_->playing(it->second.h)) damaged_[key] = {ps_->play(b.effect, p, dir, scale), frame_};
+            else { it->second.frame = frame_; ps_->move(it->second.h, p, dir); }
         } else if (it != damaged_.end()) {
             ps_->stop(it->second.h);
             damaged_.erase(it);
         }
     }
     // gone this frame (hit the target, died, went into the fog): stop emitting, particles fade out
-    for (auto* m : {&trails_, &damaged_})
-        for (auto it = m->begin(); it != m->end();) {
+    auto retireMissing = [this](auto& attached) {
+        for (auto it = attached.begin(); it != attached.end();) {
             if (it->second.frame != frame_) {
                 if (it->second.clear) ps_->kill(it->second.h);
                 else ps_->stop(it->second.h);
-                it = m->erase(it);
+                it = attached.erase(it);
             }
             else ++it;
         }
+    };
+    retireMissing(trails_);
+    retireMissing(damaged_);
+    retireMissing(statusLoops_);
 }
 
 } // namespace aiverse::game

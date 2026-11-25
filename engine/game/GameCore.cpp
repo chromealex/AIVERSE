@@ -1,11 +1,15 @@
 // Setup, commands, shared queries and state hashing for the generic RTS module.
 #include "Internal.h"
+#include "MatchChat.h"
+#include "engine/mechanics/WeaponCadence.h"
 #include "../data/JsonCompose.h"
 #include "InitialVars.h"
 #include "MapRules.h"
 #include "../core/FixedMath.h"
 #include "gen/MapGen.h"
 #include "engine/world/nereid/NereidSphereInteractions.h"
+#include "PlanetSeaGrid.h"
+#include "engine/world/TerraWeaveCavernsPlanetRegionSet.h"
 #include <algorithm>
 #include <cstdlib>
 #include <stdexcept>
@@ -40,6 +44,10 @@ void GameCore::setup(Simulation& sim, const Json& rulesIn, const Json& map) {
     aiConfig_ = aiKind_ && aiKind_->load ? aiKind_->load(rulesJson["ai"], mapIn, rules_) : nullptr;   // rules ai.<controller> + map "ai"
     matchMap_ = mapIn;
     setupMap(sim, mapIn);
+    // The actual generated spherical Surface is already built by setupMap.
+    // Planetary regions are opt-in native ECS state, not Studio preview data.
+    terraweave::caverns::registerPlanetCaveMap(sim,
+        mapIn[terraweave::caverns::kPlanetCaveMapKey],state(sim).surface);
     loadTriggers(rules_, rulesJson, mapIn, triggers_);
     mechSetup(sim, mapIn);   // agent-mech
     raid_ = std::make_unique<Raid>();   // extraction raids (rules "raid"); nothing without them
@@ -98,6 +106,20 @@ void GameCore::setup(Simulation& sim, const Json& rulesIn, const Json& map) {
     if (rules_.fidelity) sim.addSystem("fidelity", [this](Simulation& s) { sysFidelity(s); });    // Fidelity.cpp
     sim.addSystem("targeting", [this](Simulation& s) { sysTargeting(s); });
     if (fieldOps_->active()) sim.addSystem("fieldops", [this](Simulation& s) { fieldOps_->tick(s); });   // FieldOps.cpp (games with field operations only)
+    // Fractional cadence advances once before either movement/free-fire or
+    // targeted weapons can consume it. Legacy slots retain their old update order.
+    bool preciseWeapons = false;
+    for (const auto& type : rules_.types)
+        for (const auto& weapon : type.weapons) preciseWeapons |= weapon.preciseCooldown;
+    if (preciseWeapons) sim.addSystem("weapon.cadence", [this](Simulation& s) {
+        s.world().each<Combat, Unit>([&](Entity e, Combat& combat, Unit& unit) {
+            const auto& weapons = rules_.types[unit.type].weapons;
+            const Fixed elapsed = s.dt() * fxMax(stat(s, e, Stat::AttackSpeed), Fixed::fromRatio(1, 10));
+            for (size_t i = 0; i < weapons.size() && i < 4; ++i)
+                if (weapons[i].preciseCooldown)
+                    combat.cooldown[i] = lib::mechanics::advanceWeaponCadence(combat.cooldown[i], elapsed, true);
+        });
+    });
     sim.addSystem("movement", [this](Simulation& s) { sysMovement(s); });
     if (state(sim).surface) sim.addSystem("transit", [this](Simulation& s) { sysTransit(s); });
     sim.addSystem("weapons", [this](Simulation& s) { sysWeapons(s); });
@@ -585,7 +607,8 @@ Entity GameCore::spawn(Simulation& sim, uint16_t type, uint8_t owner, Vec3 pos, 
         w.add<Footprint>(e, Footprint{x0, y0, t.footprintW, t.footprintH});
         gs.grid.block(x0, y0, t.footprintW, t.footprintH, +1);
     }
-    if (S) pos = (t.layer & kLayerOrbit) ? S->toShell(pos, S->bodies[size_t(S->bodyAt(pos))].shellRadius()) : S->project(pos);
+    if (S) pos = (t.layer & kLayerOrbit) ? S->toShell(pos, S->bodies[size_t(S->bodyAt(pos))].shellRadius()) :
+        ((t.layer&kLayerNaval)&&!(t.layer&kLayerAir)&&gs.grid.liveSeaRadius(S->bodyAt(pos))>Fixed{}?placePlanetNaval(*S,gs.grid,pos):S->project(pos));
     else if (gs.grid.hf) pos.y = gs.grid.surfaceHeight(pos.x, pos.z);
     w.add<Transform>(e, Transform{pos, pos, Fixed{}});
     // NEREID sphere seas (map body "nereid"): naval units get a probe and splash / wake events
@@ -599,7 +622,7 @@ Entity GameCore::spawn(Simulation& sim, uint16_t type, uint8_t owner, Vec3 pos, 
     u.energy = t.startEnergy;
     w.add<Unit>(e, u);
     if (t.speed.raw > 0) { w.add<Mobile>(e); w.add<Orders>(e); }
-    if (!t.weapons.empty()) w.add<Combat>(e);
+    if (!t.weapons.empty()) w.add<Combat>(e, Combat{});
     if (!t.produces.empty() || !t.researches.empty() || t.members > 1) {
         Production p;
         p.charges = t.chargesMax;
@@ -696,6 +719,13 @@ bool GameCore::canAfford(Simulation& sim, uint8_t player, const std::vector<Amou
         if (rules_.resources[c.res].kind != ResourceKind::Capacity && eco.stock[c.res] < c.value) { if (missing) *missing = c.res; return false; }
     if (supply.raw > 0 && eco.supplyUsed + supply > eco.supplyCap) { if (missing) *missing = 255; return false; }
     return true;
+}
+
+bool GameCore::canAffordBuildStart(Simulation& sim, uint8_t player, uint16_t type, int* missing) const {
+    if (missing) *missing = -1;
+    if (type >= rules_.types.size()) return false;
+    return rules_.costModel != CostModel::Upfront ||
+           canAfford(sim, player, upfrontCost(rules_.types[type].cost), {}, missing);
 }
 
 bool GameCore::pay(Simulation& sim, uint8_t player, const std::vector<Amount>& cost, Fixed supply, bool emitFail) {
@@ -1063,6 +1093,16 @@ Entity GameCore::placeStructure(Simulation& sim, uint8_t player, uint16_t type, 
 
 // ================================================================= commands
 
+static void cancelWeaponWindups(Simulation& sim, Entity e, Combat& combat) {
+    auto& w = sim.world();
+    for (size_t i = 0; i < 4; ++i) {
+        auto& phase = combat.attackTiming[i];
+        const Entity target = phase.target;
+        if (lib::mechanics::cancelAttackWindup(phase))
+            sim.emit({kEvAttackCancelled, w.get<Owner>(e).player, e, target, int64_t(i), w.get<Transform>(e).pos});
+    }
+}
+
 void GameCore::issue(Simulation& sim, Entity e, const Order& o, bool queue) {
     World& w = sim.world();
     auto* ord = w.tryGet<Orders>(e);
@@ -1071,13 +1111,36 @@ void GameCore::issue(Simulation& sim, Entity e, const Order& o, bool queue) {
         ord->queue.clear();
         stopMoving(sim, e);
         if (auto* m = w.tryGet<Mobile>(e)) { m->flowGoalCell = -1; m->flowArrived = -1; }   // leaves its flow crowd
-        if (auto* c = w.tryGet<Combat>(e)) c->target = kNullEntity;
+        if (auto* c = w.tryGet<Combat>(e)) { cancelWeaponWindups(sim, e, *c); c->target = kNullEntity; }
         if (auto* u = w.tryGet<Unit>(e)) u->flags &= kKeepFlags(~kUnitHold);
     }
     ord->queue.push_back(o);
 }
 
 void GameCore::applyCommand(Simulation& sim, const Command& cmd) {
+    if (cmd.type == kSetSeatController) {
+        if (cmd.player || cmd.param < 1 || cmd.param > 255 || cmd.args.size() != 2 ||
+            cmd.args[0] < 0 || cmd.args[0] > int64_t(SeatController::Computer)) return;
+        if (auto* seat = sim.player(uint8_t(cmd.param))) {
+            const auto previous = seat->controller;
+            seat->controller = SeatController(cmd.args[0]);
+            if (!cmd.args[1] && previous == SeatController::Human && seat->controller != previous)
+                sim.emit({kEvPlayerLeft, seat->slot, {}, {}, cmd.args[0]});
+        }
+        return;
+    }
+    if (cmd.type == kCmdChat) {
+        if (!cmd.player || !sim.player(cmd.player)) return;
+        std::string text = chatText(cmd);
+        if (!text.empty()) {
+            SimEvent event{kEvChat, cmd.player};
+            auto message = std::make_shared<MatchMessage>();
+            message->text = std::move(text);
+            event.message = std::move(message);
+            sim.emit(event);
+        }
+        return;
+    }
     if (systems_) { systems_->applyCommand(sim, cmd); return; }
     World& w = sim.world();
     GameState& gs = state(sim);
@@ -1230,7 +1293,7 @@ void GameCore::applyCommand(Simulation& sim, const Command& cmd) {
         case kCmdStop:
         case kCmdHold:
             if (auto* ord = w.tryGet<Orders>(e)) { ord->queue.clear(); stopMoving(sim, e); }
-            if (auto* c = w.tryGet<Combat>(e)) c->target = kNullEntity;
+            if (auto* c = w.tryGet<Combat>(e)) { cancelWeaponWindups(sim, e, *c); c->target = kNullEntity; }
             if (cmd.type == kCmdHold) w.get<Unit>(e).flags |= kUnitHold; else w.get<Unit>(e).flags &= kKeepFlags(~kUnitHold);
             break;
         case kCmdGather:
@@ -1634,6 +1697,10 @@ int GameCore::liveResult(Simulation& sim) {
 }
 
 void GameCore::hashState(Simulation& sim, Hasher& h) {
+    hashArchivedState(sim, h, UINT32_MAX);
+}
+
+void GameCore::hashArchivedState(Simulation& sim, Hasher& h, uint32_t layout) {
     if (systems_) { systems_->hashState(sim, h); return; }
     World& w = sim.world();
     GameState& gs = state(sim);
@@ -1676,7 +1743,18 @@ void GameCore::hashState(Simulation& sim, Hasher& h) {
     w.each<Unit, Owner, Transform>([&](Entity e, Unit& u, Owner& o, Transform& t) {
         h.u64(e.packed()); h.u32(u.type); h.fx(u.hp); h.u32(u.flags); h.u32(o.player); h.v3(t.pos); h.fx(u.energy);
         if (auto* ord = w.tryGet<Orders>(e)) { h.u32(uint32_t(ord->queue.size())); if (!ord->queue.empty()) { h.u32(uint32_t(ord->queue.front().type)); h.u32(ord->queue.front().state); } }
-        if (auto* c = w.tryGet<Combat>(e)) { h.u64(c->target.packed()); h.i32(c->slot); h.u64(c->slotTarget.packed()); }
+        if (auto* c = w.tryGet<Combat>(e)) {
+            h.u64(c->target.packed()); h.i32(c->slot); h.u64(c->slotTarget.packed());
+            const auto& weapons = rules_.types[u.type].weapons;
+            for (size_t i = 0; i < weapons.size() && i < 4; ++i)
+                if (layout != 0 && (weapons[i].preciseCooldown || weapons[i].hasAttackTiming())) {
+                    h.u32(uint32_t(i)); h.fx(c->cooldown[i]);
+                    if (weapons[i].hasAttackTiming()) {
+                        const auto& phase = c->attackTiming[i];
+                        h.u32(uint32_t(phase.phase)); h.u64(phase.target.packed()); h.fx(phase.remaining);
+                    }
+                }
+        }
         if (auto* mb = w.tryGet<Mobile>(e)) { h.v3(mb->vel); h.u32(mb->yielded); h.u32(mb->yieldUntil); h.u32(mb->pathPos); h.u32(mb->moving); }
         if (auto* g = w.tryGet<Garrison>(e)) { h.i32(g->count); h.fx(g->growth); h.i32(g->pendingOut); }
         if (auto* p = w.tryGet<Production>(e)) { h.u32(uint32_t(p->queue.size())); if (!p->queue.empty()) h.fx(p->queue[0].progress); h.u32(p->ready); h.i32(p->charges); }
@@ -1686,6 +1764,16 @@ void GameCore::hashState(Simulation& sim, Hasher& h) {
         if (auto* cp = w.tryGet<Capture>(e)) { h.fx(cp->progress); h.u32(cp->team); }
         if (mechOn(sim)) hashMech(sim, h, e);
     });
+    if (!rules_.modifierGroups.empty()) {
+        h.u32(0x47525031u);
+        w.each<Buffs>([&](Entity e, Buffs& buffs) {
+            h.u64(e.packed()); h.u32(uint32_t(buffs.list.size())); h.u32(buffs.stunUntil);
+            for (const auto& bf : buffs.list) {
+                h.u32(uint32_t(bf.stat)); h.fx(bf.add); h.fx(bf.mul);
+                h.u32(bf.until); h.u32(bf.sourceType); h.u32(bf.stackingGroup);
+            }
+        });
+    }
     if (mechOn(sim)) hashMechGlobal(sim, h);
     h.u32(uint32_t(w.count<Projectile>()));
     w.each<Projectile, Transform>([&](Entity e, Projectile&, Transform& t) { h.u64(e.packed()); h.v3(t.pos); });
@@ -1696,6 +1784,7 @@ void GameCore::hashState(Simulation& sim, Hasher& h) {
             h.u32(f->enabled); h.u32(f->homing); h.u32(f->blockTerrain); h.fx(f->radius);
             h.fx(f->maxDistance); h.fx(f->lifetime); h.u32(f->splitBudget); h.u32(uint32_t(f->modifiers.size()));
             if(f->gravity.raw||f->verticalSpeed.raw){h.fx(f->gravity);h.fx(f->verticalSpeed);}
+            if(f->arc){h.u32(1);h.fx(f->arcHeight);h.fx(f->arcHeightPerDistance);}
             for (const auto& m : f->modifiers) {
                 h.u32(uint32_t(m.kind)); h.fx(m.factor); h.fx(m.radius); h.fx(m.angle); h.fx(m.after); h.u32(m.count); h.u32(m.timed);
             }
@@ -1725,7 +1814,7 @@ void GameCore::hashState(Simulation& sim, Hasher& h) {
     if (career_ && career_->active()) career_->hash(sim, h);         // games with rules "careers" only
     if (prompts_ && prompts_->active()) prompts_->hash(sim, h);      // games with rules "prompts" only
     if (fieldOps_ && fieldOps_->active()) fieldOps_->hash(sim, h);   // games with field operations only
-    if (arsenal_ && arsenal_->active()) arsenal_->hash(sim, h);   // games with rules "arsenal" only
+    if (arsenal_ && arsenal_->active()) arsenal_->hash(sim, h, layout != 0);   // games with rules "arsenal" only
     if (traffic_ && traffic_->active()) traffic_->hash(sim, h);   // games with rules "traffic" only
 }
 

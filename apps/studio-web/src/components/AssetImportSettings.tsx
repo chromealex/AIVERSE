@@ -31,8 +31,8 @@ function SettingToggle({label,value,disabled,onChange}:{
       onChange={e=>onChange(e.target.checked)}/>
   </label>;
 }
-export default function AssetImportSettings({asset,onClose,onSaved,onError,locked,onToggleLock}:{
-  asset:StudioAsset;onClose:()=>void;onSaved:()=>void;onError:(message:string)=>void;
+export default function AssetImportSettings({asset,refreshToken,onClose,onSaved,onError,locked,onToggleLock}:{
+  asset:StudioAsset;refreshToken?:number;onClose:()=>void;onSaved:()=>void;onError:(message:string)=>void;
   locked:boolean;onToggleLock:()=>void;
 }){
   const [detail,setDetail]=useState<StudioAssetDetail|null>(null);
@@ -50,7 +50,7 @@ export default function AssetImportSettings({asset,onClose,onSaved,onError,locke
     }).catch(e=>{if(!disposed)onError(String(e instanceof Error?e.message:e))})
       .finally(()=>{if(!disposed)setLoading(false)});
     return ()=>{disposed=true};
-  },[guid,onError]);
+  },[guid,onError,refreshToken]);
   useEffect(()=>{
     let cancelled=false;
     setReferences([]);setReferenceError('');

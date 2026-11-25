@@ -253,6 +253,7 @@ inline render::Mesh uploadNereidCascade(gfx::Device& device,
 
 class NereidCascadeScene final {
     struct Slot {
+        explicit Slot(NereidCascadeSource value):source(std::move(value)){}
         NereidCascadeSource source;
         // Heap-owned so its address survives setCascades(): Renderer3D
         // items_ and camera geometry snapshots keep &*mesh until render.
@@ -288,11 +289,10 @@ public:
                source.options.uvScale<=0)
                 throw std::invalid_argument("nereid.cascade: invalid source");
             const uint64_t id=source.id;
-            // Initialize every presentation cache field (including optional
-            // linked levels) before moving the source into its map slot.
-            Slot slot{};
-            slot.source=std::move(source);
-            if(!next.emplace(id,std::move(slot)).second)
+            // Construct the slot in its final map node. A temporary Slot
+            // triggers GCC 13's maybe-uninitialized diagnostic for the
+            // moved cascade point vector during temporary destruction.
+            if(!next.try_emplace(id,std::move(source)).second)
                 throw std::invalid_argument("nereid.cascade: duplicate id");
         }
         retired_.reserve(retired_.size()+slots_.size());

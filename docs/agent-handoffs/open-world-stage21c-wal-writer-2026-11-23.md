@@ -1,0 +1,3 @@
+# W1.21c — WAL writer
+
+Commit `dbfe8967`, PR #116 Draft. RegionWalWriter.h implements POSIX open/append with advisory flock exclusive ownership, scan of existing journal, directory fsync, contiguous sequence validation, partial write/EINTR handling and file fsync before successful ACK. Failed write/sync poisons writer until close/reopen and recovery; outcome can be ambiguous. Requires trusted stable path and cooperating writers, single-threaded calls; no concurrent rename/rotation. Windows and other unsupported platforms return Unsupported. macOS stronger F_FULLFSYNC and Windows implementation remain outstanding. No native tests run. Next recovery under same lock, Windows backend and transaction payload integration. No main merge.

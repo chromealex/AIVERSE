@@ -1,0 +1,3 @@
+# Stage63 — native demo setup
+Branch: feature/world-processes-stage31-bidirectional-handles; main unchanged.
+d9cbe0d4 adds examples/world/world_processes_native/EvolveForestDemo.h. setupEvolveForestDemo takes three real PHYSIS/region/producer bindings and caller-authored rooted plants, validates combined root registry, stages World and commits authority plus climate links together. No second forest registry persists. Caller must resolve map IDs, supply actual terrain/species anchors and spawn real weather cells before setup. No executable project or automatic map ID resolution added. No compilation/tests. Next: concrete map/game module and acceptance when authorized.

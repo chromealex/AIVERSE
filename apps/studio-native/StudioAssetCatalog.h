@@ -8,6 +8,7 @@
 #include <vector>
 #include <cstdint>
 #include "engine/data/Json.h"
+#include "apps/editor/core/ProjectHistory.h"
 struct sqlite3;
 namespace aiverse::studio {
 struct StudioAssetEntry {
@@ -28,12 +29,17 @@ public:
     StudioAssetCatalog(const StudioAssetCatalog&) = delete;
     StudioAssetCatalog& operator=(const StudioAssetCatalog&) = delete;
     ~StudioAssetCatalog();
-    void rebuild(); // scans content and reconciles .meta -> SQLite in a transaction
+    void rebuild(bool createMissing=true); // false: index existing sidecars only, never allocate GUIDs
     std::vector<StudioAssetEntry> all() const;
     std::optional<StudioAssetEntry> byGuid(const std::string& guid) const;
     std::optional<StudioAssetEntry> byPath(const std::string& path) const;
     StudioAssetEntry patchSettings(const std::string& guid,
-                                   const std::string& key,const Json& value);
+                                   const std::string& key,const Json& value,editor::ProjectHistory* history=nullptr,
+                                   std::vector<editor::ProjectFileEdit>* staged=nullptr);
+    // Native owner-generated plan only. Validates GUID/path/importer and exact bytes.
+    StudioAssetEntry applyMetadataEdit(const editor::ProjectFileEdit& edit);
+    // Validate identity and sidecar location without publishing bytes.
+    StudioAssetEntry validateMetadataEdit(const editor::ProjectFileEdit& edit);
     const std::filesystem::path& project() const { return project_; }
 private:
     void exec(const char* sql) const;

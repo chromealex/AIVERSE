@@ -37,6 +37,8 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
   }, [projectPath]);
   useEffect(() => { setInfo(null); setLog(''); offset.current = 0; void refreshInfo(); }, [refreshInfo]);
   useEffect(() => { window.localStorage.setItem('aiverse.studio.build.target', target); }, [target]);
+  // Saved project history can change manifest identity without changing the project path.
+  useEffect(() => { if (snapshot?.project.historyVersion) void refreshInfo(); }, [snapshot?.project.historyVersion, refreshInfo]);
 
   // Toolchain of the selected platform (aiversebuild --check-toolchain, about a second).
   useEffect(() => {
@@ -53,7 +55,7 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
     setEstimate(null);
     void invoke('studio.buildEstimate', { target }).then(r => { if (live) setEstimate(r); }).catch(() => {});
     return () => { live = false; };
-  }, [projectPath, target, state.runs]);
+  }, [projectPath, target, state.runs, snapshot?.project.historyVersion]);
 
   // Stream the log by offset; fast while a run is active, slow otherwise (a run may come from MCP).
   useEffect(() => {

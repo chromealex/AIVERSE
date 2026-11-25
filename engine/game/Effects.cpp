@@ -72,7 +72,7 @@ bool GameCore::filterOk(Simulation& sim, const TargetFilter& f, Entity e, uint8_
         auto* ord = w.tryGet<Orders>(e);
         if (!w.has<GroupTag>(e) || !ord || ord->queue.empty() || ord->queue.front().type != OrderType::Enter) return false;
     }
-    if (f.tags && !(t.tags & f.tags)) return false;
+    if (!targetTagsMatch(t.tags, f.tags, f.ignoreTags)) return false;
     if (f.type != kNoType && f.type != u->type) return false;
     if (t.level < f.minLevel || t.level > f.maxLevel) return false;
     if (enemy) {
@@ -108,9 +108,9 @@ std::vector<Entity> GameCore::effectTargets(Simulation& sim, const EffectDef& e,
     auto fdist = [&](Vec3 p) { if (f.aspect == kOne) return dist2D(p, center); Vec3 d = flat(p - center); d.z = d.z / f.aspect; return d.length(); };
     switch (f.shape) {
     case Shape::Target:
-        if (f.self && !f.enemies && !f.allies) { if (w.alive(ctx.caster) && w.has<Unit>(ctx.caster)) out.push_back(ctx.caster); }
+        if (f.self && !f.enemies && !f.allies) { if (w.alive(ctx.caster) && w.has<Unit>(ctx.caster) && targetTagsMatch(rules_.types[w.get<Unit>(ctx.caster).type].tags, f.tags, f.ignoreTags)) out.push_back(ctx.caster); }
         else if (w.alive(ctx.target) && w.has<Unit>(ctx.target)) {
-            if (legacyKind(e.kind) || filterOk(sim, f, ctx.target, ctx.owner, ctx.caster)) out.push_back(ctx.target);
+            if (legacyKind(e.kind) ? targetTagsMatch(rules_.types[w.get<Unit>(ctx.target).type].tags, f.tags, f.ignoreTags) : filterOk(sim, f, ctx.target, ctx.owner, ctx.caster)) out.push_back(ctx.target);
         }
         break;
     case Shape::Group: {
@@ -276,7 +276,7 @@ void changeUnitType(GameCore& m, Simulation& sim, Entity e, uint16_t type) {
     }
     u.type = type;
     u.hp = fxMax(Fixed::fromInt(1), nt.maxHp * frac);
-    if (!nt.weapons.empty() && !w.has<Combat>(e)) w.add<Combat>(e);
+    if (!nt.weapons.empty() && !w.has<Combat>(e)) w.add<Combat>(e, Combat{});
     if ((nt.garrisonMax > 0 || nt.spawnUnit != kNoType) && !w.has<Garrison>(e)) w.add<Garrison>(e);
     if (!nt.abilities.empty() && !w.has<AbilityState>(e)) w.add<AbilityState>(e);
     if ((!nt.produces.empty() || !nt.researches.empty() || !nt.upgrades.empty()) && !w.has<Production>(e)) w.add<Production>(e);
@@ -426,7 +426,15 @@ void GameCore::applyEffect(Simulation& sim, const EffectDef& e, int list, int in
         }
         return t;
     };
-    const Fixed amount = rollAmount(sim, e) * ctx.scale;
+    Fixed amount{};
+    if (e.useWeaponDamage) {
+        const auto damage = currentWeaponDamage(sim, ctx.caster, e.weaponIndex);
+        // An effect with no valid live source/slot cannot invent a weapon stat.
+        // Resolve at execution time, including delayed projectile/area delivery.
+        if (!damage) return;
+        amount = *damage * e.weaponDamage * ctx.scale;
+        if (amount.raw <= 0) return;
+    } else amount = rollAmount(sim, e) * ctx.scale;
     switch (e.kind) {
     case EffectKind::Damage: {
         for (Entity h : targets()) {
@@ -448,10 +456,7 @@ void GameCore::applyEffect(Simulation& sim, const EffectDef& e, int list, int in
     case EffectKind::Buff: {
         const uint32_t until = tick + fxTicks(e.duration, sim.tickRate());
         for (Entity h : targets()) if (auto* b = w.tryGet<Buffs>(h)) {
-            Buff nb{e.mod.stat, e.mod.add, e.mod.mul, until, ctx.sourceType};
-            bool found = false;
-            for (auto& x : b->list) if (x.stat == nb.stat && x.sourceType == nb.sourceType) { x = nb; found = true; }
-            if (!found) b->list.push_back(nb);
+            upsertTimedBuff(*b, {e.mod.stat, e.mod.add, e.mod.mul, until, ctx.sourceType, e.mod.stackingGroup});
         }
         break;
     }
@@ -627,11 +632,14 @@ void GameCore::applyEffect(Simulation& sim, const EffectDef& e, int list, int in
         };
         if (!cur.valid()) cur = nearest(from, e.delivery.jumpRadius);
         Entity prev = ctx.caster;
+        if (auto* caster = w.alive(prev) ? w.tryGet<Transform>(prev) : nullptr) from = caster->pos;
         for (int j = 0; j <= e.delivery.jumps && cur.valid(); ++j) {
             hit.push_back(cur);
             EffectCtx c2 = ctx;
             c2.target = cur; c2.point = w.get<Transform>(cur).pos; c2.scale = scale;
-            sim.emit({kEvChainJump, ctx.owner, prev, cur, j, c2.point});
+            SimEvent jump{kEvChainJump, ctx.owner, prev, cur, j, c2.point};
+            jump.chain = std::make_shared<ChainJumpPresentation>(ChainJumpPresentation{from, e.payload});
+            sim.emit(jump);
             applyPayload(sim, e.payload, c2);
             prev = cur;
             from = c2.point;

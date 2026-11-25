@@ -1,0 +1,210 @@
+{
+  "schema": 1,
+  "id": "studio-document-history",
+  "owner": "Studio native project, map and asset document owners",
+  "changed_paths": [
+    ".github/workflows/studio-html5-web.yml",
+    "apps/editor/core/MapDoc.cpp",
+    "apps/editor/core/MapDoc.h",
+    "apps/editor/core/MapHistoryPersistence.cpp",
+    "apps/editor/core/ProjectDocumentJournal.h",
+    "apps/editor/core/ProjectFileEdits.cpp",
+    "apps/editor/core/ProjectFileEdits.h",
+    "apps/editor/core/ProjectHistory.h",
+    "apps/editor/core/ProjectHistoryPersistence.cpp",
+    "apps/editor/core/ProjectHistoryPersistence.h",
+    "apps/studio-native/StudioAgentHistoryPolicy.h",
+    "apps/studio-native/StudioAssetCatalog.cpp",
+    "apps/studio-native/StudioAssetCatalog.h",
+    "apps/studio-native/StudioAssetFileDigest.h",
+    "apps/studio-native/StudioAssetReferences.h",
+    "apps/studio-native/StudioAssetTransfers.cpp",
+    "apps/studio-native/StudioAssetTransfers.h",
+    "apps/studio-native/StudioContentDirectory.h",
+    "apps/studio-native/StudioHistoryCoordinator.h",
+    "apps/studio-native/StudioHost.cpp",
+    "apps/studio-native/StudioModelRepairBytes.h",
+    "apps/studio-native/StudioMoveJournal.h",
+    "apps/studio-native/StudioSession.cpp",
+    "apps/studio-native/StudioTextResourceRepair.h",
+    "apps/studio-native/tests/StudioAssetCatalogTests.cpp",
+    "apps/studio-native/tests/StudioAssetTransferTests.cpp",
+    "apps/studio-native/tests/StudioModelPickingTests.cpp",
+    "apps/studio-native/tests/StudioMoveJournalTests.cpp",
+    "apps/studio-native/tests/StudioOwnerHistoryTests.cpp",
+    "apps/studio-web/src/components/AssetImportSettings.tsx",
+    "apps/studio-web/src/components/AssetReferencePicker.tsx",
+    "apps/studio-web/src/components/AssetTrashDialog.css",
+    "apps/studio-web/src/components/AssetTrashDialog.tsx",
+    "apps/studio-web/src/components/AssetsPanel.css",
+    "apps/studio-web/src/components/AssetsPanel.tsx",
+    "apps/studio-web/src/components/EntityReferencePicker.css",
+    "apps/studio-web/src/components/EntityReferencePicker.tsx",
+    "apps/studio-web/src/panels/AgentPanel.css",
+    "apps/studio-web/src/panels/AgentPanel.tsx",
+    "apps/studio-web/src/panels/HistoryPanel.css",
+    "apps/studio-web/src/panels/HistoryPanel.tsx",
+    "apps/studio-web/src/panels/historyLogic.ts",
+    "apps/studio-web/tests/historyLogic.test.mjs",
+    "docs/handoff/studio-html5/s6i3-linked-owner-history-2026-11-24.md",
+    "engine/render/ModelDae.cpp",
+    "engine/render/Xml.h",
+    "skills/editor/studio-ui/SKILL.md",
+    "tests/libraries/CMakeLists.txt",
+    "tools/studio/audit_branch_overlap.py",
+    "tools/studio/verify_headless.sh",
+    "tools/studio/verify_mac.sh"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": false,
+    "visible": true,
+    "runtime": true
+  },
+  "integrations": {
+    "skills": [
+      "studio-ui"
+    ],
+    "mcp_tools": [
+      "studio_owner_history",
+      "studio_owner_history_step"
+    ],
+    "studio_methods": [
+      "studio.snapshot",
+      "studio.undo"
+    ],
+    "studio_panels": [
+      "history",
+      "assets"
+    ]
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Map, project and asset journals retain ownership across linked undo, redo and save.",
+      "evidence": [
+        "docs/handoff/studio-html5/s6i3-linked-owner-history-2026-11-24.md",
+        "apps/studio-native/tests/StudioOwnerHistoryTests.cpp"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "The session coordinates owner journals and explicit save operations. Each document owner commits or rolls back its own mutations.",
+      "evidence": [
+        "docs/handoff/studio-html5/s6i3-linked-owner-history-2026-11-24.md"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "The session dispatcher exposes owner inventory, navigation, and coordinated saves.",
+      "evidence": [
+        "docs/handoff/studio-html5/s6i3-linked-owner-history-2026-11-24.md"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "Studio UI documents owner-scoped history, asset recovery and the linked controls.",
+      "evidence": [
+        "skills/editor/studio-ui/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "not_run",
+      "note": "Linked tools are registered. The refreshed branch still needs authenticated owner-history readback.",
+      "evidence": [
+        "docs/handoff/studio-html5/s6i3-linked-owner-history-2026-11-24.md"
+      ]
+    },
+    "studio": {
+      "status": "not_run",
+      "note": "The prior native session suite covers history navigation and persistence. Refresh acceptance and the history panel capture are pending.",
+      "evidence": [
+        "docs/agent-handoffs/world-processes-pr124-current-main-2026-11-25.md"
+      ]
+    },
+    "inspector": {
+      "status": "not_run",
+      "note": "Verify the linked history rows and controls on the refreshed native Studio.",
+      "evidence": [
+        "docs/handoff/studio-html5/s6i3-linked-owner-history-2026-11-24.md"
+      ]
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "Session coverage includes file recovery, unsaved checkpoints, compound history and asset transfer recovery.",
+      "evidence": [
+        "docs/agent-handoffs/world-processes-pr124-current-main-2026-11-25.md",
+        "apps/studio-native/tests/StudioOwnerHistoryTests.cpp"
+      ]
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "Document history is an ordered owner journal. It has no user-authored graph evaluation.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "Bounded journal and staging tests exist. Measured transfer and history latency have not been recorded.",
+      "evidence": [
+        "apps/studio-native/tests/StudioOwnerHistoryTests.cpp"
+      ]
+    },
+    "platforms": {
+      "status": "not_run",
+      "note": "The native session ran on the previous Mac candidate. Other desktop backends are not verified here.",
+      "evidence": [
+        "docs/agent-handoffs/world-processes-pr124-current-main-2026-11-25.md"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "History uses existing MapDoc, file journal and native asset owners.",
+      "evidence": [
+        "docs/handoff/studio-html5/s6i3-linked-owner-history-2026-11-24.md"
+      ]
+    },
+    "headless": {
+      "status": "pass",
+      "note": "Native session coverage exercises the document owners through the same dispatch used by the shell.",
+      "evidence": [
+        "docs/agent-handoffs/world-processes-pr124-current-main-2026-11-25.md"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "The native session fixture creates a temporary authored project, edits documents and reopens it.",
+      "evidence": [
+        "apps/studio-native/tests/StudioSessionTests.cpp"
+      ]
+    },
+    "tests": {
+      "status": "not_run",
+      "note": "Record the dedicated owner, session, catalog and transfer tests on the refreshed checkout.",
+      "evidence": [
+        "docs/agent-handoffs/world-processes-pr124-current-main-2026-11-25.md"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "The original owner handoff records its integration and recovery semantics.",
+      "evidence": [
+        "docs/handoff/studio-html5/s6i3-linked-owner-history-2026-11-24.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "The Studio UI skill details the recovery inventory, undo/redo and save contracts.",
+      "evidence": [
+        "skills/editor/studio-ui/SKILL.md"
+      ]
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Editor screenshots are required for the visible history controls.",
+      "evidence": [
+        "docs/handoff/studio-html5/s6i3-linked-owner-history-2026-11-24.md"
+      ]
+    }
+  },
+  "test_reports": []
+}

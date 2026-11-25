@@ -1,0 +1,162 @@
+{
+  "schema": 1,
+  "id": "studio-entity-debugger",
+  "owner": "Studio hosted game / entity-debugger",
+  "changed_paths": [
+    "apps/editor/core/WorldInspect.cpp",
+    "apps/studio-native/StudioHost.cpp",
+    "apps/studio-native/StudioRuntimeInspect.h",
+    "apps/studio-web/src/panels/generated/RuntimePanel.css",
+    "apps/studio-web/src/panels/generated/RuntimePanel.tsx",
+    "apps/studio-web/src/types.ts",
+    "skills/editor/studio-ui/SKILL.md",
+    "tools/studio/test_entity_debugger.py"
+  ],
+  "traits": {
+    "editable": false,
+    "simulation": false,
+    "visible": true,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+      ]
+    },
+    "architecture": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+      ]
+    },
+    "native_api": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "The Studio UI skill documents this panel and its native ownership. Its documented web suite, type checks and production build ran, and the strict skill catalog audit found zero errors.",
+      "evidence": [
+        "skills/editor/studio-ui/SKILL.md",
+        "docs/evidence/integration-acceptance-d5608fb7f.json"
+      ]
+    },
+    "mcp": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+      ]
+    },
+    "studio": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+      ]
+    },
+    "inspector": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+      ]
+    },
+    "persistence": {
+      "status": "not_applicable",
+      "note": "This read-only inspector projects the active hosted simulation. It owns no persistent scene data.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "The inspector reads existing simulation state and has no authorable node graph.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+      ]
+    },
+    "platforms": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+      ]
+    },
+    "dependencies": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+      ]
+    },
+    "headless": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+      ]
+    },
+    "examples": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+      ]
+    },
+    "tests": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "The owner handoff records the implementation, verification scope and follow-up work.",
+      "evidence": [
+        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "The owner handoff describes the supported Studio workflow, bridge contract and limits.",
+      "evidence": [
+        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+      ]
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+      ]
+    }
+  },
+  "integrations": {
+    "skills": [
+      "studio-ui"
+    ],
+    "mcp_tools": [],
+    "studio_methods": [
+      "studio.gameEntities",
+      "studio.gameInspect"
+    ],
+    "studio_panels": [
+      "runtime"
+    ]
+  },
+  "test_reports": [
+    "docs/evidence/integrated-graph-2a56cbf39.json"
+  ]
+}

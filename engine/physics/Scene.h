@@ -127,6 +127,9 @@ public:
     // Queries skip sensors unless asked; results name live handles, sorted (all hits by fraction,
     // overlaps by handle) so they do not depend on broad-phase order.
     RayHit raycast(b3Vec3 origin, b3Vec3 translation, const QueryFilter& filter = {}) const;
+    // Swept sphere, native Box3D shape query; radius 0 uses raycast.
+    // Initial overlaps without a valid normal are not depenetration results.
+    RayHit sphereCast(b3Vec3 origin,b3Vec3 translation,float radius,const QueryFilter& filter={}) const;
     std::vector<RayHit> raycastAll(b3Vec3 origin, b3Vec3 translation, const QueryFilter& filter = {}) const;
     std::vector<BodyHandle> overlapSphere(b3Vec3 centre, float radius, const QueryFilter& filter = {}) const;
     std::vector<BodyHandle> overlapBox(b3Vec3 centre, b3Vec3 halfExtents, b3Quat rotation, const QueryFilter& filter = {}) const;
@@ -136,6 +139,7 @@ public:
     // Pass its handle as `self` to stepCharacter. moveCharacter follows the state over the next step.
     BodyHandle createCharacter(const CharacterParams& params, b3Vec3 feet, uint32_t userData = 0);
     bool moveCharacter(BodyHandle h, const CharacterState& state, bool teleport = false);
+    bool moveCharacterOriented(BodyHandle h,const CharacterState& state,b3Quat localToWorld,bool teleport=false);
     // Applies pushes reported by stepCharacter: impulse along the push direction that brings the body
     // to the character's speed at that point, clamped to the push's maxImpulse.
     void applyPushes(const std::vector<Push>& pushes);

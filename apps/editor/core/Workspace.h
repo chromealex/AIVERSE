@@ -7,11 +7,17 @@
 #include <atomic>
 #include <functional>
 #include <mutex>
+#include <memory>
+#include "engine/buildings/BuildingGraphMonitor.h"
+#include <stdexcept>
+#include <utility>
+#include <optional>
 #include <thread>
 #include <map>
 #include <string>
 #include <vector>
 #include "MapDoc.h"
+#include "ProjectHistory.h"
 #include "engine/data/Json.h"
 #include "engine/game/GameData.h"
 #include "engine/data/JsonCompose.h"
@@ -26,13 +32,29 @@ struct Project {
     Json manifest = Json::object();
     Json rulesJson = Json::object();   // rules.json with its includes merged; "extends" kept as written
     JsonOrigin rulesOrigin;            // which file each part came from (saveRules writes it back there)
+    // Exact on-disk bytes, separate from normalized splitComposed comparison text.
+    std::map<size_t,std::string> savedRulesText;
+    std::optional<std::string> savedManifestText;
     game::Rules rules;
     std::string rulesError;       // last loader error (rules stay usable from the previous good state)
     bool rulesDirty = false, manifestDirty = false;
 
     bool load(const std::string& dir, std::string* err);
-    bool saveRules(std::string* err);
-    bool saveManifest(std::string* err);
+    bool saveRules(std::string* err,const std::string& historyLabel={});
+    bool saveManifest(std::string* err,const std::string& historyLabel={});
+    // Detached owner: prepare both dirty documents and the history checkpoint.
+    // The caller publishes the returned existing-file plan before swapping owners.
+    std::vector<ProjectFileEdit> stageDirtySave();
+    Json historyStatus() const;
+    bool historyStep(bool redo,const std::string& expectedVersion,std::string* err);
+    // Validate and advance a detached Project copy without writing any file.
+    std::vector<ProjectFileEdit> stageHistoryStep(bool redo);
+    ProjectHistory documentHistory;
+    std::optional<std::string> savedHistoryCheckpoint;
+    std::string historyPersistenceWarning;
+    bool historyRequiresReload=false;
+    void applyHistoryTransaction(const std::vector<ProjectFileEdit>& edits,ProjectHistory next);
+    std::string historyVersion() const;
     std::string rulesPath() const;
     std::vector<std::string> rulesFiles() const;   // rules.json + included files (relative to dir)
     // Legacy simulation host (game.json "module": rts | fps | voxel | genres | strategic). The hosts are being
@@ -63,7 +85,7 @@ struct Activity { double time = 0; std::string source, text; bool error = false;
 class Workspace {
 public:
     using OpFn = std::function<Json(const Json& params)>;
-    struct Op { std::string name, description; Json schema; OpFn fn; bool guiOnly = false; };
+    struct Op { std::string name, description; Json schema; OpFn fn; bool guiOnly = false; bool studioLinkOnly = false; };
 
     Workspace();
     ~Workspace();
@@ -79,8 +101,36 @@ public:
     // Run an operation. Never throws: errors come back as {"error": "..."}.
     Json call(const std::string& name, const Json& params, const std::string& source = "editor");
     const std::vector<Op>& ops() const { return ops_; }
+    // Host publishes a detached owner-thread snapshot; clear on world teardown.
+    // No live world provider is installed by the headless workspace itself.
+    std::function<Json(uint64_t)> buildingGraphDiagnosticsProvider;
+    // Called by the host on the Workspace owner thread, with a detached monitor.
+    void attachBuildingGraphMonitor(const std::shared_ptr<building::BuildingGraphMonitor>& monitor){
+        if(!monitor){buildingGraphDiagnosticsProvider={};return;}
+        std::weak_ptr<building::BuildingGraphMonitor> weak=monitor;
+        buildingGraphDiagnosticsProvider=[weak](uint64_t id){
+            if(auto live=weak.lock())return live->read(id);
+            return Json{};
+        };
+    }
     void registerOp(Op op);       // GUI adds view/play/screenshot ops
     Json toolList() const;        // MCP tools/list payload
+    // Presentation-only native VFX device bridge. Set by a running Studio
+    // after its Scene render thread is available. Headless aiversemcp still
+    // advertises fx_graph_preview but returns an explicit unavailability
+    // error; the graph/asset CRUD tools remain usable without a GPU.
+    void setSpectraAssetCheckHandler(OpFn handler) { spectraAssetCheckHandler_=std::move(handler); }
+    Json spectraAssetCheck(const Json& params) const {
+        if(!spectraAssetCheckHandler_)throw std::runtime_error("SpectraFX asset check requires native Studio");
+        return spectraAssetCheckHandler_(params);
+    }
+    void setSpectraPreviewHandler(OpFn handler) { spectraPreviewHandler_=std::move(handler); }
+    Json spectraPreview(const Json& params) const {
+        if(!spectraPreviewHandler_)
+            throw std::runtime_error("SpectraFX live preview requires an open native Studio GPU viewport");
+        return spectraPreviewHandler_(params);
+    }
+
 
     std::vector<GameInfo> listGames() const;
     bool openGame(const std::string& idOrDir, std::string* err);   // folder, .aiverse, game.json or template id
@@ -121,6 +171,8 @@ private:
     std::string runLabel_, logFile_;
     std::atomic<int> runCount_{0};
     std::vector<Op> ops_;
+    OpFn spectraPreviewHandler_;
+    OpFn spectraAssetCheckHandler_;
 };
 
 // "types.footman.weapons[0].damage" -> pointer into j (created when `create`), nullptr if missing.

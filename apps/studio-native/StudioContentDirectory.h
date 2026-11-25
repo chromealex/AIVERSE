@@ -73,7 +73,9 @@ inline std::vector<StudioContentAsset> studioContentFiles(
         // outside project/content even when directory symlinks are not followed.
         std::error_code fileError;
         const fs::file_status status = it->symlink_status(fileError);
-        if (fileError || !fs::is_regular_file(status)) continue;
+        if (fileError) continue;
+        if(it->path().filename().string().starts_with(".aiverse-save-")){it.disable_recursion_pending();continue;}
+        if (!fs::is_regular_file(status)) continue;
         const std::string name=it->path().filename().string();
         if(it->path().extension()==".meta" ||
            name.find(".aiverse-backup-")!=std::string::npos ||

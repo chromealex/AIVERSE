@@ -1,0 +1,19 @@
+# Stage 149 — high-resolution external SDF
+
+Owner: SpectraFX continuation agent. Branch: feature/spectrafx-html5-data-interfaces-20261123
+Previous HEAD: a3f22ce164d1995caa601097e2b99fd49c3a0135
+Plan: cd13c087a9897f05781e992d560f3421b4f98ce6
+Native runtime, binary and identity: 617584196363c68c573587a549ec7aa6ad8e297d
+Authoring, fixtures and docs: a75028089da126183296facda7e17f43be5bee3e
+
+StaticSdfVolume and MeshDistanceGrid support native dimensions through 128. Inline JSON, Studio in-memory bake/import and staticSdfToJson keep 32 maximum. Existing .sdfbin layout is preserved; SDFB v1 for 3..32, v2 for 33..128, strict version/dimension pairing and existing CRC32. 64 cubed = 262144 floats (1 MiB + 36-byte framing); 128 cubed = 2097152 floats (8 MiB + 36 bytes). Existing reader and shared storage bounds expand through the common constants. Native CLI accepts 4..128 but requires .sdfbin output above 32. Studio authoring links high-res indexed files via existing linkSdf, explains CLI workflow, rejects large inline imports. No editor-side high-resolution bake-to-file or new write permissions.
+
+Effect parser limits total effective binary reads per effect to four max-size files (32 MiB + framing), including repeated references; host reader still owns pre-allocation IO bounds. Parsed collision records source path; effectToJson high-resolution exports the path or throws for unlinked native data. Native callers must maintain source-path/sample consistency if modifying a compiled effect; no automatic file writes. Low-resolution export continues inline. Eligibility compares structural JSON without SDF samples and validates native volume. GPU pool key hashes dimensions/origin/spacing/samples and compares full sample values before reuse, avoiding large JSON expansions. Existing GPU shader runtime indexing and allocation charge scale with sample count; shared cache inherits bounds, no new GPU binding or atlas. Native vectors still copy across effect/descriptor/cache owners; no global CPU memory dedup. The parser budget is per effect, not a scene-wide memory cap.
+
+Offline >32 traversal limit 256 Mi measured work operations, <=32 retains 64 Mi; mesh topology caps and minimum 0.01 metre spacing remain unchanged. No promise all complex meshes bake within the budget, nor a measured acceleration claim. GPU/CPU segment sweep remains approximate with 64 step cap.
+
+Paths: engine/bake/MeshDistanceGrid.h; engine/fx/{SpectraStaticSdfVolume.h,SpectraSdfBinary.h,SpectraSdfBaker.h,FxEffect.h,FxEffect.cpp,SpectraGraphRuntime.cpp,SpectraGpuParticles.h,SpectraGpuPoolWorld.cpp}; tools/spectrafx/sdf_bake.cpp; apps/editor/core/SpectraGraphOps.cpp; apps/studio-web/src/panels/SpectraGraphAssetInspector.tsx; tests/{vfx_graph_runtime_test.cpp,vfx_graph_ops_test.cpp,spectrafx_metal_allocator.mm}; owning roadmap, skill, agent and Studio docs.
+
+Delivery evidence: native/runtime/authoring source committed; actual builds and independent consumer NOT RUN. Existing authoring actions retained; native API, graph, persistence, MCP, Studio, inspector and docs updated in source. Regression fixtures for 64/128 exact binary roundtrip and sampling, compact effect export/readback, invalid version/dimension/inline/no-reader rejection, 64 Workspace link/import distinction, real Metal shared storage fixture now 128. No actual high-resolution mesh bake, Metal/Vulkan shader/dispatch, compiler/link, CTest, TS, CLI, memory/benchmark or UI verification. No CI or main sync/merge. GitHub expected-head non-force branch updates succeeded. No feature-ready claim. No authoritative ECS persistence or new simulation dependency.
+
+Next: Stage 150 heterogeneous packed GPU SDF atlas with offsets, bounded residency and fence-safe lifetime. Also outstanding: packaging/replay closure and automatic reload, Studio high-res asset generation, Vulkan upload retirement, native CPU memory sharing, actual Mac/Metal and Vulkan acceptance.

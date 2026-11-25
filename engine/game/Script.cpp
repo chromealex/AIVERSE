@@ -905,9 +905,10 @@ const std::pair<uint16_t, const char*> kSimEventNames[] = {
     {kEvPlayerDefeated, "player_defeated"}, {kEvNotEnough, "not_enough"}, {kEvResearched, "researched"},
     {kEvLevelUp, "level_up"}, {kEvAbility, "ability"}, {kEvMiss, "miss"}, {kEvReadyToPlace, "ready_to_place"},
     {kEvSold, "sold"}, {kEvRegionClaimed, "region_claimed"}, {kEvWave, "wave"}, {kEvLowPower, "low_power"},
-    {kEvUpgraded, "upgraded"}, {kEvMessage, "message"}, {kEvDug, "dug"}, {kEvTerritory, "territory"},
+    {kEvPlayerLeft, "player_left"}, {kEvChat, "chat"}, {kEvUpgraded, "upgraded"}, {kEvMessage, "message"}, {kEvDug, "dug"}, {kEvTerritory, "territory"},
     {kEvRoomPainted, "room_painted"}, {kEvRecruited, "recruited"}, {kEvCreatureLeft, "creature_left"},
     {kEvPickedUp, "picked_up"}, {kEvDropped, "dropped"}, {kEvSlapped, "slapped"}, {kEvPossessed, "possessed"},
+    {kEvCampaignFightEnd, "campaign_fight_end"}, {kEvCampaignWound, "campaign_wound"},
     {kEvPayday, "payday"}, {kEvPlayerAbility, "player_ability"}, {kEvProduced, "produced"},
     {kEvDelivered, "delivered"}, {kEvRoadBuilt, "road_built"}, {kEvLanesChanged, "lanes_changed"},
     {kEvStatusStart, "status_start"}, {kEvStatusEnd, "status_end"}, {kEvAreaStart, "area_start"},
@@ -928,6 +929,8 @@ const std::pair<uint16_t, const char*> kSimEventNames[] = {
     {kEvBossEngaged, "boss_engaged"}, {kEvBossPhase, "boss_phase"}, {kEvBossEnraged, "boss_enraged"}, {kEvBossAdds, "boss_adds"},
     {kEvBossDefeated, "boss_defeated"}, {kEvBossWindow, "boss_window"}, {kEvTelegraphStart, "telegraph_start"},
     {kEvTelegraphStrike, "telegraph_strike"}, {kEvTelegraphEnd, "telegraph_end"},
+    {kEvAttackReleased, "attack_release"}, {kEvAttackWindup, "attack_start"}, {kEvAttackCancelled, "attack_cancelled"}, {kEvAttackRecoveryEnd, "attack_recovery_end"},
+    {kEvBounty, "bounty"},
 };
 } // namespace
 const char* simEventName(uint16_t type) {

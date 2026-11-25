@@ -4,6 +4,7 @@
 #pragma once
 #include "engine/mechanics/Namespace.h"
 #include "engine/mechanics/EcsDamageSystems.h"
+#include "engine/mechanics/WeaponCadence.h"
 #include "engine/core/FixedMath.h"
 #include <algorithm>
 #include <cstdint>
@@ -21,11 +22,13 @@ struct WeaponParametersComponent {
     uint32_t lifetime=60;
     uint32_t fireInterval=6;
     int32_t directDamage=25;
+    Fixed firePeriod{}; // positive seconds opts into fractional cadence; zero uses fireInterval
 };
 
 struct WeaponStateComponent {
     int32_t ammo=30;
     uint32_t nextFireTick=0;
+    Fixed remainingCooldown{}; // authoritative for firePeriod > 0; persist/hash with the owner
 };
 
 struct FireIntentComponent {
@@ -50,6 +53,7 @@ inline bool validWeaponParameters(const WeaponParametersComponent& p) {
            p.radius>=Fixed{} && p.radius<=2_fx &&
            p.lifetime>0 && p.lifetime<=100000 &&
            p.fireInterval>0 && p.fireInterval<=100000 &&
+           p.firePeriod>=Fixed{} && p.firePeriod<=100000_fx &&
            p.directDamage>0 && p.directDamage<=1000000;
 }
 
@@ -82,16 +86,24 @@ inline void addWeaponLaunchSystem(Simulation& sim,std::string name) {
             if(!world.alive(owner))continue;
             WeaponStateComponent& state=weapons->dataAt(i);
             FireIntentComponent* intent=intents->tryGet(owner.index);
-            if(!intent || !intent->requested)continue;
-            intent->requested=false;
+            const bool requested=intent && intent->requested;
+            if(intent)intent->requested=false;
             const auto* p=read.tryGetConst<WeaponParametersComponent>(owner);
-            if(!p || !validWeaponParameters(*p) ||
-               state.ammo<=0 || now<state.nextFireTick ||
-               now>std::numeric_limits<uint32_t>::max()-p->fireInterval ||
-               spawns->nextShotId==0 ||
-               spawns->nextShotId==std::numeric_limits<uint32_t>::max() ||
+            if(!p || !validWeaponParameters(*p))continue;
+            const bool precise=p->firePeriod.raw>0;
+            if(precise)state.remainingCooldown=advanceWeaponCadence(state.remainingCooldown,current.dt(),true);
+            struct Boundary {
+                WeaponStateComponent& state; bool precise;
+                ~Boundary(){if(precise)state.remainingCooldown=finishWeaponCadence(state.remainingCooldown);}
+            } boundary{state,precise};
+            if(!requested || state.ammo<=0 ||
+               (precise ? !cadenceReady(state.remainingCooldown) :
+                (now<state.nextFireTick || now>std::numeric_limits<uint32_t>::max()-p->fireInterval)) ||
                intent->direction.lengthSq()<=Fixed{})continue;
-
+            const uint32_t budget=precise?kMaxCadenceShotsPerTick:1;
+            for(uint32_t shot=0;shot<budget && state.ammo>0 &&
+                (!precise || cadenceReady(state.remainingCooldown));++shot) {
+            if(spawns->nextShotId==0 || spawns->nextShotId==std::numeric_limits<uint32_t>::max())break;
             ProjectileSpawnCommand cmd;
             cmd.flight.owner=owner;
             cmd.flight.shotId=spawns->nextShotId++;
@@ -102,7 +114,11 @@ inline void addWeaponLaunchSystem(Simulation& sim,std::string name) {
             cmd.flight.state.velocity=fxNormalize(intent->direction)*p->muzzleSpeed;
             cmd.damage.directDamage=p->directDamage;
             spawns->pending.push_back(std::move(cmd));
-            commitAcceptedShot(state.ammo,state.nextFireTick,now,p->fireInterval);
+            if(precise){
+                --state.ammo;
+                state.remainingCooldown=acceptCadenceShot(state.remainingCooldown,p->firePeriod,true);
+            }else commitAcceptedShot(state.ammo,state.nextFireTick,now,p->fireInterval);
+            }
         }
     });
 }

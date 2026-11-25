@@ -50,3 +50,13 @@ for skill_id in ('aiverse-lens', 'aiverse-lens-native'):
     assert entry['runtime'] == 'none' and entry['target'] is None
     assert m.search(entries, skill_id)[0][1]['id'] == skill_id
     assert m.plan(entries, [skill_id], 'both')['cmake'] == []
+
+# Setting recipes select their one existing library, never duplicate its target.
+for name in ["aiverse-building-alien-civilization","aiverse-building-ancient-civilizations","aiverse-building-asian-historical","aiverse-building-cyberpunk","aiverse-building-dark-fantasy","aiverse-building-medieval-fantasy","aiverse-building-modern","aiverse-building-post-apocalypse","aiverse-building-scifi-space","aiverse-building-solarpunk","aiverse-building-steampunk","aiverse-building-underwater"]:
+    entry=entries[name]
+    assert entry['runtime']=='none' and entry['target'] is None
+    selected=m.plan(entries,[name],'both')
+    assert any(e['id']=='aiverse-building-style' for e in selected['selection'])
+    assert sum(e['target']=='AIVERSE::lib_building_style' for e in selected['selection'])==1
+for name in ('aiverse-persistent-world','aiverse-region-lifecycle'):
+    assert entries[name]['runtime']=='none' and entries[name]['target'] is None

@@ -277,7 +277,8 @@ struct ScriptEngine::Impl {
             setEnt(L, "caster", ev.a); setEnt(L, "target", ev.b); setInt(L, "index", ev.value);
             if (sim.world().alive(ev.a) && sim.world().has<Unit>(ev.a)) setStr(L, "ability", m.abilityFor(sim, ev.a, int(ev.value)).id);
             break;
-        case EvDamage: setEnt(L, "unit", ev.a); setEnt(L, "source", ev.b); setFx(L, "amount", Fixed::fromRaw(ev.value)); break;
+        case EvDamage: setEnt(L, "unit", ev.a); setEnt(L, "source", ev.b); setFx(L, "amount", Fixed::fromRaw(ev.value));
+            lua_pushboolean(L, (ev.flags & kHitCritical) != 0); lua_setfield(L, -2, "critical"); break;
         case EvLevelUp: setEnt(L, "unit", ev.a); setInt(L, "level", ev.value); break;
         default: break;
         }
@@ -308,7 +309,17 @@ struct ScriptEngine::Impl {
         case kEvGathered: case kEvDelivered: case kEvProduced:
             if (ev.value >= 0 && size_t(ev.value) < r.resources.size()) setStr(L, "resource", r.resources[size_t(ev.value)].id);
             break;
-        case kEvHit: setFx(L, "amount", Fixed::fromRaw(ev.value)); break;
+        case kEvHit: setFx(L, "amount", Fixed::fromRaw(ev.value));
+            lua_pushboolean(L, (ev.flags & kHitCritical) != 0); lua_setfield(L, -2, "critical"); break;
+        case kEvBounty: setFx(L, "amount", Fixed::fromRaw(ev.value));
+            if (ev.resource < r.resources.size()) setStr(L, "resource", r.resources[ev.resource].id);
+            if (ev.subjectType < r.types.size()) setStr(L, "unit_type", r.types[ev.subjectType].id);
+            if (ev.subjectOwner <= UINT8_MAX) setInt(L, "victim_owner", ev.subjectOwner);
+            break;
+        case kEvPlayerLeft: setStr(L, "controller", controllerName(SeatController(ev.value))); break;
+        case kEvChat:
+            if (ev.message) setStr(L, "text", ev.message->text);
+            break;
         case kEvMessage: {
             auto& msgs = m.state(sim).trig.messages;
             if (ev.value >= 0 && size_t(ev.value) < msgs.size()) setStr(L, "text", msgs[size_t(ev.value)]);

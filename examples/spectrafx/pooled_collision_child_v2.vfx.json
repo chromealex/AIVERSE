@@ -1,0 +1,110 @@
+{
+  "version": 2,
+  "description": "Pooled collision child example. Place in fx/graphs, place collision_sparks.json in fx. Native scene sources opt in to the bounded GPU route; CPU uses ordinary subemitters.",
+  "parameters": {},
+  "scenePoolEmission": {
+    "burstsPerSecond": 5,
+    "maxBurstsPerFrame": 8
+  },
+  "nodes": [
+    {
+      "id": "spawn",
+      "type": "Spawn",
+      "properties": {
+        "burst": 8
+      },
+      "position": [
+        30,
+        180
+      ]
+    },
+    {
+      "id": "init",
+      "type": "Initialize",
+      "properties": {
+        "life": 2,
+        "speed": 8,
+        "size": 0.2,
+        "spread": 0,
+        "gravity": [
+          0,
+          0,
+          0
+        ]
+      },
+      "position": [
+        230,
+        180
+      ]
+    },
+    {
+      "id": "collision",
+      "type": "CollisionModule",
+      "properties": {
+        "ground": false,
+        "staticSphereRadius": 1,
+        "staticSphereCenter": [
+          0,
+          0,
+          0
+        ],
+        "bounce": 0.7
+      },
+      "position": [
+        450,
+        180
+      ]
+    },
+    {
+      "id": "child",
+      "type": "SubEmitterModule",
+      "properties": {
+        "items": [
+          {
+            "on": "collision",
+            "effect": "collision_sparks",
+            "chance": 1
+          }
+        ]
+      },
+      "position": [
+        650,
+        180
+      ]
+    },
+    {
+      "id": "out",
+      "type": "SpriteOutput",
+      "properties": {
+        "texture": "builtin:soft",
+        "blend": "additive",
+        "align": "camera"
+      },
+      "position": [
+        880,
+        180
+      ]
+    }
+  ],
+  "links": [
+    {
+      "from": "spawn",
+      "to": "init"
+    },
+    {
+      "from": "init",
+      "to": "collision"
+    },
+    {
+      "from": "collision",
+      "to": "child"
+    },
+    {
+      "from": "child",
+      "to": "out"
+    }
+  ],
+  "outputs": [
+    "out"
+  ]
+}

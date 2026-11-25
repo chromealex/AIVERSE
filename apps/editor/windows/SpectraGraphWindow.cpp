@@ -5,6 +5,7 @@
 #include "../EditorUtil.h"
 #include "../core/FxOps.h"
 #include "engine/fx/SpectraFX.h"
+#include "engine/fx/SpectraSdfFileIO.h"
 #include "libraries/include/aiverselib/mechanics/SpectraGpuCaptureMailbox.h"
 #include "libraries/include/aiverselib/mechanics/SpectraGpuRecoveryHost.h"
 #include "engine/fx/SpectraModuleSchema.h"
@@ -48,14 +49,14 @@ public:
         if(project!=project_) {
             if(dirty_ && !project_.empty()) {
                 drafts_[project_]={name_,doc_};
-                draftModes_[project_]=editingDraft_;
+                draftModes_[project_]=editingDraft_;publishedOriginals_[project_]={publishedName_,publishedOriginal_};draftOriginals_[project_]={draftName_,draftOriginal_};
             }
             project_=project;revision_=-1;names_.clear();undo_.clear();redo_.clear();
             if(auto it=drafts_.find(project);it!=drafts_.end()) {
                 name_=it->second.first;doc_=it->second.second;dirty_=true;
-                editingDraft_=draftModes_[project];
+                editingDraft_=draftModes_[project];publishedName_=publishedOriginals_[project].first;publishedOriginal_=publishedOriginals_[project].second;draftName_=draftOriginals_[project].first;draftOriginal_=draftOriginals_[project].second;
             } else {
-                name_="new_spectra";doc_=defaultGraph();dirty_=false;
+                name_="new_spectra";doc_=defaultGraph();dirty_=false;publishedName_.clear();draftName_.clear();publishedOriginal_=Json();draftOriginal_=Json();
                 editingDraft_=false;
             }
             selected_=-1;pendingFrom_.clear();pendingDataFrom_.clear();
@@ -104,7 +105,7 @@ public:
 private:
     void refreshDiagnostics() {
         fx::EffectDef result;
-        valid_=spectra::compileGraph(doc_,result,errors_);
+        valid_=spectra::compileGraph(doc_,Json::object(),result,errors_,fx::projectSdfReader(project_));
         emitters_=valid_?int(result.emitters.size()):0;
         gpuEligible_=false;
         gpuVmEligible_=false;
@@ -114,7 +115,7 @@ private:
             const auto eligibility=spectra::inspectGraphGpuEligibility(result);
             gpuEligible_=eligibility.eligible;
             gpuReason_=eligibility.eligible
-                ? "Metal compute subset compatible (device check still required)"
+                ? "GPU compute subset compatible (device check still required)"
                 : eligibility.reason;
             spectra::GraphRuntimeOptions vmOptions;
             vmOptions.gpuProgram=true;
@@ -159,7 +160,7 @@ private:
         const auto result=ed.ws().call("fx_graph_get",p);
         if(!checkResult(result))return;
         if(!result["graph"].isObject()) {message_="Граф не распознан.";return;}
-        name_=name;doc_=result["graph"];dirty_=false;editingDraft_=false;
+        name_=name;doc_=result["graph"];dirty_=false;editingDraft_=false;publishedName_=name;publishedOriginal_=doc_;draftName_.clear();draftOriginal_=Json();
         undo_.clear();redo_.clear();
         selected_=-1;pendingFrom_.clear();pendingDataFrom_.clear();
         propertyText_.clear();refreshDiagnostics();
@@ -169,7 +170,7 @@ private:
         p.set("name",Json::string(name));
         const Json result=ed.ws().call("fx_graph_draft_get",p);
         if(!checkResult(result)||!result["graph"].isObject())return;
-        doc_=result["graph"];name_=name;editingDraft_=true;dirty_=false;
+        doc_=result["graph"];name_=name;editingDraft_=true;dirty_=false;draftName_=name;draftOriginal_=doc_;publishedName_.clear();publishedOriginal_=Json();
         selected_=-1;pendingFrom_.clear();pendingDataFrom_.clear();
         undo_.clear();redo_.clear();propertyText_.clear();refreshDiagnostics();
         message_="Открыт черновик (не используется в игре до публикации).";
@@ -181,9 +182,10 @@ private:
         Json p=Json::object();
         p.set("name",Json::string(name_));
         p.set("graph",doc_);
+        if(draftName_==name_&&draftOriginal_.isObject())p.set("expected",draftOriginal_);
         const Json result=ed.ws().call("fx_graph_draft_set",p);
         if(!checkResult(result))return;
-        editingDraft_=true;dirty_=false;drafts_.erase(project_);
+        editingDraft_=true;dirty_=false;draftName_=name_;draftOriginal_=doc_;drafts_.erase(project_);
         refreshNames(ed);
         message_="Черновик сохранён отдельно. Ошибки компиляции не мешают редактированию.";
     }
@@ -199,10 +201,15 @@ private:
             Json p=Json::object();
             p.set("name",Json::string(name_));
             p.set("graph",doc_);
+            if(draftName_==name_&&draftOriginal_.isObject())p.set("expected",draftOriginal_);
             if(!checkResult(ed.ws().call("fx_graph_draft_set",p)))return;
+            draftName_=name_;draftOriginal_=doc_;
             Json target=Json::object();
             target.set("name",Json::string(name_));
+            target.set("expectedDraft",draftOriginal_);
+            if(publishedName_==name_&&publishedOriginal_.isObject())target.set("expected",publishedOriginal_);
             if(!checkResult(ed.ws().call("fx_graph_draft_publish",target)))return;
+            publishedName_=name_;publishedOriginal_=doc_;draftName_.clear();draftOriginal_=Json();
             editingDraft_=false;dirty_=false;drafts_.erase(project_);
             refreshNames(ed);
             message_="Граф опубликован: fx/graphs/"+name_+".vfx.json";
@@ -216,9 +223,10 @@ private:
         refreshDiagnostics();
         if(!valid_) {message_="Исправьте ошибки графа перед сохранением.";return;}
         Json p=Json::object();p.set("name",Json::string(name_));p.set("graph",doc_);
+        if(publishedName_==name_&&publishedOriginal_.isObject())p.set("expected",publishedOriginal_);
         const auto result=ed.ws().call("fx_graph_set",p);
         if(!checkResult(result))return;
-        dirty_=false;drafts_.erase(project_);refreshNames(ed);
+        dirty_=false;publishedName_=name_;publishedOriginal_=doc_;drafts_.erase(project_);refreshNames(ed);
         message_="Сохранено: fx/graphs/"+name_+".vfx.json";
     }
     void preview(Editor& ed,bool gpu) {
@@ -243,7 +251,7 @@ private:
         }
         const auto result=ed.ws().call("fx_graph_preview",request);
         if(checkResult(result)) {
-            message_=gpu?"Metal GPU preview queued (strict subset)."
+            message_=gpu?"GPU preview queued (strict subset)."
                         :"CPU preview in Scene.";
             ed.focusWindow(result.getStr("view","scene"));
         }
@@ -255,7 +263,7 @@ private:
         if(ImGui::Button("Новый")) {
             if(dirty_) {message_="Сохраните текущие изменения перед созданием нового графа.";return;}
             doc_=defaultGraph();name_="new_spectra";selected_=-1;pendingFrom_.clear();
-            pendingDataFrom_.clear();editingDraft_=false;
+            pendingDataFrom_.clear();editingDraft_=false;publishedName_.clear();draftName_.clear();publishedOriginal_=Json();draftOriginal_=Json();
             undo_.clear();redo_.clear();dirty_=true;message_.clear();refreshDiagnostics();
         }
         if(doc_.getInt("version")==1) {
@@ -292,7 +300,7 @@ private:
         ImGui::BeginDisabled(!valid_);
         if(ImGui::Button("Предпросмотр"))preview(ed,false);
         ImGui::SameLine();
-        if(ImGui::Button("Metal GPU"))preview(ed,true);
+        if(ImGui::Button("GPU"))preview(ed,true);
         ImGui::EndDisabled();
         ImGui::SameLine();
         ImGui::BeginDisabled(!ed.spectraGpuPreviewActive());
@@ -942,7 +950,7 @@ private:
             }
         }
         ImGui::Separator();
-        if(ImGui::CollapsingHeader("Metal GPU timeline",ImGuiTreeNodeFlags_DefaultOpen)) {
+        if(ImGui::CollapsingHeader("GPU timeline",ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Text("Visual simulation time: %.3f s",
                         ed.spectraGpuPreviewVisualSeconds());
             ImGui::Text("Queued forward steps: %u / 300",
@@ -984,13 +992,13 @@ private:
             ImGui::SameLine();
             if(ImGui::Button("Restart GPU") &&
                !ed.restartSpectraGpuPreview())
-                message_="No active Metal GPU preview to restart";
+                message_="No active GPU preview to restart";
             ImGui::EndDisabled();
             if(!ed.spectraGpuPreviewLastError().empty())
                 ui::toneText(ui::Tone::Error,"%s",
                     ed.spectraGpuPreviewLastError().c_str());
         }
-        if(ImGui::CollapsingHeader("Metal GPU checkpoint — live",ImGuiTreeNodeFlags_DefaultOpen)) {
+        if(ImGui::CollapsingHeader("GPU checkpoint — live",ImGuiTreeNodeFlags_DefaultOpen)) {
             const auto* pool=ed.spectraGpuTelemetry();
             if(pool!=gpuPrivacyPool_) {
                 gpuPrivacyPool_=pool;
@@ -1151,7 +1159,7 @@ private:
                                     gpuCheckpointGroup_!=0);
                 if(ImGui::Button("Freeze & capture preview group 0")) {
                     if(!ed.requestSpectraGpuPreviewCheckpoint())
-                        message_="Metal GPU preview is not active";
+                        message_="GPU preview is not active";
                 }
                 ImGui::EndDisabled();
                 if(!ed.spectraGpuCaptureNote().empty())
@@ -1226,13 +1234,13 @@ private:
             }
         }
         ImGui::Text("CPU emitters: %d",emitters_);
-        ImGui::Text("Metal GPU subset: %s",gpuEligible_?"compatible":"CPU fallback");
+        ImGui::Text("GPU subset: %s",gpuEligible_?"compatible":"CPU fallback");
         if(!gpuReason_.empty())ImGui::TextWrapped("%s",gpuReason_.c_str());
         ImGui::Text("Metal scalar VM (opt-in): %s",gpuVmEligible_?"compatible":"CPU fallback");
         if(!gpuVmReason_.empty())ImGui::TextWrapped("%s",gpuVmReason_.c_str());
         ImGui::TextWrapped("V2: типизированные math/dataflow узлы, "
                            "модули FxEffect и функции компилируются в CPU. "
-                           "Metal GPU доступен только для совместимого billboard-подмножества.");
+                           "GPU доступен только для совместимого billboard-подмножества.");
     }
 
     float gpuAdvanceSeconds_=0.5f;
@@ -1249,6 +1257,8 @@ private:
     bool fieldCheckpointValid_=false;
     std::map<std::string,std::pair<std::string,Json>> drafts_;
     std::map<std::string,bool> draftModes_;
+    std::map<std::string,std::pair<std::string,Json>> publishedOriginals_,draftOriginals_;
+    std::string publishedName_,draftName_;Json publishedOriginal_,draftOriginal_;
     ImVec2 pan_{10,10};
     int selected_=-1,revision_=-1,emitters_=0;
     bool dirty_=false,valid_=false,dragging_=false,gpuEligible_=false,gpuVmEligible_=false,editingDraft_=false;

@@ -1,0 +1,11 @@
+# Stage 142 — offline static mesh SDF baking
+
+Branch: feature/spectrafx-html5-data-interfaces-20261123
+Plan: 20589b670f6d1273c1c4efba2f93ae52defc949b
+Implementation: a11da377ed42121615ad571d73217e91f1394ea1
+
+Added engine/bake/MeshDistanceGrid.h, generic bounded indexed-triangle baker independent of FX and gameplay. Computes closest triangle distance in double precision and signs samples by nonzero solid-angle winding. Exact-position weld removes duplicate UV/material seam vertices; directed-edge checks reject open/inconsistent/nonmanifold edges; degenerate triangles and ambiguous sampled winding reject. This is not a proof of watertight manifold vertices or absence of self intersections. Meshes with overlapping shells, unwelded near seams or complex topology should use closed low-poly proxies. Supports affine transform; cubic bounds pad at least one lattice cell around largest extent. 4..16 samples per axis, 8192 triangles max, 16 Mi sample-triangle pairs max (distance and winding each evaluate triangles, no BVH distance query exists in current light-bake BVH). No automatic simplification or acceleration claim. Failure preserves previous output.
+
+engine/fx/SpectraSdfBaker.h adapts existing FxMesh/meshFromModelFile bind-pose loader and current StaticSdfVolume. Native aiverse_sdf_bake MODEL DIMENSION OUT.json target available alongside existing native tools. CLI identity placement, output object for CollisionModule.properties.staticSdf, overwrites destination. Existing model format availability and limits apply; no second importer. No new shader, RHI, state or asset schema. Regression source in tests/vfx_graph_runtime_test.cpp covers signed cube distances, open mesh, inconsistent winding and dimension rejection. Tools README, subsystem skill and roadmap updated.
+
+Build, CTest, actual model CLI, GPU/visual/performance QA NOT RUN per user request. No main sync or merge. Still open: high-resolution SDF asset/atlas, dynamic scene volumes, Studio/MCP bake command, automatic Depth history and Vulkan producer, planet GPU, surface decals and remaining geometry/fluid/lighting/audio/cache/procedural work. Next implement editor bake integration or remaining geometry outputs. Do not mark collision or SpectraFX fully complete.

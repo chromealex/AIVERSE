@@ -4,6 +4,7 @@
 #include "engine/view/Horizon.h"
 #include "engine/view/GridGeometry.h"
 #include "engine/view/TriangleFacing.h"
+#include "engine/core/FixedMath.h"
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -68,6 +69,7 @@ void PlanetRenderer::init(gfx::Device& dev, const TerrainLook& look, const FileR
 }
 
 void PlanetRenderer::shutdown(gfx::Device& dev) {
+    for(const auto& b:bodies_)if(b.caveCutEpoch)throw std::logic_error("Retire planetary cave cut before renderer shutdown");
     for (auto& b : bodies_) {
         for (auto& c : b.chunks) freeChunk(dev, c);
         if (b.vision.valid()) dev.destroyTexture(b.vision);
@@ -91,12 +93,247 @@ void PlanetRenderer::shutdown(gfx::Device& dev) {
     dev_ = nullptr;
 }
 
+uint64_t PlanetRenderer::caveSurfaceCutWatermark(int body)const noexcept {
+    return body>=0&&size_t(body)<bodies_.size()?bodies_[size_t(body)].caveCutWatermark:0;
+}
+uint64_t PlanetRenderer::caveSurfaceCutEpoch(int body)const noexcept {
+    return body>=0&&size_t(body)<bodies_.size()?bodies_[size_t(body)].caveCutEpoch:0;
+}
+std::vector<terraweave::caverns::CavePlanetSurfaceSlotKey> PlanetRenderer::selectCaveSurfaceSlots(
+        const terraweave::caverns::CavePlanetFrame& frame,terraweave::caverns::SurfaceRectCm footprint,size_t maxSlots)const{
+    namespace cave=terraweave::caverns;
+    const int body=frame.body();const int64_t cap=frame.anchor().halfExtentCm;
+    if(body<0||size_t(body)>=bodies_.size()||!bodies_[size_t(body)].surf||
+       world_.bodies[size_t(body)].id!=frame.anchor().bodyId||!maxSlots||maxSlots>64||
+       footprint.minX>=footprint.maxX||footprint.minZ>=footprint.maxZ||
+       footprint.minX< -cap||footprint.minZ< -cap||footprint.maxX>cap||footprint.maxZ>cap)
+        throw std::invalid_argument("Planet cave leaf selection bounds");
+    const auto& b=bodies_[size_t(body)];const auto& s=*b.surf;const int G=s.gridSize();
+    std::vector<cave::CavePlanetSurfaceSlotKey> out;
+    size_t samples=0;
+    const auto f=[](float x){
+        if(!std::isfinite(x)||std::abs(x)>100000.f)throw std::invalid_argument("Planet cave selection vertex");
+        return Fixed::fromRaw(int64_t(std::llround(double(x)*Fixed::kOne)));
+    };
+    const auto loX=Fixed::fromRatio(footprint.minX,100),hiX=Fixed::fromRatio(footprint.maxX,100);
+    const auto loZ=Fixed::fromRatio(footprint.minZ,100),hiZ=Fixed::fromRatio(footprint.maxZ,100);
+    const auto extent=Fixed::fromRatio(cap,100);
+    for(const auto& c:b.chunks){
+        if(c.child>=0)continue;
+        const auto centre=frame.vectorFromBody(Vec3{f(c.center.x),f(c.center.y),f(c.center.z)}-frame.originBody());
+        // Use the native chunk bound to avoid traversing far side samples.
+        const auto radius=f(c.boundR)+Fixed::fromRatio(1,10);
+        if(centre.x+radius<loX||centre.x-radius>hiX||centre.z+radius<loZ||centre.z-radius>hiZ||
+           centre.y+radius< -extent||centre.y-radius>extent)continue;
+        const int x1=std::min(c.x0+c.size,G),z1=std::min(c.y0+c.size,G),step=std::max(1,c.size/kGrid);
+        std::vector<int> xs,zs;
+        for(int x=c.x0;x<x1;x+=step)xs.push_back(x);xs.push_back(x1);
+        for(int z=c.y0;z<z1;z+=step)zs.push_back(z);zs.push_back(z1);
+        Vec3 minimum{Fixed::fromInt(100000),Fixed::fromInt(100000),Fixed::fromInt(100000)};
+        Vec3 maximum{Fixed::fromInt(-100000),Fixed::fromInt(-100000),Fixed::fromInt(-100000)};
+        for(int z:zs)for(int x:xs){
+            if(++samples>2000000)throw std::length_error("Planet cave leaf selection sample budget");
+            const auto p=s.gridPos(c.face,x,z);
+            const auto q=frame.vectorFromBody(Vec3{f(p.x),f(p.y),f(p.z)}-frame.originBody());
+            minimum={fxMin(minimum.x,q.x),fxMin(minimum.y,q.y),fxMin(minimum.z,q.z)};
+            maximum={fxMax(maximum.x,q.x),fxMax(maximum.y,q.y),fxMax(maximum.z,q.z)};
+        }
+        if(maximum.x<loX||minimum.x>hiX||maximum.z<loZ||minimum.z>hiZ||
+           maximum.y< -extent||minimum.y>extent)continue;
+        frame.checkLocal(minimum);frame.checkLocal(maximum);
+        if(out.size()>=maxSlots)throw std::length_error("Planet cave leaf group capacity");
+        out.push_back({c.face,c.x0,c.y0,c.size,c.level});
+    }
+    if(out.empty())throw std::invalid_argument("Planet cave footprint has no eligible leaf");
+    std::sort(out.begin(),out.end());
+    return out;
+}
+std::vector<terraweave::caverns::CavePlanetSurfaceSlotKey> PlanetRenderer::caveSurfaceLeafKeys(int body,size_t maxKeys)const{
+    if(body<0||size_t(body)>=bodies_.size()||!bodies_[size_t(body)].surf||!maxKeys||maxKeys>65536)
+        throw std::invalid_argument("Planet physical leaf enumeration");
+    std::vector<terraweave::caverns::CavePlanetSurfaceSlotKey> result;
+    for(const auto& c:bodies_[size_t(body)].chunks){
+        if(c.child>=0)continue;
+        if(result.size()>=maxKeys)throw std::length_error("Planet physical leaf enumeration budget");
+        result.push_back({c.face,c.x0,c.y0,c.size,c.level});
+    }
+    std::sort(result.begin(),result.end());return result;
+}
+std::vector<terraweave::caverns::CavePlanetSurfaceSlot> PlanetRenderer::captureCaveSurfaceSlots(int body,
+        std::span<const terraweave::caverns::CavePlanetSurfaceSlotKey> keys)const {
+    namespace cave=terraweave::caverns;
+    if(body<0||size_t(body)>=bodies_.size()||!bodies_[size_t(body)].surf||keys.empty()||keys.size()>64)
+        throw std::invalid_argument("Planet cave surface capture");
+    const auto& b=bodies_[size_t(body)];const auto& s=*b.surf;
+    const auto fixed=[](float x){if(!std::isfinite(x)||std::abs(x)>100000.f)throw std::invalid_argument("Planet cave vertex");return Fixed::fromRaw(int64_t(std::llround(double(x)*Fixed::kOne)));};
+    std::vector<cave::CavePlanetSurfaceSlot> out;
+    std::set<cave::CavePlanetSurfaceSlotKey> seen;
+    for(const auto& key:keys){
+        const auto it=std::find_if(b.chunks.begin(),b.chunks.end(),[&](const auto& c){
+            return c.face==key.face&&c.x0==key.x&&c.y0==key.z&&c.size==key.size&&c.level==key.level;
+        });
+        if(it==b.chunks.end()||it->child>=0||!seen.insert(key).second)
+            throw std::invalid_argument("Planet cave requires unique existing leaf slots");
+        const auto& c=*it;const int G=s.gridSize();
+        const int x1=std::min(c.x0+c.size,G),z1=std::min(c.y0+c.size,G);
+        const int step=std::max(1,c.size/kGrid);
+        std::vector<int> xs,zs;
+        for(int x=c.x0;x<x1;x+=step)xs.push_back(x);xs.push_back(x1);
+        for(int z=c.y0;z<z1;z+=step)zs.push_back(z);zs.push_back(z1);
+        std::vector<Vec3> points;std::vector<uint32_t> indices;
+        for(int z:zs)for(int x:xs){const auto p=s.gridPos(c.face,x,z);points.push_back({fixed(p.x),fixed(p.y),fixed(p.z)});}
+        ::aiverse::view::appendQuadGridIndices(indices,int(xs.size()),int(zs.size()));
+        cave::CavePlanetSurfaceSlot slot;slot.key=key;
+        for(size_t i=0;i<indices.size();i+=3){
+            world::Triangle t{points[indices[i]],points[indices[i+1]],points[indices[i+2]]};
+            if(fxCross(t.b-t.a,t.c-t.a).dot(t.a)<Fixed{})std::swap(t.b,t.c);
+            slot.bodyTriangles.push_back(t);
+        }
+        out.push_back(std::move(slot));
+    }
+    return out;
+}
+bool PlanetRenderer::clearCaveSurfaceCut(int body,const std::function<bool()>& exclusive){
+    if(body<0||size_t(body)>=bodies_.size()||bodies_[size_t(body)].caveCutAggregate)return false;
+    return clearCaveBodyCut(body,caveSurfaceCutEpoch(body),exclusive);
+}
+bool PlanetRenderer::clearCaveBodyCut(int body,uint64_t expectedEpoch,const std::function<bool()>& exclusive){
+    if(!dev_||body<0||size_t(body)>=bodies_.size()||!exclusive||!exclusive())return false;
+    auto& b=bodies_[size_t(body)];
+    if(b.caveCutEpoch!=expectedEpoch)return false;
+    if(!b.caveCutEpoch)return true;
+    if(!dev_->waitForResourceIdle()||!exclusive())return false;
+    for(auto& c:b.chunks){
+        if(c.caveVb.valid())dev_->destroyBuffer(c.caveVb);
+        if(c.caveIb.valid())dev_->destroyBuffer(c.caveIb);
+        c.caveVb={};c.caveIb={};c.caveIndices=0;c.caveCut=false;c.caveDescendant=false;c.caveRegion=0;
+    }
+    b.caveCutEpoch=0;b.caveCutAggregate=false;return true;
+}
+bool PlanetRenderer::installCaveSurfaceCut(int body,const terraweave::caverns::CavePlanetCutPlan& plan,
+        const std::function<bool()>& exclusive,const std::function<bool()>& nativeOwnersReady){
+    namespace cave=terraweave::caverns;
+    if(body<0||size_t(body)>=bodies_.size()||bodies_[size_t(body)].caveCutAggregate)return false;
+    auto aggregate=cave::singlePlanetBodyCut(std::make_shared<const cave::CavePlanetCutPlan>(plan));
+    if(!installCaveBodyCut(body,aggregate,caveSurfaceCutEpoch(body),exclusive,nativeOwnersReady))return false;
+    bodies_[size_t(body)].caveCutAggregate=false;return true;
+}
+bool PlanetRenderer::installCaveBodyCut(int body,const terraweave::caverns::CavePlanetBodyCutPlan& plan,
+        uint64_t expectedEpoch,const std::function<bool()>& exclusive,const std::function<bool()>& nativeOwnersReady){
+    namespace cave=terraweave::caverns;
+    if(!dev_||body<0||size_t(body)>=bodies_.size()||!exclusive||!exclusive()||
+       !nativeOwnersReady||plan.bodyId!=world_.bodies[size_t(body)].id||
+       plan.surfaceRevision!=caveSurfaceRevision_||!plan.surfaceEpoch)return false;
+    auto& b=bodies_[size_t(body)];const auto& pb=world_.bodies[size_t(body)];
+    if(!b.surf||b.caveCutEpoch!=expectedEpoch||plan.surfaceEpoch<=b.caveCutWatermark)return false;
+    const auto slots=cave::collectPlanetBodyCutSlots(plan);
+    // A full native replacement cannot silently restore an old cut leaf:
+    // its collision owner would still hold that leaf. Explicit coordinated
+    // clear/restore is required before shrinking the active set.
+    for(const auto& c:b.chunks)if(c.caveCut){
+        const auto it=slots.find({c.face,c.x0,c.y0,c.size,c.level});
+        if(it==slots.end()||it->second.region!=c.caveRegion)return false;
+    }
+    if(!dev_->waitForResourceIdle()||!exclusive())return false;
+    std::vector<cave::CavePlanetSurfaceSlotKey> keys;
+    for(const auto& [key,slot]:slots){(void)slot;keys.push_back(key);}
+    const auto original=captureCaveSurfaceSlots(body,keys);
+    const auto sameTriangle=[](const world::Triangle& a,const world::Triangle& b){return a.a==b.a&&a.b==b.b&&a.c==b.c;};
+    struct Staged{size_t index;gfx::BufferHandle vb,ib;uint32_t count=0;uint64_t region=0;};
+    std::vector<Staged> staged;staged.reserve(keys.size());
+    const auto discard=[&]{for(auto& st:staged){if(st.vb.valid())dev_->destroyBuffer(st.vb);if(st.ib.valid())dev_->destroyBuffer(st.ib);}staged.clear();};
+    const auto& s=*b.surf;const int N=s.faceSize(),G=s.gridSize(),K=std::max(1,s.detailScale());
+    const auto asFloat=[](Vec3 p){return float3{float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())};};
+    try{
+        for(const auto& captured:original){
+            const auto& slot=*slots.at(captured.key).slot;
+            if(slot.originalBody.size()!=captured.bodyTriangles.size()||
+               !std::equal(slot.originalBody.begin(),slot.originalBody.end(),captured.bodyTriangles.begin(),sameTriangle)||
+               slot.bodyTriangles.size()>65534){discard();return false;}
+            const auto& key=captured.key;
+            const auto it=std::find_if(b.chunks.begin(),b.chunks.end(),[&](const auto& c){return c.face==key.face&&c.x0==key.x&&c.y0==key.z&&c.size==key.size&&c.level==key.level;});
+            const auto& chunk=*it;
+            // Preserve authored terrain shading, fog/detail atlases and
+            // body-relative origin in the original PlanetRenderer shader.
+            // New vertices sample the same source face (no seam-face switch).
+            std::vector<PV> vertices;std::vector<uint32_t> indices;
+            vertices.reserve(slot.bodyTriangles.size()*3);indices.reserve(slot.bodyTriangles.size()*3);
+            const auto fixed=[](float x){return Fixed::fromRaw(int64_t(std::llround(double(x)*Fixed::kOne)));};
+            std::map<cave::SurfaceVertexKey,PV> originalPV;
+            const int step=std::max(1,chunk.size/kGrid),x1=std::min(chunk.x0+chunk.size,G),z1=std::min(chunk.y0+chunk.size,G);
+            std::vector<int> xs,zs;
+            for(int x=chunk.x0;x<x1;x+=step)xs.push_back(x);xs.push_back(x1);
+            for(int z=chunk.y0;z<z1;z+=step)zs.push_back(z);zs.push_back(z1);
+            for(int z:zs)for(int x:xs){
+                const auto p=s.gridPos(chunk.face,x,z);uint32_t splat=0;
+                const auto col=s.detailScale()?sampleColor(pb,s,chunk.face,x,z,splat):cornerColor(pb,s,chunk.face,x,z,splat);
+                PV pv{};pv.pos=p-chunk.center;pv.morph=pv.pos;pv.nrm=s.gridNormal(chunk.face,x,z);
+                pv.rgba=rgbaf({col.x,col.y,col.z,1});pv.splat=splat;
+                pv.uv[0]=(float(chunk.face%3)*N+float(x)/K)/float(3*N);
+                pv.uv[1]=(float(chunk.face/3)*N+float(z)/K)/float(2*N);
+                pv.duv[0]=(float((chunk.face%3)*(G+1)+x)+.5f)/float(3*(G+1));
+                pv.duv[1]=(float((chunk.face/3)*(G+1)+z)+.5f)/float(2*(G+1));
+                originalPV.emplace(cave::surfaceVertexKey({fixed(p.x),fixed(p.y),fixed(p.z)}),pv);
+            }
+            const auto vertex=[&](Vec3 point){
+                if(const auto found=originalPV.find(cave::surfaceVertexKey(point));found!=originalPV.end())return found->second;
+                const auto p=asFloat(point);
+                for(const auto& source:captured.bodyTriangles){
+                    const auto a=asFloat(source.a),u=asFloat(source.b)-a,v=asFloat(source.c)-a,w=p-a;
+                    const double uu=dot(u,u),uv=dot(u,v),vv=dot(v,v),wu=dot(w,u),wv=dot(w,v);
+                    const double det=uu*vv-uv*uv;if(det<=1e-20)continue;
+                    const float y=float((wu*vv-wv*uv)/det),z=float((wv*uu-wu*uv)/det),x=1.f-y-z;
+                    if(std::min({x,y,z})<-.001f||length(a+u*y+v*z-p)>.005f)continue;
+                    const auto& A=originalPV.at(cave::surfaceVertexKey(source.a));
+                    const auto& B=originalPV.at(cave::surfaceVertexKey(source.b));
+                    const auto& C=originalPV.at(cave::surfaceVertexKey(source.c));
+                    PV pv{};pv.pos=p-chunk.center;pv.morph=pv.pos;pv.nrm=normalize(A.nrm*x+B.nrm*y+C.nrm*z);
+                    const auto packed=[&](uint32_t aa,uint32_t bb,uint32_t cc){uint32_t out=0;for(unsigned shift=0;shift<32;shift+=8){
+                        const auto q=uint32_t(std::clamp(float((aa>>shift)&255)*x+float((bb>>shift)&255)*y+float((cc>>shift)&255)*z,0.f,255.f)+.5f);out|=q<<shift;}return out;};
+                    pv.rgba=packed(A.rgba,B.rgba,C.rgba);pv.splat=packed(A.splat,B.splat,C.splat);
+                    for(int i=0;i<2;++i){pv.uv[i]=A.uv[i]*x+B.uv[i]*y+C.uv[i]*z;pv.duv[i]=A.duv[i]*x+B.duv[i]*y+C.duv[i]*z;}
+                    return pv;
+                }
+                throw std::invalid_argument("Planet cave fragment is outside original terrain triangles");
+            };
+            // Bound the interpolation scan even for hostile native input.
+            if(slot.bodyTriangles.size()*3ull*captured.bodyTriangles.size()>4000000)throw std::length_error("Planet cave attribute work budget");
+            for(const auto& t:slot.bodyTriangles)for(const auto& p:{t.a,t.b,t.c}){indices.push_back(uint32_t(vertices.size()));vertices.push_back(vertex(p));}
+            staged.push_back({size_t(it-b.chunks.begin()),{},{},uint32_t(indices.size()),slots.at(captured.key).region});
+            auto& st=staged.back();
+            if(!indices.empty()){
+                gfx::BufferDesc vb;vb.type=gfx::BufferType::Vertex;vb.size=vertices.size()*sizeof(PV);vb.data=vertices.data();vb.label="planet cave cut";
+                gfx::BufferDesc ib;ib.type=gfx::BufferType::Index;ib.size=indices.size()*sizeof(uint32_t);ib.data=indices.data();ib.label="planet cave cut";
+                st.vb=dev_->createBuffer(vb);st.ib=dev_->createBuffer(ib);
+                if(!st.vb.valid()||!st.ib.valid()){discard();return false;}
+            }
+        }
+        // No new terrain becomes visible until the real volume/physics
+        // owner acknowledges the matching cut. Original ocean remains.
+        if(!exclusive()||!nativeOwnersReady()||!exclusive()){discard();return false;}
+    }catch(...){discard();throw;}
+    for(auto& c:b.chunks){
+        if(c.caveVb.valid())dev_->destroyBuffer(c.caveVb);
+        if(c.caveIb.valid())dev_->destroyBuffer(c.caveIb);
+        c.caveVb={};c.caveIb={};c.caveIndices=0;c.caveCut=false;c.caveDescendant=false;c.caveRegion=0;
+    }
+    for(auto& st:staged){
+        auto& leaf=b.chunks[st.index];leaf.caveVb=st.vb;leaf.caveIb=st.ib;leaf.caveIndices=st.count;leaf.caveCut=true;leaf.caveRegion=st.region;
+        for(auto& c:b.chunks)if(c.child>=0&&c.face==leaf.face&&c.x0<=leaf.x0&&c.y0<=leaf.y0&&
+            c.x0+c.size>=leaf.x0+leaf.size&&c.y0+c.size>=leaf.y0+leaf.size)c.caveDescendant=true;
+    }
+    b.caveCutEpoch=plan.surfaceEpoch;b.caveCutWatermark=plan.surfaceEpoch;b.caveCutAggregate=true;return true;
+}
+
 void PlanetRenderer::freeChunk(gfx::Device& dev, Chunk& c) {
     dev.destroyBuffer(c.vb); dev.destroyBuffer(c.ib);
     c.vb = {}; c.ib = {}; c.indexCount = 0; c.built = false;
 }
 
 void PlanetRenderer::setWorld(const PlanetWorld& w) {
+    for(const auto& b:bodies_)if(b.caveCutEpoch)throw std::logic_error("Retire planetary cave cut before replacing world");
+    if(caveSurfaceRevision_==UINT64_MAX)throw std::overflow_error("Planet surface revision");
+    ++caveSurfaceRevision_;
     if (dev_) for (auto& b : bodies_) {
         for (auto& c : b.chunks) freeChunk(*dev_, c);
         if (b.vision.valid()) dev_->destroyTexture(b.vision);
@@ -313,6 +550,8 @@ void PlanetRenderer::updateHeights(int body, const std::vector<int16_t>& corners
                 any = true;
             }
     if (!any) return;
+    if(b.caveCutEpoch)throw std::logic_error("Retire planetary cave cut before height edit");
+    ++caveSurfaceRevision_;
     pb.corners = corners;
     // seams: a changed corner on a face edge changes its duplicates on the neighbour faces too
     CubeSphere cs(N);
@@ -376,6 +615,9 @@ bool PlanetRenderer::updateDetail(int body, const std::vector<int16_t>& detail) 
     Body& b = bodies_[size_t(body)];
     const int K = b.surf->detailScale();
     if (!K || pb.detailK != K || detail.size() != size_t(6) * size_t(b.surf->gridSize() + 1) * size_t(b.surf->gridSize() + 1)) return false;
+    if(pb.detail==detail)return true;
+    if(b.caveCutEpoch)throw std::logic_error("Retire planetary cave cut before detail edit");
+    ++caveSurfaceRevision_;
     pb.detail = detail;
     PlanetSurface::Rect gr[6];
     if (!b.surf->updateDetail(detail, gr)) return true;
@@ -479,6 +721,8 @@ void PlanetRenderer::updateFlags(int body, const std::vector<uint8_t>& flags) {
     PlanetBody& pb = world_.bodies[size_t(body)];
     if (flags == pb.flags) return;
     Body& b = bodies_[size_t(body)];
+    if(b.caveCutEpoch)throw std::logic_error("Retire planetary cave cut before flag edit");
+    ++caveSurfaceRevision_;
     const int K = b.surf->detailScale(), N = pb.faceSize;
     if (K && flags.size() == pb.flags.size()) { // detail: only around the changed cells (fine noise follows the cell kinds)
         PlanetSurface::Rect rect[6];
@@ -656,7 +900,7 @@ void PlanetRenderer::draw(Renderer3D& r, const render::SphereViewFrame& fr, doub
         if (!frustum.visibleSphere(C, pb.radius * 1.2f + 2)) continue;
         if (pb.star()) { spheres.push_back({C, pb.radius, {pb.color.x * 1.6f, pb.color.y * 1.6f, pb.color.z * 1.5f, 1}, true}); continue; }
         Body& b = bodies_[bi];
-        if (!b.surf || projR < 3.0f) { // a few pixels: a plain sphere is enough
+        if (!b.surf || (projR < 3.0f&&!b.caveCutEpoch)) { // a few pixels: a plain sphere is enough
             spheres.push_back({C, pb.radius, {0.5f, 0.55f, 0.5f, 1}, false});
             continue;
         }
@@ -676,15 +920,19 @@ void PlanetRenderer::draw(Renderer3D& r, const render::SphereViewFrame& fr, doub
             Chunk& c = b.chunks[size_t(ci)];
             // Generic View geometry bounds now own spherical horizon math;
             // the planet module still owns its own local frame and LOD tree.
-            if(horizon.hidden(c.dir,c.cosAngle,c.maxR)) {
+            const float seaRadius=pb.seaLevel>-1e8f?pb.radius+pb.seaLevel:0.f;
+            const bool mayHaveSea=seaRadius>0.f&&c.minR<seaRadius+1.2f;
+            const float outer=mayHaveSea?std::max(c.maxR,seaRadius):c.maxR;
+            const float bounds=c.boundR+(mayHaveSea?std::max(0.f,seaRadius-c.minR):0.f);
+            if(horizon.hidden(c.dir,c.cosAngle,outer)) {
                 ++stats_.culledHorizon;continue;
             }
             const float3 cv = C + rot.transformDir(c.center);
-            if (!frustum.visibleSphere(cv, c.boundR)) { ++stats_.culledFrustum; continue; }
+            if (!frustum.visibleSphere(cv, bounds)) { ++stats_.culledFrustum; continue; }
             const float d = std::max(length(cv - eye) - c.boundR, 0.0f);
             // detail grids: leaves are 16 samples (16 / k cells); 1.5 / k keeps triangles ~1.5x smaller on screen
             const float range = options.lodRange * float(1 << c.level) * (b.surf->detailScale() ? 1.5f / float(b.surf->detailScale()) : 1.0f);
-            const bool split = c.child >= 0 && d < range;
+            const bool split = c.child >= 0 && (c.caveDescendant||d < range);
             if (split) {
                 bool ready = true;
                 for (int k = 0; k < 4; ++k) if (!b.chunks[size_t(c.child + k)].built) ready = false;
@@ -692,14 +940,14 @@ void PlanetRenderer::draw(Renderer3D& r, const render::SphereViewFrame& fr, doub
                     for (int k = 0; k < 4; ++k) { Chunk& ch = b.chunks[size_t(c.child + k)]; if (!ch.built) { buildChunk(dev, pb, b, ch); --buildBudget; } }
                     ready = true;
                 }
-                if (ready) { for (int k = 0; k < 4; ++k) stack.push_back({c.child + k, 0}); continue; }
+                if (ready||c.caveDescendant) { for (int k = 0; k < 4; ++k) stack.push_back({c.child + k, 0}); continue; }
             }
             if (!c.built) buildChunk(dev, pb, b, c);
             // morph towards the parent level over the last quarter of this level's range
             const float end = range * 2.0f, start = end * 0.75f;
-            items->push_back({&c, c.level + 1 < b.levels ? start : 1e9f, c.level + 1 < b.levels ? end : 2e9f, int(bi)});
+            items->push_back({&c, !c.caveCut&&c.level + 1 < b.levels ? start : 1e9f, !c.caveCut&&c.level + 1 < b.levels ? end : 2e9f, int(bi)});
             ++stats_.drawn;
-            stats_.triangles += c.indexCount / 3;
+            stats_.triangles += (c.caveCut?c.caveIndices:c.indexCount) / 3;
         }
     }
     const int tier = tierFor(r);
@@ -783,9 +1031,11 @@ void PlanetRenderer::draw(Renderer3D& r, const render::SphereViewFrame& fr, doub
                 std::memcpy(uu.model, m.m, sizeof uu.model);
                 uu.morph[0] = it.morphStart; uu.morph[1] = it.morphEnd; uu.morph[3] = 0;
                 d.setUniforms(0, &uu, sizeof uu);
-                d.setVertexBuffer(it.c->vb);
-                d.setIndexBuffer(it.c->ib);
-                d.drawIndexed(it.c->indexCount);
+                if(it.c->caveCut){
+                    if(it.c->caveIndices){d.setVertexBuffer(it.c->caveVb);d.setIndexBuffer(it.c->caveIb);d.drawIndexed(it.c->caveIndices);}
+                }else{
+                    d.setVertexBuffer(it.c->vb);d.setIndexBuffer(it.c->ib);d.drawIndexed(it.c->indexCount);
+                }
             }
         });
     }
@@ -812,7 +1062,11 @@ void PlanetRenderer::draw(Renderer3D& r, const render::SphereViewFrame& fr, doub
     // ocean + atmosphere after the opaque scene (custom draws run after translucent meshes)
     struct OceanItem { const Chunk* c; float s, e; int body; };
     auto oceanItems = std::make_shared<std::vector<OceanItem>>();
-    for (auto& it : *items) if (it.c->hasSea) oceanItems->push_back({it.c, it.morphStart, it.morphEnd, it.body});
+    for (auto& it : *items) {
+        const auto& pb=world_.bodies[size_t(it.body)];
+        if(pb.seaLevel>-1e8f&&it.c->minR<pb.radius+pb.seaLevel+1.2f)
+            oceanItems->push_back({it.c,it.morphStart,it.morphEnd,it.body});
+    }
     if (ocean.valid() && !oceanItems->empty()) {
         r.drawCustom([this, &r, oceanItems, bodyU, ocean](gfx::Device& d) {
             d.setPipeline(ocean);

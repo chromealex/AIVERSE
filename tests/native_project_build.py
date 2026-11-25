@@ -12,16 +12,33 @@ with tempfile.TemporaryDirectory(prefix="rts-native-projects-") as tmp:
     (src / "engine/game").mkdir(parents=True)
     # The real selection/registration code is exercised; no renderer/toolchain is needed.
     (src / "engine/game/Native.cpp").write_text("")
-    (src / "engine/game/NativeRegistry.cpp").write_text("")
+    # Build.cmake now separates the registrar from the gameplay implementation.
+    (src / "engine/game/NativeRegistry.cpp").write_bytes((engine / "engine/game/NativeRegistry.cpp").read_bytes())
     (src / "stub.cpp").write_text("")
     module_cmake = (engine / "engine/game/native/Build.cmake").as_posix()
     protobuf_cmake = (engine / "engine/grpc/Protobuf.cmake").as_posix()
     (src / "CMakeLists.txt").write_text(
         'cmake_minimum_required(VERSION 3.22)\nproject(NativeIsolation LANGUAGES CXX)\n'
-        'add_library(aiverse_game STATIC stub.cpp)\ninclude("' + module_cmake + '")\n'
+        'add_library(aiverse_engine INTERFACE)\nadd_library(aiverse_game STATIC stub.cpp)\ninclude("' + module_cmake + '")\n'
         # engine targets defined after the include are there for the project's native CMake (configured last)
         'add_library(aiverse_grpc STATIC stub.cpp)\nadd_library(aiverse_protobuf INTERFACE)\n'
-        'include("' + protobuf_cmake + '")\naiverse_native_configure()\n')
+        'include("' + protobuf_cmake + '")\n'
+        'add_library(aiverse_runtime INTERFACE)\n'
+        'add_library(aiverse_client_runtime INTERFACE)\n'
+        'add_library(aiverse_game_view INTERFACE)\n'
+        'target_link_libraries(aiverse_game_view INTERFACE aiverse_game)\n'
+        'add_executable(camera_only stub.cpp)\n'
+        'target_link_libraries(camera_only PRIVATE aiverse_runtime)\n'
+        'add_executable(scene_only stub.cpp)\n'
+        'target_link_libraries(scene_only PRIVATE aiverse_client_runtime)\n'
+        'add_executable(game_client stub.cpp)\n'
+        'target_link_libraries(game_client PRIVATE aiverse_client_runtime aiverse_game_view)\n'
+        'add_executable(game_host stub.cpp)\n'
+        'target_link_libraries(game_host PRIVATE aiverse_game)\n'
+        'aiverse_native_configure()\n'
+        'foreach(t camera_only scene_only game_client game_host)\n'
+        '  file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${t}-links.txt" CONTENT "$<TARGET_PROPERTY:${t},LINK_LIBRARIES>")\n'
+        'endforeach()\n')
     for name in ("a", "b"):
         native = root / name / "native"
         native.mkdir(parents=True)
@@ -52,6 +69,12 @@ with tempfile.TemporaryDirectory(prefix="rts-native-projects-") as tmp:
         if r.returncode != 0:
             sys.exit(r.stdout)
         log["out"] = r.stdout
+        # Deferred registration must not inject project objects into render-only
+        # or scene-only executables, even when real project modules are configured.
+        for target, expected in (("camera_only", False), ("scene_only", False),
+                                 ("game_client", True), ("game_host", True)):
+            links = (build / (target + "-links.txt")).read_text().split(";")
+            assert ("aiverse_native_modules" in links) == expected, (target, links)
         return (build / "gen/NativeRegistry.cpp").read_text()
 
     a = configure("a")

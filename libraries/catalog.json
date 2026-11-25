@@ -16,16 +16,25 @@
     },
     {
       "id": "math",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "layer": "simulation",
       "status": "engine-reference",
       "source": "engine/core/FixedMath.h",
       "skill": "skills/core/aiverse-math/SKILL.md",
-      "summary": "Fixed arithmetic, vectors and trigonometry",
-      "notes": "Use existing Fixed; angles in turns. Check zero vectors and overflow.",
+      "summary": "Fixed arithmetic, trigonometry, interpolation, rotations, matrices, curves and numerical solvers",
+      "notes": "Engine reference; Q16 bounded algorithms, no new verification.",
       "verifiedPlatforms": [],
       "runtime": "none",
-      "cmakeTarget": null
+      "cmakeTarget": null,
+      "dependencies": [
+        "engine/core/FixedInterpolation.h",
+        "engine/core/FixedQuaternion.h",
+        "engine/core/FixedMatrix.h",
+        "engine/core/FixedCurves.h",
+        "engine/core/FixedNumerical.h",
+        "engine/core/FixedLinear.h",
+        "engine/core/FixedQR.h"
+      ]
     },
     {
       "id": "collections",
@@ -44,46 +53,62 @@
     },
     {
       "id": "graphs",
-      "version": "0.2.1",
+      "version": "0.3.0",
       "layer": "simulation",
       "status": "cpp-foundation",
       "source": "engine/core/Graphs.h",
       "skill": "skills/core/aiverse-graphs/SKILL.md",
-      "summary": "BFS and topological ordering",
-      "notes": "Use dense IDs. Test unreachable nodes, cycles and duplicate edges. Weighted search and flows remain planned.",
+      "summary": "Graph traversal, weighted paths, connectivity, spanning forests and integral flows",
+      "notes": "Integer graph algorithms; signed paths flag negative cycles; flow budgets and restrictions documented in skill. No new verification.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_graphs",
       "runtime": "header",
       "linkDependencies": [],
-      "packageDependencies": []
+      "packageDependencies": [],
+      "dependencies": [
+        "engine/core/GraphFlow.h",
+        "engine/core/GraphAnalysis.h"
+      ]
     },
     {
       "id": "spatial",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "layer": "simulation",
-      "status": "engine-reference",
-      "source": "engine/game/GameCore.h",
+      "status": "cpp-foundation",
+      "source": "libraries/include/aiverselib/algorithms/Spatial.h",
       "skill": "skills/world/aiverse-spatial-queries/SKILL.md",
-      "summary": "Existing game spatial queries",
-      "notes": "Read current game query API; batch queries. Never infer visibility from presentation. New spatial index adapter remains planned.",
+      "summary": "Generic spatial grids, hashes, BVH and trees",
+      "notes": "Use common algorithms for new code; existing GameCore queries remain compatibility adapters pending migration. Integer AABB; floating distance queries not lockstep guaranteed.",
       "verifiedPlatforms": [],
-      "runtime": "none",
-      "cmakeTarget": null
+      "runtime": "header",
+      "cmakeTarget": "AIVERSE::lib_spatial",
+      "linkDependencies": [],
+      "packageDependencies": [],
+      "dependencies": [
+        "libraries/include/aiverselib/algorithms/Bvh.h",
+        "libraries/include/aiverselib/algorithms/SpatialTree.h",
+        "skills/core/aiverse-spatial/SKILL.md"
+      ]
     },
     {
       "id": "grid",
-      "version": "0.2.1",
+      "version": "0.3.0",
       "layer": "simulation",
       "status": "cpp-foundation",
       "source": "libraries/include/aiverselib/Grid.h",
       "skill": "skills/core/aiverse-grid/SKILL.md",
-      "summary": "Four-neighbor multi-source distance fields",
+      "summary": "2D/3D grid traversal, components, morphology, distance fields and seeded watershed",
       "notes": "Use row-major IDs. Zero cells are blocked. Bound work and cache under NativeState. Test borders and unreachable cells.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_grid",
       "runtime": "header",
       "linkDependencies": [],
-      "packageDependencies": []
+      "packageDependencies": [],
+      "dependencies": [
+        "libraries/include/aiverselib/algorithms/GridFields.h",
+        "libraries/include/aiverselib/algorithms/GridVolume.h",
+        "libraries/include/aiverselib/algorithms/GridWatershed.h"
+      ]
     },
     {
       "id": "navigation",
@@ -819,12 +844,12 @@
     },
     {
       "id": "work-budget",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "layer": "simulation",
       "status": "cpp-subsystem",
       "source": "libraries/include/aiverselib/runtime/WorkBudget.h",
       "skill": "skills/core/aiverse-work-budget/SKILL.md",
-      "summary": "Deterministic round-robin work with operation budgets",
+      "summary": "Deterministic round-robin work and recurring decision budgets",
       "notes": "Keep WorkItems sorted by unique ID. Each callback performs one bounded operation without modifying the items span or cursor. Persist completed counters and WorkCursor for rollback. Failed callback must leave its own output untouched. Never budget by elapsed wall time or use unordered iteration.",
       "verifiedPlatforms": [],
       "cmakeTarget": "AIVERSE::lib_work_budget",
@@ -1159,6 +1184,31 @@
         "aiverse_engine"
       ],
       "packageDependencies": []
+    },
+    {
+      "id": "building-style",
+      "version": "0.1.0",
+      "layer": "presentation",
+      "status": "cpp-subsystem",
+      "source": "engine/systems/BuildingStyle.h",
+      "skill": "skills/world/aiverse-building-style/SKILL.md",
+      "summary": "Shared procedural building architecture grammar, 12 authored visual settings, seeded palettes, 16 CPU PBR surface patterns (actual albedo/MR/normal texture maps), GLB and Renderer3D integration, neutral ECS functional structures",
+      "notes": "Presentation (float) but deterministic per definition + style + seed. dressStructure() / dressBuilding() return vertices and one index list per material (structures also collision boxes and gate points); aiverse_building_export writes .glb (a structure, one building or a street). Headers: BuildingStyle.h, BuildingStructure.h. Openings stay clear: the door corridor is free of decoration, windows hold only glass. Style elements are generic; a new setting is a new style file. Not yet: kit models in styles (GLB pieces), textures, non-rectangular footprints, map/runtime block that builds the Model on load, LOD.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_building_style",
+      "dependencies": [
+        "tests/libraries/building_style_tests.cpp",
+        "engine/assets/building-styles/scifi.json",
+        "engine/assets/building-styles/modern.json",
+        "tools/buildings/building_style_export.cpp"
+      ],
+      "runtime": "header",
+      "linkDependencies": [
+        "aiverse_engine"
+      ],
+      "packageDependencies": [
+        "building-gen"
+      ]
     },
     {
       "id": "bot-matches",
@@ -3154,6 +3204,70 @@
         "aiverse_engine"
       ],
       "packageDependencies": []
+    },
+    {
+      "id": "geometry-algorithms",
+      "version": "0.4.0",
+      "layer": "simulation",
+      "status": "cpp-foundation",
+      "source": "libraries/include/aiverselib/algorithms/Geometry2D.h",
+      "skill": "skills/core/aiverse-geometry-algorithms/SKILL.md",
+      "summary": "Planar geometry, triangulation, Voronoi, 3D ray and primitive distance/overlap queries",
+      "notes": "Coordinate bound ±1e9; no render dependencies.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_geometry_algorithms",
+      "runtime": "header",
+      "linkDependencies": [],
+      "packageDependencies": [],
+      "dependencies": [
+        "libraries/include/aiverselib/algorithms/GeometryClip.h",
+        "libraries/include/aiverselib/algorithms/Voronoi.h",
+        "libraries/include/aiverselib/algorithms/Geometry3D.h",
+        "libraries/include/aiverselib/algorithms/GeometryDistance.h",
+        "libraries/include/aiverselib/algorithms/GeometryConvex.h",
+        "libraries/include/aiverselib/algorithms/GeometryEPA.h",
+        "libraries/include/aiverselib/algorithms/GeometryManifold.h",
+        "libraries/include/aiverselib/algorithms/GeometryContactCache.h",
+        "libraries/include/aiverselib/algorithms/GeometrySweep.h"
+      ]
+    },
+    {
+      "id": "random",
+      "version": "0.2.0",
+      "layer": "simulation",
+      "status": "cpp-foundation",
+      "source": "libraries/include/aiverselib/algorithms/Random.h",
+      "skill": "skills/core/aiverse-random/SKILL.md",
+      "summary": "Portable RNG, weighted sampling, distributions, low discrepancy and spatial sampling",
+      "notes": "Explicit state; no replacement of simulation RNG.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_random",
+      "runtime": "header",
+      "linkDependencies": [],
+      "packageDependencies": [],
+      "dependencies": [
+        "libraries/include/aiverselib/algorithms/RandomSampling.h",
+        "libraries/include/aiverselib/algorithms/RandomSequences.h",
+        "libraries/include/aiverselib/algorithms/SpatialSampling.h",
+        "libraries/include/aiverselib/algorithms/BlueNoise.h"
+      ]
+    },
+    {
+      "id": "noise",
+      "version": "0.6.0",
+      "layer": "simulation",
+      "status": "cpp-foundation",
+      "source": "libraries/include/aiverselib/algorithms/Noise.h",
+      "skill": "skills/core/aiverse-noise/SKILL.md",
+      "summary": "Deterministic scalar, simplex, cellular, fractal, vector, warp, curl and SIMD batch noise",
+      "notes": "Fixed-point scalar kernels and allocation-free AoS/SoA batch sampling; NoiseSimd.h adds SSE2/AVX2/NEON interpolation for Value batch values, scalar fallback. Other kernels remain scalar. Legacy GenNoise unchanged.",
+      "verifiedPlatforms": [],
+      "cmakeTarget": "AIVERSE::lib_noise",
+      "runtime": "header",
+      "linkDependencies": [],
+      "packageDependencies": [
+        "random"
+      ]
     }
   ]
 }

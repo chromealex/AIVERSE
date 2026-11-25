@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <map>
 
 namespace aiverse::game {
 
@@ -268,7 +269,19 @@ void GameOverlays::processEvents(const GameScene& s) {
     popups_.erase(std::remove_if(popups_.begin(), popups_.end(), [&](const Popup& p) {
         return p.def >= set_.defs.size() || time_ - p.born > double(set_.defs[p.def].event.lifetime); }), popups_.end());
     const size_t globalCap = quality_ == OverlayQuality::Low ? 24 : quality_ == OverlayQuality::Medium ? 96 : 256;
-    auto spawn = [&](size_t di, uint16_t kind, uint8_t player, Entity a, int64_t value, Vec3 pos, uint32_t salt) {
+    using BountyRows = std::vector<std::pair<uint16_t, Fixed>>;
+    std::map<uint64_t, BountyRows> rewards;
+    if (s.tick != lastTick_) for (const auto& ev : s.events)
+        if (ev.type == kEvBounty && ev.subjectKey != UINT64_MAX &&
+            ev.resource < rules_->resources.size() && ev.value > 0) {
+            auto& rows = rewards[ev.subjectKey];
+            auto it = std::find_if(rows.begin(), rows.end(), [&](const auto& row) { return row.first == ev.resource; });
+            if (it == rows.end()) rows.push_back({ev.resource, Fixed::fromRaw(ev.value)});
+            else it->second += Fixed::fromRaw(ev.value);
+        }
+    auto spawn = [&](size_t di, const SimEvent& ev, uint32_t salt) {
+        const uint16_t kind = ev.type; const uint8_t player = ev.player;
+        const Entity a = ev.a; const int64_t value = ev.value; Vec3 pos = ev.pos;
         const OverlayDef& d = set_.defs[di];
         if (!d.enabled || !d.hasEvent || !contains(d.event.kinds, kind)) return;
         uint8_t owner = player;
@@ -279,7 +292,22 @@ void GameOverlays::processEvents(const GameScene& s) {
             if (auto* u = w->tryGet<Unit>(a)) type = u->type;
             if (pos.x.raw == 0 && pos.z.raw == 0) if (auto* tr = w->tryGet<Transform>(a)) pos = tr->pos;
         }
+        if (ev.subjectType < rules_->types.size()) type = ev.subjectType;
+        if (ev.subjectOwner <= UINT8_MAX) owner = uint8_t(ev.subjectOwner);
         if (kind == kEvDied && value >= 0 && size_t(value) < rules_->types.size()) type = uint16_t(value);
+        const bool critical = kind == kEvHit && (ev.flags & kHitCritical);
+        if (d.event.critical >= 0 && (kind != kEvHit || critical != (d.event.critical == 1))) return;
+        BountyRows bounty;
+        if (kind == kEvDied) {
+            auto it = rewards.find(ev.subjectKey);
+            if (it != rewards.end()) bounty = it->second;
+        } else if (kind == kEvBounty && ev.resource < rules_->resources.size() && value > 0)
+            bounty.push_back({ev.resource, Fixed::fromRaw(value)});
+        Fixed selectedBounty{};
+        if (d.event.bountyResource >= 0) {
+            for (const auto& row : bounty) if (row.first == d.event.bountyResource) selectedBounty += row.second;
+            if (selectedBounty.raw <= 0) return;
+        }
         if (d.event.by && !(d.event.by & relation(player))) return;
         if (d.event.on && !(d.event.on & relation(owner))) return;
         if (!d.event.types.types.empty() || d.event.types.tags) {
@@ -295,7 +323,9 @@ void GameOverlays::processEvents(const GameScene& s) {
         if (live >= d.event.max || (!d.builtin && popups_.size() >= globalCap)) return;
         Popup p;
         p.def = uint16_t(di); p.kind = kind; p.born = time_; p.value = value; p.owner = owner; p.player = player; p.type = type;
-        p.pos = toF(pos);
+        p.pos = toF(pos); p.critical = critical; p.bounty = std::move(bounty);
+        if (kind == kEvBounty) { p.res = int16_t(ev.resource); p.amount = float(Fixed::fromRaw(value).toDouble()); }
+        if (d.event.bountyResource >= 0) { p.res = int16_t(d.event.bountyResource); p.amount = float(selectedBounty.toDouble()); }
         if (kind == kEvHit) p.amount = float(Fixed::fromRaw(value).toDouble());
         if (kind == kEvGathered) {
             p.res = int16_t(value);
@@ -310,7 +340,7 @@ void GameOverlays::processEvents(const GameScene& s) {
         for (size_t ei = 0; ei < s.events.size(); ++ei) {
             const SimEvent& ev = s.events[ei];
             for (size_t di = 0; di < set_.defs.size(); ++di)
-                if (set_.defs[di].hasEvent) spawn(di, ev.type, ev.player, ev.a, ev.value, ev.pos, s.tick * 977u + uint32_t(ei));
+                if (set_.defs[di].hasEvent) spawn(di, ev, s.tick * 977u + uint32_t(ei));
         }
     }
     if (ctx_.pings)
@@ -318,7 +348,7 @@ void GameOverlays::processEvents(const GameScene& s) {
             const OverlayPing& pg = (*ctx_.pings)[pi];
             Vec3 pos{Fixed::fromRatio(int64_t(pg.pos.x * 256), 256), Fixed{}, Fixed::fromRatio(int64_t(pg.pos.z * 256), 256)};
             for (size_t di = 0; di < set_.defs.size(); ++di)
-                if (set_.defs[di].hasEvent) spawn(di, kOvEventPing, pg.player, kNullEntity, 0, pos, uint32_t(time_ * 1000) + uint32_t(pi));
+                if (set_.defs[di].hasEvent) spawn(di, SimEvent{kOvEventPing, pg.player, kNullEntity, kNullEntity, 0, pos}, uint32_t(time_ * 1000) + uint32_t(pi));
         }
     carry_.clear();
     for (auto& o : s.objects) if (o.entity.valid() && o.carry > 0) carry_[o.entity.packed()] = {o.carry, o.carryRes};
@@ -343,6 +373,11 @@ void GameOverlays::spawnPreviewPopups() {
         Popup p;
         p.def = uint16_t(di); p.born = time_; p.kind = d.event.kinds.empty() ? 0 : d.event.kinds[0];
         p.value = 12; p.amount = 12; p.res = 0; p.owner = p.player = ctx_.player;
+        p.critical = d.event.critical == 1;
+        if ((p.kind == kEvDied || p.kind == kEvBounty) && !rules_->resources.empty()) {
+            p.res = int16_t(d.event.bountyResource >= 0 ? d.event.bountyResource : 0);
+            p.bounty.push_back({uint16_t(p.res), Fixed::fromInt(12)});
+        }
         if (ctx_.hasCursor) p.pos = ctx_.cursor;
         else if (!scene_->objects.empty()) { p.pos = scene_->objects[0].pos; p.type = scene_->objects[0].type; }
         else if (grid_) p.pos = {grid_->w * 0.5f, 0, grid_->h * 0.5f};
@@ -566,11 +601,26 @@ const std::string& GameOverlays::format(const OverlayDef& d, const Inst& in) {
         if (end == std::string::npos) { text_.append(t, i, std::string::npos); break; }
         const std::string key = t.substr(i + 1, end - i - 1);
         const size_t before = text_.size();
-        if (key == "value") { if (p) { if (p->kind == kEvHit) appendNumber(text_, p->amount); else appendNumber(text_, double(p->value)); } }
+        if (key == "value") { if (p) { if (p->kind == kEvHit || p->kind == kEvBounty) appendNumber(text_, p->amount); else appendNumber(text_, double(p->value)); } }
         else if (key == "amount") { if (p) appendNumber(text_, p->amount); else if (o) appendNumber(text_, o->carry); }
         else if (key == "resource") {
             int r = p ? p->res : o ? o->carryRes : -1;
             if (r >= 0 && size_t(r) < rules_->resources.size()) text_ += rules_->resources[size_t(r)].name;
+        }
+        else if (key == "critical") { if (p) appendNumber(text_, p->critical ? 1 : 0); }
+        else if (key == "bounty") {
+            if (p) for (size_t n = 0; n < p->bounty.size(); ++n) {
+                const auto& row = p->bounty[n];
+                if (n) text_ += ", ";
+                appendNumber(text_, row.second.toDouble());
+                if (row.first < rules_->resources.size()) { text_ += ' '; text_ += rules_->resources[row.first].name; }
+            }
+        }
+        else if (key.rfind("bounty:", 0) == 0) {
+            const int resource = rules_->findResource(key.substr(7));
+            Fixed amount{};
+            if (p && resource >= 0) for (const auto& row : p->bounty) if (row.first == resource) amount += row.second;
+            appendNumber(text_, amount.toDouble());
         }
         else if (key == "name") { if (ty) text_ += ty->name; }
         else if (key == "hp") { if (o && ty) appendNumber(text_, std::round(o->hp * ty->maxHp.toDouble())); }

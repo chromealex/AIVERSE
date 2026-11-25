@@ -142,3 +142,35 @@ back/base/front ordering, premultiplied opacity, handle/texture reuse, new-glyph
 invalidation, unchanged text width, and resource cleanup. macOS client screenshots
 verify ordinary and narrow-screen counters. Android, Windows and Web builds were
 not executed for this change; no shaders were changed.
+
+The game HUD model exposes `selectedUnits[]` with type, name, icon, subgroup, unitClass, hp, maxHp, hpFraction, energy, attackMin, attackMax, damageType, armor, armorType, invulnerable, hasInventory and selectAction. Call `act(row.selectAction)` to narrow the selection. Attack values describe the primary weapon before target mitigation. For a single selection, `selectedStatuses[]` contains active status ids. View scripts can query `view.selection()` for the current local entity handles. Set optional `view.icon`, `view.class` and `view.subgroup` on the type for project presentation.
+
+### Fixed command cells and pages
+
+Add `"cardSlot":{"column":1,"row":0,"page":"Build/Defenses"}` to a structure or unit type, research item, unit ability or script command. Coordinates start at zero. The root page is the empty string. Assigning a page without a cell uses the next free cell. The client reserves explicit cells before placing automatic buttons. When two available actions request the same cell, the later one gets a free cell.
+
+In `game.json`, configure the number of columns and the cells for page navigation. A page button appears when the current selection has an action in that page or a descendant. Back or Escape returns to the parent. Changing selection returns to the root.
+
+```json
+{
+  "commandCard": {
+    "columns": 4,
+    "buttons": {"card.attack":{"column":0,"row":0}},
+    "pages": {
+      "Build":{"label":"Build","column":2,"row":0},
+      "Build/Defenses":{"label":"Defenses","column":0,"row":1}
+    },
+    "back":{"column":3,"row":2}
+  }
+}
+```
+
+Custom HUDs can read `cardPage` and each visible action's `positioned`, `page`, `column` and `row`. The stock HUD consumes the calculated `cellStyle` and `cardGridStyle`. Actions with no assigned slot keep their section on the root page.
+
+### Local match files
+
+The stock pause menu saves the current local match or its command recording in a new slot. Open a saved match or recording from the main menu. Playback controls pause the timeline and change its speed. The viewer checks the final simulation checksum when it reaches the recorded end tick.
+
+Custom UI Lua can enumerate sorted names with `match_files.saves()` and `match_files.replays()`. Use `match_files.save("campaign1")` or `match_files.record("battle1")` to write or replace a named slot. Use `match_files.load("campaign1")` and `match_files.watch("battle1")` to open it. These operations return true on success or false and an error. During playback `match_files.control(paused, speed)` accepts speeds from 0.25 to 8.
+
+The per-project user data directory contains a `matches/` folder. Native server or headless `.rpl` files placed there appear in the replay list when named with letters, digits, hyphens or underscores. Opening a recording requires the matching installed map and rules. Custom client recordings retain the original seat, loadout, initial variables and rule sets.

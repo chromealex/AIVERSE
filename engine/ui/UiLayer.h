@@ -39,6 +39,7 @@ public:
     // Returns true when the UI consumed the event (the pointer is over an interactive element, or a
     // text field has focus); the game should then ignore it.
     bool handleEvent(const platform::Event& e);
+    std::string pointerCursor() const;
     bool pointerOverUi() const; // Current hover only; ignores a press captured by the UI.
     bool pointerHasAttribute(const char* name) const;   // the hovered element or an ancestor carries the attribute
     void update();   // layout + data bindings; call once per frame before render()
@@ -60,7 +61,8 @@ public:
 
     // Exposes a texture owned by the caller to documents as <img src="#name"/> or
     // `decorator: image(#name)`. The caller may update its pixels every frame.
-    void setDynamicTexture(const std::string& name, gfx::TextureHandle tex, int width, int height);
+    void setDynamicTexture(const std::string& name, gfx::TextureHandle tex, int width, int height, bool renderTarget = false);
+    bool usesDynamicTexture(const std::string& name) const;
 
     // Localized documents: text nodes and attribute values that are exactly "@some.key" are passed
     // to `fn` while a document loads. After a language change, reload the documents.

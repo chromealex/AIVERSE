@@ -28,12 +28,28 @@ bool dynamicShape(b3ShapeId shape) { return (b3Shape_GetFilter(shape).categoryBi
 struct Planes { PlaneHit hit[kMaxPlanes]; int count = 0; };
 struct Solved { b3CollisionPlane plane[kMaxPlanes]; int count = 0; };
 
+// Transform queries, not the physics scene. Identity preserves the old
+// +Y motor path; arbitrary orientation uses a nearby origin for precision.
+struct MotorBasis {
+    b3Vec3 origin{0,0,0};
+    b3Quat rotation=b3Quat_identity;
+    b3Vec3 toWorldVector(b3Vec3 v)const{return b3RotateVector(rotation,v);}
+    b3Vec3 toLocalVector(b3Vec3 v)const{return b3InvRotateVector(rotation,v);}
+    b3Vec3 toWorldPoint(b3Vec3 p)const{return add(origin,toWorldVector(p));}
+    b3Vec3 toLocalPoint(b3Vec3 p)const{return toLocalVector(sub(p,origin));}
+    b3Capsule toWorldCapsule(b3Capsule c)const{
+        c.center1=toWorldVector(c.center1);c.center2=toWorldVector(c.center2);return c;
+    }
+};
 struct Query {
     b3WorldId world;
     b3QueryFilter filter;
     BodyHandle self;
     b3Capsule capsule;
-    float stepTop; // world y: an edge above this is a wall, not ground (feet at the step start + stepHeight)
+    float stepTop; // motor-local y: an edge above this is a wall
+    MotorBasis basis;
+    bool freeMotion=false;
+    bool allowGround=true;
 };
 
 bool accept(b3ShapeId shape, BodyHandle self) {
@@ -43,16 +59,17 @@ bool accept(b3ShapeId shape, BodyHandle self) {
 
 constexpr float kDepenetration = 0.01f; // per plane solve (a step runs up to ~6): ~3 m/s apart, no launch
 
-struct CollectCtx { Planes* planes; BodyHandle self; b3Vec3 pos; };
+struct CollectCtx { Planes* planes; BodyHandle self; b3Vec3 pos; const MotorBasis* basis; bool freeMotion; };
 bool collectPlanes(b3ShapeId shape, const b3PlaneResult* r, int n, void* c) {
     auto* x = static_cast<CollectCtx*>(c);
     if (!accept(shape, x->self)) return true;
     b3BodyId body = b3Shape_GetBody(shape);
     const bool dynamic = dynamicShape(shape);
     const bool character = (b3Shape_GetFilter(shape).categoryBits & kCategoryCharacter) != 0;
-    b3Vec3 axis = sub(b3Body_GetPosition(body), x->pos);   // a character proxy's origin is its feet
+    b3Vec3 axis = x->basis->toLocalVector(sub(b3Body_GetPosition(body), x->pos));   // a character proxy's origin is its feet
     for (int i = 0; i < n && x->planes->count < kMaxPlanes; ++i) {
         b3Plane plane = r[i].plane;
+        plane.normal=x->basis->toLocalVector(plane.normal);
         if (character) {
             // Characters spawned or pushed inside each other separate gradually: the penetration resolved per
             // solve is capped. On a shared axis the capsules give no separating direction; use one fixed by
@@ -66,8 +83,8 @@ bool collectPlanes(b3ShapeId shape, const b3PlaneResult* r, int n, void* c) {
         // Dynamic bodies have no contacts with the character proxy, so one can come to rest overlapping the
         // capsule from above (a box dropped on a head). Its downward planes would press the character into
         // the ground every step until it falls through: a character is never crushed by dynamic bodies.
-        if (dynamic && plane.normal.y < -0.3f) continue;
-        x->planes->hit[x->planes->count++] = {plane, r[i].point, body, dynamic};
+        if (!x->freeMotion && dynamic && plane.normal.y < -0.3f) continue;
+        x->planes->hit[x->planes->count++] = {plane, x->basis->toLocalVector(r[i].point), body, dynamic};
     }
     return x->planes->count < kMaxPlanes;
 }
@@ -75,14 +92,17 @@ bool castFilter(b3ShapeId shape, void* c) { return accept(shape, *static_cast<Bo
 
 void collide(const Query& q, b3Vec3 pos, const b3Capsule& capsule, Planes& out) {
     out.count = 0;
-    CollectCtx ctx{&out, q.self, pos};
-    b3World_CollideMover(q.world, pos, &capsule, q.filter, collectPlanes, &ctx);
+    const auto worldPos=q.basis.toWorldPoint(pos);
+    const auto oriented=q.basis.toWorldCapsule(capsule);
+    CollectCtx ctx{&out, q.self, worldPos,&q.basis,q.freeMotion};
+    b3World_CollideMover(q.world, worldPos, &oriented, q.filter, collectPlanes, &ctx);
 }
 
 float cast(const Query& q, b3Vec3 pos, b3Vec3 delta) {
     if (dot(delta, delta) < 1e-12f) return 1;
     BodyHandle self = q.self;
-    return b3World_CastMover(q.world, pos, &q.capsule, delta, q.filter, castFilter, &self);
+    const auto capsule=q.basis.toWorldCapsule(q.capsule);
+    return b3World_CastMover(q.world,q.basis.toWorldPoint(pos),&capsule,q.basis.toWorldVector(delta),q.filter,castFilter,&self);
 }
 
 struct RayCtx { BodyHandle self; bool hit; b3Vec3 normal; float fraction; };
@@ -96,14 +116,15 @@ float rayFcn(b3ShapeId shape, b3Pos, b3Vec3 normal, float fraction, uint64_t, in
 // A contact under the lower cap is ground when its plane is walkable, or when it is the edge of a
 // walkable top (a step or a ledge corner): a short ray just past the edge finds that top.
 bool walkable(const Query& q, b3Vec3 pos, const PlaneHit& h, float cosMax, b3Vec3* surface) {
-    if (h.point.y > q.capsule.center1.y + 1e-4f || h.plane.normal.y <= 0) return false;
+    if (!q.allowGround || h.point.y > q.capsule.center1.y + 1e-4f || h.plane.normal.y <= 0) return false;
     if (h.plane.normal.y >= cosMax) { if (surface) *surface = h.plane.normal; return true; }
     if (pos.y + h.point.y > q.stepTop) return false;
     float l = lenXZ(h.point);
     b3Vec3 out = l > 1e-4f ? b3Vec3{h.point.x / l * 0.02f, 0, h.point.z / l * 0.02f} : b3Vec3{0, 0, 0};
     b3Vec3 origin = add(add(pos, h.point), add(out, b3Vec3{0, 0.05f, 0}));
     RayCtx ctx{q.self, false, {0, 0, 0}, 2};
-    b3World_CastRay(q.world, origin, {0, -0.1f, 0}, q.filter, rayFcn, &ctx);
+    b3World_CastRay(q.world,q.basis.toWorldPoint(origin),q.basis.toWorldVector({0,-0.1f,0}),q.filter,rayFcn,&ctx);
+    ctx.normal=q.basis.toLocalVector(ctx.normal);
     if (!ctx.hit || ctx.normal.y < cosMax) return false;
     if (surface) *surface = ctx.normal;
     return true;
@@ -113,6 +134,7 @@ struct Ground { bool found = false; b3BodyId body = b3_nullBodyId; b3Vec3 point{
 
 // Walkable surface within kSkin under the lower cap.
 Ground probe(const Query& q, b3Vec3 pos, float cosMax) {
+    if (!q.allowGround) return {};
     Query wide = q;
     wide.capsule.radius += kSkin;
     Planes planes;
@@ -136,7 +158,7 @@ enum class Mode { Walk, Fall };
 // planes, so gravity slides down steep slopes and ceilings stop jumps.
 b3CollisionPlane solverPlane(const Query& q, b3Vec3 pos, const PlaneHit& h, Mode mode, float cosMax) {
     b3CollisionPlane cp{h.plane, FLT_MAX, 0, true};
-    if (mode == Mode::Fall) return cp;
+    if (mode == Mode::Fall || !q.allowGround) return cp;
     float ny = h.plane.normal.y;
     if (ny > 0 && walkable(q, pos, h, cosMax, nullptr)) {
         cp.plane = {{0, 1, 0}, ny >= cosMax ? h.plane.offset / ny : 0.0f};
@@ -203,8 +225,8 @@ CharacterInput CharacterInput::unpack(const uint8_t* data, size_t size) {
     return in;
 }
 
-void stepCharacter(b3WorldId world, const CharacterParams& p, CharacterState& st, const CharacterInput& in, float dt, Pushes* out,
-                   BodyHandle self) {
+static void stepCharacterLocal(b3WorldId world, const CharacterParams& p, CharacterState& st, const CharacterInput& in, float dt, Pushes* out,
+                   BodyHandle self,const MotorBasis& basis,bool allowGround=true) {
     if (out) out->clear();
     st.groundTurn = 0;
     if (!b3World_IsValid(world) || !validParams(p) || !finite(st.position, kMaxCoord) || !inRange(dt, 1e-5f, 0.1f)) {
@@ -214,7 +236,7 @@ void stepCharacter(b3WorldId world, const CharacterParams& p, CharacterState& st
     if (!finite(st.velocity, p.maxSpeed * 2)) st.velocity = {0, 0, 0};
     const float cosMax = std::cos(p.maxSlope);
     const b3Vec3 start = st.position;
-    const Query q{world, {kCategoryQuery, p.mask, 0, nullptr}, self, characterCapsule(p), start.y + std::max(0.0f, p.stepHeight - 0.01f)};
+    const Query q{world, {kCategoryQuery, p.mask, 0, nullptr}, self, characterCapsule(p), start.y + std::max(0.0f, p.stepHeight - 0.01f),basis,false,allowGround};
 
     // Ground at the start: walkable surface and its velocity (moving platforms carry the character).
     Ground g0 = probe(q, start, cosMax);
@@ -222,13 +244,13 @@ void stepCharacter(b3WorldId world, const CharacterParams& p, CharacterState& st
     b3Vec3 platform{0, 0, 0}, spinCarry{0, 0, 0};
     float turn = 0;
     if (grounded && b3Body_GetType(g0.body) != b3_staticBody) {
-        platform = b3Body_GetWorldPointVelocity(g0.body, g0.point);
-        b3Vec3 w = b3Body_GetAngularVelocity(g0.body);
+        platform = basis.toLocalVector(b3Body_GetWorldPointVelocity(g0.body,basis.toWorldPoint(g0.point)));
+        b3Vec3 w = basis.toLocalVector(b3Body_GetAngularVelocity(g0.body));
         float wl = std::sqrt(dot(w, w));
         if (finite(w, 100) && wl * dt > 1e-6f) {
             // Rotating ground: carry the feet along the arc (the point velocity alone drifts outwards) and turn
             // the yaw with the ground's spin about +Y.
-            b3Vec3 c = b3Body_GetWorldCenter(g0.body), v = b3Body_GetLinearVelocity(g0.body);
+            b3Vec3 c = basis.toLocalPoint(b3Body_GetWorldCenter(g0.body)), v = basis.toLocalVector(b3Body_GetLinearVelocity(g0.body));
             b3Vec3 r = b3RotateVector(b3MakeQuatFromAxisAngle(scale(w, 1 / wl), wl * dt), sub(start, c));
             spinCarry = sub(add(add(c, scale(v, dt)), r), start);
             turn = w.y * dt;
@@ -358,4 +380,63 @@ void stepCharacter(b3WorldId world, const CharacterParams& p, CharacterState& st
         *out = std::move(pushes);
     }
 }
+void stepCharacter(b3WorldId world,const CharacterParams& p,CharacterState& st,const CharacterInput& in,float dt,Pushes* out,BodyHandle self){
+    stepCharacterLocal(world,p,st,in,dt,out,self,MotorBasis{});
+}
+bool stepCharacterOriented(b3WorldId world,const CharacterParams& p,CharacterState& st,const CharacterInput& in,float dt,
+                           b3Quat localToWorld,Pushes* out,BodyHandle self){
+    return stepCharacterOriented(world,p,st,in,dt,localToWorld,true,out,self);
+}
+bool validCharacterOrientation(b3Quat q){
+    const float n=b3DotQuat(q,q);
+    return std::isfinite(n)&&std::abs(n-1.f)<.001f;
+}
+bool stepCharacterOriented(b3WorldId world,const CharacterParams& p,CharacterState& st,const CharacterInput& in,float dt,
+                           b3Quat localToWorld,bool allowGround,Pushes* out,BodyHandle self){
+    if(out)out->clear();
+    if(!b3World_IsValid(world)||!validParams(p)||!finite(st.position,kMaxCoord)||
+       !inRange(dt,1e-5f,.1f)||!validCharacterOrientation(localToWorld))return false;
+    localToWorld=b3NormalizeQuat(localToWorld);
+    const MotorBasis basis{st.position,localToWorld};
+    CharacterState local=st;local.position={0,0,0};
+    local.velocity=basis.toLocalVector(st.velocity);
+    Pushes pushes;
+    stepCharacterLocal(world,p,local,in,dt,out?&pushes:nullptr,self,basis,allowGround);
+    local.position=basis.toWorldPoint(local.position);
+    local.velocity=basis.toWorldVector(local.velocity);
+    if(!finite(local.position,kMaxCoord)||!finite(local.velocity,1000))return false;
+    for(auto& push:pushes){
+        push.point=basis.toWorldPoint(push.point);
+        push.direction=basis.toWorldVector(push.direction);
+    }
+    st=local;
+    if(out)*out=std::move(pushes);
+    return true;
+}
+
+bool sweepCharacterVelocityOriented(b3WorldId world,const CharacterParams& p,CharacterState& st,
+        b3Vec3 worldVelocity,float dt,b3Quat localToWorld,BodyHandle self){
+    if(!b3World_IsValid(world)||!validParams(p)||!finite(st.position,kMaxCoord)||
+       !finite(worldVelocity,p.maxSpeed)||!inRange(dt,1e-5f,.1f)||!b3IsValidQuat(localToWorld))return false;
+    if(dot(worldVelocity,worldVelocity)>p.maxSpeed*p.maxSpeed+1e-4f)return false;
+    const MotorBasis basis{st.position,localToWorld};
+    const Query q{world,{kCategoryQuery,p.mask,0,nullptr},self,characterCapsule(p),0,basis,true};
+    const auto v=basis.toLocalVector(worldVelocity);
+    Solved solved;
+    const auto pos=slide(q,{0,0,0},scale(v,dt),Mode::Fall,std::cos(p.maxSlope),solved,
+        [](const PlaneHit&,b3Vec3){});
+    // Refresh contacts at the final position: a cast may stop on a plane
+    // not yet in the previous iteration's set.
+    Planes contacts;collide(q,pos,q.capsule,contacts);
+    solved.count=contacts.count;
+    for(int i=0;i<contacts.count;++i)
+        solved.plane[i]=solverPlane(q,pos,contacts.hit[i],Mode::Fall,0);
+    auto candidate=st;
+    candidate.position=basis.toWorldPoint(pos);
+    candidate.velocity=basis.toWorldVector(b3ClipVector(v,solved.plane,solved.count));
+    candidate.grounded=false;candidate.ground=kNoBody;candidate.groundTurn=0;
+    if(!finite(candidate.position,kMaxCoord)||!finite(candidate.velocity,1000))return false;
+    st=candidate;return true;
+}
+
 }

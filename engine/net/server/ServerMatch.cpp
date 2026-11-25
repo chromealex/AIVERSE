@@ -29,6 +29,9 @@ void Server::Impl::startMatch(Room& r) {
     Member* host = nullptr;
     for (size_t i = 0; i < r.slots.size(); ++i) {
         const SlotEntry& s = r.slots[i];
+        const auto controller = s.kind == SlotKind::Human ? SeatController::Human :
+                                s.kind == SlotKind::Bot ? SeatController::Computer : SeatController::Empty;
+        m->carry.push_back(seatControllerCommand(uint8_t(i + 1), controller, true));
         if (s.kind != SlotKind::Human && s.kind != SlotKind::Bot) continue;
         MatchPlayer p;
         p.slot = uint8_t(i + 1); p.team = r.map.slotTeams[i]; p.kind = s.kind; p.clientId = s.kind == SlotKind::Human ? s.clientId : 0;
@@ -239,6 +242,8 @@ void Server::Impl::onMatchResult(Client& c, Room& r, ByteReader& rd) {
 void Server::Impl::memberResumed(Room& r, Client& c, uint64_t resumeSeed, uint32_t resumeTick) {
     Member* m = member(r, c.id);
     if (!m || m->left) return;
+    if (m->slot && !m->connected)
+        r.match->carry.push_back(seatControllerCommand(m->slot, SeatController::Human));
     m->connected = true; m->synced = false;
     if (resumeSeed == r.match->seed && resumeTick <= r.match->confirmedNext && !r.match->concluding) {
         // The client still runs this match: continue from its last confirmed tick. Frames it already
@@ -259,6 +264,8 @@ void Server::Impl::memberResumed(Room& r, Client& c, uint64_t resumeSeed, uint32
 void Server::Impl::memberDropped(Room& r, uint32_t clientId, bool left) {
     Member* m = member(r, clientId);
     if (!m || m->left) return;
+    if (m->slot && m->connected)
+        r.match->carry.push_back(seatControllerCommand(m->slot, SeatController::Empty));
     if (left) m->left = true; else m->connected = false;
     if (!m->slot) return; // spectator
     PlayerStatusMsg ps; ps.slot = m->slot; ps.status = left ? 2 : 1;
@@ -285,8 +292,11 @@ void Server::Impl::memberDropped(Room& r, uint32_t clientId, bool left) {
     for (auto& o : r.match->members)
         if (o.slot && !o.left) { anyHuman = true; for (auto& p : r.match->players) if (p.slot == o.slot) activeTeams.insert(p.team); }
     if (anyHuman) for (auto& p : r.match->players) if (p.kind == SlotKind::Bot) activeTeams.insert(p.team);
-    if (!anyHuman) endMatch(r, 0, NetText("net.end.everyone_left"), r.match->confirmedNext, 0, false);
-    else if (activeTeams.size() == 1 && startTeams.size() > 1) endMatch(r, *activeTeams.begin(), NetText("net.end.opponents_left"), r.match->confirmedNext, 0, false);
+    if (!anyHuman || (activeTeams.size() == 1 && startTeams.size() > 1)) {
+        if (!r.match->carry.empty()) confirmNextTick(*r.match);
+        endMatch(r, anyHuman ? *activeTeams.begin() : 0,
+                 NetText(anyHuman ? "net.end.opponents_left" : "net.end.everyone_left"), r.match->confirmedNext, 0, false);
+    }
 }
 
 void Server::Impl::reassignBots(Room& r) {
@@ -419,7 +429,7 @@ void Server::Impl::endMatch(Room& r, int32_t result, const NetText& reason, uint
     // Spectators lag behind: give them the rest so they can watch the ending.
     for (auto& m : M.members) {
         Client* c = client(m.clientId);
-        if (m.slot || m.left || !c || c->roomId != r.id || m.sent >= M.confirmedNext) continue;
+        if (m.left || !c || c->roomId != r.id || m.sent >= M.confirmedNext) continue;
         TickBatchMsg tb;
         tb.serverTick = M.confirmedNext; tb.first = m.sent; tb.count = M.confirmedNext - m.sent;
         for (auto& cmd : M.history) if (cmd.tick >= m.sent) tb.commands.push_back(cmd);

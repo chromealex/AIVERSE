@@ -1,0 +1,4 @@
+# Stage68 — Studio ecology layers
+Branch: feature/world-processes-stage31-bidirectional-handles; main unchanged.
+65d6d4ce adds read-only EvolveVisualization.h. 6f6a5262 through f8b07007 add authored MapDoc gizmo colors and studio.evolveLayer RPC. 212573ee mounts typed React picker in SceneBrushBar. 89dbca06 exposes studio.evolveState from active game World; 1250fa9e adds live SVG minimap with 500ms nonoverlapping polling. bc0471a1 and 47b3a983 add bounded TerraWeave plant and PHYSIS weather samples, visibility toggles and minimap opacity.
+Authored Scene overlay is not live ECS; live data is displayed in the HTML5 minimap. Plant markers distinguish rooted/fallen, not all mortality states. Sample caps 4096 each. No build, TypeScript check, or runtime verification. Next: comprehensive source/API audit and acceptance when authorized.

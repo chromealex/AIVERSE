@@ -1,0 +1,2 @@
+aiverse_native_module(ID world_processes VERSION 1 ENTRY createWorldProcessesModule SOURCES WorldProcessesModule.cpp)
+target_link_libraries(aiverse_native_world_processes PRIVATE AIVERSE::libraries)

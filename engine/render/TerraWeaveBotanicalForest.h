@@ -20,11 +20,7 @@ namespace aiverse::terraweave {
 
 using BotanicalTextureReader = std::function<bool(const std::string& path, std::string& bytes)>;
 
-inline const TreePreset* findBotanicalPreset(std::string_view name) {
-    for (const auto& preset : botanicalTreePresets())
-        if (preset.name == name) return &preset;
-    return nullptr;
-}
+
 
 // Assign one PBR family to material `slot` (0 bark, 1 foliage) of a freshly
 // built Arbor model (before GPU upload). Missing files leave the material

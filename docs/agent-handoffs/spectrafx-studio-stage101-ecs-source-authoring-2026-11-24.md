@@ -1,0 +1,5 @@
+# Stage 101 — shared SpectraSource document authoring
+
+Parent `df04859bf6c6e316af393dd49330ca4aff151747`; branch `feature/spectrafx-html5-data-interfaces-20261123`.
+
+Adds reusable JSON adapter in libraries/include/aiverselib/mechanics/SpectraSourceDocument.h for the existing SpectraSourceComponent fields, without creating an ECS type. Native Studio flat-map document Inspector supports Add/Remove VFX Renderer, effect/scale/enabled/killOnDetach editing, validated revision increment and undo. Published valid Graph v2 can be dragged from Library using the existing native Mac Scene asset drop text protocol; special spectrafx: prefix validates graph and uses neutral scenery type rather than attaching StaticModel. Drafts cannot be dragged. Existing runtime does not automatically hydrate the authored document into a live ECS World in this stage; source rendering, world-space scene documents, placement on Windows, delay/loop/instance parameters remain follow-up. Tests authored for edit/undo/remove/invalid asset; positive drag placement still needs native QA. No build/test run. Main untouched.

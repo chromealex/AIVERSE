@@ -21,6 +21,7 @@
 #include <fstream>
 #include <sstream>
 #include "engine/net/Udp.h"
+#include "engine/net/LanDiscovery.h"
 #include "engine/net/WebSocket.h"
 #include "engine/sim/Simulation.h"
 #include <thread>
@@ -448,7 +449,22 @@ TEST(net_real_sockets_udp_and_websocket) {
     CHECK(srv.listen(&err));
     if (!err.empty()) { std::printf("    %s\n", err.c_str()); return; }
     NetPlayer a{"Udp", kMushrooms}, b{"Ws", kMushrooms};
-    a.net = std::make_unique<net::NetClient>(net::connectTo("127.0.0.1:" + std::to_string(srv.udpPort())), net::ClientIdentity{"Udp", gameIdOf(kMushrooms), 1});
+    const auto game = gameIdOf(kMushrooms);
+    net::LanDiscovery advert, browser;
+    CHECK(advert.advertise(game, "Socket test", srv.udpPort()));
+    CHECK(browser.browse(game, "127.0.0.1"));
+    const auto discoveryStart = net::nowMs();
+    while (browser.hosts().empty() && net::nowMs() - discoveryStart < 3000) {
+        browser.update(net::nowMs());
+        advert.update(net::nowMs());
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    CHECK(!browser.hosts().empty());
+    if (browser.hosts().empty()) return;
+    const std::string address = browser.hosts().begin()->first;
+    CHECK(address == "127.0.0.1:" + std::to_string(srv.udpPort()));
+    browser.close();
+    a.net = std::make_unique<net::NetClient>(net::connectTo(address), net::ClientIdentity{"Udp", game, 1});
     b.net = std::make_unique<net::NetClient>(net::connectTo("ws://127.0.0.1:" + std::to_string(srv.wsPort())), net::ClientIdentity{"Ws", gameIdOf(kMushrooms), 2});
     auto maps = net::describeGameMaps(kMushrooms);
     uint64_t last = net::nowMs();
@@ -775,6 +791,26 @@ TEST(net_clock_rate_messages_are_optional) {
     for (int i = 0; i < 2600; ++i, now += 5) ses.update(0.005, now);   // 13 s, no server clock: speed 2 asked, rate stays 1
     CHECK(sent == 1 && ses.clockRate() == 1.0 && sim->tick() > 250 && sim->tick() < 270);
 }
+
+#ifndef __EMSCRIPTEN__
+TEST(lan_discovery_matches_game_and_expires_closed_relays) {
+    net::LanDiscovery host, browser, other;
+    CHECK(host.advertise("fixture", "LAN room", 29001));
+    CHECK(browser.browse("fixture","127.0.0.1"));
+    CHECK(other.browse("other","127.0.0.1"));
+    for (uint64_t tick=0; tick<100; ++tick) {
+        browser.update(tick); other.update(tick); host.update(tick);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    const auto found = browser.hosts().find("127.0.0.1:29001");
+    CHECK(found != browser.hosts().end());
+    if (found != browser.hosts().end()) CHECK(found->second.label == "LAN room");
+    CHECK(other.hosts().empty());
+    host.close();
+    browser.update(6000);
+    CHECK(browser.hosts().empty());
+}
+#endif
 
 int main(int argc, char** argv) {
     for (auto& [name, fn] : registry()) {

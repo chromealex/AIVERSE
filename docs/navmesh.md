@@ -83,3 +83,14 @@ open maps; `hybrid` for big or mixed maps (it never falls far behind the grid an
 `grid` stays the default.
 
 Tests: `navmesh_core_*`, `navmesh_rts_*` in `tests/tests_navmesh.inc`; FPS: `aiverse_library_navmesh_tests`.
+
+
+## Building vertical circulation adapter (Stage 14)
+
+The existing nav::Mesh has no integrated off-mesh portals. Instead,
+engine/buildings/BuildingNavMeshBridge.h resolves building StructureGraph
+stairs/lift edges onto actual current nav polygon IDs and uses native
+findPath for horizontal room legs. Stair actions include physical step
+waypoints; lift edges need explicit asynchronous boarding/ride actions.
+Links become stale after NavMesh::refresh, and dynamic platform collider
+changes mark dirty native mesh tiles. See docs/building-runtime-circulation.md.

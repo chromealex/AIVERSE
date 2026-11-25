@@ -31,14 +31,21 @@ bool boolean(const Json& j, const char* k, bool d, const std::string& w) {
 }
 ProjectileFlight parseProjectileFlight(const Json& j, const std::string& w) {
     ProjectileFlight f;
-    keys(j, w, {"radius", "maxDistance", "lifetime", "homing", "blockTerrain", "splitBudget", "modifiers", "gravity", "verticalSpeed"});
+    keys(j, w, {"radius", "maxDistance", "lifetime", "homing", "blockTerrain", "splitBudget", "modifiers", "gravity", "verticalSpeed", "arc", "arcHeight", "arcHeightPerDistance"});
     f.enabled = true;
     f.gravity = number(j, "gravity", Fixed{}, Fixed{}, 1000_fx, w);
     f.verticalSpeed = number(j, "verticalSpeed", Fixed{}, -1024_fx, 1024_fx, w);
     f.radius = number(j, "radius", f.radius, Fixed{}, 4_fx, w);
     f.maxDistance = number(j, "maxDistance", f.maxDistance, Fixed::fromRatio(1,100), 4096_fx, w);
     f.lifetime = number(j, "lifetime", f.lifetime, Fixed::fromRatio(1,100), 120_fx, w);
-    f.homing = boolean(j, "homing", false, w); f.blockTerrain = boolean(j, "blockTerrain", true, w);
+    f.arc = boolean(j, "arc", false, w);
+    if (f.arc) {
+        if (f.gravity.raw || f.verticalSpeed.raw) bad(w, "arc and explicit gravity/verticalSpeed are alternative trajectory definitions");
+        f.arcHeight = number(j, "arcHeight", Fixed{}, Fixed{}, 128_fx, w);
+        f.arcHeightPerDistance = number(j, "arcHeightPerDistance",
+            j.has("arcHeight") ? Fixed{} : Fixed::fromRatio(1,4), Fixed{}, 4_fx, w);
+    } else if (j.has("arcHeight") || j.has("arcHeightPerDistance")) bad(w, "arc height requires arc:true");
+    f.homing = boolean(j, "homing", f.arc, w); f.blockTerrain = boolean(j, "blockTerrain", true, w);
     f.splitBudget = count(j, "splitBudget", 64, 0, 256, w);
     if (j.has("modifiers") && (!j["modifiers"].isArray() || j["modifiers"].size() > 16)) bad(w, "modifiers must be an array of at most 16 entries");
     for (const auto& m : j["modifiers"].items()) {

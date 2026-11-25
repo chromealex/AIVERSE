@@ -666,6 +666,29 @@ TEST(traffic_population_far_from_the_hero_runs_on_the_schedule_alone) {
     CHECK(citizensIn(*sim, game::kCitizenHome) == 12);
 }
 
+TEST(traffic_population_recurring_budget_and_restore) {
+    const std::string marker=R"("population": {)";
+    auto rules=populationRules();
+    rules.insert(rules.find(marker)+marker.size(),R"("updatePeriodTicks": 1,"maxUpdatesPerTick": 3,)");
+    auto sim=makeSimJson(rules,populationMap(),5);
+    sim->step();
+    CHECK(tstore(*sim).citizens.size()==12);
+    CHECK(trf(*sim).rules().population.updatePeriodTicks==1);
+    CHECK(trf(*sim).rules().population.maxUpdatesPerTick==3);
+    const auto before=tstore(*sim).citizenCursor;
+    sim->step();
+    CHECK(tstore(*sim).citizenCursor==before+3);
+    tstore(*sim).citizenCursor=UINT32_MAX-1;
+    sim->step();
+    CHECK(tstore(*sim).citizenCursor==5); // indices 2,3,4 visited, next is 5
+    auto saved=sim->serialize();
+    auto restored=makeSimJson(rules,populationMap(),5);
+    std::string error;
+    CHECK(restored->deserialize(saved,&error));
+    CHECK(restored->checksum()==sim->checksum());
+    for(int i=0;i<80;++i){sim->step();restored->step();}
+    CHECK(restored->checksum()==sim->checksum());
+}
 TEST(traffic_population_determinism_and_saves) {
     auto s1 = makeSimJson(populationRules(), populationMap(), 5), s2 = makeSimJson(populationRules(), populationMap(), 5);
     std::vector<uint64_t> c1, c2;
@@ -804,6 +827,99 @@ TEST(traffic_population_drivers_park_at_the_kerb_drive_to_work_and_walk_in) {
     CHECK(citizensIn(*sim, game::kCitizenHome) >= 10);
     const auto& me = tstore(*sim).citizens[size_t(drove)];
     if (me.car.valid()) CHECK((w.get<Transform>(me.car).pos - Vec3{Fixed::fromRatio(13, 2), Fixed{}, Fixed::fromRatio(13, 2)}).length() < Fixed::fromInt(10));
+}
+
+TEST(traffic_population_held_walker_reifies_after_release_and_restore) {
+    auto rules = replaced(populationRules(), R"("spawnMin": 2, "spawnMax": 40, "despawn": 60)",
+                          R"("spawnMin": 1, "spawnMax": 10, "despawn": 12)");
+    auto sim = makeSimJson(rules, populationMap(), 3);
+    sim->step();
+    auto& citizens = tstore(*sim).citizens;
+    auto it = std::find_if(citizens.begin(), citizens.end(), [](const auto& c){ return c.work >= 0; });
+    CHECK(it != citizens.end());
+    if (it == citizens.end()) return;
+    const size_t id = size_t(it - citizens.begin());
+    it->journey = 1;
+    run(*sim, 2.5);
+    const Entity first = citizens[id].e;
+    CHECK(first.valid());
+    if (!first.valid()) return;
+    const Entity hero = mod(*sim).topDown()->heroOf(*sim, 1);
+    const Vec3 near = sim->world().get<Transform>(hero).pos;
+    citizens[id].held = true;
+    sim->world().get<Transform>(hero).pos = {26_fx, 0_fx, 26_fx};
+    run(*sim, 0.5);
+    CHECK(sim->world().alive(first) && citizens[id].e == first);
+    citizens[id].held = false;
+    run(*sim, 0.5);
+    CHECK(!sim->world().alive(first) && !citizens[id].e.valid());
+    auto restored = makeSimJson(rules, populationMap(), 3);
+    std::string error;
+    CHECK(restored->deserialize(sim->serialize(), &error));
+    CHECK(restored->checksum() == sim->checksum());
+    for (Simulation* peer : {sim.get(), restored.get()}) {
+        peer->world().get<Transform>(hero).pos = near;
+        run(*peer, 2.5);
+        auto body = tstore(*peer).citizens[id].e;
+        CHECK(peer->world().alive(body) && body != first);
+        const auto& people = tstore(*peer).people;
+        CHECK(std::count_if(people.begin(), people.end(), [id](const auto& p){ return p.citizen == int32_t(id); }) == 1);
+    }
+    CHECK(restored->checksum() == sim->checksum());
+}
+
+TEST(traffic_moving_car_with_passenger_survives_distance_retirement) {
+    const auto rules = replaced(kTrafficRules, R"("spawnMin": 4, "spawnMax": 40, "despawn": 60)",
+                                R"("spawnMin": 2, "spawnMax": 10, "despawn": 12)");
+    auto sim = makeSimJson(rules, trafficMap(kTrafficHero), 3);
+    run(*sim, 1);
+    const auto& cars = tstore(*sim).cars;
+    CHECK(!cars.empty());
+    if (cars.empty()) return;
+    auto& world = sim->world();
+    const Entity car = cars.front().e;
+    const Vec3 pos = world.get<Transform>(car).pos;
+    const Entity hero = mod(*sim).topDown()->heroOf(*sim, 1);
+    world.get<Transform>(hero).pos = {pos.x < 14_fx ? 26_fx : 1_fx, 0_fx, pos.z < 14_fx ? 26_fx : 1_fx};
+    world.get<vehicles::VehicleDrive>(car).seats.occupants.emplace(2, 1);
+    run(*sim, 0.5);
+    CHECK(world.alive(car) && trf(*sim).kindOf(*sim, car) >= 0);
+    if (!world.alive(car)) return;
+    world.get<vehicles::VehicleDrive>(car).seats.occupants.clear();
+    run(*sim, 0.5);
+    CHECK(!world.alive(car));
+}
+
+TEST(traffic_population_occupied_parked_car_stays_live_until_last_passenger_leaves) {
+    const auto rules = replaced(commuteRules(R"("car": 100, "parked": 12, "drive": 2,)",
+        R"("roads": {"tiles": "a", "parkingLanes": 1},)"),
+        R"("spawnMin": 4, "spawnMax": 40, "despawn": 60)", R"("spawnMin": 1, "spawnMax": 12, "despawn": 14)");
+    auto sim = makeSimJson(rules, populationMap(), 3);
+    run(*sim, 2.5);
+    auto& citizens = tstore(*sim).citizens;
+    auto owner = std::find_if(citizens.begin(), citizens.end(), [](const auto& c){ return c.car.valid(); });
+    CHECK(owner != citizens.end());
+    if (owner == citizens.end()) return;
+    const auto index = size_t(owner - citizens.begin());
+    const Entity car = owner->car;
+    auto& world = sim->world();
+    auto& drive = world.get<vehicles::VehicleDrive>(car);
+    CHECK(!drive.driver.valid());
+    drive.seats.occupants.emplace(2, 1);
+    const Entity hero = mod(*sim).topDown()->heroOf(*sim, 1);
+    world.get<Transform>(hero).pos = {26_fx, 0_fx, 26_fx};
+    run(*sim, 2.5);
+    CHECK(world.alive(car) && tstore(*sim).citizens[index].car == car);
+    if (!world.alive(car)) return;
+    auto& cargo = world.add<game::Transport>(car, game::Transport{});
+    cargo.cargo.push_back(findType(*sim, "dummy", 2));
+    world.get<vehicles::VehicleDrive>(car).seats.occupants.clear();
+    run(*sim, 2.5);
+    CHECK(world.alive(car) && tstore(*sim).citizens[index].car == car);
+    if (!world.alive(car)) return;
+    world.get<game::Transport>(car).cargo.clear();
+    run(*sim, 2.5);
+    CHECK(!world.alive(car) && !tstore(*sim).citizens[index].car.valid());
 }
 
 TEST(traffic_population_a_stolen_car_is_reported_and_its_owner_goes_without) {

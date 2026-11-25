@@ -1,0 +1,11 @@
+{
+  "sha": "5d6e08f3937c46bc198f93564160c4e645aaf631",
+  "argv": [
+    "python3.12",
+    "-c",
+    "\nfrom concurrent.futures import ThreadPoolExecutor\nfrom pathlib import Path\nimport subprocess\nroot=Path(\"/Volumes/KINGSTON/AIVERSE/Building-Caverns-Demo/work\")\nout=root/\"linux-gcc13\"\ncc=str(out/\"aarch64-unknown-linux-gnu/bin/aarch64-unknown-linux-gnu-g++\")\nflags=\"-O3 -DNDEBUG -std=c++20 -Wall -Wextra -fno-fast-math -Wpedantic -Wno-misleading-indentation -Wno-dangling-reference -Wno-error=array-bounds -Wno-error=stringop-overflow -Wno-error=nonnull -Wno-error=dangling-pointer -Werror -I. -Ilibraries/include -Ithird_party/lua\".split()\ndef run(*cmd):\n print(\"RUN\",*cmd,flush=True); subprocess.run(cmd,check=True)\ndef compile_unit(name):\n target=str(out/(name+\"-verified.o\"))\n run(cc,*flags,\"-c\",\"engine/game/\"+name+\".cpp\",\"-o\",target)\n run(\"file\",target)\ndef mac():\n names=[\"ecs_snapshot_delta_test\",\"ecs_multiworld_test\",\"ecs_cow_snapshot_test\",\"ecs_cow_exception_test\",\"ecs_cow_parallel_test\",\"ecs_cow_rollback_session_test\"]\n build=str(root/\"native\")\n run(\"cmake\",\"--build\",build,\"--parallel\",\"4\",\"--target\",*[\"aiverse_\"+name for name in names])\n run(\"ctest\",\"--test-dir\",build,\"--no-tests=error\",\"--output-on-failure\",\"-R\",\"^(\"+\"|\".join(names)+\")$\")\nrun(cc,\"--version\")\nwith ThreadPoolExecutor(3) as pool:\n jobs=[pool.submit(compile_unit,name) for name in (\"Economy\",\"GameCore\")]+[pool.submit(mac)]\n for job in jobs:job.result()\n"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/ecs-pool-release-5d6e08f39.log.txt",
+  "sha256": "b9a8206c0d088cc04eb44fa2167418ce57b38024cc5dea87f86d8d2c1f3fe0b8"
+}

@@ -16,13 +16,14 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
 
 namespace aiverse::studio {
 
-enum class StudioSurface { Scene, Game };
+enum class StudioSurface { Scene, Game, Fx };
 
 // What a shell provides. Called on the main (UI) thread only, except runInBackground's work.
 class StudioHostPlatform {
@@ -74,6 +75,7 @@ public:
 struct StudioSceneMods { bool shift = false, ctrl = false, alt = false, command = false; }; // command: Cmd on macOS, Ctrl on Windows
 enum class StudioSceneKey { Other, A, D, E, F, Q, R, S, V, W, Left, Right, Up, Down, Home, Delete, Escape, BracketLeft, BracketRight };
 
+class StudioBuildingPanelPreview;
 class StudioHost {
 public:
     StudioHost(StudioHostPlatform& platform, const std::string& engineRoot, bool htmlComposite);
@@ -83,6 +85,10 @@ public:
     // Runs fn on the Scene render thread between its frames and waits (inline when there is none yet).
     // Shells use it for Scene surface changes, e.g. resizing the drawable.
     void runOnSceneThread(const std::function<void()>& fn) { if (renderThread_) renderThread_->invoke(fn); else fn(); }
+    // Separate dedicated FX drawable; both GPU Scenes have the same owner
+    // thread, but independent devices/swapchains and camera lifetimes.
+    void fxCameraOrbit(double dx,double dy);
+    void fxCameraZoom(double wheel);
     bool projectLoading() const { return projectLoading_; }
     bool htmlComposite() const { return htmlComposite_; }
 
@@ -125,9 +131,11 @@ public:
     void select(double x, double y, double w, double h, const std::string& mode);
     void selectionAction(const std::string& method);
     bool brushArmed() const;
+    bool resolveBrushPoint(double x,double y,double w,double h,render::float3& at,std::string* error=nullptr);
     bool updateBrushCursor(double x, double y, double w, double h);
     void brushAdjust(double factor, bool disarm);
     bool splineDrag(int phase, double x, double y, double w, double h);
+    bool worldProcessDrag(int phase, double x, double y, double w, double h, bool symmetric = false, bool snap = false);
     bool terrainStroke(int phase, double x, double y, double w, double h);
     bool placeAsset(const std::string& asset, double x, double y, double w, double h);
     bool placeType(const std::string& type, double x, double y, double w, double h);
@@ -175,6 +183,7 @@ private:
         std::vector<std::string> thumbnails; // Assets panel model thumbnails finished since the last frame
         uint32_t drawCalls = 0;
     };
+    void tickFx();                     // UI thread: independent native FX surface
     void tickScene();                  // UI thread: snapshot inputs, kick the render thread, publish results
     void renderSceneFrame();           // render thread: one map frame
     void publishSceneFrame(const FrameOutputs& out);
@@ -191,6 +200,12 @@ private:
     void pollAgentRequests();
     Json assetThumbnail(const std::string& path);
     Json viewportInput(const Json& input);
+    Json dispatchSpectraPreview(const Json& params);
+    uint64_t spectraDispatchSequence_=0,spectraDispatchFailed_=0;
+    uint64_t packageProjectEpoch_=0;
+    Json runSpectraPreview(const Json& params); // shared HTML5 / authenticated MCP bridge
+    void cancelSpectraCapture(); // invalidate callback state before dropping ownership
+    Json captureSpectraFrame(const Json& params); // bounded asynchronous native GPU readback
     void applyViewport(const Json& params);
     bool handleHostMethod(const Json& req); // methods the host answers itself; false: StudioSession's
     void afterSessionReply(const Json& req, const Json& reply);
@@ -202,7 +217,22 @@ private:
     std::string engineRoot_;
     bool htmlComposite_ = false;
     std::unique_ptr<StudioSession> session_;
+    // Separate GPU owner. One outstanding camera request; no main Scene
+    // access and no UI-thread GPU readback during orbit.
+    struct BuildingPreviewJob {Json id;uint64_t token;float yaw,pitch,zoom,panX,panY;};
+    std::unique_ptr<StudioRenderThread> buildingPreviewThread_;
+    std::unique_ptr<StudioBuildingPanelPreview> buildingPanelPreview_;
+    std::mutex buildingPreviewMutex_;
+    std::optional<BuildingPreviewJob> buildingPreviewJob_;
+    std::optional<Json> buildingPreviewReply_;
+    uint64_t buildingPreviewToken_=0;
+    bool buildingPreviewPending_=false,buildingPreviewActive_=false;
+    void retireBuildingPanelPreview();
+    void renderBuildingPanelFrame();
+    void publishBuildingPanelFrame();
+    Json buildingPanelFrame(const BuildingPreviewJob& job);
     std::unique_ptr<StudioScene> preview_;             // created, used and destroyed on renderThread_
+    std::unique_ptr<StudioScene> fxPreview_;           // separate GPU drawable + isolated camera; same owner render thread
     std::unique_ptr<StudioRenderThread> renderThread_;
     std::mutex renderIoMutex_;                         // guards renderInputs_ / renderOutputs_
     FrameInputs renderInputs_;
@@ -215,24 +245,83 @@ private:
     size_t rulesSnapshotHash_ = 0;
     double nextMapSnapshot_ = 0, nextRulesCheck_ = 0;
     std::unique_ptr<StudioGameSurface> game_;
-    NativeViewportPlacement placement_{}, gamePlacement_{};
+    Json playReview_;
+    uint64_t playReviewSerial_=0;
+    NativeViewportPlacement placement_{}, gamePlacement_{}, fxPlacement_{};
+    // Independent native FX drawable/swapchain: no Scene surface reparent,
+    // no camera hijack. Both run on the existing native render owner thread.
+    bool fxSurfaceVisible_=false;
     double gameFrameTime_ = 0;
     struct AgentShot { std::string png; int w = 0, h = 0; std::atomic<bool> done{false}; };
     std::shared_ptr<AgentShot> agentShot_; // agent view_screenshot capture on its way
+    struct FxShot {
+        uint64_t id=0;
+        bool cancelled=false;
+        std::mutex mutex; // capture callback may run on GPU completion thread
+        bool done=false;
+        int width=0,height=0;
+        std::string jpeg,error;
+        Json provenance=Json::object(); // immutable at native render-owner capture scheduling
+    };
+    std::shared_ptr<FxShot> fxShot_; // one bounded in-flight FX capture per host
+    double fxShotStartedAt_=0;
+    uint64_t nextFxShotId_=1;
     bool readyEmitted_ = false, projectLoading_ = false, loadingShown_ = false, surfaceSnap_ = false;
     std::shared_ptr<bool> alive_ = std::make_shared<bool>(true); // background completions after shutdown
     double nextGizmoPoll_ = 0, nextAgentPoll_ = 0, lastSceneFrame_ = 0, sceneFrameMs_ = 0;
     uint64_t sceneFrameCount_ = 0;
     std::deque<std::pair<float, uint32_t>> frameHistory_;
     std::vector<StudioScene::OverlayShape> extShapes_;
+    uint64_t buildingGraphOverlayScene_=0;
+    uint32_t buildingGraphOverlayLayers_=1;
     Json splineCache_;
     std::string splineDrag_, lastActionCaption_, hoverId_, pendingProject_;
+    // Scene-only drag scratch. Source of truth remains MapDoc; commit once
+    // on pointer release via the existing StudioSession Undoable RPC.
+    struct WorldProcessDrag {
+        bool active=false;
+        std::uint8_t mode=0;
+        std::string owner,component,key,targetType,previewTarget,label;
+        render::float3 previewPoint{};
+        float baseline=1.f,value=0.f,valueZ=0.f;
+        bool symmetric=false;
+        bool snap=false;
+        bool neighborSnap=false;
+        std::string snapTarget;
+        render::float3 snapGuideA{},snapGuideB{};
+        bool valid=false;
+    } wpDrag_;
+    // Repeated clicks at overlapping handles cycle through stable candidates.
+    std::string wpHitOwner_;
+    double wpHitX_=0,wpHitY_=0;
+    std::size_t wpHitOrdinal_=0;
+    Json wpNumericPreview_;
+    Json forestPlantArm_; // one-shot, bound to project/map/revision
+    StudioWorldProcessLiveOptions wpLiveOptions_;
+    double wpLiveRefresh_=0;
+    Json wpLiveSnapshot_;
+    Json wpForestRenderSnapshot_; // native-only; never returned by browser or MCP
+    std::string wpLivePlanetProject_,wpLivePlanetMapPath_;
+    uint64_t wpLivePlanetRevision_=0;
+    bool worldProcessPlanetMapCurrent() const;
+    std::string worldProcessSceneBody();
+    std::optional<StudioForestCameraFocus> worldProcessForestCamera();
+    Json sampleWorldProcessLive();
+    Json planetSceneBodyRequest(const Json& params);
+    Json planetForestLiveRequest();
+    Json planetViewAgentRequest(const std::string& name,const Json& params);
+    std::int64_t wpPreviewRevision_=-1;
+    std::string wpPreviewOwner_;
+    std::string wpPreviewSelection_;
+    bool wpCustomPivot_=false;
+    render::float3 wpGroupPivot_{};
+    std::vector<std::string> wpPivotSelection_;
     unsigned lightingStatusTicks_ = 0;
     int lastLoadDone_ = -1, lastLoadTotal_ = -1;
     double lastCameraYaw_ = 0, lastCameraPitch_ = 0, lastCameraDistance_ = 0;
     bool lastCameraOrtho_ = false, cameraSent_ = false;
     // sceneMouse state (shells that use the neutral mapping)
-    struct { double pressX = 0, pressY = 0; bool dragged = false, move = false, stroke = false, spline = false, marquee = false, active = false; } mouse_;
+    struct { double pressX = 0, pressY = 0; bool dragged = false, move = false, stroke = false, spline = false, worldProcess = false, forest = false, marquee = false, active = false; } mouse_;
     double lastHoverTime_ = 0;
 };
 

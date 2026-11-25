@@ -1,0 +1,3 @@
+# W1.20f — staged migration ledger
+
+Commit `623292513c390c29192a7682af271598bc9018b7`, PR #116 Draft. ActorRegionOwnership.cpp copies the ledger after structural binding and group preflight; applies all group and solo transfers to the private ledger and publishes after success. Spawn/retire, ECS tags and dirty ACK remain outside this transaction. Full ledger copy may be expensive with tombstones; replace with bounded transaction/undo log after inspecting ledger internals. Full compatibility scan remains. No native build or tests run. Next: extend transaction to lifecycle and ACK, audit canonical writers, implement candidate-only mode, update skill/catalog. No main merge.

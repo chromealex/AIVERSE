@@ -1,0 +1,2 @@
+# Stage 161D5b — scope
+Read-only camera snapshot scoped to rendered body. Rank candidate roots by view and horizon estimate, distance and stable identity; use actual valid consequence position when fallen. Global counters and existing payload cap retained, no per-tree weather sampling for omitted rows. Camera unavailable falls back to stable body order. Native/UI diagnostics, no mutation. MCP and full-population renderer remain separate. Mac acceptance deferred.

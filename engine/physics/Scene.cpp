@@ -479,6 +479,28 @@ RayHit Scene::raycast(b3Vec3 origin, b3Vec3 translation, const QueryFilter& filt
     return best;
 }
 
+RayHit Scene::sphereCast(b3Vec3 origin,b3Vec3 translation,float radius,const QueryFilter& filter) const {
+    if(radius==0.f)return raycast(origin,translation,filter);
+    RayHit best;
+    if(!finite(origin,kMaxCoord)||!finite(translation,2*kMaxCoord)||
+       !inRange(radius,0,10000)||dot(translation,translation)<=0)return best;
+    const b3Vec3 center{0,0,0};
+    const b3ShapeProxy proxy{&center,1,radius};
+    struct Ctx {const Scene* scene;const QueryFilter* filter;RayHit* best;} ctx{this,&filter,&best};
+    auto fcn=[](b3ShapeId shape,b3Pos point,b3Vec3 normal,float fraction,uint64_t,int,int,void* data)->float {
+        auto* x=static_cast<Ctx*>(data);
+        if(!x->scene->acceptShape(shape,*x->filter)||
+           !inRange(fraction,0,1)||!finite(normal,2)||dot(normal,normal)<1e-10f)return -1;
+        const auto h=x->scene->bodyOfShape(shape);
+        if(x->best->body==kNoBody||fraction<x->best->fraction||
+           (fraction==x->best->fraction&&h<x->best->body))
+            *x->best={h,point,normal,fraction};
+        return x->best->fraction;
+    };
+    b3World_CastShape(world_,origin,&proxy,translation,queryFilter(filter.mask),fcn,&ctx);
+    return best;
+}
+
 std::vector<RayHit> Scene::raycastAll(b3Vec3 origin, b3Vec3 translation, const QueryFilter& filter) const {
     std::vector<RayHit> hits;
     if (!finite(origin, kMaxCoord) || !finite(translation, 2 * kMaxCoord) || dot(translation, translation) <= 0) return hits;
@@ -554,13 +576,17 @@ BodyHandle Scene::createCharacter(const CharacterParams& p, b3Vec3 feet, uint32_
     return h;
 }
 
-bool Scene::moveCharacter(BodyHandle h, const CharacterState& st, bool teleport) {
-    auto* s = slot(h);
-    if (!s || s->motion != Motion::Kinematic || !finite(st.position, kMaxCoord)) return false;
-    if (teleport) { b3Body_SetTransform(s->id, st.position, b3Quat_identity); b3Body_SetLinearVelocity(s->id, {0, 0, 0}); }
-    else b3Body_SetTargetTransform(s->id, b3WorldTransform{st.position, b3Quat_identity}, dt(), true);
+bool Scene::moveCharacter(BodyHandle h,const CharacterState& st,bool teleport){
+    return moveCharacterOriented(h,st,b3Quat_identity,teleport);
+}
+bool Scene::moveCharacterOriented(BodyHandle h,const CharacterState& st,b3Quat localToWorld,bool teleport){
+    auto* s=slot(h);
+    if(!s||s->motion!=Motion::Kinematic||!finite(st.position,kMaxCoord)||!validCharacterOrientation(localToWorld))return false;
+    if(teleport){b3Body_SetTransform(s->id,st.position,localToWorld);b3Body_SetLinearVelocity(s->id,{0,0,0});}
+    else b3Body_SetTargetTransform(s->id,b3WorldTransform{st.position,localToWorld},dt(),true);
     return true;
 }
+
 
 void Scene::applyPushes(const std::vector<Push>& pushes) {
     for (const auto& p : pushes) {

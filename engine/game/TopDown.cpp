@@ -2,6 +2,7 @@
 // with acceleration, wall sliding and unit push-out, facing, aim snap and auto-fire targeting, abilities aimed along
 // the stick, a computer pilot for bots. Integer / Fixed maths only; every loop runs in player-slot or entity order.
 #include "TopDown.h"
+#include "engine/mechanics/WeaponCadence.h"
 #include "Driving.h"
 #include "Systems.h"
 #include "Encounters.h"
@@ -653,6 +654,12 @@ void TopDown::freeFire(Simulation& sim, TopDownPilot& p, uint8_t owner) {
     for (size_t i = 0; i < t.weapons.size() && i < 4; ++i) {
         const WeaponDef& wd = t.weapons[i];
         if (c->cooldown[i].raw > 0) continue;
+        // Arsenal owns its hero's opted-in firing; do not also consume a free-fire slot.
+        if (wd.preciseCooldown && m_->arsenal() && m_->arsenal()->active()) continue;
+        const bool precise = wd.preciseCooldown && wd.chargeTime.raw <= 0;
+        const uint32_t budget = precise ? lib::mechanics::kMaxCadenceShotsPerTick : 1;
+        for (uint32_t shotIndex = 0; shotIndex < budget && lib::mechanics::cadenceReady(c->cooldown[i]); ++shotIndex) {
+        if (precise && u.hp.raw <= 0) break;
         const Fixed range = wd.range + bonus;
         // march the line in quarter cells: the first wall ends it; the first hostile body on it is hit
         Entity hit;
@@ -673,14 +680,14 @@ void TopDown::freeFire(Simulation& sim, TopDownPilot& p, uint8_t owner) {
                 const Owner* co = w.tryGet<Owner>(cand);
                 if (!cu || !co || cu->hp.raw <= 0 || (cu->flags & kUnitOffMap)) return;
                 const UnitType& ct = m_->rules().types[cu->type];
-                if (ct.invulnerable || !m_->hostile(sim, owner, co->player) || !layerHit(wd.targets, ct.layer)) return;
+                if (ct.invulnerable || !m_->hostile(sim, owner, co->player) || !weaponTargetMatches(wd, ct.layer, ct.tags)) return;
                 const Fixed d = dist2D(w.get<Transform>(cand).pos, q);
                 if (d > ct.radius + Fixed::fromRatio(1, 4)) return;
                 if (!hit.valid() || d < bestD || (d == bestD && cand.index < hit.index)) { hit = cand; bestD = d; }
             });
             if (hit.valid()) end = flat(w.get<Transform>(hit).pos);
         }
-        c->cooldown[i] = wd.cooldown;
+        c->cooldown[i] = lib::mechanics::acceptCadenceShot(c->cooldown[i], wd.cooldown, precise);
         sim.emit({kEvAttack, owner, e, hit, int64_t(i), pos});
         const Fixed dmg = wd.damage * mult;
         Progression* prog = m_->progression() && m_->progression()->active() ? m_->progression() : nullptr;   // perks on free-fire shots too
@@ -709,6 +716,8 @@ void TopDown::freeFire(Simulation& sim, TopDownPilot& p, uint8_t owner) {
             w.add<Projectile>(pe, shot);
             w.add<Owner>(pe, Owner{owner});
         }
+        }
+        if (precise) c->cooldown[i] = lib::mechanics::finishWeaponCadence(c->cooldown[i]);
     }
 }
 
@@ -914,9 +923,10 @@ bool TopDown::validTarget(Simulation& sim, Entity hero, uint8_t owner, Entity c,
     const Rules& R = m_->rules();
     const UnitType& ct = R.types[cu->type];
     if (ct.invulnerable || !m_->hostile(sim, owner, co->player)) return false;
-    uint8_t layers = 0;
-    for (auto& wd : R.types[w.get<Unit>(hero).type].weapons) layers |= wd.targets;
-    if (layers && !layerHit(layers, ct.layer)) return false;
+    const auto& weapons = R.types[w.get<Unit>(hero).type].weapons;
+    if (!weapons.empty() && std::none_of(weapons.begin(), weapons.end(), [&](const WeaponDef& wd) {
+        return weaponTargetMatches(wd, ct.layer, ct.tags);
+    })) return false;
     const Vec3 cp = w.get<Transform>(c).pos;
     if (R.advancedEffects) { uint32_t f = m_->statusFlags(sim, c); if ((f & kStInvisible) && !(f & kStRevealed)) return false; }
     if (!m_->isVisible(sim, owner, cp)) return false;

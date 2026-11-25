@@ -155,6 +155,11 @@ int main(int argc, char** argv) {
         auto zone = [&] { auto d = box({5, 1, 0}, {2, 2, 2}, Motion::Static); d.sensor = true; return s.create(d); }();
         auto hit = s.raycast({0, 10, 0}, {0, -20, 0});
         require(hit.body == a && std::abs(hit.point.y - 2.5f) < 1e-3f && hit.normal.y > 0.99f, "closest hits box");
+        const auto sphere=s.sphereCast({0,10,0},{0,-20,0},0.5f);
+        require(sphere.body==a&&sphere.fraction<hit.fraction&&sphere.normal.y>0.99f,"radius cast hits earlier than ray");
+        require(s.sphereCast({0,10,0},{0,-20,0},0.5f,{.ignore=a}).body==g,"sphere ignore filter");
+        require(s.sphereCast({5,10,0},{0,-20,0},0.5f).body==g,"sphere skips sensors");
+        require(s.sphereCast({0,10,0},{0,-20,0},-1.f).body==kNoBody,"invalid sphere radius");
         auto all = s.raycastAll({0, 10, 0}, {0, -20, 0});
         require(all.size() == 2 && all[0].body == a && all[1].body == g, "all hits, ordered");
         require(s.raycast({0, 10, 0}, {0, -20, 0}, {.ignore = a}).body == g, "ignore filter");
@@ -678,6 +683,36 @@ int main(int argc, char** argv) {
         stepCharacter(s.world(), bad, ok, {}, s.dt());
         stepCharacter(s.world(), w.params, ok, {}, 10.0f);
         require(ok.position.y == 0, "invalid params / dt ignored");
+    });
+
+    test("oriented character wall ground, jump and zero gravity", []{
+        Scene s;
+        const auto wall=s.create(box({-.5f,0,0},{1,30,30},Motion::Static));
+        require(wall!=kNoBody,"wall");
+        CharacterParams p;
+        CharacterState st;st.position={0,0,0};
+        const auto q=b3MakeQuatFromAxisAngle({0,0,1},-1.57079632679f); // local +Y -> +X
+        const auto proxy=s.createCharacter(p,st.position);
+        require(proxy!=kNoBody&&s.moveCharacterOriented(proxy,st,q,true),"oriented proxy");
+        for(int i=0;i<5;++i){
+            require(stepCharacterOriented(s.world(),p,st,{},s.dt(),q,true,nullptr,proxy),"wall step");
+            require(s.moveCharacterOriented(proxy,st,q),"proxy target");s.step();
+        }
+        require(st.grounded&&st.ground==wall,"wall is ground under -X gravity");
+        CharacterInput in;in.jump=true;
+        require(stepCharacterOriented(s.world(),p,st,in,s.dt(),q,true,nullptr,proxy),"wall jump");
+        require(st.velocity.x>0&&st.position.x>0,"jump away from wall");
+        p.gravity=0;st.position={0,0,0};st.velocity={};
+        require(stepCharacterOriented(s.world(),p,st,in,s.dt(),q,false,nullptr,proxy),"zero-g contact");
+        require(!st.grounded&&st.ground==kNoBody&&std::abs(st.velocity.x)<.001f,"no zero-g ground jump");
+        require(!stepCharacterOriented(s.world(),p,st,{},s.dt(),{0,0,0,0},true),"invalid rotation rejected");
+    });
+    test("oriented identity preserves legacy step", []{
+        Scene s;ground(s);CharacterParams p;CharacterState a,b;
+        CharacterInput in;in.moveZ=1;
+        stepCharacter(s.world(),p,a,in,s.dt());
+        require(stepCharacterOriented(s.world(),p,b,in,s.dt(),b3Quat_identity,true),"identity step");
+        require(dist(a.position,b.position)<1e-6f&&dist(a.velocity,b.velocity)<1e-6f&&a.grounded==b.grounded,"legacy parity");
     });
 
     if (bench) {

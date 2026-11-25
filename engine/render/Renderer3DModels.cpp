@@ -1182,6 +1182,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
     ProfileTimer timer(profiling_?&profile_.submitMs:nullptr);
     const Model* m = d.model;
     if (!m || !m->vb.valid() || m->nodes.empty()) return;
+    if(d.nodeMask&&(d.nodeMask->size()!=m->nodes.size()||d.persistentId||d.staticCache||(d.flags&kDrawStatic)))return;
     if ((d.layers & visibilityMask_) == 0) return;
     if (applyWindRig(d)) return;
     if(modelPacketTap_)modelPacketTap_(d);
@@ -1213,7 +1214,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
     if (!customVertexStream) recordPersistentModel(d);
     // Partial primitive draws and per-instance vertex parameters cannot
     // replay an immutable whole-model static packet/cache.
-    const bool specialDraw = d.primitiveMaterialFilter >= 0 || d.useVertexParameters;
+    const bool specialDraw = d.primitiveMaterialFilter >= 0 || d.useVertexParameters || d.nodeMask;
     if (capture_ && (d.flags & kDrawStatic) && d.primitiveMaterialFilter < 0 && !d.materialMask) {   // light baker: the static scene, every node in world space
         const auto& pose = d.nodeWorld && d.nodeWorld->size() == m->nodes.size() ? *d.nodeWorld : m->bindWorld;
         std::vector<mat4> nodeWorld(pose.size());
@@ -1432,6 +1433,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
     if (packetEligible)
         packetSelectedMeshes.assign(m->nodes.size(), -1);
     for (int n : m->order) {
+        if(d.nodeMask&&!(*d.nodeMask)[size_t(n)])continue;
         const Node& node = m->nodes[size_t(n)];
         if (node.mesh < 0) continue;
         ++modelStats_.nodes;
@@ -1748,7 +1750,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             it.model = m; it.prim = &p; it.materialIndex = materialIndex;
             it.mat = &mats[size_t(materialIndex)];
             it.vertexOverride = customVertexStream ? d.vertexOverride : gfx::BufferHandle{};
-            it.tint = d.tint; it.team = d.team; it.flash = d.flash; it.flags = d.flags | (mats[size_t(std::clamp(mi, 0, int(mats.size()) - 1))].transparent ? uint32_t(kDrawTransparent) : 0u);
+            it.tint = d.tint; it.team = d.team; it.flash = d.flash; it.flashColor = d.flashColor; it.flags = d.flags | (mats[size_t(std::clamp(mi, 0, int(mats.size()) - 1))].transparent ? uint32_t(kDrawTransparent) : 0u);
             it.dissolve = d.dissolve; it.teamGlow = d.teamGlow; it.outline = d.outline;
             it.rigid = rigid;
             it.motionPersistentId = d.persistentId;
@@ -2039,6 +2041,7 @@ void Renderer3D::packModelInstance(const ModelItem& x, int phase,
     // Two spare floats in the existing 144-byte Inst slot (vec4 lod).
     // Per-instance palette mode uses z; normal LOD and GI keep xy/anim.
     d[34] = float(instanceMaterial);
+    d[35] = float(x.flashColor); // RGB8 + 1 is exactly representable in float32.
 }
 
 bool Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count,

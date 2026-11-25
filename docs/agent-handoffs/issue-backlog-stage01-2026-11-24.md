@@ -1,0 +1,5 @@
+# Issue backlog — stage 01
+Branch: `feature/aiv20261124_issue-backlog`. Code SHA: 632315781650a832dd120da1e819613f07a97e8c.
+Issue #165: recognize viewScripts as presentation data in apps/editor/core/SchemaOps.cpp. Source change committed. Native build, lint regression, Studio/MCP validation and Mac merged-tree gate NOT RUN. No issue closure or main merge.
+Next delivery: #177 optional final speed bounds in the existing shared stat owner, preserving absent-key behavior; #178 presentation-only per-tick notices, confirmed-only network delivery and rollback invalidation. Acceptance: zero/multiple ticks per frame, rollback and no duplicated events, validated nonnegative speed bounds with min <= max. Preserve fixed-point simulation and existing event consumers. Roadmap/feature delivery: in progress; final readiness and publication pending.
+Remaining backlog: #179, #178, #177, #176, #175, #174, #173, #172, #171, #170, #169, #168, #167, #166, #164, #163, #162, #161, #160, #159, #158, #157, #156, #155, #154, #153, #152, #151, #150, #149, #148, #147, #146, #145, #144, #143, #131, #130, #129, #128, #127, #125.

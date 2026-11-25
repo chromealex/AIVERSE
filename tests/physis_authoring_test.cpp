@@ -93,6 +93,22 @@ void rejectionIsTransactional() {
     CHECK(map.revision == rev);
 }
 
+void malformedDocumentRejected() {
+    for (bool worldSpace : {false, true}) {
+        MapDoc map; map.reset(8,8);
+        map.data.worldSpace = worldSpace;
+        map.data.extra = Json::array();
+        const auto before = map.data.extra;
+        const auto revision = map.revision;
+        const auto undo = map.canUndo();
+        std::string error;
+        CHECK(!apply(map, defaultConfig(), &error));
+        CHECK(!error.empty());
+        CHECK(map.data.extra == before && map.revision == revision);
+        CHECK(map.canUndo() == undo);
+    }
+}
+
 void fpsDocumentRoundtrip() {
     MapDoc map;
     std::string error;
@@ -115,6 +131,7 @@ int main() {
     mcpAuthoring();
     plainMapAndUndo();
     rejectionIsTransactional();
+    malformedDocumentRejected();
     fpsDocumentRoundtrip();
     std::printf("PHYSIS authoring: %s\n",failed?"FAIL":"PASS");
     return failed?1:0;

@@ -18,13 +18,22 @@ namespace aiverse::game {
 using namespace render;
 
 namespace {
+void applyLiveSeaLevels(PlanetWorld& world,const MapGrid& grid){
+    for(size_t i=0;i<world.bodies.size();++i){
+        const auto radius=grid.liveSeaRadius(int(i));
+        if(radius>Fixed{})world.bodies[i].seaLevel=float(radius.toDouble())-world.bodies[i].radius;
+    }
+}
 uint32_t ringColor(const SceneObject& o) { return o.selected ? (o.owner == 0 ? rgba(255, 255, 160, 230) : rgba(120, 255, 120, 230)) : rgba(255, 255, 255, 130); }
 }
 
 void GameView::setWorld(const Json& map) {
+    planetDetailBaseline_.clear();
     fog_.setBlur({});
     PlanetWorld w = loadPlanetWorld(map, &warnings_);
     loadPlanetDetailFiles(w, map, read_, &warnings_);
+    discardPendingSurfaceLease();framePublication_.invalidate();
+    if(dev_)planetFlora_.setAuthoredSpecies(*dev_,w.forestManifest,read_);
     planets_.setWorld(w);
     planetVision_.clear();
     rebuildPlanetFlora();
@@ -43,7 +52,8 @@ void GameView::updateWorld(const Json& map) {
     PlanetWorld w = loadPlanetWorld(map);
     loadPlanetDetailFiles(w, map, read_, nullptr);
     const PlanetWorld& cur = planets_.world();
-    bool same = w.bodies.size() == cur.bodies.size() && !w.empty();
+    bool same = w.bodies.size() == cur.bodies.size() && !w.empty() &&
+        w.forestManifest.dump(0)==cur.forestManifest.dump(0);
     for (size_t i = 0; same && i < w.bodies.size(); ++i) {
         const PlanetBody &a = w.bodies[i], &b = cur.bodies[i];
         same = a.id == b.id && a.kind == b.kind && a.faceSize == b.faceSize && a.radius == b.radius && a.seaLevel == b.seaLevel &&
@@ -90,6 +100,14 @@ void GameView::setSimWorld(std::shared_ptr<const Surface> surf, const MapGrid& g
     PlanetWorld visual = loadPlanetWorld(map, &warnings_);
     loadPlanetDetailFiles(visual, map, read_, &warnings_);
     PlanetWorld w = planetWorldFromSim(std::move(surf), grid.flags, visual);
+    applyLiveSeaLevels(w,grid);
+    discardPendingSurfaceLease();framePublication_.invalidate();
+    if(dev_)planetFlora_.setAuthoredSpecies(*dev_,w.forestManifest,read_);
+    planetDetailBaseline_.clear();planetDetailBaseline_.resize(w.bodies.size());
+    for(size_t i=0;i<w.bodies.size();++i){
+        const auto& body=w.bodies[i];
+        if(!body.detail.empty())planetDetailBaseline_[i]={body.corners,body.detail,body.detailK};
+    }
     planets_.setWorld(w);
     planetVision_.clear();
     rebuildPlanetFlora();
@@ -97,6 +115,49 @@ void GameView::setSimWorld(std::shared_ptr<const Surface> surf, const MapGrid& g
     planetCam_.reset(planets_.world(), w.start, planets_.surface(w.start), 0);
 }
 
+bool GameView::syncSimPlanetTerrain(const MapGrid& grid){
+    const auto& current=planets_.world();
+    if(!current.sim)return true; // editor world has its own explicit update path
+    if(!grid.surf||!dev_||grid.surf->tab!=current.sim->tab)return false;
+    bool seaChanged=false;
+    for(size_t i=0;i<current.bodies.size();++i){
+        const auto radius=grid.liveSeaRadius(int(i));
+        if(radius>Fixed{}&&float(radius.toDouble())-current.bodies[i].radius!=current.bodies[i].seaLevel)seaChanged=true;
+    }
+    if(grid.surf==current.sim&&!seaChanged)return true;
+    auto next=planetWorldFromSim(grid.surf,grid.flags,current);
+    applyLiveSeaLevels(next,grid);
+    bool rebuild=false;
+    for(size_t i=0;i<next.bodies.size();++i){
+        auto& body=next.bodies[i];
+        if(body.corners==current.bodies[i].corners)continue;
+        if(i<planetDetailBaseline_.size()&&planetDetailBaseline_[i].scale>0){
+            // Explicit authored detail is absolute, not a delta. Avoid
+            // drawing stale fine relief over edited ground. Restore exact
+            // authored detail when rollback returns to its original corners.
+            const auto& base=planetDetailBaseline_[i];
+            if(body.corners==base.corners){body.detail=base.detail;body.detailK=base.scale;}
+            else {body.detail.clear();body.detailK=0;}
+            rebuild=true;
+        }
+    }
+    if(rebuild){
+        planets_.setWorld(next);planetVision_.clear();
+    }else{
+        for(size_t i=0;i<next.bodies.size();++i){
+            if(!next.bodies[i].surface())continue;
+            planets_.updateSeaLevel(int(i),next.bodies[i].seaLevel);
+            if(next.bodies[i].corners!=current.bodies[i].corners)
+                planets_.updateHeights(int(i),next.bodies[i].corners);
+            planets_.updateFlags(int(i),next.bodies[i].flags);
+        }
+        planets_.bindSimSurface(grid.surf);
+    }
+    rebuildPlanetFlora(); // existing cosmetic scatter owner; not rooted ECS lifecycle
+    planetCam_.update(planets_.world(),planets_.surface(planetCam_.body()),planetSeconds_,0);
+    pframe_=planetCam_.frame();
+    return true;
+}
 bool GameView::simToBody(float3 sim, int& body, float3& local) {
     if (!onSphereF(sim)) return false;
     body = bodyAtF(sim);
@@ -190,6 +251,26 @@ bool GameView::placeObject(const SceneObject& o, int& body, float3& ground, floa
     return true;
 }
 
+bool GameView::planetFxObjectPose(const SceneObject& o,float3& position,float3& direction) const {
+    if(o.body!=planetCam_.body() || o.body<0 || dot(o.pos,o.pos)<=1e-10f)return false;
+    int body;float3 g,up,east,south;float lift;
+    if(!placeObject(o,body,g,up,east,south,lift))return false;
+    position=g+up*lift;
+    const float len=length(o.facing);
+    direction=std::isfinite(len)&&len>1e-5f?o.facing*(1.f/len):up;
+    return std::isfinite(position.x)&&std::isfinite(position.y)&&std::isfinite(position.z)&&
+           std::isfinite(direction.x)&&std::isfinite(direction.y)&&std::isfinite(direction.z);
+}
+bool GameView::planetFxTerrain(float3 local,float& relief,float& clearance,float3& up) const {
+    const auto* surface=planets_.surface(planetCam_.body());
+    const float radius=length(local);
+    if(!surface||!std::isfinite(radius)||radius<=1e-5f)return false;
+    up=local*(1.f/radius);
+    relief=surface->heightAt(up);
+    clearance=radius-surface->radius()-relief;
+    return std::isfinite(relief)&&std::isfinite(clearance);
+}
+
 bool GameView::planetPlacement(const SceneObject& o, mat4& m) const {
     int body; float3 g, up, east, south; float lift;
     if (!placeObject(o, body, g, up, east, south, lift)) return false;
@@ -255,6 +336,7 @@ void GameView::drawPlanets(Renderer3D& r, const GameScene& s, double time, const
         std::fprintf(stderr, "[planet] t=%.0f transit %d orbit-units %d on-other-bodies %d\n", s.seconds, tr, orbit, moon);
     }
     planets_.draw(r, pframe_, s.seconds, planetCam_.body(), blend);
+    drawPlanetCaves(r,pframe_,s.seconds);
     if (dev_ && rules_ && planetGroundFx_.draw(*dev_, r, planets_, pframe_, s, time, vision, grid, groundFx_, *rules_))
         for (size_t bi = 0; bi < Wd.bodies.size(); ++bi) { // rock dug out (seen): the terrain under it becomes ground
             if (!Wd.bodies[bi].surface()) continue;
@@ -315,6 +397,8 @@ void GameView::drawPlanets(Renderer3D& r, const GameScene& s, double time, const
     if (blend < 0.5f) {
         const float floraFar = 260.0f;
         for (const PlanetFlora::Instance& in : planetFlora_.instances()) {
+            if(PlanetFlora::treeProto(in.proto)&&size_t(in.body)<s.planetForest.managedBodies.size()&&
+               s.planetForest.managedBodies[size_t(in.body)])continue;
             const render::Model* m = planetFlora_.proto(in.proto);
             if (!m) continue;
             const float3 pv = bodyToView(in.body, in.local);
@@ -336,6 +420,50 @@ void GameView::drawPlanets(Renderer3D& r, const GameScene& s, double time, const
             md.world = w;
             if (planetNoShadow_) md.flags |= kDrawNoCastShadow;
             r.drawModel(md);
+        }
+    }
+    if(blend<0.5f){
+        for(const auto& plant:s.planetForest.plants){
+            if(plant.body<0||size_t(plant.body)>=W.bodies.size())continue;
+            const auto* model=planetFlora_.forestProto(plant.species,plant.proto);
+            if(!model)continue;
+            const auto center=bodyToView(plant.body,plant.local);
+            const auto d=center-eye;
+            if(dot(d,d)>260.f*260.f||occluded(plant.body,center))continue;
+            const auto U=normalize(pframe_.dirToView(plant.up));
+            const auto hint=pframe_.dirToView(plant.forward);
+            auto Z=hint-U*dot(hint,U);
+            if(dot(Z,Z)<1e-6f)continue;
+            Z=normalize(Z);
+            const auto X=normalize(cross(U,Z));
+            const float scale=plant.size*W.bodies[size_t(plant.body)].floraScale;
+            if(!(scale>0.f))continue;
+            auto position=center;
+            // ARBOR meshes have an authored root pivot, whereas a physical
+            // checkpoint describes centre of mass. Approximate that offset
+            // with the shared prototype's bind-space height.
+            if(plant.physical)position=position-U*(plant.physicalRootOffset>=0.f?plant.physicalRootOffset:
+                (model->boundsMax.y+model->boundsMin.y)*.5f*scale);
+            ModelDraw md;md.model=model;
+            mat4 matrix;
+            const float transverse=scale*plant.thickness;
+            if(!(transverse>0.f))continue;
+            const float3 axes[]={X*transverse,U*scale,Z*transverse,position};
+            for(int col=0;col<4;++col){
+                matrix.at(0,col)=axes[col].x;matrix.at(1,col)=axes[col].y;matrix.at(2,col)=axes[col].z;
+            }
+            md.world=matrix;md.tint={plant.tint.x,plant.tint.y,plant.tint.z,1};
+            if(planetNoShadow_)md.flags|=kDrawNoCastShadow;
+            md.primitiveMaterialFilter=0; // shared bark material
+            r.drawModel(md);
+            // Shared foliage geometry; vigor tint and threshold, no per-tree
+            // GPU mesh mutation or fabricated fractional leaf topology.
+            if(plant.foliage>.05f){
+                const float vigor=std::clamp(plant.foliage,0.f,1.f);
+                md.primitiveMaterialFilter=1;
+                md.tint={.75f+.25f*vigor,.45f+.55f*vigor,.55f+.45f*vigor,1};
+                r.drawModel(md);
+            }
         }
     }
     for (size_t i = 0; i < s.objects.size(); ++i) {
@@ -360,12 +488,24 @@ void GameView::drawPlanets(Renderer3D& r, const GameScene& s, double time, const
         const float3 pv = place.transformPoint({0, 0, 0});
         if (o.isProjectile) {
             if (o.visible) {
-                ::aiverse::view::MeshObject packet;
-                packet.mesh=&projectile_;
-                packet.world=mat4::translate(place.transformPoint({0,0.3f,0}));
-                packet.color={1,0.95f,0.8f,1};
-                packet.flags=kDrawUnlit;
-                ::aiverse::View::submitMesh(r,packet);
+                const bool custom=o.shooterType<looks_.size() && o.shotWeapon>=0 &&
+                    size_t(o.shotWeapon)<looks_[o.shooterType].projectiles.size() &&
+                    looks_[o.shooterType].projectiles[size_t(o.shotWeapon)].model;
+                if(custom) {
+                    SceneObject shot=o;
+                    shot.pos=body>=0?bodyToView(body,o.pos):pv;
+                    shot.facing=pframe_.dirToView(o.facing);
+                    const float3 radial=body>=0?pframe_.dirToView(normalize(o.pos)):float3{0,1,0};
+                    if(body<0||!occluded(body,shot.pos))
+                        drawProjectile(r,key,shot,dt,radial,false);
+                } else {
+                    // Preserve the original planet-ball fallback transform.
+                    ::aiverse::view::MeshObject packet;
+                    packet.mesh=&projectile_;
+                    packet.world=mat4::translate(place.transformPoint({0,0.3f,0}));
+                    packet.color={1,0.95f,0.8f,1}; packet.flags=kDrawUnlit;
+                    ::aiverse::View::submitMesh(r,packet);
+                }
             }
             continue;
         }
@@ -447,11 +587,22 @@ void sceneFromSphere(Simulation& sim, GameCore& m, const Surface& S, GameScene& 
         if (S.bodyAt(prev) != body) return c;
         return lerp(toF(prev - Surface::anchor(body)), c, alpha);
     };
+    const std::vector<uint8_t> missingVision;
+    const auto* playerVision=viewer<gs.vision.size()?&gs.vision[viewer]:&missingVision;
     auto visibleAt = [&](Vec3 p) -> uint8_t {
         const int c = S.cellAt(p);
-        return c >= 0 && size_t(c) < gs.vision[viewer].size() ? gs.vision[viewer][size_t(c)] : 0;
+        return c >= 0 && size_t(c) < playerVision->size() ? (*playerVision)[size_t(c)] : 0;
     };
+    // Filter before the GameScene lease, not by blurred GPU fog or camera.
+    // A malformed owner snapshot must not restore cosmetic trees in fog.
+    if(!collectPlanetForestVisuals(w,S,out.planetForest,viewer?playerVision:nullptr)){
+        out.planetForest={};
+        if(viewer)out.planetForest.managedBodies.assign(S.bodies.size(),1);
+        out.planetForestMotion.clear();
+    }
     const uint32_t tick = sim.tick();
+    out.planetForestMotion.interpolate(out.planetForest,S,&sim,sim.stateRestoreSerial(),tick,viewer,alpha,
+                                      viewer?playerVision:nullptr);
     w.each<Unit, Owner, Transform>([&](Entity e, Unit& u, Owner& o, Transform& t) {
         SceneObject so;
         so.entity = e; so.type = u.type; so.owner = o.player;
@@ -507,7 +658,11 @@ void sceneFromSphere(Simulation& sim, GameCore& m, const Surface& S, GameScene& 
         if (!Surface::onSphere(t.pos)) return;
         SceneObject so;
         so.entity = e; so.isProjectile = true; so.source = pr.source;
-        if (auto* su = w.tryGet<Unit>(pr.source)) so.shooterType = su->type;
+        if(pr.sourceType<R.types.size())so.shooterType=pr.sourceType;
+        else if(auto* su=w.tryGet<Unit>(pr.source))so.shooterType=su->type;
+        so.shotWeapon=int8_t(view_adapter::projectileAppearanceSlot(R,pr));
+        const Vec3 delta=t.pos-t.prevPos;
+        so.facing=toF(delta.lengthSq().raw>0?delta:pr.aim-t.pos);
         int body;
         so.pos = local(t.prevPos, t.pos, body);
         so.body = int16_t(body);

@@ -70,7 +70,7 @@ if(NOT MSVC)
     target_include_directories(aiverse_studio SYSTEM PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/win/mingw") # EventToken.h
 endif()
 target_link_libraries(aiverse_studio PRIVATE aiverse_hosted_client SQLite::SQLite3 aiverse_lua aiverse_editor_core aiverse_runtime
-    aiverse_game_view aiverse_gfx_vulkan AIVERSE::vivid_human AIVERSE::libraries
+    aiverse_fx aiverse_game_view aiverse_gfx_vulkan AIVERSE::vivid_human AIVERSE::libraries
     ole32 oleaut32 uuid shell32 shlwapi user32 advapi32 dwmapi)
 target_sources(aiverse_studio PRIVATE $<TARGET_OBJECTS:aiverse_runtime>)
 target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_SOURCE_DIR="${PROJECT_SOURCE_DIR}" _WIN32_WINNT=0x0A00)
@@ -107,6 +107,14 @@ if(AIVERSE_BUILD_TESTS)
     else()
         target_compile_options(aiverse_studio_session_tests PRIVATE -Wa,-mbig-obj)
     endif()
+    add_executable(aiverse_studio_asset_transfer_tests tests/StudioAssetTransferTests.cpp StudioAssetCatalog.cpp StudioAssetTransfers.cpp)
+    target_include_directories(aiverse_studio_asset_transfer_tests PRIVATE "${PROJECT_SOURCE_DIR}")
+    target_link_libraries(aiverse_studio_asset_transfer_tests PRIVATE SQLite::SQLite3 aiverse_editor_core)
+    add_test(NAME studio_asset_transfers COMMAND aiverse_studio_asset_transfer_tests)
+    add_executable(aiverse_studio_move_journal_tests tests/StudioMoveJournalTests.cpp)
+    target_include_directories(aiverse_studio_move_journal_tests PRIVATE "${PROJECT_SOURCE_DIR}")
+    target_link_libraries(aiverse_studio_move_journal_tests PRIVATE aiverse_editor_core)
+    add_test(NAME studio_move_journal COMMAND aiverse_studio_move_journal_tests)
     add_test(NAME studio_session COMMAND aiverse_studio_session_tests)
     set_tests_properties(studio_session PROPERTIES LABELS "EDITOR")
 endif()

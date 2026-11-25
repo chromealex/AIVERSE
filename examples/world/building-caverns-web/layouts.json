@@ -1,0 +1,394 @@
+{
+  "residence": {
+    "size": [
+      18,
+      7,
+      16
+    ],
+    "rooms": [
+      2,
+      2,
+      2
+    ],
+    "features": [
+      {
+        "kind": "personnel-door",
+        "side": "front",
+        "count": 1,
+        "width": 1.2,
+        "height": 2.35,
+        "depth": 0,
+        "open": 0,
+        "position": -1,
+        "positionZ": -1,
+        "spacing": 0.35,
+        "floor": 0,
+        "sill": 0.9
+      },
+      {
+        "kind": "window",
+        "side": "back",
+        "count": 2,
+        "width": 1.6,
+        "height": 1.1,
+        "depth": 0,
+        "open": 0,
+        "position": -1,
+        "positionZ": -1,
+        "spacing": 0.35,
+        "floor": 0,
+        "sill": 0.9
+      },
+      {
+        "kind": "window",
+        "side": "left",
+        "count": 2,
+        "width": 1.6,
+        "height": 1.1,
+        "depth": 0,
+        "open": 0,
+        "position": -1,
+        "positionZ": -1,
+        "spacing": 0.35,
+        "floor": 1,
+        "sill": 0.9
+      },
+      {
+        "kind": "stairs",
+        "side": "front",
+        "count": 1,
+        "width": 2.6,
+        "height": 2.35,
+        "depth": 7.2,
+        "open": 0,
+        "position": 4.5,
+        "positionZ": 4,
+        "spacing": 0.35,
+        "floor": 0,
+        "sill": 0.9
+      }
+    ]
+  },
+  "market": {
+    "size": [
+      24,
+      8,
+      18
+    ],
+    "rooms": [
+      1,
+      3,
+      2
+    ],
+    "features": [
+      {
+        "kind": "small-gate",
+        "side": "front",
+        "count": 2,
+        "width": 2.7,
+        "height": 2.9,
+        "depth": 0,
+        "open": 0,
+        "position": -1,
+        "positionZ": -1,
+        "spacing": 0.35,
+        "floor": 0,
+        "sill": 0.9
+      },
+      {
+        "kind": "personnel-door",
+        "side": "back",
+        "count": 1,
+        "width": 1.2,
+        "height": 2.35,
+        "depth": 0,
+        "open": 0,
+        "position": -1,
+        "positionZ": -1,
+        "spacing": 0.35,
+        "floor": 0,
+        "sill": 0.9
+      },
+      {
+        "kind": "window",
+        "side": "left",
+        "count": 3,
+        "width": 1.6,
+        "height": 1.1,
+        "depth": 0,
+        "open": 0,
+        "position": -1,
+        "positionZ": -1,
+        "spacing": 0.35,
+        "floor": 0,
+        "sill": 0.9
+      }
+    ]
+  },
+  "administration": {
+    "size": [
+      24,
+      12,
+      20
+    ],
+    "rooms": [
+      3,
+      2,
+      2
+    ],
+    "features": [
+      {
+        "kind": "personnel-door",
+        "side": "front",
+        "count": 1,
+        "width": 1.2,
+        "height": 2.35,
+        "depth": 0,
+        "open": 0,
+        "position": -1,
+        "positionZ": -1,
+        "spacing": 0.35,
+        "floor": 0,
+        "sill": 0.9
+      },
+      {
+        "kind": "window",
+        "side": "back",
+        "count": 3,
+        "width": 1.6,
+        "height": 1.1,
+        "depth": 0,
+        "open": 0,
+        "position": -1,
+        "positionZ": -1,
+        "spacing": 0.35,
+        "floor": 0,
+        "sill": 0.9
+      },
+      {
+        "kind": "window",
+        "side": "right",
+        "count": 3,
+        "width": 1.6,
+        "height": 1.1,
+        "depth": 0,
+        "open": 0,
+        "position": -1,
+        "positionZ": -1,
+        "spacing": 0.35,
+        "floor": 1,
+        "sill": 0.9
+      },
+      {
+        "kind": "elevator",
+        "side": "front",
+        "count": 1,
+        "width": 2,
+        "height": 2.35,
+        "depth": 2.2,
+        "open": 0,
+        "position": 6,
+        "positionZ": 5,
+        "spacing": 0.35,
+        "floor": 0,
+        "sill": 0.9
+      },
+      {
+        "kind": "stairs",
+        "side": "front",
+        "count": 1,
+        "width": 2.6,
+        "height": 2.35,
+        "depth": 8.5,
+        "open": 0,
+        "position": 18,
+        "positionZ": 5,
+        "spacing": 0.35,
+        "floor": 0,
+        "sill": 0.9
+      }
+    ]
+  },
+  "warehouse": {
+    "size": [
+      32,
+      10,
+      24
+    ],
+    "rooms": [
+      1,
+      2,
+      1
+    ],
+    "features": [
+      {
+        "kind": "large-gate",
+        "side": "front",
+        "count": 2,
+        "width": 5,
+        "height": 4.5,
+        "depth": 0,
+        "open": 0,
+        "position": -1,
+        "positionZ": -1,
+        "spacing": 0.35,
+        "floor": 0,
+        "sill": 0.9
+      },
+      {
+        "kind": "personnel-door",
+        "side": "back",
+        "count": 1,
+        "width": 1.2,
+        "height": 2.35,
+        "depth": 0,
+        "open": 0,
+        "position": -1,
+        "positionZ": -1,
+        "spacing": 0.35,
+        "floor": 0,
+        "sill": 0.9
+      },
+      {
+        "kind": "window",
+        "side": "right",
+        "count": 3,
+        "width": 1.6,
+        "height": 1.1,
+        "depth": 0,
+        "open": 0,
+        "position": -1,
+        "positionZ": -1,
+        "spacing": 0.35,
+        "floor": 0,
+        "sill": 0.9
+      }
+    ]
+  },
+  "workshop": {
+    "size": [
+      24,
+      10,
+      18
+    ],
+    "rooms": [
+      1,
+      2,
+      1
+    ],
+    "features": [
+      {
+        "kind": "large-gate",
+        "side": "front",
+        "count": 1,
+        "width": 5,
+        "height": 4.5,
+        "depth": 0,
+        "open": 0,
+        "position": -1,
+        "positionZ": -1,
+        "spacing": 0.35,
+        "floor": 0,
+        "sill": 0.9
+      },
+      {
+        "kind": "personnel-door",
+        "side": "back",
+        "count": 1,
+        "width": 1.2,
+        "height": 2.35,
+        "depth": 0,
+        "open": 0,
+        "position": -1,
+        "positionZ": -1,
+        "spacing": 0.35,
+        "floor": 0,
+        "sill": 0.9
+      },
+      {
+        "kind": "window",
+        "side": "left",
+        "count": 2,
+        "width": 1.6,
+        "height": 1.1,
+        "depth": 0,
+        "open": 0,
+        "position": -1,
+        "positionZ": -1,
+        "spacing": 0.35,
+        "floor": 0,
+        "sill": 0.9
+      },
+      {
+        "kind": "sliding-roof",
+        "side": "front",
+        "count": 1,
+        "width": 5,
+        "height": 0,
+        "depth": 5,
+        "open": 0,
+        "position": -1,
+        "positionZ": -1,
+        "spacing": 0.35,
+        "floor": 0,
+        "sill": 0.9
+      }
+    ]
+  },
+  "hall": {
+    "size": [
+      28,
+      8,
+      24
+    ],
+    "rooms": [
+      1,
+      1,
+      1
+    ],
+    "features": [
+      {
+        "kind": "small-gate",
+        "side": "front",
+        "count": 2,
+        "width": 2.7,
+        "height": 2.9,
+        "depth": 0,
+        "open": 0,
+        "position": -1,
+        "positionZ": -1,
+        "spacing": 0.35,
+        "floor": 0,
+        "sill": 0.9
+      },
+      {
+        "kind": "window",
+        "side": "left",
+        "count": 4,
+        "width": 1.6,
+        "height": 1.1,
+        "depth": 0,
+        "open": 0,
+        "position": -1,
+        "positionZ": -1,
+        "spacing": 0.35,
+        "floor": 0,
+        "sill": 0.9
+      },
+      {
+        "kind": "window",
+        "side": "right",
+        "count": 4,
+        "width": 1.6,
+        "height": 1.1,
+        "depth": 0,
+        "open": 0,
+        "position": -1,
+        "positionZ": -1,
+        "spacing": 0.35,
+        "floor": 0,
+        "sill": 0.9
+      }
+    ]
+  }
+}

@@ -18,7 +18,7 @@
 namespace aiverse::game { class GameCore; }
 
 namespace aiverse::net::city {
-constexpr uint32_t kProtocol = 4;
+constexpr uint32_t kProtocol = 7; // chain jumps include their source position and authored payload
 // What both sides must agree on: the unit types (their order is the wire's type id) and the map's players and
 // entities (their order is the entity ids at the start). Other rules may differ: the client does not simulate.
 uint64_t contentId(const Json& rules, const Json& map);
@@ -64,6 +64,10 @@ struct Shot { uint32_t id = 0, source = UINT32_MAX; uint16_t x = 0, z = 0; uint8
 struct Event { uint32_t tick = 0, id = 0; uint8_t kind = 0; uint16_t x = 0, z = 0; uint32_t subject = 0; };
 struct RemoteEvent {              // a SimEvent of the server's simulation that happened in view (or is about this player)
     uint16_t type = 0; uint8_t player = 0; uint32_t a = UINT32_MAX, b = UINT32_MAX; int64_t value = 0; uint16_t x = 0, z = 0;
+    uint16_t flags = 0, resource = UINT16_MAX, subjectType = UINT16_MAX, subjectOwner = UINT16_MAX;
+    uint64_t subjectKey = UINT64_MAX;
+    std::shared_ptr<const MatchMessage> message;
+    uint16_t chainX = 0, chainZ = 0, chainPayload = UINT16_MAX;
 };
 struct PremiseState {             // one of the map's premises as this player may know it
     uint8_t owner = 0, tenant = 0;    // 0 nobody (the city), 1 this player, 2 somebody else
@@ -127,6 +131,8 @@ private:
     bool seat(Peer& p, uint8_t slot, const std::string& player);
     bool hello(Peer& p, const Bytes& packet, bool seated);
     void welcome(Peer& p);
+    void queueController(uint8_t slot, SeatController kind, bool initial = false);
+    uint32_t controllerSequence_ = 0;
     void collectEvents();
     void tellPremises(Peer& p);
     std::vector<uint8_t> seats_;                        // slots that had a hero on the map

@@ -13,6 +13,7 @@
 #include "../Editor.h"
 #include "../EditorUtil.h"
 #include "engine/fx/SpectraFX.h"
+#include "engine/fx/SpectraSdfFileIO.h"
 #include "engine/render/TextureCache.h"
 #include "engine/fx/FxModelMesh.h"
 
@@ -225,7 +226,7 @@ private:
             previewHash_=hash;
             fx::EffectDef compiled;
             std::vector<std::string> errors;
-            if(fx::compileSpectraGraph(document_,compiled,errors)) {
+            if(fx::compileSpectraGraph(document_,Json::object(),compiled,errors,fx::projectSdfReader(project_))) {
                 previewId_=preview_.define("__spectrafx_editor_preview",compiled);
                 previewHandle_={};
                 lastPreviewTime_=-1;
@@ -483,7 +484,7 @@ private:
     bool compile(const Json& doc,std::string& error) const {
         fx::EffectDef effect;
         std::vector<std::string> errors;
-        if(fx::compileSpectraGraph(doc,effect,errors)) { error.clear();return true; }
+        if(fx::compileSpectraGraph(doc,Json::object(),effect,errors,fx::projectSdfReader(project_))) { error.clear();return true; }
         error=errors.empty()?"Invalid SpectraFX graph":errors.front();
         return false;
     }

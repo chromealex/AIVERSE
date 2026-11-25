@@ -1,0 +1,7 @@
+# Stage 117 — canonical Device allocation ledger
+
+Branch `feature/spectrafx-html5-data-interfaces-20261123`; parent `a74b68a3857a97d1d0d13caf981bfbc0bb85454b`; plan `cfb11775e79b1199b98d898648f4e14e778f2108`; implementation `73ea4e7460656243c52954b005068ade071d450b`. Main untouched.
+
+Generic owner-thread GpuAllocationBudget moved to engine/gfx/GpuAllocationBudget.h; SpectraFx header exports source-compatible aliases. gfx::Device owns one canonical ledger, automatically used by direct ComputeParticles, GraphRuntime and GpuPoolWorld. Zero inherits, conflicting nonzero limits or second active ledger rejected; explicit adoption possible before first use or when old ledger has no charges/external owners. Device teardown invalidates old ledger; fence charges survive pool teardown. No driver-wide memory claim or authored schema change. Recording fixture covers independent implicit emitters, denial, conflict and release. Paths engine/gfx/Gfx.h, GpuAllocationBudget.h; engine/fx/SpectraGpuAllocationBudget.h, SpectraGpuParticles.cpp, SpectraGpuPoolWorld.{h,cpp}; tests/vfx_gpu_backend_test.cpp; docs/spectrafx.md.
+
+Feature gate: source committed; architecture/dependencies documented, native API additive, no new graph/MCP/Studio/inspector/persistence operation. CMake, CTest, MSL, Mac, performance/captures/CI NOT RUN by user request. Next Stage 118 per-Device temporary transfer budget; Stage 119 exact GPU-owned checkpoint and Stage 120 Vulkan.

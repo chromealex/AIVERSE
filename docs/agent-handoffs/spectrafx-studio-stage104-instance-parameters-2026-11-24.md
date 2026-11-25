@@ -1,0 +1,5 @@
+# Stage 104 — per-source named scalar overrides
+
+Parent `6b1b13676bcabe7faa127bee301a789b0d8b7e36`; branch `feature/spectrafx-html5-data-interfaces-20261123`.
+
+Existing SpectraSourceComponent gains optional fixed-point named parameters, max eight. Shared resolution validates graph schema, bounds and defaults. CPU presenter passes independent slot snapshots to ParticleSystem::playWithProgramParameters; override edits restart the affected attachment, not the graph definition. GPU ECS presenter stages overrides through setSourceNamedParameter before committing a replacement source. Studio loads schema per compiled graph, rejects invalid declarations, and exposes dynamic numeric Inspector properties for saved Graph v2; effect changes clear incompatible overrides. Optional document field preserves backward compatibility. Regression source covers independent values, defaults, bounds, serialization. No build/tests run. Live adjustment without restart, policy Inspector, delay/loop, world-space/planet integration remain follow-up. Main untouched.

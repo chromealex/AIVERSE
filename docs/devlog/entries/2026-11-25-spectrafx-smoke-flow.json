@@ -1,0 +1,49 @@
+{
+  "id": "2026-11-25-spectrafx-smoke-flow",
+  "date": "2026-11-25",
+  "system": "spectrafx",
+  "title": "Движение клубов дыма",
+  "titleEn": "Motion inside the smoke plume",
+  "summary": "Серые клубы поднимаются вдоль шлейфа, оставляя между собой просветы.",
+  "summaryEn": "Grey billows travel up the plume with thinner gaps between them.",
+  "body": [
+    "В графе fire_smoke_v2 направление движения деталей задаёт материал объёма. Внутренние тени и тень на площадке учитывают тот же движущийся рисунок плотности.",
+    "Падающая тень смягчается с высотой дыма над поверхностью. Мелкие просветы между клубами дают плавный переход на земле.",
+    "Один источник подаёт топливо и тепло. Искры рождаются у основания пламени и летят по волнистым траекториям вдоль дыма."
+  ],
+  "bodyEn": [
+    "In fire_smoke_v2 the volume material sets the direction of detail motion. Internal shadows and the shadow on the stage follow the same moving density pattern.",
+    "The cast shadow softens as smoke rises above the receiving surface. Small gaps between billows produce gradual changes on the ground.",
+    "One source supplies fuel and heat. Sparks rise from the base and follow undulating paths along the plume."
+  ],
+  "status": "experimental",
+  "verified": "Движение показано с неподвижной камерой в Studio на macOS с Metal.",
+  "verifiedEn": "Captured with a stationary camera in Studio on macOS with Metal.",
+  "limits": "Направление движения деталей задаётся для всего материала.",
+  "limitsEn": "Detail velocity is shared across the material.",
+  "branch": "codex/spectrafx-volumetric-scene",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-spectrafx-smoke-flow/01.png",
+      "caption": "Светлые просветы между клубами над площадкой.",
+      "captionEn": "Gaps between billows above the stage."
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-spectrafx-smoke-flow/02.png",
+      "caption": "Мягкая тень движущегося шлейфа на площадке.",
+      "captionEn": "Soft shadow of the moving plume on the stage."
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-spectrafx-smoke-flow/03.png",
+      "caption": "Искры поднимаются от общего основания огня вдоль шлейфа.",
+      "captionEn": "Sparks rise from a single fire base along the plume."
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-spectrafx-smoke-flow/04.png",
+      "caption": "Вид вдоль шлейфа: прежний дым слева, расширенный справа. Камера и момент симуляции совпадают.",
+      "captionEn": "Looking along the plume at the same simulation tick and camera angle. Previous smoke on the left, wider smoke on the right."
+    }
+  ],
+  "links": [],
+  "author": "render"
+}

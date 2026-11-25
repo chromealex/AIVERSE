@@ -290,7 +290,13 @@ private:
                 img.repeat = inum(s["wrapS"], 10497) != 33071 || inum(s["wrapT"], 10497) != 33071;
             }
             img.name = it->second.name + "#t" + std::to_string(i);
-            texMap_.push_back(int(model_->images.size()));
+            const int index = int(model_->images.size());
+            const Json& image = doc_["images"][size_t(src)];
+            for (const auto& alias : {t.getStr("name"), image.getStr("name")})
+                if (!alias.empty()) model_->imageAliases.emplace(alias, index);
+            const auto uri = image.getStr("uri");
+            if (!uri.empty() && uri.rfind("data:", 0) != 0) model_->imageAliases.emplace(uri, index);
+            texMap_.push_back(index);
             model_->images.push_back(std::move(img));
         }
     }

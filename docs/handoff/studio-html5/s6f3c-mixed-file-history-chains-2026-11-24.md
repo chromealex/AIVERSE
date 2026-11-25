@@ -1,0 +1,12 @@
+# S6f.3.3 — mixed file history chains (2026-11-24)
+
+Owner Studio; branch feature/studio-html5. Base 1e618fd454e70b6b1810722e2c9ea87ebd7db264; roadmap 344550ad3f4c80f9b9f79def372160e564dc4a7a; implementation d425217058abe0eacd4f21cf141161613ed85049; regression scenarios and identity fences 386d22dfc9934c01f0ebf0c51cfdb5e5df6955f7; quota refinement 0c002523993b1ff43535005599e72846486dd108.
+
+## Implementation
+- Mixed file history planner for texture/audio/.bin assets composes retained import, ordinary move, importer settings, replacement and quarantine deletion/restoration steps in original or reverse chronology. Tracks physical payload and sidecar identity separately, checks virtual intermediate digests, exact metadata bytes, GUID occupancy and importer compatibility. No arbitrary browser-supplied filesystem paths.
+- Replacement exchanges payload slots without changing live GUID. Metadata follows the physical sidecar through content paths and exact retained Trash slots. Journal v3 stores moving metadata snapshots and restores them before reversing relocations. Generic document journal permits only the exact Trash asset.meta path form, not arbitrary cache payloads.
+- Recovery quota accounting follows virtual source sizes and includes the final size change of quarantined sidecars. Known model references are conservatively fenced for mixed relocations; ordinary repair chains retain their prior specialized planner. Existing disjoint fallback remains for unsupported mixed topology. Existing linked MCP batch actions use the same native coordinator.
+- Added regression fixture for import -> move -> settings -> replace -> delete, whole-chain undo/redo, quota, recovery after final sidecar publication in Trash, and external metadata edit refusal. Existing test target reused. Skill and MCP docs updated.
+
+## Evidence / limits
+GitHub source committed and read back. Tests added, NOT RUN. No C++ compile, CTest, frontend checks, real native/MCP execution, fault-injection execution or performance evidence. No main merge. This is a supported file-only mixed subset, not unrestricted mixed history. Mixed model replacement/restoration and URI repair, directories in mixed chains, nested endpoints, ambiguous repeated recovery states, manual Trash restore that clears history, and map/rules dependencies requiring interleaving remain limited. Cross-owner durable save/checkpoint remains open. Next S6f.3.4: mixed directory and model topology with ordered dependency validation; then S6f.4 atomic save, recovery/MCP extensions, final QA.

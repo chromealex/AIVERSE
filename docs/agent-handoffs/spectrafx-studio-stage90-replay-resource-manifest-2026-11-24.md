@@ -1,0 +1,5 @@
+# Stage 90 — replay direct resource compatibility
+
+Parent `fc78345ab6abcb16229f757ee7a8831d68e39e65`; branch `feature/spectrafx-html5-data-interfaces-20261123`.
+
+Named presets record a bounded manifest of direct content/ strings in the authored graph, hashing file bytes and existing authoritative .meta sidecars (including GUID). 64 paths, 128 MiB total scan budget, 64 KiB serialized preset cap, no symlink traversal. Existing manifests are never silently refreshed. MCP fx_replay_preset_check and get expose matching/changed/unavailable/unverified states. HTML5 checks recorded dependencies before restore and adds name search and compatibility display. Legacy/imported presets without a manifest remain unverified. FNV-1a detects accidental changes, not authenticity; no transitive model/material dependencies, asset relocation by GUID, or portable project identity yet. Test sources cover same-size mutation, missing file, GUID and empty manifests. Native/Node execution not performed. Main untouched.

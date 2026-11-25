@@ -57,30 +57,59 @@ Fixed effectiveStat(Simulation& sim, const Rules& rules, Entity e, Stat s, const
     Fixed add{}, mul = kOne, lerp{};
     if (src.mods) { add += src.mods->add[size_t(s)]; mul *= src.mods->mul[size_t(s)]; }
     if (auto* h = w.tryGet<Hero>(e)) for (auto& pl : t.perLevel) if (pl.stat == s) { add += pl.add * (h->level - 1); }
+    // Group candidates are compared against the same authored/script base,
+    // before other modifiers. Equal-strength ties use add then mul, independent of arrival order.
+    struct Winner { uint16_t group; Fixed add, mul, strength; };
+    std::vector<Winner> winners;
+    auto grouped = [&](uint16_t group, Fixed a, Fixed m) {
+        const Fixed strength = fxAbs((base + a) * m - base);
+        for (auto& winner : winners) if (winner.group == group) {
+            if (strength > winner.strength || (strength == winner.strength &&
+                (a > winner.add || (a == winner.add && m > winner.mul))))
+                winner = {group, a, m, strength};
+            return;
+        }
+        winners.push_back({group, a, m, strength});
+    };
     if (auto* b = w.tryGet<Buffs>(e)) {
-        for (auto& bf : b->list) if (bf.stat == s && bf.until > sim.tick()) { add += bf.add; mul *= bf.mul; }
+        for (auto& bf : b->list) if (bf.stat == s && bf.until > sim.tick()) { if (bf.stackingGroup) grouped(bf.stackingGroup, bf.add, bf.mul); else { add += bf.add; mul *= bf.mul; } }
     }
     if (rules.advancedEffects) {
         Fixed smul = kOne, floor{};
         if (auto* st = w.tryGet<Statuses>(e))
             for (auto& in : st->list)
                 for (auto& m : rules.statuses[in.def].mods)
-                    if (m.stat == s) floor = fxMax(floor, m.floor);
+                    if (m.stat == s && !m.stackingGroup) floor = fxMax(floor, m.floor);
         if (auto* st = w.tryGet<Statuses>(e))
             for (auto& in : st->list)
                 for (auto& m : rules.statuses[in.def].mods)
-                    if (m.stat == s) { add += m.add * in.stacks; lerp += m.lerp * in.stacks; for (int k = 0; k < in.stacks; ++k) (floor.raw > 0 ? smul : mul) *= m.mul; }
+                    if (m.stat == s) {
+                        if (m.stackingGroup) { if (in.until > sim.tick() && in.stacks) grouped(m.stackingGroup, m.add, m.mul); }
+                        else { add += m.add * in.stacks; lerp += m.lerp * in.stacks; for (int k = 0; k < in.stacks; ++k) (floor.raw > 0 ? smul : mul) *= m.mul; }
+                    }
         if (floor.raw > 0) mul *= fxMax(smul, floor);
         if (src.playerStatuses)
             for (auto& in : *src.playerStatuses)
                 for (auto& m : rules.statuses[in.def].mods)
-                    if (m.stat == s) { add += m.add * in.stacks; for (int k = 0; k < in.stacks; ++k) mul *= m.mul; }
+                    if (m.stat == s) {
+                        if (m.stackingGroup) { if (in.until > sim.tick() && in.stacks) grouped(m.stackingGroup, m.add, m.mul); }
+                        else { add += m.add * in.stacks; for (int k = 0; k < in.stacks; ++k) mul *= m.mul; }
+                    }
     }
+    // Apply winners in stable group-ID order (fixed-point multiplication rounds).
+    for (size_t group = 1; group <= rules.modifierGroups.size(); ++group)
+        for (const auto& winner : winners) if (winner.group == group) {
+            add += winner.add; mul *= winner.mul; break;
+        }
     extra(add, mul);
     // Damage/Range/GatherRate/AttackSpeed "add" are fractional bonuses on top of 1 / absolute range
     Fixed v = (base + add) * mul;
     finish(v);
     if (lerp.raw > 0) v = v + (kOne - v) * fxMin(kOne, lerp);   // statuses that pull the stat toward 1
+    if (s == Stat::Speed && t.speed.raw > 0) {
+        if (rules.hasMinUnitSpeed) v = fxMax(v, rules.minUnitSpeed);
+        if (rules.hasMaxUnitSpeed) v = fxMin(v, rules.maxUnitSpeed);
+    }
     return v;
 }
 

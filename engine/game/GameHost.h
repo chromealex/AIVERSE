@@ -3,6 +3,7 @@
 // queries and actions on units, and the other systems. The game module (GameCore) implements it.
 #pragma once
 #include <cstdint>
+#include <optional>
 #include "../../engine/core/ECS.h"
 #include "../../engine/core/Fixed.h"
 #include "../../engine/sim/Simulation.h"
@@ -43,6 +44,18 @@ public:
     virtual bool hostile(Simulation& sim, uint8_t a, uint8_t b) const = 0;
     virtual uint8_t teamOf(Simulation& sim, uint8_t player) const = 0;
     virtual Fixed stat(Simulation& sim, Entity e, Stat s) const = 0;
+    // Native effects use the authoritative stat pipeline, not presentation
+    // estimates. No target-specific armor, bonuses, elevation or hit RNG.
+    std::optional<Fixed> currentWeaponDamage(Simulation& sim, Entity caster, size_t slot = 0) const {
+        const World& w = sim.world();
+        if (!w.alive(caster)) return std::nullopt;
+        const auto* unit = w.tryGetConst<Unit>(caster);
+        if (!unit || !w.tryGetConst<Owner>(caster) || unit->type >= rules().types.size())
+            return std::nullopt;
+        const auto& weapons = rules().types[unit->type].weapons;
+        if (slot >= weapons.size()) return std::nullopt;
+        return fxMax(Fixed{}, weapons[slot].damage * stat(sim, caster, Stat::Damage));
+    }
     virtual uint32_t statusFlags(Simulation& sim, Entity e) const = 0;
     virtual Fixed contactDistance(Simulation& sim, Entity a, Entity b) = 0;
     virtual bool isVisible(Simulation& sim, uint8_t player, Vec3 p) const = 0;
@@ -59,6 +72,33 @@ public:
     virtual void moveTo(Simulation& sim, Entity e, Vec3 goal, Fixed radius) = 0;
     virtual void stopMoving(Simulation& sim, Entity e) = 0;
     virtual void addResource(Simulation& sim, uint8_t player, uint16_t res, Fixed amount) = 0;
+    // Called only by the existing kill reward owners after eligibility checks.
+    // Report actual stock changes after conversion, caps and goods storage.
+    void payUnitBounty(Simulation& sim, Entity victim, uint8_t recipient) {
+        auto& world = sim.world();
+        auto& players = state(sim).players;
+        if (!recipient || recipient >= players.size() || !world.alive(victim)) return;
+        const auto* unit = world.tryGetConst<Unit>(victim);
+        const auto* owner = world.tryGetConst<Owner>(victim);
+        const auto* transform = world.tryGetConst<Transform>(victim);
+        if (!unit || !owner || !transform || unit->type >= rules().types.size()) return;
+        const auto& bounty = rules().types[unit->type].bounty;
+        if (bounty.empty()) return;
+        const uint16_t type = unit->type, victimOwner = owner->player;
+        const Entity killer = unit->lastHitBy;
+        const Vec3 pos = transform->pos;
+        const auto before = players[recipient].stock;
+        for (const auto& amount : bounty) addResource(sim, recipient, amount.res, amount.value);
+        const auto& after = players[recipient].stock;
+        for (size_t res = 0; res < after.size() && res < before.size() && res < UINT16_MAX; ++res) {
+            const Fixed credited = after[res] - before[res];
+            if (credited.raw <= 0) continue;
+            SimEvent event{kEvBounty, recipient, victim, killer, credited.raw, pos};
+            event.resource = uint16_t(res); event.subjectType = type;
+            event.subjectOwner = victimOwner; event.subjectKey = victim.packed();
+            sim.emit(event);
+        }
+    }
     virtual void dealDamage(Simulation& sim, Entity target, Fixed dmg, uint16_t dmgType, Entity source, uint8_t sourceOwner,
                             const WeaponDef* wd = nullptr) = 0;
     virtual void addStatus(Simulation& sim, Entity target, int def, Fixed duration, const EffectCtx& ctx) = 0;
