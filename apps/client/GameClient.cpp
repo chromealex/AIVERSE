@@ -290,6 +290,23 @@ void GameClient::updateAudio(double dt) {
     audio_.update(dt);
 }
 
+void GameClient::presentOrder(const Command& c) {
+    if (c.units.empty()) return;
+    switch (c.type) {
+    case kCmdMove: case kCmdAttack: case kCmdSmart: case kCmdPatrol: case kCmdRally:
+    case kCmdSend: case kCmdFollow: case kCmdGuard: case kCmdGather: case kCmdRepair:
+        break;
+    default: return;
+    }
+    Vec3 pos = c.point;
+    if (c.target.valid())
+        if (const auto* transform = sim_->world().tryGet<Transform>(c.target)) pos = transform->pos;
+    SimEvent event{kViewEventOrder, c.player, c.units.front(), c.target, c.type, pos};
+    event.flags = c.flags;
+    pendingOrders_.push_back(event);
+    viewScripts_.queueLocalOrder(event);
+}
+
 void GameClient::pingMap(float3 point) {
     pendingPings_.push_back({point, human_});
     sound_.play(Cue::Ping);
@@ -298,6 +315,8 @@ void GameClient::pingMap(float3 point) {
 void GameClient::toMenu() {
     playback_.reset();
     pendingPings_.clear();
+    pendingOrders_.clear();
+    markers_.clear();
     hostPaused_ = hostStep_ = false;
     hostSpeed_=0;
     hostCheckpoint_.clear();
@@ -946,8 +965,9 @@ void GameClient::command(uint16_t type, float sx, float sy, bool queue) {
     c.flags = queue ? kCmdQueue : 0;
     c.units = selection_;
     float3 g;
-    if (groundAt(sx, sy, g)) c.point = {Fixed::fromInt(int64_t(std::lround(g.x * 256))) / 256, Fixed{}, Fixed::fromInt(int64_t(std::lround(g.z * 256))) / 256};
-    if (planet() && groundAt(sx, sy, g)) c.point = simPoint(g);   // planets: all three coordinates
+    const bool hitGround = groundAt(sx, sy, g);
+    if (hitGround) c.point = {Fixed::fromInt(int64_t(std::lround(g.x * 256))) / 256, Fixed{}, Fixed::fromInt(int64_t(std::lround(g.z * 256))) / 256};
+    if (planet() && hitGround) c.point = simPoint(g);   // planets: all three coordinates
     Entity t = pick(sx, sy);
     if (type != kCmdMove && type != kCmdPatrol) c.target = t;
     if (type == kCmdSmart && selectionHasGarrison()) {
@@ -957,8 +977,9 @@ void GameClient::command(uint16_t type, float sx, float sy, bool queue) {
         for (Entity e : selection_) if (e != t && sim_->world().has<Garrison>(e)) src.push_back(e);
         c.units = src;
     }
+    if (!hitGround && !c.target.valid()) return;
     issue(c);
-    markers_.push_back({g, time_ + 0.6});
+    if (hitGround) markers_.push_back({g, time_ + 0.6});
 }
 
 Vec3 GameClient::placeCentre(float sx, float sy, bool& ok) {
@@ -2020,6 +2041,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
             OverlayContext oc;
             oc.sim = sim_.get();
             oc.pings = &pendingPings_;
+            oc.orders = &pendingOrders_;
             oc.player = spectator_ ? 0 : human_;
             float3 g;
             if (groundAt(mouseX_, mouseY_, g)) { oc.hasCursor = true; oc.cursor = g; }
@@ -2067,6 +2089,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         }
         view_.draw(r3d_, scene_, time_, spectator_ ? nullptr : &gs.vision[human_], gs.grid);
         pendingPings_.clear();
+        pendingOrders_.clear();
         g_stages.lap(3);   // view
         for (auto& fe : view_.fieldView().takeEffects()) fx_.playEffect(fe.name, fe.pos.x, fe.pos.y + 0.2f, fe.pos.z);   // grid field particles
         natureUpdate(screen_ == Screen::Playing || screen_ == Screen::Over ? float(dt) : 0.0f);

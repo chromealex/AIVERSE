@@ -1641,7 +1641,7 @@ Json scriptApiReference() {
     d.push(fn("rules \"commandBudget\": 200000", "instructions per player per tick for script command handlers"));
     r.set("data", d);
     Json v = Json::array();
-    v.push(fn("view.on(event, fn(e)) / view.on_frame(fn(dt))", "presentation events (same names as on()) / every frame"));
+    v.push(fn("view.on(event, fn(e)) / view.on_frame(fn(dt))", "simulation events and local order {kind, player, unit, target, x, y, z, queued} / every frame"));
     v.push(fn("view.notice(text) / view.effect(name, x, z) / view.sound(name, x, z)", "requests to the host (UI notice, particle effect, sound)"));
     v.push(fn("view.player()", "the local player slot"));
     v.push(fn("view.render_texture{width,height}", "view-only persistent mask canvas; stroke/clear/destroy; docs/render-texture.md"));

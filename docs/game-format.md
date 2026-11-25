@@ -2852,7 +2852,10 @@ relation of the player who caused it, `owner` = of the object it happened to, `t
 Events: `hit`, `died`, `bounty`, `spawned`, `attack`, `gathered`, `delivered`, `produced`, `ability`, `cast`,
 `impact`, `miss`, `built`, `placed`, `trained`, `researched`, `levelup`, `captured`, `sold`,
 `upgraded`, `alert` (under attack), `status`, `area`, `claimed`, `wave`, `message`, `ping` (pings of
-the client / editor). Popups never appear in cells the local player cannot see.
+the client / editor), and `order` (local movement or target orders). Order markers use the local
+input position even in unexplored cells. Other popups require local visibility. Use the
+`local_order_ring` overlay template to get an animated order point. In an order popup `{value}`
+is the submitted numeric command ID.
 
 For hit popups, `event.critical: true` selects critical hits and `false` selects normal hits; omit it to keep both. The critical flag is the result of the existing Progression critical roll, not a second random roll. `{critical}` formats 1 or 0; `{value}` still formats final damage. Use two overlays with different styles:
 

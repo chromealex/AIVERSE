@@ -3547,6 +3547,22 @@
           "titleEn": "Configurable automatic target order",
           "text": "Порядок автоматического выбора цели",
           "textEn": "Configurable automatic target order"
+        },
+        {
+          "id": "local-order-feedback",
+          "status": "in-progress",
+          "title": "Маркеры приказов",
+          "titleEn": "Order markers",
+          "text": "События локального приказа для скриптов и оверлеев.",
+          "textEn": "Local order events for scripts and overlays."
+        },
+        {
+          "id": "structure-upgrade-appearance",
+          "status": "in-progress",
+          "title": "Вид здания при улучшении",
+          "titleEn": "Structure upgrade appearance",
+          "text": "Модель нового типа с прогрессом улучшения.",
+          "textEn": "Display the target model with upgrade progress."
         }
       ]
     }

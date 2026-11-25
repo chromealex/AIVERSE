@@ -506,7 +506,7 @@ void parseEvent(const Rules& R, const Json& j, OverlayDef& d, const std::string&
         uint16_t k = overlayEventKind(s);
         if (!k) fail(where + ".on", "unknown event '" + s + "' (hit, died, bounty, spawned, attack, gathered, delivered, produced, ability, cast, "
                                     "impact, miss, built, placed, trained, researched, levelup, captured, sold, upgraded, alert, status, "
-                                    "area, claimed, wave, message, ping)");
+                                    "area, claimed, wave, message, ping, order)");
         d.event.kinds.push_back(k);
     }
     for (auto& [k, v] : j.members()) {
@@ -635,7 +635,7 @@ const EvName kEvents[] = {
     {"miss", kEvMiss}, {"built", kEvBuildDone}, {"placed", kEvBuildPlaced}, {"trained", kEvTrainDone}, {"researched", kEvResearched},
     {"levelup", kEvLevelUp}, {"captured", kEvCaptured}, {"sold", kEvSold}, {"upgraded", kEvUpgraded}, {"alert", kEvAlert},
     {"status", kEvStatusStart}, {"area", kEvAreaStart}, {"claimed", kEvRegionClaimed}, {"wave", kEvWave}, {"message", kEvMessage},
-    {"ping", kOvEventPing},
+    {"ping", kOvEventPing}, {"order", kViewEventOrder},
 };
 } // namespace
 
@@ -846,6 +846,11 @@ Json overlayTemplates() {
    "overlay": {"id": "build_radius", "when": "placing", "anchor": "ghost",
      "shape": {"type": "cells", "predicate": "buildRadius", "radius": 18},
      "style": {"colors": {"true": "#60b0ff22"}, "lift": 0.05}}},
+  {"id": "local_order_ring", "name": "Local order ring",
+   "description": "An expanding ring at the point of a local movement or target order.",
+   "overlay": {"id": "local_order_ring", "event": {"on": "order", "lifetime": 1.4, "grow": 1.8},
+     "shape": {"type": "ring", "radius": 0.4},
+     "style": {"color": "#6effdaff", "thickness": 0.08, "fadeOut": 0.5, "onTop": true}}},
   {"id": "ping_marker", "name": "Ping marker",
    "description": "Expanding pulsing ring where a ping or an under-attack alert happens.",
    "overlay": {"id": "ping_marker", "event": {"on": ["ping", "alert"], "lifetime": 2.0, "grow": 1.5},

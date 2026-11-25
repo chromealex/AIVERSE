@@ -19,7 +19,7 @@ namespace aiverse::game {
 using namespace render;
 
 std::shared_ptr<const AnimationEnvironment> GameView::animationEnvironment(const SceneObject& o,const EntityAnim& st,const ModelChoice& ch,const MapGrid& grid){
-    auto environment=std::make_shared<AnimationEnvironment>();const auto& look=looks_[o.type];
+    auto environment=std::make_shared<AnimationEnvironment>();const auto& look=looks_[o.modelType()];
     EntityFxValues fx;bool hasFx=fxFor(o,fx);float lift=hasFx?fx.v[EntityFxValues::kLift]:0;
     auto pos=float3{o.pos.x,(!look.structure&&!look.air?groundAt(grid,o.pos.x,o.pos.z):heightAt(grid,o.pos.x,o.pos.z))+(look.air?look.flyHeight:0)+lift,o.pos.z};
     auto tilt=hasFx?mat4::rotateZ(-fx.v[EntityFxValues::kPitch]*.017453292f)*mat4::rotateX(-fx.v[EntityFxValues::kRoll]*.017453292f):mat4{};
@@ -137,23 +137,23 @@ void GameView::handleEvents(const GameScene& s) {
 
 GameView::EntityAnim& GameView::stateFor(uint64_t key, const SceneObject& o) {
     EntityAnim& st = anims_[key];
-    if (!st.initialized || st.type != o.type) {
-        const TypeLook& L = looks_[o.type];
+    if (!st.initialized || st.type != o.modelType()) {
+        const TypeLook& L = looks_[o.modelType()];
         const uint64_t h = mix64(key);
         auto resumed=reloadPlayback_.find(key);
         const bool compatibleReload=resumed!=reloadPlayback_.end() &&
-            resumed->second.type==o.type &&
+            resumed->second.type==o.modelType() &&
             frame_>=resumed->second.capturedFrame &&
             frame_-resumed->second.capturedFrame<=120;
-        st.type = o.type;
+        st.type = o.modelType();
         st.choice = int(h % L.models.size());
         auto saved = streamingChoices_.find(key);
-        if (saved != streamingChoices_.end() && saved->second.first == o.type &&
+        if (saved != streamingChoices_.end() && saved->second.first == o.modelType() &&
             saved->second.second>=0 &&
             size_t(saved->second.second)<L.models.size())
             st.choice = saved->second.second;
         else if (L.nextVariant < L.pendingVariants.size())
-            streamingChoices_[key] = {o.type, st.choice};
+            streamingChoices_[key] = {o.modelType(), st.choice};
         if(compatibleReload && resumed->second.choice>=0 &&
            size_t(resumed->second.choice)<L.models.size())
             st.choice=resumed->second.choice;
@@ -224,14 +224,14 @@ GameView::EntityAnim& GameView::stateFor(uint64_t key, const SceneObject& o) {
         // Source hot reload is not a gameplay spawn. No duplicate
         // presentation "spawn" event is emitted on a valid rebind.
         if(!compatibleReload && st.eventAge[kProcEvSpawn] < 1)
-            events_.push_back({"spawn", o.entity, o.type, o.owner, o.pos});
+            events_.push_back({"spawn", o.entity, o.modelType(), o.owner, o.pos});
     }
     st.seen = frame_;
     return st;
 }
 
 uint32_t GameView::stateBits(const EntityAnim& st, const SceneObject& o, bool moving) const {
-    const TypeLook& L = looks_[o.type];
+    const TypeLook& L = looks_[o.modelType()];
     uint32_t state = 0;
     if (st.dead) state |= kProcDead;
     if (moving) state |= kProcMoving;
@@ -257,7 +257,7 @@ void GameView::emitClipEvents(EntityAnim& st, const ModelChoice& ch, const Scene
                 if (cs.events.empty() || std::find(cs.clips.begin(), cs.clips.end(), clip) == cs.clips.end()) continue;
                 for (const auto& [at, name] : cs.events) {
                     const bool crossed = t >= t0 ? (at > t0 && at <= t) : (at > t0 || at <= t); // wrapped loop
-                    if (crossed) events_.push_back({name, o.entity, o.type, o.owner, o.pos});
+                    if (crossed) events_.push_back({name, o.entity, o.modelType(), o.owner, o.pos});
                 }
             }
         }
@@ -267,7 +267,7 @@ void GameView::emitClipEvents(EntityAnim& st, const ModelChoice& ch, const Scene
 }
 
 void GameView::animate(EntityAnim& st, const SceneObject& o, float dt, const MapGrid* grid, const float3* viewPos) {
-    const TypeLook& L = looks_[o.type];
+    const TypeLook& L = looks_[o.modelType()];
     const ModelChoice& ch = L.models[size_t(st.choice)];
     // A finished, stationary visual without clips, graph, procedural effects,
     // pose, or programmable overrides has no animation work to evaluate.
@@ -279,7 +279,7 @@ void GameView::animate(EntityAnim& st, const SceneObject& o, float dt, const Map
         return !(flag && std::strcmp(flag, "0") == 0);
     }();
     if (staticFastPath && ch.model &&
-        (L.structure || rules_->types[o.type].speed <= Fixed{}) &&
+        (L.structure || rules_->types[o.modelType()].speed <= Fixed{}) &&
         !st.dead && !o.moving && o.build >= 1.0f &&
         ch.staticAnimateEligible && !st.graph.graph() &&
         st.anim.clip(0) < 0 &&

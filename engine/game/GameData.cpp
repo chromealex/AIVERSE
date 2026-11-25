@@ -743,6 +743,8 @@ Rules loadRules(const Json& j) {
         }
         t.score = tj.getFx("score", t.structure ? Fixed::fromInt(5) : Fixed::fromInt(1));
         t.view = tj["view"];
+        if (t.view.has("showUpgradeTarget") && t.view["showUpgradeTarget"].type() != Json::Type::Bool)
+            fail(where + " view.showUpgradeTarget", "expected boolean");
         if (const Json& sp = tj["sprite"]; !sp.isNull()) { // 2D games: presentation only, kept with the view block
             if (!sp.isObject() || sp.getStr("sheet").empty()) throw std::runtime_error(where + ": sprite needs \"sheet\" (image path)");
             t.view.set("sprite", sp);
