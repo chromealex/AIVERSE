@@ -1,0 +1,10 @@
+{
+  "sha": "d12a52abfcdf7f6dbcc834b3fa2183065a0e039e",
+  "argv": [
+    "bash",
+    "/tmp/studio-beacon-qa.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-light-beacon-authoring.log.txt",
+  "sha256": "192c5acd15bdd8d026649bab5ad20b411fd05520899574da0f280fd4cb18d739"
+}
