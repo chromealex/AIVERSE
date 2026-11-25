@@ -1,0 +1,34 @@
+{
+  "id": "2026-11-25-gameplay-selection-targeting",
+  "date": "2026-11-25",
+  "system": "gameplay",
+  "branch": "feature/aiv198_selection_acquisition",
+  "commit": "7409fd3c0",
+  "author": "gameplay",
+  "title": "Выбор разведчика под деревом и порядок обстрела целей",
+  "titleEn": "Selecting a scout under a tree and choosing which target gets hit first",
+  "summary": "На полигоне разведчик виден из-под кроны только по кольцу выделения. Щёлкните по дереву, чтобы выбрать разведчика, или включите выбор самих деревьев клавишей E.",
+  "summaryEn": "A tree canopy hides the scout on the training range. Click through the tree to select the scout, or press E to make the oaks selectable.",
+  "body": [
+    "Флаг Selectable в правилах типа управляет щелчком, наведением и рамкой. На полигоне клавиша D возвращает деревья в исходное состояние. Выделение снимается, а дуб остаётся на карте.",
+    "Две красные мишени стоят на разном расстоянии от разведчика. На полигоне он стреляет в дальнюю, потому что её ячейка находится в более ранней строке карты. Чтобы сравнить поведение, выберите Nearest в поле Auto-target order в Studio и перезапустите матч."
+  ],
+  "bodyEn": [
+    "The Selectable flag on a unit type controls clicks, hover and box selection. Press D on the range to switch the trees back to scenery. The selection clears and the oak stays on the map.",
+    "Two red targets stand at different distances from the scout. On the range it fires at the farther target because its cell lies in an earlier map row. To compare the two policies, set Auto-target order to Nearest in Studio and restart the match."
+  ],
+  "verified": "В Chrome на Mac щелчок под кроной и рамка вокруг двух деревьев выбрали только разведчика. После E открылась карточка дуба, а после D она исчезла. На той же карте с фиксированным зерном урон получили разные мишени при смене порядка.",
+  "verifiedEn": "In Chrome on Mac, clicking the canopy and dragging a box around both trees selected the scout alone. E enabled the oak's selection card and D cleared it. Running the same seeded range under each acquisition policy damaged a different target.",
+  "limits": "Настройки меняют выбор мышью и автоматическую стрельбу. Демонстрационная карта плоская.",
+  "limitsEn": "The controls cover pointer selection and automatic fire. The training range uses a flat map.",
+  "links": [
+    {"title": "Training range · Web", "href": "https://chromealex.github.io/AIVERSE/demos/selection-targeting/?map=0"},
+    {"title": "Training range · source", "href": "demos/selection-targeting/README.md"}
+  ],
+  "media": [
+    {"src": "docs/devlog/media/2026-11-25-gameplay-selection-targeting/scout.jpg", "caption": "Щелчок по кроне открыл карточку разведчика. Он стреляет в мишень в верхней строке.", "captionEn": "Clicking the canopy opened the scout's card. It is firing at the target in the earlier row."},
+    {"src": "docs/devlog/media/2026-11-25-gameplay-selection-targeting/selected-oak.jpg", "caption": "Клавиша E включила выбор дуба. Кольцо и подпись указывают на отдельно стоящее дерево.", "captionEn": "After pressing E, clicking the standalone oak shows its selection ring and card."},
+    {"src": "docs/devlog/media/2026-11-25-gameplay-selection-targeting/scenery-oak.jpg", "caption": "После D под неподвижным указателем осталось дерево без подсветки, а карточка закрылась.", "captionEn": "D cleared the card and hover outline while the pointer stayed over the oak."}
+  ],
+  "status": "in-progress"
+}
