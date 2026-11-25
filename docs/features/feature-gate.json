@@ -121,12 +121,11 @@
       ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Opt-in regeneration, job status, dependency graph and assignment proposals implemented in source; typecheck, build and visual validation pending. At 460ce965c the Studio TypeScript check, 256 web cases and 55 Python contract cases (one skipped) passed. Live native acceptance is tracked separately.",
+      "status": "pass",
+      "note": "Verified in the production Studio web bundle inside native WKWebView, connected to the local game host. The dashboard displayed the report revision and blockers and exposed native regeneration.",
       "evidence": [
-        "docs/evidence/feature-gate-ad5786f5a-typecheck.log.txt",
-        "docs/evidence/feature-gate-ad5786f5a-studio-contracts.log.txt",
-        "docs/evidence/feature-gate-ad5786f5a-web.log.txt"
+        "docs/evidence/studio-play-ad676e70c/feature_readiness.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "inspector": {

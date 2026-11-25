@@ -62,31 +62,35 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Verify the typed local Studio handler, headless refusal and guarded requests over the authenticated agent link.",
+      "status": "pass",
+      "note": "On a paused saved map the native Game panel previewed changes. Authenticated MCP removed 11 destroyed objects, refused a consumed token and restored the exact map with one undo and one redo.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/game.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "On a paused saved map the native Game panel previewed changes. Authenticated MCP removed 11 destroyed objects, refused a consumed token and restored the exact map with one undo and one redo.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/game.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "On a paused saved map the native Game panel previewed changes. Authenticated MCP removed 11 destroyed objects, refused a consumed token and restored the exact map with one undo and one redo.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/game.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "One undo restored the complete source map after applying 11 removals. One redo restored the exact reviewed map. The changes entered the native map history.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/game.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "graphs": {
@@ -129,10 +133,11 @@
       ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "On a paused saved map the native Game panel previewed changes. Authenticated MCP removed 11 destroyed objects, refused a consumed token and restored the exact map with one undo and one redo.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/game.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "tests": {

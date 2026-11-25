@@ -57,24 +57,27 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Verify the typed local Studio handler, headless refusal and guarded requests over the authenticated agent link.",
+      "status": "pass",
+      "note": "The native Runtime panel listed real entities and inspected an emitter at its actual epoch and tick. The same real match returned its paged entities and detail over authenticated MCP.",
       "evidence": [
-        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/runtime.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Runtime panel listed real entities and inspected an emitter at its actual epoch and tick. The same real match returned its paged entities and detail over authenticated MCP.",
       "evidence": [
-        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/runtime.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Runtime panel listed real entities and inspected an emitter at its actual epoch and tick. The same real match returned its paged entities and detail over authenticated MCP.",
       "evidence": [
-        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/runtime.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "persistence": {
@@ -119,10 +122,11 @@
       ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Runtime panel listed real entities and inspected an emitter at its actual epoch and tick. The same real match returned its paged entities and detail over authenticated MCP.",
       "evidence": [
-        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/runtime.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "tests": {

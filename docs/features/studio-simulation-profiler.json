@@ -68,10 +68,11 @@
       ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Verified in the production Studio web bundle inside native WKWebView, connected to the local game host. The profiler displayed the completed eight-tick capture and per-system timings.",
       "evidence": [
-        "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/simulation_profiler.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "inspector": {
