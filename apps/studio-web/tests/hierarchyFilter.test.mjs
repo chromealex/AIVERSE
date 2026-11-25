@@ -45,3 +45,17 @@ test('project grouping uses native paths for filtered stable ids', async () => {
   assert.equal(view[3].label,'Unassigned');
   assert.equal(groupedHierarchy(rows,'project:0',new Set([view[0].key]),paths)[1].label,'Unassigned');
 });
+
+test('one object can belong to multiple component groups under the same parent', async () => {
+  const {groupedHierarchy}=await import('../src/hierarchyFilter.ts');
+  const rows=['a','b'].map(id=>({node:e(id,id,'Unit'),depth:0}));
+  const paths={a:['Map',['Transform','Health']],b:['Map',['Transform']]};
+  const view=groupedHierarchy(rows,'project:1',new Set(),paths);
+  assert.deepEqual(view.filter(r=>r.members).map(r=>[r.label,r.members]),
+    [['Map',['a','b']],['Transform',['a','b']],['Health',['a']]]);
+  const expanded=groupedHierarchy(rows,'project:1',new Set(view.filter(r=>r.collapsed).map(r=>r.key)),paths);
+  const occurrences=expanded.filter(r=>r.node?.id==='a').map(r=>r.occurrence);
+  assert.equal(new Set(occurrences).size,2);
+  const hidden=groupedHierarchy(rows,'project:1',new Set([view[2].key]),paths);
+  assert.deepEqual(hidden.filter(r=>r.node).map(r=>r.node.id),['a']);
+});

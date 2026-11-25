@@ -121,6 +121,7 @@ export interface StudioEntityCatalog { types: Array<{id: string; name: string}>;
 export type ProjectRuleGroup = 'types'|'resources'|'techs'|'factions';
 export interface StudioProjectState { groups?:Record<ProjectRuleGroup,{id:string;name:string}[]>; rulesError?:string; maps: Array<{file: string; title: string}>; currentMap: string; canCreateMap: boolean; maxMapSize: number }
 export interface StudioRuntimeOwnership {state:'untracked'|'invalid-tag'|'ledger-unavailable'|'missing-record'|'retired'|'live-record'; stableId?:string; cell?:[number,number,number];revision?:string;dormantMarker:boolean}
+export type StudioHierarchyPaths = Record<string,(string|string[])[]>;
 export interface StudioRuntimeRow {ref:string; name:string; kind:string; owner:number; parent:string; health:number; components:string[];ownership?:StudioRuntimeOwnership}
 export interface StudioRuntimePage {active:boolean; epoch:string; tick:number; rows:StudioRuntimeRow[]; total:number; groups?:{name:string; count:number}[]; groupCount?:number}
 export interface StudioRuntimeEditField {id:'hp'|'energy';title:string;raw:string;value:number;min:number;max:number}
@@ -738,7 +739,7 @@ export interface StudioResult {
   'studio.newMap': StudioSnapshot;
   'studio.openMap': StudioSnapshot;
   'studio.saveAs': StudioSnapshot;
-  'studio.hierarchyGroups': {pending:boolean;paths?:Record<string,string[]>};
+  'studio.hierarchyGroups': {pending:boolean;paths?:StudioHierarchyPaths};
   'studio.entityCatalog': StudioEntityCatalog;
   'studio.entityCreate': StudioSnapshot;
   'studio.entityDelete': StudioSnapshot;

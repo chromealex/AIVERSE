@@ -1,4 +1,5 @@
 #pragma once
+#include "StudioHierarchyGroups.h"
 #include "apps/editor/core/WorldInspect.h"
 #include "engine/world/WorldPersistenceDiagnostics.h"
 #include "engine/game/Script.h"
@@ -116,7 +117,11 @@ public:
                    !editor::worldRowMatches(model_,mod->rules(),nullptr,row,filter.shared))continue;
                 bool matchesPath=true;
                 for(size_t depth=0;depth<group.path.size();++depth){
-                    if(editor::worldGroupValue(model_,mod->rules(),row,group.keys.at(depth))!=group.path[depth]){
+                    bool inGroup=false;
+                    visitHierarchyLabels(model_,mod->rules(),row,group.keys.at(depth),[&](const auto& label){
+                        if(group.path[depth]==label)inGroup=true;
+                    });
+                    if(!inGroup){
                         matchesPath=false;
                         break;
                     }
@@ -124,7 +129,8 @@ public:
                 if(!matchesPath)continue;
                 const int i=total++;
                 if(hasChildren){
-                    ++children[editor::worldGroupValue(model_,mod->rules(),row,group.keys[group.path.size()])];
+                    visitHierarchyLabels(model_,mod->rules(),row,group.keys[group.path.size()],
+                                         [&](const auto& label){ ++children[label]; });
                     continue;
                 }
                 if(i<offset || i>=offset+limit)continue;

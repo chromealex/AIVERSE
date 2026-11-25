@@ -1,3 +1,4 @@
+#include "StudioHierarchyGroups.h"
 #include "StudioGameWizard.h"
 #include "apps/editor/core/WizardOps.h"
 #include "engine/game/Script.h"
@@ -3026,7 +3027,7 @@ Json StudioHost::localPlayOperation(const std::string& method, const Json& param
             const auto offset = int(params["offset"].integer()), limit = int(params["limit"].integer());
             StudioRuntimeInspect::GroupQuery group;
             if(params.has("group")){
-                group.config=editor::parseWorldConfig(session_->workspace().project.manifest);
+                group.config=studioHierarchyConfig(session_->workspace().project.manifest);
                 const int index=params.getInt("group",-1);
                 if(index<0 || size_t(index)>=group.config.groupings.size() || !params["path"].isArray())
                     throw std::runtime_error("Unknown live hierarchy group");

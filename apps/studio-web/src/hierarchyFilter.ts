@@ -1,5 +1,5 @@
 /** Hierarchy search: free text plus Unity-like filters t:<kind> owner:<n> is:hidden|locked|selected. */
-import type { StudioEntity } from './types.ts';
+import type { StudioEntity, StudioHierarchyPaths } from './types.ts';
 
 export interface HierarchyFilter { text: string[]; kinds: string[]; owners: number[]; is: string[] }
 export function parseHierarchyFilter(query: string): HierarchyFilter {
@@ -36,27 +36,32 @@ export function rangeIds(order: string[], anchor: string, target: string): strin
 }
 
 export type HierarchyGrouping = 'scene' | 'type' | 'owner-type' | `project:${number}`;
-type ObjectRow = {node:StudioEntity; depth:number};
+type ObjectRow = {node:StudioEntity; depth:number; occurrence?:string};
 type GroupRow = {key:string; label:string; depth:number; members:string[]; collapsed:boolean};
-export function groupedHierarchy(rows:ObjectRow[], mode:HierarchyGrouping, collapsed:ReadonlySet<string>, paths?:Record<string,string[]>):(ObjectRow|GroupRow)[] {
+export function groupedHierarchy(rows:ObjectRow[], mode:HierarchyGrouping, toggled:ReadonlySet<string>, paths?:StudioHierarchyPaths):(ObjectRow|GroupRow)[] {
   if(mode==='scene') return rows;
   const display:(ObjectRow|GroupRow)[]=[];
   function append(members:ObjectRow[], path:string[], byOwner:boolean) {
     const buckets=new Map<string,ObjectRow[]>();
     const projectGroup=mode.startsWith('project:');
+    let componentLevel=false;
     for(const row of members) {
       const owner=row.node.owner;
       const label=projectGroup ? paths?.[row.node.id]?.[path.length] || 'Unassigned' : byOwner ? owner===undefined?'No owner':owner===0?'Neutral':owner===-1?'Hostile':'Player '+owner
         : row.node.kind || 'Other';
-      const bucket=buckets.get(label);
-      if(bucket) bucket.push(row); else buckets.set(label,[row]);
+      if(Array.isArray(label))componentLevel=true;
+      for(const membership of Array.isArray(label) ? label : [label]){
+        const bucket=buckets.get(membership);
+        if(bucket) bucket.push(row); else buckets.set(membership,[row]);
+      }
     }
     for(const [label,items] of buckets) {
       const keys=[...path,label],key=JSON.stringify(keys);
-      display.push({key,label,depth:path.length,members:items.map(r=>r.node.id),collapsed:collapsed.has(key)});
-      if(collapsed.has(key)) continue;
+      const collapsed=componentLevel !== toggled.has(key);
+      display.push({key,label,depth:path.length,members:items.map(r=>r.node.id),collapsed});
+      if(collapsed) continue;
       if(byOwner || (projectGroup && items.some(r=>(paths?.[r.node.id]?.length??0)>keys.length))) append(items,keys,false);
-      else for(const {node} of items) display.push({node,depth:keys.length});
+      else for(const {node} of items) display.push({node,depth:keys.length,occurrence:JSON.stringify([...keys,node.id])});
     }
   }
   append(rows,[],mode==='owner-type');

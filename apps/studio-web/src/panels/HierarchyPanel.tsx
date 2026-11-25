@@ -3,7 +3,7 @@ import { shortcutKey } from '../keyboard';
 import { Box, ChevronDown, ChevronRight, Copy, Eye, EyeOff, Focus, Lightbulb, Lock, LockOpen, Plus, Search, Shield, Trash2, User, X } from 'lucide-react';
 import { groupedHierarchy, matchesHierarchy, parseHierarchyFilter, rangeIds, type HierarchyGrouping } from '../hierarchyFilter';
 import { invoke } from '../bridge';
-import type { StudioEntity, StudioEntityCatalog, StudioSnapshot } from '../types';
+import type { StudioEntity, StudioEntityCatalog, StudioSnapshot, StudioHierarchyPaths } from '../types';
 import { StudioButton, StudioContextMenu, StudioIconButton, StudioSelect, type StudioMenuItem } from '../ui';
 import type { StudioPanelContext } from './StudioPanelRenderer';
 import './HierarchyPanel.css';
@@ -16,7 +16,7 @@ const kindIcon = (node: StudioEntity) => node.kind === 'Light' ? Lightbulb
 export default function HierarchyPanel({ snapshot, busy, connected, search, setSearch,
   rows, select, selectIds, hoverId, updateSnapshot, setBusy }: StudioPanelContext) {
   const [grouping, setGrouping] = useState<HierarchyGrouping>('scene');
-  const [paths,setPaths]=useState<Record<string,string[]>>();
+  const [paths,setPaths]=useState<StudioHierarchyPaths>();
   const [refresh,refreshGroups]=useState(0);
   const refreshSeen=useRef(0);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -70,15 +70,20 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
   },[project,scope?.mapPath,scope?.epoch,scope?.revision,snapshot?.project.historyVersion,group,refresh]);
   const display = useMemo(() => group>=0 && !paths ? [] : groupedHierarchy(matches, grouping, collapsed,paths), [matches, grouping, collapsed,paths,group]);
   const visible = useMemo(() => display.flatMap(row => 'node' in row ? [row] : []), [display]);
+  const occurrenceKeys = useMemo(() => visible.map(r => r.occurrence ?? r.node.id), [visible]);
+  const idsByOccurrence = useMemo(() => new Map(visible.map(r => [r.occurrence ?? r.node.id, r.node.id])), [visible]);
   const canReorder = grouping === 'scene' && !search && !busy;
   // Selection targets for row actions: the whole selection when the row is part of it.
   const targets = (id: string) => selectedSet.has(id) ? [...selectedSet] : [id];
-  const click = (event: React.MouseEvent, id: string) => {
+  const click = (event: React.MouseEvent, id: string, occurrence:string) => {
     if (event.shiftKey && anchor.current) {
-      void selectIds(rangeIds(visible.map(r => r.node.id), anchor.current, id), event.metaKey || event.ctrlKey ? 'add' : 'replace');
+      const range=rangeIds(occurrenceKeys, anchor.current, occurrence);
+      const ids=new Set(range.map(key=>idsByOccurrence.get(key)!));
+      ids.delete(id);
+      void selectIds([...ids,id], event.metaKey || event.ctrlKey ? 'add' : 'replace');
       return;
     }
-    anchor.current = id;
+    anchor.current = occurrence;
     void select(id, event.metaKey || event.ctrlKey ? 'toggle' : 'replace');
   };
   const setFlags = (ids: string[], flags: { hidden?: boolean; locked?: boolean }) =>
@@ -123,20 +128,20 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     const key = shortcutKey(event);
     if ((event.metaKey || event.ctrlKey) && key === 'f') { event.preventDefault(); searchRef.current?.focus(); return; }
     if (busy) return;
-    const focused = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('[data-id]')?.dataset.id : undefined;
-    const index = visible.findIndex(({node}) => node.id === (focused ?? selectedId));
-    if ((event.metaKey || event.ctrlKey) && key === 'a') { event.preventDefault(); void selectIds(visible.map(r => r.node.id)); return; }
+    const focused = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('[data-occurrence]')?.dataset.occurrence : undefined;
+    const index = focused ? occurrenceKeys.indexOf(focused) : visible.findIndex(({node}) => node.id === selectedId);
+    if ((event.metaKey || event.ctrlKey) && key === 'a') { event.preventDefault(); void selectIds([...new Set(visible.map(r => r.node.id))]); return; }
     if ((event.key === 'Enter' || event.key === ' ') && event.target instanceof HTMLElement && event.target.matches('[role=option]')) {
       const id = event.target.dataset.id;
-      if (id) { event.preventDefault(); anchor.current = id; void select(id, event.metaKey || event.ctrlKey ? 'toggle' : 'replace'); }
+      if (id) { event.preventDefault(); anchor.current = focused ?? id; void select(id, event.metaKey || event.ctrlKey ? 'toggle' : 'replace'); }
       return;
     }
     if (!visible.length) return;
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       const next = visible[Math.max(0, Math.min(visible.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)))];
-      if (next) { anchor.current = next.node.id; void select(next.node.id, event.shiftKey ? 'add' : 'replace');
-        listRef.current?.querySelector<HTMLElement>(`[data-id="${CSS.escape(next.node.id)}"]`)?.focus(); }
+      if (next) { anchor.current = next.occurrence ?? next.node.id; void select(next.node.id, event.shiftKey ? 'add' : 'replace');
+        listRef.current?.querySelector<HTMLElement>(`[data-occurrence="${CSS.escape(next.occurrence ?? next.node.id)}"]`)?.focus(); }
     } else if (!selectedId) return;
     else if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); remove(selectedId); }
     else if ((event.metaKey || event.ctrlKey) && key === 'd') { event.preventDefault(); duplicate(selectedId); }
@@ -221,7 +226,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
                 return next;
               })}><Chevron size={13}/></button>
             <button type="button" title={'Select '+row.members.length+' matching objects'} disabled={busy}
-              onClick={event => {anchor.current = row.members[row.members.length-1]; void selectIds(row.members, event.metaKey || event.ctrlKey ? 'add' : 'replace');}}>
+              onClick={event => {anchor.current = visible.find(r=>r.node.id===row.members.at(-1) && r.occurrence?.startsWith(row.key.slice(0,-1)+','))?.occurrence ?? null; void selectIds(row.members, event.metaKey || event.ctrlKey ? 'add' : 'replace');}}>
               <span>{row.label}</span><small>{row.members.length}</small>
             </button>
           </div>;
@@ -231,7 +236,8 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
         const selected = selectedSet.has(node.id);
         const hidden = node.visible === false;
         const dragging = editable(node.id) && canReorder;
-        return <div key={node.id} data-id={node.id} role="option" aria-selected={selected} tabIndex={selected ? 0 : -1}
+        const occurrence=row.occurrence ?? node.id;
+        return <div key={occurrence} data-occurrence={occurrence} data-id={node.id} role="option" aria-selected={selected} tabIndex={selected ? 0 : -1}
           className={'hier__row' + (selected ? ' is-selected' : '') + (node.id === selectedId ? ' is-primary' : '') +
             (node.id === hoverId ? ' is-hover' : '') + (hidden ? ' is-hidden' : '') +
             (drop?.id === node.id ? ' is-drop-' + drop.placement : '')}
@@ -241,7 +247,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
           onDragEnd={() => setDrop(null)}
           onDragOver={event => dragOver(event, node.id)}
           onDrop={event => onDrop(event, node.id)}
-          onClick={event => click(event, node.id)}
+          onClick={event => click(event, node.id, occurrence)}
           onMouseEnter={() => hover(node.id)}
           onDoubleClick={() => void focus(node.id)}
           onContextMenu={event => { event.preventDefault(); if (!selectedSet.has(node.id)) void select(node.id); setMenu({ x: event.clientX, y: event.clientY, id: node.id }); }}>

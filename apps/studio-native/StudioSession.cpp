@@ -1,3 +1,4 @@
+#include "StudioHierarchyGroups.h"
 #include "aiverselib/world/EvolveAreaScaleMath.h"
 #include <regex>
 #include "apps/editor/core/GraphAssetTransaction.h"
@@ -737,7 +738,7 @@ static bool sameDocumentScope(const Json& supplied,const Json& current) {
 Json StudioSession::hierarchyGroups(const Json& params) {
     if(ws_.project.dir.empty() || params.getStr("expectedProject")!=ws_.project.dir ||
        !sameDocumentScope(params["scope"],graphDocumentScope()))throw std::runtime_error("Hierarchy document changed");
-    const auto config=editor::parseWorldConfig(ws_.project.manifest);
+    const auto config=studioHierarchyConfig(ws_.project.manifest);
     const auto index=params.getInt("group",-1);
     if(index<0 || size_t(index)>=config.groupings.size())throw std::runtime_error("Unknown Hierarchy grouping");
     const auto version=graphDocumentScope().dump(-1)+"|"+ws_.project.historyVersion();
@@ -760,8 +761,13 @@ Json StudioSession::hierarchyGroups(const Json& params) {
         const auto* row=world.findDoc(int(node.ref.index));
         if(!row)continue;
         Json path=Json::array();
-        for(const auto& key:config.groupings[size_t(index)].by)
-            path.push(str(editor::worldGroupValue(world,module->rules(),*row,key)));
+        for(const auto& key:config.groupings[size_t(index)].by){
+            if(key=="component"){
+                Json labels=Json::array();
+                visitHierarchyLabels(world,module->rules(),*row,key,[&](const auto& label){ labels.push(str(label)); });
+                path.push(std::move(labels));
+            }else path.push(str(editor::worldGroupValue(world,module->rules(),*row,key)));
+        }
         paths.set(nodeId(ws_.map,node.ref),std::move(path));
     }
     result.set("paths",std::move(paths));
@@ -795,8 +801,8 @@ Json StudioSession::snapshot() const {
             row.set("owner",num(int64_t(ws_.map.data.entities[node.ref.index].owner)));
         rows.push(std::move(row));
     }
-    const auto hierarchy=editor::parseWorldConfig(ws_.project.manifest);
-    if(!ws_.map.data.worldSpace && !hierarchy.groupings.empty()){
+    const auto hierarchy=studioHierarchyConfig(ws_.project.manifest);
+    if(!ws_.project.dir.empty() && !ws_.map.data.worldSpace){
         Json groups=Json::array();
         for(const auto& group:hierarchy.groupings)groups.push(str(group.title));
         scene.set("groupings",std::move(groups));

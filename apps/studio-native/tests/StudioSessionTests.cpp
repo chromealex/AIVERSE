@@ -1788,6 +1788,11 @@ void entityWorkflow() {
             }while(std::chrono::steady_clock::now()<deadline);
             const auto& path=reply["result"]["paths"][snapshot["scene"]["entities"][0].getStr("id")];
             AIVERSE_TEST_CHECK(path.size()==2 && !path[0].str().empty() && path[1].str()==editor::worldOriginTitle(editor::WorldOrigin::Map));
+            AIVERSE_TEST_CHECK(snapshot["scene"]["groupings"][2].str()=="Component");
+            params.set("group",Json::number(int64_t(2)));
+            const auto byComponent=call("studio.hierarchyGroups",params);
+            const auto& components=byComponent["result"]["paths"][snapshot["scene"]["entities"][0].getStr("id")][0];
+            AIVERSE_TEST_CHECK(components.isArray() && components.size()>1);
             AIVERSE_TEST_CHECK(session.workspace().map.toJson()==unchanged);
             params.member("scope").set("revision",Json::string("stale"));
             AIVERSE_TEST_CHECK(call("studio.hierarchyGroups",params).has("error"));
@@ -1902,6 +1907,14 @@ void entityWorkflow() {
             grouped.path.push_back(level["groups"][0].getStr("name"));
             level=inspector.entities(&live,"run-1",0,1,"",grouped);
             AIVERSE_TEST_CHECK(level["rows"].size()==1 && !level.has("groups"));
+            grouped.keys={"component"}; grouped.path.clear();
+            level=inspector.entities(&live,"run-1",0,100,"ref:"+ref,grouped);
+            AIVERSE_TEST_CHECK(level.getInt("total")==1 && level["groups"].size()>1);
+            for(const auto& component:level["groups"].items()){
+                grouped.path={component.getStr("name")};
+                const auto members=inspector.entities(&live,"run-1",0,1,"ref:"+ref,grouped);
+                AIVERSE_TEST_CHECK(members.getInt("total")==1 && members["rows"][0].getStr("ref")==ref);
+            }
             inspector.select(&live,"run-1","run-1",ref);
             AIVERSE_TEST_CHECK(inspector.selectedRef(&live,"run-1")==ref);
             AIVERSE_TEST_CHECK(inspector.selectedRef(&live,"run-2").empty());
