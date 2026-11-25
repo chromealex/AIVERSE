@@ -1,0 +1,14 @@
+{
+  "sha": "6f0578758a42f27d6b26416fd7decc18848bb427",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^studio_metal_lighting$",
+    "-V"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-baked-scene-metal.log.txt",
+  "sha256": "b7d37ea68259cca0a31472e7a7e0464a5fe53b618d6c0299561687149c3ad7b9"
+}
