@@ -1,0 +1,10 @@
+{
+  "sha": "e0b95cf24446fea4b3bd3d0cd1980eb46807b140",
+  "argv": [
+    "python3.12",
+    "tests/native_project_build.py"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/feature-gate-a4a078735-native-project.log.txt",
+  "sha256": "dda55c42c4d976bd597d80718a472d5a0cbf2c9ee82903b0bfd6606a4ffd0235"
+}

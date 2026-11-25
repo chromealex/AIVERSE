@@ -167,8 +167,8 @@
       "evidence": [
         "skills/workflow/aiverse-graph-authoring/SKILL.md",
         "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md",
-        "docs/evidence/feature-gate-a4a078735-catalog.log.txt",
-        "docs/evidence/feature-gate-a4a078735-skill-audit.log.txt",
+        "docs/evidence/feature-gate-e0b95cf24-catalog.log.txt",
+        "docs/evidence/feature-gate-e0b95cf24-skill-audit.log.txt",
         "skills/workflow/aiverse-graph-authoring/SKILL.md"
       ]
     },
@@ -385,13 +385,13 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-a4a078735-contracts.json",
-    "docs/evidence/feature-gate-a4a078735-catalog.json",
-    "docs/evidence/feature-gate-a4a078735-skill-audit.json",
-    "docs/evidence/feature-gate-a4a078735-feature-suite.json",
-    "docs/evidence/feature-gate-a4a078735-native-project.json",
-    "docs/evidence/feature-gate-a4a078735-web.json",
-    "docs/evidence/feature-gate-a4a078735-studio-contracts.json",
-    "docs/evidence/feature-gate-a4a078735-typecheck.json"
+    "docs/evidence/feature-gate-e0b95cf24-contracts.json",
+    "docs/evidence/feature-gate-e0b95cf24-catalog.json",
+    "docs/evidence/feature-gate-e0b95cf24-skill-audit.json",
+    "docs/evidence/feature-gate-e0b95cf24-feature-suite.json",
+    "docs/evidence/feature-gate-e0b95cf24-native-project.json",
+    "docs/evidence/feature-gate-e0b95cf24-web.json",
+    "docs/evidence/feature-gate-e0b95cf24-studio-contracts.json",
+    "docs/evidence/feature-gate-e0b95cf24-typecheck.json"
   ]
 }
