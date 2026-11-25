@@ -115,7 +115,8 @@
       "note": "Native lens_ops and studio_session passed at the recorded SHA. Desktop Mac also exercised independent preview and PNG capture. Full merged-tree gate pending.",
       "evidence": [
         "docs/evidence/studio-lens-native-1c0544842.json",
-        "docs/evidence/studio-lens-follow-c94c7f595.json"
+        "docs/evidence/studio-lens-follow-c94c7f595.json",
+        "docs/evidence/studio-lens-optics-322216da2.json"
       ]
     },
     "handoff": {
@@ -162,6 +163,7 @@
   },
   "test_reports": [
     "docs/evidence/studio-lens-native-1c0544842.json",
-    "docs/evidence/studio-lens-follow-c94c7f595.json"
+    "docs/evidence/studio-lens-follow-c94c7f595.json",
+    "docs/evidence/studio-lens-optics-322216da2.json"
   ]
 }
