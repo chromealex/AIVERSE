@@ -155,6 +155,19 @@
         "apps/studio-native/StudioWorldProcessesEditing.h",
         "libraries/include/aiverselib/world/WorldProcessesNativeModule.h"
       ]
+    },
+    "renderer-sdk": {
+      "requires": [
+        "cpu-renderer",
+        "direct3d-renderer"
+      ],
+      "roadmap": {
+        "system": "render",
+        "id": "renderer-sdk"
+      },
+      "api_paths": [
+        "sdk/render/aiverse_render.h"
+      ]
     }
   },
   "claims": []

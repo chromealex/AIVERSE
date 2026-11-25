@@ -3189,6 +3189,7 @@
         },
         {
           "status": "in-progress",
+          "id": "renderer-sdk",
           "title": "Доступ к рендереру из Python, C# и Java",
           "titleEn": "Use the renderer from Python, C# and Java"
         },
