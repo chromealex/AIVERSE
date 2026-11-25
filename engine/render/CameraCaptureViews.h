@@ -45,6 +45,7 @@ inline std::array<CameraCaptureView,6> makeCubemapCameraViews(
         face.setPose(eye,qnormalize(pose*directions[i]));
         face.fovY=cameraPi*.5f;
         face.ortho=false;
+        face.designAspect=1.f;
         face.lensShift={};
         face.jitter={};
         result[i]={face,targetKeys[i],faceSize,faceSize,hdr};

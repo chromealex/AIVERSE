@@ -1,3 +1,4 @@
+import { StudioDialog } from '../ui';
 import { copyText } from '../clipboard';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -62,9 +63,9 @@ function PreviewDialog({plan,busy,onCancel,onCommit}:{
     plan.items.map(item=>[item.id,item.conflict?'skip':'import'])));
   const pending=plan.items.filter(item=>selected[item.id]!=='skip').length;
   const blocked=(plan.references??[]).filter(ref=>!ref.writable && selected[ref.id]!=='skip');
-  return <div className="studio-asset-dialog-overlay">
-    <section className="studio-asset-dialog" role="dialog" aria-modal="true"
-      aria-label="Resolve asset import and move conflicts">
+  return <StudioDialog className="studio-asset-dialog-overlay" label="Resolve asset import and move conflicts"
+    dismissOnBackdrop={false} onDismiss={() => { if (!busy) onCancel(); }}>
+    <section className="studio-asset-dialog">
       <header>
         <div><h3>{plan.source==='external'?'Import into content':'Move content assets'}</h3>
           <p>Review paths and resolve filename or GUID conflicts before applying changes.</p></div>
@@ -106,7 +107,7 @@ function PreviewDialog({plan,busy,onCancel,onCommit}:{
         </button>
       </footer>
     </section>
-  </div>;
+  </StudioDialog>;
 }
 function allFolders(catalog:StudioAssetList):AssetFolder[]{
   const known=new Map(assetFolders(catalog.files).map(f=>[f.path,f]));

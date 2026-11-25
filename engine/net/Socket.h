@@ -30,8 +30,11 @@ public:
     ~UdpSocket() { close(); }
     // Bind to port (0 = ephemeral). family 0 = dual-stack IPv6 with IPv4 fallback.
     bool open(uint16_t port, int family = 0, bool loopbackOnly = false);
+    bool openBroadcast(uint16_t port);  // IPv4 discovery socket
     void close();
     bool isOpen() const;
+    // A limited IPv4 broadcast fans out to local subnets, including LANs without a default route.
+    bool sendBroadcast(const Address& to, const uint8_t* data, size_t n);
     bool sendTo(const Address& to, const uint8_t* data, size_t n);
     // Returns bytes received, or -1 when nothing is pending.
     int recvFrom(Address& from, uint8_t* buf, size_t cap);

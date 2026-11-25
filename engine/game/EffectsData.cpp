@@ -32,6 +32,24 @@ Json merge(const Json& base, const Json& over) {
 }
 } // namespace
 
+StatMod EffectParser::timedStatMod(const std::string& where, const Json& j) {
+    StatMod m = statMod(where, j);
+    if (!j.has("stackingGroup")) return m;
+    if (!j["stackingGroup"].isString()) fail(where, "stackingGroup must be a nonempty string");
+    const auto name = j.getStr("stackingGroup");
+    if (name.empty() || name.size() > 128) fail(where, "stackingGroup name must have 1..128 bytes");
+    if (m.lerp.raw || m.floor.raw) fail(where, "stackingGroup supports add/mul, not lerp/floor");
+    auto& groups = r.modifierGroups;
+    auto it = std::find(groups.begin(), groups.end(), name);
+    if (it == groups.end()) {
+        if (groups.size() >= 64) fail(where, "at most 64 stacking groups");
+        groups.push_back(name);
+        it = groups.end() - 1;
+    }
+    m.stackingGroup = uint16_t(1 + (it - groups.begin()));
+    return m;
+}
+
 uint64_t EffectParser::statusTags(const Json& arr) {
     uint64_t m = 0;
     for (auto& t : arr.items()) {
@@ -93,6 +111,14 @@ void EffectParser::filter(const std::string& where, const Json& j, EffectDef& e)
     f.garrisons = j.getBool("garrisons", false);
     f.inTransit = j.getBool("inTransit", false);
     f.tags = tagsOf(j["tags"]);
+    if (j.has("ignoreTags")) {
+        if (!j["ignoreTags"].isArray()) fail(where, "ignoreTags must be an array");
+        for (const auto& tag : j["ignoreTags"].items()) {
+            const uint64_t bit = tag.isString() ? r.tagMask(tag.str()) : 0;
+            if (!bit) fail(where, "ignoreTags: unknown unit tag '" + tag.str() + "'");
+            f.ignoreTags |= bit;
+        }
+    }
     if (j.has("ofType")) f.type = typeRef(where, j.getStr("ofType"));
     if (const Json& lv = j["level"]; lv.isArray()) { f.minLevel = int(lv[0].integer(0)); f.maxLevel = int(lv[1].integer(1 << 20)); }
     f.maxTargets = int(j.getInt("maxTargets", 0));
@@ -124,6 +150,7 @@ void EffectParser::delivery(const std::string& where, const Json& j, DeliveryDef
     if (j.has("flight")) {
         d.flight = parseProjectileFlight(j["flight"], where + " flight");
         if (d.arc && (d.arcHeight < Fixed{} || d.arcHeight > 128_fx)) fail(where, "flight arcHeight must be in [0,128]");
+        if (d.arc && d.flight.arc) fail(where, "delivery.arc and flight.arc are alternative trajectory definitions");
         if (d.arc && (d.flight.gravity.raw || d.flight.verticalSpeed.raw)) fail(where, "arc and flight gravity/verticalSpeed are alternative trajectory definitions");
         if (d.speed <= Fixed{} || d.speed > Fixed::fromInt(1024)) fail(where, "flight speed must be in (0,1024]");
     }
@@ -232,7 +259,7 @@ void EffectParser::statusBody(const std::string& where, const Json& j, int idx) 
         for (auto& [n, b] : flags) if (f.str() == n) { s.flags |= b; ok = true; }
         if (!ok) fail(where, "unknown status flag '" + f.str() + "'");
     }
-    for (auto& m : j["mods"].items()) s.mods.push_back(statMod(where + " mods", m));
+    for (auto& m : j["mods"].items()) s.mods.push_back(timedStatMod(where + " mods", m));
     if (const Json& t = j["tick"]; t.isObject()) {
         s.tickAmount = t.getFx("damage") - t.getFx("heal");
         s.tickDamageType = damageIdx(t.getStr("damageType", "normal"));
@@ -324,6 +351,26 @@ EffectDef EffectParser::effect(const std::string& where, const Json& ej) {
         if (e.amountMax < e.amount) fail(w, "amount range must be [min, max]");
     }
     else e.amount = ej.getFx("amount");
+    if (ej.has("weaponDamage")) {
+        if (e.kind != EffectKind::Damage && e.kind != EffectKind::Heal)
+            fail(w, "weaponDamage is only supported for damage or heal");
+        if (ej.has("amount") || ej.has("percent"))
+            fail(w, "weaponDamage cannot be combined with amount or percent");
+        if (!ej["weaponDamage"].isNumber() || ej["weaponDamage"].fx().raw < 0 ||
+            ej["weaponDamage"].fx() > Fixed::fromInt(1000))
+            fail(w, "weaponDamage must be a factor in [0, 1000]");
+        e.useWeaponDamage = true;
+        e.weaponDamage = ej["weaponDamage"].fx();
+        if (ej.has("weaponIndex")) {
+            const auto index = ej.getInt("weaponIndex", -1);
+            if (!ej["weaponIndex"].isNumber() || index < 0 || index > 126 ||
+                ej["weaponIndex"].fx() != Fixed::fromInt(index))
+                fail(w, "weaponIndex must be an integer in [0, 126]");
+            e.weaponIndex = uint16_t(index);
+        }
+    } else if (ej.has("weaponIndex") && (e.kind == EffectKind::Damage || e.kind == EffectKind::Heal)) {
+        fail(w, "weaponIndex requires weaponDamage");
+    }
     if (e.kind == EffectKind::Script) {
         e.scriptFn = ej.getStr("fn");
         if (e.scriptFn.empty()) fail(w, "needs 'fn' (a function of the game's scripts)");
@@ -375,7 +422,7 @@ EffectDef EffectParser::effect(const std::string& where, const Json& ej) {
     e.chance = ej.getFx("chance", e.chance);
     e.targetChance = ej.getFx("targetChance", e.targetChance);
     e.damageType = damageIdx(ej.getStr("damageType", "normal"));
-    if (e.kind == EffectKind::Buff) e.mod = statMod(w, ej);
+    if (e.kind == EffectKind::Buff) e.mod = timedStatMod(w, ej);
     if (ej.has("unit")) e.spawnType = typeRef(w, ej.getStr("unit"));
     if (e.kind == EffectKind::Spawn && e.spawnType == kNoType) fail(w, "needs 'unit'");
     e.count = int(ej.getInt("count", 1));
@@ -388,6 +435,7 @@ EffectDef EffectParser::effect(const std::string& where, const Json& ej) {
     filter(w, ej, e);
     if (ej.has("status")) e.status = int16_t(status(w, ej["status"]));
     if ((e.kind == EffectKind::Status || e.kind == EffectKind::PlayerStatus) && e.status < 0) fail(w, "needs 'status'");
+    if (e.kind == EffectKind::Chain) e.chainFx = ej.getStr("chainFx");
     delivery(w, ej, e.delivery);
     if (e.delivery.flight.enabled && e.kind != EffectKind::Projectile) fail(w, "flight is only valid on projectile effects");
     if (ej.has("effects")) e.payload = int16_t(payload(w, ej["effects"]));
@@ -484,6 +532,7 @@ int EffectParser::deliveredPayload(const std::string& where, const Json& aj, boo
     else if (type == "area") w.kind = EffectKind::Area;
     else if (type == "chain") w.kind = EffectKind::Chain;
     else fail(where + " delivery", "unknown type '" + type + "' (instant, projectile, area, chain, channel, line, cone)");
+    if (w.kind == EffectKind::Chain) w.chainFx = d.getStr("chainFx", aj.getStr("id"));
     w.payload = int16_t(inner);
     w.filter.shape = Shape::Target;
     w.enemies = w.filter.enemies = true;
@@ -501,6 +550,7 @@ void EffectParser::ability(const std::string& where, const Json& aj0, AbilityDef
     a.id = aj.getStr("id", "ability");
     const std::string w = where + " ability '" + a.id + "'";
     a.name = aj.getStr("name", a.id);
+    a.cardSlot = aj["cardSlot"];
     a.target = targetKind(w, aj.getStr("target", "none"));
     a.range = aj.getFx("range", a.range);
     a.cooldown = aj.getFx("cooldown", a.cooldown);

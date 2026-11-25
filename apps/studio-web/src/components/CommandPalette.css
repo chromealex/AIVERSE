@@ -19,3 +19,7 @@
 .command-palette__empty { padding: 18px 14px; color: var(--au-text-muted); }
 .command-palette__footer { display: flex; gap: 14px; padding: 8px 14px; border-top: 1px solid var(--studio-border); font-size: 11px; color: var(--au-text-muted); flex: none; }
 .command-palette__spacer { flex: 1; }
+
+.command-palette__filters { padding: 6px 12px; gap: 6px; flex-wrap: wrap; border-bottom: 1px solid var(--au-line); }
+.command-palette__filters button { min-height: 26px; font-size: var(--au-font-sm); }
+.command-palette__icon { display: grid; place-items: center; color: var(--au-accent); background: var(--au-panel); }

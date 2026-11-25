@@ -6,6 +6,7 @@
 #include <cstdio>
 
 #include "GameClient.h"
+#include "engine/game/CampaignFight.h"
 #include "engine/view/game/ScriptHud.h"
 
 namespace aiverse::client {
@@ -175,6 +176,7 @@ std::string GameClient::toolHint() const {
 
 bool GameClient::toolMouseDown(const Event& e) {
     if (possessedUnit().valid()) {
+        if (rules_.possession.firstPerson && !platform::pointerLocked()) platform::setPointerLock(true);
         if (e.button == 0) fireHeld_ = true;
         if (e.button == 1) walkHeld_ = true;
         return e.button != 2;   // middle button still pans
@@ -259,8 +261,24 @@ void GameClient::steerPossessed() {
     World& w = sim_->world();
     const Vec3 pos = w.get<Transform>(p).pos;
     const float px = float(pos.x.toDouble()), pz = float(pos.z.toDouble());
-    cam_.target.x += (px - cam_.target.x) * 0.15f;     // the camera rides along
-    cam_.target.z += (pz - cam_.target.z) * 0.15f;
+    const bool crouching = rules_.possession.firstPerson && (keys_[int(Key::LeftCtrl)] || keys_[int(Key::RightCtrl)]);
+    if (rules_.possession.firstPerson) {
+        if (!campaignCamera_) {
+            campaignCamera_ = cam_;
+            encounterLook_.settings = render::cameraLookFrom(manifest_["camera"]["firstPerson"]);
+            const Vec3 facing = w.get<Unit>(p).facing;
+            encounterLook_.yaw = float(std::atan2(facing.x.toDouble(), facing.z.toDouble()) / 6.28318530718);
+            encounterLook_.pitch = 0;
+            platform::setPointerLock(true);
+        }
+        const float ground = view_.heightAt(w.resource<GameState>()->grid, px, pz);
+        const auto* fight = w.tryGet<CampaignFight>(p);
+        const float eyeDrop = fight ? float(fight->penaltyMilli) * 0.00045f : 0.0f;
+        cam_ = encounterLook_.camera({px, ground + float(pos.y.toDouble()) + (crouching ? 1.0f : 1.7f) - eyeDrop, pz});
+    } else {
+        cam_.target.x += (px - cam_.target.x) * 0.15f;
+        cam_.target.z += (pz - cam_.target.z) * 0.15f;
+    }
 
     float dx = 0, dz = 0;
     if (!ui_.textInputFocused()) {
@@ -281,25 +299,36 @@ void GameClient::steerPossessed() {
     float3 g;
     const auto* walking=inputShortcuts_.system().state("PossessedWalk");
     const bool wantsWalk=walking?walking->active:walkHeld_;
-    if (wantsWalk && dx == 0 && dz == 0 && groundAt(mouseX_, mouseY_, g)) {
+    if (!rules_.possession.firstPerson && wantsWalk && dx == 0 && dz == 0 && groundAt(mouseX_, mouseY_, g)) {
         dx = g.x - px; dz = g.z - pz;
         if (std::hypot(dx, dz) < 0.3f) dx = dz = 0;
     }
     const float len = std::hypot(dx, dz);
-    if (len > 0) { dx /= len; dz /= len; }
+    if (len > 0) {
+        dx /= len;
+        dz /= len;
+    }
     Entity target = kNullEntity;
     const auto* firing=inputShortcuts_.system().state("PossessedFire");
     const bool fire=firing?firing->active:fireHeld_;
-    if (fire && hover_.valid() && w.alive(hover_) && w.has<Owner>(hover_)) {
+    if (!rules_.possession.firstPerson && fire && hover_.valid() && w.alive(hover_) && w.has<Owner>(hover_)) {
         const uint8_t o = w.get<Owner>(hover_).player;
         if (o != human_ && o != 0) target = hover_;
     }
     const bool changed = std::abs(dx - steerX_) > 0.05f || std::abs(dz - steerZ_) > 0.05f || fire != steerFire_ || target != steerTarget_;
     const bool idle = len == 0 && !fire;
-    if (!changed && (idle || sim_->tick() < lastSteerTick_ + 4)) return;
+    const bool poseChanged = rules_.possession.firstPerson &&
+        (steerCrouching_ != crouching || steerYaw_ != encounterLook_.yaw);
+    if (!changed && !poseChanged && (idle || sim_->tick() < lastSteerTick_ + 4)) return;
     steerX_ = dx; steerZ_ = dz; steerFire_ = fire; steerTarget_ = target;
+    steerYaw_ = encounterLook_.yaw;
+    steerCrouching_ = crouching;
     lastSteerTick_ = sim_->tick();
     Command c; c.type = kCmdDirect; c.point = {fx(dx), Fixed{}, fx(dz)}; c.param = fire ? 1 : 0; c.target = target;
+    if (rules_.possession.firstPerson) {
+        c.point.y = fx(steerYaw_);
+        if (crouching) c.param |= 2;
+    }
     issue(c);
 }
 

@@ -20,6 +20,7 @@ extern "C" {
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <cmath>
 #include <sstream>
 
 #include "GameClient.h"
@@ -263,7 +264,7 @@ struct LuaApi {
         lua_pushboolean(L, c.engineMenu_);
         return 1;
     }
-    static int notice(lua_State* L) { client(L).notice(luaL_checkstring(L, 1)); return 0; }
+    static int notice(lua_State* L) { client(L).notice(luaL_checkstring(L, 1), luaL_optnumber(L, 2, 2.5), luaL_optstring(L, 3, "")); return 0; }
     static int lastResult(lua_State* L) { ui::luaPushJson(L, client(L).lastResult_); return 1; }
     // game.safeArea() -> {left, top, right, bottom} in dp: notch, home indicator, ad banner (AIVERSE_UI_SAFE_AREA="l,t,r,b" for previews)
     static int safeArea(lua_State* L) {
@@ -303,6 +304,39 @@ struct LuaApi {
         std::printf("[lua] %s\n", line.c_str());
         std::fflush(stdout);
         return 0;
+    }
+
+    template<bool Replay, bool Write>
+    static int matchFile(lua_State* L) {
+        auto& c = client(L);
+        const char* slot = luaL_checkstring(L,1);
+        const bool ok = Write ? c.writeMatchFile(slot,Replay) : c.openMatchFile(slot,Replay);
+        lua_pushboolean(L,ok);
+        if (ok) return 1;
+        lua_pushstring(L,c.error_.c_str());
+        return 2;
+    }
+    template<bool Replay>
+    static int matchFiles(lua_State* L) {
+        const auto slots = client(L).matchFileList(Replay);
+        lua_createtable(L,int(slots.size()),0);
+        for (size_t i=0;i<slots.size();++i) {
+            lua_pushstring(L,slots[i].c_str());
+            lua_rawseti(L,-2,lua_Integer(i+1));
+        }
+        return 1;
+    }
+    static int replayControl(lua_State* L) {
+        auto& c = client(L);
+        if (!c.playback_) { lua_pushboolean(L,false); return 1; }
+        if (!lua_isnoneornil(L,2)) {
+            const double speed = luaL_checknumber(L,2);
+            if (!std::isfinite(speed) || speed < .25 || speed > 8) return luaL_error(L,"speed must be 0.25..8");
+            c.playbackSpeed_ = speed;
+        }
+        if (!lua_isnoneornil(L,1)) c.playbackPaused_ = lua_toboolean(L,1);
+        lua_pushboolean(L,true);
+        return 1;
     }
 
     // ------------------------------------------------------------------ storage.*
@@ -480,6 +514,10 @@ void GameClient::initLua() {
         {"notice", LuaApi::notice}, {"safeArea", LuaApi::safeArea}, {"lastResult", LuaApi::lastResult}, {"touch", LuaApi::touch}, {"openUrl", LuaApi::openUrl},
         {"platform", LuaApi::platformName}, {"preview", LuaApi::preview}, {"time", LuaApi::time}, {"json", LuaApi::json}, {"decode", LuaApi::decode}, {"encode", LuaApi::encode},
         {"log", LuaApi::log}});
+    table("match_files", {{"saves",LuaApi::matchFiles<false>},{"replays",LuaApi::matchFiles<true>},
+        {"save",LuaApi::matchFile<false,true>},{"load",LuaApi::matchFile<false,false>},
+        {"record",LuaApi::matchFile<true,true>},{"watch",LuaApi::matchFile<true,false>},
+        {"control",LuaApi::replayControl}});
     table("storage", {{"load", LuaApi::load}, {"save", LuaApi::save}, {"erase", LuaApi::erase}});
     table("store", {{"available", LuaApi::storeAvailable}, {"provider", LuaApi::storeProvider}, {"products", LuaApi::storeProducts},
                     {"buy", LuaApi::storeBuy}, {"finish", LuaApi::storeFinish}, {"restore", LuaApi::storeRestore}});

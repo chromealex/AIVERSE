@@ -25,6 +25,8 @@ struct Vertex {
 struct Uniforms {
     Vec4 gravityDt,rightSize,up;
     uint32_t meta[4];
+    float cullViewProj[16]{};
+    Vec4 cullControl{},lodEye{};
 };
 struct DrawArgs {
     uint32_t indexCount,instanceCount,firstIndex;
@@ -33,11 +35,11 @@ struct DrawArgs {
 };
 static_assert(sizeof(Particle)==64);
 static_assert(sizeof(Vertex)==40);
-static_assert(sizeof(Uniforms)==64);
+static_assert(sizeof(Uniforms)==160);
 static_assert(sizeof(DrawArgs)==20);
 
 bool submit(id<MTLCommandQueue> queue,id<MTLComputePipelineState> pipeline,
-            const std::array<id<MTLBuffer>,7>& buffers,
+            const std::array<id<MTLBuffer>,15>& buffers,
             uint32_t births,float dt) {
     id<MTLCommandBuffer> cb=[queue commandBuffer];
     if(!cb)return false;
@@ -45,7 +47,7 @@ bool submit(id<MTLCommandQueue> queue,id<MTLComputePipelineState> pipeline,
     if(!enc)return false;
     [enc setComputePipelineState:pipeline];
     for(NSUInteger i=0;i<buffers.size();++i)
-        [enc setBuffer:buffers[i] offset:0 atIndex:i];
+        if(i!=8)[enc setBuffer:buffers[i] offset:0 atIndex:i];
     Uniforms u{};
     u.gravityDt={-9.81f,dt,0,0};
     u.rightSize={1,0,0,0.4f};
@@ -77,7 +79,7 @@ bool submit(id<MTLCommandQueue> queue,id<MTLComputePipelineState> pipeline,
     }
     return true;
 }
-bool verify(const std::array<id<MTLBuffer>,7>& buffers,uint32_t expected) {
+bool verify(const std::array<id<MTLBuffer>,15>& buffers,uint32_t expected) {
     uint32_t count=UINT32_MAX;
     DrawArgs args{};
     std::memcpy(&count,buffers[5].contents,sizeof(count));
@@ -133,7 +135,7 @@ int main() {
         uint32_t zero=0;
         DrawArgs args{0,1,0,0,0};
 
-        std::array<id<MTLBuffer>,7> buffers{
+        std::array<id<MTLBuffer>,15> buffers{
             [device newBufferWithBytes:initial.data() length:sizeof(initial) options:MTLResourceStorageModeShared],
             [device newBufferWithBytes:births.data() length:sizeof(births) options:MTLResourceStorageModeShared],
             [device newBufferWithBytes:slots.data() length:sizeof(slots) options:MTLResourceStorageModeShared],
@@ -142,7 +144,14 @@ int main() {
             [device newBufferWithBytes:&zero length:sizeof(zero) options:MTLResourceStorageModeShared],
             [device newBufferWithBytes:&args length:sizeof(args) options:MTLResourceStorageModeShared]
         };
-        for(auto b:buffers)if(!b){fprintf(stderr,"Metal buffer allocation failed\n");return 1;}
+        std::array<uint32_t,2564> vm{};vm[0]=1; // ABI 1, no instructions
+        std::array<uint32_t,4> sources{0,1,2,3};
+        for(unsigned i:{7u,9u,11u})buffers[i]=[device newBufferWithLength:4*32 options:MTLResourceStorageModeShared];
+        buffers[10]=[device newBufferWithBytes:vm.data() length:sizeof(vm) options:MTLResourceStorageModeShared];
+        buffers[12]=[device newBufferWithBytes:&zero length:sizeof(zero) options:MTLResourceStorageModeShared];
+        buffers[13]=[device newBufferWithBytes:sources.data() length:sizeof(sources) options:MTLResourceStorageModeShared];
+        buffers[14]=[device newBufferWithBytes:zeroSlots.data() length:sizeof(zeroSlots) options:MTLResourceStorageModeShared];
+        for(unsigned i=0;i<buffers.size();++i)if(i!=8&&!buffers[i]){fprintf(stderr,"Metal buffer allocation failed\n");return 1;}
 
         if(!submit(queue,pipeline,buffers,2,0.1f)||!verify(buffers,2))return 1;
         const Vertex* vertices=static_cast<const Vertex*>(buffers[3].contents);

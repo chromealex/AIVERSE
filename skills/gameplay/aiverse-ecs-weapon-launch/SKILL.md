@@ -26,7 +26,13 @@ Read `AGENTS.md`, `docs/ecs-mechanic-composition.md`,
    damage resolves in its own ordered stage.
 4. The native game should map input, AI decisions or triggers to
    `FireIntentComponent.requested` and set its origin/direction.
-   A request is consumed once. Add magazine/reload, aim, team/friendly-fire
+   A request is consumed once. With a positive `WeaponParametersComponent.firePeriod`
+   (seconds), it authorizes up to 32 accepted shots in this tick as allowed by
+   fractional cooldown and ammo. Reissue intent every tick for held fire.
+   Zero period keeps the integer `fireInterval` contract. Keep configuration
+   immutable during a match; save/hash `WeaponStateComponent.remainingCooldown`
+   for fractional weapons, and keep `nextFireTick` for integer weapons.
+   Add magazine/reload, aim, team/friendly-fire
    filtering, spread and guided missiles as **optional components/systems**,
    not hardcoded `if (genre == FPS)` branches.
 5. Keep all gameplay state in ECS and serialize it, including the spawn
@@ -43,6 +49,29 @@ Read `AGENTS.md`, `docs/ecs-mechanic-composition.md`,
    systems. Move only one behavior at a time, compare authoritative
    simulation/replay and published save/network formats, and retain legacy
    adapters until parity is proved. Document every migration commit.
+
+Fitted arc: the existing `engine/sim/ProjectileProgram.h` exposes
+`fitTargetArc`, `arcOffset`, and `targetArcStep`. In targeted GameCore
+author `flight.arc`, `arcHeight` / `arcHeightPerDistance` and optional
+`homing`. Reuse the existing swept impact pipeline and local surface frame.
+Do not claim direction-only ActorModule or generic launch integration for
+target-fitted arcs; they use their existing ballistic policy.
+
+Multishot: `engine/mechanics/MultiTargetSelection.h` exposes bounded,
+deterministic nearest-distinct candidate selection. The targeted GameCore
+adapter accepts `extraTargets` (0–16), `extraTargetTags` and
+`extraIgnoreTags`, then uses the existing shot/impact pipeline for each
+secondary. One accepted attack spends cooldown once. Do not duplicate
+damage or launch ownership; use the selection helper with your host's
+eligibility policy. Native ECS/free-fire adapters still need integration.
+
+Attack timing: `engine/mechanics/AttackTiming.h` provides the shared per-slot
+`AttackTimingState` and pure begin/advance/cancel/release policy. The targeted
+GameCore adapter supports weapon `windup` and `backswing`, and emits
+`attack_start`, `attack` (release), `attack_cancelled` and
+`attack_recovery_end`. The generic ECS launch adapter still needs explicit
+integration; do not advertise phased firing there yet. Persist/hash phase state
+in the owning host. See docs/game-format.md.
 
 For each new mechanic repeat:
 **ECS components + independent configurable systems + reusable policies +

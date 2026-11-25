@@ -7,6 +7,8 @@
 #include "engine/fx/SpectraFxGpuRoutes.h"
 #include "engine/fx/SpectraFxView.h"
 #include "engine/fx/SpectraFxCueInbox.h"
+#include "engine/fx/SpectraFxSignificance.h"
+#include "engine/fx/SpectraFxAccelerationFields.h"
 #include "engine/fx/SpectraFxGpuLod.h"
 #include "engine/fx/SpectraFxGpuBudgetGovernor.h"
 #include "engine/fx/SpectraFxGpuEmitterLibrary.h"
@@ -81,24 +83,43 @@ int main() {
     SpectraFxGpuRouteAsset::Routes routes;
     std::optional<FxQuality> sceneQuality;
     SpectraFxGpuBudgetGovernor::Config budget;
+    SpectraFxSignificance::Config authoredPriority;
+    authoredPriority.enabled=true;
     expect(SpectraFxGpuRouteAsset::readText(
         R"JSON({"version":1,"sceneQuality":"low",
                  "gpuFrameBudgetMs":12,"minGpuSpawnScale":0.25,
                  "routes":[{"eventType":7,"asset":"smoke",
                             "sharedPool":"fire","sharedPoolCapacity":1024}]})JSON",
-        routes,&error,&budget,&sceneQuality), "valid project routes");
+        routes,&error,&budget,&sceneQuality,&authoredPriority), "valid project routes");
     expect(routes.count(7)==1 && routes.at(7).playback.sharedPool=="fire",
            "route pool resolved");
     expect(sceneQuality && *sceneQuality==FxQuality::Low,
            "scene quality parsed");
     expect(budget.targetFrameMs==12.0f,"GPU budget parsed");
+    expect(!authoredPriority.enabled,"legacy route asset defaults to FIFO");
+    expect(SpectraFxGpuRouteAsset::readText(
+        R"JSON({"version":1,"cuePriority":{"nearDistance":8,
+                "farDistance":150,"targetRadiusPixels":32},
+                "routes":[{"eventType":9,"asset":"spark","importance":5.5}]})JSON",
+        routes,&error,nullptr,nullptr,&authoredPriority),
+        "authored cue ranking parsed");
+    expect(authoredPriority.enabled && authoredPriority.nearDistance==8 &&
+           routes.at(9).importance==5.5f,
+           "camera priority and per-event importance loaded");
     const auto preserved=routes;
+    const auto previousImportance=authoredPriority;
     expect(!SpectraFxGpuRouteAsset::readText(
         R"JSON({"version":1,"routes":[{"eventType":7,"asset":"smoke"},
                   {"eventType":7,"asset":"smoke2"}]})JSON",
         routes,&error), "duplicate cue rejected");
-    expect(routes.size()==preserved.size() && routes.count(7)==1,
+    expect(routes.size()==preserved.size() && routes.count(9)==1,
            "failed route edit preserves old map");
+    expect(!SpectraFxGpuRouteAsset::readText(
+        R"JSON({"version":1,"cuePriority":{"nearDistance":200,
+                "farDistance":10},"routes":[]})JSON",
+        routes,&error,nullptr,nullptr,&authoredPriority) &&
+        authoredPriority.nearDistance==previousImportance.nearDistance,
+        "invalid cue policy rejected without changing previous config");
     expect(!SpectraFxGpuRouteAsset::readText(
         R"JSON({"version":1,"routes":[{"eventType":1,"asset":"smoke",
                  "ownPlayerOnly":false}]})JSON",routes,&error),
@@ -241,6 +262,138 @@ int main() {
                "permanently rejected cue dropped after bounded retries");
         pool.shutdown();
     }
+    // Camera significance is opt-in, bounded and presentation-only.
+    {
+        SpectraFxSignificance importance;
+        SpectraFxSignificance::Config settings;
+        settings.enabled=true;
+        settings.nearDistance=12;
+        settings.farDistance=250;
+        expect(importance.configure(settings) && importance.enabled(),
+               "importance policy configured");
+        const auto previous=importance.config();
+        settings.targetRadiusPixels=0;
+        expect(!importance.configure(settings) &&
+               importance.config().targetRadiusPixels==previous.targetRadiusPixels,
+               "invalid importance config preserves existing settings");
+        SpectraFxView view;
+        view.eye={0,0,0};view.forward={0,0,-1};
+        view.right={1,0,0};view.up={0,1,0};
+        view.width=1920;view.height=1080;view.projectionYScale=1;
+        SpectraFxCue near{};near.id=13;near.position={0,0,-3};
+        SpectraFxCue far=near;far.position={0,0,-150};
+        SpectraFxCue behind=near;behind.position={0,0,3};
+        expect(importance.score(near,view)>importance.score(far,view) &&
+               importance.score(far,view)>importance.score(behind,view),
+               "near/front cue ranks above distant and rear cues");
+        expect(!importance.setEventWeight(13,-1) &&
+               importance.eventWeight(13)==1,
+               "invalid weight leaves policy unchanged");
+        expect(importance.setEventWeight(13,5) &&
+               importance.eventWeight(13)==5,
+               "host priority weights override default importance");
+
+        SpectraFxCueInbox priority(8);
+        const auto generation=priority.epoch();
+        SpectraFxCue keyed{};keyed.id=1;keyed.key=77;
+        SpectraFxCue low{};low.id=2;low.key=0;
+        SpectraFxCue stop=keyed;stop.action=SpectraFxCue::Action::Stop;
+        SpectraFxCue high{};high.id=3;high.key=0;
+        expect(priority.submit(keyed,true,generation) &&
+               priority.submit(low,true,generation) &&
+               priority.submit(stop,true,generation) &&
+               priority.submit(high,true,generation),
+               "importance fixture queues lifecycle and independent one-shots");
+        std::vector<uint32_t> seen;
+        const auto score=[](const SpectraFxCue& cue) {
+            return cue.id==3?100.0:cue.id==2?0.01:0.0;
+        };
+        priority.drainPrioritized(score,[&](const SpectraFxCue& cue) {
+            seen.push_back(cue.id);
+            return true;
+        },2);
+        expect(seen.size()==2 && seen[0]==1 && seen[1]==1 &&
+               priority.pending()==2,
+               "keyed Play precedes Stop and lifecycle cannot starve");
+        seen.clear();
+        priority.drainPrioritized(score,[&](const SpectraFxCue& cue) {
+            seen.push_back(cue.id);
+            return true;
+        });
+        expect(seen.size()==2 && seen[0]==3 && seen[1]==2 &&
+               priority.pending()==0 && priority.stats().priorityDrained==4,
+               "one-shot importance order and drain stats");
+        // A callback may enqueue new cues; they cannot enter this drain
+        // snapshot and will be available next frame.
+        expect(priority.submit(low,true,generation) &&
+               priority.submit(high,true,generation),"snapshot fixtures queued");
+        int dispatched=0;
+        priority.drainPrioritized(score,[&](const SpectraFxCue&) {
+            ++dispatched;
+            priority.submit(keyed,true,generation);
+            return true;
+        },1);
+        expect(dispatched==1 && priority.pending()==2,
+               "priority callbacks enqueue to the next-frame snapshot");
+        int remaining=0;
+        priority.drain([&](const SpectraFxCue&){++remaining;return true;});
+        expect(remaining==2 && priority.pending()==0,
+               "FIFO compatibility remains available after priority drain");
+    }
+
+    // External environment sources are read-only acceleration snapshots.
+    // Invalid providers are ignored without poisoning the Metal uniform or
+    // CPU twin integration state.
+    {
+        SpectraFxAccelerationFields fields;
+        SpectraFxAccelerationFields::Point a{};
+        SpectraFxAccelerationFields::Stats telemetry{};
+        expect(!fields.evaluate({0,0,0},a,&telemetry) &&
+               telemetry.consulted==0,"empty acceleration registry is zero");
+        expect(fields.bind(1,1,[](render::float3,render::float3& v) {
+            v={1,2,3};return true;
+        }),"register first external field");
+        expect(fields.bind(2,0.5f,[](render::float3,render::float3& v) {
+            v={0,4,0};return true;
+        }),"register second external field");
+        expect(fields.evaluate({0,0,0},a,&telemetry) &&
+               a.x==1 && a.y==4 && a.z==3 &&
+               telemetry.accepted==2,"weighted field aggregation");
+        expect(fields.bind(1,2,[](render::float3,render::float3& v) {
+            v={3,0,0};return true;
+        }) && fields.size()==2,"provider hot replacement preserves slot count");
+        expect(fields.evaluate({0,0,0},a) &&
+               a.x==6 && a.y==2 && a.z==0,
+               "replaced provider produces current value");
+        expect(fields.bind(3,1,[](render::float3,render::float3& v) {
+            v={NAN,0,0};return true;
+        }),"invalid-result provider can be registered");
+        expect(fields.evaluate({0,0,0},a,&telemetry) &&
+               telemetry.invalid==1 && a.x==6 && a.y==2,
+               "nonfinite provider result is isolated");
+        expect(!fields.evaluate({NAN,0,0},a,&telemetry) &&
+               telemetry.invalid==1 &&
+               a.x==0 && a.y==0 && a.z==0,
+               "nonfinite query is rejected and output cleared");
+        expect(!fields.bind(0,1,[](render::float3,render::float3&){return true;}) &&
+               !fields.bind(4,17,[](render::float3,render::float3&){return true;}),
+               "invalid identifiers and extreme weights rejected");
+        expect(fields.unbind(3) && fields.unbind(2) &&
+               fields.unbind(1) && fields.empty(),
+               "all external field callbacks detached");
+
+        SpectraFxHybridEmitter dedicated;
+        expect(dedicated.setExternalAcceleration({2,-3,1}) &&
+               dedicated.externalAcceleration().y==-3,
+               "dedicated hybrid emitter accepts visual field acceleration");
+        expect(!dedicated.setExternalAcceleration({NAN,0,0}) &&
+               dedicated.externalAcceleration().y==-3,
+               "invalid acceleration preserves prior valid setting");
+        dedicated.stop();
+        expect(dedicated.externalAcceleration().y==0,
+               "emitter retirement clears external acceleration");
+    }
+
     if(failures) {
         std::fprintf(stderr,"%d SpectraFX contract failures\n",failures);
         return 1;

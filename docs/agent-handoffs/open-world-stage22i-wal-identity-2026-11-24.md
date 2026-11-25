@@ -1,0 +1,3 @@
+# W1.22i — WAL identity binding
+
+Commits 90369f43, 7242494c, 1ffb9242, 0a079310, b184c95b. Publisher writes exact 92-byte manifest as WAL prefix; loader validates world/digest/revision/sequence/generation/size; writer verifies prefix and includes it in tail repair offsets; finality/session forward prefix. Low-level raw WAL remains supported with empty identity argument. Earlier experimental empty generation WAL is incompatible; no migration implemented. Reader validBytes remains relative to frame start. Native tests not run. Next retention cleanup and skill/catalog, then full ECS persistence. PR #116 Draft; no main merge.

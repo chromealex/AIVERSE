@@ -1,0 +1,5 @@
+# SpectraFX Stage 107 — sparse active-slot page index
+
+Parent `5f7aca832b4d63d8c7483948f1e815d272851175`; branch `feature/spectrafx-html5-data-interfaces-20261123`.
+
+Adds ActiveParticlePages (64 slots per bitmap page, sparse ordered occupied-page set). ComputeParticles no longer scans every allocated slot for per-frame lifespan/gather or selective source kills; it iterates only occupied pages/live slots, maintaining ascending order and preserving existing free-list order, pending birth cancellation, kill quarantine and checked submission semantics. Live VM parameter updates use the same index. Init/reset/release and checkpoint restore rebuild/clear the derived index. Adds hostActiveSlotVisits and hostOccupiedPages diagnostics and regression source for sparse high indices, duplicate insert, mutation-safe traversal, recycling and reset. This is CPU-side ownership metadata, not a GPU physical page allocator; shader integration still uses its existing active prefix/compaction dispatch, GPU buffers remain fixed per group. GPU-resident free list, dynamic buffer growth and page migration remain future work. No native build/tests executed. Main untouched.

@@ -3,13 +3,22 @@
 // Legacy fx/*.json and fx_preview continue to work; fx_graph_bake bridges them.
 #include "Workspace.h"
 #include "FxOps.h"
+#include "PackageTool.h"
 #include "engine/fx/SpectraFX.h"
 #include "engine/fx/SpectraAuthoring.h"
+#include "engine/fx/SpectraSdfBaker.h"
+#include "engine/fx/SpectraSdfFileIO.h"
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <array>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <map>
 #include <set>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -80,10 +89,24 @@ Json sourceGraph(const Json& p, const Workspace& ws) {
     }
     return Json::parse(readFile(graphFile(ws, requireGraphName(p))));
 }
-Json graphEvaluation(const Json& graph, const Json& overrides, fx::EffectDef* compiled = nullptr) {
+Json graphEvaluation(const Workspace& ws,const Json& graph, const Json& overrides, fx::EffectDef* compiled = nullptr) {
     fx::EffectDef def;
     std::vector<std::string> errors;
-    const bool ok = spectra::compileGraph(graph, overrides, def, errors);
+    if(spectra::volume::hasVolume(graph)||spectra::hasVolumetricParticles(graph)){
+        spectra::volume::PresentationGraph result;
+        bool ok=spectra::volume::compilePresentationGraph(graph,overrides,result,errors,fx::projectSdfReader(ws.project.dir));
+        if(ok&&compiled){ok=false;errors.push_back("Legacy particle bake cannot preserve volume output");}
+        Json response=Json::object();response.set("ok",Json::fromBool(ok));response.set("errors",graphStrings(errors));
+        if(ok){response.set("volume",Json::fromBool(result.volume));response.set("volumetricParticles",Json::fromBool(result.particleMaterial.enabled));response.set("hybrid",Json::fromBool(result.volume&&result.particles));
+            response.set("volumeDimension",Json::number(int64_t(result.volumeAsset.simulation.dimension)));
+            response.set("emitters",Json::number(int64_t(result.particleEffect.emitters.size())));
+            spectra::GraphRuntimeOptions opts;opts.preference=spectra::ComputePreference::RequireGpu;opts.gpuProgram=true;opts.volumeMaterial=result.particleMaterial;
+            const auto eligibility=spectra::inspectGraphGpuEligibility(result.particleEffect,opts);
+            response.set("gpuEligible",Json::fromBool(!result.particleMaterial.enabled||eligibility.eligible));
+            response.set("gpuReason",Json::string(result.particleMaterial.enabled&&!eligibility.eligible?eligibility.reason:"Volume requires native GPU; device support unverified"));}
+        return response;
+    }
+    const bool ok = spectra::compileGraph(graph, overrides, def, errors,fx::projectSdfReader(ws.project.dir));
     Json response = Json::object();
     response.set("ok", Json::fromBool(ok));
     response.set("errors", graphStrings(errors));
@@ -101,6 +124,9 @@ Json graphEvaluation(const Json& graph, const Json& overrides, fx::EffectDef* co
         // device might still lack Metal compute, or shader setup might fail.
         const auto eligibility = spectra::inspectGraphGpuEligibility(def);
         response.set("metalGpuEligible", Json::fromBool(eligibility.eligible));
+        response.set("gpuEligible", Json::fromBool(eligibility.eligible));
+        response.set("gpuReason",strGraph(eligibility.eligible
+            ?"Bounded GPU schema compatible; device/runtime still unverified":eligibility.reason));
         response.set("metalGpuReason", strGraph(eligibility.eligible
             ? "Metal compute subset compatible; device/runtime still unverified"
             : eligibility.reason));
@@ -112,6 +138,9 @@ Json graphEvaluation(const Json& graph, const Json& overrides, fx::EffectDef* co
         const bool authoredVm=def.emitters.size()==1 &&
                              !def.emitters[0].particleProgram.isNull();
         response.set("metalVmEligible",Json::fromBool(authoredVm && vm.eligible));
+        response.set("gpuVmEligible",Json::fromBool(authoredVm && vm.eligible));
+        response.set("gpuVmReason",strGraph(!authoredVm?"effect has no per-particle VM program":
+            vm.eligible?"Bounded GPU VM schema eligible; device execution not verified":vm.reason));
         response.set("metalVmReason",strGraph(!authoredVm
             ? "effect has no per-particle VM program"
             : vm.eligible
@@ -120,6 +149,496 @@ Json graphEvaluation(const Json& graph, const Json& overrides, fx::EffectDef* co
         if (compiled) *compiled = std::move(def);
     }
     return response;
+}
+// Project content assets, not arbitrary filesystem paths. Reject symlinks
+// at every owned component, including the destination file.
+constexpr size_t kReplayMaxBytes=65536;
+constexpr size_t kReplayMaxEntries=256;
+constexpr const char* kReplaySuffix=".spectra-replay.json";
+void requireReplayProject(const Workspace& ws,const Json& p) {
+    requireGame(ws);
+    if(p.has("expectedProjectPath")&&(!p["expectedProjectPath"].isString()||
+        p.getStr("expectedProjectPath")!=ws.project.dir))
+        throw std::runtime_error("Stale replay project");
+}
+fs::file_status replayFileStatus(const fs::path& path) {
+    std::error_code ec;
+    const auto status=fs::symlink_status(path,ec);
+    if(ec&&ec!=std::errc::no_such_file_or_directory)
+        throw std::runtime_error("Cannot inspect replay storage");
+    if(fs::is_symlink(status))throw std::runtime_error("Replay storage cannot use symlinks");
+    return status;
+}
+fs::path replayDirectory(const Workspace& ws,bool create) {
+    fs::path dir=fs::path(ws.project.dir);
+    if(!fs::is_directory(dir))throw std::runtime_error("Invalid project directory");
+    for(const char* part:{"content","spectrafx","replays"}){
+        dir/=part;
+        auto st=replayFileStatus(dir);
+        if(!fs::exists(st)){
+            if(!create)return {};
+            fs::create_directory(dir);
+            st=replayFileStatus(dir);
+        }
+        if(!fs::is_directory(st))throw std::runtime_error("Invalid replay directory");
+    }
+    return dir;
+}
+void validateReplayPreset(const Json& p,const Workspace& ws) {
+    if(!p.isObject()||p.getStr("format")!="aiverse.spectrafx.replay"||p.getInt("version",-1)!=1||
+       !p["projectPath"].isString()||p.getStr("projectPath")!=ws.project.dir||
+       !p["graphSignature"].isString()||p.getStr("graphSignature").empty())
+        throw std::runtime_error("Invalid replay preset format or project identity");
+    const auto graph=Json::parse(p.getStr("graphSignature"));
+    if(!graph.isObject()||graph.getInt("version")!=2)
+        throw std::runtime_error("Replay signature must contain Graph v2");
+    auto bounded=[](const Json& v,double lo,double hi){
+        return v.isNumber()&&std::isfinite(v.toDouble())&&v.toDouble()>=lo&&v.toDouble()<=hi;
+    };
+    auto integer=[&](const Json& v,double hi){
+        return bounded(v,0,hi)&&std::floor(v.toDouble())==v.toDouble();
+    };
+    const auto speed=p["speed"].toDouble();
+    const auto bg=p.getStr("background");
+    if(!integer(p["tick"],3600)||!p["speed"].isNumber()||
+       (speed!=0.25&&speed!=0.5&&speed!=1&&speed!=2&&speed!=4)||
+       p["loop"].type()!=Json::Type::Bool||p["grid"].type()!=Json::Type::Bool||
+       p["axes"].type()!=Json::Type::Bool||(bg!="dark"&&bg!="neutral"&&bg!="light"&&bg!="black"))
+        throw std::runtime_error("Invalid replay timeline or stage");
+    const auto& camera=p["camera"];
+    if(!camera.isObject()||!bounded(camera["yaw"],-1000,1000)||
+       !bounded(camera["pitch"],-1.56,1.56)||!bounded(camera["distance"],0.01,100000)||
+       !bounded(camera["targetX"],-1000000,1000000)||!bounded(camera["targetY"],-1000000,1000000)||
+       !bounded(camera["targetZ"],-1000000,1000000)||camera["ortho"].type()!=Json::Type::Bool)
+        throw std::runtime_error("Invalid replay camera");
+    if((p.has("gpuBirthRandom")&&p["gpuBirthRandom"].type()!=Json::Type::Bool)||
+       (p.has("gpuOwnedAllocation")&&p["gpuOwnedAllocation"].type()!=Json::Type::Bool)||
+       (p.getBool("gpuOwnedAllocation",false)&&p.has("gpuAllocationSeed"))||
+       (p.has("seed")&&!integer(p["seed"],2147483647.0))||
+       (p.has("gpuAllocationSeed")&&!integer(p["gpuAllocationSeed"],2147483647.0))||
+       (p.has("gpuShaderSeed")&&!integer(p["gpuShaderSeed"],4294967295.0))||
+       int(p.has("seed"))+int(p.has("gpuAllocationSeed"))+int(p.has("gpuShaderSeed"))>1)
+        throw std::runtime_error("Invalid replay seed mode");
+    const auto& params=p["parameters"];
+    if(!params.isObject()||params.size()>8)throw std::runtime_error("Invalid replay parameters");
+    for(const auto& [name,value]:params.members()){
+        const auto& spec=graph["instanceParameters"][name];
+        if(name.empty()||name.size()>48||
+           name.find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_")!=std::string::npos||
+           (name[0]>='0'&&name[0]<='9')||!bounded(value,-1000000,1000000)||
+           !spec.isObject()||!spec["min"].isNumber()||!spec["max"].isNumber()||
+           value.toDouble()<spec["min"].toDouble()||value.toDouble()>spec["max"].toDouble())
+            throw std::runtime_error("Invalid replay scalar: "+name);
+    }
+}
+// Bounded direct content dependencies. FNV-1a detects changes, not authenticity.
+constexpr uint64_t kReplayDependencyBudget=128ull*1024*1024;
+void collectReplayPaths(const Json& value,std::set<std::string>& paths,unsigned depth=0) {
+    if(depth>64)throw std::runtime_error("Replay graph nesting limit exceeded");
+    if(value.isString()){
+        const auto text=value.str();
+        if(text.rfind("content/",0)==0){
+            paths.insert(text);
+            if(paths.size()>64)throw std::runtime_error("Too many replay dependencies");
+        }
+    }else if(value.isArray()){
+        for(const auto& item:value.items())collectReplayPaths(item,paths,depth+1);
+    }else if(value.isObject()){
+        for(const auto& [key,item]:value.members()){(void)key;collectReplayPaths(item,paths,depth+1);}
+    }
+}
+fs::path checkedReplayDependency(const Workspace& ws,const std::string& relative) {
+    if(relative.rfind("content/",0)!=0||relative.size()>520||
+       relative.find('\\')!=std::string::npos||relative.find(':')!=std::string::npos||
+       std::any_of(relative.begin(),relative.end(),[](unsigned char c){return c<32;}))
+        throw std::runtime_error("Unsafe replay resource path");
+    fs::path path=ws.project.dir;
+    for(const auto& part:fs::path(relative)){
+        if(part.empty()||part=="."||part=="..")throw std::runtime_error("Unsafe replay resource component");
+        path/=part;
+        (void)replayFileStatus(path);
+    }
+    if(!fs::is_regular_file(replayFileStatus(path)))throw std::runtime_error("Missing replay resource: "+relative);
+    return path;
+}
+std::string replayFingerprint(const fs::path& file,uint64_t& budget) {
+    const auto size=fs::file_size(file);
+    if(size>budget)throw std::runtime_error("Replay dependency byte budget exceeded");
+    std::ifstream input(file,std::ios::binary);
+    if(!input)throw std::runtime_error("Cannot read replay dependency");
+    std::array<char,16384> buffer{};
+    uint64_t hash=14695981039346656037ULL,read=0;
+    while(input){
+        input.read(buffer.data(),std::streamsize(buffer.size()));
+        const auto count=uint64_t(input.gcount());
+        if(count>budget-read)throw std::runtime_error("Replay dependency byte budget exceeded");
+        for(size_t i=0;i<count;++i){hash^=static_cast<unsigned char>(buffer[i]);hash*=1099511628211ULL;}
+        read+=count;
+    }
+    if(input.bad()||read!=size)throw std::runtime_error("Replay dependency changed during read");
+    budget-=read;
+    return std::to_string(hash)+":"+std::to_string(read);
+}
+// Resolve only local glTF external buffer/image URIs. Embedded data is
+// already covered by the owning file's fingerprint. Reject unsupported
+// URI forms rather than silently claiming that they are verified.
+std::string replayLocalUri(const std::string& owner,const std::string& uri) {
+    if(uri.rfind("data:",0)==0)return {};
+    if(uri.empty()||uri.size()>512||uri.front()=='/'||
+       uri.find_first_of("\\:%?#")!=std::string::npos||
+       std::any_of(uri.begin(),uri.end(),[](unsigned char c){return c<32;}))
+        throw std::runtime_error("Unsupported replay resource URI in "+owner);
+    auto combined=(fs::path(owner).parent_path()/fs::path(uri)).lexically_normal();
+    const auto result=combined.generic_string();
+    if(result.rfind("content/",0)!=0)throw std::runtime_error("Replay resource URI escapes content");
+    return result;
+}
+void addReplayChild(std::set<std::string>& children,const std::string& child){
+    if(!child.empty())children.insert(child);
+    if(children.size()>64)throw std::runtime_error("Too many replay dependencies");
+}
+std::string readReplayGlbJson(const fs::path& file,uint64_t& parseBudget) {
+    const auto bytes=fs::file_size(file);
+    if(bytes<20||bytes>kReplayDependencyBudget)throw std::runtime_error("Invalid GLB size");
+    std::ifstream input(file,std::ios::binary);
+    std::array<unsigned char,20> header{};
+    if(!input.read(reinterpret_cast<char*>(header.data()),std::streamsize(header.size())))
+        throw std::runtime_error("Cannot read GLB header");
+    auto u32=[&](size_t at){
+        return uint32_t(header[at])|(uint32_t(header[at+1])<<8)|
+               (uint32_t(header[at+2])<<16)|(uint32_t(header[at+3])<<24);
+    };
+    const auto length=u32(12);
+    if(u32(0)!=0x46546c67u||u32(4)!=2||u32(8)!=bytes||
+       u32(16)!=0x4e4f534au||!length||length%4||uint64_t(length)+20>bytes||
+       length>1024*1024||uint64_t(length)+20>parseBudget)
+        throw std::runtime_error("Invalid or oversized GLB JSON chunk");
+    std::string json(length,' ');
+    if(!input.read(json.data(),std::streamsize(length)))throw std::runtime_error("Truncated GLB JSON");
+    parseBudget-=uint64_t(length)+20;
+    return json;
+}
+void collectReplayGltf(const Json& doc,const std::string& owner,std::set<std::string>& children) {
+    for(const char* key:{"buffers","images"}){
+        const auto& entries=doc[key];
+        if(entries.isNull())continue;
+        if(!entries.isArray())throw std::runtime_error("Invalid glTF dependency table");
+        for(const auto& item:entries.items()){
+            if(!item.isObject())throw std::runtime_error("Invalid glTF dependency entry");
+            if(item.has("uri")){
+                if(!item["uri"].isString())throw std::runtime_error("Invalid glTF URI");
+                addReplayChild(children,replayLocalUri(owner,item.getStr("uri")));
+            }
+        }
+    }
+}
+void collectReplayWavefront(const std::string& text,const std::string& owner,bool obj,
+                            std::set<std::string>& children) {
+    std::istringstream input(text);
+    std::string line;
+    while(std::getline(input,line)){
+        if(!line.empty()&&line.back()=='\r')line.pop_back();
+        const auto comment=line.find('#');
+        if(comment!=std::string::npos)line.resize(comment);
+        if(line.find_last_not_of(" \t")!=std::string::npos&&
+           line[line.find_last_not_of(" \t")]=='\\')
+            throw std::runtime_error("Unsupported Wavefront line continuation");
+        std::istringstream fields(line);
+        std::string key;
+        fields>>key;
+        if(obj&&key=="mtllib"){
+            std::string name;bool found=false;
+            while(fields>>name){
+                if(name.front()=='-'||name.find_first_of("\"'")!=std::string::npos)
+                    throw std::runtime_error("Unsupported OBJ material reference");
+                addReplayChild(children,replayLocalUri(owner,name));found=true;
+            }
+            if(!found)throw std::runtime_error("Empty OBJ material reference");
+        }else if(!obj&&(key.rfind("map_",0)==0||key=="bump"||key=="disp"||key=="decal"||key=="refl"||key=="norm")){
+            std::string name,extra;
+            // Conservative subset: one unquoted filename, no map options.
+            // Unsupported options or ambiguous paths must not appear verified.
+            if(!(fields>>name)||name.front()=='-'||name.find_first_of("\"'")!=std::string::npos||(fields>>extra))
+                throw std::runtime_error("Unsupported MTL texture reference or options");
+            addReplayChild(children,replayLocalUri(owner,name));
+        }
+    }
+}
+void collectReplayChildren(const fs::path& file,const std::string& owner,
+                           std::set<std::string>& children,uint64_t& parseBudget,int64_t version) {
+    auto ext=file.extension().string();
+    std::transform(ext.begin(),ext.end(),ext.begin(),[](unsigned char c){return char(std::tolower(c));});
+    if(version>=3&&ext==".glb"){
+        const auto doc=Json::parse(readReplayGlbJson(file,parseBudget));
+        collectReplayPaths(doc,children);
+        collectReplayGltf(doc,owner,children);
+        return;
+    }
+    const bool wavefront=version>=3&&(ext==".obj"||ext==".mtl");
+    if(ext!=".json"&&ext!=".gltf"&&!wavefront)return;
+    const auto bytes=fs::file_size(file);
+    if(bytes>1024*1024||bytes>parseBudget)
+        throw std::runtime_error("Replay dependency document exceeds parse budget");
+    const auto text=readFile(file);
+    if(text.size()!=bytes)throw std::runtime_error("Replay dependency changed during parse");
+    parseBudget-=bytes;
+    if(wavefront){
+        collectReplayWavefront(text,owner,ext==".obj",children);
+        return;
+    }
+    const auto doc=Json::parse(text);
+    collectReplayPaths(doc,children);
+    if(ext==".gltf")collectReplayGltf(doc,owner,children);
+}
+Json replayDependencies(const Json& preset,const Workspace& ws,int64_t version) {
+    std::set<std::string> paths;
+    collectReplayPaths(Json::parse(preset.getStr("graphSignature")),paths);
+    Json manifest=Json::array();
+    uint64_t budget=kReplayDependencyBudget,parseBudget=8ull*1024*1024;
+    std::set<std::string> visited;
+    std::map<std::string,Json> rows;
+    while(!paths.empty()){
+        const auto relative=*paths.begin();paths.erase(paths.begin());
+        if(!visited.insert(relative).second)continue;
+        if(visited.size()>64)throw std::runtime_error("Too many replay dependencies");
+        const auto file=checkedReplayDependency(ws,relative);
+        Json row=Json::object();
+        row.set("path",strGraph(relative));
+        row.set("content",strGraph(replayFingerprint(file,budget)));
+        const auto meta=fs::path(file.string()+".meta");
+        if(fs::is_regular_file(replayFileStatus(meta))){
+            if(fs::file_size(meta)>65536)throw std::runtime_error("Oversized asset metadata");
+            const auto metadata=Json::parse(readFile(meta));
+            const auto guid=metadata.getStr("guid");
+            if(guid.size()!=32||guid.find_first_not_of("0123456789abcdef")!=std::string::npos)
+                throw std::runtime_error("Invalid asset GUID for "+relative);
+            row.set("guid",strGraph(guid));
+            row.set("meta",strGraph(replayFingerprint(meta,budget)));
+        }
+        if(version>=2){
+            std::set<std::string> children;
+            collectReplayChildren(file,relative,children,parseBudget,version);
+            for(const auto& child:children)if(!visited.count(child))paths.insert(child);
+            if(paths.size()+visited.size()>64)throw std::runtime_error("Too many replay dependencies");
+        }
+        rows.emplace(relative,std::move(row));
+    }
+    for(auto& [path,row]:rows){(void)path;manifest.push(std::move(row));}
+    return manifest;
+}
+Json replayCompatibility(const Json& preset,const Workspace& ws) {
+    Json out=Json::object();
+    const auto version=preset.getInt("dependencyVersion",1);
+    out.set("scope",strGraph(version==3?"content paths, JSON, glTF/GLB external URIs and simple OBJ/MTL references":version==2?"content paths, JSON references and external glTF buffer/image URIs":"direct content paths and existing meta sidecars only"));
+    if(version!=1&&version!=2&&version!=3){
+        out.set("state",strGraph("unavailable"));out.set("detail",strGraph("Unsupported dependency manifest version"));return out;
+    }
+    if(!preset.has("dependencies")){
+        out.set("state",strGraph("unverified"));return out;
+    }
+    try{
+        const auto current=replayDependencies(preset,ws,version);
+        const bool same=current.dump(-1)==preset["dependencies"].dump(-1);
+        out.set("state",strGraph(same?"matching":"changed"));
+        out.set("count",Json::number(int64_t(current.size())));
+    }catch(const std::exception& e){
+        out.set("state",strGraph("unavailable"));out.set("detail",strGraph(e.what()));
+    }
+    return out;
+}
+Json readReplayPreset(const fs::path& file,const Workspace& ws) {
+    if(!fs::is_regular_file(replayFileStatus(file))||fs::file_size(file)>kReplayMaxBytes)
+        throw std::runtime_error("Missing or oversized replay preset");
+    const auto bytes=readFile(file);
+    if(bytes.size()>kReplayMaxBytes)throw std::runtime_error("Replay preset exceeds 64 KiB");
+    auto preset=Json::parse(bytes);
+    validateReplayPreset(preset,ws);
+    return preset;
+}
+// Standalone Workspace can inspect authoritative sidecars without opening
+// Studio's disposable SQLite index or generating any new asset identities.
+bool replayGuidValid(const std::string& guid) {
+    return guid.size()==32&&guid.find_first_not_of("0123456789abcdef")==std::string::npos;
+}
+std::map<std::string,std::vector<std::string>> replayGuidLocations(
+    const Workspace& ws,const std::set<std::string>& wanted) {
+    std::map<std::string,std::vector<std::string>> found;
+    if(wanted.empty())return found;
+    const fs::path root=fs::path(ws.project.dir)/"content";
+    const auto status=replayFileStatus(root);
+    if(!fs::exists(status))return found;
+    if(!fs::is_directory(status))throw std::runtime_error("Invalid content directory");
+    size_t count=0;
+    uint64_t budget=32ull*1024*1024;
+    for(const auto& entry:fs::recursive_directory_iterator(root)){
+        if(++count>20000)throw std::runtime_error("Replay GUID scan entry limit exceeded");
+        const auto st=entry.symlink_status();
+        if(!fs::is_regular_file(st)||entry.path().extension()!=".meta")continue;
+        const auto bytes=entry.file_size();
+        if(bytes>65536||bytes>budget)throw std::runtime_error("Replay GUID metadata scan budget exceeded");
+        budget-=bytes;
+        const auto text=readFile(entry.path());
+        if(text.size()!=bytes)throw std::runtime_error("Asset metadata changed during scan");
+        const auto guid=Json::parse(text).getStr("guid");
+        if(!wanted.count(guid))continue;
+        auto asset=entry.path();asset.replace_extension();
+        const auto relative=asset.lexically_relative(fs::path(ws.project.dir)).generic_string();
+        if(!fs::is_regular_file(replayFileStatus(asset)))continue;
+        (void)checkedReplayDependency(ws,relative);
+        found[guid].push_back(relative);
+    }
+    for(auto& [guid,locations]:found){(void)guid;std::sort(locations.begin(),locations.end());}
+    return found;
+}
+Json rewriteReplayPaths(const Json& value,const std::map<std::string,std::string>& mapping,unsigned depth=0) {
+    if(depth>64)throw std::runtime_error("Replay graph nesting limit exceeded");
+    if(value.isString()){
+        const auto it=mapping.find(value.str());
+        return it==mapping.end()?value:Json::string(it->second);
+    }
+    if(value.isArray()){
+        Json out=Json::array();
+        for(const auto& item:value.items())out.push(rewriteReplayPaths(item,mapping,depth+1));
+        return out;
+    }
+    if(value.isObject()){
+        Json out=Json::object();
+        for(const auto& [key,item]:value.members())out.set(key,rewriteReplayPaths(item,mapping,depth+1));
+        return out;
+    }
+    return value;
+}
+Json replayRelocationPlan(const Json& preset,const Workspace& ws) {
+    const auto& dependencies=preset["dependencies"];
+    const auto version=preset.getInt("dependencyVersion",1);
+    if(!dependencies.isArray()||dependencies.size()>64||version<1||version>3)
+        throw std::runtime_error("Replay has no supported dependency baseline");
+    std::set<std::string> wanted,oldPaths;
+    for(const auto& row:dependencies.items()){
+        const auto old=row.getStr("path"),guid=row.getStr("guid");
+        if(!row.isObject()||old.rfind("content/",0)!=0||old.size()>520||
+           !oldPaths.insert(old).second||!row["content"].isString()||
+           (row.has("guid")&&!replayGuidValid(guid)))
+            throw std::runtime_error("Invalid replay dependency baseline");
+        if(!guid.empty())wanted.insert(guid);
+    }
+    const auto locations=replayGuidLocations(ws,wanted);
+    Json changes=Json::array();
+    bool conflicts=false;
+    std::map<std::string,std::string> mapping;
+    std::map<std::string,Json> expectedRows;
+    uint64_t budget=kReplayDependencyBudget;
+    for(const auto& row:dependencies.items()){
+        const auto old=row.getStr("path"),guid=row.getStr("guid");
+        std::string target=old,state="unchanged",detail;
+        if(!guid.empty()){
+            const auto it=locations.find(guid);
+            if(it==locations.end()){state="missing";detail="GUID not found";}
+            else if(it->second.size()!=1){state="conflict";detail="Duplicate GUID";}
+            else target=it->second.front();
+        }
+        if(state=="unchanged"){
+            try{
+                const auto file=checkedReplayDependency(ws,target);
+                if(replayFingerprint(file,budget)!=row.getStr("content")){
+                    state="changed";detail="Content fingerprint differs";
+                }else if(row.has("meta")){
+                    const auto meta=fs::path(file.string()+".meta");
+                    if(!fs::is_regular_file(replayFileStatus(meta))||
+                       replayFingerprint(meta,budget)!=row.getStr("meta")){
+                        state="changed";detail="Metadata fingerprint differs";
+                    }
+                }
+                if(state=="unchanged"&&target!=old)state="moved";
+            }catch(const std::exception& e){state="missing";detail=e.what();}
+        }
+        if(state=="unchanged"||state=="moved"){
+            Json expected=row;expected.set("path",strGraph(target));
+            if(!expectedRows.emplace(target,std::move(expected)).second){
+                state="conflict";detail="Multiple old dependencies map to one destination";
+            }else if(state=="moved")mapping.emplace(old,target);
+        }
+        if(state!="unchanged"&&state!="moved")conflicts=true;
+        Json change=Json::object();change.set("from",strGraph(old));change.set("to",strGraph(target));
+        change.set("state",strGraph(state));change.set("detail",strGraph(detail));
+        if(!guid.empty())change.set("guid",strGraph(guid));
+        changes.push(std::move(change));
+    }
+    Json out=Json::object();out.set("changes",std::move(changes));
+    if(conflicts){out.set("state",strGraph("conflict"));return out;}
+    Json candidate=preset;
+    const auto graph=rewriteReplayPaths(Json::parse(preset.getStr("graphSignature")),mapping);
+    if(!mapping.empty())candidate.set("graphSignature",strGraph(graph.dump(-1)));
+    Json expected=Json::array();
+    for(auto& [path,row]:expectedRows){(void)path;expected.push(std::move(row));}
+    candidate.set("dependencies",expected);
+    // Rewalk the candidate graph; moving a relative nested resource may
+    // require changing its parent asset, which this read-only plan cannot do.
+    const auto compatibility=replayCompatibility(candidate,ws);
+    if(compatibility.getStr("state")!="matching"||candidate.dump(-1).size()>kReplayMaxBytes){
+        out.set("state",strGraph("conflict"));
+        out.set("detail",strGraph("Remapped graph does not reproduce the recorded dependency closure"));
+        return out;
+    }
+    out.set("state",strGraph(mapping.empty()?"matching":"ready"));
+    // Opaque revision is a stale-plan detector, not an authentication token.
+    const auto sourceBytes=preset.dump(-1),candidateBytes=candidate.dump(-1);
+    uint64_t revision=14695981039346656037ULL;
+    for(const auto* bytes:{&sourceBytes,&candidateBytes}){
+        for(unsigned char ch:*bytes){revision^=ch;revision*=1099511628211ULL;}
+        revision^=255;revision*=1099511628211ULL;
+    }
+    out.set("planRevision",strGraph(std::to_string(revision)));
+    out.set("candidate",std::move(candidate));
+    return out;
+}
+Json publishReplayPreset(const Workspace& ws,const std::string& name,const Json& preset) {
+    const auto bytes=preset.dump(-1);
+    if(bytes.size()>kReplayMaxBytes)throw std::runtime_error("Replay preset with dependencies exceeds 64 KiB");
+    const auto dir=replayDirectory(ws,true);
+    const auto file=dir/(name+kReplaySuffix);
+    if(fs::exists(replayFileStatus(file)))throw std::runtime_error("Replay name already exists");
+    size_t count=0;
+    for(const auto& entry:fs::directory_iterator(dir)){
+        const auto n=entry.path().filename().string();const std::string suffix=kReplaySuffix;
+        if(n.size()>suffix.size()&&n.compare(n.size()-suffix.size(),suffix.size(),suffix)==0)++count;
+    }
+    if(count>=kReplayMaxEntries)throw std::runtime_error("Replay library is full");
+    const auto temp=dir/(name+".aiverse-tmp");
+    if(fs::exists(replayFileStatus(temp)))throw std::runtime_error("Replay temporary file already exists");
+    try{
+        writeFile(temp,bytes);
+        if(fs::exists(replayFileStatus(file)))throw std::runtime_error("Replay name already exists");
+        fs::rename(temp,file);
+    }catch(...){std::error_code ec;fs::remove(temp,ec);throw;}
+    Json out=Json::object();out.set("name",strGraph(name));
+    out.set("path",strGraph("spectrafx/replays/"+name+kReplaySuffix));
+    return out;
+}
+// Portable envelope deliberately excludes projectPath and unknown preset
+// metadata. The graph itself remains authored data, not an asset archive.
+Json portableReplayRecipe(const Json& source) {
+    Json recipe=Json::object();
+    for(const char* field:{"format","version","graphSignature","camera","tick","speed","loop",
+        "background","grid","axes","parameters","gpuBirthRandom","gpuOwnedAllocation","seed","gpuShaderSeed",
+        "gpuAllocationSeed","dependencyVersion","dependencies"})
+        if(source.has(field))recipe.set(field,source[field]);
+    return recipe;
+}
+Json portableReplayPlan(const Json& portable,const Workspace& ws) {
+    if(!portable.isObject()||portable.getStr("format")!="aiverse.spectrafx.replay.portable"||
+       portable.getInt("version",-1)!=1||portable.dump(-1).size()>kReplayMaxBytes||
+       !portable["recipe"].isObject()||portable["recipe"].has("projectPath"))
+        throw std::runtime_error("Invalid portable replay envelope");
+    Json recipe=portableReplayRecipe(portable["recipe"]);
+    recipe.set("projectPath",strGraph(ws.project.dir));
+    if(recipe.dump(-1).size()>kReplayMaxBytes)throw std::runtime_error("Replay exceeds target size limit");
+    validateReplayPreset(recipe,ws);
+    // Require the strongest currently supported manifest, not a partial
+    // legacy baseline. No silent rebaseline on import.
+    if(recipe.getInt("dependencyVersion")!=3||!recipe["dependencies"].isArray())
+        throw std::runtime_error("Portable replay requires a version 3 dependency manifest");
+    return replayRelocationPlan(recipe,ws);
 }
 void noteGraph(Workspace& ws, const std::string& text) {
     // Existing editor live-reload watcher subscribes to Change::Fx.
@@ -131,6 +650,235 @@ void registerSpectraGraphOps(Workspace& ws) {
     auto add = [&ws](const char* name, const char* description, const char* schema, Workspace::OpFn fn) {
         ws.registerOp({name, description, Json::parse(schema), std::move(fn)});
     };
+
+    // Headless diagnostics of the actual dense volume reference, not a
+    // fake viewport. No graph or project file is written.
+    add("fx_volume_validate","Validate a SpectraFX volume asset v1 and resolve its optional project SDF.",
+        R"({"properties":{"asset":{"type":"object"},"expectedProjectPath":{"type":"string"}},"required":["asset"]})",[&ws](const Json& p){
+        requireReplayProject(ws,p);
+        spectra::volume::Asset asset;spectra::volume::GasGrid grid;std::string error;
+        const bool ok=spectra::volume::readAsset(p["asset"],asset,error)&&
+            spectra::volume::initAsset(asset,grid,error,fx::projectSdfReader(ws.project.dir));
+        Json out=Json::object();out.set("ok",Json::fromBool(ok));
+        if(ok){out.set("asset",spectra::volume::writeAsset(asset));
+            out.set("bytes",Json::number(int64_t(grid.memoryBytes())));
+            out.set("solidCells",Json::number(int64_t(grid.stats().solidCells)));}
+        else out.set("error",strGraph(error));
+        return out;
+    });
+    add("fx_volume_probe","Run 0..8 fixed headless volume ticks and return aggregate field statistics and optional ray integration; CPU reference, no GPU or scene mutation.",
+        R"({"properties":{"asset":{"type":"object"},"ticks":{"type":"integer","minimum":0,"maximum":8},"ray":{"type":"object"},"expectedProjectPath":{"type":"string"}},"required":["asset","ticks"]})",[&ws](const Json& p){
+        requireReplayProject(ws,p);
+        const double ticks=p["ticks"].toDouble(-1);
+        if(!p["ticks"].isNumber()||!std::isfinite(ticks)||ticks<0||ticks>8||std::floor(ticks)!=ticks)
+            throw std::runtime_error("Volume probe requires 0..8 integer ticks");
+        spectra::volume::Asset asset;spectra::volume::GasGrid grid;std::string error;
+        if(!spectra::volume::readAsset(p["asset"],asset,error)||
+           !spectra::volume::initAsset(asset,grid,error,fx::projectSdfReader(ws.project.dir)))
+            throw std::runtime_error(error);
+        // Bound synchronous editor work separately from native caller limits.
+        if(uint64_t(grid.stats().cells)*uint64_t(ticks)*(asset.simulation.pressureIterations+asset.sources.size()+4)>16ull*1024*1024)
+            throw std::runtime_error("Volume probe work budget exceeded; lower ticks or dimension");
+        for(int i=0;i<int(ticks);++i)if(!grid.step())throw std::runtime_error("Volume tick failed");
+        const auto stats=grid.stats();
+        Json out=Json::object();out.set("ok",Json::fromBool(true));
+        out.set("ticks",Json::number(int64_t(stats.ticks)));out.set("cells",Json::number(int64_t(stats.cells)));
+        out.set("solidCells",Json::number(int64_t(stats.solidCells)));
+        out.set("density",Json::number(stats.density,6));out.set("temperature",Json::number(stats.temperature,6));
+        out.set("fuel",Json::number(stats.fuel,6));out.set("peakSpeed",Json::number(double(stats.peakSpeed),6));
+        if(p.has("ray")){
+            const auto& ray=p["ray"];render::float3 eye{},dir{0,0,1};float distance=10;
+            using namespace spectra::volume::asset_detail;
+            if(!keys(ray,{"eye","direction","distance"})||!vector(ray,"eye",eye)||!vector(ray,"direction",dir)||
+               !number(ray,"distance",distance)||!ray.has("eye")||!ray.has("direction")||!ray.has("distance"))
+                throw std::runtime_error("Invalid volume probe ray");
+            spectra::volume::RayResult result;
+            if(!grid.march(eye,dir,distance,asset.material,result))throw std::runtime_error("Invalid volume ray");
+            Json j=Json::object();j.set("radiance",vec(result.radiance));j.set("alpha",scalar(result.alpha));
+            j.set("steps",Json::number(int64_t(result.steps)));out.set("ray",std::move(j));
+        }
+        return out;
+    });
+    add("fx_replay_preset_list","List named project Replay Presets in content/spectrafx/replays; bounded metadata only.",
+        R"({"properties":{"expectedProjectPath":{"type":"string"}}})",[&ws](const Json& p){
+        requireReplayProject(ws,p);
+        const auto dir=replayDirectory(ws,false);
+        Json entries=Json::array();
+        std::vector<std::string> names;
+        if(!dir.empty())for(const auto& entry:fs::directory_iterator(dir)){
+            if(!fs::is_regular_file(entry.symlink_status()))continue;
+            const auto file=entry.path().filename().string();
+            const std::string suffix=kReplaySuffix;
+            if(file.size()<=suffix.size()||file.compare(file.size()-suffix.size(),suffix.size(),suffix)!=0)continue;
+            const auto name=file.substr(0,file.size()-suffix.size());
+            if(validFxName(name)&&name!="fx")names.push_back(name);
+            if(names.size()>kReplayMaxEntries)throw std::runtime_error("Replay library exceeds 256 entries");
+        }
+        std::sort(names.begin(),names.end());
+        for(const auto& name:names){
+            Json row=Json::object();row.set("name",strGraph(name));
+            try{
+                const auto preset=readReplayPreset(dir/(name+kReplaySuffix),ws);
+                row.set("tick",preset["tick"]);row.set("ok",Json::fromBool(true));
+                row.set("hasDependencies",Json::fromBool(preset.has("dependencies")));
+            }catch(const std::exception& e){row.set("ok",Json::fromBool(false));row.set("error",strGraph(e.what()));}
+            entries.push(std::move(row));
+        }
+        Json out=Json::object();out.set("presets",std::move(entries));return out;
+    });
+    add("fx_replay_preset_get","Read a named replay preset; optionally require an exact authored graph signature.",
+        R"({"properties":{"name":{"type":"string"},"expectedProjectPath":{"type":"string"},"expectedGraphSignature":{"type":"string"}},"required":["name"]})",
+        [&ws](const Json& p){
+        requireReplayProject(ws,p);const auto name=requireGraphName(p);
+        const auto dir=replayDirectory(ws,false);
+        if(dir.empty())throw std::runtime_error("Replay library is empty");
+        const auto preset=readReplayPreset(dir/(name+kReplaySuffix),ws);
+        if(p.has("expectedGraphSignature")&&(!p["expectedGraphSignature"].isString()||
+           p.getStr("expectedGraphSignature")!=preset.getStr("graphSignature")))
+            throw std::runtime_error("Replay graph revision mismatch");
+        Json out=Json::object();out.set("name",strGraph(name));out.set("preset",preset);
+        out.set("compatibility",replayCompatibility(preset,ws));return out;
+    });
+    add("fx_replay_preset_check","Check current direct project content dependencies against a recorded replay manifest; legacy presets are unverified.",
+        R"({"properties":{"preset":{"type":"object"},"expectedProjectPath":{"type":"string"}},"required":["preset"]})",
+        [&ws](const Json& p){
+        requireReplayProject(ws,p);
+        if(p["preset"].dump(-1).size()>kReplayMaxBytes)throw std::runtime_error("Replay preset exceeds 64 KiB");
+        validateReplayPreset(p["preset"],ws);
+        return replayCompatibility(p["preset"],ws);
+    });
+    add("fx_replay_preset_relocate_preview","Read-only GUID relocation plan for a named Replay Preset. Returns a candidate only when the full recorded dependency closure still matches.",
+        R"({"properties":{"name":{"type":"string"},"expectedProjectPath":{"type":"string"}},"required":["name"]})",
+        [&ws](const Json& p){
+        requireReplayProject(ws,p);const auto name=requireGraphName(p);
+        const auto dir=replayDirectory(ws,false);
+        if(dir.empty())throw std::runtime_error("Replay library is empty");
+        return replayRelocationPlan(readReplayPreset(dir/(name+kReplaySuffix),ws),ws);
+    });
+    add("fx_replay_preset_relocate_apply","Recompute a reviewed GUID relocation plan and publish a new immutable preset. Does not modify the source graph, source preset or resources.",
+        R"({"properties":{"name":{"type":"string"},"newName":{"type":"string"},"planRevision":{"type":"string"},"expectedProjectPath":{"type":"string"}},"required":["name","newName","planRevision"]})",
+        [&ws](const Json& p){
+        requireReplayProject(ws,p);
+        const auto name=requireGraphName(p),newName=requireGraphName(p,"newName");
+        if(name==newName)throw std::runtime_error("Choose a new replay preset name");
+        const auto dir=replayDirectory(ws,false);
+        if(dir.empty())throw std::runtime_error("Replay library is empty");
+        const auto plan=replayRelocationPlan(readReplayPreset(dir/(name+kReplaySuffix),ws),ws);
+        if(plan.getStr("state")!="ready"||!p["planRevision"].isString()||
+           p.getStr("planRevision")!=plan.getStr("planRevision"))
+            throw std::runtime_error("Replay relocation plan is stale or has conflicts; preview again");
+        const auto& candidate=plan["candidate"];
+        validateReplayPreset(candidate,ws);
+        auto out=publishReplayPreset(ws,newName,candidate);
+        out.set("source",strGraph(name));
+        return out;
+    });
+    add("fx_replay_preset_portable_export","Export a named replay recipe without its project path. References resources by recorded GUID and fingerprints; does not embed asset bytes.",
+        R"({"properties":{"name":{"type":"string"},"expectedProjectPath":{"type":"string"}},"required":["name"]})",
+        [&ws](const Json& p){
+        requireReplayProject(ws,p);const auto name=requireGraphName(p);
+        const auto dir=replayDirectory(ws,false);
+        if(dir.empty())throw std::runtime_error("Replay library is empty");
+        const auto preset=readReplayPreset(dir/(name+kReplaySuffix),ws);
+        if(preset.getInt("dependencyVersion")!=3||replayCompatibility(preset,ws).getStr("state")!="matching")
+            throw std::runtime_error("Export requires a matching version 3 dependency baseline");
+        Json portable=Json::object();
+        portable.set("format",strGraph("aiverse.spectrafx.replay.portable"));
+        portable.set("version",Json::number(int64_t(1)));
+        portable.set("recipe",portableReplayRecipe(preset));
+        if(portable.dump(-1).size()>kReplayMaxBytes)throw std::runtime_error("Portable replay exceeds 64 KiB");
+        Json out=Json::object();out.set("portable",std::move(portable));return out;
+    });
+    add("fx_replay_preset_portable_preview","Preview importing a portable replay into the open project. No files are written.",
+        R"({"properties":{"portable":{"type":"object"},"expectedProjectPath":{"type":"string"}},"required":["portable"]})",
+        [&ws](const Json& p){
+        requireReplayProject(ws,p);
+        return portableReplayPlan(p["portable"],ws);
+    });
+    add("fx_replay_preset_portable_apply","Recompute the reviewed portable import plan and save a new immutable preset in the target project.",
+        R"({"properties":{"portable":{"type":"object"},"newName":{"type":"string"},"planRevision":{"type":"string"},"expectedProjectPath":{"type":"string"}},"required":["portable","newName","planRevision"]})",
+        [&ws](const Json& p){
+        requireReplayProject(ws,p);const auto name=requireGraphName(p,"newName");
+        const auto plan=portableReplayPlan(p["portable"],ws);
+        const auto state=plan.getStr("state");
+        if((state!="ready"&&state!="matching")||!p["planRevision"].isString()||
+           p.getStr("planRevision")!=plan.getStr("planRevision"))
+            throw std::runtime_error("Portable import plan is stale or has conflicts; preview again");
+        const auto& candidate=plan["candidate"];
+        validateReplayPreset(candidate,ws);
+        return publishReplayPreset(ws,name,candidate);
+    });
+    add("fx_replay_package_list","List project-local .aivfx transfer archives; payload validation occurs at preview.",
+        R"({"properties":{"expectedProjectPath":{"type":"string"}}})",[&ws](const Json& p){
+        requireReplayProject(ws,p);
+        const auto dir=fs::path(ws.project.dir)/"packages";
+        Json rows=Json::array();
+        std::vector<std::string> names;
+        if(fs::exists(replayFileStatus(dir))){
+            if(!fs::is_directory(replayFileStatus(dir)))throw std::runtime_error("Invalid package directory");
+            for(const auto& e:fs::directory_iterator(dir)){
+                if(!fs::is_regular_file(e.symlink_status())||e.path().extension()!=".aivfx")continue;
+                const auto name=e.path().stem().string();
+                if(validFxName(name)&&name!="fx")names.push_back(name);
+                if(names.size()>256)throw std::runtime_error("Too many VFX packages");
+            }
+        }
+        std::sort(names.begin(),names.end());
+        for(const auto& name:names){
+            Json row=Json::object();row.set("name",strGraph(name));
+            row.set("bytes",Json::number(int64_t(fs::file_size(dir/(name+".aivfx")))));
+            rows.push(std::move(row));
+        }
+        Json out=Json::object();out.set("packages",std::move(rows));return out;
+    });
+    add("fx_replay_package_export","Export a verified named preset and recorded dependency bytes to project/packages/<package>.aivfx.",
+        R"({"properties":{"name":{"type":"string"},"package":{"type":"string"},"expectedProjectPath":{"type":"string"}},"required":["name","package"]})",
+        [&ws](const Json& p){
+        requireReplayProject(ws,p);
+        const auto name=requireGraphName(p),package=requireGraphName(p,"package");
+        const auto dir=replayDirectory(ws,false);
+        if(dir.empty())throw std::runtime_error("Replay library is empty");
+        const auto preset=readReplayPreset(dir/(name+kReplaySuffix),ws);
+        if(preset.getInt("dependencyVersion")!=3||replayCompatibility(preset,ws).getStr("state")!="matching")
+            throw std::runtime_error("Package export requires matching manifest v3");
+        return runPackageTool(ws.engineDir,{"fx-package-export",name,package,"--project",ws.project.dir});
+    });
+    add("fx_replay_package_preview","Preview project-local .aivfx package payload installation; reuse maps original content paths to selected target GUIDs.",
+        R"({"properties":{"package":{"type":"string"},"reuse":{"type":"object"},"expectedProjectPath":{"type":"string"}},"required":["package"]})",
+        [&ws](const Json& p){
+        requireReplayProject(ws,p);const auto package=requireGraphName(p,"package");
+        const auto reuse=p.has("reuse")?p["reuse"].dump(-1):"{}";
+        if(reuse.size()>16384)throw std::runtime_error("Package reuse selection too large");
+        return runPackageTool(ws.engineDir,{"fx-package-preview",package,"--project",ws.project.dir,"--reuse",reuse});
+    });
+    add("fx_replay_package_apply","Install reviewed missing payloads without overwriting; returns portable recipe for separate verified preset import.",
+        R"({"properties":{"package":{"type":"string"},"planRevision":{"type":"string"},"reuse":{"type":"object"},"expectedProjectPath":{"type":"string"}},"required":["package","planRevision"]})",
+        [&ws](const Json& p){
+        requireReplayProject(ws,p);const auto package=requireGraphName(p,"package");
+        const auto revision=p.getStr("planRevision");
+        if(revision.size()!=64||revision.find_first_not_of("0123456789abcdef")!=std::string::npos)
+            throw std::runtime_error("Invalid package revision");
+        const auto reuse=p.has("reuse")?p["reuse"].dump(-1):"{}";
+        if(reuse.size()>16384)throw std::runtime_error("Package reuse selection too large");
+        return runPackageTool(ws.engineDir,{"fx-package-apply",package,revision,"--project",ws.project.dir,"--reuse",reuse});
+    });
+    add("fx_replay_preset_save","Create an immutable named replay preset asset. Existing names are never overwritten.",
+        R"({"properties":{"name":{"type":"string"},"preset":{"type":"object"},"expectedProjectPath":{"type":"string"}},"required":["name","preset"]})",
+        [&ws](const Json& p){
+        requireReplayProject(ws,p);const auto name=requireGraphName(p);
+        Json preset=p["preset"];
+        if(preset.dump(-1).size()>kReplayMaxBytes)throw std::runtime_error("Replay preset exceeds 64 KiB");
+        validateReplayPreset(preset,ws);
+        // Preserve existing baselines; never silently bless a changed resource.
+        if(preset.has("dependencies")){
+            if(replayCompatibility(preset,ws).getStr("state")!="matching")
+                throw std::runtime_error("Replay resource baseline no longer matches");
+        }else{
+            preset.set("dependencyVersion",Json::number(int64_t(3)));
+            preset.set("dependencies",replayDependencies(preset,ws,3));
+        }
+        return publishReplayPreset(ws,name,preset);
+    });
 
     add("fx_graph_list", "List SpectraFX graphs (fx/graphs/*.vfx.json) with compiler diagnostics and emitter counts.",
         R"({"properties":{}})", [&ws](const Json&) {
@@ -151,7 +899,7 @@ void registerSpectraGraphOps(Workspace& ws) {
             Json item = Json::object();
             item.set("name", strGraph(name));
             try {
-                Json state = graphEvaluation(Json::parse(readFile(graphFile(ws, name))), Json::object());
+                Json state = graphEvaluation(ws,Json::parse(readFile(graphFile(ws, name))), Json::object());
                 for (const auto& [key, value] : state.members()) item.set(key, value);
             } catch (const std::exception& e) {
                 item.set("ok", Json::fromBool(false));
@@ -176,7 +924,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         try {
             const Json graph = Json::parse(content);
             response.set("graph", graph);
-            response.set("validation", graphEvaluation(graph, Json::object()));
+            response.set("validation", graphEvaluation(ws,graph, Json::object()));
         } catch (const std::exception& e) {
             response.set("parseError", strGraph(e.what()));
         }
@@ -187,7 +935,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         R"({"properties":{"name":{"type":"string"},"graph":{"type":"object"},"text":{"type":"string"},"overrides":{"type":"object"}}})",
         [&ws](const Json& p) {
         requireGame(ws);
-        return graphEvaluation(sourceGraph(p, ws), p.has("overrides") ? p["overrides"] : Json::object());
+        return graphEvaluation(ws,sourceGraph(p, ws), p.has("overrides") ? p["overrides"] : Json::object());
     });
 
     add("fx_graph_set", "Create or replace fx/graphs/<name>.vfx.json after strict SpectraFX compiler validation; legacy effects are not changed.",
@@ -197,7 +945,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         const std::string name = requireGraphName(p);
         if (!p.has("graph") && !p.has("text")) throw std::runtime_error("provide graph or text");
         const Json graph = sourceGraph(p, ws);
-        Json response = graphEvaluation(graph, Json::object());
+        Json response = graphEvaluation(ws,graph, Json::object());
         response.set("name", strGraph(name));
         if (!response.getBool("ok")) return response; // never overwrite a valid graph with invalid input
         const std::string content = graph.dump(2) + "\n";
@@ -249,16 +997,19 @@ void registerSpectraGraphOps(Workspace& ws) {
     // a valid graph node by node. The caller can commit via fx_graph_set or
     // preserve incomplete work using fx_graph_draft_set.
     add("fx_graph_edit",
-        "Apply a v1/v2 graph edit in memory and return the edited JSON plus compiler diagnostics. Actions: new, upgrade, add, connect, disconnect, deleteNode, setProperty; does not write files.",
+        "Apply a v1/v2 graph edit in memory and return the edited JSON plus compiler diagnostics. Actions: new, newVolume, addVolume, upgrade, add, connect, disconnect, deleteNode, setProperty, bakeSdf (closed project model, dimension 4..32), importSdf (project .sdfbin snapshot), linkSdf (persistent project .sdfbin reference); does not write files.",
         R"({"properties":{"name":{"type":"string"},"graph":{"type":"object"},"text":{"type":"string"},
-             "action":{"type":"string"},"type":{"type":"string"},"from":{"type":"string"},
+             "action":{"type":"string"},"preset":{"type":"string"},"type":{"type":"string"},"from":{"type":"string"},
              "to":{"type":"string"},"toPort":{"type":"string"},"node":{"type":"string"},
-             "property":{"type":"string"},"value":{},"draft":{"type":"boolean"}},
+             "property":{"type":"string"},"value":{},"draft":{"type":"boolean"},
+             "model":{"type":"string"},"dimension":{"type":"integer","minimum":4,"maximum":32},
+             "sdfAsset":{"type":"string"},"expectedProjectPath":{"type":"string"}},
              "required":["action"]})", [&ws](const Json& p) {
         requireGame(ws);
         const std::string action=p.getStr("action");
         Json graph;
         if(action=="new")graph=spectra::authoring::newGraphV2();
+        else if(action=="newVolume")graph=Json::parse(R"({"version":2,"nodes":[],"links":[],"outputs":[]})");
         else if(p.getBool("draft") && !p.has("graph") && !p.has("text"))
             graph=Json::parse(readFile(draftFile(ws,requireGraphName(p))));
         else graph=sourceGraph(p,ws);
@@ -266,6 +1017,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         std::string added;
         bool ok=true;
         if(action=="new") {}
+        else if(action=="newVolume"||action=="addVolume")ok=spectra::volume::appendPreset(graph,p.getStr("preset","fire"),error);
         else if(action=="upgrade") {
             if(graph.getInt("version")!=1)ok=false;
             else graph.set("version",Json::number(int64_t(2)));
@@ -297,13 +1049,81 @@ void registerSpectraGraphOps(Workspace& ws) {
                 graph.set("links",std::move(links));
                 graph.set("outputs",std::move(outputs));
             }
+        } else if(action=="importSdf"||action=="linkSdf") {
+            requireReplayProject(ws,p);
+            Json* n=spectra::authoring::node(graph,p.getStr("node"));
+            if(graph.getInt("version")!=2||!n||n->getStr("type")!="CollisionModule")
+                throw std::runtime_error("Select a Graph v2 CollisionModule");
+            const std::string asset=p.getStr("sdfAsset");
+            if(asset.size()<7||asset.compare(asset.size()-7,7,".sdfbin")!=0)
+                throw std::runtime_error("Choose a project .sdfbin file");
+            const auto file=checkedReplayDependency(ws,asset);
+            const auto size=fs::file_size(file);
+            if(size>fx::kSdfBinaryMaxBytes)throw std::runtime_error("SDF binary exceeds byte budget");
+            std::ifstream input(file,std::ios::binary);
+            if(!input)throw std::runtime_error("Cannot open SDF binary");
+            std::string bytes(size_t(size),'\0');
+            if(size&&!input.read(bytes.data(),std::streamsize(size)))
+                throw std::runtime_error("Cannot read SDF binary");
+            if(input.peek()!=std::char_traits<char>::eof())throw std::runtime_error("SDF binary size changed");
+            fx::StaticSdfVolume sdf;
+            if(!fx::decodeSdfBinary(bytes,sdf,&error))throw std::runtime_error("SDF import: "+error);
+            if(action=="importSdf"&&sdf.dimension>fx::kStaticSdfInlineMaxDimension)
+                throw std::runtime_error("High-resolution SDF must be linked, not imported inline");
+            Json props=(*n)["properties"];
+            if(!props.isObject())props=Json::object();
+            props.set("staticSdf",action=="linkSdf"?Json::string(asset):fx::staticSdfToJson(sdf));
+            n->set("properties",std::move(props));
+        } else if(action=="bakeSdf") {
+            // Same edit pipeline as setProperty; never persist partial work.
+            requireReplayProject(ws,p);
+            Json* n=spectra::authoring::node(graph,p.getStr("node"));
+            const auto& dimension=p["dimension"];
+            const auto d=dimension.toDouble();
+            if(graph.getInt("version")!=2||!n||n->getStr("type")!="CollisionModule"||
+               !dimension.isNumber()||!std::isfinite(d)||d<4||d>fx::kStaticSdfInlineMaxDimension||std::floor(d)!=d)
+                throw std::runtime_error("Select a Graph v2 CollisionModule and integer dimension 4..32");
+            const std::string model=p.getStr("model");
+            (void)checkedReplayDependency(ws,model);
+            if(!render::isNativeModelFormat(model))
+                throw std::runtime_error("Choose a native supported model format");
+            uint64_t remaining=64ull*1024*1024;
+            // All model dependencies must remain inside project content;
+            // the existing checked path rejects traversal and symlinks.
+            render::FileReader reader=[&](const std::string& name,std::string& bytes){
+                try{
+                    const auto file=checkedReplayDependency(ws,name);
+                    const auto size=fs::file_size(file);
+                    if(size>remaining)return false;
+                    std::ifstream input(file,std::ios::binary);
+                    if(!input)return false;
+                    bytes.resize(size_t(size));
+                    if(size&&!input.read(bytes.data(),std::streamsize(size)))return false;
+                    if(input.peek()!=std::char_traits<char>::eof())return false;
+                    remaining-=size;return true;
+                }catch(const std::exception&){return false;}
+            };
+            fx::StaticSdfVolume sdf;
+            if(!fx::bakeStaticSdfModel(model,reader,uint32_t(d),render::mat4{},sdf,error))
+                throw std::runtime_error("SDF bake: "+error);
+            Json props=(*n)["properties"];
+            if(!props.isObject())props=Json::object();
+            props.set("staticSdf",fx::staticSdfToJson(sdf));
+            // Other modules, terrain policy, and sphere stay as authored.
+            n->set("properties",std::move(props));
         } else if(action=="setProperty") {
             Json* n=spectra::authoring::node(graph,p.getStr("node"));
             if(!n || !p.has("value"))ok=false;
             else {
                 Json props=(*n)["properties"];
                 if(!props.isObject())props=Json::object();
-                ok=fx::vfx2::nestedSet(props,p.getStr("property"),p["value"]);
+                const auto key=p.getStr("property");
+                if(n->getStr("type")=="VolumeDomain"&&key=="obstacle"&&p["value"].isString()&&p["value"].str().empty()){
+                    props.erase(key);ok=true;
+                }else{
+                    ok=fx::vfx2::nestedSet(props,key,p["value"]);
+                    if(ok&&n->getStr("type")=="VolumeSource"&&key=="mode"&&p["value"].str()=="continuous")props.erase("duration");
+                }
                 if(ok)n->set("properties",std::move(props));
             }
         } else {ok=false;error="unknown graph edit action";}
@@ -315,7 +1135,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         }
         response.set("graph",graph);
         if(!added.empty())response.set("newNodeId",Json::string(added));
-        response.set("validation",graphEvaluation(graph,Json::object()));
+        response.set("validation",graphEvaluation(ws,graph,Json::object()));
         response.set("summary",Json::string("In-memory SpectraFX graph edit; save via fx_graph_set or fx_graph_draft_set"));
         return response;
     });
@@ -338,7 +1158,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         Json response=Json::object();
         response.set("name",Json::string(name));
         response.set("ok",Json::fromBool(true));
-        response.set("validation",graphEvaluation(doc,Json::object()));
+        response.set("validation",graphEvaluation(ws,doc,Json::object()));
         response.set("summary",Json::string("Draft saved separately; published graph/effect unchanged"));
         return response;
     });
@@ -353,7 +1173,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         Json response=Json::object();
         response.set("name",Json::string(name));
         response.set("graph",doc);
-        response.set("validation",graphEvaluation(doc,Json::object()));
+        response.set("validation",graphEvaluation(ws,doc,Json::object()));
         return response;
     });
 
@@ -389,7 +1209,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         const std::string name=requireGraphName(p);
         const fs::path draft=draftFile(ws,name);
         const Json doc=Json::parse(readFile(draft));
-        Json response=graphEvaluation(doc,Json::object());
+        Json response=graphEvaluation(ws,doc,Json::object());
         response.set("name",Json::string(name));
         if(!response.getBool("ok"))return response;
         writeFile(graphFile(ws,name),doc.dump(2)+"\n");
@@ -407,7 +1227,7 @@ void registerSpectraGraphOps(Workspace& ws) {
         const std::string name = requireGraphName(p);
         const std::string effect = requireGraphName(p, "effect");
         fx::EffectDef compiled;
-        Json response = graphEvaluation(sourceGraph(p, ws),
+        Json response = graphEvaluation(ws,sourceGraph(p, ws),
             p.has("overrides") ? p["overrides"] : Json::object(), &compiled);
         if (!response.getBool("ok")) return response;
         const fs::path target = effectFile(ws, effect);
@@ -420,6 +1240,74 @@ void registerSpectraGraphOps(Workspace& ws) {
         response.set("next", strGraph("fx_preview {\"effect\":\"" + effect + "\"}"));
         return response;
     });
+    // The same GPU preview used by SpectraStudio is available through MCP
+    // when the tool call is forwarded to a running native Studio. Standalone
+    // MCP keeps full graph authoring but reports the absent graphics device.
+    // No RHI pointer, arbitrary file path or source code crosses this API.
+    add("fx_graph_preview",
+        "Control the *real native Studio* SpectraFX GPU/CPU particle preview. "
+        "Actions: status, load, play, pause, step, seek (0..3600 ticks), "
+        "restart, parameter (named scalar), stop, cameraReset, cameraOrbit, cameraZoom, "
+        "cameraPreset (perspective/front/side/top), stage (background/grid/axes), "
+        "playback (speed 0.25..4 and loop), burst (count 1..8), "
+        "clear (GPU-safe deferred reset), capture (maxSide 128..768), "
+        "captureStatus (one bounded native JPEG readback, not a stream), replayRestore, replayCancel. "
+        "For load use a graph object or graphName with draft=true for a private draft. "
+        "Optional gpuOwnedAllocation enables GPU-authored lists and demand-grown buffers on supported devices. "
+        "Optional expectedProjectPath and expectedGeneration reject stale commands. "
+        "The preview is presentation only; no game ECS writes or offscreen fake renders. "
+        "Requires the native Studio GPU viewport to be visible; standalone MCP "
+        "returns a clear unavailable error.",
+        R"({"properties":{"action":{"type":"string","enum":["status","load","play","pause","step","seek","restart","parameter","stop","cameraReset","cameraOrbit","cameraZoom","cameraPreset","stage","playback","burst","clear","capture","captureStatus","replayRestore","replayCancel"]},
+            "graph":{"type":"object"},"graphName":{"type":"string"},
+            "expectedProjectPath":{"type":"string"},"expectedGeneration":{"type":"integer","minimum":0},
+            "camera":{"type":"object"},"parameters":{"type":"object"},"seed":{"type":"integer"},
+            "gpuShaderSeed":{"type":"integer"},"gpuAllocationSeed":{"type":"integer"},"gpuBirthRandom":{"type":"boolean"},"gpuOwnedAllocation":{"type":"boolean"},
+            "draft":{"type":"boolean"},"tick":{"type":"integer","minimum":0,"maximum":3600},
+            "play":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"number"},
+            "dx":{"type":"number"},"dy":{"type":"number"},"amount":{"type":"number"},
+            "preset":{"type":"string","enum":["perspective","front","side","top"]},
+            "background":{"type":"string","enum":["dark","neutral","light","black"]},
+            "grid":{"type":"boolean"},"axes":{"type":"boolean"},
+            "speed":{"type":"number"},"loop":{"type":"boolean"},
+            "count":{"type":"integer","minimum":1,"maximum":8},
+            "maxSide":{"type":"integer","minimum":128,"maximum":768}},
+            "required":["action"]})",
+        [&ws](const Json& p) {
+            requireGame(ws);
+            const std::string action=p.getStr("action");
+            if(action!="status"&&action!="load"&&action!="play"&&
+               action!="pause"&&action!="step"&&action!="seek"&&
+               action!="restart"&&action!="parameter"&&action!="stop"&&
+               action!="cameraReset"&&action!="cameraOrbit"&&action!="cameraZoom"&&
+               action!="cameraPreset"&&action!="stage"&&action!="playback"&&
+               action!="burst"&&action!="clear"&&
+               action!="capture"&&action!="captureStatus"&&action!="replayRestore"&&action!="replayCancel")
+                throw std::runtime_error("unknown SpectraFX preview action");
+            Json command=p;
+            if(action=="load") {
+                if(p.has("graph")&&p.has("graphName"))
+                    throw std::runtime_error("use either graph or graphName, not both");
+                if(!p.has("graph")) {
+                    const std::string graphName=requireGraphName(p,"graphName");
+                    const fs::path file=p.getBool("draft")
+                        ?draftFile(ws,graphName):graphFile(ws,graphName);
+                    std::error_code ec;
+                    const auto root=fs::weakly_canonical(fs::path(ws.project.dir),ec);
+                    if(ec)throw std::runtime_error("cannot resolve active project path");
+                    const auto resolved=fs::weakly_canonical(file,ec);
+                    if(ec)throw std::runtime_error("cannot resolve VFX graph file");
+                    const auto rel=resolved.lexically_relative(root);
+                    if(rel.empty()||rel.is_absolute()||
+                       (rel.begin()!=rel.end()&&(*rel.begin()).string()==".."))
+                        throw std::runtime_error("preview graph reference escapes the active project");
+                    command.set("graph",Json::parse(readFile(file)));
+                }
+                if(!command["graph"].isObject())
+                    throw std::runtime_error("preview requires a Graph v2 JSON object");
+            }
+            return ws.spectraPreview(command);
+        });
     registerSpectraFunctionOps(ws);
 }
 

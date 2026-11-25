@@ -2,9 +2,12 @@
 // abilities (autocast, auras, buffs, stuns, summons, blink), hero experience, death (bounty, score,
 // wrecks, depleted extractors).
 #include "Damage.h"
+#include "CampaignFight.h"
 #include "Internal.h"
 #include "engine/mechanics/EcsKinematicProjectileSystems.h"
 #include "engine/mechanics/EcsOrderedImpactSystems.h"
+#include "engine/mechanics/WeaponCadence.h"
+#include "engine/mechanics/MultiTargetSelection.h"
 #include <algorithm>
 #include <map>
 
@@ -36,6 +39,7 @@ void GameCore::sysTargeting(Simulation& sim) {
     w.each<Combat, Unit, Owner, Transform>([&](Entity e, Combat& c, Unit& u, Owner& o, Transform& tr) {
         if (o.player == 0 || (u.flags & (kUnitUnderConstruction | kUnitDisabled | kUnitInHand | kUnitPossessed))) return;
         if (mechOn(sim) && !mechCanAcquire(sim, e)) { if (c.autoTarget && w.alive(c.target)) { c.target = kNullEntity; if (!w.has<Orders>(e) || w.get<Orders>(e).queue.empty()) stopMoving(sim, e); } return; }   // agent-mech
+        if (w.alive(c.target) && !campaignGuardCanTarget(w, e, c.target)) c.target = kNullEntity;
         if (++c.acquireTimer < 4) return;
         if (rules_.advancedEffects && (statusFlags(sim, e) & (kStBlind | kStStun | kStDisarm))) return;
         c.acquireTimer = 0;
@@ -54,8 +58,6 @@ void GameCore::sysTargeting(Simulation& sim) {
                 return;
             }
         }
-        uint8_t layers = 0;
-        for (auto& wd : t.weapons) layers |= wd.targets;
         Fixed sight = stat(sim, e, Stat::Sight);
         const Fixed ownSight = sight;
         if (radarAcq) sight = fxMax(sight, maxWeaponRange(t) + stat(sim, e, Stat::Range));   // beyond sight: seen by allies or on radar
@@ -66,11 +68,11 @@ void GameCore::sysTargeting(Simulation& sim) {
         // elliptical range (weapon rangeAspect): the sight ellipse squashed along z
         const Fixed aspect = t.weapons.empty() ? kOne : t.weapons[0].rangeAspect;
         gs.hash.query(tr.pos, sight, [&](Entity cand) {
-            if (cand == e) return;
+            if (cand == e || !campaignGuardCanTarget(w, e, cand)) return;
             auto* cu = w.tryGet<Unit>(cand);
             if (!cu || cu->hp.raw <= 0) return;
             const UnitType& ct = rules_.types[cu->type];
-            if (ct.invulnerable || !layerHit(layers, ct.layer)) return;
+            if (ct.invulnerable || std::none_of(t.weapons.begin(), t.weapons.end(), [&](const WeaponDef& wd) { return weaponTargetMatches(wd, ct.layer, ct.tags); })) return;
             if (sensors && !sensors->anyWeaponHits(u.type, cu->type)) return;   // underwater: torpedoes only
             if (!hostile(sim, o.player, w.get<Owner>(cand).player)) return;
             if (rules_.advancedEffects) { uint32_t fl = statusFlags(sim, cand); if (fl & kStUntargetable) return; if ((fl & kStInvisible) && !(fl & kStRevealed) && !(rules_.mech.detection && detected(sim, cand, o.player))) return; }
@@ -120,6 +122,7 @@ Fixed GameCore::environmentWaterDepth(Simulation& sim, Fixed x, Fixed z) {
 void GameCore::dealDamage(Simulation& sim, Entity target, Fixed dmg, uint16_t dmgType, Entity source, uint8_t sourceOwner, const WeaponDef* wd) {
     struct Hooks {
         GameCore& m; Simulation& sim;
+        bool critical = false;
         bool before(Entity t, Entity s, Fixed& d) {   // native modules (docs/native-modules.md § Hooks)
             if (m.native_.has(kHookDamage)) { m.native_.damage(m, sim, t, s, d); if (d.raw <= 0) return false; }
             return true;
@@ -129,7 +132,7 @@ void GameCore::dealDamage(Simulation& sim, Entity target, Fixed dmg, uint16_t dm
         uint32_t statusFlags(Entity t) { return m.statusFlags(sim, t); }
         Fixed stat(Entity e, Stat s) { return m.stat(sim, e, s); }
         Fixed finish(Entity t, Entity s, uint8_t owner, uint16_t type, Fixed fin) {
-            if (m.progression_ && m.progression_->active()) fin = m.progression_->damage(sim, t, s, fin);   // perks: crits, incoming damage
+            if (m.progression_ && m.progression_->active()) fin = m.progression_->damage(sim, t, s, fin, &critical);   // perks: crits, incoming damage
             if (m.script_ && (m.script_->hooks() & ScriptEngine::kHookDamage)) fin = m.script_->beforeDamage(sim, t, s, owner, fin, type);   // before_damage (G12)
             return fin;
         }
@@ -149,6 +152,10 @@ void GameCore::sysWeapons(Simulation& sim) {
     std::vector<Shot> shots;
     struct OnHit { int16_t payload; Entity caster, target; uint8_t owner; uint16_t type; Vec3 at; };
     std::vector<OnHit> onHits;
+    // Conservative extent of authored targets for contact-distance broadphase.
+    // Computed only on the first opt-in multishot attack this tick.
+    Fixed maxTargetExtent{};
+    bool extentReady = false;
     auto statusOnHit = [&](Entity e) -> int16_t {   // first status of the attacker that enchants its weapons
         if (!rules_.advancedEffects) return -1;
         if (auto* st = w.tryGet<Statuses>(e)) for (auto& in : st->list) if (rules_.statuses[in.def].onHit >= 0) return rules_.statuses[in.def].onHit;
@@ -157,14 +164,36 @@ void GameCore::sysWeapons(Simulation& sim) {
     w.each<Combat, Unit, Owner, Transform>([&](Entity e, Combat& c, Unit& u, Owner& o, Transform& tr) {
         const UnitType& t = rules_.types[u.type];
         Fixed atkSpeed = fxMax(stat(sim, e, Stat::AttackSpeed), Fixed::fromRatio(1, 10));
-        for (size_t i = 0; i < t.weapons.size() && i < 4; ++i) c.cooldown[i] = fxMax(Fixed{}, c.cooldown[i] - dt * atkSpeed);
+        using namespace lib::mechanics;
+        // Scope guard also covers early returns and rejected shots: unused credit
+        // must never accumulate across idle, stunned or out-of-range ticks.
+        struct CadenceBoundary {
+            Combat& combat;
+            ~CadenceBoundary() {
+                for (auto& remaining : combat.cooldown) remaining = finishWeaponCadence(remaining);
+            }
+        } boundary{c};
+        for (size_t i = 0; i < t.weapons.size() && i < 4; ++i)
+            if (!t.weapons[i].preciseCooldown)
+                c.cooldown[i] = advanceWeaponCadence(c.cooldown[i], dt * atkSpeed, false);
+        bool keepWindup[4]{};
+        for (size_t i = 0; i < 4; ++i) {
+            auto& phase = c.attackTiming[i];
+            if (phase.phase == WeaponAttackPhase::Recovery && advanceAttackPhase(phase, dt * atkSpeed)) {
+                sim.emit({kEvAttackRecoveryEnd, o.player, e, phase.target, int64_t(i), tr.pos});
+                phase = {};
+            }
+        }
+        auto tryFire = [&] {
         if (u.flags & (kUnitUnderConstruction | kUnitDisabled | kUnitInHand)) return;
         if (auto* b = w.tryGet<Buffs>(e); b && b->stunUntil > sim.tick()) return;
         if (rules_.advancedEffects && (statusFlags(sim, e) & (kStStun | kStDisarm))) return;
         if (!w.alive(c.target) || !w.has<Unit>(c.target) || (w.get<Unit>(c.target).flags & kUnitOffMap)) { c.target = kNullEntity; return; }
         const Unit& tu = w.get<Unit>(c.target);
         const UnitType& tt = rules_.types[tu.type];
-        if (tu.hp.raw <= 0) return;
+        if (tu.hp.raw <= 0 || !campaignGuardCanTarget(w, e, c.target)) return;
+        if (std::any_of(t.weapons.begin(), t.weapons.end(), [](const WeaponDef& wd) { return wd.targetTags || wd.ignoreTags; }) &&
+            std::none_of(t.weapons.begin(), t.weapons.end(), [&](const WeaponDef& wd) { return weaponTargetMatches(wd, tt.layer, tt.tags); })) { c.target = kNullEntity; return; }
         auto* ord = w.tryGet<Orders>(e);
         auto* m = w.tryGet<Mobile>(e);
         Fixed dist = contactDistance(sim, e, c.target);
@@ -185,66 +214,181 @@ void GameCore::sysWeapons(Simulation& sim) {
         Vec3 face = flat(tp - tr.pos);
         if (face.length().raw > 0) u.facing = face / face.length();
         // damage scaling: techs/buffs, squad members alive, height advantage
-        Fixed mult = stat(sim, e, Stat::Damage);
-        if (t.members > 1) mult = mult * membersAlive(sim, e) / t.members;
+        Fixed baseMult = stat(sim, e, Stat::Damage);
+        if (t.members > 1) baseMult = baseMult * membersAlive(sim, e) / t.members;
+        Fixed mult = baseMult;
         if (adv.raw > 0) mult = mult * (kOne + rules_.heights.damagePerLevel * adv);
         for (size_t i = 0; i < t.weapons.size() && i < 4; ++i) {
             const WeaponDef& wd = t.weapons[i];
-            if (!canHit(wd, tt.layer) || c.cooldown[i].raw > 0 || dist > wd.range + rangeBonus || dist < wd.minRange) continue;
+            if (!weaponTargetMatches(wd, tt.layer, tt.tags) || c.cooldown[i].raw > 0 || dist > wd.range + rangeBonus || dist < wd.minRange) continue;
             if (sensors_ && sensors_->active() && !sensors_->weaponHits(u.type, i, tu.type)) continue;   // underwater: torpedoes only
             if (wd.rangeAspect != kOne && !inRangeEllipse(tr.pos, tp, wd.range + rangeBonus, wd.rangeAspect)) continue;
             if (m && m->moving && ord && !ord->queue.empty() && ord->queue.front().type == OrderType::Move) continue;
-            if (wd.chargeTime.raw > 0) {
+            auto& phase = c.attackTiming[i];
+            if (phase.phase == WeaponAttackPhase::Recovery) continue;
+            if (phase.phase == WeaponAttackPhase::Windup && (!wd.hasAttackTiming() || phase.target != c.target)) {
+                const Entity previous = phase.target;
+                cancelAttackWindup(phase);
+                sim.emit({kEvAttackCancelled, o.player, e, previous, int64_t(i), tr.pos});
+                continue;
+            }
+            const bool phased = wd.hasAttackTiming();
+            const uint32_t budget = !phased && wd.preciseCooldown && wd.chargeTime.raw <= 0 ? kMaxCadenceShotsPerTick : 1;
+            for (uint32_t shot = 0; shot < budget && cadenceReady(c.cooldown[i]); ++shot) {
+            if (phased && u.hp.raw <= 0) break;
+            if ((phased || wd.preciseCooldown) && (!w.alive(c.target) || tu.hp.raw <= 0)) break;
+            if (wd.chargeTime.raw > 0 && phase.phase != WeaponAttackPhase::Windup) {
                 // charging shot: the weapon has to stay on the same target for chargeTime
                 if (c.chargeTarget != c.target) { c.chargeTarget = c.target; c.chargeStart = sim.tick(); }
-                if (sim.tick() - c.chargeStart < uint32_t((wd.chargeTime * int64_t(sim.tickRate())).toInt())) continue;
+                if (sim.tick() - c.chargeStart < uint32_t((wd.chargeTime * int64_t(sim.tickRate())).toInt())) break;
                 c.chargeStart = sim.tick();
             }
-            if (mechOn(sim) && !mechOnFire(sim, e, i, c.target)) continue;   // agent-mech: turret aim, ammo, suppression, crews
-            c.cooldown[i] = wd.cooldown;
-            sim.emit({kEvAttack, o.player, e, c.target, int64_t(i), tr.pos});
+            if (wd.windup.raw > 0) {
+                if (phase.phase != WeaponAttackPhase::Windup) {
+                    beginAttackWindup(phase, c.target, wd.windup);
+                    keepWindup[i] = true;
+                    sim.emit({kEvAttack, o.player, e, c.target, int64_t(i), tr.pos, kAttackStartsWindup});
+                    sim.emit({kEvAttackWindup, o.player, e, c.target, int64_t(i), tr.pos});
+                    break;
+                }
+                if (!advanceAttackPhase(phase, dt * atkSpeed)) {
+                    keepWindup[i] = true;
+                    break;
+                }
+            }
+            if (mechOn(sim) && !mechOnFire(sim, e, i, c.target)) break;   // acceptance, including ammo, only at release
+            c.cooldown[i] = acceptCadenceShot(c.cooldown[i], wd.cooldown, !phased && wd.preciseCooldown && wd.chargeTime.raw <= 0);
+            if (phased) {
+                phase.target = c.target;
+                commitAttackRelease(phase, wd.backswing);
+            }
+            sim.emit({wd.windup.raw > 0 ? kEvAttackReleased : kEvAttack, o.player, e, c.target, int64_t(i), tr.pos});
+            if (rules_.possession.firstPerson && w.has<Possessed>(e))
+                w.get<CampaignFight>(e).shotNoisePending = true;
+            if (phased && wd.backswing.raw == 0)
+                sim.emit({kEvAttackRecoveryEnd, o.player, e, c.target, int64_t(i), tr.pos});
             const bool prog = progression_ && progression_->active();
             if (prog) progression_->onShot(sim, e);   // perks that fire on every Nth shot (Progression.cpp)
             const int volley = prog ? progression_->fireCount(sim, e) : 1;   // fireCount stat: bullets per shot
+            // Select secondary targets before damage mutates the world.
+            // Rank by contact distance, then stable entity handle; the primary
+            // is never reselected and a volley spends cooldown/ammo only once.
+            NearestWeaponTargets secondary(wd.extraTargets);
+            if (wd.extraTargets) {
+                auto consider = [&](Entity candidate) {
+                    if (candidate == e || candidate == c.target || !w.alive(candidate)) return;
+                    const auto* cu = w.tryGetConst<Unit>(candidate);
+                    const auto* co = w.tryGetConst<Owner>(candidate);
+                    const auto* ct = w.tryGetConst<Transform>(candidate);
+                    if (!cu || !co || !ct || cu->hp.raw <= 0 || (cu->flags & kUnitOffMap) ||
+                        !hostile(sim, o.player, co->player)) return;
+                    const auto& targetType = rules_.types[cu->type];
+                    if (targetType.invulnerable || !weaponTargetMatches(wd, targetType.layer, targetType.tags) ||
+                        !targetTagsMatch(targetType.tags, wd.extraTargetTags, wd.extraIgnoreTags)) return;
+                    if (gs.surface && gs.surface->bodyAt(tr.pos) != gs.surface->bodyAt(ct->pos)) return;
+                    if (sensors_ && sensors_->active() && !sensors_->weaponHits(u.type, i, cu->type)) return;
+                    if (rules_.advancedEffects) {
+                        const uint32_t flags = statusFlags(sim, candidate);
+                        if (flags & kStUntargetable) return;
+                        if ((flags & kStInvisible) && !(flags & kStRevealed) &&
+                            !(rules_.mech.detection && detected(sim, candidate, o.player))) return;
+                    }
+                    const Fixed d = contactDistance(sim, e, candidate);
+                    const Fixed h = (t.layer & kLayerAir) || (targetType.layer & kLayerAir) ?
+                        Fixed{} : heightAdvantage(sim, tr.pos, ct->pos);
+                    const Fixed reach = wd.range + stat(sim, e, Stat::Range) +
+                        (h.raw > 0 ? rules_.heights.rangePerLevel * h : Fixed{});
+                    if (d > reach || d < wd.minRange) return;
+                    if (wd.rangeAspect != kOne && !inRangeEllipse(tr.pos, ct->pos, reach, wd.rangeAspect)) return;
+                    if (rules_.heights.blockVision && !(targetType.layer & kLayerAir) &&
+                        (gs.grid.hf || levelAt(sim, ct->pos) > levelAt(sim, tr.pos)) &&
+                        !isVisible(sim, o.player, ct->pos)) return;
+                    secondary.consider(candidate, d);
+                };
+                if (rules_.heights.rangePerLevel.raw != 0) {
+                    // Height-dependent range has no fixed local upper bound.
+                    w.eachExistingConst<Unit>([&](Entity candidate, const Unit&) { consider(candidate); });
+                } else {
+                    if (!extentReady) {
+                        for (const auto& type : rules_.types) {
+                            maxTargetExtent = fxMax(maxTargetExtent, type.radius);
+                            if (type.structure) maxTargetExtent = fxMax(maxTargetExtent,
+                                Fixed::fromInt(type.footprintW + type.footprintH));
+                        }
+                        extentReady = true;
+                    }
+                    const Fixed queryRange = fxMax(Fixed{}, wd.range + stat(sim, e, Stat::Range)) +
+                        t.radius + maxTargetExtent;
+                    gs.hash.query(tr.pos, queryRange, consider);
+                }
+            }
+            auto fireAt = [&](Entity victim, Vec3 victimPos, Fixed victimAdv, Fixed victimMult,
+                              Vec3 victimFace, int bulletCount) {
             // shooting uphill can miss (StarCraft); the roll uses the shared deterministic RNG
             // (a full level or more below: the whole chance; less on a heightfield slope: proportionally less)
-            if (adv.raw < 0 && rules_.heights.missUphill.raw > 0 && sim.rng().unit() < rules_.heights.missUphill * fxMin(kOne, -adv)) {
-                sim.emit({kEvMiss, o.player, e, c.target, 0, tp});
-                continue;
+            if (victimAdv.raw < 0 && rules_.heights.missUphill.raw > 0 && sim.rng().unit() < rules_.heights.missUphill * fxMin(kOne, -victimAdv)) {
+                sim.emit({kEvMiss, o.player, e, victim, 0, victimPos});
+                return;
             }
-            Fixed dmg = wd.damage * mult;
+            Fixed dmg = wd.damage * victimMult;
             uint16_t dtype = wd.damageType;
-            if (rules_.armor.model == ArmorModel::Classes) classDamage(sim, e, i, c.target, dmg, dtype);   // AoE II class attacks
+            if (rules_.armor.model == ArmorModel::Classes) classDamage(sim, e, i, victim, dmg, dtype);   // AoE II class attacks
             const int16_t enchant = statusOnHit(e);
             const bool proc = wd.onHit >= 0 && (wd.onHitChance >= kOne || sim.rng().unit() < wd.onHitChance);
             if (wd.projectileSpeed.raw <= 0) {
-                for (int k = 1; k < volley && w.alive(c.target); ++k) dealDamage(sim, c.target, dmg, dtype, e, o.player, &wd);   // extra bullets
-                dealDamage(sim, c.target, dmg, dtype, e, o.player, &wd);
-                if (proc) onHits.push_back({wd.onHit, e, c.target, o.player, u.type, tp});
-                if (progression_ && progression_->active()) if (int16_t ph = progression_->hitPayload(sim, e); ph >= 0) onHits.push_back({ph, e, c.target, o.player, u.type, tp});   // perk on-hit (burn, stun)
-                if (enchant >= 0) onHits.push_back({enchant, e, c.target, o.player, u.type, tp});
+                for (int k = 1; k < bulletCount && w.alive(victim); ++k) dealDamage(sim, victim, dmg, dtype, e, o.player, &wd);   // extra bullets
+                dealDamage(sim, victim, dmg, dtype, e, o.player, &wd);
+                if (proc) onHits.push_back({wd.onHit, e, victim, o.player, u.type, victimPos});
+                if (progression_ && progression_->active()) if (int16_t ph = progression_->hitPayload(sim, e); ph >= 0) onHits.push_back({ph, e, victim, o.player, u.type, victimPos});   // perk on-hit (burn, stun)
+                if (enchant >= 0) onHits.push_back({enchant, e, victim, o.player, u.type, victimPos});
                 if (wd.splash.raw > 0) {
-                    gs.hash.query(tp, wd.splash, [&](Entity s) {
-                        if (s == c.target || !w.has<Unit>(s)) return;
+                    gs.hash.query(victimPos, wd.splash, [&](Entity s) {
+                        if (s == victim || !w.has<Unit>(s)) return;
                         if (!hostile(sim, o.player, w.get<Owner>(s).player)) return;
-                        if (dist2D(w.get<Transform>(s).pos, tp) <= wd.splash) dealDamage(sim, s, dmg, dtype, e, o.player, &wd);
+                        if (dist2D(w.get<Transform>(s).pos, victimPos) <= wd.splash) dealDamage(sim, s, dmg, dtype, e, o.player, &wd);
                     });
                 }
             } else {
                 Projectile pr;
-                pr.target = c.target; pr.source = e; pr.aim = tp; pr.speed = wd.projectileSpeed;
+                pr.target = victim; pr.source = e; pr.aim = victimPos; pr.speed = wd.projectileSpeed;
                 pr.damage = dmg; pr.splash = wd.splash; pr.damageType = dtype; pr.owner = o.player; pr.layers = wd.targets;
                 pr.onHit = proc ? wd.onHit : enchant; pr.sourceType = u.type; pr.weapon = int8_t(i);
-                if (proc && enchant >= 0) onHits.push_back({enchant, e, c.target, o.player, u.type, tp});
+                if (proc && enchant >= 0) onHits.push_back({enchant, e, victim, o.player, u.type, victimPos});
                 Vec3 start = lift(sim, tr.pos, Fixed::fromRatio(6, 10));
                 shots.push_back({pr, start});
-                if (volley > 1) {   // fireCount: parallel bullets, a quarter cell apart across the line of fire
-                    const Vec3 side = face.length().raw > 0 ? Vec3{-face.z, Fixed{}, face.x} / face.length() : Vec3{kOne, Fixed{}, Fixed{}};
-                    for (int k = 1; k < volley; ++k) {
+                if (bulletCount > 1) {   // fireCount: parallel bullets, a quarter cell apart across the line of fire
+                    const Vec3 side = victimFace.length().raw > 0 ? Vec3{-victimFace.z, Fixed{}, victimFace.x} / victimFace.length() : Vec3{kOne, Fixed{}, Fixed{}};
+                    for (int k = 1; k < bulletCount; ++k) {
                         const Fixed off = Fixed::fromRatio((k + 1) / 2, 4) * ((k & 1) ? 1 : -1);
                         shots.push_back({pr, start + side * off});
                     }
                 }
+            }
+            };
+            fireAt(c.target, tp, adv, mult, face, volley);
+            for (const auto& entry : secondary) {
+                const Entity victim = entry.entity;
+                if (!w.alive(victim) || !w.has<Unit>(victim) || w.get<Unit>(victim).hp.raw <= 0) continue;
+                const auto& targetType = rules_.types[w.get<Unit>(victim).type];
+                const Vec3 victimPos = w.get<Transform>(victim).pos;
+                const Fixed victimAdv = (t.layer & kLayerAir) || (targetType.layer & kLayerAir) ?
+                    Fixed{} : heightAdvantage(sim, tr.pos, victimPos);
+                Fixed victimMult = baseMult;
+                if (victimAdv.raw > 0) victimMult = victimMult * (kOne + rules_.heights.damagePerLevel * victimAdv);
+                fireAt(victim, victimPos, victimAdv, victimMult, flat(victimPos - tr.pos), 1);
+            }
+            }
+        }
+        };
+        tryFire();
+        // Invalid range, target, status, movement, rejected release, etc.
+        // An interrupted windup is never allowed to survive an ineligible tick.
+        for (size_t i = 0; i < 4; ++i) {
+            auto& phase = c.attackTiming[i];
+            if (!keepWindup[i] && phase.phase == WeaponAttackPhase::Windup) {
+                const Entity previous = phase.target;
+                cancelAttackWindup(phase);
+                sim.emit({kEvAttackCancelled, o.player, e, previous, int64_t(i), tr.pos});
             }
         }
     });
@@ -367,14 +511,6 @@ bool GameCore::canCast(Simulation& sim, Entity caster, int index) const {
     return !st || st->readyAt[index] <= sim.tick();
 }
 
-namespace {
-void addBuff(Buffs& b, const Buff& nb) {
-    for (auto& x : b.list)
-        if (x.stat == nb.stat && x.sourceType == nb.sourceType) { x = nb; return; } // refresh, don't stack
-    b.list.push_back(nb);
-}
-} // namespace
-
 void GameCore::castAbility(Simulation& sim, Entity caster, int index, Entity target, Vec3 point) {
     World& w = sim.world();
     if (!canCast(sim, caster, index)) return;
@@ -433,6 +569,7 @@ void GameCore::applyEffects(Simulation& sim, Entity caster, uint8_t owner, uint1
             state(sim).hash.query(point, ef.radius, [&](Entity s) {
                 auto* su = w.tryGet<Unit>(s);
                 if (!su || su->hp.raw <= 0 || (su->flags & kUnitOffMap) || dist2D(w.get<Transform>(s).pos, point) > ef.radius) return;
+                if (!targetTagsMatch(rules_.types[su->type].tags, ef.filter.tags, ef.filter.ignoreTags)) return;
                 uint8_t so = w.get<Owner>(s).player;
                 bool enemy = hostile(sim, owner, so);
                 bool ally = so == owner || (so != 0 && so != kHostileNeutral && owner != kHostileNeutral && sim.allied(so, owner));
@@ -440,21 +577,28 @@ void GameCore::applyEffects(Simulation& sim, Entity caster, uint8_t owner, uint1
             });
             std::sort(hits.begin(), hits.end(), [](Entity x, Entity y) { return x.packed() < y.packed(); });
         } else if (w.alive(target) && w.has<Unit>(target)) {
-            hits.push_back(target);
+            if (targetTagsMatch(rules_.types[w.get<Unit>(target).type].tags, ef.filter.tags, ef.filter.ignoreTags)) hits.push_back(target);
         }
         const uint32_t until = sim.tick() + uint32_t((ef.duration * int64_t(ticks)).toInt());
+        Fixed amount = ef.amount;
+        if (ef.useWeaponDamage) {
+            const auto damage = currentWeaponDamage(sim, caster, ef.weaponIndex);
+            if (!damage) continue;
+            amount = *damage * ef.weaponDamage;
+            if (amount.raw <= 0) continue;
+        }
         switch (ef.kind) {
         case EffectKind::Damage:
-            for (Entity h : hits) dealDamage(sim, h, ef.amount, ef.damageType, caster, owner);
+            for (Entity h : hits) dealDamage(sim, h, amount, ef.damageType, caster, owner);
             break;
         case EffectKind::Heal:
-            for (Entity h : hits) { Unit& hu = w.get<Unit>(h); hu.hp = fxMin(stat(sim, h, Stat::MaxHp), hu.hp + ef.amount); }
+            for (Entity h : hits) { Unit& hu = w.get<Unit>(h); hu.hp = fxMin(stat(sim, h, Stat::MaxHp), hu.hp + amount); }
             break;
         case EffectKind::Stun:
             for (Entity h : hits) if (auto* b = w.tryGet<Buffs>(h)) b->stunUntil = std::max(b->stunUntil, until);
             break;
         case EffectKind::Buff:
-            for (Entity h : hits) if (auto* b = w.tryGet<Buffs>(h)) addBuff(*b, {ef.mod.stat, ef.mod.add, ef.mod.mul, until, casterType});
+            for (Entity h : hits) if (auto* b = w.tryGet<Buffs>(h)) upsertTimedBuff(*b, {ef.mod.stat, ef.mod.add, ef.mod.mul, until, casterType, ef.mod.stackingGroup});
             break;
         case EffectKind::Spawn:
             summons.push_back({ef.spawnType, ef.count, ef.duration.raw > 0 ? until : 0});
@@ -512,15 +656,16 @@ void GameCore::sysAbilities(Simulation& sim) {
                     if (ef.kind != EffectKind::Buff) continue;
                     gs.hash.query(tr.pos, a.auraRadius, [&](Entity s) {
                         if (!w.has<Unit>(s) || dist2D(w.get<Transform>(s).pos, tr.pos) > a.auraRadius) return;
+                        if (!targetTagsMatch(rules_.types[w.get<Unit>(s).type].tags, ef.filter.tags, ef.filter.ignoreTags)) return;
                         uint8_t so = w.get<Owner>(s).player;
                         bool enemy = hostile(sim, o.player, so);
                         bool ally = so == o.player || (so != 0 && so != kHostileNeutral && o.player != kHostileNeutral && sim.allied(so, o.player));
-                        if ((enemy && ef.enemies) || (ally && ef.allies)) hits.push_back({s, {ef.mod.stat, ef.mod.add, ef.mod.mul, tick + 15, u.type}});
+                        if ((enemy && ef.enemies) || (ally && ef.allies)) hits.push_back({s, {ef.mod.stat, ef.mod.add, ef.mod.mul, tick + 15, u.type, ef.mod.stackingGroup}});
                     });
                 }
             }
         });
-        for (auto& h : hits) if (auto* b = w.tryGet<Buffs>(h.target)) addBuff(*b, h.buff);
+        for (auto& h : hits) if (auto* b = w.tryGet<Buffs>(h.target)) upsertTimedBuff(*b, h.buff);
     }
     // charges regenerate one per cooldown
     if (rules_.advancedEffects)
@@ -596,7 +741,7 @@ void GameCore::grantKill(Simulation& sim, Entity victim, uint8_t killer) {
     if (victimOwner == 0 && arsenal_ && arsenal_->active()) { arsenal_->neutralKill(sim, victim, killer); return; }   // parked cars (rules arsenal.payNeutral)
     if (killer == 0 || killer == kHostileNeutral || !hostile(sim, killer, victimOwner)) return;
     // bounty
-    for (auto& b : vt.bounty) addResource(sim, killer, b.res, b.value);
+    payUnitBounty(sim, victim, killer);
     if (rules_.originals) gainOn(sim, killer, &ResourceDef::gainKill, kOne);
     // score (lane battlers, arcade modes)
     uint8_t team = teamOf(sim, killer);
@@ -674,7 +819,9 @@ void GameCore::sysDeath(Simulation& sim) {
             if (rules_.anyDeathGain) payDeathGain(sim, e, owner);
             grantKill(sim, e, u.lastAttacker);
             if (!t.wreck.empty() && wreckType >= 0) leftovers.push_back({uint16_t(wreckType), pos, int16_t(t.wreck[0].res), t.wreck[0].value});
-            sim.emit({kEvDied, owner, e, u.lastHitBy, u.type, pos});
+            SimEvent death{kEvDied, owner, e, u.lastHitBy, u.type, pos};
+            death.subjectType = u.type; death.subjectOwner = owner; death.subjectKey = e.packed();
+            sim.emit(death);
         }
         if (rules_.originals) onDeathOriginals(sim, e, owner, pos, silent);   // explosions, infection, dead heroes
         if (rules_.fidelity && !silent) deathFidelity(sim, e);                // the foundation goes with the structure

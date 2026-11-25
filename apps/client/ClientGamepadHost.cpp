@@ -1,5 +1,6 @@
 // GameClient side of the gamepad (ClientGamepad.h): polling, snap targets, event injection, the cursor.
 #include "GameClient.h"
+#include <cstdlib>
 extern "C" {
 #include <lauxlib.h>
 #include <lua.h>

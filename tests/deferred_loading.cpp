@@ -139,6 +139,42 @@ int aiverseMain(int, char**) {
           "lazy editor type must expose every model variant");
     view.shutdown(dev);
     view.setDeferAppearanceVariants(true);
+    // Projectile appearance shares the same deferred model owner and trim rules.
+    game::WeaponDef weapon;weapon.id="bow";
+    rules.types[0].weapons={weapon};
+    rules.types[0].view=Json::parse(R"({"model":"a.obj","projectiles":{"bow":{"model":"b.obj","scale":0.5,"forward":"+z","tint":[1,0.5,0.2,1]}}})");
+    reads.clear();
+    check(view.init(dev,rules,reader),"projectile appearance init");
+    view.setAsyncReader(reader);
+    for(int i=0;!view.prepareType(0);++i) {
+        check(i<10000,"projectile preparation timeout");
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    view.loadType(0);
+    check(view.projectileModelOf(0,0)!=nullptr && reads["b.obj"]==1,"projectile asset not loaded once");
+    const auto* shot=view.projectileModelOf(0,0);
+    view.trimTypes(std::vector<bool>{true,false,false},true);
+    check(view.projectileModelOf(0,0)==shot,"trim removed live projectile model");
+    check(view.reloadModelSources({"b.obj"})>0 && view.projectileModelOf(0,0)!=nullptr,"projectile source reload");
+    view.shutdown(dev);
+    {
+        using namespace game::view_adapter;
+        using namespace render;
+        auto appearance=parseProjectileAppearance(Json::parse(R"({"model":"b.obj","forward":"+z","scale":0.5})"));
+        auto matrix=projectileFlightFrame({1,2,3},{0,1,0},{0,1,0})*appearance.axisFix;
+        auto front=matrix.transformPoint({0,0,1})-matrix.transformPoint({0,0,0});
+        check(length(front-float3{0,1,0})<0.001f,"vertical projectile orientation");
+        auto diagonal=normalize(float3{2,-1,3});
+        matrix=projectileFlightFrame({1,2,3},diagonal,{0,1,0});
+        front=matrix.transformPoint({1,0,0})-matrix.transformPoint({0,0,0});
+        check(length(front-diagonal)<0.001f,"ballistic projectile pitch/yaw");
+        game::Projectile projectile;projectile.sourceType=0;projectile.weapon=0;
+        check(projectileAppearanceSlot(rules,projectile)==0,"weapon appearance without live shooter");
+        projectile.effList=0;
+        check(projectileAppearanceSlot(rules,projectile)==-1,"ability projectile must not use weapon appearance");
+        bool rejected=false;try{(void)parseProjectileAppearance(Json::parse(R"({"model":"b.obj","scale":-1})"));}catch(const std::exception&){rejected=true;}
+        check(rejected,"invalid projectile scale accepted");
+    }
     auto cache = std::make_shared<render::ModelTextureCache>();
     int imageReads = 0;
     auto images = [&](const std::string&, std::string& bytes) {

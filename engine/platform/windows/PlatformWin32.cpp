@@ -29,6 +29,7 @@ using detail::state;
 
 namespace {
 HWND g_hwnd = nullptr;
+HCURSOR g_gameCursor = nullptr;
 bool g_pointerLocked = false;
 HDC g_hdc = nullptr;
 HGLRC g_rc = nullptr;
@@ -111,6 +112,9 @@ LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         detail::dispatch(e);
     };
     switch (msg) {
+    case WM_SETCURSOR:
+        if (LOWORD(lp) == HTCLIENT && g_gameCursor) { SetCursor(g_gameCursor); return TRUE; }
+        break;
     case WM_CLOSE: e.type = EventType::QuitRequested; detail::dispatch(e); S.quit = true; return 0;
     case WM_SIZE: updateSize(); e.type = EventType::Resized; detail::dispatch(e); return 0;
     case WM_GETMINMAXINFO: {   // game.json window.minWidth / minHeight (logical points -> pixels + frame)
@@ -367,6 +371,38 @@ int run(const AppConfig& cfgIn, AppCallbacks cb) {
     return 0;
 }
 
+bool setCursorImage(const uint8_t* pixels, int w, int h, int x, int y) {
+    HCURSOR next = nullptr;
+    if (pixels) {
+        if (w < 1 || h < 1 || w > 256 || h > 256 || x < 0 || y < 0 || x >= w || y >= h) return false;
+        BITMAPINFO info{};
+        info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        info.bmiHeader.biWidth = w; info.bmiHeader.biHeight = -h;
+        info.bmiHeader.biPlanes = 1; info.bmiHeader.biBitCount = 32;
+        void* data = nullptr;
+        HBITMAP bitmap = CreateDIBSection(nullptr, &info, DIB_RGB_COLORS, &data, nullptr, 0);
+        if (!bitmap) return false;
+        auto* dst = static_cast<uint8_t*>(data);
+        for (int i = 0; i < w*h; ++i) {
+            const auto* src = pixels + 4*i;
+            for (int c = 0; c < 3; ++c) dst[4*i+c] = uint8_t((unsigned(src[2-c])*src[3]+127)/255);
+            dst[4*i+3] = src[3];
+        }
+        std::vector<uint8_t> maskBits(size_t((w+15)/16)*2*h, 0);
+        HBITMAP mask = CreateBitmap(w,h,1,1,maskBits.data());
+        if (mask) {
+            ICONINFO icon{FALSE,DWORD(x),DWORD(y),mask,bitmap};
+            next = reinterpret_cast<HCURSOR>(CreateIconIndirect(&icon));
+            DeleteObject(mask);
+        }
+        DeleteObject(bitmap);
+        if (!next) return false;
+    }
+    SetCursor(next ? next : LoadCursorW(nullptr, MAKEINTRESOURCEW(32512)));
+    if (g_gameCursor) DestroyCursor(g_gameCursor);
+    g_gameCursor = next;
+    return true;
+}
 bool pointerLocked() { return g_pointerLocked; }
 bool setPointerLock(bool enabled) {
     if (g_pointerLocked == enabled) return true;

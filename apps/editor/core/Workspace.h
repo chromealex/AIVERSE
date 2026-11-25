@@ -7,6 +7,8 @@
 #include <atomic>
 #include <functional>
 #include <mutex>
+#include <stdexcept>
+#include <utility>
 #include <thread>
 #include <map>
 #include <string>
@@ -81,6 +83,22 @@ public:
     const std::vector<Op>& ops() const { return ops_; }
     void registerOp(Op op);       // GUI adds view/play/screenshot ops
     Json toolList() const;        // MCP tools/list payload
+    // Presentation-only native VFX device bridge. Set by a running Studio
+    // after its Scene render thread is available. Headless aiversemcp still
+    // advertises fx_graph_preview but returns an explicit unavailability
+    // error; the graph/asset CRUD tools remain usable without a GPU.
+    void setSpectraAssetCheckHandler(OpFn handler) { spectraAssetCheckHandler_=std::move(handler); }
+    Json spectraAssetCheck(const Json& params) const {
+        if(!spectraAssetCheckHandler_)throw std::runtime_error("SpectraFX asset check requires native Studio");
+        return spectraAssetCheckHandler_(params);
+    }
+    void setSpectraPreviewHandler(OpFn handler) { spectraPreviewHandler_=std::move(handler); }
+    Json spectraPreview(const Json& params) const {
+        if(!spectraPreviewHandler_)
+            throw std::runtime_error("SpectraFX live preview requires an open native Studio GPU viewport");
+        return spectraPreviewHandler_(params);
+    }
+
 
     std::vector<GameInfo> listGames() const;
     bool openGame(const std::string& idOrDir, std::string* err);   // folder, .aiverse, game.json or template id
@@ -121,6 +139,8 @@ private:
     std::string runLabel_, logFile_;
     std::atomic<int> runCount_{0};
     std::vector<Op> ops_;
+    OpFn spectraPreviewHandler_;
+    OpFn spectraAssetCheckHandler_;
 };
 
 // "types.footman.weapons[0].damage" -> pointer into j (created when `create`), nullptr if missing.

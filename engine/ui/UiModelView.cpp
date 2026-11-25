@@ -20,7 +20,7 @@ bool UiModelView::init(gfx::Device& device, UiLayer& ui, const std::string& name
     desc.label="ui-model-depth";
     depth_=device.createTexture(desc);
     if (!color_.valid() || !depth_.valid()) { shutdown(); return false; }
-    ui.setDynamicTexture("model:"+name_,color_,width_,height_);
+    ui.setDynamicTexture("model:"+name_,color_,width_,height_,true);
     return true;
 }
 

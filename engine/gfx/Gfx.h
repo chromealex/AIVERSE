@@ -31,6 +31,7 @@
 #include <string>
 #include <vector>
 #include "engine/gfx/GpuTimingRouter.h"
+#include "engine/gfx/GpuAllocationBudget.h"
 
 namespace aiverse::gfx {
 
@@ -580,12 +581,13 @@ struct ShaderDesc {
 // Vulkan shader resource ABI. Other backends keep their native slot contracts.
 // TextureResources: storage images 0..3, sampled images 4..11, buffers 12..15,
 // uniform buffer 16. BufferPushConstants: buffers 0..7, <=128 push bytes.
-enum class VulkanComputeLayout : uint8_t { TextureResources, BufferPushConstants };
+enum class VulkanComputeLayout : uint8_t { TextureResources, BufferPushConstants, StorageUniforms };
 struct ComputeDesc {
     const char* msl=nullptr;
     const char* glsl=nullptr;
     const char* label=nullptr;
     VulkanComputeLayout vulkanLayout=VulkanComputeLayout::TextureResources;
+    uint32_t storageUniformSlots=19; // slots [0,N), binding 8 reserved for uniform block
 };
 
 struct VertexAttr {
@@ -620,6 +622,7 @@ struct PipelineDesc {
     PixelFormat additionalColorFormats[3] = {
         PixelFormat::RGBA8, PixelFormat::RGBA8, PixelFormat::RGBA8
     };
+    bool vertexPerInstance=false; // optional single binding instance-rate stream
 };
 
 // Default: render to the screen. With targets: render into textures (both must match in size).
@@ -727,7 +730,34 @@ inline VulkanExtensionRequests& vulkanExtensionRequests() { static VulkanExtensi
 
 class Device {
 public:
-    virtual ~Device() = default;
+    virtual ~Device() {if(allocationBudget_)allocationBudget_->closeDevice(this);}
+    // One render-owner-thread ledger for presentation clients that opt into
+    // envelope accounting. Independent worlds cannot bypass the same limit.
+    // Zero inherits; nonzero conflicting limits are rejected. Explicit budget
+    // adoption is allowed only before use or after an unowned idle ledger.
+    std::shared_ptr<GpuAllocationBudget> acquireGpuAllocationBudget(
+        std::shared_ptr<GpuAllocationBudget> requested={},size_t limit=0){
+        if(allocationBudget_)allocationBudget_->collect(gpuCompletedFence());
+        if(requested&&allocationBudget_&&requested!=allocationBudget_){
+            if(allocationBudget_.use_count()!=1||allocationBudget_->stats().charged()!=0)return {};
+            if(!requested->bind(this)||(limit&&requested->stats().limit&&requested->stats().limit!=limit))return {};
+            allocationBudget_->closeDevice(this);allocationBudget_.reset();
+        }
+        if(!allocationBudget_){
+            auto candidate=requested?requested:std::make_shared<GpuAllocationBudget>(limit);
+            if(!candidate->bind(this)||(limit&&candidate->stats().limit&&candidate->stats().limit!=limit))return {};
+            allocationBudget_=std::move(candidate);
+        }
+        if(limit){
+            if(allocationBudget_->stats().limit&&allocationBudget_->stats().limit!=limit)return {};
+            allocationBudget_->setLimit(limit);
+        }
+        return allocationBudget_;
+    }
+    // Separate headroom for temporary upload/readback buffers. Zero unlimited;
+    // lowering below outstanding usage denies new transfers until completion.
+    void setGpuTransferBudget(size_t bytes){transferBudget_.setLimit(bytes);}
+    GpuAllocationBudgetStats gpuTransferBudgetStats(){return transientGpuBudget().stats();}
     // One shared timing collection owner per graphics Device. Components
     // subscribe instead of independently draining takeGpuTimings().
     // All router calls remain on this Device's render owner thread.
@@ -758,6 +788,11 @@ public:
     virtual bool updateStorageBufferChecked(BufferHandle,const void*,size_t,size_t=0) {
         return false;
     }
+    // Ordered GPU-to-GPU storage copy in the current frame, outside encoders.
+    // Both resources must survive encoded work even if handles are retired.
+    // True is encode acceptance, not completion. Unsupported backends refuse.
+    virtual bool supportsStorageBufferCopy() const { return false; }
+    virtual bool copyStorageBufferChecked(BufferHandle,BufferHandle,size_t,size_t=0,size_t=0) { return false; }
     virtual void destroyBuffer(BufferHandle h) = 0;
     // Optional per-buffer diagnostics. No GPU stall/readback, and never
     // authoritatively measures GPU memory bandwidth or execution.
@@ -834,8 +869,8 @@ public:
     // live TextureHandles only (not swapchain internals); estimate is not a
     // driver allocation query. Query on the graphics device owner thread.
     virtual std::vector<TextureResourceInfo> textureResources() const { return {}; }
-    // Copies the colour of a render target (invalid = the screen as drawn so far this frame) into `to`: an RGBA8
-    // render target of the same size. Only between passes. False when the backend can't (the screen is not
+    // Copies the colour of a render target (invalid = the screen as drawn so far this frame) into `to`:
+    // an RGBA8 target, or a matching RGBA16F HDR target where supported. Only between passes. False when the backend can't (the screen is not
     // readable: see setScreenReadable, sizes differ); the caller then takes another path.
     virtual bool copyColor(TextureHandle from, TextureHandle to) { (void)from; (void)to; return false; }
     // Optional diagnostics only: synchronously read a completed RGBA8 render
@@ -881,6 +916,7 @@ public:
     // Storage buffers persist across frames; updateBuffer uploads in queue order.
     // Commands are between beginFrame/endFrame and outside render passes.
     virtual bool supportsCompute() const { return false; }
+    virtual bool supportsStorageUniformCompute(uint32_t) const {return false;}
     virtual ComputeHandle createCompute(const ComputeDesc&) { return {}; }
     virtual void destroyCompute(ComputeHandle) {}
     virtual bool beginCompute(ComputeHandle) { return false; }
@@ -903,6 +939,10 @@ public:
         dispatch(x,y);
         return gpuHealthy();
     }
+    // GPU-authored three uint32 threadgroup counts, ordered by compute barriers.
+    // Backend fixes threadgroup size to 64 x 1 x 1, matching dispatch().
+    virtual bool supportsGpuComputeIndirect() const {return false;}
+    virtual bool dispatchGpuIndirect(BufferHandle,size_t=0){return false;}
     virtual void endCompute() {}
     // True only when the latest dispatch was successfully encoded; not GPU completion.
     virtual bool computeDispatchSucceeded() const { return false; }
@@ -1028,6 +1068,10 @@ public:
     // Tools (editor screenshots, MCP): deliver the next presented frame as top-down RGBA8.
     // The callback may run one or two frames later; it always runs on the main thread.
     using CaptureFn = std::function<void(int w, int h, std::vector<uint8_t> rgba)>;
+    using TaggedCaptureFn = std::function<void(uint64_t frame,int w,int h,std::vector<uint8_t> rgba)>;
+    virtual void captureNextFrameTagged(TaggedCaptureFn fn) {
+        captureNextFrame([fn=std::move(fn)](int w,int h,std::vector<uint8_t> rgba){if(fn)fn(0,w,h,std::move(rgba));});
+    }
     virtual void captureNextFrame(CaptureFn fn) { if (fn) fn(0, 0, {}); }
     // Optional offscreen RGBA8 readback inside a frame but outside a pass.
     virtual bool captureTexture(TextureHandle source,CaptureFn callback) {
@@ -1145,9 +1189,14 @@ public:
     }
 
 protected:
+    GpuAllocationBudget& transientGpuBudget(){
+        transferBudget_.collect(gpuCompletedFence());return transferBudget_;
+    }
     int fbW_ = 0, fbH_ = 0;
 private:
     GpuTimingRouter gpuTimingRouter_{};
+    std::shared_ptr<GpuAllocationBudget> allocationBudget_;
+    GpuAllocationBudget transferBudget_{};
 };
 
 // Backend factories. `nativeSurface` is backend specific:

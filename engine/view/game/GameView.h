@@ -54,6 +54,7 @@ namespace kingston { struct CabinResidentDraw; }
 #include "GameModelResourceCache.h"
 #include "GameModelPreparationService.h"
 #include "GameTerrainRender.h"
+#include "ProjectileAppearance.h"
 #include "EntityFx.h"
 
 namespace aiverse::render { class CameraModelSnapshot; }
@@ -181,6 +182,7 @@ struct ViewEffect {
     uint8_t owner = 0;
     render::float3 pos;
     float intensity = 1;
+    size_t slot = 0;
 };
 
 }  // namespace aiverse::game
@@ -553,6 +555,8 @@ public:
     // Where a drawn unit's shots leave its model: the look's "muzzle" (node + offset) in world space and the unit's
     // facing; false when the unit is not drawn yet or its model has no muzzle (effects then use the simulation point).
     bool muzzleOf(Entity e, render::float3& pos, render::float3& dir) const;
+    // Named node in particle space; no model ownership escapes this query.
+    bool effectNodeOf(Entity e, const std::string& node, render::mat4& frame) const;
     // Problems found while loading view blocks ("type 'knight': models/knight.glb: file not found").
     const std::vector<std::string>& warnings() const { return warnings_; }
     // Read-only static geometry scene (HLOD / opt-in STRATA counters).
@@ -577,9 +581,11 @@ public:
     }
     bool geometryOnly() const { return geometryOnly_; }
     const render::Model* modelOf(uint16_t type, size_t choice = 0) const;
+    const render::Model* projectileModelOf(uint16_t type,size_t weapon) const; // borrowed, same lifetime as modelOf
     const std::vector<ViewEvent>& events() const { return events_; }
     const std::vector<ViewEffect>& effects() const { return effects_; }
     void setSelectionOutline(bool on) { outline_ = on; }
+    bool selectionOutline() const { return outline_; }
     void setRetainPickingGeometry(bool on){resources_.setRetainPickingGeometry(on);}
     // Register immutable native pose operations before init().
     void setAnimationOperations(render::AnimationOperations operations) { animationOperations_ = std::move(operations); }
@@ -654,6 +660,9 @@ public:
     // keep the position as it is, e.g. a flyer); false on other bodies. Ground altitude of a body-local point.
     bool planetFxPlace(render::float3 sim, float lift, render::float3& out, render::float3& up) const;
     float planetFxAltitude(render::float3 local) const;
+    // Prepared body-local visual placement, same ground/sea policy as drawPlanets.
+    bool planetFxObjectPose(const SceneObject& o,render::float3& position,render::float3& direction) const;
+    bool planetFxTerrain(render::float3 local,float& relief,float& clearance,render::float3& up) const;
     // Object frame in the view world (columns: east, up, south, ground point); false when not on a body.
     bool planetPlacement(const SceneObject& o, render::mat4& out) const;
     void setFogLook(const FogLook& l) {
@@ -746,6 +755,12 @@ private:
         bool tracer = false;                      // optional visual bullets for attack events
         std::vector<float> projectileScale;       // "projectileScale": size of the projectile ball by weapon index (missing: 1; 0: not drawn)
         float projectileScaleDefault = 1;
+        struct ProjectileLook {
+            view_adapter::ProjectileAppearance config;
+            render::Model* model = nullptr; // borrowed from resources_
+            int clip = -1;
+        };
+        std::vector<ProjectileLook> projectiles; // authored by weapon slot
         float corpse = 2.5f;                      // seconds a dead object stays visible
         float corpseFade = 0.6f;                  // its last seconds fade out (0: drawn whole until removed)
         float corpseAlpha(float age) const { return GameView::corpseAlpha(corpse, corpseFade, age); }
@@ -753,6 +768,8 @@ private:
         float flyHeight = 2.4f;
         float unitSpeed = 0;
         Construction construction = Construction::Grow;
+        float hitFlashStrength = 0.3f, hitFlashDuration = 0.3f;
+        uint32_t hitFlashColor = 0;
         bool dissolveSpawn = false, dissolveDeath = false;
         bool transparent = false;                 // "transparent": Unity transparent queue (sorted, no depth write among its parts)
         // "groundShadow": a flat image under the model (OpenWar's footprint sprites), turning with the drawn model
@@ -802,6 +819,7 @@ private:
         } ground;
         float yaw = 0, speed = 0, distance = 0, turnRate = 0, accel = 0, phase = 0;
         float eventAge[render::kProcEvCount] = {1e9f, 1e9f, 1e9f, 1e9f};
+        uint8_t pendingAttackWindups = 0; // presentation only; weapon slots 0..3
         render::float3 attackDirection{};          // last shot in the animation tangent frame
         float castAge = 1e9f;
         render::float3 lastPos;
@@ -898,7 +916,8 @@ private:
     // placement (planets): object frame in the view world (local +Y = up); null = flat (pos, ground)
     void drawObject(render::Renderer3D& r, EntityAnim& st, const SceneObject& o, float ground, float alpha, const render::float4* tintOverride = nullptr,
                     const render::mat4* placement = nullptr);
-    void drawProjectile(render::Renderer3D& r, uint64_t key, const SceneObject& o, float dt);
+    void drawProjectile(render::Renderer3D& r, uint64_t key, const SceneObject& o, float dt,
+                        render::float3 up = {0,1,0}, bool useMuzzle = true);
     void emitClipEvents(EntityAnim& st, const ModelChoice& ch, const SceneObject& o);
     render::float3 nodeWorldPos(const EntityAnim& st, const ModelChoice& ch, int node, render::float3 offset) const;
     uint32_t stateBits(const EntityAnim& st, const SceneObject& o, bool moving) const;

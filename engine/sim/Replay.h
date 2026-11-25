@@ -26,6 +26,8 @@ struct Replay {
     std::vector<Command> commands;
     std::vector<std::pair<uint32_t, uint64_t>> checksums; // (tick, checksum)
 
+    std::string encode() const;
+    bool decode(const std::string& bytes, std::string* err = nullptr);
     bool save(const std::string& path) const;
     bool load(const std::string& path, std::string* err = nullptr);
 };

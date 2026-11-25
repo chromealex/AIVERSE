@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Bot, Brush, LayoutGrid, Play, Rocket, X } from 'lucide-react';
+import { StudioDialog } from '../ui';
 import './WelcomeTour.css';
 
 const KEY = 'aiverse.studio.tour.v1';
@@ -24,7 +25,7 @@ export default function WelcomeTour({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState(0);
   const close = () => { markSeen(); onClose(); };
   const s = STEPS[step], Icon = s.icon;
-  return <div className="tour" role="dialog" aria-modal="true" aria-label="Welcome to AIVERSE">
+  return <StudioDialog className="tour" label="Welcome to AIVERSE" onDismiss={close}>
     <div className="tour__card">
       <button type="button" className="tour__close" aria-label="Close tour" onClick={close}><X size={14}/></button>
       <div className="tour__icon"><Icon size={26} strokeWidth={1.5}/></div>
@@ -39,5 +40,5 @@ export default function WelcomeTour({ onClose }: { onClose: () => void }) {
           {step + 1 < STEPS.length ? 'Next' : 'Start'}</button>
       </div>
     </div>
-  </div>;
+  </StudioDialog>;
 }

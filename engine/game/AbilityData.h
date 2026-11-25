@@ -105,7 +105,7 @@ struct TargetFilter {
     bool units = true, structures = true;
     bool garrisons = false;             // only structures with a garrison
     bool inTransit = false;             // only units walking to a structure (lanes, sends)
-    uint64_t tags = 0;
+    uint64_t tags = 0, ignoreTags = 0;
     uint16_t type = 0xFFFF;
     int minLevel = 0, maxLevel = 1 << 20;
     int maxTargets = 0;                 // 0: all
@@ -194,6 +194,10 @@ struct EffectDef {
     Fixed amount{};            // damage / heal / units / resource / distance
     Fixed amountMax{};         // random value in [amount, amountMax] (sim RNG) when `randomAmount`
     bool randomAmount = false;
+    std::string chainFx;       // key in fx.json chainJumps
+    bool useWeaponDamage = false;
+    Fixed weaponDamage{};       // factor of the caster's current effective weapon damage
+    uint16_t weaponIndex = 0;   // zero-based authored weapon slot
     Fixed percent{};           // share (0..1) for garrison / group / resource effects
     Fixed radius{};            // 0 = single target
     Fixed duration{};          // stun / buff / summon lifetime / status / temporary capture
@@ -274,6 +278,7 @@ struct AbilityDef {
     int chargesMax = 0;        // > 0: charges regenerate one per `cooldown`
     SmartRule smart = SmartRule::Auto;
     std::vector<AbilityDef> levels; // level 2.. (hero level / skill level); each a full copy
+    Json cardSlot;
 };
 
 // Player-level abilities (not tied to a unit): nukes, air strikes, Bunker Wars style skills.

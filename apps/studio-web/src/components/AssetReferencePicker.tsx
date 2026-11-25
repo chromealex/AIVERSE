@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { DragEvent } from 'react';
-import { createPortal } from 'react-dom';
+import { StudioDialog } from '../ui';
 import { FolderSearch, Search, X } from 'lucide-react';
 import { invoke, onNativeEvent } from '../bridge';
 import { assetFileName, assetKind, safeAssetPath } from '../assetTree';
@@ -71,15 +71,6 @@ export default function AssetReferencePicker({
     return () => { alive = false; };
   }, [open, version]);
 
-  useEffect(() => {
-    if (!open) return;
-    const keydown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { event.preventDefault(); setOpen(false); }
-    };
-    window.addEventListener('keydown', keydown);
-    return () => window.removeEventListener('keydown', keydown);
-  }, [open]);
-
   const permitted = (asset: StudioAsset) => (!kinds?.length || kinds.includes(assetKind(asset.path))) &&
     (!kinds?.includes('image') || kinds.length !== 1 || !asset.importer || asset.importer === 'texture');
   const files = useMemo(() => catalog.files.filter(asset => permitted(asset) &&
@@ -128,11 +119,9 @@ export default function AssetReferencePicker({
       {allowClear && value && !value.startsWith('builtin:') && <button type="button" disabled={disabled} onClick={() => onChange('')}
         aria-label={'Clear '+label}><X size={14}/></button>}
     </div>
-    {open && createPortal(<div className="studio-asset-reference__overlay" onMouseDown={event => {
-      if (event.target === event.currentTarget) setOpen(false);
-    }}>
-      <section role="dialog" aria-modal="true" aria-label={'Choose '+label}
-        className="studio-asset-reference__dialog">
+    {open && <StudioDialog className="studio-asset-reference__overlay" label={'Choose '+label}
+      onDismiss={() => setOpen(false)}>
+      <section className="studio-asset-reference__dialog">
         <header><strong>Choose {label}</strong>
           <button type="button" aria-label="Close asset chooser" onClick={() => setOpen(false)}><X size={18}/></button>
         </header>
@@ -160,6 +149,6 @@ export default function AssetReferencePicker({
         <footer>{kinds?.includes('model') ? 'Built-in meshes or models under project/content.' :
           'Only assets under project/content are selectable.'} Drag from Assets to assign.</footer>
       </section>
-    </div>, document.body)}
+    </StudioDialog>}
   </div>;
 }

@@ -113,3 +113,5 @@ all owners prepare. Retain immutable Model/Graph leases through submission.
 This API does not roll back external callback side effects or arbitrary shared
 host components; host callbacks must be read-only outside supplied state.
 A World copy or PlaybackSnapshot alone is not a complete animation checkpoint.
+
+For game selection markers, set `selectionOutline` in game.json through `set_manifest {"path":"selectionOutline","value":false}` to disable the selected and hovered model silhouettes. Verify with `game_info`. Author custom marker rings through the existing overlay data.

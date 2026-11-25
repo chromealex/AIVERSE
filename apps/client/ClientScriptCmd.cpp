@@ -22,13 +22,7 @@ void pushSection(UiState& s, const UiSection& sec) {   // same layout as ClientU
     for (UiAction a : sec.actions) { a.kind = sec.kind; s.card.push_back(std::move(a)); }
 }
 
-Key hotkeyOf(const std::string& h) {
-    if (h.size() != 1) return Key::Unknown;
-    const char c = char(std::toupper(static_cast<unsigned char>(h[0])));
-    if (c >= 'A' && c <= 'Z') return Key(int(Key::A) + (c - 'A'));
-    if (c >= '0' && c <= '9') return Key(int(Key::Num0) + (c - '0'));
-    return Key::Unknown;
-}
+
 
 } // namespace
 
@@ -59,6 +53,7 @@ void GameClient::buildScriptCommands(UiState& s) {
         const auto& d = (*cs)[i];
         if (!scriptCommandFits(d)) continue;
         UiAction a;
+        applyCardSlot(a, d.cardSlot);
         a.label = d.label; a.hotkey = d.hotkey;   // the card shows `tip` as a red "why not" line: only for the cooldown
         for (auto& [r, v] : d.cost) {
             char b[64];
@@ -175,7 +170,8 @@ bool GameClient::scriptCommandKey(Key k) {
     if (!cs || k == Key::Unknown) return false;
     for (size_t i = 0; i < cs->size(); ++i) {
         const auto& d = (*cs)[i];
-        if (hotkeyOf(d.hotkey) != k || !scriptCommandFits(d)) continue;
+        if (d.cardSlot.getStr("page") != cardPage_) continue;
+        if (k == Key::Unknown || ClientGamepad::keyFromName(d.hotkey) != k || !scriptCommandFits(d)) continue;
         if (mod().scripts()->commandCooldown(*sim_, human_, int(i)).raw > 0) return true;
         startScriptCommand(int(i));
         return true;

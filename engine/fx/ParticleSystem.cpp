@@ -1,4 +1,5 @@
 #include "ParticleSystem.h"
+#include "SpectraStaticSphereCollision.h"
 #include "../gfx/GpuTier.h"
 #include <algorithm>
 #include <cmath>
@@ -212,7 +213,7 @@ uint16_t ParticleSystem::Impl::batchFor(const FxTexture& t, FxBlend blend, const
 void ParticleSystem::Impl::build(EffectRT& e, std::vector<std::string>& errors) {
     e.em.clear();
     e.looping = e.def.looping();
-    e.emitEnd = 0;
+    e.emitEnd = e.def.model.source.empty() ? 0 : e.def.model.duration;
     e.extent = 0.5f;
     for (size_t i = 0; i < e.def.emitters.size(); ++i) {
         const EmitterDef& d = e.def.emitters[i];
@@ -440,6 +441,7 @@ void ParticleSystem::Impl::emitInstance(size_t slot, float dt, float spawn, int&
 void ParticleSystem::Impl::stepParticle(size_t& i, float dt, bool& removed) {
     removed = false;
     auto& p = particles[i];
+    const auto previousPosition=p.pos;
     p.age += dt;
     const EmitterDef& d = defOf(p);
     if (p.age * p.invLife >= 1.0f) {
@@ -581,6 +583,34 @@ void ParticleSystem::Impl::stepParticle(size_t& i, float dt, bool& removed) {
             const float rad = c.radius > 0 ? c.radius * 0.5f * p.size : 0.0f;
             const float before = render::length(p.vel);
             bool hit = false;
+            if(c.staticSphereRadius>0 && dt>0 && resolveStaticSphere(previousPosition,p.pos,p.vel,
+                    c.staticSphereCenter,c.staticSphereRadius+rad,c.bounce,c.dampen)) {
+                p.vtot=p.vel;hit=true;
+            }
+            if(c.staticSdf.dimension && dt>0 && resolveStaticSdf(c.staticSdf,previousPosition,p.pos,p.vel,rad,c.bounce,c.dampen)) {
+                p.vtot=p.vel;hit=true;
+            }
+            if(c.scene && sceneCollision && dt>0) {
+                if(sceneCollisionStats.queries>=sceneCollisionBudget)++sceneCollisionStats.budgetDenied;
+                else {
+                    ++sceneCollisionStats.queries;
+                    SceneCollisionHit contact;
+                    const SceneCollisionQuery query{previousPosition,p.pos,rad};
+                    if(sceneCollision->sweep(query,contact,sceneCollisionStats)) {
+                        const auto n=contact.normal;
+                        const float vn=render::dot(p.vel,n);
+                        const float approach=render::dot(p.pos-previousPosition,n);
+                        if(contact.penetration>0||approach<0||vn<0) {
+                            p.pos=previousPosition+(p.pos-previousPosition)*contact.fraction+
+                                  n*(contact.penetration+0.001f);
+                            if(vn<0)p.vel=(p.vel-n*vn)*(1-c.dampen)-n*(vn*c.bounce);
+                            p.vtot=p.vel;
+                            ++sceneCollisionStats.hits;
+                            hit=true;
+                        }
+                    }
+                }
+            }
             if (c.ground && upFn && altFn) { // curved worlds: the ground along the local up
                 const float3 n = upFn(p.pos);
                 const float below = c.height * p.scale + rad - altFn(p.pos);
@@ -685,7 +715,7 @@ bool ParticleSystem::init(gfx::Device* dev) {
     shutdown();
     auto& I = *impl_;
     I.dev = dev;
-    I.limits = limitsFor(quality_);
+    I.limits = effectiveLimits(quality_);
     I.quality = quality_;
     I.particles.reserve(size_t(I.limits.maxParticles));
     if (!dev) return true;
@@ -798,19 +828,40 @@ void ParticleSystem::shutdown() {
     impl_->wind = wind;
     impl_->lightDir = light;
     impl_->quality = quality_;
-    impl_->limits = limitsFor(quality_);
+    impl_->limits = effectiveLimits(quality_);
+}
+
+QualityLimits ParticleSystem::effectiveLimits(FxQuality q) const {
+    QualityLimits limits = limitsFor(q);
+    if (q >= FxQuality::Low && q <= FxQuality::High) {
+        const int budget = particleBudgets_[size_t(q) - size_t(FxQuality::Low)];
+        if (budget >= 0) limits.maxParticles = budget;
+    }
+    return limits;
+}
+
+void ParticleSystem::setParticleBudgets(std::array<int,3> budgets) {
+    for (int& budget : budgets) budget = std::clamp(budget, -1, maxConfiguredParticles);
+    particleBudgets_ = budgets;
+    setQuality(quality_);
 }
 
 void ParticleSystem::setQuality(FxQuality q) {
     quality_ = q;
     auto& I = *impl_;
     I.quality = q;
-    I.limits = limitsFor(q);
+    I.limits = effectiveLimits(q);
     while (int(I.particles.size()) > I.limits.maxParticles) I.die(I.particles.size() - 1, false);
     if (q == FxQuality::Off) clear();
 }
 
 void ParticleSystem::setGroundHeight(std::function<float(float, float)> fn) { impl_->ground = std::move(fn); }
+void ParticleSystem::setSceneCollisionRegistry(std::shared_ptr<const SceneCollisionRegistry> registry,uint32_t maxQueries) {
+    impl_->sceneCollision=std::move(registry);
+    impl_->sceneCollisionBudget=std::min(maxQueries,65536u);
+    impl_->sceneCollisionStats={};
+}
+SceneCollisionStats ParticleSystem::sceneCollisionStats() const {return impl_->sceneCollisionStats;}
 void ParticleSystem::setWind(float3 wind) { impl_->wind = wind; }
 void ParticleSystem::setLightDir(float3 dir) { if (render::length(dir) > 1e-5f) impl_->lightDir = render::normalize(dir); }
 void ParticleSystem::setUpFunction(std::function<float3(float3)> fn) { impl_->upFn = std::move(fn); }
@@ -856,7 +907,7 @@ int ParticleSystem::define(const std::string& name, const EffectDef& def) {
     e.name = name;
     e.def = def;
     if (e.def.emitters.size() > size_t(kMaxEmitters)) e.def.emitters.resize(size_t(kMaxEmitters));
-    e.valid = !def.emitters.empty();
+    e.valid = !def.emitters.empty() || !def.model.source.empty();
     I.build(e, errors_);
     return e.valid ? id : -1;
 }
@@ -894,7 +945,7 @@ int ParticleSystem::effect(const std::string& name) {
     if (!reader_) errors_.push_back(path + ": no file reader");
     else if (!reader_(path, text)) errors_.push_back(path + ": file not found");
     else {
-        try { ok = parseEffect(Json::parse(text), path, def, errors_); }
+        try { ok = parseEffect(Json::parse(text), path, def, errors_,reader_); }
         catch (const std::exception& ex) { errors_.push_back(path + ": " + ex.what()); }
     }
     if (!ok) {   // remembered as invalid: not retried every event
@@ -1037,6 +1088,25 @@ bool ParticleSystem::setProgramParameter(FxHandle h, uint32_t slot, float value,
             }
     return changed;
 }
+void ParticleSystem::modelInstances(std::vector<ModelInstance>& out) const {
+    out.clear();
+    for (size_t slot=0; slot<impl_->instances.size(); ++slot) {
+        const auto& instance = impl_->instances[slot];
+        if (!instance.used || instance.stopped || !instance.emitting) continue;
+        const auto& model = impl_->effects[size_t(instance.effect)].def.model;
+        if (model.source.empty() || (!model.loop && instance.time >= model.duration)) continue;
+        auto world = render::mat4::translate(instance.pos);
+        const float3 axes[] = {{1,0,0},{0,1,0},{0,0,1}};
+        for (int col=0; col<3; ++col) {
+            const auto axis = upRotate(instance.dir,axes[col]) * instance.scale;
+            world.at(0,col) = axis.x; world.at(1,col) = axis.y; world.at(2,col) = axis.z;
+        }
+        if (impl_->haveSpace) world = impl_->space * world;
+        out.push_back({{(uint32_t(instance.gen)<<16)|uint32_t(slot+1)},instance.effect,
+            world,instance.time,instance.tint});
+    }
+}
+
 void ParticleSystem::move(FxHandle h, float3 pos) { if (auto* in = findInstance(*impl_, h)) in->pos = pos; }
 void ParticleSystem::move(FxHandle h, float3 pos, float3 dir) {
     if (auto* in = findInstance(*impl_, h)) { in->pos = pos; if (render::length(dir) > 1e-5f) in->setDir(render::normalize(dir)); }
@@ -1146,6 +1216,13 @@ void ParticleSystem::clear() {
     for (size_t i = 0; i < I.instances.size(); ++i) { I.instances[i].used = false; I.freeInstances.push_back(int(i)); }
 }
 
+void ParticleSystem::resetDeterministicSeed(uint32_t seed) {
+    clear();
+    auto& I=*impl_;
+    I.rng.s=seed==0?0x9E3779B9u:seed; // xorshift32 zero state is absorbing
+    I.nextUid=0;
+}
+
 void ParticleSystem::setView(const SpectraFxView& view) {
     if(!view.valid()) return;
     auto& I = *impl_;
@@ -1174,6 +1251,7 @@ void ParticleSystem::setView(const SpectraFxView& view) {
 
 void ParticleSystem::update(float dt) {
     auto& I = *impl_;
+    I.sceneCollisionStats={};
     dt = std::clamp(dt, 0.0f, 0.1f);
     if (I.haveView) {   // camera velocity ("cameraStretch")
         if (I.haveLastEye && dt > 0) I.camVel = (I.eye - I.lastEye) * (1.0f / dt);

@@ -1,3 +1,5 @@
+#include "apps/client/NoticeEvents.h"
+#include "engine/view/game/MainCameraShake.h"
 #include <chrono>
 #include "engine/view/VisibilityField.h"
 #include "engine/render/NativeMeshBatch.h"
@@ -34,6 +36,8 @@ extern "C" {
 #include "engine/game/ComputerPlayer.h"
 #include "engine/game/Campaign.h"   // agent-mech
 #include "engine/game/GameCore.h"
+#include "apps/client/MatchFiles.h"
+#include "engine/game/CampaignFight.h"
 #include "../engine/roads/RoadNet.h"   // agent-roads
 #include "engine/game/ScriptIeee.h"
 #include "engine/game/Tiles.h"
@@ -351,6 +355,66 @@ TEST(replay_file_roundtrip) {
     CHECK(l.commands.size() == 2 && l.commands[1] == c);
     CHECK(l.checksums == r.checksums);
     std::remove(path);
+}
+
+TEST(client_match_save_and_replay_slots) {
+    namespace fs = std::filesystem;
+    using client::MatchFile;
+    using client::MatchFiles;
+    const auto root = fs::temp_directory_path() / ("aiverse-match-slots-" + std::to_string(std::random_device{}()));
+    CHECK(fs::create_directory(root));
+    struct Cleanup {
+        fs::path root;
+        ~Cleanup() { std::error_code ec; fs::remove_all(root, ec); }
+    } cleanup{root};
+
+    const std::string map = "maps/valley.json";
+    auto live = makeSim(kSkirmish, map, 7);
+    Command action;
+    action.type = game::kCmdPossess;
+    action.player = 1;
+    live->submit(action);
+    for (int i = 0; i < 10; ++i) live->step();
+    MatchFile slot;
+    slot.map = map;
+    slot.seed = 7;
+    slot.setup = R"({"human":1})";
+    slot.simulation = live->serialize();
+    slot.bots.emplace_back(2, std::string("ai\0state", 8));
+    std::string err;
+    CHECK(MatchFiles::write(root, "manual", false, slot, err));
+    CHECK(MatchFiles::list(root, false) == std::vector<std::string>{"manual"});
+    MatchFile saved;
+    CHECK(MatchFiles::read(root, "manual", false, saved, err));
+    CHECK(saved.map == map && saved.setup == slot.setup && saved.bots == slot.bots);
+    auto restored = makeSim(kSkirmish, map, saved.seed);
+    CHECK(restored->deserialize(saved.simulation));
+    for (int i = 0; i < 10; ++i) { live->step(); restored->step(); }
+    CHECK(live->checksum() == restored->checksum());
+
+    slot.replay.module = "game";
+    slot.replay.mapPath = map;
+    slot.replay.seed = slot.seed;
+    slot.replay.endTick = restored->tick();
+    slot.replay.finalChecksum = restored->checksum();
+    slot.replay.commands = restored->executedCommands();
+    CHECK(!slot.replay.commands.empty());
+    CHECK(MatchFiles::write(root, "manual", true, slot, err));
+    CHECK(slot.replay.save((root / "imported.rpl").string()));
+    for (const auto& name : MatchFiles::list(root, true)) {
+        MatchFile recording;
+        CHECK(MatchFiles::read(root, name, true, recording, err));
+        CHECK(recording.nativeReplay == (name == "imported.rpl"));
+        auto playback = makeSim(kSkirmish, recording.map, recording.seed);
+        for (const auto& cmd : recording.replay.commands) playback->inject(cmd);
+        while (playback->tick() < recording.replay.endTick) playback->step();
+        CHECK(playback->checksum() == live->checksum());
+    }
+    CHECK(MatchFiles::list(root, true).size() == 2);
+    CHECK(!MatchFiles::read(root, "../manual", false, saved, err));
+    std::ofstream(root / "manual.avsave", std::ios::trunc) << "incomplete";
+    CHECK(!MatchFiles::read(root, "manual", false, saved, err));
+    CHECK(saved.simulation == slot.simulation);
 }
 
 // ------------------------------------------------------------------ generic mechanics (inline mini games)
@@ -1249,6 +1313,111 @@ TEST(audio_sample_games_banks_load_cleanly) {
     }
 }
 
+TEST(notice_events_run_once_per_tick_and_mirror_batch) {
+    auto sim = makeSimJson(R"({"victory":"noEntities","types":{"unit":{}}})", flatMap(12,12,
+        R"(,"entities":[{"type":"unit","owner":1,"pos":[2,2]},{"type":"unit","owner":2,"pos":[8,8]}])"));
+    sim->addSystem("test.notice.emit", [](Simulation& s) {
+        s.emit({game::kEvLevelUp, 1, {}, {}, int64_t(s.tick() + 1)});
+        s.emit({game::kEvHit});
+    });
+    auto local = client::collectNoticeEvents(*sim, false);
+    auto online = client::collectNoticeEvents(*sim, true);
+    SimSnapshot start;
+    sim->saveState(start);
+    const double tick = 1.0 / sim->tickRate();
+    CHECK(sim->advance(tick * .25) == 0 && local->drain().empty());
+    CHECK(sim->advance(tick * 3) == 3);
+    auto batch = local->drain();
+    CHECK(batch.size() == 3);
+    for (size_t i = 0; i < batch.size(); ++i) CHECK(batch[i].value == int64_t(i + 1));
+    CHECK(local->drain().empty());
+    CHECK(online->drain(1).size() == 1);
+    sim->loadState(start);
+    sim->step();
+    CHECK(online->drain(1).empty());
+    sim->step();
+    batch = online->drain(2);
+    CHECK(batch.size() == 1 && batch.front().value == 2);
+    local->drain();
+    sim->present({{game::kEvBuildDone}});
+    sim->present({});
+    sim->present({{game::kEvResearched}});
+    batch = local->drain();
+    CHECK(batch.size() == 2 && batch[0].type == game::kEvBuildDone && batch[1].type == game::kEvResearched);
+    CHECK(local->drain().empty());
+}
+
+TEST(build_button_checks_only_immediate_cost) {
+    auto run = [](const char* model, const char* storage, int gold, bool expected) {
+        Json rules = Json::parse(R"({"resources":{"gold":{"global":true},"wood":{}},
+            "types":{"tower":{"structure":{"footprint":[1,1]},"cost":{"gold":4,"wood":8}}}})");
+        rules.set("costModel", Json::string(model));
+        rules.set("storage", Json::string(storage));
+        auto sim = makeSimJson(rules.dump(), flatMap(12, 12, ""));
+        auto& core = mod(*sim);
+        const int goldSlot = core.rules().findResource("gold");
+        core.state(*sim).players[1].stock[size_t(goldSlot)] = Fixed::fromInt(gold);
+        const auto before = sim->checksum();
+        int missing = -1;
+        CHECK(core.canAffordBuildStart(*sim, 1, core.rules().findType("tower"), &missing) == expected);
+        CHECK(missing == (expected ? -1 : core.rules().findResource(gold < 4 ? "gold" : "wood")));
+        CHECK(sim->checksum() == before);
+    };
+    run("upfront", "player", 0, false);
+    run("upfront", "player", 4, false);
+    run("upfront", "buildings", 4, true);
+    run("progressive", "player", 0, true);
+}
+
+TEST(audio_repeated_selection_uses_entity_and_time_window) {
+    auto sim = makeSimJson(R"({"types":{"scout":{"health":{"max":10}}}})",
+        flatMap(16,16,R"(,"entities":[{"type":"scout","owner":1,"pos":[3,3]},{"type":"scout","owner":1,"pos":[8,8]}])"));
+    std::vector<Entity> scouts;
+    sim->world().each<game::Unit>([&](Entity e, game::Unit&) { scouts.push_back(e); });
+    CHECK(scouts.size() == 2);
+    const auto first = scouts[0], second = scouts[1];
+    CHECK(first.valid() && second.valid() && first != second);
+    auto audioEngine = offlineAudio();
+    const Json bank = Json::parse(R"({"sounds":{"repeat":{"synth":{}}},
+        "types":{"scout":{"repeatSelect":{"sound":"repeat","count":3,"window":1}}}})");
+    CHECK(audioEngine->loadBank(bank, {}));
+    game::GameAudio sound;
+    CHECK(sound.init(*audioEngine, mod(*sim).rules(), bank) && sound.warnings().empty());
+    auto click = [&](Entity e, int played) {
+        CHECK(sound.onSelectionClick(*sim, e));
+        CHECK(sound.played() == played);
+    };
+    click(first, 0); click(first, 0); click(second, 0);
+    click(first, 0); click(first, 0); click(first, 1);
+    sound.update(*sim, 1.1);
+    click(first, 1); click(first, 1);
+    sound.resetSelectionClicks();
+    click(first, 1); click(first, 1); click(first, 2);
+    CHECK(sound.init(*audioEngine, mod(*sim).rules(), Json::object()));
+    CHECK(!sound.onSelectionClick(*sim, first));
+}
+
+TEST(build_button_missing_resource_audio) {
+    audio::AudioEngine audioEngine;
+    audio::AudioConfig config;
+    config.openDevice = false;
+    audioEngine.init(config);
+    const Json bank = Json::parse(R"({"sounds":{"goldVoice":{"synth":{},"cooldown":1},
+        "genericVoice":{"synth":{},"cooldown":1}},
+        "events":{"notEnough.gold":"goldVoice","notEnough":"genericVoice"}})");
+    CHECK(audioEngine.loadBank(bank, {}));
+    game::Rules rules;
+    rules.resources.resize(2);
+    rules.resources[0].id = "gold";
+    rules.resources[1].id = "wood";
+    game::GameAudio sound;
+    CHECK(sound.init(audioEngine, rules, bank));
+    sound.onMissingResource(0);
+    CHECK(sound.played() == 1 && audioEngine.play("goldVoice") == audio::kNoVoice);
+    sound.onMissingResource(1);
+    CHECK(sound.played() == 2 && audioEngine.play("genericVoice") == audio::kNoVoice);
+}
+
 TEST(audio_aiverse_mapping_warnings) {
     auto a = offlineAudio();
     CHECK(loadBank(*a, R"({"sounds":{"s":{"synth":{}}}})"));
@@ -1764,6 +1933,76 @@ TEST(mech_dungeon_hand_slap_possess) {
     sim->submit(rel);
     run(*sim, 0.2);
     CHECK(!gs.possessed[1].valid() && !(w.get<game::Unit>(gob).flags & game::kUnitPossessed));
+}
+
+TEST(campaign_guard_needs_awareness_before_targeting_and_capture) {
+    const std::string rules = R"({"victory":"keyUnits","possession":{"firstPerson":true},"types":{
+        "fighter":{"move":{"speed":2},"health":{"max":200},"key":true},
+        "guard":{"health":{"max":200},"key":true,"sight":12,"weapons":[{"range":8,"damage":1}]}
+    }})";
+    auto sim = makeSimJson(rules, flatMap(20, 20, R"(,"entities":[
+        {"type":"fighter","owner":1,"pos":[5,5]},{"type":"guard","owner":2,"pos":[10,5]}])"));
+    auto& w = sim->world();
+    Entity fighter = findType(*sim, "fighter", 1), guard = findType(*sim, "guard", 2);
+    w.get<game::Unit>(guard).facing = {1_fx, {}, {}};
+    Command enter;
+    enter.player = 1;
+    enter.type = game::kCmdPossess;
+    enter.units = {fighter};
+    // Start the encounter before the ordinary RTS guard acquires a target.
+    enter.tick = sim->tick();
+    sim->inject(enter);
+    run(*sim, 2);
+    CHECK(w.has<game::Possessed>(fighter));
+    CHECK(!w.get<game::Combat>(guard).target.valid());
+    CHECK(w.get<game::Unit>(fighter).hp == 200_fx);
+    w.get<game::Unit>(guard).facing = {-1_fx, {}, {}};
+    run(*sim, 3);
+    CHECK(w.get<game::Combat>(guard).target == fighter);
+    w.get<Transform>(fighter).pos = w.get<Transform>(guard).pos - Vec3{1_fx, {}, {}};
+    bool captured = false;
+    for (int i = 0; i < 5; ++i) {
+        sim->step();
+        for (const auto& ev : sim->events()) {
+            if (ev.type == game::kEvCampaignFightEnd && ev.value == 1 && ev.a == fighter && ev.b == guard) captured = true;
+        }
+    }
+    CHECK(captured && !w.has<game::Possessed>(fighter));
+}
+
+TEST(campaign_fight_wounds_survive_retreat_and_save) {
+    std::string rules(kDungeonRules);
+    rules.insert(rules.find("\"cost\"", rules.find("\"possession\"")), "\"firstPerson\": true, ");
+    auto sim = makeSimJson(rules, dungeonMap(R"(,{"type":"imp","owner":1,"pos":[7,6]})"));
+    Entity fighter = findType(*sim, "imp", 1);
+    Command enter;
+    enter.player = 1;
+    enter.type = game::kCmdPossess;
+    enter.units = {fighter};
+    sim->submit(enter);
+    run(*sim, 0.2);
+    auto& w = sim->world();
+    CHECK(w.has<game::CampaignFight>(fighter));
+    w.get<game::Unit>(fighter).hp -= 5_fx;
+    sim->step();
+    const auto& fight = w.get<game::CampaignFight>(fighter);
+    CHECK(fight.penaltyMilli > 0);
+    const auto& wounds = fight.health.bodies.at(int64_t(fighter.packed()) + 1).wounds;
+    CHECK(wounds.size() == 1 && wounds.begin()->second.part > 0);
+    const auto snapshot = sim->serialize();
+    CHECK(!snapshot.empty() && sim->deserialize(snapshot));
+    Command retreat = enter;
+    retreat.units.clear();
+    sim->submit(retreat);
+    bool returned = false;
+    for (int i = 0; i < 5; ++i) {
+        sim->step();
+        for (const auto& ev : sim->events()) {
+            if (ev.type == game::kEvCampaignFightEnd && ev.a == fighter && ev.value == 0) returned = true;
+        }
+    }
+    CHECK(returned && !w.has<game::Possessed>(fighter));
+    CHECK(w.get<game::CampaignFight>(fighter).penaltyMilli > 0);
 }
 
 // ------------------------------------------------------------------ territory war (State.io style)
@@ -3420,6 +3659,164 @@ TEST(fx_quality_tiers_bound_particles) {
     CHECK(fx::defaultQualityFor("Mali-T720", true) == fx::FxQuality::Low || std::getenv("AIVERSE_PARTICLES"));
     CHECK(fx::defaultQualityFor("Adreno (TM) 640", true) == fx::FxQuality::Medium || std::getenv("AIVERSE_PARTICLES"));
     CHECK(fx::defaultQualityFor("Apple M2", false) == fx::FxQuality::High || std::getenv("AIVERSE_PARTICLES"));
+}
+
+TEST(fx_node_binding_selects_entity_and_falls_back_to_terrain) {
+    auto sim = makeSimJson(R"({"types":{"unit":{}}})", flatMap(12,12,""));
+    const Entity caster = sim->world().create();
+    const Entity target = sim->world().create();
+    fx::ParticleSystem ps;
+    CHECK(ps.init(nullptr));
+    ps.setQuality(fx::FxQuality::High);
+    CHECK(ps.define("marker", fxParse(R"({"emitters":[{"burst":1,"life":2,"speed":0}]})")) >= 0);
+    game::GameFx bridge;
+    const Json bank = Json::parse(R"({"events":{
+        "attack":{"effect":"marker","node":"weapon","offset":[1,2,3]},
+        "ability":{"effect":"marker","node":"chest","anchor":"target"},
+        "hit":{"effect":"marker","node":"missing","height":4}}})");
+    CHECK(bridge.init(ps, mod(*sim).rules(), bank) && bridge.warnings().empty());
+    bridge.setNodeFn([&](Entity entity, const std::string& node, render::mat4& frame) {
+        if (node == "weapon") CHECK(entity == caster);
+        else CHECK(entity == target);
+        if (node == "missing") return false;
+        frame.at(0,3) = entity == caster ? 10.f : 20.f;
+        return true;
+    });
+    bridge.setHeightFn([](float, float) { return 7.f; });
+    sim->addSystem("test.node.events", [=](Simulation& s) {
+        s.emit({game::kEvAttack,1,caster,target});
+        s.emit({game::kEvAbility,1,caster,target});
+        s.emit({game::kEvHit,1,target,caster});
+    });
+    bridge.attach(*sim, 0);
+    sim->step();
+    bridge.update(*sim, nullptr);
+    ps.update(.01f);
+    std::vector<fx::FxParticleInfo> particles;
+    ps.snapshot(particles);
+    CHECK(particles.size() == 3);
+    for (fx::float3 expected : {fx::float3{11,2,3}, fx::float3{20,0,0}, fx::float3{0,11,0}}) {
+        CHECK(std::any_of(particles.begin(), particles.end(), [&](const auto& p) {
+            return render::length(p.pos - expected) < .01f;
+        }));
+    }
+}
+
+TEST(main_camera_shake_distance_pause_and_expiry) {
+    const Json binding = Json::parse(R"({"amplitude":2,"duration":1,"radius":10,"frequency":12})");
+    game::MainCameraShake near, halfway, outside;
+    near.start(binding, 0, 0);
+    halfway.start(binding, 5, 0);
+    outside.start(binding, 10, 0);
+    render::Camera navigation;
+    const auto first = near.sample(navigation, 0).target;
+    CHECK(render::length(first) > 0);
+    CHECK(render::length(halfway.sample(navigation, 0).target - first * .5f) < .0001f);
+    CHECK(render::length(outside.sample(navigation, 0).target) == 0);
+    CHECK(render::length(near.sample(navigation, 1).target - first) == 0);
+    CHECK(render::length(near.sample(navigation, 0).target) == 0);
+    CHECK(render::length(navigation.target) == 0);
+}
+
+TEST(animated_model_effect_uses_existing_handle_lifecycle) {
+    const auto source = R"({"model":{"source":"models/aura.glb","clip":"idle","duration":0.5,"loop":true,
+        "materials":[{"material":"Glow","color":[[0,"#ffffff00"],[1,"#ff0000ff"]],"uvSpeed":[1,-2],"textures":["a","b"]}]}})";
+    auto definition = fxParse(source);
+    auto roundTrip = fxParse(fx::effectToJson(definition).dump().c_str());
+    CHECK(roundTrip.model.source == definition.model.source);
+    CHECK(roundTrip.model.materials.size() == 1 && roundTrip.model.materials[0].textures.size() == 2);
+    fx::ParticleSystem ps;
+    CHECK(ps.init(nullptr));
+    const auto id = ps.define("aura",roundTrip);
+    const auto handle = ps.play(id,{2,3,4});
+    CHECK(handle.valid());
+    std::vector<fx::ParticleSystem::ModelInstance> models;
+    ps.update(.1f);
+    ps.move(handle,{4,5,6});
+    ps.modelInstances(models);
+    CHECK(models.size() == 1);
+    if (!models.empty()) {
+        CHECK(models[0].handle == handle && models[0].time > 0);
+        CHECK(models[0].world.at(0,3) == 4 && models[0].world.at(1,3) == 5);
+    }
+    ps.stop(handle);
+    ps.modelInstances(models);
+    CHECK(models.empty());
+    definition.model.loop=false;
+    const auto shot=ps.play(ps.define("shot",definition),{});
+    CHECK(shot.valid());
+    for (int i=0;i<12;++i) ps.update(.05f);
+    CHECK(!ps.alive(shot));
+}
+
+TEST(fx_chain_jump_retains_both_endpoints_after_tick_and_expires) {
+    auto sim = makeSimJson(R"({"types":{"unit":{}}})", flatMap(12,12,""));
+    fx::ParticleSystem ps;
+    CHECK(ps.init(nullptr));
+    game::GameFx bridge;
+    CHECK(bridge.init(ps, mod(*sim).rules(), Json::parse(R"({"events":{"chainJump":{"mode":"beam","scale":2,"height":1,"lifetime":0.25}}})")));
+    CHECK(bridge.warnings().empty());
+    sim->addSystem("test.chain.presentation", [](Simulation& s) {
+        SimEvent jump{game::kEvChainJump};
+        jump.pos = {Fixed::fromInt(8), {}, Fixed::fromInt(7)};
+        jump.chain = std::make_shared<ChainJumpPresentation>(ChainJumpPresentation{{Fixed::fromInt(2), {}, Fixed::fromInt(3)}, -1});
+        s.emit(jump);
+    });
+    bridge.attach(*sim, 0);
+    sim->step();
+    bridge.update(*sim, nullptr);
+    CHECK(bridge.chainLinks().size() == 1);
+    const auto link = bridge.chainLinks().front();
+    CHECK(link.beam && link.scale == 2 && link.from.x == 2 && link.from.y == 1 && link.from.z == 3);
+    CHECK(link.to.x == 8 && link.to.y == 1 && link.to.z == 7);
+    bridge.update(*sim, nullptr, .125f);
+    CHECK(bridge.chainLinks().size() == 1);
+    bridge.update(*sim, nullptr, .125f);
+    CHECK(bridge.chainLinks().empty());
+}
+
+TEST(fx_budget_config_limits_particles_and_counts_skipped_events) {
+    auto sim = makeSimJson(R"({"types":{"unit":{}}})", flatMap(12,12,""));
+    fx::ParticleSystem ps;
+    ps.setQuality(fx::FxQuality::High);
+    CHECK(ps.init(nullptr));
+    game::GameFx bridge;
+    const Json bank = Json::parse(R"({"limits":{"combatPerFrame":2,"particles":{"high":5,"low":1}}})");
+    CHECK(bridge.init(ps, mod(*sim).rules(), bank) && bridge.warnings().empty());
+    const int effect = ps.define("burst", fxParse(R"({"emitters":[{"burst":20,"life":2,"speed":0}]})"));
+    CHECK(ps.play(effect, {}).valid());
+    ps.update(.01f);
+    CHECK(ps.stats().particles == 5 && ps.stats().dropped > 0);
+    ps.setQuality(fx::FxQuality::Low);
+    ps.update(.01f);
+    CHECK(ps.stats().particles == 1);
+    sim->addSystem("test.budget.events", [](Simulation& s) {
+        for (int i = 0; i < 4; ++i) s.emit({game::kEvHit});
+        s.emit({game::kEvMiss});
+        s.emit({game::kEvWave});
+    });
+    bridge.attach(*sim, 0);
+    sim->step();
+    bridge.update(*sim, nullptr);
+    CHECK(bridge.skippedCombatEvents() == 3);
+    sim->step();
+    bridge.update(*sim, nullptr);
+    CHECK(bridge.skippedCombatEvents() == 6);
+    bridge.detach();
+    CHECK(bridge.init(ps, mod(*sim).rules(), Json::parse(R"({"limits":{"combatPerFrame":0,"particles":{"low":0}}})")));
+    bridge.attach(*sim, 0);
+    sim->step();
+    bridge.update(*sim, nullptr);
+    ps.update(.01f);
+    CHECK(bridge.skippedCombatEvents() == 5 && ps.stats().particles == 0);
+    bridge.detach();
+    CHECK(bridge.init(ps, mod(*sim).rules(), Json::parse(R"({"limits":{"particles":{"low":-2},"combatPerFrame":1.5}})")));
+    CHECK(bridge.warnings().size() == 2);
+    bridge.attach(*sim, 0);
+    sim->step();
+    bridge.update(*sim, nullptr);
+    CHECK(bridge.skippedCombatEvents() == 0);
+    bridge.detach();
 }
 
 TEST(fx_attached_trail_follows_and_stops) {
@@ -7994,6 +8391,21 @@ TEST(models_dae_skinned_two_bones) {
     CHECK(near(pose[size_t(top)].t.y, 1));
 }
 
+TEST(models_gltf_resolves_authored_texture_frames) {
+    using namespace interchangetest;
+    Json source = Json::parse(modeltest::skinnedGltf());
+    source.set("images", Json::parse(R"([{"name":"glow","uri":"glow.tga"}])"));
+    source.set("textures", Json::parse(R"([{"name":"soft","source":0},{"name":"sharp","source":0,"sampler":0}])"));
+    source.set("samplers", Json::parse(R"([{"magFilter":9728}])"));
+    auto model = loadGltf("marker.gltf", source.dump(), mapReader({{"glow.tga", tga2x2()}}), nullptr);
+    CHECK(model->findImage("glow") == 0);
+    CHECK(model->findImage("glow.tga") == 0);
+    CHECK(model->findImage("soft") == 0);
+    CHECK(model->findImage("sharp") == 1);
+    CHECK(model->findImage("glow.tga#t1") == 1);
+    CHECK(model->findImage("missing") == -1);
+}
+
 TEST(models_dae_textured_zup_and_errors) {
     using namespace interchangetest;
     std::vector<std::string> warn;
@@ -9921,6 +10333,7 @@ TEST(gen_planet_world_players) {
 // ---------------- Lua scripting (scripting agent) ----------------
 #include "engine/game/Script.h"
 #include "engine/game/ScriptInternal.h"
+#include "engine/game/MatchChat.h"
 #include <fstream>
 #include <iterator>
 
@@ -9944,6 +10357,36 @@ static bool scriptLogHas(Simulation& sim, const std::string& text, bool error = 
     return false;
 }
 static Fixed gold(Simulation& sim, uint8_t p) { return mod(sim).state(sim).players[p].stock[size_t(mod(sim).rules().findResource("gold"))]; }
+
+TEST(match_chat_replays_player_text_to_simulation_script) {
+    const char* source = R"(
+        on("chat", function(e)
+            if e.text == "/точка 2" then game.add_var("sender_total", e.player) end
+        end)
+    )";
+    auto run = [&](const std::vector<Command>& commands) {
+        auto sim = scriptSim({{"chat.lua", source}});
+        for (const auto& command : commands) sim->submit(command);
+        for (int tick = 0; tick < 5; ++tick) sim->step();
+        CHECK(mod(*sim).scripts()->errorCount() == 0);
+        CHECK(mod(*sim).state(*sim).trig.vars["sender_total"] == Fixed::fromInt(3));
+        return sim->checksum();
+    };
+    Replay live;
+    Command chat = game::chatCommand("/точка 2");
+    for (uint8_t sender : {1, 2}) {
+        chat.tick = sender;
+        chat.player = sender;
+        live.commands.push_back(chat);
+    }
+    live.finalChecksum = run(live.commands);
+    Replay playback;
+    CHECK(playback.decode(live.encode()));
+    CHECK(playback.commands == live.commands);
+    CHECK(run(playback.commands) == live.finalChecksum);
+    CHECK(!game::chatCommand(std::string(257, 'a')).param);
+    CHECK(!game::chatCommand("  ").param);
+}
 
 TEST(script_no_scripts_no_vm) {   // only the standard library: no "scripts" system, ScriptStore not hashed
     auto sim = makeSim(kSkirmish, "maps/valley.json", 3);
@@ -11541,6 +11984,29 @@ TEST(ai_map_player_presets) {   // map players[i].ai: per-slot preset + knobs (s
     }
     CHECK(loaded.checksum() == cont->checksum());
     CHECK(cont->checksum() == rush->checksum());
+}
+
+#include "apps/client/ResourceHud.h"
+
+TEST(resource_hud_labels_from_rules) {
+    const auto rules = game::loadRules(Json::parse(R"({
+      "resources":{"gold":{"name":"Gold","hudLabelFormat":"{value}"},
+                   "supply":{"kind":"capacity","name":"Supply","hudLabelFormat":"{name} {value}/{cap}"}},
+      "types":{"scout":{"health":{"max":10}}}
+    })"));
+    CHECK(rules.resources.size() == 2);
+    game::PlayerEconomy eco;
+    eco.stock.assign(2, Fixed::fromInt(42));
+    eco.cap.assign(2, Fixed::fromInt(100));
+    eco.capUsed.assign(2, Fixed::fromInt(3));
+    eco.capProvided.assign(2, Fixed::fromInt(8));
+    for (size_t slot = 0; slot < rules.resources.size(); ++slot) {
+        auto resource = rules.resources[slot];
+        const bool gold = resource.id == "gold";
+        CHECK(client::resourceHudLabel(resource, eco, slot) == (gold ? "42" : "Supply 3/8"));
+        resource.hudLabelFormat.clear();
+        CHECK(client::resourceHudLabel(resource, eco, slot) == (gold ? "Gold: 42" : "Supply: 3/8"));
+    }
 }
 
 TEST(script_hud_resource_progress) {

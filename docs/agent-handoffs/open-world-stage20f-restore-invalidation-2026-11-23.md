@@ -1,0 +1,3 @@
+# W1.20f — restore invalidation
+
+Commits `572d1e8d`, `56115232`, `2b5c7d34`, `95cc4a8f`; PR #116 Draft. ECS.h adds quiescent resetComponentChanges<T>. ActorModule.h/cpp registers ActorHost::invalidateRegionOwnershipCaches through existing Simulation::addStateRestoredHook only for region ownership opt-in. ActorRegionOwnership.cpp erases derived RegionSeatIndex and resets CharacterBody, Vehicle and Loot transient tracking. Next reconciliation bootstraps with full scan; persisted dirty queue untouched. No native build/tests run. Next: candidate-only mode and incremental seat index, update skill/catalog. No main merge.

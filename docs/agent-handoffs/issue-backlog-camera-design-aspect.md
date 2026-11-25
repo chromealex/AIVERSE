@@ -1,0 +1,7 @@
+# Camera design aspect (#175)
+
+Accept a fixed design aspect on wide and narrow windows, with consistent sizing, picking and authored framing. Preserve automatic viewport aspect by default and explicit XR frustum precedence.
+
+Code 3920544c1cc438d3b0a7704035b55da858027e32 on codex/issue-backlog-completion. Math3D.h uses one effective aspect for ordinary orthographic and perspective matrices, shared by screenRay and worldToScreen. CameraBehavior.h reads camera.designAspect. GameClient.cpp uses it for initial and scrolling-map framing. Editor.cpp applies it to the Scene and existing play camera workflow. CameraCaptureViews.h forces square cubemap faces. See docs/game-format.md and docs/camera-behaviors.md.
+
+macOS x86_64 Debug: rebuilt aiverse_camera_behavior_tests and aiverse_camera_capture_views_tests, then ran ctest --test-dir ../issue-backlog-completion-mac -R '^camera_(behavior|capture_views)$' --output-on-failure: 2/2 passed. Coverage includes fixed and default aspect on narrow/wide windows, both depth conventions and camera projections, pointer intersection, XR precedence and cubemap symmetry. GameClient.cpp and Editor.cpp passed clang++ -fsyntax-only using their respective CMake target flags. Existing pr121-completion/mac/aiversemcp set_manifest followed by game_info in a fresh process round-tripped camera.designAspect=1.333333. Runtime captures and the final combined-tree Mac gate remain pending.

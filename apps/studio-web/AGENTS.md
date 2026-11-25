@@ -1,4 +1,243 @@
+## 2026-11-23 — Stage 18: real native SpectraFX frame capture (tests deferred)
+
+`apps/studio-native/StudioHost::captureSpectraFrame` now adds bounded
+asynchronous one-shot readback of the dedicated native FX drawable,
+NOT a browser-generated screenshot. The existing `gfx::Device`
+`captureNextFrame` is scheduled on the native render owner and
+completed via an immutable shared callback state guarded by a mutex.
+`studio.spectraPreview` and authenticated `aiversemcp`
+`fx_graph_preview` share new actions
+`{"action":"capture","maxSide":512}` and
+`{"action":"captureStatus"}`. Capture status includes
+`capture:{pending,ready,width,height,mime,image?,error?}` in the
+normal preview status. Max capture side 128–768, default 512;
+JPEG ≤600 KiB, at most one outstanding request, 10s timeout;
+project switch, FX detach and shutdown discard stale results.
+Graph UI exposes Capture Frame, genuine JPEG thumbnail and Save
+captured JPEG. No gameplay/ECS writes, fake particles, filesystem
+output path or continuous video streaming. **No current-source
+AppleClang/Metal, Node/Vite, CTest, Mac UI or Windows Vulkan tests
+were run (user requested features first).**
+Handoff:
+`docs/agent-handoffs/spectrafx-studio-stage18-native-gpu-frame-capture-2026-11-23.md`.
+
+## 2026-11-23 — Stage 13: independent Scene and FX GPU swapchains
+
+The SpectraFX Graph native GPU preview **NO LONGER BORROWS OR
+REPOSITIONS the map Scene drawable**. StudioHost now uses three
+`StudioSurface` values: `Scene`, `Game` and `Fx`. The native
+`Fx` viewport owns its own `StudioScene`, renderer, camera, gfx Device
+and native CAMetalLayer (macOS) / Win32 Vulkan child window (Windows).
+Both map Scene and FX are framed on the **same render-owner thread**
+using separate swapchains and can be displayed simultaneously.
+`studio.viewportRect {id:"fx"}` places ONLY the FX surface. The
+browser never draws fake particles or receives GPU handles.
+`studio.spectraPreview` and `aiversemcp fx_graph_preview` remain
+the shared playback/camera/parameter control surface, but target
+`fxPreview_` rather than the authored Scene. No native map brush,
+selection, asset drop, keyboard deletion or ECS mutation is permitted
+from the dedicated FX window. Independent map Scene camera/history
+are untouched. Both renderer/device lifetimes retire on the native
+owner thread.
+
+This supersedes Stage 11's **one shared native surface** limitation
+without replacing the established Stage 11 HTML5 dock rectangle.
+Metal CTest source now creates two real devices and captures different
+GPU frames; macOS Studio CI also compiles the full native host.
+**Full AppleClang/Metal, Windows Vulkan and WKWebView UI acceptance
+not yet observed as PASS.** Required agent handoff:
+`docs/agent-handoffs/spectrafx-studio-stage13-independent-gpu-targets-2026-11-23.md`.
+
+
+## 2026-11-23 — embedded SpectraFX native viewport / MCP (Stages 11–12)
+
+`SpectraDockViewport.tsx` owns the **HTML rectangle only**, uses
+`studio.viewportRect {id:"fx"}`, and releases it on unmount.
+The actual render, particles, isolated camera, resource fences and
+GPU Device belong to the existing `StudioScene` native render thread.
+Do not render fake particle DOM/canvas frames or create another WebGL/
+Metal device in React. Graph and Scene share a native surface with FX
+priority and reflow after it closes. Browser code never edits the
+game map from VFX.
+`fx_graph_preview` is a shared Workspace op listed by `aiversemcp`
+and delegates to the same `StudioHost::runSpectraPreview` as
+`studio.spectraPreview`. Standalone MCP returns a clear unavailable
+error; all asset authoring tools remain usable.
+Tests: `test:graphs` includes `spectraViewportModel.test.mjs`,
+native `studio_spectrafx_preview` includes isolated camera/restore,
+`vfx_graph_ops` includes MCP discovery, host callback and safety.
+**Current exact-SHA hardware/UI QA NOT yet run.** Handoffs: Stage 11
+`docs/agent-handoffs/spectrafx-studio-stage11-embedded-preview-2026-11-23.md`
+and Stage 12
+`docs/agent-handoffs/spectrafx-studio-stage12-mcp-camera-2026-11-23.md`.
+
+
+## Stage 9 — SpectraFX Graph first-use UX (2026-11-23)
+
+User screenshot showed the `New Graph` form hidden below a scrolling asset list
+in the narrow ~420px HTML5 Graph dock. Creation now appears as always-visible
+**Starter FX** and **Blank V2** actions, above Graph Assets and in the no-graph
+welcome state. Starter passes through the canonical native
+`fx_graph_edit {action:"new"}` result (which already has
+Spawn→Initialize→SpriteOutput) and invokes native `fx_graph_validate`
+before presenting it as runnable. Blank V2 explicitly removes nodes/links
+without mutating the native source. Duplicate graph names are rejected;
+source controls and tests live in `SpectraDataInterfacesPanel.tsx`,
+`spectraStarterModel.ts`, `SpectraDataInterfacesPanel.css` and
+`tests/spectraStarterModel.test.mjs`. **Exact HEAD UI/Node/Vite checks
+not yet confirmed PASS.** Handoff:
+`docs/agent-handoffs/spectrafx-studio-stage9-first-use-2026-11-23.md`.
+
 # AIVERSE Studio Web — AI authoring rules
+
+## 2026-11-23 — SpectraFX Studio Stages 15–17 (features only; tests postponed)
+
+Added production-native preview-authoring controls to the independent
+FX viewport and existing `aiversemcp` `fx_graph_preview` tool:
+
+- **Stage 15**: `playback {speed:0.25|0.5|1|2|4,loop:boolean}`
+  uses whole fixed 1/60s simulation ticks, bounded quarter-tick
+  accumulator and native-frame restart at 3600 ticks. `stage`
+  selects `background:dark|neutral|light|black` and boolean grid/axes;
+  `cameraPreset` uses perspective/front/side/top with a separate FX
+  camera. All supported through the HTML5 Graph pane and MCP.
+- **Stage 16**: opt-in `Auto-reload graph` recompiles an immutable
+  in-memory Graph v2 after 650ms debounce. Save Draft/Publish remain
+  explicit; native compiler rejects invalid candidate graphs without
+  replacing last-good state. Successful recompilation restores Play.
+  Native backend initialization failure is a known separate hazard,
+  not a proven atomic swap.
+- **Stage 17**: `burst {count:1..8}` queues bounded native one-shot
+  emitter events (max 32 queued), `clear` defers particle reset to
+  the next native device frame. HTML5 Trigger Burst/Clear controls
+  and real burst/queue counters; no gameplay/ECS writes.
+
+Docs:
+`docs/agent-handoffs/spectrafx-studio-stage15-playback-stage-2026-11-23.md`,
+`docs/agent-handoffs/spectrafx-studio-stage16-auto-reload-2026-11-23.md`,
+`docs/agent-handoffs/spectrafx-studio-stage17-burst-events-2026-11-23.md`.
+
+**User deliberately deferred ALL testing until later.** No exact-SHA
+TypeScript/Vite/AppleClang/Metal/Windows/Vulkan/interactive GUI PASS
+has been observed for Stages 15–17. Do not describe the source
+implementation as hardware-verified. Prior 2/2 Mac CTest PASS belongs
+to an older Scene-only preview.
+
+
+## 2026-11-23 — Stage 14: dual Scene/FX viewport QA hardening
+
+The real native Scene and SpectraFX editor now use two separate GPU
+drawables and independent cameras (Stage 13), both serialized on the
+existing native render thread. Stage 14 extends
+`StudioViewportLayoutTests.cpp` to verify two simultaneous independent
+rectangles, DPR, FX hide/resize without mutating Scene geometry.
+The focused macOS CI includes
+`aiverse_studio_viewport_layout_tests` and CTest
+`studio_viewport_layout` in addition to native Metal, codec and
+Workspace/MCP tests. `SpectraDockViewport.tsx` no longer dispatches
+the obsolete shared-surface reflow event when FX closes, preventing
+unnecessary authored Scene redraws.
+**Exact-SHA AppleClang/Metal, Node/Vite, Windows and dual live
+WKWebView screenshot QA remain unverified.** Detailed handoff:
+`docs/agent-handoffs/spectrafx-studio-stage14-dual-viewport-qa-2026-11-23.md`.
+
+
+## Stage 10 — macOS Studio image codec warnings (2026-11-23)
+
+Tester Mac build succeeded but reported 54 diagnostics:
+11 `-Wmissing-field-initializers` (3 repetitions of `StudioGameLaunch`
+plus 8 stb writer initializers), 42 `-Wunused-function` generated by the
+private static stb implementation in `StudioHost.cpp`, and 1 deprecated
+`sprintf` in the vendored HDR writer. Source cleanup:
+`StudioGameLaunch.h` fully initializes the optional camera;
+`third_party/stb_image_write/stb_image_write.h` completes 8 portable
+C initializers and uses bounded `snprintf`;
+`StudioStbCodecs.h` retains private stb linkage but annotates its
+optional unused entry points `[[maybe_unused]]` without muting any
+first-party warnings; `StudioHost.cpp` includes this wrapper.
+`studio_image_codecs` is a real PNG/JPEG regression target compiled
+with `-Werror=unused-function`, `-Werror=missing-field-initializers`
+and `-Werror=deprecated-declarations`. CI also fixes Studio's
+`AIVERSE_BUILD_TOOLS=ON` prerequisite.
+
+**Mac exact-HEAD build and codec CTest still pending**.
+Small Clang/GCC language contract checks passed in a Linux sandbox;
+they are not a full project compile. Handoff:
+`docs/agent-handoffs/spectrafx-studio-stage10-warning-cleanup-2026-11-23.md`.
+
+
+## 2026-11-23 — SpectraFX native Scene GPU preview (Stage 8; hardware acceptance pending)
+
+Mandatory handoff: `docs/agent-handoffs/spectrafx-studio-stage8-native-preview-2026-11-23.md`.
+`apps/studio-native/StudioSpectraPreview.h` owns a single real
+`spectra::GraphRuntime` on Studio's existing Scene render thread and
+gfx::Device. `StudioScene::frame` performs actual GPU/CPU particle step
+at a device-safe point BEFORE render passes and draws into the open HDR
+Renderer3D scene pass BEFORE PRISMA resolve. `StudioHost` allowlists
+`studio.spectraPreview` commands and marshals them via `onScene`.
+HTML5 `SpectraNativePreview.tsx` controls Play/Pause/Step/Seek (60Hz,
+max 3600 ticks), Restart/Stop, actual backend status and named
+runtime scalar parameters. Click Open Scene to see real native pixels.
+This DOES NOT render an offscreen preview *within the Graph panel*;
+it does not draw fake HTML particles. A new macOS Metal CAMetalLayer
+acceptance test and CI are authored. **Current revision not yet
+build/Metal/UI verified**; the parent PR #113 must be accepted first.
+Do not route RHI handles, GPU simulation or non-immutable ECS data into
+React or the main StudioSession/UI thread.
+
+
+## 2026-11-23 — SpectraFX Stage 7: typed Curve and Gradient authoring (QA pending)
+
+Mandatory handoff: `docs/agent-handoffs/spectrafx-studio-stage7-curve-gradient-2026-11-23.md`.
+`apps/studio-web/src/panels/SpectraCurveEditor.tsx` adds bounded
+visual key editing for the existing Graph v2 `Curve` and `Gradient`
+value nodes. `spectraCurveModel.ts` validates 1..32 unique normalized
+keys, finite curve numbers, safe six/eight-digit RGBA hex and immutable
+changes. Alpha, add/remove key, time/parameter edits and static chart/
+color-strip preview are authoring only. Existing `fx_graph_validate`
+and `fx_graph_set` remain authoritative for Publish. Never describe the
+static chart as GPU particles or use browser code to own RHI handles.
+`npm run test:graphs` now includes `spectraCurveModel.test.mjs`.
+**Current Stage 7 source has NOT passed confirmed CI or GUI hardware QA.**
+This feature is on stacked draft PR #115, parent PR #113 remains a draft.
+
+
+## 2026-11-23 — SpectraFX HTML5 graph canvas (Stage 6; QA pending)
+
+Read `docs/agent-handoffs/spectrafx-studio-stage6-graph-canvas-2026-11-23.md`.
+The existing `fx_graph` dock tab now includes a 2D node/link canvas implemented
+by `SpectraGraphCanvas.tsx` and `spectraGraphCanvasModel.ts`:
+node drag/layout, zoom, display typed/exec links, native catalog-driven
+Add/Delete and native `fx_graph_edit` Connect/Disconnect.
+File saves still use the parent Stage 5 Data Interfaces pane's
+`fx_graph_validate` / `fx_graph_set` / `fx_graph_draft_set`, not browser IO.
+`npm run test:graphs` includes new canvas-model tests.
+**Source committed, CI queued; not hardware/UI-verified.**
+This is an authoring topology canvas, NOT a particle/GPU preview.
+Never represent it as a real frame or change RHI simulation based on it.
+
+
+## 2026-11-23 — SpectraFX Graph v2 Data Interfaces (Stage 5, draft PR #115)
+
+Read `docs/agent-handoffs/spectrafx-studio-stage5-2026-11-23.md` before
+changing this area. `apps/studio-web/src/panels/SpectraDataInterfacesPanel.tsx`
+now renders the existing `fx_graph` tab using the shared Studio UI kit.
+It accesses native project graph assets ONLY through `studio.op` with
+`fx_graph_list/get/validate/set/draft_*`, and uses `studio.assets` to
+choose real SpriteOutput image references from `content/`. Do not write
+the project's files directly from React. The pure
+`spectraDataInterfaceModel.ts` owns atomic Graph v2 parameter/binding
+edits, safe provider IDs, node refs and image path validation; tests live
+in `apps/studio-web/tests/spectraDataInterfaces.test.mjs`.
+Provider names refer to host callbacks, not file paths. Browser-only
+validation does not substitute native `fx_graph_validate`.
+Live GPU preview/full wiring are NOT finished; never fake the renderer.
+
+This stage is stacked on `feature/spectrafx-significance-data-20261123`
+(parent draft PR #113); `main` and `feature/studio-html5` are unchanged.
+Native Studio WebView and new CI tests have not yet passed as of this
+handoff. Read the exact test logs and preserve per-stage handoffs.
+
 
 ## Approved visual direction — do not reinterpret
 **The selected design is the FIRST cinematic concept, approved 2026-11-20.** It has a dominant real 3D Scene, premium layered dark-navy editor surfaces, blue/periwinkle focused highlights, softly raised panels, a practical Hierarchy/Inspector and a bottom Assets grid. The later stricter/flat mockup was **not** selected.
@@ -62,3 +301,35 @@ The old App shell and NestedDockWorkspace use `src/ui/editor-shell.css` to inher
 - API: `studio.assets` takes an empty parameters object and returns `{root:"content",files:[{path,bytes}]}`. Do not reintroduce an arbitrary browser-selected directory or expose game.json/rules.json/maps from the project root.
 - Existing project files **outside** `content/` are not moved automatically. If needed, instruct the user to move/copy assets consciously and update any existing references; never migrate by silently overwriting paths.
 - The HTML5 content-browser is read-only. Asset import/rename/delete can be added only with new bounded native Workspace operations and separate handoffs/tests.
+
+## Stage 143 — Studio/MCP in-memory SDF baking (source; QA deferred)
+
+Shared `fx_graph_edit` action `bakeSdf` takes Graph v2 CollisionModule node, project content model path and integer dimension 4..16 (optional expectedProjectPath). Uses existing model loader and bounded offline SDF baker. Dependencies restricted to checked project content, no symlink traversal, total 64 MiB input; no filesystem writes. Returns normal graph/compiler diagnostics, preserves unrelated authoring. HTML5 Graph resource inspector adds CollisionModule model asset picker (search/drop), lattice dimension and Bake/Rebake, rejecting stale graph/project responses. Parent local draft save/publish unchanged; no global undo/redo implementation claim. Native MCP uses same edit action; no new op registry. No high-resolution format, asset texture or dynamic geometry. Build/CTest/TS/UI not run.
+
+## Stage 144 — expanded dense static SDF (source; QA deferred)
+
+Existing staticSdf JSON and native lattice now accept dimensions 3..32; baker, CLI and shared Studio/MCP bakeSdf accept 4..32, including 24 and 32 in the existing picker (default remains 16). Max 32768 floats, 128 KiB + five words for GPU source payload. No shader ABI change: both existing Metal/Vulkan samplers use runtime dimension and x-fastest indexing; current allocation budget already charges the actual payload on initialization and resize. The 16 Mi sample-triangle pair cap stays: 32 cubed accepts at most 512 triangles, with no automatic simplification. Existing 1 MiB graph file cap stays; complex/multiple dense inline volumes may exceed it. No external asset/atlas, acceleration, dynamic SDF or new runtime owner. Native CPU interpolation, GPU eligibility, JSON roundtrip/rejection, mesh work cap and shared editor bake regression source updated; no build/CTest/TS/GPU/visual/performance QA executed. Next: external compact asset/atlas and scalable baking.
+
+## Stage 145 — portable binary SDF interchange (source; QA deferred)
+
+Native SpectraSdfBinary.h exposes lossless little-endian SDFB v1 float32 encode/decode/load, exact dimension/byte bounds, CRC32 over header and samples, atomic output; 32 cubed file is 131108 bytes. Existing CLI writes .sdfbin by extension or legacy JSON. Shared fx_graph_edit importSdf accepts checked project content .sdfbin and a Graph v2 CollisionModule; reads at most the codec byte limit and replaces staticSdf in memory only. Studio indexed asset adapter classifies .sdfbin, picker imports a snapshot with existing stale-result guard. No live graph reference, atlas, compression or new runtime resolution; graph JSON size limit remains. Existing fixtures expanded for exact roundtrip, malformed/corrupt file and guarded import. QA/build/TS/Metal/Vulkan deferred. Next persistent external references through all graph compiler/load paths and GPU storage sharing.
+
+## Stage 146 — persistent external SDF references (source; QA deferred)
+
+CollisionModule staticSdf now accepts either legacy inline object or safe content/<name>.sdfbin string. Native effect parser resolves exact binary values via explicit SdfResourceReader after graph expression evaluation. Missing, corrupt, unsafe and no-reader references fail. projectSdfReader bounds bytes before reading, rejects symlink components; trusted root required. Existing GraphAssets explicit load hashes effective dependencies, reuses unchanged compiled IDs and preserves last good on failure. Native dedicated runtime, batch, cue, pool, client and Studio authoring/scene/preview paths accept resource readers; dedicated device restore identity includes resolved bytes. Preview candidate validation/init share a snapshot. Workspace linkSdf and indexed Studio Link button persist only the path; existing importSdf/bakeSdf still materialize inline copies. No GPU ABI/atlas change. Live file watching, automatic scene/client reload, package import/export closure, full replay provenance and generic asset indexing need separate integration/QA. Compiled EffectDef export still materializes samples. Source fixtures expanded; no build, CTest, TS, GPU or visual checks executed.
+
+## Stage 148 — bounded accelerated mesh SDF baking (source; QA deferred)
+
+MeshDistanceQueries.h extracts existing double triangle distance and solid angle queries, adds balanced deterministic median BVH, nearest-distance AABB pruning and signed oriented axis-ray winding with alternate axes and exhaustive solid-angle fallback on ambiguous edges/vertices/planes. Existing light-baker float/ray BVH is not used for double distance/winding; no new renderer dependency. MeshDistanceGrid keeps closed oriented topology validation, exact weld, grid layout and atomic output. Static sample-triangle product cap replaced by 64 Mi counted traversal/triangle operations; max triangles now 32768 subject to actual budget, not a guarantee for every mesh. Native optional stats report node, distance, ray, fallback and retry counts; caller may lower generic work limit. SpectraSdfBaker passes stats through; Studio hint updated. Regression source compares nested reversed shell to exhaustive reference, checks 768-triangle disjoint fixture above previous cap and exact budget rejection preserving output. Resolution still 4..32 and runtime/file/GPU ABI unchanged. No compile/tests/performance measurements run. Next: high-resolution external lattice and packed atlas; previous package/replay gaps remain.
+
+## Stage 149 — high-resolution external SDF (source; QA deferred)
+
+Native StaticSdfVolume and offline baker accept up to 128 nodes/axis; inline JSON, Studio bake/import and staticSdfToJson remain capped at 32. SDFB v2 encodes >32, v1 remains exact <=32. 64 cubed is 1 MiB, 128 cubed 8 MiB of samples plus 36-byte file framing. Existing linkSdf supports high-resolution files; CLI requires .sdfbin output above 32, Studio explains workflow. No large graph IPC or new file-write op. Effect parser caps effective binary reads per effect at four maximum volumes (32 MiB + headers), high-res effect serialization keeps resolved asset path and rejects unlinked native export. Eligibility compares structural JSON without sample expansion; group key uses compact hash and full exact volume comparison before reuse. Existing GPU source-buffer indexing and actual allocation charge scale with samples; no shader ABI change. Offline high-res traversal budget 256 Mi operations, <=32 remains 64 Mi; spacing minimum 0.01m and topology limits unchanged. 64/128 resolution does not guarantee a successful complex bake. Regression source includes exact roundtrip, native interpolation, GPU schema, compact linked JSON, rejection, Workspace and 128³ Metal sharing fixture. No actual build, bake benchmark, CTest, TS, Metal/Vulkan or UI QA. Next: packed atlas and resource integration gaps.
+
+## Stage 154A — volume/hybrid Graph v2 and Studio preview (source; QA deferred)
+
+SpectraVolumeGraph.h provides compilePresentationGraph splitting one independent ordered volume branch (VolumeDomain, repeated VolumeSource, VolumeAdvection, VolumeCombustion, VolumePressure, VolumeOutput) from existing particle Graph v2. Strict no cross-domain/value links, one output and ordered chain; native asset parser remains authoritative. Native presets fire/smoke/magic/fog, existing fx_graph_edit newVolume/addVolume, catalog, validation, save/get/draft; legacy particle bake rejects volume rather than omitting it. Canvas preset creation and selected volume property JSON editor, native reload; StudioSpectraPreview loads GPU grid/renderer alongside optional particle runtime with candidate-before-swap, native fixed ticks and HDR dock contribution (map contribution only if HDR enabled). Volume-only uses continuous sources; hybrid executes both, no exchange/coupling or cross-runtime transactional tick. Replay/checkpoint unsupported and rejected. Native status shows volume resolution, logical bytes and successful HDR command submission (not completion). No automatic gameplay instance, explosion impulse authoring, typed data ports, fully specialized inspector, sparse/LOD, scene shadow maps or package closure yet. Tests and examples source, actual CMake/TypeScript/Metal/Vulkan/Studio QA NOT RUN. Next Stage 154B finish game runtime, typed inspector and hybrid controls, then Stage 155 coupling/sparse.
+
+## Stage 154B — scene volume sources and authored impulses (source; QA deferred)
+
+Volume asset v1 now supports one optional impulse, duration .001..1 seconds and signed radial acceleration in Source. Graph VolumeSource mode continuous/impulse, one impulse per branch; Explosion preset injects heat/fuel/density and outward velocity once, not persistent fuel. CPU reference init injects immediately; GPU queued impulse applies on first successful tick. Native VolumeInstance owns placed grid + HDR renderer; local domain, source and SDF origins translated by scene anchor. Studio preview reuses instance; Restart rearms authored impulse, Clear cancels, Trigger explosion queues one pulse and paused preview requests a tick. SceneVolumeWorld admits at most four fixed-anchor volumes, four admission attempts/sync, four ticks/frame, revision/effect changes recreate, detach removes immediately; back-to-front approximate per-volume HDR composition, no unified overlap. Existing SpectraSource ECS identity/visible presentation reused in ClientFx and StudioSpectraSources; hybrid particle branch still existing presenter. Flat maps/unit scale only, source movement does not translate live volume, rotation and planet support pending. HDR must be active, no forced map quality change. Studio typed numeric/vector/mode/path fields replace manual JSON and expose optional settings; obstacle path typed manually (indexed picker pending). Tests source for preset/codec/radial impulse, anchor/revision/detach and admission; no actual builds, GPU, TS or UI acceptance. Next Stage 155: coupling, planet/moving volumes, PHYSIS, sparse/LOD, and scene diagnostics/authoring gaps.

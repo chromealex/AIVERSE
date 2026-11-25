@@ -80,6 +80,7 @@ struct ArsenalHand {
     bool aimActive = false, aimTrigger = false, aimPending = false;
     int16_t aimSlot = -1;
     uint32_t aimUntil = 0;
+    Fixed preciseRemaining{}; // shared hand cooldown, in unscaled weapon seconds
 };
 
 struct ArsenalCrate {
@@ -102,7 +103,7 @@ public:
     void setup(Simulation& sim, GameHost& m, const Json& rulesJson);
     bool command(Simulation& sim, const Command& cmd);   // true: kCmdTopDownWeapon handled
     void tick(Simulation& sim);                          // after the vehicles: crates, loadouts, firing
-    void hash(Simulation& sim, Hasher& h) const;
+    void hash(Simulation& sim, Hasher& h, bool includeCadence = true) const;
     void io(Simulation& sim, Archive& a);
     ArsenalStore* store(Simulation& sim) const;
     const ArsenalHand* hand(Simulation& sim, uint8_t player) const;
@@ -123,6 +124,7 @@ private:
 
     GameHost* m_ = nullptr;
     ArsenalRules rules_;
+    bool preciseCadence_ = false;
 };
 
 } // namespace aiverse::game

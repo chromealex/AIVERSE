@@ -1,0 +1,3 @@
+# W1.22k — retention cleanup
+
+Commits a27e5eec, f09be9ae. RegionCheckpointRetention::cleanup revalidates active manifest, recomputes plan, checks regular non-symlink pairs, deletes only older eligible pairs, reports completed generations and failed generation. Partial deletion can leave an orphan, which subsequent planning protects. PersistentWorldSession exposes retentionPlan and cleanupRetention only while ready and lock held. Caller must serialize operations; backup contents not verified, deletion metadata durability not guaranteed, no automatic orphan removal. No native tests run. Next read-only backup validation/recovery, then skill/catalog. PR #116 Draft; no main merge.

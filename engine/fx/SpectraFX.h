@@ -9,6 +9,12 @@
 #include "SpectraModuleSchema.h"
 #include "SpectraAuthoring.h"
 #include "SpectraFunctionAssets.h"
+#include "SpectraSdfBinary.h"
+#include "SpectraVolumeAsset.h"
+#include "SpectraVolumeGraph.h"
+#include "SpectraGpuVolumeGrid.h"
+#include "SpectraGpuVolumeRenderer.h"
+#include "SpectraSceneVolumeWorld.h"
 #include "SpectraGpuParticles.h"
 #include "SpectraGpuFramePlan.h"
 #include "SpectraGpuProgram.h"
@@ -20,6 +26,9 @@
 #include "SpectraCueScheduler.h"
 #include "SpectraGpuPoolWorld.h"
 #include "SpectraGpuCueBridge.h"
+#include "SpectraFxSignificance.h"
+#include "SpectraFxCuePriority.h"
+#include "SpectraFxAccelerationFields.h"
 
 namespace aiverse::spectra {
 
@@ -37,8 +46,8 @@ inline constexpr int kGraphVersion = 2; // latest authoring format
 inline constexpr int kLegacyGraphVersion = 1; // still supported
 
 inline bool compileGraph(const Json& graph, const Json& overrides, Effect& out,
-                         std::vector<std::string>& errors) {
-    return fx::compileSpectraGraph(graph, overrides, out, errors);
+                         std::vector<std::string>& errors,const fx::SdfResourceReader& sdfReader = {}) {
+    return fx::compileSpectraGraph(graph, overrides, out, errors,sdfReader);
 }
 inline bool compileGraph(const Json& graph, Effect& out,
                          std::vector<std::string>& errors) {

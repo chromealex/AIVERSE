@@ -14,6 +14,8 @@ uint32_t AudioScriptSound::play(const std::string& name, const ScriptSoundPlay& 
     pp.variant = p.variant;
     pp.startAt = p.at;
     pp.loop = p.loop;
+    pp.positional = p.positional;
+    pp.x = p.x; pp.y = p.y; pp.z = p.z;
     return e_.play(name, pp);
 }
 void AudioScriptSound::set(uint32_t v, float gain, float pan, float pitch) {

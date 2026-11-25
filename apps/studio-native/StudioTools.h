@@ -43,7 +43,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
         {"raid", {"raid_info", "raid_set", "raid_point", "raid_run"}},
         {"balance", {"balance_stats", "balance_duel", "balance_matrix", "balance_batch", "match_run", "scenario_run", "rules_lint"}},
         {"fx_graph", {"fx_graph_list", "fx_graph_node_catalog", "fx_graph_get", "fx_graph_validate", "fx_graph_set", "fx_graph_edit",
-                      "fx_graph_bake", "fx_graph_delete", "fx_graph_draft_list", "fx_graph_draft_get", "fx_graph_draft_set", "fx_graph_draft_publish"}},
+                      "fx_graph_bake", "fx_graph_delete", "fx_graph_draft_list", "fx_graph_draft_get", "fx_graph_draft_set", "fx_graph_draft_publish", "fx_graph_preview", "fx_asset_check", "fx_replay_prepare", "fx_replay_status", "fx_replay_capture", "fx_checkpoint_timeline", "fx_checkpoint_file", "fx_replay_preset_list", "fx_replay_preset_get", "fx_replay_preset_save", "fx_replay_preset_check", "fx_replay_preset_relocate_preview", "fx_replay_preset_relocate_apply", "fx_replay_preset_portable_export", "fx_replay_preset_portable_preview", "fx_replay_preset_portable_apply", "fx_replay_package_list", "fx_replay_package_export", "fx_replay_package_preview", "fx_replay_package_apply"}},
         {"fx_functions", {"fx_function_list", "fx_function_get", "fx_function_set", "fx_function_import", "fx_function_export", "fx_import_unity"}},
         {"modeling", {"modeling_catalog", "modeling_list", "modeling_get", "modeling_create", "modeling_edit", "modeling_apply", "modeling_build",
                       "modeling_duplicate", "modeling_lod", "modeling_export", "modeling_graph_set", "modeling_graph_import", "modeling_graph_publish",
@@ -55,6 +55,10 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
                       "animation_root_motion_generate"}},
         {"model_anim", {"model_info", "animation_editor", "animation_edit"}},
         {"snapshot_diff", {"game_file_read"}},
+        {"world_persistence", {"world_save_list", "world_save_status", "world_save_page", "world_save_backups",
+            "world_save_create", "world_save_checkpoint", "world_save_retention_preview", "world_save_retention_apply", "world_save_fork",
+            "world_job_start", "world_job_status", "world_job_cancel", "world_job_release",
+            "world_simulation_lod_get", "world_simulation_lod_validate", "world_simulation_lod_set"}},
         {"project_import", {"port_scan", "port_report", "port_item", "port_resolve", "port_import"}},
         // Package catalog (AIVERSE-PACKAGES): search and install content into the open project.
         {"catalog", {"package_search", "package_info", "package_status", "package_add", "package_remove", "package_install"}},
@@ -79,6 +83,7 @@ inline bool studioToolAllowed(const std::string& op) {
 // Ops that never change the project or the map: the panel runs them without an undo step or a
 // document refresh.
 inline bool studioToolReadOnly(const std::string& op) {
+    if(op=="world_save_page"||op=="world_save_backups"||op=="world_save_retention_preview"||op=="world_job_status"||op=="world_simulation_lod_get"||op=="world_simulation_lod_validate")return true;
     static const char* suffixes[] = {"_get", "_list", "_info", "_types", "_network", "_catalog", "_templates",
                                      "_presets", "_validate", "_ascii", "_estimate", "_api", "_read", "_check",
                                      "_preview", "_analyze", "_state", "_export", "_run", "_scan", "_report", "_sample",

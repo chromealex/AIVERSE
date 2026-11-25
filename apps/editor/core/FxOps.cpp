@@ -236,7 +236,7 @@ FxCheck checkFx(const Workspace& ws, const std::string& name, const Json& j) {
             c.warnings.push_back(where + ": particles grow beyond 12 m: heavy fill rate on phones");
         if (e.trail.enabled && e.trail.minQuality == fx::FxQuality::Low) c.warnings.push_back(where + ": trail on the low tier: ribbons cost fill rate on weak GPUs");
     }
-    if (burst > 600) c.warnings.push_back("bursts total " + std::to_string(burst) + " particles: the low tier keeps 600 for the whole screen");
+    if (burst > 600) c.warnings.push_back("bursts total " + std::to_string(burst) + " particles: the default low-tier budget is 600 for the whole screen");
     return c;
 }
 
@@ -486,20 +486,22 @@ void registerFxOps(Workspace& ws) {
 
     add("fx_bind", "Attach an effect to game events in fx/fx.json (or detach with effect: null; remove: true deletes the entry so fallbacks "
         "apply). cue: attack, hit, miss, died, spawned, ready, buildPlaced, buildDone, gathered, captured, levelUp, ability, upgraded, sold, "
-        "regionClaimed, wave, trail (projectile), damaged (loop while hp < below). Scope (most specific wins in the game): type + weapon / "
+        "regionClaimed, wave, chainJump (beam or projectile; chainKey selects the authored jump), trail (projectile), damaged (loop while hp < below). Scope (most specific wins in the game): type + weapon / "
         "ability, type, weapon (any type), ability (any type), category (structure | air | unit), or all. Options: height, scale, "
         "teamColor, below, upright (play along +Y: explosions), clear (trail vanishes with its projectile). Returns the binding warnings "
         "of the whole file.",
         R"({"properties": {"effect": {"type": ["string", "null"]}, "cue": {"type": "string"}, "type": {"type": "string"},
+            "chainKey":{"type":"string"}, "mode":{"enum":["beam","projectile"]}, "lifetime":{"type":"number","exclusiveMinimum":0}, "color":{"type":"integer"},
             "weapon": {"type": "string"}, "ability": {"type": "string"}, "category": {"type": "string", "enum": ["structure", "air", "unit"]},
             "height": {"type": "number"}, "scale": {"type": "number"}, "teamColor": {"type": "boolean"}, "below": {"type": "number"},
-            "upright": {"type": "boolean"}, "clear": {"type": "boolean"}, "remove": {"type": "boolean"}}})", [&ws](const Json& p) {
+            "upright": {"type": "boolean"}, "clear": {"type": "boolean"}, "node": {"type": "string"}, "offset": {"type": "array", "items": {"type":"number"}, "minItems":3,"maxItems":3}, "inheritRotation": {"type":"boolean"}, "inheritScale": {"type":"boolean"}, "anchor": {"type":"string","enum":["subject","target"]}, "remove": {"type": "boolean"}}})", [&ws](const Json& p) {
         needGame(ws);
         const auto& R = ws.project.rules;
         const bool remove = p.getBool("remove");
-        const bool none = !remove && (!p.has("effect") || p["effect"].isNull());
+        const bool beamOnly = !p.has("effect") && p.getStr("mode") == "beam";
+        const bool none = !remove && !beamOnly && p["effect"].isNull();
         std::string eff;
-        if (!remove && !none) {
+        if (!remove && !none && !beamOnly) {
             eff = needName(p, "effect");
             if (!fs::exists(fxFile(ws, eff))) throw std::runtime_error("fx/" + eff + ".json does not exist (fx_set / fx_templates / fx_import_unity first)");
         }
@@ -507,7 +509,16 @@ void registerFxOps(Workspace& ws) {
         std::string cue = p.has("cue") ? cueName(p.getStr("cue")) : ability.empty() ? "" : "ability";
         if (cue.empty()) throw std::runtime_error("'cue' is required (died, hit, attack, ability, spawned, ...)");
         if (!weapon.empty() && cue != "attack" && cue != "hit" && cue != "trail") throw std::runtime_error("weapon bindings take cue attack, hit or trail");
-        if (!ability.empty() && cue != "ability") throw std::runtime_error("ability bindings take cue 'ability'");
+        const auto chainKey = p.getStr("chainKey", ability);
+        if (cue == "chainJump" && (!type.empty() || !cat.empty() || !weapon.empty()))
+            throw std::runtime_error("chainJump accepts a chainKey, ability, or global fallback");
+        if (cue != "chainJump" && (p.has("chainKey") || p.has("mode") || p.has("lifetime") || p.has("color")))
+            throw std::runtime_error("chain options require cue chainJump");
+        if (p.has("mode") && p.getStr("mode") != "beam" && p.getStr("mode") != "projectile")
+            throw std::runtime_error("chain mode must be beam or projectile");
+        if (p.has("lifetime") && (!p["lifetime"].isNumber() || p["lifetime"].toDouble() <= 0 || p["lifetime"].toDouble() > 60))
+            throw std::runtime_error("chain lifetime must be positive and at most 60 seconds");
+        if (!ability.empty() && cue != "ability" && cue != "chainJump") throw std::runtime_error("ability bindings take cue 'ability'");
         int t = -1;
         if (!type.empty() && (t = R.findType(type)) < 0) throw std::runtime_error("unknown type '" + type + "' (rules_list)");
         auto hasWeapon = [&](const game::UnitType& ut) { return std::any_of(ut.weapons.begin(), ut.weapons.end(), [&](auto& w) { return w.id == weapon; }); };
@@ -521,16 +532,35 @@ void registerFxOps(Workspace& ws) {
         Json value;
         if (none) value = Json();
         else if (!remove) {
-            const bool obj = p.has("height") || p.has("scale") || p.has("teamColor") || p.has("below") || p.has("upright") || p.has("clear");
+            const bool obj = p.has("height") || p.has("scale") || p.has("teamColor") || p.has("below") || p.has("upright") || p.has("clear") || p.has("node") || p.has("offset") || p.has("inheritRotation") || p.has("inheritScale") || p.has("anchor") || p.has("mode") || p.has("lifetime") || p.has("color");
             if (!obj) value = str(eff);
             else {
                 value = Json::object();
-                value.set("effect", str(eff));
+                if (!beamOnly) value.set("effect", str(eff));
+                for (const char* key : {"mode","lifetime","color"}) if (p.has(key)) value.set(key, p[key]);
                 if (p.has("height")) value.set("height", Json::number(p["height"].toDouble(), 3));
                 if (p.has("scale")) value.set("scale", Json::number(p["scale"].toDouble(1), 3));
                 if (p.has("teamColor")) value.set("teamColor", Json::fromBool(p.getBool("teamColor")));
                 if (p.has("below")) value.set("below", Json::number(p["below"].toDouble(0.5), 3));
                 if (p.getBool("upright")) value.set("upright", Json::fromBool(true));
+                if(p.has("node")) {
+                    if(!p["node"].isString()||p.getStr("node").empty())throw std::runtime_error("node must be a nonempty name");
+                    value.set("node",p["node"]);
+                }
+                if(p.has("offset")) {
+                    const auto& o=p["offset"];
+                    if(!o.isArray()||o.size()!=3||!o[0].isNumber()||!o[1].isNumber()||!o[2].isNumber())throw std::runtime_error("offset must have three numbers");
+                    value.set("offset",o);
+                }
+                for(const char* key:{"inheritRotation","inheritScale"})if(p.has(key)){
+                    if(p[key].type()!=Json::Type::Bool)throw std::runtime_error(std::string(key)+" must be boolean");
+                    value.set(key,p[key]);
+                }
+                if(p.has("anchor")) {
+                    const auto a=p.getStr("anchor");
+                    if(a!="subject"&&a!="target")throw std::runtime_error("anchor must be subject or target");
+                    value.set("anchor",p["anchor"]);
+                }
                 if (p.getBool("clear")) {
                     if (cue != "trail") throw std::runtime_error("'clear' applies to trail bindings");
                     value.set("clear", Json::fromBool(true));
@@ -540,7 +570,8 @@ void registerFxOps(Workspace& ws) {
         std::string bankText;
         Json bank = loadBank(ws, &bankText);
         std::vector<std::string> path;
-        if (t >= 0) {
+        if (cue == "chainJump" && !chainKey.empty()) path = {"chainJumps", chainKey};
+        else if (t >= 0) {
             path = {"types", type};
             if (!weapon.empty()) path.insert(path.end(), {"weapons", weapon, cue});
             else if (!ability.empty()) path.insert(path.end(), {"abilities", ability});

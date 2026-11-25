@@ -5,10 +5,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <set>
 #include <cstdio>
 
 #include "GameClient.h"
 #include "RegionSettings.h"
+#include "ResourceHud.h"
+#include "engine/game/MatchChat.h"
+#include "engine/game/Mech.h"
 #include "engine/view/game/ScriptHud.h"
 #include "engine/view/game/WorldCounters.h"
 #include "engine/net/NetLocalize.h"
@@ -54,7 +58,8 @@ public:
         const Rml::Vector2f sz = el->GetBox().GetSize(Rml::BoxArea::Content);
         if (sz.x <= 0 || sz.y <= 0) return;
         const float x = ev.GetParameter("mouse_x", 0.0f), y = ev.GetParameter("mouse_y", 0.0f);
-        client_.minimapPointer(std::clamp((x - o.x) / sz.x, 0.0f, 1.0f), std::clamp((y - o.y) / sz.y, 0.0f, 1.0f));
+        client_.minimapPointer(std::clamp((x - o.x) / sz.x, 0.0f, 1.0f), std::clamp((y - o.y) / sz.y, 0.0f, 1.0f),
+                               ev.GetParameter<int>("alt_key", 0) != 0, ev.GetId() == Rml::EventId::Mousedown);
     }
 
 private:
@@ -70,6 +75,10 @@ void GameClient::initUi() {
         if (ui::parseUiBlend(manifest_, &err) == ui::UiBlend::Linear) ui_.setLinearBlending(true);
         if (!err.empty()) std::fprintf(stderr, "[ui] %s\n", err.c_str());
     }
+    const auto& portrait = manifest_["ui"]["portrait"];
+    showPortrait_ = portrait.isObject() ? portrait.getBool("enabled",true) : manifest_["ui"].getBool("portrait");
+    portraitSize_ = int(std::clamp<int64_t>(portrait.getInt("size",192),16,1024));
+    ui_.setDynamicTexture("portrait", {}, portraitSize_, portraitSize_, true);
     initLua();   // before any document: <script> and onclick="..." need the plugin
     spine_.init(*dev_, ui_, manifest_);   // game.json "spine" views (<img src="#spine:NAME"/>)
     ui_.setKeyboardLanguage(loc_.language());
@@ -108,34 +117,79 @@ void GameClient::initUi() {
     c.Bind("roomName", &roomName_);
 
     using VArgs = const Rml::VariantList&;
-    c.BindEventCallback("start", [this](Rml::DataModelHandle, Rml::Event&, VArgs a) { if (!a.empty()) startMatch(size_t(a[0].Get<int>())); });
-    c.BindEventCallback("act", [this](Rml::DataModelHandle, Rml::Event&, VArgs a) {
+    c.BindEventCallback("start", [this](Rml::DataModelHandle, Rml::Event&, VArgs a) { if (!a.empty()) { sound_.play(Cue::MenuClick); startMatch(size_t(a[0].Get<int>())); } });
+    c.BindEventCallback("act", [this](Rml::DataModelHandle, Rml::Event& event, VArgs a) {
         if (a.empty()) return;
         const int id = a[0].Get<int>(-1);
-        if (id >= 0 && size_t(id) < actions_.size() && actions_[size_t(id)]) actions_[size_t(id)]();
+        Cue cue = screen_ == Screen::Playing ? Cue::TopClick : Cue::MenuClick;
+        for (auto* el = event.GetTargetElement(); el; el = el->GetParentNode()) {
+            if (el->GetId() == "card" || el->GetId() == "tools") { cue = Cue::CardClick; break; }
+        }
+        if (id < 0 || size_t(id) >= actions_.size() || !actions_[size_t(id)]) {
+            sound_.play(Cue::Error);
+            return;
+        }
+        if (event.GetId() != Rml::EventId::Dblclick) sound_.play(cue);
+        actions_[size_t(id)]();
     });
     c.BindEventCallback("skill_drag", [this](Rml::DataModelHandle, Rml::Event& event, VArgs a) {
         if(a.size()<2 || a[1].Get<float>(-1)<0 || event.GetParameter<int>("button",0)!=0)return;
         const int id=a[0].Get<int>(-1);
-        if(id<0||size_t(id)>=actions_.size()||!actions_[size_t(id)])return;
+        if(id<0||size_t(id)>=actions_.size()||!actions_[size_t(id)]){sound_.play(Cue::Error);return;}
+        sound_.play(Cue::CardClick);
         actions_[size_t(id)]();
         if(mode_==Mode::Skill){skillDragging_=true;skillOverWorld_=false;regionSwipe_.cancel();}
     });
     c.BindEventCallback("support_click", [this](Rml::DataModelHandle, Rml::Event&, VArgs a) {
         if(a.size()<2 || a[1].Get<float>(-1)>=0)return;
         const int id=a[0].Get<int>(-1);
-        if(id>=0&&size_t(id)<actions_.size()&&actions_[size_t(id)])actions_[size_t(id)]();
+        if(id>=0&&size_t(id)<actions_.size()&&actions_[size_t(id)]){sound_.play(Cue::CardClick);actions_[size_t(id)]();}
+        else sound_.play(Cue::Error);
     });
-    c.BindEventCallback("pause", [this](Rml::DataModelHandle, Rml::Event&, VArgs) { if (screen_ == Screen::Playing) setScreen(Screen::Paused); });
-    c.BindEventCallback("resume", [this](Rml::DataModelHandle, Rml::Event&, VArgs) { if (screen_ == Screen::Paused) setScreen(Screen::Playing); });
-    c.BindEventCallback("howto", [this](Rml::DataModelHandle, Rml::Event&, VArgs) { howtoOpen_ = !howtoOpen_; });
-    c.BindEventCallback("restart", [this](Rml::DataModelHandle, Rml::Event&, VArgs) { startMatch(mapIndex_); });
-    c.BindEventCallback("tomenu", [this](Rml::DataModelHandle, Rml::Event&, VArgs) {
+    c.BindEventCallback("match_chat", [this](Rml::DataModelHandle, Rml::Event& event, VArgs a) {
+        if (!sim_ || screen_ != Screen::Playing || spectator_) return;
+        if (!a.empty()) {
+            const auto key = a[0].Get<int>();
+            if (key != Rml::Input::KI_RETURN && key != Rml::Input::KI_NUMPADENTER) return;
+        }
+        Command cmd = chatCommand(chatInput_);
+        if (!cmd.param) { sound_.play(Cue::Error); return; }
+        issue(std::move(cmd));
+        chatInput_.clear();
+        // RmlUi emits a change with the field's value after handling Enter.
+        if (!a.empty()) event.GetCurrentElement()->SetAttribute("value", Rml::String{});
+        model_.DirtyVariable("chatInput");
+    });
+    c.BindEventCallback("message_log", [this](Rml::DataModelHandle, Rml::Event&, VArgs) { messageLogOpen_ = !messageLogOpen_; sound_.play(Cue::TopClick); });
+    c.BindEventCallback("pause", [this](Rml::DataModelHandle, Rml::Event&, VArgs) { sound_.play(Cue::TopClick); if (screen_ == Screen::Playing) setScreen(Screen::Paused); });
+    c.BindEventCallback("matchFile", [this](Rml::DataModelHandle, Rml::Event&, VArgs args) {
+        if (args.empty()) return;
+        const auto op = args[0].Get<std::string>();
+        if (op == "toggle" && playback_) { playbackPaused_ = !playbackPaused_; return; }
+        if (op == "speed" && playback_) { playbackSpeed_ = playbackSpeed_ >= 4 ? .5 : playbackSpeed_ * 2; return; }
+        const bool replay = op == "watch" || op == "record";
+        const auto slot = args.size()>1 ? args[1].Get<std::string>() : std::string{};
+        if (op == "save" || op == "record") {
+            auto name = slot;
+            if (name.empty()) {
+                const auto existing = matchFileList(replay);
+                for (size_t n=1;;++n) {
+                    name = "slot_" + std::to_string(n);
+                    if (!std::binary_search(existing.begin(),existing.end(),name)) break;
+                }
+            }
+            writeMatchFile(name,replay);
+        } else if (op == "load" || op == "watch") openMatchFile(slot,replay);
+    });
+    c.BindEventCallback("resume", [this](Rml::DataModelHandle, Rml::Event&, VArgs) { sound_.play(Cue::MenuClick); if (screen_ == Screen::Paused) setScreen(Screen::Playing); });
+    c.BindEventCallback("howto", [this](Rml::DataModelHandle, Rml::Event&, VArgs) { sound_.play(Cue::MenuClick); howtoOpen_ = !howtoOpen_; });
+    c.BindEventCallback("restart", [this](Rml::DataModelHandle, Rml::Event&, VArgs) { sound_.play(Cue::MenuClick); startMatch(mapIndex_); });
+    c.BindEventCallback("tomenu", [this](Rml::DataModelHandle, Rml::Event&, VArgs) { sound_.play(Cue::MenuClick);
         if (netMatch_) { leaveNetMatch(); return; }
         toMenu();
     });
     // net('connect'), net('create', i) ... -> Lobby.cpp
-    c.BindEventCallback("net", [this](Rml::DataModelHandle, Rml::Event&, VArgs a) {
+    c.BindEventCallback("net", [this](Rml::DataModelHandle, Rml::Event&, VArgs a) { sound_.play(Cue::MenuClick);
         if (!a.empty()) netAction(a[0].Get<Rml::String>(), a.size() > 1 ? a[1].Get<int>(-1) : -1);
     });
     model_ = c.GetModelHandle();
@@ -186,6 +240,7 @@ void GameClient::setScreen(Screen s) {
     const bool changed = screen_ != s;
     screen_ = s;
     if (s != Screen::Playing) {
+        edgePointer_.reset();
         inputShortcuts_.reset(); // release camera and gameplay actions on pause/menu
         boxing_ = panning_ = sendDrag_ = false; mode_ = Mode::Normal;
     }
@@ -216,19 +271,160 @@ void GameClient::setScreen(Screen s) {
     luaEmit("screen", Json::string(screenName()));
 }
 
-void GameClient::minimapPointer(float u, float v) {
+void GameClient::minimapPointer(float u, float v, bool ping, bool pressed) {
     if (!sim_) return;
     if (planet()) { minimap_.planetPointer(view_, u, v); return; }   // MinimapPlanet.cpp
     const auto& g = mod().state(*sim_).grid;
-    cam_.target = {u * float(g.w), 0, v * float(g.h)};
+    const float3 point{u * float(g.w), 0, v * float(g.h)};
+    if (ping) { if (pressed) pingMap(point); }
+    else cam_.target = point;
+}
+
+const SceneObject* GameClient::shortcutUnit(int type, bool idleWorker) {
+    const SceneObject* first = nullptr;
+    auto& world = sim_->world();
+    for (const auto& object : scene_.objects) {
+        if (!object.visible || object.isProjectile || !world.alive(object.entity)) continue;
+        const auto* owner = world.tryGet<Owner>(object.entity);
+        const auto* unit = world.tryGet<Unit>(object.entity);
+        if (!owner || owner->player != human_ || !unit || unit->hp.raw <= 0 || (unit->flags & kUnitInHand)) continue;
+        if (type >= 0 && unit->type != type) continue;
+        if (idleWorker) {
+            const auto* orders = world.tryGet<Orders>(object.entity);
+            if (!rules_.types[unit->type].worker || !orders || !orders->queue.empty()) continue;
+        }
+        if (selection_.size() == 1 && selection_.front() == object.entity) return &object;
+        if (!first || object.entity.packed() < first->entity.packed()) first = &object;
+    }
+    return first;
+}
+
+bool GameClient::visibleSelectionUnit(Entity e) {
+    auto& world = sim_->world();
+    if (!world.alive(e)) return false;
+    const auto* unit = world.tryGet<Unit>(e);
+    const auto* owner = world.tryGet<Owner>(e);
+    const auto* tr = world.tryGet<Transform>(e);
+    return unit && owner && tr && unit->hp.raw > 0 && !(unit->flags & kUnitInHand) &&
+           (spectator_ || owner->player == human_ || mod().isVisible(*sim_, human_, tr->pos));
+}
+
+void GameClient::renderSelectionPortrait() {
+    if (portraitFailed_ || (!showPortrait_ && !ui_.usesDynamicTexture("portrait"))) return;
+    if (!selectionPortrait_.texture().valid()) {
+        if (!sim_ || !portraitSubject_.valid()) return;
+        if (!selectionPortrait_.init(*dev_, portraitSize_)) {
+            selectionPortrait_.shutdown();
+            portraitFailed_ = true;
+            std::fprintf(stderr,"[ui] could not initialize the selected unit portrait\n");
+            return;
+        }
+        ui_.setDynamicTexture("portrait",selectionPortrait_.texture(),portraitSize_,portraitSize_,true);
+    }
+    if (!sim_ || !portraitSubject_.valid() || !visibleSelectionUnit(portraitSubject_)) {
+        if (!portraitBlank_) selectionPortrait_.clear();
+        portraitBlank_ = true;
+        return;
+    }
+    auto& world = sim_->world();
+    const auto type = world.get<Unit>(portraitSubject_).type;
+    const auto owner = world.get<Owner>(portraitSubject_).player;
+    const auto& options = rules_.types[type].view["portrait"];
+    const auto& defaults = manifest_["ui"]["portrait"];
+    auto option = [&](const char* name, double fallback) {
+        return float(options[name].toDouble(defaults[name].toDouble(fallback)));
+    };
+    selectionPortrait_.render(view_,type,owner,time_,option("yaw",-1),option("zoom",1),option("focusHeight",.45));
+    portraitBlank_ = false;
+}
+
+void GameClient::buildSelectionData(UiState& state) {
+    auto& world = sim_->world();
+    for (Entity e : selection_) {
+        if (!visibleSelectionUnit(e)) continue;
+        const auto* u = world.tryGet<Unit>(e);
+        const UnitType& t = rules_.types[u->type];
+        if (!portraitSubject_.valid()) {
+            portraitSubject_ = e;
+            state.hasPortrait = !portraitFailed_;
+            state.showPortrait = showPortrait_ && state.hasPortrait;
+        }
+        SelectedUnit row;
+        row.type = t.id; row.name = t.name;
+        row.icon = t.view.getStr("icon");
+        row.subgroup = t.view.getStr("subgroup", t.id);
+        row.unitClass = t.view.getStr("class", t.hero ? "hero" : t.worker ? "worker" : t.structure ? "structure" : "unit");
+        row.hp = float(u->hp.toDouble());
+        row.maxHp = float(mod().stat(*sim_, e, Stat::MaxHp).toDouble());
+        row.hpFraction = row.maxHp > 0 ? std::clamp(row.hp / row.maxHp, 0.f, 1.f) : 0;
+        row.energy = float(u->energy.toDouble());
+        row.armor = float(mod().stat(*sim_, e, Stat::Armor).toDouble());
+        if (t.armorType < rules_.armorTypes.size()) row.armorType = rules_.armorTypes[t.armorType];
+        if (!t.weapons.empty()) {
+            const auto& weapon = t.weapons.front();
+            row.attackMin = row.attackMax = float(mod().currentWeaponDamage(*sim_, e).value_or(Fixed{}).toDouble());
+            if (weapon.damageType < rules_.damageTypes.size()) row.damageType = rules_.damageTypes[weapon.damageType];
+        }
+        row.invulnerable = t.invulnerable || (mod().statusFlags(*sim_, e) & kStInvulnerable);
+        row.hasInventory = world.has<ItemBag>(e) || world.has<Inventory>(e);
+        if (selection_.size() == 1) {
+            if (const auto* statuses = world.tryGet<Statuses>(e))
+                for (const auto& status : statuses->list)
+                    if (status.def < rules_.statuses.size() && (!status.until || status.until > sim_->tick()))
+                        state.selectedStatuses.push_back(rules_.statuses[status.def].id);
+        }
+        row.selectAction = addAction([this, e] {
+            if (visibleSelectionUnit(e) && std::find(selection_.begin(), selection_.end(), e) != selection_.end())
+                selection_ = {e};
+        });
+        state.selectedUnits.push_back(std::move(row));
+    }
+}
+
+void GameClient::buildSelectionShortcut(UiState& state) {
+    const auto& config = manifest_["selectionShortcut"];
+    if (!config.isObject() || spectator_) return;
+    const std::string typeId = config.getStr("type");
+    const int type = rules_.findType(typeId);
+    const bool idleWorker = config.getBool("idleWorker");
+    if (type < 0 && (!idleWorker || !typeId.empty())) return;
+    UiAction button;
+    button.label = config.has("label") ? loc_.text(config.getStr("label")) :
+        type >= 0 ? rules_.types[size_t(type)].name : tr("hud.idle_worker");
+    button.image = config.getStr("image");
+    button.enabled = shortcutUnit(type, idleWorker) != nullptr;
+    button.id = addAction([this, type, idleWorker] {
+        const auto* target = shortcutUnit(type, idleWorker);
+        if (!target) return;
+        if (selection_.size() == 1 && selection_.front() == target->entity) {
+            if (planet() && target->body >= 0) {
+                auto& camera = view_.planetCamera();
+                camera.focus(target->body);
+                camera.setDir(target->pos);
+            } else cam_.target = target->pos;
+        } else {
+            selection_ = {target->entity};
+            acknowledgeSelectionClick(target->entity);
+        }
+    }, button.enabled);
+    state.selectionShortcuts.push_back(std::move(button));
 }
 
 // ------------------------------------------------------------------ per-frame model
 
 void GameClient::updateUi() {
+    portraitSubject_ = kNullEntity;
     UiState s;
     s.screen = screen_ == Screen::Menu ? "menu" : screen_ == Screen::Lobby ? "lobby" : screen_ == Screen::Playing ? "playing"
              : screen_ == Screen::Paused ? "paused" : "over";
+    if (slotsDirty_) {
+        saveSlots_ = matchFileList(false); replaySlots_ = matchFileList(true);
+        slotsDirty_ = false;
+    }
+    if (!netMatch_ && !city_) { s.saveSlots = saveSlots_; s.replaySlots = replaySlots_; }
+    s.canSaveMatch = sim_ && !playback_ && !netMatch_ && !city_ && !mapLoading_;
+    s.watchingReplay = playback_.has_value(); s.replayPaused = playbackPaused_;
+    s.replaySpeed = fmt("%.2gx",playbackSpeed_);
     s.gameName = gameName_;
     s.error = error_;
     s.platformInfo = std::string(platform::name()) + " · " + dev_->info().name;
@@ -237,6 +433,8 @@ void GameClient::updateUi() {
     s.touch = platform::isTouchDevice();
     s.showCard = !spectator_;
     nextActions_.clear();
+    cardKeys_.clear();
+
     if (langs_.available.size() > 1)
         for (size_t i = 0; i < langs_.available.size() && i < langNames_.size(); ++i) {
             UiAction a;
@@ -253,14 +451,35 @@ void GameClient::updateUi() {
     if (sim_) {
         cleanSelection();
         buildTopBar(s);
-        if (!spectator_) { buildCommandCard(s); buildScriptCommands(s); buildTools(s); }
+        buildSelectionShortcut(s);
+        buildSelectionData(s);
+        if (selection_ != cardKeySelection_) cardPage_.clear();
+        cardKeySelection_ = selection_;
+        if (!spectator_) { buildCommandCard(s); buildScriptCommands(s); layoutCommandCard(s); buildTools(s); }
         buildOverlays(s);
-        for (auto& n : notices_) if (n.until >= time_) s.notices.push_back(n.text);
+        s.canChat = !spectator_ && screen_ == Screen::Playing;
+        s.hasMessageLog = true;
+        s.messageLogOpen = messageLogOpen_;
+        std::erase_if(activeNoticeIndices_, [&](size_t i) { return notices_[i].until <= time_; });
+        const size_t first = activeNoticeIndices_.size() > 4 ? activeNoticeIndices_.size() - 4 : 0;
+        for (size_t i = first; i < activeNoticeIndices_.size(); ++i) {
+            const auto& notice = notices_[activeNoticeIndices_[i]];
+            UiItem row; row.text = notice.text; row.sub = notice.style;
+            s.notices.push_back(row.text);
+            s.noticeRows.push_back(std::move(row));
+        }
+        if (messageLogOpen_) {
+            for (auto it = notices_.rbegin(); it != notices_.rend(); ++it) {
+                UiItem row; row.text = it->text; row.sub = it->style;
+                s.messageHistory.push_back(std::move(row));
+            }
+        }
         if (screen_ == Screen::Over) {
             const int res = sim_->result();
             auto* me = sim_->player(human_);
             const bool won = !spectator_ && res > 0 && me && me->team == res;
-            s.overTitle = tr(spectator_ ? "pause.match_over" : won ? "pause.victory" : "pause.defeat");
+            if (playback_ && res == 0) s.overTitle = tr("matchfiles.finished");
+            else s.overTitle = tr(spectator_ ? "pause.match_over" : won ? "pause.victory" : "pause.defeat");
             s.overTime = tr("pause.time", Args().str("time", clockText(sim_->tick() / sim_->tickRate())));
         }
         // minimap image
@@ -302,17 +521,32 @@ void GameClient::updateUi() {
     ui_.update();
 }
 
+void GameClient::beginBuildPlacement(uint16_t type) {
+    if (!sim_ || spectator_ || type >= rules_.types.size() || !mod().canTrain(*sim_, human_, type)) return;
+    int missing = -1;
+    if (!mod().canAffordBuildStart(*sim_, human_, type, &missing)) {
+        if (mode_ == Mode::Place) mode_ = Mode::Normal;
+        placeType_ = -1;
+        placeProducer_ = kNullEntity;
+        noticeMissingResource(missing);
+        sound_.onMissingResource(missing);
+        return;
+    }
+    mode_ = Mode::Place;
+    placeType_ = type;
+    placeProducer_ = kNullEntity;
+}
+
 void GameClient::buildTopBar(UiState& s) {
     auto& gs = mod().state(*sim_);
     const auto& eco = gs.players[spectator_ ? 1 : human_];
     for (size_t r = 0; r < rules_.resources.size(); ++r) {
         const auto& rd = rules_.resources[r];
         UiItem it;
+        it.text = resourceHudLabel(rd, eco, r);
         if (rd.kind == ResourceKind::Capacity) {
-            it.text = fmt("%s: %lld/%lld", rd.name.c_str(), (long long)eco.capUsed[r].toInt(), (long long)eco.capProvided[r].toInt());
             it.warn = eco.capUsed[r] > eco.capProvided[r];
         } else {
-            it.text = fmt("%s: %lld", rd.name.c_str(), (long long)eco.stock[r].toInt());
             if ((rd.kind == ResourceKind::Flow || rd.capped) && eco.cap[r].raw > 0) it.sub = fmt("/%lld", (long long)eco.cap[r].toInt());
             if (rd.kind == ResourceKind::Flow) it.sub += " " + tr("hud.per_second", Args().str("value", fmt("%+.1f", eco.income[r].toDouble())));
         }
@@ -371,6 +605,78 @@ void GameClient::buildTopBar(UiState& s) {
     s.clock = fmt("%u:%02u", sim_->tick() / sim_->tickRate() / 60, sim_->tick() / sim_->tickRate() % 60);
 }
 
+void GameClient::layoutCommandCard(UiState& state) {
+    std::set<std::string> pages;
+    bool configured = false;
+    for (const auto& action : state.card) {
+        if (!action.positioned) continue;
+        configured = true;
+        std::string path = action.page;
+        while (!path.empty() && pages.insert(path).second) {
+            const auto slash = path.rfind('/');
+            if (slash == std::string::npos) break;
+            path.resize(slash);
+        }
+    }
+    if (!configured) { cardPage_.clear(); return; }
+    if (!pages.count(cardPage_)) cardPage_.clear();
+    state.cardPage = cardPage_;
+    const auto& layout = manifest_["commandCard"];
+    std::vector<UiAction> grid, legacy;
+    UiAction header;
+    bool pendingHeader = false;
+    for (auto& action : state.card) {
+        if (action.header) { header = std::move(action); pendingHeader = true; continue; }
+        if (action.positioned) {
+            if (action.page == cardPage_) grid.push_back(std::move(action));
+        } else if (cardPage_.empty()) {
+            if (pendingHeader) { legacy.push_back(std::move(header)); pendingHeader = false; }
+            legacy.push_back(std::move(action));
+        }
+    }
+    auto navigation = [&](const std::string& dest, const std::string& label, const Json& slot) {
+        UiAction action;
+        applyCardSlot(action, slot);
+        action.positioned = true;
+        action.page = cardPage_;
+        action.label = label;
+        action.id = addAction([this,dest] { cardPage_ = dest; });
+        grid.push_back(std::move(action));
+    };
+    for (const auto& path : pages) {
+        const auto slash = path.rfind('/');
+        const auto parent = slash == std::string::npos ? std::string{} : path.substr(0,slash);
+        if (parent != cardPage_) continue;
+        const auto& slot = layout["pages"][path];
+        navigation(path, slot.getStr("label", path.substr(slash == std::string::npos ? 0 : slash+1)), slot);
+    }
+    if (!cardPage_.empty()) {
+        const auto slash = cardPage_.rfind('/');
+        navigation(slash == std::string::npos ? "" : cardPage_.substr(0,slash),
+                   layout["back"].getStr("label", tr("meta.back")), layout["back"]);
+    }
+    int columns = int(std::clamp<int64_t>(layout.getInt("columns", 4),1,16));
+    for (const auto& a : grid) columns = std::max(columns, a.column + 1);
+    std::set<int> occupied;
+    for (auto& a : grid) {
+        if (a.column < 0 || a.row < 0 || !occupied.insert(a.row*columns+a.column).second)
+            a.column = a.row = -1;
+    }
+    int next = 0, rows = 0;
+    for (auto& a : grid) {
+        if (a.column < 0) {
+            while (!occupied.insert(next).second) ++next;
+            a.column = next % columns; a.row = next / columns;
+        }
+        rows = std::max(rows, a.row+1);
+        a.cellStyle = fmt("left: %.4f%%; top: %ddp; width: %.4f%%;", 100.*a.column/columns,
+                          a.row*52, 100./columns);
+    }
+    state.cardGridStyle = fmt("height: %ddp;", rows*52);
+    state.card = std::move(legacy);
+    for (auto& a : grid) state.card.push_back(std::move(a));
+}
+
 void GameClient::buildCommandCard(UiState& s) {
     if (!spectator_) for (const auto& panel : game::scriptHud(manifest_, mod().state(*sim_), rules_, human_, loc_)) {
         UiSection sec{panel.title, "list", {}};
@@ -404,6 +710,7 @@ void GameClient::buildCommandCard(UiState& s) {
         s.emptyHint = tr(platform::isTouchDevice() ? "card.hint_touch" : "card.hint_mouse");
         UiSection sec{"", "list", {}};
         UiAction a;
+        applyCardSlot(a, manifest_["commandCard"]["buttons"]["card.all_army"]);
         a.label = tr("card.all_army");
         a.id = addAction([this] {
             for (auto& o : scene_.objects)
@@ -468,23 +775,30 @@ void GameClient::buildCommandCard(UiState& s) {
     }
     if (anyMobile) {
         UiSection sec{"", "row", {}};
-        auto add = [&](const std::string& label, const char* key, bool active, std::function<void()> fn) {
-            UiAction a; a.label = label; a.hotkey = key; a.active = active; a.id = addAction(std::move(fn));
+        auto add = [&](const std::string& labelKey, const char* key, bool active, std::function<void()> fn) {
+            UiAction a; applyCardSlot(a, manifest_["commandCard"]["buttons"][labelKey]);
+            a.label = tr(labelKey); a.hotkey = key; a.active = active; a.id = addAction(std::move(fn));
             sec.actions.push_back(a);
         };
-        if (anyWeapon) add(tr("card.attack"), "A", mode_ == Mode::AttackMove, [this] { mode_ = Mode::AttackMove; });
-        add(tr("card.stop"), "S", false, simple(kCmdStop, selection_));
-        add(tr("card.hold"), "H", false, simple(kCmdHold, selection_));
-        add(tr("card.patrol"), "P", mode_ == Mode::Patrol, [this] { mode_ = Mode::Patrol; });
+        if (anyWeapon) add("card.attack", "A", mode_ == Mode::AttackMove, [this] { mode_ = Mode::AttackMove; });
+        add("card.stop", "S", false, simple(kCmdStop, selection_));
+        add("card.hold", "H", false, simple(kCmdHold, selection_));
+        add("card.patrol", "P", mode_ == Mode::Patrol, [this] { mode_ = Mode::Patrol; });
         if (const FieldOps* fo = mod().fieldOps()) {   // field operations (rules repair / reclaim / selfDestruct)
             if (!buildable.empty()) {
-                add(tr("card.repair"), "R", mode_ == Mode::Repair, [this] { mode_ = Mode::Repair; });
-                add(tr("card.reclaim"), "E", mode_ == Mode::Reclaim, [this] { mode_ = Mode::Reclaim; });
+                add("card.repair", "R", mode_ == Mode::Repair, [this] { mode_ = Mode::Repair; });
+                add("card.reclaim", "E", mode_ == Mode::Reclaim, [this] { mode_ = Mode::Reclaim; });
             }
-            if (fo->selfDestructEnabled()) add(tr("card.self_destruct"), "", false, simple(kCmdSelfDestruct, selection_));
+            if (fo->selfDestructEnabled()) add("card.self_destruct", "", false, simple(kCmdSelfDestruct, selection_));
         }
         pushSection(s, sec);
     }
+    auto bindCardKey = [&](UiAction& action, const std::string& name) {
+        action.hotkey = name;
+        if (action.page != cardPage_ || !action.enabled || name.empty()) return;
+        const auto key = ClientGamepad::keyFromName(name);
+        if (key != platform::Key::Unknown) cardKeys_.emplace(key, action.id);
+    };
     if (!buildable.empty()) {
         UiSection sec{tr("card.build"), "grid", {}};
         for (uint16_t b : buildable) {
@@ -493,7 +807,9 @@ void GameClient::buildCommandCard(UiState& s) {
             a.enabled = mod().canTrain(*sim_, human_, b);
             if (!a.enabled) a.tip = reqText(rules_.types[b].requires_);
             a.active = mode_ == Mode::Place && placeType_ == b && !placeProducer_.valid();
-            a.id = addAction([this, b] { mode_ = Mode::Place; placeType_ = b; placeProducer_ = kNullEntity; }, a.enabled);
+            a.id = addAction([this, b] { beginBuildPlacement(b); }, a.enabled);
+            applyCardSlot(a, rules_.types[b].cardSlot);
+            bindCardKey(a, rules_.types[b].hotkey);
             sec.actions.push_back(a);
         }
         pushSection(s, sec);
@@ -504,6 +820,7 @@ void GameClient::buildCommandCard(UiState& s) {
             const AbilityDef& ab = t0.abilities[i];
             if (ab.aura) { s.selInfo.push_back(tr("card.aura", Args().str("name", ab.name))); continue; }
             UiAction a;
+            applyCardSlot(a, ab.cardSlot);
             a.label = ab.name;
             if (ab.energyCost.raw > 0) a.cost = tr("card.energy_cost", Args().num("count", ab.energyCost.toInt()));
             a.enabled = mod().canCast(*sim_, e0, int(i));
@@ -541,6 +858,8 @@ void GameClient::buildCommandCard(UiState& s) {
                 Command c; c.type = kCmdTrain; c.param = p; c.units = {best};
                 issue(c);
             }, a.enabled);
+            applyCardSlot(a, rules_.types[p].cardSlot);
+            bindCardKey(a, rules_.types[p].hotkey);
             sec.actions.push_back(a);
         }
         const auto& eco = mod().state(*sim_).players[human_];
@@ -553,16 +872,21 @@ void GameClient::buildCommandCard(UiState& s) {
             a.enabled = !eco.researching[k] && mod().requirementsMet(*sim_, human_, tech.requires_);
             if (!a.enabled && !eco.researching[k]) a.tip = reqText(tech.requires_);
             a.id = addAction(simple(kCmdResearch, {e0}, k), a.enabled);
+            applyCardSlot(a, tech.cardSlot);
+            bindCardKey(a, tech.hotkey);
             sec.actions.push_back(a);
         }
         for (uint16_t up : t0.upgrades) {
             UiAction a;
             a.label = tr("card.upgrade", Args().str("name", rules_.types[up].name)); a.cost = costText(up);
             a.id = addAction(simple(kCmdUpgrade, {e0}, up));
+            applyCardSlot(a, rules_.types[up].cardSlot);
+            bindCardKey(a, rules_.types[up].hotkey);
             sec.actions.push_back(a);
         }
         if (!t0.produces.empty()) {
             UiAction a;
+            applyCardSlot(a, manifest_["commandCard"]["buttons"]["card.rally"]);
             a.label = tr("card.rally"); a.active = mode_ == Mode::Rally;
             a.id = addAction([this] { mode_ = Mode::Rally; });
             sec.actions.push_back(a);
@@ -668,7 +992,6 @@ void GameClient::buildOverlays(UiState& s) {
     }
     if (screen_ == Screen::Playing && possessedUnit().valid() && mode_ == Mode::Normal) {
         s.modeHint = tr("mode.possessed");
-        s.hintStyle = fmt("left: %.0fpx; top: %.0fpx;", (mouseX_ + 16) * k, (mouseY_ + 8) * k);
     }
     if (mode_ != Mode::Normal && screen_ == Screen::Playing) {
         std::string th = toolHint();
@@ -676,7 +999,20 @@ void GameClient::buildOverlays(UiState& s) {
         s.modeHint = !th.empty() ? th : tr(mode_ == Mode::AttackMove ? "mode.attack" : mode_ == Mode::Patrol ? "mode.patrol"
                       : mode_ == Mode::Rally ? "mode.rally" : mode_ == Mode::Ability ? "mode.ability"
                       : mode_ == Mode::Claim ? "mode.claim" : "mode.place");
-        s.hintStyle = fmt("left: %.0fpx; top: %.0fpx;", (mouseX_ + 16) * k, (mouseY_ + 8) * k);
+    }
+    if (!s.modeHint.empty()) {
+        const float width = platform::windowWidth(), height = platform::windowHeight();
+        const bool placeLeft = mouseX_ > width * .5f, placeAbove = mouseY_ > height * .5f;
+        const float dx = placeLeft ? width - mouseX_ : mouseX_;
+        const float dy = placeAbove ? height - mouseY_ : mouseY_;
+        const float hintWidth = std::min(320.f, width * .4f) * k;
+        if (campaignCamera_ && mode_ == Mode::Normal) {
+            s.hintStyle = fmt("left: %.0fpx; bottom: 55dp; width: %.0fpx; text-align: center;",
+                              (width * k - hintWidth) * .5f, hintWidth);
+        } else {
+            s.hintStyle = fmt("%s: %.0fpx; %s: %.0fpx; width: %.0fpx;", placeLeft ? "right" : "left",
+                              (dx + 12) * k, placeAbove ? "bottom" : "top", (dy + 8) * k, hintWidth);
+        }
     }
 }
 

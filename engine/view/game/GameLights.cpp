@@ -35,7 +35,7 @@ void GameLights::consumeEvents(const GameScene& s, double time, const std::vecto
     };
     for (const SimEvent& e : s.events) {
         const float3 p = toF(e.pos);
-        switch (e.type) {
+        switch (weaponCueEventType(e.type, e.flags)) {
         case kEvAttack: if (int t = type(e.a); t >= 0) {
             const auto& weapons=rules_->types[size_t(t)].weapons;
             const bool muzzleFx=std::any_of(weapons.begin(),weapons.end(),[](const auto& w){return !w.attackLight;});

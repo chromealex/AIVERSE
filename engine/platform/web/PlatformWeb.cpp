@@ -178,6 +178,20 @@ EM_JS(int, aiverse_web_text_focused, (), {
 });
 
 namespace aiverse::platform {
+bool setCursorImage(const uint8_t* pixels, int w, int h, int x, int y) {
+    if (pixels && (w < 1 || h < 1 || w > 256 || h > 256 || x < 0 || y < 0 || x >= w || y >= h)) return false;
+    EM_ASM({
+        if (!$0) { Module.canvas.style.cursor = ''; return; }
+        var surface = document.createElement('canvas');
+        surface.width = $1; surface.height = $2;
+        var ctx = surface.getContext('2d');
+        var img = ctx.createImageData($1,$2);
+        img.data.set(HEAPU8.subarray($0,$0+$1*$2*4));
+        ctx.putImageData(img,0,0);
+        Module.canvas.style.cursor = 'url(' + surface.toDataURL() + ') ' + $3 + ' ' + $4 + ', auto';
+    }, pixels,w,h,x,y);
+    return true;
+}
 bool pointerLocked() { EmscriptenPointerlockChangeEvent status{}; return emscripten_get_pointerlock_status(&status) == EMSCRIPTEN_RESULT_SUCCESS && status.isActive; }
 bool setPointerLock(bool enabled) {
     return (enabled ? emscripten_request_pointerlock("#canvas", EM_FALSE) : emscripten_exit_pointerlock()) == EMSCRIPTEN_RESULT_SUCCESS;

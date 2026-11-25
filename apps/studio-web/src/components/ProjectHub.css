@@ -30,3 +30,8 @@
 .hub__back:hover{background:var(--au-hover)}
 .hub__search{display:flex;align-items:center;gap:6px;margin-bottom:8px;color:var(--au-text-faint)}
 .hub__search .au-input{flex:1}
+
+.hub__item { grid-template-columns: minmax(0, 1fr) auto; }
+.hub__head, .hub__create { flex-wrap: wrap; }
+.hub__create .au-input { min-width: min(100%, 10rem); }
+.hub__tmpl:focus-visible, .hub__item:focus-visible { outline: 2px solid var(--au-accent); outline-offset: -2px; }

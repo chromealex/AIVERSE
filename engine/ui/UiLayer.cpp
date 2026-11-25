@@ -19,6 +19,8 @@ namespace {
 
 class UiSystem final : public Rml::SystemInterface {
 public:
+    Rml::String cursorName;
+    void SetMouseCursor(const Rml::String& name) override { cursorName = name; }
     double GetElapsedTime() override {
         return std::chrono::duration<double>(std::chrono::steady_clock::now() - start_).count();
     }
@@ -209,8 +211,12 @@ Rml::ElementDocument* UiLayer::loadDocument(const std::string& name) {
     return doc;
 }
 
-void UiLayer::setDynamicTexture(const std::string& name, gfx::TextureHandle tex, int w, int h) {
-    if (impl_) impl_->renderer.setDynamicTexture(name, tex, w, h);
+void UiLayer::setDynamicTexture(const std::string& name, gfx::TextureHandle tex, int w, int h, bool renderTarget) {
+    if (impl_) impl_->renderer.setDynamicTexture(name, tex, w, h, renderTarget);
+}
+
+bool UiLayer::usesDynamicTexture(const std::string& name) const {
+    return impl_ && impl_->renderer.usesDynamicTexture(name);
 }
 
 void UiLayer::setTranslator(std::function<std::string(const std::string&)> fn) {
@@ -273,6 +279,8 @@ void UiLayer::toggleDebugger() {
     impl_->debugger = !impl_->debugger;
     Rml::Debugger::SetVisible(impl_->debugger);
 }
+
+std::string UiLayer::pointerCursor() const { return impl_ ? impl_->system.cursorName : std::string{}; }
 
 bool UiLayer::pointerOverUi() const {
     auto* hover=context()?context()->GetHoverElement():nullptr;

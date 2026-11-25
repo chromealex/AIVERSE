@@ -235,6 +235,13 @@ source-compatible. This is a **render submission migration**:
 the game host still owns projectile gameplay, planet tangent
 frames, and previews' simulation-specific data.
 
+Per-weapon projectile appearances (`types.<id>.view.projectiles`) opt into
+`View::submitModel` using the same borrowed Model resource owner and imported
+animation sampler; default balls still use `submitMesh`. The RTS adapter
+supplies the flight displacement and local up vector, and the reusable
+`projectileFlightFrame` helper constructs a stable 3D orientation. See
+[models.md](models.md) for the appearance schema.
+
 ### VisibilityField buffer API and ownership
 
 The visibility effect accepts any contiguous byte mask without
