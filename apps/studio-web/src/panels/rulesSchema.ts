@@ -55,6 +55,10 @@ export function typeValues(typeId: string, own: unknown, resolved: unknown, reso
       out.push({ field, path: 'types.' + typeId + '.' + rel, own: o, resolved: r, inherited: o === undefined && r !== undefined });
   };
   for (const f of TYPE_FIELDS) add(f, f.path);
+  if (isObj(resolved) && isObj(resolved.structure) && Array.isArray(resolved.upgrades) && resolved.upgrades.length) {
+    const path = 'view.showUpgradeTarget';
+    add({ path, label: 'Show upgrade target during construction', group: 'Flags', type: 'boolean' }, path);
+  }
   for (const res of resources) add({ path: 'cost.' + res, label: res, group: 'Cost', type: 'number', min: 0, step: 1 }, 'cost.' + res);
   const weapons = (isObj(resolved) && Array.isArray(resolved.weapons)) ? resolved.weapons : isObj(own) && Array.isArray(own.weapons) ? own.weapons : [];
   weapons.forEach((w, i) => {

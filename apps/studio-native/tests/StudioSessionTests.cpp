@@ -1217,6 +1217,28 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(call("studio.op",R"({"op":"map_new","params":{}})").has("error"));
        const auto info=call("studio.op",R"({"op":"map_info","params":{}})");
        AIVERSE_TEST_CHECK(!info.has("error") && !info["result"].getBool("changed"));
+       auto stepProject = [&](const char* direction) {
+           Json step = Json::object();
+           step.set("direction", Json::string(direction));
+           step.set("expectedVersion", call("studio.projectHistory")["result"]["version"]);
+           return call("studio.projectHistoryStep", step.dump().c_str());
+       };
+       const auto ring = call("studio.op",R"({"op":"overlay_set","params":{"template":"local_order_ring","id":"command_ring"}})");
+       AIVERSE_TEST_CHECK(!ring.has("error"));
+       AIVERSE_TEST_CHECK(call("studio.op",R"({"op":"overlay_get","params":{"id":"command_ring"}})")["result"]["result"]["rules"]["event"].getStr("on")=="order");
+       AIVERSE_TEST_CHECK(!call("studio.rulesSet",R"({"path":"types.tree.view.showUpgradeTarget","value":true})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.rulesSet",R"({"path":"types.tree.view.showUpgradeTarget","value":"invalid"})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.rules")["result"]["types"]["tree"]["view"].getBool("showUpgradeTarget"));
+       AIVERSE_TEST_CHECK(!stepProject("undo").has("error"));
+       AIVERSE_TEST_CHECK(!call("studio.rules")["result"]["types"]["tree"]["view"].has("showUpgradeTarget"));
+       AIVERSE_TEST_CHECK(!stepProject("undo").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.op",R"({"op":"overlay_get","params":{"id":"command_ring"}})").has("error"));
+       AIVERSE_TEST_CHECK(!stepProject("redo").has("error"));
+       AIVERSE_TEST_CHECK(!stepProject("redo").has("error"));
+       const auto savedRules = Json::parseFile((project/"rules.json").string());
+       AIVERSE_TEST_CHECK(savedRules["types"]["tree"]["view"].getBool("showUpgradeTarget"));
+       AIVERSE_TEST_CHECK(!call("studio.rulesSet",R"({"path":"types.tree.view.showUpgradeTarget","value":null})").has("error"));
+       AIVERSE_TEST_CHECK(!call("studio.op",R"({"op":"overlay_delete","params":{"id":"command_ring"}})").has("error"));
        const auto readMeadow = [&] { return call("studio.op",R"({"op":"terraweave_meadow_get","params":{}})"); };
        AIVERSE_TEST_CHECK(readMeadow()["result"]["result"]["meadow"].isNull());
        AIVERSE_TEST_CHECK(!call("studio.op",R"({"op":"terraweave_meadow_set","params":{"preset":"wetland"}})").has("error"));
