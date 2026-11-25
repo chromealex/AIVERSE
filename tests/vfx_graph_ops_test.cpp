@@ -116,14 +116,14 @@ int main() {
             "ticks":3,"ray":{"eye":[0,0,-3],"direction":[0,0,1],"distance":8}})");
         args.set("expectedProjectPath",Json::string(ws.project.dir));
         auto validated=call("fx_volume_validate",args);
-        require(validated.getBool("ok")&&validated["bytes"].toDouble()>0,"native volume asset validation");
+        checkGraphRequirement(validated.getBool("ok")&&validated["bytes"].toDouble()>0,"native volume asset validation");
         auto probe=call("fx_volume_probe",args);
-        require(probe.getBool("ok")&&probe.getInt("ticks")==3&&probe["density"].toDouble()>0&&
+        checkGraphRequirement(probe.getBool("ok")&&probe.getInt("ticks")==3&&probe["density"].toDouble()>0&&
                 probe["ray"]["alpha"].toDouble()>0,"actual CPU volume diagnostic");
         args.set("ticks",Json::number(int64_t(9)));
         auto invalid=call("fx_volume_probe",args);
-        require(invalid.has("error")||!invalid.getBool("ok"),"probe tick cap");
-        require(!fs::exists(root/"fx"),"volume probe must not write files");
+        checkGraphRequirement(invalid.has("error")||!invalid.getBool("ok"),"probe tick cap");
+        checkGraphRequirement(!fs::exists(root/"fx"),"volume probe must not write files");
     }
     const Json graph = Json::parse(R"JSON({
       "version":1,
@@ -137,6 +137,96 @@ int main() {
       "outputs":["out"]
     })JSON");
 
+    // In-memory bake is a shared Studio/MCP edit, not a write operation.
+    {
+        fs::create_directories(root/"content");
+        std::ofstream model(root/"content"/"tetra.obj");
+        model<<"v 0 0 0\nv 1 0 0\nv 0 1 0\nv 0 0 1\n"
+               "f 1 3 2\nf 1 2 4\nf 1 4 3\nf 2 3 4\n";
+        model.close();
+        auto request=Json::parse(R"({"action":"bakeSdf","node":"collision","model":"content/tetra.obj","dimension":8,
+            "graph":{"version":2,"nodes":[{"id":"spawn","type":"Spawn","properties":{"burst":1}},
+            {"id":"init","type":"Initialize","properties":{"life":1,"speed":0,"spread":0}},
+            {"id":"collision","type":"CollisionModule","properties":{"ground":false,"bounce":0.7}},
+            {"id":"out","type":"SpriteOutput","properties":{"texture":"builtin:soft"}}],
+            "links":[{"from":"spawn","to":"init"},{"from":"init","to":"collision"},{"from":"collision","to":"out"}],"outputs":["out"]}})");
+        auto baked=call("fx_graph_edit",request);
+        checkGraphRequirement(baked.getBool("ok")&&baked["validation"].getBool("ok"),"native model SDF edit");
+        const auto& props=baked["graph"]["nodes"][size_t(2)]["properties"];
+        checkGraphRequirement(props["staticSdf"]["samples"].size()==512&&props.getBool("ground",true)==false,"SDF and previous properties");
+        checkGraphRequirement(!fs::exists(root/"fx"),"SDF edit must not publish files");
+        request.set("dimension",Json::number(int64_t(32)));
+        auto dense=call("fx_graph_edit",request);
+        checkGraphRequirement(dense.getBool("ok")&&dense["validation"].getBool("ok")&&
+                dense["graph"]["nodes"][size_t(2)]["properties"]["staticSdf"]["samples"].size()==32768,
+                "32 cubed Studio/MCP SDF bake");
+        checkGraphRequirement(!fs::exists(root/"fx"),"dense bake stays in local graph");
+        fx::StaticSdfVolume volume;
+        volume.dimension=3;volume.spacing=1;volume.samples.resize(27,-.25f);
+        std::string bytes;
+        checkGraphRequirement(fx::encodeSdfBinary(volume,bytes),"encode fixture");
+        std::ofstream binary(root/"content"/"test.sdfbin",std::ios::binary);
+        binary.write(bytes.data(),std::streamsize(bytes.size()));binary.close();
+        auto import=request;
+        import.set("action",Json::string("importSdf"));
+        import.set("sdfAsset",Json::string("content/test.sdfbin"));
+        auto imported=call("fx_graph_edit",import);
+        checkGraphRequirement(imported.getBool("ok")&&imported["validation"].getBool("ok")&&
+                imported["graph"]["nodes"][size_t(2)]["properties"]["staticSdf"]["samples"].size()==27,
+                "binary SDF import through shared Workspace");
+        checkGraphRequirement(!fs::exists(root/"fx"),"import does not publish");
+        import.set("action",Json::string("linkSdf"));
+        auto linked=call("fx_graph_edit",import);
+        checkGraphRequirement(linked.getBool("ok")&&linked["validation"].getBool("ok")&&
+                linked["graph"]["nodes"][size_t(2)]["properties"].getStr("staticSdf")=="content/test.sdfbin",
+                "persistent external SDF link");
+        checkGraphRequirement(!fs::exists(root/"fx"),"link does not publish");
+        Json save=Json::object();save.set("name",Json::string("linked_sdf"));save.set("graph",linked["graph"]);
+        checkGraphRequirement(call("fx_graph_set",save).getBool("ok"),"publish external link");
+        Json name=Json::object();name.set("name",Json::string("linked_sdf"));
+        auto reopened=call("fx_graph_get",name);
+        checkGraphRequirement(reopened["validation"].getBool("ok")&&
+                reopened["graph"]["nodes"][size_t(2)]["properties"].getStr("staticSdf")=="content/test.sdfbin",
+                "persistent link reopens without inline samples");
+        fs::remove_all(root/"fx");
+        volume.dimension=64;volume.samples.assign(64u*64u*64u,-.25f);
+        checkGraphRequirement(fx::encodeSdfBinary(volume,bytes),"encode external 64 cubed");
+        std::ofstream denseBinary(root/"content"/"dense.sdfbin",std::ios::binary);
+        denseBinary.write(bytes.data(),std::streamsize(bytes.size()));denseBinary.close();
+        import.set("sdfAsset",Json::string("content/dense.sdfbin"));
+        auto denseLink=call("fx_graph_edit",import);
+        checkGraphRequirement(denseLink.getBool("ok")&&denseLink["validation"].getBool("ok")&&
+                denseLink["graph"].dump(-1).size()<4096,"high-resolution link stays compact");
+        import.set("action",Json::string("importSdf"));
+        auto denseImport=call("fx_graph_edit",import);
+        checkGraphRequirement(denseImport.has("error")||!denseImport.getBool("ok"),"high-resolution inline import denied");
+        checkGraphRequirement(!fs::exists(root/"fx"),"dense link/import does not publish");
+        import.set("action",Json::string("linkSdf"));
+        import.set("sdfAsset",Json::string("content/../test.sdfbin"));
+        auto badImport=call("fx_graph_edit",import);
+        checkGraphRequirement(badImport.has("error")||!badImport.getBool("ok"),"SDF import traversal denied");
+        request.set("dimension",Json::number(int64_t(33)));
+        auto invalidDimension=call("fx_graph_edit",request);
+        checkGraphRequirement(invalidDimension.has("error")||!invalidDimension.getBool("ok"),"oversized bake rejected");
+        request.set("dimension",Json::number(int64_t(8)));
+        request.set("model",Json::string("content/../escape.obj"));
+        auto rejected=call("fx_graph_edit",request);
+        checkGraphRequirement(rejected.has("error")||!rejected.getBool("ok"),"SDF traversal rejected");
+    }
+
+    {
+        auto req=Json::parse(R"({"action":"newVolume","preset":"magic"})");
+        auto created=call("fx_graph_edit",req);
+        checkGraphRequirement(created.getBool("ok")&&created["validation"].getBool("ok"),"new volume graph through Workspace");
+        Json save=Json::object();save.set("name",Json::string("volume_magic"));save.set("graph",created["graph"]);
+        checkGraphRequirement(call("fx_graph_set",save).getBool("ok"),"publish volume graph");
+        Json name=Json::object();name.set("name",Json::string("volume_magic"));
+        auto reopened=call("fx_graph_get",name);
+        checkGraphRequirement(reopened["validation"].getBool("ok")&&reopened["graph"]==created["graph"],"reopen volume graph");
+        name.set("effect",Json::string("volume_legacy"));
+        checkGraphRequirement(!call("fx_graph_bake",name).getBool("ok")&&!fs::exists(root/"fx"/"volume_legacy.json"),"legacy bake rejects volume");
+        Json remove=Json::object();remove.set("name",Json::string("volume_magic"));call("fx_graph_delete",remove);
+    }
     const auto catalog = call("graph_catalog", Json::object());
     checkGraphRequirement(catalog.getBool("ok") && catalog["domains"].size()==5, "generic graph catalog missing domains");
     checkGraphRequirement(call("graph_list", Json::parse(R"({"domain":"unknown"})")).has("error"), "unknown graph domain accepted");
@@ -366,96 +456,6 @@ int main() {
     const auto manifest=Json::parseFile((root/"content"/"textures"/"fixture_set"/"texture-set.json").string());
     checkGraphRequirement(manifest["files"].size()==2&&manifest["files"][size_t(0)].getStr("backend")=="cpu","shared texture set provenance missing");
 
-    // In-memory bake is a shared Studio/MCP edit, not a write operation.
-    {
-        fs::create_directories(root/"content");
-        std::ofstream model(root/"content"/"tetra.obj");
-        model<<"v 0 0 0\nv 1 0 0\nv 0 1 0\nv 0 0 1\n"
-               "f 1 3 2\nf 1 2 4\nf 1 4 3\nf 2 3 4\n";
-        model.close();
-        auto request=Json::parse(R"({"action":"bakeSdf","node":"collision","model":"content/tetra.obj","dimension":8,
-            "graph":{"version":2,"nodes":[{"id":"spawn","type":"Spawn","properties":{"burst":1}},
-            {"id":"init","type":"Initialize","properties":{"life":1,"speed":0,"spread":0}},
-            {"id":"collision","type":"CollisionModule","properties":{"ground":false,"bounce":0.7}},
-            {"id":"out","type":"SpriteOutput","properties":{"texture":"builtin:soft"}}],
-            "links":[{"from":"spawn","to":"init"},{"from":"init","to":"collision"},{"from":"collision","to":"out"}],"outputs":["out"]}})");
-        auto baked=call("fx_graph_edit",request);
-        require(baked.getBool("ok")&&baked["validation"].getBool("ok"),"native model SDF edit");
-        const auto& props=baked["graph"]["nodes"][size_t(2)]["properties"];
-        require(props["staticSdf"]["samples"].size()==512&&props.getBool("ground",true)==false,"SDF and previous properties");
-        require(!fs::exists(root/"fx"),"SDF edit must not publish files");
-        request.set("dimension",Json::number(int64_t(32)));
-        auto dense=call("fx_graph_edit",request);
-        require(dense.getBool("ok")&&dense["validation"].getBool("ok")&&
-                dense["graph"]["nodes"][size_t(2)]["properties"]["staticSdf"]["samples"].size()==32768,
-                "32 cubed Studio/MCP SDF bake");
-        require(!fs::exists(root/"fx"),"dense bake stays in local graph");
-        fx::StaticSdfVolume volume;
-        volume.dimension=3;volume.spacing=1;volume.samples.resize(27,-.25f);
-        std::string bytes;
-        require(fx::encodeSdfBinary(volume,bytes),"encode fixture");
-        std::ofstream binary(root/"content"/"test.sdfbin",std::ios::binary);
-        binary.write(bytes.data(),std::streamsize(bytes.size()));binary.close();
-        auto import=request;
-        import.set("action",Json::string("importSdf"));
-        import.set("sdfAsset",Json::string("content/test.sdfbin"));
-        auto imported=call("fx_graph_edit",import);
-        require(imported.getBool("ok")&&imported["validation"].getBool("ok")&&
-                imported["graph"]["nodes"][size_t(2)]["properties"]["staticSdf"]["samples"].size()==27,
-                "binary SDF import through shared Workspace");
-        require(!fs::exists(root/"fx"),"import does not publish");
-        import.set("action",Json::string("linkSdf"));
-        auto linked=call("fx_graph_edit",import);
-        require(linked.getBool("ok")&&linked["validation"].getBool("ok")&&
-                linked["graph"]["nodes"][size_t(2)]["properties"].getStr("staticSdf")=="content/test.sdfbin",
-                "persistent external SDF link");
-        require(!fs::exists(root/"fx"),"link does not publish");
-        Json save=Json::object();save.set("name",Json::string("linked_sdf"));save.set("graph",linked["graph"]);
-        require(call("fx_graph_set",save).getBool("ok"),"publish external link");
-        Json name=Json::object();name.set("name",Json::string("linked_sdf"));
-        auto reopened=call("fx_graph_get",name);
-        require(reopened["validation"].getBool("ok")&&
-                reopened["graph"]["nodes"][size_t(2)]["properties"].getStr("staticSdf")=="content/test.sdfbin",
-                "persistent link reopens without inline samples");
-        fs::remove_all(root/"fx");
-        volume.dimension=64;volume.samples.assign(64u*64u*64u,-.25f);
-        require(fx::encodeSdfBinary(volume,bytes),"encode external 64 cubed");
-        std::ofstream denseBinary(root/"content"/"dense.sdfbin",std::ios::binary);
-        denseBinary.write(bytes.data(),std::streamsize(bytes.size()));denseBinary.close();
-        import.set("sdfAsset",Json::string("content/dense.sdfbin"));
-        auto denseLink=call("fx_graph_edit",import);
-        require(denseLink.getBool("ok")&&denseLink["validation"].getBool("ok")&&
-                denseLink["graph"].dump(-1).size()<4096,"high-resolution link stays compact");
-        import.set("action",Json::string("importSdf"));
-        auto denseImport=call("fx_graph_edit",import);
-        require(denseImport.has("error")||!denseImport.getBool("ok"),"high-resolution inline import denied");
-        require(!fs::exists(root/"fx"),"dense link/import does not publish");
-        import.set("action",Json::string("linkSdf"));
-        import.set("sdfAsset",Json::string("content/../test.sdfbin"));
-        auto badImport=call("fx_graph_edit",import);
-        require(badImport.has("error")||!badImport.getBool("ok"),"SDF import traversal denied");
-        request.set("dimension",Json::number(int64_t(33)));
-        auto invalidDimension=call("fx_graph_edit",request);
-        require(invalidDimension.has("error")||!invalidDimension.getBool("ok"),"oversized bake rejected");
-        request.set("dimension",Json::number(int64_t(8)));
-        request.set("model",Json::string("content/../escape.obj"));
-        auto rejected=call("fx_graph_edit",request);
-        require(rejected.has("error")||!rejected.getBool("ok"),"SDF traversal rejected");
-    }
-
-    {
-        auto req=Json::parse(R"({"action":"newVolume","preset":"magic"})");
-        auto created=call("fx_graph_edit",req);
-        require(created.getBool("ok")&&created["validation"].getBool("ok"),"new volume graph through Workspace");
-        Json save=Json::object();save.set("name",Json::string("volume_magic"));save.set("graph",created["graph"]);
-        require(call("fx_graph_set",save).getBool("ok"),"publish volume graph");
-        Json name=Json::object();name.set("name",Json::string("volume_magic"));
-        auto reopened=call("fx_graph_get",name);
-        require(reopened["validation"].getBool("ok")&&reopened["graph"]==created["graph"],"reopen volume graph");
-        name.set("effect",Json::string("volume_legacy"));
-        require(!call("fx_graph_bake",name).getBool("ok")&&!fs::exists(root/"fx"/"volume_legacy.json"),"legacy bake rejects volume");
-        Json remove=Json::object();remove.set("name",Json::string("volume_magic"));call("fx_graph_delete",remove);
-    }
     Json create = Json::object();
     create.set("name", Json::string("spark"));
     create.set("graph", graph);
@@ -490,10 +490,10 @@ int main() {
     bool discoveredPreview=false;
     for(const auto& t:tools.items())
         if(t.getStr("name")=="fx_graph_preview")discoveredPreview=true;
-    require(discoveredPreview,"FX preview absent from MCP tools/list");
+    checkGraphRequirement(discoveredPreview,"FX preview absent from MCP tools/list");
     Json previewStatus=Json::object();
     previewStatus.set("action",Json::string("status"));
-    require(call("fx_graph_preview",previewStatus).has("error"),
+    checkGraphRequirement(call("fx_graph_preview",previewStatus).has("error"),
             "headless MCP must not fake a GPU preview");
     Json seen;
     int previewCalls=0;
@@ -508,22 +508,22 @@ int main() {
     previewLoad.set("action",Json::string("load"));
     previewLoad.set("graphName",Json::string("spark"));
     const auto linked=call("fx_graph_preview",previewLoad);
-    require(linked.getBool("ready")&&previewCalls==1,
+    checkGraphRequirement(linked.getBool("ready")&&previewCalls==1,
             "MCP graph load did not reach native preview owner");
-    require(seen["graph"].isObject()&&seen["graph"].getInt("version")==1,
+    checkGraphRequirement(seen["graph"].isObject()&&seen["graph"].getInt("version")==1,
             "MCP graph file not resolved by Workspace");
     Json previewStep=Json::object();
     previewStep.set("action",Json::string("step"));
-    require(call("fx_graph_preview",previewStep).getBool("ready")&&
+    checkGraphRequirement(call("fx_graph_preview",previewStep).getBool("ready")&&
             seen.getStr("action")=="step","MCP step not forwarded");
     const int forwarded=previewCalls;
     Json unsafe=previewLoad;
     unsafe.set("graphName",Json::string("../escape"));
-    require(call("fx_graph_preview",unsafe).has("error")&&
+    checkGraphRequirement(call("fx_graph_preview",unsafe).has("error")&&
             previewCalls==forwarded,"unsafe graph name reached native preview");
     Json ambiguous=previewLoad;
     ambiguous.set("graph",graph);
-    require(call("fx_graph_preview",ambiguous).has("error")&&
+    checkGraphRequirement(call("fx_graph_preview",ambiguous).has("error")&&
             previewCalls==forwarded,"ambiguous source reached native preview");
     // A harmless-looking graphName cannot cross the project boundary via
     // a symlink to an external JSON file. Platforms that forbid symlink
@@ -536,13 +536,13 @@ int main() {
     if(!symlinkError) {
         Json escaped=previewLoad;
         escaped.set("graphName",Json::string("outside"));
-        require(call("fx_graph_preview",escaped).has("error")&&
+        checkGraphRequirement(call("fx_graph_preview",escaped).has("error")&&
                 previewCalls==forwarded,"symlink outside project reached GPU runtime");
     }
     std::error_code removeError;
     fs::remove(outside,removeError);
     ws.setSpectraPreviewHandler({});
-    require(call("fx_graph_preview",previewStatus).has("error"),
+    checkGraphRequirement(call("fx_graph_preview",previewStatus).has("error"),
             "detached Studio preview must not be callable from standalone MCP");
 
     Json preset=Json::parse(R"JSON({"format":"aiverse.spectrafx.replay","version":1,"tick":25,"speed":1,"loop":false,"grid":true,"axes":true,"background":"dark","camera":{"yaw":0,"pitch":0,"distance":6,"targetX":0,"targetY":1,"targetZ":0,"ortho":false},"parameters":{}})JSON");
@@ -550,29 +550,29 @@ int main() {
     Json v2=graph;v2.set("version",Json::number(int64_t(2)));
     preset.set("graphSignature",Json::string(v2.dump(-1)));
     Json savePreset=Json::object();savePreset.set("name",Json::string("first"));savePreset.set("preset",preset);
-    require(!call("fx_replay_preset_save",savePreset).has("error"),"replay asset save failed");
-    require(fs::exists(root/"content"/"spectrafx"/"replays"/"first.spectra-replay.json"),"missing replay content asset");
-    require(call("fx_replay_preset_save",savePreset).has("error"),"replay history overwritten");
-    require(call("fx_replay_preset_list",Json::object())["presets"].size()==1,"replay listing failed");
+    checkGraphRequirement(!call("fx_replay_preset_save",savePreset).has("error"),"replay asset save failed");
+    checkGraphRequirement(fs::exists(root/"content"/"spectrafx"/"replays"/"first.spectra-replay.json"),"missing replay content asset");
+    checkGraphRequirement(call("fx_replay_preset_save",savePreset).has("error"),"replay history overwritten");
+    checkGraphRequirement(call("fx_replay_preset_list",Json::object())["presets"].size()==1,"replay listing failed");
     Json getPreset=Json::object();getPreset.set("name",Json::string("first"));
-    require(call("fx_replay_preset_get",getPreset)["preset"].getInt("tick")==25,"replay read failed");
+    checkGraphRequirement(call("fx_replay_preset_get",getPreset)["preset"].getInt("tick")==25,"replay read failed");
     Json checkPreset=Json::object();checkPreset.set("preset",call("fx_replay_preset_get",getPreset)["preset"]);
-    require(call("fx_replay_preset_check",checkPreset).getStr("state")=="matching","empty direct manifest mismatch");
+    checkGraphRequirement(call("fx_replay_preset_check",checkPreset).getStr("state")=="matching","empty direct manifest mismatch");
     const auto texture=root/"content"/"spark.png";
     {std::ofstream f(texture,std::ios::binary);f<<"abc";}
     {std::ofstream f(texture.string()+".meta");f<<R"({"guid":"0123456789abcdef0123456789abcdef"})";}
     Json dependencyGraph=v2;dependencyGraph.set("testAsset",Json::string("content/spark.png"));
     Json dependencyPreset=preset;dependencyPreset.set("graphSignature",Json::string(dependencyGraph.dump(-1)));
     Json dependencySave=Json::object();dependencySave.set("name",Json::string("with_asset"));dependencySave.set("preset",dependencyPreset);
-    require(!call("fx_replay_preset_save",dependencySave).has("error"),"dependency preset save failed");
+    checkGraphRequirement(!call("fx_replay_preset_save",dependencySave).has("error"),"dependency preset save failed");
     Json dependencyGet=Json::object();dependencyGet.set("name",Json::string("with_asset"));
     const auto baseline=call("fx_replay_preset_get",dependencyGet);
-    require(baseline["compatibility"].getStr("state")=="matching","resource baseline mismatch");
-    require(baseline["preset"]["dependencies"][size_t(0)].getStr("guid")=="0123456789abcdef0123456789abcdef","GUID not recorded");
+    checkGraphRequirement(baseline["compatibility"].getStr("state")=="matching","resource baseline mismatch");
+    checkGraphRequirement(baseline["preset"]["dependencies"][size_t(0)].getStr("guid")=="0123456789abcdef0123456789abcdef","GUID not recorded");
     {std::ofstream f(texture,std::ios::binary|std::ios::trunc);f<<"xyz";}
-    require(call("fx_replay_preset_get",dependencyGet)["compatibility"].getStr("state")=="changed","same-size edit not detected");
+    checkGraphRequirement(call("fx_replay_preset_get",dependencyGet)["compatibility"].getStr("state")=="changed","same-size edit not detected");
     fs::remove(texture);
-    require(call("fx_replay_preset_get",dependencyGet)["compatibility"].getStr("state")=="unavailable","missing asset not detected");
+    checkGraphRequirement(call("fx_replay_preset_get",dependencyGet)["compatibility"].getStr("state")=="unavailable","missing asset not detected");
     // A glTF references a material-like JSON asset through an explicit content
     // path and external buffers through local URIs; cycles terminate.
     const auto modelFile=root/"content"/"ship.gltf";
@@ -584,16 +584,16 @@ int main() {
     Json nestedGraph=v2;nestedGraph.set("testAsset",Json::string("content/ship.gltf"));
     Json nestedPreset=preset;nestedPreset.set("graphSignature",Json::string(nestedGraph.dump(-1)));
     Json nestedSave=Json::object();nestedSave.set("name",Json::string("nested"));nestedSave.set("preset",nestedPreset);
-    require(!call("fx_replay_preset_save",nestedSave).has("error"),"nested dependency save failed");
+    checkGraphRequirement(!call("fx_replay_preset_save",nestedSave).has("error"),"nested dependency save failed");
     Json nestedGet=Json::object();nestedGet.set("name",Json::string("nested"));
     const auto nested=call("fx_replay_preset_get",nestedGet);
-    require(nested["preset"].getInt("dependencyVersion")==3&&nested["preset"]["dependencies"].size()==3,
+    checkGraphRequirement(nested["preset"].getInt("dependencyVersion")==3&&nested["preset"]["dependencies"].size()==3,
             "nested manifest did not resolve unique cycle-safe dependencies");
-    require(nested["compatibility"].getStr("state")=="matching","nested baseline mismatch");
+    checkGraphRequirement(nested["compatibility"].getStr("state")=="matching","nested baseline mismatch");
     {std::ofstream f(buffer,std::ios::binary|std::ios::trunc);f<<"456";}
-    require(call("fx_replay_preset_get",nestedGet)["compatibility"].getStr("state")=="changed","external glTF buffer change missed");
+    checkGraphRequirement(call("fx_replay_preset_get",nestedGet)["compatibility"].getStr("state")=="changed","external glTF buffer change missed");
     {std::ofstream f(modelFile,std::ios::trunc);f<<R"({"buffers":[{"uri":"../../outside.bin"}]})";}
-    require(call("fx_replay_preset_get",nestedGet)["compatibility"].getStr("state")=="unavailable","escaping glTF URI accepted");
+    checkGraphRequirement(call("fx_replay_preset_get",nestedGet)["compatibility"].getStr("state")=="unavailable","escaping glTF URI accepted");
     // GLB JSON chunk is read without loading the binary body.
     const auto glb=root/"content"/"ship.glb";
     std::string glbJson=R"({"asset":{"version":"2.0"},"images":[{"uri":"ship.bin"}]})";
@@ -608,13 +608,13 @@ int main() {
     formatGraph.set("testAsset",Json::parse(R"(["content/ship.glb","content/ship.obj"])"));
     Json formatPreset=preset;formatPreset.set("graphSignature",Json::string(formatGraph.dump(-1)));
     Json formatSave=Json::object();formatSave.set("name",Json::string("formats"));formatSave.set("preset",formatPreset);
-    require(!call("fx_replay_preset_save",formatSave).has("error"),"GLB/OBJ manifest save failed");
+    checkGraphRequirement(!call("fx_replay_preset_save",formatSave).has("error"),"GLB/OBJ manifest save failed");
     Json formatGet=Json::object();formatGet.set("name",Json::string("formats"));
     const auto formats=call("fx_replay_preset_get",formatGet);
-    require(formats["compatibility"].getStr("state")=="matching"&&formats["preset"]["dependencies"].size()==4,
+    checkGraphRequirement(formats["compatibility"].getStr("state")=="matching"&&formats["preset"]["dependencies"].size()==4,
             "GLB/OBJ/MTL dependencies incomplete");
     {std::ofstream f(root/"content"/"ship.mtl");f<<"map_Kd -s 1 1 1 ship.bin\n";}
-    require(call("fx_replay_preset_get",formatGet)["compatibility"].getStr("state")=="unavailable",
+    checkGraphRequirement(call("fx_replay_preset_get",formatGet)["compatibility"].getStr("state")=="unavailable",
             "unsupported MTL options silently accepted");
     const auto movedFrom=root/"content"/"relocate.png";
     const auto movedTo=root/"content"/"relocated.png";
@@ -624,39 +624,39 @@ int main() {
     Json movedGraph=v2;movedGraph.set("testAsset",Json::string("content/relocate.png"));
     Json movedPreset=preset;movedPreset.set("graphSignature",Json::string(movedGraph.dump(-1)));
     Json movedSave=Json::object();movedSave.set("name",Json::string("relocation"));movedSave.set("preset",movedPreset);
-    require(!call("fx_replay_preset_save",movedSave).has("error"),"relocation baseline save failed");
+    checkGraphRequirement(!call("fx_replay_preset_save",movedSave).has("error"),"relocation baseline save failed");
     fs::rename(movedFrom,movedTo);fs::rename(movedFrom.string()+".meta",movedTo.string()+".meta");
     Json movedGet=Json::object();movedGet.set("name",Json::string("relocation"));
     const auto plan=call("fx_replay_preset_relocate_preview",movedGet);
-    require(plan.getStr("state")=="ready"&&plan["changes"][size_t(0)].getStr("to")=="content/relocated.png",
+    checkGraphRequirement(plan.getStr("state")=="ready"&&plan["changes"][size_t(0)].getStr("to")=="content/relocated.png",
             "GUID relocation plan failed");
-    require(call("fx_replay_preset_get",movedGet)["preset"].getStr("graphSignature")==movedGraph.dump(-1),
+    checkGraphRequirement(call("fx_replay_preset_get",movedGet)["preset"].getStr("graphSignature")==movedGraph.dump(-1),
             "read-only relocation changed stored preset");
     Json movedCheck=Json::object();movedCheck.set("preset",plan["candidate"]);
-    require(call("fx_replay_preset_check",movedCheck).getStr("state")=="matching","candidate dependency closure mismatch");
+    checkGraphRequirement(call("fx_replay_preset_check",movedCheck).getStr("state")=="matching","candidate dependency closure mismatch");
     Json applyPlan=movedGet;
     applyPlan.set("newName",Json::string("relocation_v2"));
     applyPlan.set("planRevision",Json::string("stale"));
-    require(call("fx_replay_preset_relocate_apply",applyPlan).has("error"),"stale plan applied");
+    checkGraphRequirement(call("fx_replay_preset_relocate_apply",applyPlan).has("error"),"stale plan applied");
     applyPlan.set("planRevision",plan["planRevision"]);
-    require(!call("fx_replay_preset_relocate_apply",applyPlan).has("error"),"relocated preset publication failed");
+    checkGraphRequirement(!call("fx_replay_preset_relocate_apply",applyPlan).has("error"),"relocated preset publication failed");
     Json newGet=Json::object();newGet.set("name",Json::string("relocation_v2"));
-    require(call("fx_replay_preset_get",newGet)["compatibility"].getStr("state")=="matching","published relocation mismatch");
-    require(call("fx_replay_preset_relocate_apply",applyPlan).has("error"),"relocated preset overwritten");
-    require(call("fx_replay_preset_get",movedGet)["preset"].getStr("graphSignature")==movedGraph.dump(-1),
+    checkGraphRequirement(call("fx_replay_preset_get",newGet)["compatibility"].getStr("state")=="matching","published relocation mismatch");
+    checkGraphRequirement(call("fx_replay_preset_relocate_apply",applyPlan).has("error"),"relocated preset overwritten");
+    checkGraphRequirement(call("fx_replay_preset_get",movedGet)["preset"].getStr("graphSignature")==movedGraph.dump(-1),
             "relocation apply modified source");
     {std::ofstream f(movedFrom,std::ios::binary);f<<"pixels";}
     {std::ofstream f(movedFrom.string()+".meta");f<<moveMeta;}
     applyPlan.set("newName",Json::string("relocation_v3"));
-    require(call("fx_replay_preset_relocate_apply",applyPlan).has("error"),"conflicting plan applied");
-    require(call("fx_replay_preset_relocate_preview",movedGet).getStr("state")=="conflict",
+    checkGraphRequirement(call("fx_replay_preset_relocate_apply",applyPlan).has("error"),"conflicting plan applied");
+    checkGraphRequirement(call("fx_replay_preset_relocate_preview",movedGet).getStr("state")=="conflict",
             "duplicate GUID accepted");
     // Export the relocated v2 recipe after removing the deliberate GUID
     // collision. The target has the same asset at a different content path.
     fs::remove(movedFrom);fs::remove(movedFrom.string()+".meta");
     Json portableGet=Json::object();portableGet.set("name",Json::string("relocation_v2"));
     const auto portable=call("fx_replay_preset_portable_export",portableGet)["portable"];
-    require(portable.isObject()&&!portable["recipe"].has("projectPath"),"portable export retained project identity");
+    checkGraphRequirement(portable.isObject()&&!portable["recipe"].has("projectPath"),"portable export retained project identity");
     const auto target=root/"portable-target";
     fs::create_directories(target/"content");
     fs::copy_file(movedTo,target/"content"/"target.png");
@@ -664,27 +664,27 @@ int main() {
     ws.project.dir=target.string();
     Json portableArgs=Json::object();portableArgs.set("portable",portable);
     const auto portablePlan=call("fx_replay_preset_portable_preview",portableArgs);
-    require(portablePlan.getStr("state")=="ready"&&portablePlan["candidate"].getStr("projectPath")==target.string(),
+    checkGraphRequirement(portablePlan.getStr("state")=="ready"&&portablePlan["candidate"].getStr("projectPath")==target.string(),
             "cross-project portable remap failed");
     portableArgs.set("newName",Json::string("imported"));
     portableArgs.set("planRevision",Json::string("stale"));
-    require(call("fx_replay_preset_portable_apply",portableArgs).has("error"),"stale portable plan applied");
+    checkGraphRequirement(call("fx_replay_preset_portable_apply",portableArgs).has("error"),"stale portable plan applied");
     portableArgs.set("planRevision",portablePlan["planRevision"]);
-    require(!call("fx_replay_preset_portable_apply",portableArgs).has("error"),"portable apply failed");
+    checkGraphRequirement(!call("fx_replay_preset_portable_apply",portableArgs).has("error"),"portable apply failed");
     Json imported=Json::object();imported.set("name",Json::string("imported"));
-    require(call("fx_replay_preset_get",imported)["compatibility"].getStr("state")=="matching",
+    checkGraphRequirement(call("fx_replay_preset_get",imported)["compatibility"].getStr("state")=="matching",
             "imported preset dependencies mismatch");
-    require(call("fx_replay_preset_portable_apply",portableArgs).has("error"),"portable import overwrote existing name");
+    checkGraphRequirement(call("fx_replay_preset_portable_apply",portableArgs).has("error"),"portable import overwrote existing name");
     fs::remove(target/"content"/"target.png");
-    require(call("fx_replay_preset_portable_preview",portableArgs).getStr("state")=="conflict",
+    checkGraphRequirement(call("fx_replay_preset_portable_preview",portableArgs).getStr("state")=="conflict",
             "portable import missed absent target resource");
     ws.project.dir=root.string();
     getPreset.set("expectedGraphSignature",Json::string("other"));
-    require(call("fx_replay_preset_get",getPreset).has("error"),"stale graph revision accepted");
+    checkGraphRequirement(call("fx_replay_preset_get",getPreset).has("error"),"stale graph revision accepted");
     savePreset.set("name",Json::string("../escape"));
-    require(call("fx_replay_preset_save",savePreset).has("error"),"unsafe replay name accepted");
+    checkGraphRequirement(call("fx_replay_preset_save",savePreset).has("error"),"unsafe replay name accepted");
     savePreset.set("name",Json::string("second"));savePreset.set("expectedProjectPath",Json::string("other"));
-    require(call("fx_replay_preset_save",savePreset).has("error"),"stale project accepted");
+    checkGraphRequirement(call("fx_replay_preset_save",savePreset).has("error"),"stale project accepted");
 
     Json bake = Json::object();
     bake.set("name", Json::string("spark"));
