@@ -1,0 +1,17 @@
+{
+  "materialTechniques": [
+    {
+      "source": "Amber",
+      "use": "Jade",
+      "scheme": "inspection",
+      "requires": [
+        "rgba16f"
+      ]
+    },
+    {
+      "source": "Amber",
+      "use": "Blue",
+      "minDistance": 20
+    }
+  ]
+}
