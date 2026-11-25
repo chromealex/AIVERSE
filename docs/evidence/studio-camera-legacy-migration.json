@@ -1,0 +1,10 @@
+{
+  "sha": "caa4fb4756d885f9a41b82c32a2f185b1ddd0233",
+  "argv": [
+    "bash",
+    "/tmp/legacy-bookmarks-qa.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-camera-legacy-migration.log.txt",
+  "sha256": "c2f07315527aa335b60271c1ff02634f2d62ea5a4e761ba611bf2d0137a9a9e7"
+}
