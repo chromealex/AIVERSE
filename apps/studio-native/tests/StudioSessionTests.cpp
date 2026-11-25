@@ -2286,7 +2286,7 @@ static void worldSceneInspectorProperties() {
     fs::create_directories(project);
     std::ofstream(project/"game.json")<<R"({"module":"actor","rules":"rules.json","maps":[{"file":"map.json"}]})";
     std::ofstream(project/"rules.json")<<R"({"actor":{}})";
-    const Json original=Json::parse(R"({"colliders":[{"min":[0,0,0],"max":[1,1,1]}],"spawns":[[0,0,0],[4,0,4]],"custom":{"marker":7}})");
+    const Json original=Json::parse(R"({"players":[{"name":"One","team":1},{"name":"Two","team":2}],"colliders":[{"id":1,"min":[0,0,0],"max":[1,1,1]}],"spawns":[[0,0,0],[4,0,4]],"custom":{"marker":7}})");
     std::ofstream(project/"map.json")<<original.dump();
     {
         studio::StudioSession session(root.string(),project.string());
@@ -2316,6 +2316,21 @@ static void worldSceneInspectorProperties() {
         bool rejected=false;
         try{(void)session.saveMapAs((project/"other.json").string());}catch(const std::exception&){rejected=true;}
         AIVERSE_TEST_CHECK(rejected&&!fs::exists(project/"other.json"));
+        Json bounds=Json::parse(R"({"entityId":"collider:0","componentId":"BoxCollider","values":{"minX":2,"maxX":5}})");
+        const auto scope=call("studio.snapshot")["result"]["graphDocument"];
+        bounds.set("scope",scope);
+        Json invalid=bounds;invalid.set("entityIds",Json::parse(R"(["collider:0","collider:999"])"));
+        AIVERSE_TEST_CHECK(call("studio.setProperties",invalid).has("error")&&session.workspace().map.toJson()==expected);
+        const auto boundsDepth=session.workspace().map.undoDepth();
+        const auto applied=call("studio.setProperties",bounds);
+        if(applied.has("error"))std::cerr<<applied.getStr("error")<<"\n";
+        AIVERSE_TEST_CHECK(!applied.has("error")&&session.workspace().map.undoDepth()==boundsDepth+1);
+        const auto edited=session.workspace().map.toJson();
+        AIVERSE_TEST_CHECK(edited["colliders"][size_t(0)]["min"][size_t(0)].integer()==2&&edited["colliders"][size_t(0)]["max"][size_t(0)].integer()==5);
+        AIVERSE_TEST_CHECK(call("studio.setProperties",bounds).has("error")&&session.workspace().map.toJson()==edited);
+        bounds.set("scope",call("studio.snapshot")["result"]["graphDocument"]);
+        AIVERSE_TEST_CHECK(!call("studio.setProperties",bounds).has("error")&&session.workspace().map.undoDepth()==boundsDepth+1);
+        AIVERSE_TEST_CHECK(!call("studio.undo").has("error")&&session.workspace().map.toJson()==expected);
     }
     fs::remove_all(root);
 }
