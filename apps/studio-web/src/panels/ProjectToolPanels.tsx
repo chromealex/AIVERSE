@@ -143,6 +143,20 @@ export function ScriptsPanel(ctx: Ctx & {location:{path:string;line:number}|null
   const editor = useRef<HTMLTextAreaElement>(null);
   const loadVersion = useRef(0);
   const [selection,setSelection] = useState<{line:number}|null>(null);
+  const [restart,setRestart] = useState<boolean|null>(null);
+  const [updatingRestart,setUpdatingRestart] = useState(false);
+  useEffect(() => {
+    let active=true;
+    void invoke('studio.scriptWatch',{}).then(r=>{if(active)setRestart(r.restart);})
+      .catch(e=>{if(active)setStatus({ok:false,text:message(e)});});
+    return ()=>{active=false;};
+  },[]);
+  const changeRestart = async (value:boolean) => {
+    setUpdatingRestart(true);
+    try {const r=await invoke('studio.scriptWatch',{restart:value});setRestart(r.restart);}
+    catch(e){setStatus({ok:false,text:message(e)});}
+    finally{setUpdatingRestart(false);}
+  };
   const [view,setView] = useState<'source'|'log'>('source');
   useLayoutEffect(() => {
     if (!selection || !editor.current) return;
@@ -219,6 +233,8 @@ export function ScriptsPanel(ctx: Ctx & {location:{path:string;line:number}|null
       <nav className="console__views" aria-label="Script views">
         <button type="button" aria-pressed={view==='source'} onClick={()=>setView('source')}>Source</button>
         <button type="button" aria-pressed={view==='log'} onClick={()=>setView('log')}>Play-test log</button>
+        <label className="scripts-page__restart"><input type="checkbox" checked={restart===true}
+          disabled={restart===null || updatingRestart} onChange={e=>void changeRestart(e.target.checked)}/> Restart on Lua changes</label>
       </nav>
       {view === 'log' ? <ScriptPlayLog playing={ctx.playing}/> : <>
       <div className="ptp__edhead">

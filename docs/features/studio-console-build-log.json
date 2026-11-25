@@ -136,7 +136,8 @@
       "studio.buildLog",
       "studio.buildReveal",
       "studio.gameState",
-      "studio.gameScriptLog"
+      "studio.gameScriptLog",
+      "studio.scriptWatch"
     ]
   },
   "test_reports": [

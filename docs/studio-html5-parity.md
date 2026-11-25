@@ -238,4 +238,6 @@ Console in the Mac bundle displayed 49 lines from a successful size estimate. Co
 
 Mac Console Activity showed the running VM error at scripts/game.lua:23, Tick 0, with source Lua. The status bar reported one error during play and zero after stop. Capture docs/evidence/studio-console-html5/play-script-error.png.
 
-Verified in Mac Studio. Clicking scripts/game.lua:23 in Console selected the exact source line. Scripts displayed the live simulation VM print and error at tick zero. Errors only hid the print, and Stop returned the log to its empty state. Captures docs/evidence/studio-console-html5/scripts-source-line.png and scripts-runtime-log.png. Legacy script-file change detection and restart remain to be compared.
+Verified in Mac Studio. Clicking scripts/game.lua:23 in Console selected the exact source line. Scripts displayed the live simulation VM print and error at tick zero. Errors only hid the print, and Stop returned the log to its empty state. Captures docs/evidence/studio-console-html5/scripts-source-line.png and scripts-runtime-log.png. Script file change detection and opt-in/out restart verified in the Mac bundle.
+
+The native host checks project scripts while the panel is closed and logs changed and removed paths. The desktop test loaded revision A, retained A after saving B with restart disabled, and restarted into C after saving C with restart enabled. Adding a file with invalid Lua syntax produced a clickable line 1 error. Capture docs/evidence/studio-console-html5/scripts-restart-enabled.png.

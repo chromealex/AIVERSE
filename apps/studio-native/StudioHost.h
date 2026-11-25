@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <set>
@@ -206,6 +207,12 @@ private:
     void rebuildOverlay();
     void publishCamera(const StudioScene::CameraState& camera);
     void tickGame();
+    void restartGame();
+    void pollScriptChanges();
+    bool restartOnScriptChange_ = true;
+    double nextScriptPoll_ = 0;
+    std::string scriptWatchProject_;
+    std::map<std::string,std::filesystem::file_time_type> scriptStamps_;
     void tickAgentScreenshot();
     void pollAgentRequests();
     Json assetThumbnail(const std::string& path);

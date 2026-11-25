@@ -1,3 +1,4 @@
+#include "engine/game/Script.h"
 #include "apps/editor/core/StudioPlayTools.h"
 #include "apps/studio-native/StudioHost.h"
 #include "apps/editor/core/AnimationPreviewSession.h"
@@ -363,6 +364,61 @@ void StudioHost::surfaceDetached(StudioSurface surface) {
     }
     else { gamePlacement_ = {}; if (game_) game_->suspend(); }
 }
+void StudioHost::restartGame() {
+    clearPlayReviews();
+    if(!game_->state().getBool("active"))throw std::runtime_error("Start a game before restarting");
+    buildingGraphOverlayScene_=0;session_->setBuildingGraphReader({});rebuildOverlay();
+    const auto old=game_->launchPlan();
+    auto plan=studioGameLaunch(session_->workspace(),old.map.has_value());
+    plan.camera=old.camera;
+    game_->start(plan,engineRoot_+"/engine/assets");gameFrameTime_=0;
+    wpLivePlanetProject_=plan.project;
+    wpLivePlanetMapPath_=plan.map?session_->workspace().map.path:std::string{};
+    wpLivePlanetRevision_=plan.map?session_->workspace().map.revision:0;
+    wpLiveSnapshot_=Json();wpLiveRefresh_=0;rebuildOverlay();
+}
+
+void StudioHost::pollScriptChanges() {
+    auto& ws = session_->workspace();
+    const auto& project = ws.project.dir;
+    const double now = platform_.now();
+    const bool baseline = project != scriptWatchProject_;
+    if (!baseline && now < nextScriptPoll_) return;
+    nextScriptPoll_ = now + 1.0;
+    std::map<std::string,fs::file_time_type> stamps;
+    std::error_code ec;
+    const auto root = fs::path(project) / "scripts";
+    if (!project.empty() && fs::exists(root,ec) && !fs::is_symlink(root,ec)) {
+        for (fs::recursive_directory_iterator it(root,ec), end; !ec && it!=end; it.increment(ec)) {
+            const auto& file = *it;
+            if (file.path().extension() != ".lua" || file.is_symlink(ec) || !file.is_regular_file(ec)) continue;
+            const auto stamp = file.last_write_time(ec);
+            if (ec) break;
+            stamps.emplace(file.path().lexically_relative(project).generic_string(),stamp);
+        }
+    }
+    if (ec) return;
+    if (baseline) { scriptWatchProject_=project; scriptStamps_=std::move(stamps); return; }
+    if (stamps == scriptStamps_) return;
+    for (const auto& [path,stamp] : stamps) {
+        const auto previous=scriptStamps_.find(path);
+        if (previous!=scriptStamps_.end() && previous->second==stamp) continue;
+        std::ifstream in(fs::path(project)/path,std::ios::binary);
+        if (!in) {ws.log("script","Cannot read "+path,true);continue;}
+        std::string text((std::istreambuf_iterator<char>(in)),{});
+        const auto error=game::checkScriptSyntax(path,text,path.rfind("scripts/view/",0)!=0);
+        ws.log("script",error.empty()?"Changed "+path:error,!error.empty());
+    }
+    for (const auto& [path,stamp] : scriptStamps_)
+        if (!stamps.count(path)) ws.log("script","Removed "+path);
+    scriptStamps_=std::move(stamps);
+    if (restartOnScriptChange_ && game_ && game_->launchPlan().project==project && game_->state().getBool("active")) {
+        try { restartGame();ws.log("script","Restarted play-test after Lua changes"); }
+        catch (const std::exception& error) {ws.log("script",error.what(),true);}
+    }
+    sendEvent("document.changed","");
+}
+
 void StudioHost::tickGame() {
     const double now = platform_.now(), dt = gameFrameTime_ > 0 ? now - gameFrameTime_ : 0;
     gameFrameTime_ = now;
@@ -742,6 +798,7 @@ void StudioHost::fxCameraZoom(double wheel) {
 void StudioHost::tick() {
     publishBuildingPanelFrame();
     if (projectLoading_) return; // the background thread owns the session right now
+    pollScriptChanges();
     tickGame();
     tickTextureGraph(session_->workspace().project.dir); // independent of Scene visibility
     // An empty Workspace owns an internal default MapDoc, NOT a loaded project.
@@ -3286,6 +3343,10 @@ bool StudioHost::handleHostMethod(const Json& req) {
             return result;
         });
     }
+    if (method == "studio.scriptWatch") return answer([&] {
+        if (params.has("restart")) restartOnScriptChange_=params.getBool("restart");
+        Json result=Json::object();result.set("restart",Json::fromBool(restartOnScriptChange_));return result;
+    });
     if (method == "studio.gameScriptLog") return answer([&] { return game_ ? game_->scriptLog(false) : Json::array(); });
     if (method == "studio.gameDevices") return answer([&] { return studioGameDevices(); });
     if (method == "studio.gameStart" || method == "studio.gameStop" || method == "studio.gameState" ||
@@ -3325,17 +3386,9 @@ bool StudioHost::handleHostMethod(const Json& req) {
             clearPlayReviews();
             const auto action=params.getStr("action");
             if(action=="restart"){
-                if(!game_->state().getBool("active"))throw std::runtime_error("Start a game before restarting");
-                buildingGraphOverlayScene_=0;session_->setBuildingGraphReader({});rebuildOverlay();
-                const auto old=game_->launchPlan();
-                auto plan=studioGameLaunch(session_->workspace(),old.map.has_value());
-                plan.camera=old.camera;
-                game_->start(plan,engineRoot_+"/engine/assets");gameFrameTime_=0;
-                wpLivePlanetProject_=plan.project;
-                wpLivePlanetMapPath_=plan.map?session_->workspace().map.path:std::string{};
-                wpLivePlanetRevision_=plan.map?session_->workspace().map.revision:0;
+                restartGame();
             }else game_->control(action);
-            if(action=="restart"||action=="checkpointRestore"){
+            if(action=="checkpointRestore"){
                 wpLiveSnapshot_=Json();wpLiveRefresh_=0;rebuildOverlay();
             }
         }
