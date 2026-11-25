@@ -13,7 +13,7 @@
 namespace {
 using namespace aiverse;
 using namespace aiverse::render;
-struct Vertex { float4 clip, color; };
+struct Vertex { float4 clip, color; float2 uv; };
 
 bool read(const std::string& path, std::string& data) {
     std::ifstream file(path,std::ios::binary);
@@ -26,29 +26,46 @@ bool read(const std::string& path, std::string& data) {
 }
 bool capture(gfx::Device& device,const Model& model,const std::string& output) {
     gfx::ShaderDesc shader;
-    shader.cpu=gfx::CpuShader::ClipColor;
+    shader.cpu=gfx::CpuShader::ClipColorTexture;shader.textureSlots=1;
 #ifdef _WIN32
     shader.hlsl11=R"(
-        struct Input {float4 pos:TEXCOORD0;float4 color:TEXCOORD1;};
-        struct Out {float4 pos:SV_Position;float4 color:COLOR0;};
-        Out vs_main(Input i){Out o;o.pos=i.pos;o.color=i.color;return o;}
-        float4 ps_main(Out i):SV_Target{return i.color;}
+        struct Input {float4 pos:TEXCOORD0;float4 color:TEXCOORD1;float2 uv:TEXCOORD2;};
+        struct Out {float4 pos:SV_Position;float4 color:COLOR0;float2 uv:TEXCOORD0;};
+        Out vs_main(Input i){Out o;o.pos=i.pos;o.color=i.color;o.uv=i.uv;return o;}
+        Texture2D baseColor:register(t0);SamplerState baseSampler:register(s0);
+        float4 ps_main(Out i):SV_Target{return i.color*baseColor.Sample(baseSampler,i.uv);}
     )";
     shader.hlsl9=R"(
-        struct Input {float4 pos:TEXCOORD0;float4 color:TEXCOORD1;};
-        struct Out {float4 pos:POSITION;float4 color:COLOR0;};
-        Out vs_main(Input i){Out o;o.pos=i.pos;o.color=i.color;return o;}
-        float4 ps_main(float4 color:COLOR0):COLOR0{return color;}
+        struct Input {float4 pos:TEXCOORD0;float4 color:TEXCOORD1;float2 uv:TEXCOORD2;};
+        struct Out {float4 pos:POSITION;float4 color:COLOR0;float2 uv:TEXCOORD0;};
+        Out vs_main(Input i){Out o;o.pos=i.pos;o.color=i.color;o.uv=i.uv;return o;}
+        sampler2D baseColor:register(s0);
+        float4 ps_main(float4 color:COLOR0,float2 uv:TEXCOORD0):COLOR0{return color*tex2D(baseColor,uv);}
     )";
 #endif
     gfx::PipelineDesc pipeline;
     pipeline.shader=device.createShader(shader);
     pipeline.attrs[0]={0,gfx::VertexFormat::Float4,offsetof(Vertex,clip)};
     pipeline.attrs[1]={1,gfx::VertexFormat::Float4,offsetof(Vertex,color)};
-    pipeline.attrCount=2; pipeline.stride=sizeof(Vertex); pipeline.indexType=gfx::IndexType::UInt32;
+    pipeline.attrs[2]={2,gfx::VertexFormat::Float2,offsetof(Vertex,uv)};
+    pipeline.attrCount=3; pipeline.stride=sizeof(Vertex); pipeline.indexType=gfx::IndexType::UInt32;
     pipeline.cull=gfx::CullMode::None;
     auto program=device.createPipeline(pipeline);
     if(!program.valid())return false;
+    const uint32_t white=0xffffffff;
+    gfx::TextureDesc plain;plain.width=plain.height=1;plain.data=&white;
+    const auto fallback=device.createTexture(plain);
+    if(!fallback.valid())return false;
+    std::vector<gfx::TextureHandle> textures(model.images.size());
+    for(size_t i=0;i<model.images.size();++i) {
+        const auto& image=model.images[i];
+        const auto& rgba=image.sharedRgba?*image.sharedRgba:image.rgba;
+        if(image.width<=0 || image.height<=0 || uint64_t(image.width)*image.height*4!=rgba.size())continue;
+        gfx::TextureDesc td;td.width=image.width;td.height=image.height;td.repeat=image.repeat;
+        td.filter=image.nearest?gfx::Filter::Nearest:gfx::Filter::Linear;td.data=rgba.data();
+        textures[i]=device.createTexture(td);
+        if(!textures[i].valid())return false;
+    }
     constexpr int size=512;
     Camera camera;
     const float radius=std::max(.001f,length(model.boundsMax-model.boundsMin)*.5f);
@@ -79,6 +96,13 @@ bool capture(gfx::Device& device,const Model& model,const std::string& output) {
             if(*high>=model.vertices.size() || *low>INT32_MAX)return false;
             const size_t count=size_t(*high)-*low+1;
             const auto& material=model.materials.at(prim.material);
+            auto texture=fallback;
+            if(material.baseTex>=0 && size_t(material.baseTex)<textures.size()) {
+                texture=textures[size_t(material.baseTex)];
+                if(!texture.valid())return false;
+            }
+            device.setTexture(0,texture);
+            const float cosAngle=std::cos(material.uvRotation),sinAngle=std::sin(material.uvRotation);
             std::vector<Vertex> vertices;
             vertices.reserve(count);
             for(size_t j=0;j<count;++j) {
@@ -92,7 +116,10 @@ bool capture(gfx::Device& device,const Model& model,const std::string& output) {
                 const auto normal=normalize(normalTransform.transformDir(source.nrm));
                 const float light=.32f+.68f*std::max(0.f,dot(normal,normalize({.3f,.8f,.5f})));
                 color.x*=light;color.y*=light;color.z*=light;color.w=1;
-                vertices.push_back({mvp*float4{source.pos.x,source.pos.y,source.pos.z,1},color});
+                const float u=source.uv.x*material.uvScale.x,v=source.uv.y*material.uvScale.y;
+                const float2 uv{cosAngle*u-sinAngle*v+material.uvOffset.x,
+                                sinAngle*u+cosAngle*v+material.uvOffset.y};
+                vertices.push_back({mvp*float4{source.pos.x,source.pos.y,source.pos.z,1},color,uv});
             }
             auto vb=device.createBuffer({gfx::BufferType::Vertex,gfx::Usage::Immutable,
                                          sizeof(Vertex)*vertices.size(),vertices.data()});

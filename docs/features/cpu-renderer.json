@@ -10,6 +10,7 @@
     "apps/modelview/main.cpp",
     "docs/agent-handoffs/cpu-renderer-initial.md",
     "docs/agent-handoffs/cpu-renderer-stage1.md",
+    "docs/agent-handoffs/render-backends-sampled-textures.md",
     "docs/cpu-renderer.md",
     "docs/devlog/systems.json",
     "docs/evidence/cpu-renderer-stage2-pixels.json",
@@ -19,7 +20,8 @@
     "engine/gfx/Gfx.h",
     "engine/gfx/cpu/GfxCpu.cpp",
     "engine/render/graph/GraphGpuProfile.h",
-    "tests/render/cpu_device.cpp"
+    "tests/render/cpu_device.cpp",
+    "tests/render/headless_model_capture.py"
   ],
   "traits": {
     "editable": false,

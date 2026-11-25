@@ -49,4 +49,25 @@ int main() {
     render({},{});
     device->captureNextFrame([&](auto... a){verify(a...);frame=true;});
     device->endFrame();check(offscreen && frame,"callbacks");
+    struct Textured {float clip[4],color[4],uv[2];};
+    const Textured quad[]={
+        {{-1,-1,0,1},{1,1,1,1},{0,0}},{{3,-1,0,1},{1,1,1,1},{2,0}},
+        {{-1,3,0,1},{1,1,1,1},{0,2}}};
+    const uint8_t texels[]={255,0,0,255,0,255,0,255};
+    TextureDesc image;image.width=2;image.height=1;image.data=texels;image.filter=Filter::Nearest;
+    auto sampled=device->createTexture(image);
+    shader.cpu=CpuShader::ClipColorTexture;shader.textureSlots=1;p.shader=device->createShader(shader);
+    p.attrCount=3;p.stride=sizeof(Textured);p.attrs[2]={2,VertexFormat::Float2,32};
+    auto tp=device->createPipeline(p);
+    auto tv=device->createBuffer({BufferType::Vertex,Usage::Immutable,sizeof(quad),quad});
+    check(tp.valid() && sampled.valid(),"textured pipeline");
+    device->beginFrame(4,1);device->beginPass({});device->setPipeline(tp);device->setVertexBuffer(tv);
+    device->setTexture(0,sampled);device->draw(3);device->endPass();
+    bool textured=false;
+    device->captureNextFrame([&](int,int,std::vector<uint8_t> rgba){
+        check(rgba.size()==16 && rgba[0]==255 && rgba[4]==255 && rgba[9]==255 && rgba[13]==255,
+              "clipped UV interpolation and nearest sampling");
+        textured=true;
+    });
+    device->endFrame();check(textured,"textured frame captured");
 }

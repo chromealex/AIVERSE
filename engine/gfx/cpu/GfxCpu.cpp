@@ -8,8 +8,8 @@
 namespace aiverse::gfx {
 namespace {
 using Vec = std::array<double, 4>;
-struct Vertex { Vec clip, color; };
-struct ScreenVertex { double x, y, depth, inverseW; Vec color; };
+struct Vertex { Vec clip, color; std::array<double,2> uv{}; };
+struct ScreenVertex { double x, y, depth, inverseW; Vec color; std::array<double,2> uv; };
 
 double edge(const ScreenVertex& a, const ScreenVertex& b, double x, double y) {
     return (b.x-a.x)*(y-a.y)-(b.y-a.y)*(x-a.x);
@@ -26,6 +26,7 @@ Vertex between(const Vertex& a, const Vertex& b, double t) {
         v.clip[k]=a.clip[k]+(b.clip[k]-a.clip[k])*t;
         v.color[k]=a.color[k]+(b.color[k]-a.color[k])*t;
     }
+    for(int k=0;k<2;++k)v.uv[k]=a.uv[k]+(b.uv[k]-a.uv[k])*t;
     return v;
 }
 uint8_t unorm(double x) {
@@ -38,7 +39,35 @@ struct Surface {
     int width=0,height=0;
     std::vector<uint8_t> color;
     std::vector<float> depth;
+    bool attachment=false,repeat=false;
+    Filter filter=Filter::Linear;
+
+    Vec sample(double u,double v) const {
+        auto coordinate=[&](double value,int extent){
+            value=repeat?value-std::floor(value):std::clamp(value,0.,1.);
+            return value*extent-.5;
+        };
+        auto texel=[&](int x,int y,int channel){
+            auto index=[&](int i,int n){return repeat?(i+n)%n:std::clamp(i,0,n-1);};
+            return color[(size_t(index(y,height))*width+index(x,width))*4+channel]/255.;
+        };
+        const double x=coordinate(u,width),y=coordinate(v,height);
+        const auto ix=int(std::floor(x)),iy=int(std::floor(y));
+        const double fx=x-ix,fy=y-iy;
+        auto lerp=[](double a,double b,double t){return a+(b-a)*t;};
+        Vec c{};
+        for(int k=0;k<4;++k) {
+            if(filter==Filter::Nearest)c[k]=texel(int(std::floor(x+.5)),int(std::floor(y+.5)),k);
+            else {
+                const double upper=lerp(texel(ix,iy,k),texel(ix+1,iy,k),fx);
+                const double lower=lerp(texel(ix,iy+1,k),texel(ix+1,iy+1,k),fx);
+                c[k]=lerp(upper,lower,fy);
+            }
+        }
+        return c;
+    }
 };
+struct CpuPipeline { PipelineDesc layout; CpuShader shader; };
 struct Buffer { BufferType type; Usage usage; std::vector<uint8_t> bytes; };
 
 class CpuDevice final : public Device {
@@ -48,7 +77,8 @@ class CpuDevice final : public Device {
     std::unordered_map<uint32_t,Buffer> buffers;
     std::unordered_map<uint32_t,Surface> textures;
     std::unordered_map<uint32_t,CpuShader> shaders;
-    std::unordered_map<uint32_t,PipelineDesc> pipelines;
+    std::unordered_map<uint32_t,CpuPipeline> pipelines;
+    TextureHandle sampler{};
     Surface screen;
     Surface* color=nullptr;
     Surface* depth=nullptr;
@@ -84,12 +114,13 @@ public:
     }
     void destroyBuffer(BufferHandle h) override { buffers.erase(h.id); }
     TextureHandle createTexture(const TextureDesc& d) override {
-        if(!sizeValid(d.width,d.height) || !supports(d.format) || !d.renderTarget ||
+        if(validateTextureDesc(d)!=TextureDescError::None || !sizeValid(d.width,d.height) || !supports(d.format) ||
+           (d.format==PixelFormat::Depth && !d.renderTarget) ||
            d.dimension!=TextureDimension::Texture2D || d.depth!=1 || d.arrayLayers!=1 ||
            d.sampleCount!=1 || d.mipLevels>1 || d.levelCount || d.storage || d.mipmaps || d.compare) {
-            error="CPU device requires a single-level RGBA8 or depth attachment";return {};
+            error="CPU device requires a single-level RGBA8 image or depth attachment";return {};
         }
-        Surface s; s.width=d.width; s.height=d.height;
+        Surface s; s.width=d.width; s.height=d.height;s.attachment=d.renderTarget;s.filter=d.filter;s.repeat=d.repeat;
         const size_t count=size_t(s.width)*s.height;
         if(d.format==PixelFormat::Depth) {
             s.depth.resize(count,1);
@@ -117,6 +148,7 @@ public:
         auto it=textures.find(h.id);
         if(it==textures.end())return;
         if(color==&it->second || depth==&it->second)endPass();
+        if(sampler.id==h.id)sampler={};
         textures.erase(it);
     }
     bool textureInfo(TextureHandle h,TextureInfo& out) const override {
@@ -125,12 +157,16 @@ public:
         out={it->second.width,it->second.height,it->second.color.empty()?PixelFormat::Depth:PixelFormat::RGBA8};return true;
     }
     ShaderHandle createShader(const ShaderDesc& d) override {
-        if(d.cpu!=CpuShader::ClipColor) {error="missing native CPU shader implementation";return {};}
+        if((d.cpu!=CpuShader::ClipColor || d.textureSlots!=0) &&
+           (d.cpu!=CpuShader::ClipColorTexture || d.textureSlots!=1)) {error="missing native CPU shader implementation";return {};}
         uint32_t id=nextId++; shaders.emplace(id,d.cpu);return {id};
     }
     void destroyShader(ShaderHandle h) override {shaders.erase(h.id);}
     PipelineHandle createPipeline(const PipelineDesc& d) override {
-        if(!shaders.count(d.shader.id) || d.primitive!=Primitive::Triangles || d.attrCount!=2 ||
+        auto shader=shaders.find(d.shader.id);
+        const bool textured=shader!=shaders.end() && shader->second==CpuShader::ClipColorTexture;
+        if(shader==shaders.end() || d.primitive!=Primitive::Triangles || d.attrCount!=(textured?3:2) ||
+           (textured && (d.attrs[2].location!=2 || d.attrs[2].format!=VertexFormat::Float2 || d.stride<8 || d.attrs[2].offset>d.stride-8)) ||
            d.attrs[0].location!=0 || d.attrs[0].format!=VertexFormat::Float4 ||
            d.attrs[1].location!=1 || d.attrs[1].format!=VertexFormat::Float4 ||
            d.stride<16 || d.attrs[0].offset>d.stride-16 || d.attrs[1].offset>d.stride-16 ||
@@ -140,7 +176,7 @@ public:
             error="unsupported CPU triangle pipeline";return {};
         }
         auto config=d;config.label=nullptr;
-        uint32_t id=nextId++;pipelines.emplace(id,config);return {id};
+        uint32_t id=nextId++;pipelines.emplace(id,CpuPipeline{config,shader->second});return {id};
     }
     void destroyPipeline(PipelineHandle p) override {pipelines.erase(p.id);}
     void beginFrame(int w,int h) override {
@@ -175,7 +211,7 @@ public:
         auto* c=target(d.colorTarget);auto* z=target(d.depthTarget);
         if(!d.colorTarget.valid() && !d.depthTarget.valid())c=z=&screen;
         if((d.colorTarget.valid() && !c) || (d.depthTarget.valid() && !z) ||
-           (c && c->color.empty()) || (z && z->depth.empty()) ||
+           (c && (c->color.empty() || (c!=&screen && !c->attachment))) || (z && z->depth.empty()) ||
            (c && z && (c->width!=z->width || c->height!=z->height))) {
             error="invalid CPU render attachments";return;
         }
@@ -195,7 +231,12 @@ public:
     void setPipeline(PipelineHandle p) override {pipeline=p;}
     void setVertexBuffer(BufferHandle b,size_t offset) override {vb=b;vbOffset=offset;}
     void setIndexBuffer(BufferHandle b,size_t offset) override {ib=b;ibOffset=offset;}
-    void setTexture(int,TextureHandle) override {error="clip/color CPU shader has no texture slots";}
+    void setTexture(int slot,TextureHandle t) override {
+        if(slot!=0 || (t.valid() && (!textures.count(t.id) || textures.at(t.id).color.empty()))) {
+            error="invalid CPU texture binding";return;
+        }
+        sampler=t;
+    }
     void setUniforms(int,const void*,size_t) override {error="clip/color CPU shader has no uniforms";}
     void draw(uint32_t n,uint32_t first) override {submit(n,first,0,false);}
     void drawIndexed(uint32_t n,uint32_t first,int32_t base,uint32_t instances) override {
@@ -210,7 +251,13 @@ private:
         if(!pass || p==pipelines.end() || v==buffers.end() || v->second.type!=BufferType::Vertex) {
             error="CPU draw missing a pipeline or vertex buffer";return;
         }
-        const auto& desc=p->second;
+        const auto& desc=p->second.layout;
+        const Surface* source=nullptr;
+        if(p->second.shader==CpuShader::ClipColorTexture) {
+            auto tex=textures.find(sampler.id);
+            if(tex==textures.end() || &tex->second==color){error="missing or active CPU texture";return;}
+            source=&tex->second;
+        }
         const auto& bytes=v->second.bytes;
         if(vbOffset>bytes.size()) {error="invalid CPU vertex buffer offset";return;}
         const size_t capacity=(bytes.size()-vbOffset)/desc.stride;
@@ -235,19 +282,24 @@ private:
                     id=int64_t(value)+base;
                 }
                 if(id<0 || uint64_t(id)>=capacity){error="CPU index exceeds vertex buffer";return;}
-                const uint8_t* source=bytes.data()+vbOffset+size_t(id)*desc.stride;
+                const uint8_t* vertex=bytes.data()+vbOffset+size_t(id)*desc.stride;
+                if(source) {
+                    float uv[2];std::memcpy(uv,vertex+desc.attrs[2].offset,8);
+                    if(!std::isfinite(uv[0]) || !std::isfinite(uv[1])){error="non-finite CPU UV";return;}
+                    tri[j].uv={uv[0],uv[1]};
+                }
                 for(int a=0;a<2;++a){
-                    float values[4];std::memcpy(values,source+desc.attrs[a].offset,16);
+                    float values[4];std::memcpy(values,vertex+desc.attrs[a].offset,16);
                     for(int k=0;k<4;++k) {
                         if(!std::isfinite(values[k])){error="non-finite CPU vertex";return;}
                         (a==0?tri[j].clip:tri[j].color)[k]=values[k];
                     }
                 }
             }
-            clipAndRasterize(tri,desc);
+            clipAndRasterize(tri,desc,source);
         }
     }
-    void clipAndRasterize(const std::array<Vertex,3>& tri,const PipelineDesc& p) {
+    void clipAndRasterize(const std::array<Vertex,3>& tri,const PipelineDesc& p,const Surface* source) {
         // Clipping a convex polygon by one plane adds at most one vertex.
         std::array<Vertex,10> polygon{},scratch{};
         std::copy(tri.begin(),tri.end(),polygon.begin());
@@ -271,11 +323,11 @@ private:
             double w=1/v.clip[3];
             points[i]={viewport.x+(v.clip[0]*w+1)*viewport.w*.5,
                        viewport.y+(1-v.clip[1]*w)*viewport.h*.5,
-                       (v.clip[2]*w+1)*.5,w,v.color};
+                       (v.clip[2]*w+1)*.5,w,v.color,v.uv};
         }
-        for(int i=1;i+1<count;++i)rasterize(points[0],points[i],points[i+1],p);
+        for(int i=1;i+1<count;++i)rasterize(points[0],points[i],points[i+1],p,source);
     }
-    void rasterize(ScreenVertex a,ScreenVertex b,ScreenVertex c,const PipelineDesc& p) {
+    void rasterize(ScreenVertex a,ScreenVertex b,ScreenVertex c,const PipelineDesc& p,const Surface* source) {
         double area=edge(a,b,c.x,c.y);
         if(!area || (p.cull==CullMode::Back && area>0) || (p.cull==CullMode::Front && area<0))return;
         if(area<0){std::swap(b,c);area=-area;}
@@ -305,6 +357,11 @@ private:
             Vec src;
             for(int k=0;k<4;++k)
                 src[k]=std::clamp((a.color[k]*t[0]+b.color[k]*t[1]+c.color[k]*t[2])/sum,0.,1.);
+            if(source) {
+                auto interpolate=[&](int k){return (a.uv[k]*t[0]+b.uv[k]*t[1]+c.uv[k]*t[2])/sum;};
+                const auto texel=source->sample(interpolate(0),interpolate(1));
+                for(int k=0;k<4;++k)src[k]*=texel[k];
+            }
             uint8_t* rgba=&color->color[pixel*4];
             for(int k=0;k<4;++k){
                 double v=src[k];

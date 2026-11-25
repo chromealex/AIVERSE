@@ -569,7 +569,7 @@ inline size_t estimateTextureFootprint(const TextureDesc& d) {
 
 // Each backend picks the sources it understands. A shader may provide all of them.
 // CPU shader contract: locations 0 and 1 are float4 clip position and RGBA.
-enum class CpuShader { None, ClipColor };
+enum class CpuShader { None, ClipColor, ClipColorTexture };
 struct ShaderDesc {
     const char* glslVertex = nullptr;   // GLSL ES 3.00 body WITHOUT #version line (added by backend)
     const char* glslFragment = nullptr;

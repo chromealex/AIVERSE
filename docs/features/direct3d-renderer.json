@@ -11,6 +11,7 @@
     "docs/agent-handoffs/direct3d-renderer-initial.md",
     "docs/agent-handoffs/direct3d-renderer-stage1.md",
     "docs/agent-handoffs/direct3d-renderer-stage2.md",
+    "docs/agent-handoffs/render-backends-sampled-textures.md",
     "docs/devlog/systems.json",
     "docs/direct3d.md",
     "docs/features/direct3d-renderer.json",
@@ -20,7 +21,8 @@
     "engine/gfx/d3d/GfxDirect3D.cpp",
     "engine/render/graph/GraphGpuProfile.h",
     "tests/render/direct3d_device.cpp",
-    "tests/render/direct3d_rhi.cpp"
+    "tests/render/direct3d_rhi.cpp",
+    "tests/render/headless_model_capture.py"
   ],
   "traits": {
     "editable": false,

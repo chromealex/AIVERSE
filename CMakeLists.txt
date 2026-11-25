@@ -1946,6 +1946,10 @@ if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
     add_executable(aiverse_cpu_device_tests tests/render/cpu_device.cpp)
     target_link_libraries(aiverse_cpu_device_tests PRIVATE aiverse_gfx_cpu)
     add_test(NAME render_cpu_device COMMAND aiverse_cpu_device_tests)
+    if(TARGET aiverse_cpu_capture AND Python3_Interpreter_FOUND AND AIVERSE_OBJ)
+        add_test(NAME render_cpu_textured_model
+                 COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/render/headless_model_capture.py $<TARGET_FILE:aiverse_cpu_capture>)
+    endif()
 endif()
 
 # Model viewer (models agent): models, materials, clips and quality tiers as the game renders them.

@@ -24,6 +24,15 @@ struct Buffer {
     ComPtr<IDirect3DIndexBuffer9> index9;
     IndexType indexType9=IndexType::None;
 };
+struct Texture {
+    int width=0,height=0;
+    Filter filter=Filter::Linear;
+    bool repeat=false;
+    ComPtr<ID3D11Texture2D> image11;
+    ComPtr<ID3D11ShaderResourceView> view11;
+    ComPtr<ID3D11SamplerState> sampler11;
+    ComPtr<IDirect3DTexture9> image9;
+};
 struct Shader {
     ComPtr<ID3DBlob> vertexCode;
     ComPtr<ID3D11VertexShader> vertex11;
@@ -59,6 +68,8 @@ class WindowsDevice final : public Device {
     std::string error;
     std::unordered_map<uint32_t,Buffer> buffers;
     std::unordered_map<uint32_t,Shader> shaders;
+    std::unordered_map<uint32_t,Texture> textures;
+    std::array<TextureHandle,16> boundTextures{};
     std::unordered_map<uint32_t,Pipeline> pipelines;
     std::array<ComPtr<ID3D11Buffer>,16> uniforms;
     ComPtr<ID3D11DepthStencilView> screenDepth11;
@@ -92,12 +103,76 @@ public:
     }
     const DeviceInfo& info() const override {return identity;}
     const std::string& lastError() const override {return error;}
-    bool supports(PixelFormat) const override {return false;} // sampled textures are not yet exposed
-    bool supportsTextureDimension(TextureDimension) const override {return false;}
-    TextureHandle createTexture(const TextureDesc&) override {error="Direct3D sampled textures unavailable";return {};}
-    void updateTexture(TextureHandle,int,int,int,int,const void*,int) override {error="Direct3D sampled textures unavailable";}
-    void destroyTexture(TextureHandle) override {}
-    void setTexture(int,TextureHandle) override {error="Direct3D sampled textures unavailable";}
+    bool supports(PixelFormat f) const override {return f==PixelFormat::RGBA8;}
+    TextureHandle createTexture(const TextureDesc& d) override {
+        if(validateTextureDesc(d)!=TextureDescError::None || d.format!=PixelFormat::RGBA8 ||
+           d.dimension!=TextureDimension::Texture2D || d.renderTarget || d.mipmaps || d.mipLevels>1 ||
+           d.levelCount || d.sampleCount!=1 || d.storage || d.width>8192 || d.height>8192) {
+            error="Direct3D requires a single-level sampled RGBA8 image";return {};
+        }
+        Texture t;t.width=d.width;t.height=d.height;t.filter=d.filter;t.repeat=d.repeat;
+        if(dx11()) {
+            D3D11_TEXTURE2D_DESC desc{};
+            desc.Width=d.width;desc.Height=d.height;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
+            desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+            D3D11_SUBRESOURCE_DATA init{d.data,UINT(d.width*4),0};
+            if(!check(dx11()->CreateTexture2D(&desc,d.data?&init:nullptr,t.image11.GetAddressOf()),"CreateTexture2D(sampled)") ||
+               !check(dx11()->CreateShaderResourceView(t.image11.Get(),nullptr,t.view11.GetAddressOf()),"CreateShaderResourceView"))return {};
+            D3D11_SAMPLER_DESC sampler{};
+            sampler.Filter=d.filter==Filter::Linear?D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT:D3D11_FILTER_MIN_MAG_MIP_POINT;
+            sampler.AddressU=sampler.AddressV=sampler.AddressW=d.repeat?D3D11_TEXTURE_ADDRESS_WRAP:D3D11_TEXTURE_ADDRESS_CLAMP;
+            sampler.ComparisonFunc=D3D11_COMPARISON_NEVER;sampler.MaxAnisotropy=1;
+            if(!check(dx11()->CreateSamplerState(&sampler,t.sampler11.GetAddressOf()),"CreateSamplerState"))return {};
+        } else {
+            if(!check(dx9()->CreateTexture(d.width,d.height,1,0,D3DFMT_A8R8G8B8,D3DPOOL_MANAGED,t.image9.GetAddressOf(),nullptr),"CreateTexture"))return {};
+            if(d.data && !write9(t,0,0,d.width,d.height,d.data,d.width*4))return {};
+        }
+        auto id=nextId++;textures.emplace(id,std::move(t));return {id};
+    }
+    bool textureInfo(TextureHandle h,TextureInfo& info) const override {
+        auto it=textures.find(h.id);if(it==textures.end())return false;
+        info={it->second.width,it->second.height,PixelFormat::RGBA8};return true;
+    }
+    void updateTexture(TextureHandle h,int x,int y,int w,int ht,const void* data,int pitch) override {
+        auto it=textures.find(h.id);
+        if(it==textures.end() || !data || x<0 || y<0 || w<=0 || ht<=0 ||
+           x>it->second.width-w || y>it->second.height-ht || (pitch && pitch<w*4)) {
+            error="invalid Direct3D texture update";return;
+        }
+        if(!pitch)pitch=w*4;
+        if(dx11()){
+            D3D11_BOX region{UINT(x),UINT(y),0,UINT(x+w),UINT(y+ht),1};
+            context()->UpdateSubresource(it->second.image11.Get(),0,&region,data,UINT(pitch),0);
+        }else write9(it->second,x,y,w,ht,data,pitch);
+    }
+    void destroyTexture(TextureHandle h) override {
+        if(!h.valid())return;
+        for(size_t i=0;i<boundTextures.size();++i)if(boundTextures[i].id==h.id)setTexture(int(i),{});
+        textures.erase(h.id);
+    }
+    void setTexture(int slot,TextureHandle h) override {
+        if(slot<0 || size_t(slot)>=boundTextures.size()){error="invalid Direct3D texture slot";return;}
+        auto it=textures.find(h.id);
+        if(h.valid() && it==textures.end()){error="invalid Direct3D texture handle";return;}
+        Texture* t=h.valid()?&it->second:nullptr;
+        if(dx11()){
+            auto* view=t?t->view11.Get():nullptr;
+            auto* sampler=t?t->sampler11.Get():nullptr;
+            context()->PSSetShaderResources(slot,1,&view);context()->PSSetSamplers(slot,1,&sampler);
+            context()->VSSetShaderResources(slot,1,&view);context()->VSSetSamplers(slot,1,&sampler);
+        }else {
+            if(!check(dx9()->SetTexture(slot,t?t->image9.Get():nullptr),"SetTexture"))return;
+            if(t){
+                DWORD address=t->repeat?D3DTADDRESS_WRAP:D3DTADDRESS_CLAMP;
+                DWORD filter=t->filter==Filter::Linear?D3DTEXF_LINEAR:D3DTEXF_POINT;
+                if(!check(dx9()->SetSamplerState(slot,D3DSAMP_ADDRESSU,address),"SetSamplerState(U)") ||
+                   !check(dx9()->SetSamplerState(slot,D3DSAMP_ADDRESSV,address),"SetSamplerState(V)") ||
+                   !check(dx9()->SetSamplerState(slot,D3DSAMP_MAGFILTER,filter),"SetSamplerState(mag)") ||
+                   !check(dx9()->SetSamplerState(slot,D3DSAMP_MINFILTER,filter),"SetSamplerState(min)"))return;
+            }
+        }
+        boundTextures[size_t(slot)]=h;
+    }
     BufferHandle createBuffer(const BufferDesc& d) override {
         if(!d.size || d.size>UINT32_MAX || (d.type!=BufferType::Vertex && d.type!=BufferType::Index)){
             error="invalid Direct3D vertex/index buffer";return {};
@@ -119,7 +194,7 @@ public:
     ShaderHandle createShader(const ShaderDesc& d) override {
         const bool modern=dx11()!=nullptr;
         const char* src=modern?d.hlsl11:d.hlsl9;
-        if(!src || d.textureSlots){error="missing native Direct3D shader or unsupported sampled textures";return {};}
+        if(!src || d.textureSlots<0 || d.textureSlots>16){error="missing native Direct3D shader or invalid texture count";return {};}
         auto compile=[&](const char* entry,const char* profile,ID3DBlob** result){
             ComPtr<ID3DBlob> messages;
             HRESULT hr=D3DCompile(src,std::strlen(src),d.label,nullptr,nullptr,entry,profile,
@@ -286,6 +361,19 @@ public:
         submit(n,first,base,true);
     }
 private:
+    bool write9(Texture& t,int x,int y,int w,int h,const void* data,int pitch) {
+        const RECT rect{x,y,x+w,y+h};
+        D3DLOCKED_RECT mapped{};
+        if(!check(t.image9->LockRect(0,&mapped,&rect,0),"LockRect(texture update)"))return false;
+        for(int row=0;row<h;++row){
+            const auto* src=static_cast<const uint8_t*>(data)+size_t(row)*pitch;
+            auto* dst=static_cast<uint8_t*>(mapped.pBits)+ptrdiff_t(row)*mapped.Pitch;
+            for(int col=0;col<w;++col,src+=4,dst+=4){
+                dst[0]=src[2];dst[1]=src[1];dst[2]=src[0];dst[3]=src[3];
+            }
+        }
+        return check(t.image9->UnlockRect(0),"UnlockRect(texture update)");
+    }
     bool upload(Buffer& b,IndexType type) {
         const UINT size=UINT(b.bytes.size());
         if(dx11()){
