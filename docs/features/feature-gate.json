@@ -116,8 +116,12 @@
     },
     "studio": {
       "status": "not_run",
-      "note": "Mac v7 native Studio launched; operator confirms Feature Readiness panel visible. Mac v10 native MCP report refresh works. UI filters, dependency graph interaction and auto timer not explicitly verified; dashboard screenshot not supplied.",
-      "evidence": []
+      "note": "Mac v7 native Studio launched; operator confirms Feature Readiness panel visible. Mac v10 native MCP report refresh works. UI filters, dependency graph interaction and auto timer not explicitly verified; dashboard screenshot not supplied. At 561c6a197 the typecheck and all 250 Studio web cases passed. Python Studio contracts ran 51 cases, one skipped. Live interaction remains pending.",
+      "evidence": [
+        "docs/evidence/feature-gate-561c6a197-typecheck.log.txt",
+        "docs/evidence/feature-gate-561c6a197-web.log.txt",
+        "docs/evidence/feature-gate-561c6a197-studio-contracts.log.txt"
+      ]
     },
     "inspector": {
       "status": "not_applicable",
@@ -223,9 +227,12 @@
     "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-refresh.json",
     "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-registry.json",
     "docs/evidence/feature-gate-mac-v10-be64591b1087-contracts.json",
-    "docs/evidence/feature-gate-mac-v10-be64591b1087-skill-audit.json",
-    "docs/evidence/feature-gate-mac-v10-be64591b1087-skill-catalog.json",
+    "docs/evidence/feature-gate-561c6a197-skill-audit.json",
+    "docs/evidence/feature-gate-561c6a197-catalog.json",
     "docs/evidence/feature-gate-mac-v10-be64591b1087-policy.json",
-    "docs/evidence/feature-gate-mac-v13-74099694a317-ctest-summary.json"
+    "docs/evidence/feature-gate-mac-v13-74099694a317-ctest-summary.json",
+    "docs/evidence/feature-gate-561c6a197-typecheck.json",
+    "docs/evidence/feature-gate-561c6a197-web.json",
+    "docs/evidence/feature-gate-561c6a197-studio-contracts.json"
   ]
 }
