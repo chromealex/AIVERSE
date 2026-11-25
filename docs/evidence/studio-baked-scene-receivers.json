@@ -1,0 +1,10 @@
+{
+  "sha": "659c2da62870be7b5d3505fc7e154530fd18ea5a",
+  "argv": [
+    "bash",
+    "/tmp/baked-scene-final.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-baked-scene-receivers.log.txt",
+  "sha256": "663af584d09e01e250eda768ccd8a01be4591c41d2f7a0271b354f867a27b9de"
+}

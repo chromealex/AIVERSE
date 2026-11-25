@@ -1,0 +1,48 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native/DartConfiguration.tcl
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native/DartConfiguration.tcl
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 556
+    Start 556: studio_metal_lighting
+
+556: Test command: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native/apps/studio-native/aiverse_studio_metal_lighting_tests "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native/apps/studio-native/metal-lighting-captures"
+556: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native/apps/studio-native
+556: Test timeout computed to be: 90
+556: [metal-assets] libraries=0 sourceMisses=14 pipelines=18 pipelineFailures=0 archive=0 strict=0
+556: [metal-assets] libraries=0 sourceMisses=40 pipelines=74 pipelineFailures=0 archive=0 strict=0
+556: Terrain, matching and moved model receivers: {"enabled":true,"loaded":true,"lightmapped":2,"probed":1}
+556: Baked terrain draws verified, blue channel changed at 8154 pixels
+556: Independent weather framebuffer means 37.0053 28.8254
+556: Preview geometry · GI: CPU · Direct: Luma PASS
+556: Preview geometry · GI: GPU · Direct: Luma PASS
+556: Preview geometry · GI: off · Direct: Luma PASS
+556: Preview geometry · GI: off · Direct: Luma PASS
+556: Luma light removal delta 47234 in 3950 pixels
+556: Negative-coordinate FPS and material transition PASS
+556: Idle frame skipping PASS
+556: Studio Metal lighting PASS
+1/1 Test #556: studio_metal_lighting ............   Passed    1.84 sec
+
+The following tests passed:
+	studio_metal_lighting
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+EDITOR      =   1.84 sec*proc (1 test)
+LIGHTING    =   1.84 sec*proc (1 test)
+
+Total Test time (real) =   1.86 sec
+
+> @aiverse/studio-web@0.1.0 typecheck
+> tsc --noEmit
+
+299 web tests
+2026-11-26 01:45:06.205 AiverseStudioHTML5[42491:82192321] [studio-web] JS: CROSS bakedisplay DONE_1
+2026-11-26 01:45:06.205 AiverseStudioHTML5[42491:82192321] [studio-web] JS: CROSS bakedisplay VERIFIED {"before":{"enabled":true,"loaded":true,"lightmapped":2,"probed":1},"after":{"enabled":true,"loaded":true,"lightmapped":2,"probed":1}}

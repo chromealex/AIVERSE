@@ -296,6 +296,8 @@
     "docs/evidence/studio-bake-panel-acceptance.json",
     "docs/evidence/studio-shared-light-bake.json",
     "docs/evidence/studio-light-bake-atlas.json",
+    "docs/evidence/studio-baked-scene-metal.json",
+    "docs/evidence/studio-baked-scene-receivers.json",
     "docs/evidence/studio-light-game-frame.json",
     "docs/evidence/studio-light-rgb-swatch.json",
     "docs/evidence/studio-light-beacon-authoring.json",
