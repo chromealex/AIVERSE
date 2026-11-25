@@ -518,6 +518,8 @@ bool GameClient::startMatch(size_t idx, const Json& initialVars, const MatchFile
         std::string terr; // 2D tile maps: the tileset decides cell kinds / levels / fields
         if (!applyTilesToMap(map, [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); }, &terr)) throw std::runtime_error(terr);
         SimConfig cfg;
+        // startMatch owns offline play. Network peers construct their simulation in Lobby.
+        cfg.singleAuthorityPhysics = !playback;
         cfg.seed = uint64_t(std::time(nullptr));
         if (const char* sd = std::getenv("AIVERSE_SEED")) cfg.seed = uint64_t(std::strtoull(sd, nullptr, 10));   // testing: reproducible matches
         if (file) cfg.seed = file->seed;
