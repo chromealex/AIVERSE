@@ -3654,3 +3654,7 @@ grid. Choose the domain origin and extent to cover the route: after a source mov
 outside the grid, only the part of its injection radius overlapping the grid contributes.
 Changing the source revision recreates the field. `world` keeps the original placement;
 `follow` carries the entire field. See [the example graph](../examples/spectrafx/moving_smoke_trail.vfx.json).
+
+## GPU checkpoint restore portability (in progress)
+
+PR #190 tracks GCC compilation of the GPU-owned restore path and a Metal restore/readback check for all eight program parameters and all eight custom attributes in a live slot.

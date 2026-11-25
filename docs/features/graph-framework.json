@@ -4,6 +4,8 @@
   "owner": "studio",
   "changed_paths": [
     "apps/studio-web/src/graphs/graphFramework.ts",
+    "engine/fx/SpectraGpuParticles.cpp",
+    "tests/spectrafx_metal_allocator.mm",
     "apps/studio-web/src/graphs/GraphCanvas.tsx",
     "apps/studio-web/src/panels/ShaderGraphPanel.tsx",
     "apps/studio-web/tests/graphFramework.test.mjs",
