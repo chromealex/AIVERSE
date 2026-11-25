@@ -1,0 +1,10 @@
+{
+  "sha": "589925e58586bf050a43f0943f247ba3b42061b3",
+  "argv": [
+    "bash",
+    "/tmp/scene-road-visible-qa.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-scene-movement-road-frames.log.txt",
+  "sha256": "4d3f8cee74e6e4d62a40b68e6006bb294b015cc6b051081bc3a931042225c1ed"
+}
