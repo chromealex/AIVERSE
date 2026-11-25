@@ -1,0 +1,14 @@
+{
+  "sha": "d53816a6023a5cb319787c85100fa696b8894d3d",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^(studio_session|studio_mcp_registry)$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-avatar-d53816a60.log.txt",
+  "sha256": "25edd1f94f3df3ba78b6fab26117e23dbb90de3b7c2c69a4ff20434a50381e8f"
+}
