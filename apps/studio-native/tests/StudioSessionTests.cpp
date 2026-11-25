@@ -2297,6 +2297,12 @@ static void worldSceneInspectorProperties() {
         };
         const auto initial=call("studio.snapshot")["result"];
         AIVERSE_TEST_CHECK(initial["scene"].getBool("worldSpace")&&initial["scene"].getBool("mapProperties"));
+        const auto rulesReply=call("studio.rules");
+        AIVERSE_TEST_CHECK(!rulesReply.has("error"));
+        for(const auto* key:{"types","resolved"}){
+            const auto& types=rulesReply["result"][key];
+            AIVERSE_TEST_CHECK(types.isObject() && types.size()==0);
+        }
         Json network=Json::object();
         network.set("project",initial["project"]["path"]);
         network.set("mode",Json::string("listen"));

@@ -4471,13 +4471,19 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 const Json changed=ws_.call(erase?"rules_delete":"rules_set",args,"studio");
                 if (changed.has("error")) throw std::runtime_error(changed.getStr("error"));
             }
-            Json own=Json::object(),resolvedArgs=Json::object();own.set("path",str("types"));
-            resolvedArgs.set("path",str("types"));resolvedArgs.set("resolved",Json::fromBool(true));
-            const Json types=ws_.call("rules_get",own,"studio"), resolved=ws_.call("rules_get",resolvedArgs,"studio"),
-                       list=ws_.call("rules_list",Json::object(),"studio");
-            for (const auto* r:{&types,&resolved,&list}) if (r->has("error")) throw std::runtime_error(r->getStr("error"));
+            const auto list=ws_.call("rules_list",Json::object(),"studio");
+            if(list.has("error"))throw std::runtime_error(list.getStr("error"));
             Json out=Json::object();
-            out.set("types",types["value"]);out.set("resolved",resolved["value"]);
+            const auto& authoredTypes=ws_.project.rulesJson["types"];
+            if(authoredTypes.isNull()){
+                out.set("types",Json::object());out.set("resolved",Json::object());
+            }else{
+                Json args=Json::object();
+                args.set("path",str("types"));args.set("resolved",Json::fromBool(true));
+                const auto resolved=ws_.call("rules_get",args,"studio");
+                if(resolved.has("error"))throw std::runtime_error(resolved.getStr("error"));
+                out.set("types",authoredTypes);out.set("resolved",resolved["value"]);
+            }
             out.set("resources",list["resources"]);out.set("summary",list["types"]);
             const auto& authored=ws_.project.rulesJson;
             out.set("triggers",authored["triggers"].isNull()?Json::array():authored["triggers"]);
