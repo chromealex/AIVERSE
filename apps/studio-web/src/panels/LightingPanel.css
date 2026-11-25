@@ -24,5 +24,5 @@
 .lighting-error{margin:8px 12px;padding:9px;border:1px solid #723c4c;border-radius:6px;background:#482b35;color:#ffb4be;font-size:11px}
 
 .lighting-color{display:flex;align-items:center;gap:8px}
-.lighting-color input[type="color"]{width:44px;height:30px;padding:2px;cursor:pointer}
-.lighting-color code{color:var(--au-text-soft)}
+.lighting-editor .lighting-color input[type="color"]{flex:0 0 44px;width:44px;height:30px;padding:2px;cursor:pointer}
+.lighting-color code{white-space:nowrap;color:var(--au-text-soft)}

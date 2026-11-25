@@ -1,0 +1,10 @@
+{
+  "sha": "dfc60b0f9684e475eb7407e06d909cd4d92a77af",
+  "argv": [
+    "bash",
+    "/tmp/studio-light-color-qa.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-light-rgb-halo.log.txt",
+  "sha256": "1b2a58814fd039648185a52b150648bafb9f3ab1a58c4ee517a208c4603e786c"
+}
