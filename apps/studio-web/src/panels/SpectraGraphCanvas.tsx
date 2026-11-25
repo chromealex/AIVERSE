@@ -158,7 +158,7 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
                 if(!edited.error)onEdit(edited.graph);
               }}
               onPointerUp={finishDrag} onPointerCancel={finishDrag}>
-              <div className="spectra-canvas__node-head"><GitBranch size={13}/><span title={node.type}>{node.type}</span></div>
+              <div className="spectra-canvas__node-head"><GitBranch size={13}/><span title={node.type}>{node.type.replace(/([a-z0-9])([A-Z])/g,'$1 $2')}</span></div>
               <div className="spectra-canvas__node-id" title={node.id}>{node.id}</div>
               {node.type==='DataInterface' && <div className="spectra-canvas__node-param">{String(node.properties?.name??'Unbound')}</div>}
             </div>;
