@@ -1,0 +1,15 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/ow01-pr192-mac-f0b46a0ca
+Test project /Volumes/KINGSTON/AIVERSE-builds/ow01-pr192-mac-f0b46a0ca
+    Start 449: region_gamecore_integration_test
+1/2 Test #449: region_gamecore_integration_test ...   Passed    2.24 sec
+    Start 451: vehicle_region_group_test
+2/2 Test #451: vehicle_region_group_test ..........   Passed    0.20 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Label Time Summary:
+ECS         =   2.44 sec*proc (2 tests)
+Vehicles    =   0.20 sec*proc (1 test)
+World       =   2.44 sec*proc (2 tests)
+
+Total Test time (real) =   2.48 sec
