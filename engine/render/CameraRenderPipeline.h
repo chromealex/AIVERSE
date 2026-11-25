@@ -233,6 +233,10 @@ public:
         return executeWithPostAndModifier(world,frame,seconds,
             std::forward<Submit>(submit),
             [&](const EcsCameraView& camera)->PostProcess* {
+                Prisma::CameraInputs inputs{};
+                for (size_t i = 0; i < camera.dependencies.count; ++i)
+                    inputs[i] = targets_.color(camera.dependencies.reads[i]);
+                post.setCompositorCameraInputs(camera.entity, inputs);
                 return post.get(camera.entity);
             },
             [&](EcsCameraView& camera,int width,int height) {

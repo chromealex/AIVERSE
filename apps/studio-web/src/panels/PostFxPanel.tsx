@@ -3,6 +3,7 @@ import { Eye, EyeOff, Plus, Trash2, Wrench } from 'lucide-react';
 import { invoke } from '../bridge';
 import type { StudioSnapshot } from '../types';
 import ToolPanel from './ToolPanel';
+import PrismaCompositorEditor from './PrismaCompositorEditor';
 import './ToolPanel.css';
 import './ProjectToolPanels.css';
 import './PostFxPanel.css';
@@ -114,6 +115,12 @@ export default function PostFxPanel({ snapshot, commitSnapshot }: { snapshot: St
       <h4>Add effect <button type="button" className="au-button au-button--ghost au-button--sm" onClick={() => setAdding(!adding)}><Plus size={12}/>{adding ? 'Hide' : 'Show'}</button></h4>
       {adding && <div className="tbrush__chips">{(catalog?.effects ?? []).filter(e => !present.has(e.type)).map(e =>
         <button key={e.type} type="button" title={e.help + ' · ' + e.class} onClick={() => void run('postfx_add', { type: e.type })}>{e.type}<em className={'pfx__dot pfx__class--' + e.class}/></button>)}</div>}
+      {state && <PrismaCompositorEditor key={path+'|'+scope+'|'+(scope==='map'?snapshot?.graphDocument?.mapPath:'')}
+        scope={scope} stored={block?.compositor} save={async params=>{
+          await op('postfx_compositor_set',{...params,scope});
+          await read();
+          void invoke('studio.snapshot',{}).then(commitSnapshot).catch(()=>{});
+        }}/>}
       <h4>Presets</h4>
       <div className="tbrush__chips">{(catalog?.presets ?? []).map(p =>
         <button key={p.id} type="button" title={p.help + ' (replaces the chain)'} onClick={() => void run('postfx_preset', { preset: p.id, mode: 'replace' })}>{p.id}</button>)}</div>

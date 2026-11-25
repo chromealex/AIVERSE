@@ -1,0 +1,14 @@
+{
+  "postfx": {
+    "compositor": {
+      "sources": [{"id":"selected", "cameraInput":0}],
+      "targets": [{"id":"horizontal","divisor":2},{"id":"glow","divisor":2},{"id":"out"}],
+      "passes": [
+        {"id":"blurH","op":"blurX","inputs":["selected"],"target":"horizontal","amount":2},
+        {"id":"blurV","op":"blurY","inputs":["horizontal"],"target":"glow","amount":2},
+        {"id":"combine","op":"add","inputs":["glow","scene"],"target":"out","amount":0.8}
+      ],
+      "output":"out"
+    }
+  }
+}

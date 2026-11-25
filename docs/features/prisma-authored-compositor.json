@@ -3,7 +3,30 @@
   "id": "prisma-authored-compositor",
   "owner": "prisma",
   "changed_paths": [
-    "engine/render/Prisma.cpp"
+    "CMakeLists.txt",
+    "apps/editor/core/PrismaOps.cpp",
+    "apps/studio-native/StudioTools.h",
+    "apps/studio-web/src/panels/PostFxPanel.tsx",
+    "apps/studio-web/src/panels/PrismaCompositorEditor.tsx",
+    "docs/agent-handoffs/prisma-authored-compositor-initial.md",
+    "docs/devlog/systems.json",
+    "docs/en/prisma.md",
+    "docs/features/prisma-authored-compositor.json",
+    "docs/handoffs/prisma-stage-authored-compositor.md",
+    "docs/prisma.md",
+    "docs/ru/prisma.md",
+    "engine/render/CameraPostFxPool.h",
+    "engine/render/CameraRenderPipeline.h",
+    "engine/render/Prisma.cpp",
+    "engine/render/Prisma.h",
+    "engine/render/PrismaCompositor.cpp",
+    "engine/render/PrismaCompositor.h",
+    "engine/render/PrismaData.cpp",
+    "engine/render/PrismaData.h",
+    "examples/prisma/camera-glow.json",
+    "skills/visuals/aiverse-prisma/SKILL.md",
+    "tests/render/prisma_compositor.cpp",
+    "tests/render/prisma_compositor_metal.cpp"
   ],
   "traits": {
     "editable": true,
@@ -13,9 +36,12 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "CPU graph planning and actual Metal pixel readback exercised.",
+      "evidence": [
+        "engine/render/PrismaCompositor.cpp",
+        "engine/render/Prisma.cpp"
+      ]
     },
     "architecture": {
       "status": "not_run",
@@ -23,14 +49,19 @@
       "evidence": []
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Validated compiler, view-scoped texture inputs and view pass counts.",
+      "evidence": [
+        "engine/render/PrismaCompositor.h",
+        "engine/render/Prisma.h"
+      ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Recipe for masked camera glow and acceptance.",
+      "evidence": [
+        "skills/visuals/aiverse-prisma/SKILL.md"
+      ]
     },
     "mcp": {
       "status": "not_run",
@@ -78,9 +109,11 @@
       "evidence": []
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Saved game/map postfx block with a masked-camera glow example.",
+      "evidence": [
+        "examples/prisma/camera-glow.json"
+      ]
     },
     "tests": {
       "status": "not_run",
@@ -93,9 +126,11 @@
       "evidence": []
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Document schema, resource lifetimes and entry points.",
+      "evidence": [
+        "docs/prisma.md"
+      ]
     },
     "publishing": {
       "status": "not_run",
@@ -104,10 +139,19 @@
     }
   },
   "integrations": {
-    "skills": [],
-    "mcp_tools": [],
-    "studio_panels": [],
-    "studio_methods": []
+    "skills": [
+      "aiverse-prisma"
+    ],
+    "mcp_tools": [
+      "postfx_compositor_set",
+      "postfx_get"
+    ],
+    "studio_panels": [
+      "postfx"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ]
   },
   "test_reports": []
 }
