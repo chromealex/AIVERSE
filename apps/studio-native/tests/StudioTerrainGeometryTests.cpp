@@ -40,6 +40,11 @@ int main() {
         doc.reset(260,260);
         for(int z=0;z<map.h;++z)for(int x=0;x<map.w;++x)
             map.regions[map.idx(x,z)]=(x+z)%2?'A':'B';
+        build();
+        AIVERSE_TEST_CHECK(borders.stride==1 && !borders.edges.empty());
+        // A third letter breaks the straight runs of selected-color edges.
+        for(int z=0;z<map.h;++z)for(int x=0;x<map.w;++x)
+            map.regions[map.idx(x,z)]="ABC"[(x+z)%3];
         build();AIVERSE_TEST_CHECK(borders.stride>1 && borders.edges.size()<=32768);
         borders.build(map,{32,32,40,40},1.5f,false,'B');
         AIVERSE_TEST_CHECK(borders.stride==1 && !borders.edges.empty());
