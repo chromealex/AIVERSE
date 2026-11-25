@@ -1,0 +1,24 @@
+{
+  "id": "2026-11-25-texture-graph-gpu",
+  "date": "2026-11-25",
+  "system": "studio",
+  "title": "GPU-карты Texture Graph на модели сцены",
+  "titleEn": "Texture Graph GPU maps on a scene model",
+  "summary": "В Studio можно выбрать материал загруженной модели и применить к нему карты из Texture Graph на время сессии.",
+  "summaryEn": "Studio can apply Texture Graph maps to a selected material on a loaded model for the current session.",
+  "body": ["В панели Texture Graph откройте Apply to Scene model и обновите список моделей. После выбора модели и материала команда Generate and apply GPU maps рассчитывает карты и передаёт текстуры рендереру.", "Для проверки материала доступны плоский предпросмотр и освещённая PBR-сфера. Ниже показаны кадры одного графа, полученные через Metal на Apple M3 Ultra."],
+  "bodyEn": ["Open Apply to Scene model in the Texture Graph panel and refresh the model list. Select a model and material, then choose Generate and apply GPU maps to compute the maps and send the textures to the renderer.", "Inspect the graph in the flat preview and on a lit PBR sphere. Both captures below use the same graph on an Apple M3 Ultra running Metal."],
+  "status": "in-progress",
+  "branch": "feature/aiv20261124_texture_graph_gpu_slots",
+  "commit": "1b155c425",
+  "media": [
+    {"src": "docs/devlog/media/2026-11-25-texture-graph-gpu/pbr-preview.png", "caption": "Материал на освещённой сфере, нативный кадр 256 × 256.", "captionEn": "Material on a lit sphere, native 256 × 256 capture."},
+    {"src": "docs/devlog/media/2026-11-25-texture-graph-gpu/texture-preview.png", "caption": "Цветовой выход того же графа, 128 × 128.", "captionEn": "Color output of the same graph at 128 × 128."}
+  ],
+  "links": [],
+  "author": null,
+  "verified": "В нативной Studio на Mac проверены применение к материалу модели, отмена GPU-запроса, повторный предпросмотр и рендер PBR.",
+  "verifiedEn": "Native Mac Studio verified application to a model material, cancellation, preview recovery and PBR rendering.",
+  "limits": "Изменение материала модели действует в текущей сессии Studio. Интерактивная демонстрация этого нативного режима в браузере отсутствует.",
+  "limitsEn": "The model material change lasts for the current Studio session. The native workflow has no interactive browser demo."
+}

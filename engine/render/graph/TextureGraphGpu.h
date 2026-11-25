@@ -3,6 +3,8 @@
 #pragma once
 #include "TextureGraph.h"
 #include "TextureGraphDagLowering.h"
+#include "TextureGraphIncremental.h"
+#include "TextureGraphFusion.h"
 #include "TextureGraphKernelSource.h"
 #include "TextureGraphGpuPatterns.h"
 #include "engine/gfx/Gfx.h"
@@ -10,9 +12,10 @@
 #include <iomanip>
 #include <locale>
 #include <limits>
+#include <string_view>
 
 namespace aiverse::render::texture_graph::gpu {
-inline constexpr int maxPreviewSize=128,maxBakeSize=1024;
+inline constexpr int maxPreviewSize=256,maxBakeSize=1024;
 inline constexpr size_t readbackBlockBytes=64*1024;
 inline std::string literal(float v){
     std::ostringstream s;s.imbue(std::locale::classic());
@@ -39,16 +42,70 @@ float cells(float2 uv,int p,uint seed){
 }
 )MSL";
     msl+=patternShader;
+    msl+=custom_compute::shaderHelpers;
     return msl;
 }
 template<class Port>
-inline std::string pointwiseExpression(const Node& node,int n,Port var){
+inline std::string pointwiseExpression(const Node& node,int n,Port var,std::string* resourceBody=nullptr){
     const auto& q=node.parameters;const std::string id=node.info->id;
         auto a=[&](){return var(0)+".x";};auto b=[&](){return var(1)+".x";};
         auto f=[&](const char* key,float fallback,float lo=0,float hi=1){return literal(scalar(q[key],fallback,lo,hi));};
         std::string expr;
-        if(id=="constant")expr="float3("+f("value",.5f)+")";
+        if(id=="hdrConstant")expr="float3("+literal(scalar(q["radiance"][0],1,-65504,65504))+","+literal(scalar(q["radiance"][1],1,-65504,65504))+","+literal(scalar(q["radiance"][2],1,-65504,65504))+")";
+        else if(id=="hdrFromColor"||id=="hdrSetAlpha")expr=var(0);
+        else if(id=="hdrAdd"||id=="hdrMultiply")expr="("+var(0)+(id=="hdrAdd"?"+":"*")+var(1)+")";
+        else if(id=="hdrExposure")expr="("+var(0)+"*"+literal(std::ldexp(1.f,integer(q["ev"],0,-12,12)))+")";
+        else if(id=="hdrBlend")expr="mix("+var(0)+","+var(1)+","+var(2)+".x)";
+        else if(id=="hdrToneMap"){
+            const auto exposed="max("+var(0)+"*"+literal(std::ldexp(1.f,integer(q["ev"],0,-12,12)))+",float3(0.0f))";
+            expr=q.getStr("mapping","reinhard")=="reinhard"?"("+exposed+"/(float3(1.0f)+"+exposed+"))":exposed;
+        }
+        else if(id=="constant")expr="float3("+f("value",.5f)+")";
         else if(id=="color")expr="float3("+literal(scalar(q["value"][size_t(0)],0))+","+literal(scalar(q["value"][size_t(1)],0))+","+literal(scalar(q["value"][size_t(2)],0))+")";
+        else if(id=="formula"){
+            std::vector<std::string> stack;
+            for(const auto& token:formulaTokens(q.getStr("expression","a b *"))){
+                if(token=="a"||token=="b"||token=="0"||token=="1"||token=="0.5")stack.push_back(token=="a"?a():token=="b"?b():token=="0"?"0.0f":token=="1"?"1.0f":"0.5f");
+                else if(token=="abs"||token=="invert")stack.back()=token=="abs"?"abs("+stack.back()+")":"(1.0f-"+stack.back()+")";
+                else{auto y=std::move(stack.back());stack.pop_back();auto x=std::move(stack.back());stack.back()=(token=="min"||token=="max")?token+"("+x+","+y+")":"("+x+token+y+")";}
+            }
+            expr="float3("+stack.back()+")";
+        }
+        else if(isCustomCompute(id)){
+            auto variable=[&](unsigned index)->std::string{
+                if(index<6)return var(index/3)+"."+std::string(1,"xyz"[index%3]);
+                if(index==6)return var(2)+".x";
+                if(index==7)return "uv.x";
+                if(index==8)return "uv.y";
+                return "("+f(custom_compute::variableNames[index].data(),.5f,-16,16)+")";
+            };
+            size_t sampleSerial=0;
+            auto sample=[&](unsigned index,const std::string& u,const std::string& v)->std::string{
+                require(resourceBody!=nullptr,"custom resource reads require materialized inputs");
+                const auto slot=index/3,component=index%3;
+                require(slot<node.info->inputs.size(),"invalid custom resource slot");
+                const auto tag="tgRead"+std::to_string(sampleSerial++);
+                const bool linear=q.getStr("resourceFilter","nearest")=="bilinear";
+                const std::string repeat=q.getStr("resourceAddress","clamp")=="repeat"?"true":"false";
+                auto& body=*resourceBody;
+                const std::string offset=linear?"-0.5f":"";
+                body+="float "+tag+"X=tgAddress("+u+","+repeat+")*float(n)"+offset+","+tag+"Y=tgAddress("+v+","+repeat+")*float(n)"+offset+";\n";
+                body+="int "+tag+"IX=int(floor("+tag+"X)),"+tag+"IY=int(floor("+tag+"Y));\n";
+                auto texel=[&](int dx,int dy){
+                    return "input"+std::to_string(slot)+"[tgResourceIndex("+tag+"IX+"+std::to_string(dx)+","+tag+"IY+"+std::to_string(dy)+",n,"+repeat+")]"+
+                        (node.info->inputs[slot]==Kind::Scalar?std::string{}:"."+std::string(1,"xyz"[component]));
+                };
+                if(!linear)body+="float "+tag+"="+texel(0,0)+";\n";
+                else{
+                    const auto tx=tag+"TX",ty=tag+"TY";
+                    body+="float "+tx+"="+tag+"X-float("+tag+"IX),"+ty+"="+tag+"Y-float("+tag+"IY);\n";
+                    body+="float "+tag+"=mix(mix("+texel(0,0)+","+texel(1,0)+","+tx+"),mix("+texel(0,1)+","+texel(1,1)+","+tx+"),"+ty+");\n";
+                }
+                return tag;
+            };
+            auto channel=[&](size_t i){return custom_compute::emit(node.custom[i],variable,[](float v){return literal(v);},sample);};
+            expr=id=="customScalar"?"float3("+channel(0)+")":"float3("+channel(0)+","+channel(1)+","+channel(2)+")";
+        }
         else if(id=="gradient")expr=q.getStr("axis","y")=="x"?"float3(uv.x)":"float3(uv.y)";
         else if(id=="noise"||id=="fbm"||id=="voronoi"){
             const auto period=std::to_string(integer(q["period"],8,1,256));
@@ -155,7 +212,7 @@ inline PassPlan plan(const Program& p,size_t target,int n,bool shareScalar=false
 // The existing fused native dispatcher does NOT execute this plan yet.
 inline constexpr size_t materializedBudgetBytes=32u*1024u*1024u;
 inline MaterializedDagPlan planMaterializedDag(const Program& p,
-        const std::vector<size_t>& targets,int n,size_t budget=materializedBudgetBytes){
+        const std::vector<size_t>& targets,int n,size_t budget=materializedBudgetBytes,bool retainAll=false){
     require(n>=8&&n<=p.size&&n<=maxBakeSize,"invalid materialized resolution");
     std::vector<std::vector<size_t>> inputs;
     std::vector<size_t> bytes;
@@ -165,7 +222,7 @@ inline MaterializedDagPlan planMaterializedDag(const Program& p,
         inputs.push_back(node.inputs);
         bytes.push_back(size_t(n)*size_t(n)*(node.info->output==Kind::Scalar?4u:16u));
     }
-    return lowerDagSlots(inputs,p.order,targets,bytes,budget,3);
+    return lowerDagSlots(inputs,p.order,targets,bytes,budget,3,retainAll);
 }
 inline KernelValue materializedValue(Kind kind){
     return kind==Kind::Scalar?KernelValue::Scalar:KernelValue::Vector;
@@ -185,7 +242,78 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
     const auto output=materializedValue(node.info->output);
     std::string body;
     const bool normal=std::string(node.info->id)=="normal";
-    if(normal){
+    const std::string_view op=node.info->id;
+    if(isImageSource(op)){
+        require(node.image!=nullptr,"missing resolved image source");
+        const auto sampling=imageSampling(*node.image,node.parameters,n);
+        if(sampling.linear||sampling.a.offset!=0){
+            types.push_back(node.image->hdr()?KernelValue::Vector:KernelValue::PackedBytes);
+            body="uint x=tid%n,y=tid/n;";
+            auto load=[&](const std::string& index,const std::string& name){
+                if(node.image->hdr())return "float4 "+name+"=input0["+index+"];";
+                const auto p=name+"Packed";
+                return "uint "+p+"=input0["+index+"];float4 "+name+"=float4(float(("+p+">>16u)&255u)/255.0f,float(("+p+">>8u)&255u)/255.0f,float("+p+"&255u)/255.0f,"+(node.image->hasAlpha?"float("+p+">>24u)/255.0f":"1.0f")+");";
+            };
+            auto level=[&](const ImageMip& m,const std::string& tag){
+                const auto w=std::to_string(m.width),h=std::to_string(m.height),off=std::to_string(m.offset);
+                if(!sampling.linear){body+=load(off+"u+(y*"+h+"u/n)*"+w+"u+x*"+w+"u/n",tag);return;}
+                const auto fx=tag+"fx",fy=tag+"fy",ix=tag+"ix",iy=tag+"iy";
+                body+="float "+fx+"=(float(x)+0.5f)*"+w+".0f/float(n)-0.5f,"+fy+"=(float(y)+0.5f)*"+h+".0f/float(n)-0.5f;int "+ix+"=int(floor("+fx+")),"+iy+"=int(floor("+fy+"));";
+                auto at=[&](int dx,int dy){return off+"u+uint(clamp("+iy+"+"+std::to_string(dy)+",0,"+std::to_string(m.height-1)+"))*"+w+"u+uint(clamp("+ix+"+"+std::to_string(dx)+",0,"+std::to_string(m.width-1)+"))";};
+                body+=load(at(0,0),tag+"A")+load(at(1,0),tag+"B")+load(at(0,1),tag+"C")+load(at(1,1),tag+"D");
+                body+="float4 "+tag+"=mix(mix("+tag+"A,"+tag+"B,"+fx+"-float("+ix+")),mix("+tag+"C,"+tag+"D,"+fx+"-float("+ix+")),"+fy+"-float("+iy+"));";
+            };
+            level(sampling.a,"mipA");
+            if(sampling.blend>0){level(sampling.b,"mipB");body+="float4 raw=mix(mipA,mipB,"+literal(sampling.blend)+");";}else body+="float4 raw=mipA;";
+            if(node.image->hdr()&&!isBufferSource(op)&&op!="hdrAsset"){
+                const auto gain=literal(std::ldexp(1.f,integer(node.parameters["hdrExposure"],0,-12,12)));
+                body+="float3 exposed=max(raw.xyz*"+gain+",float3(0.0f));";
+                body+=node.parameters.getStr("hdrMapping","reinhard")=="reinhard"?"float3 mapped=exposed/(float3(1.0f)+exposed);":"float3 mapped=min(exposed,float3(1.0f));";
+            }else body+="float3 mapped=raw.xyz;";
+            if(op=="imageAssetChannel"){
+                const auto shift=imageChannelShift(node.parameters.getStr("channel","alpha"));
+                body+="float3 value=float3("+std::string(shift==24?"clamp(raw.w,0.0f,1.0f)":shift==16?"mapped.x":shift==8?"mapped.y":"mapped.z")+");\n";
+            }else body+="float3 value=mapped;\n";
+        }else{
+        const auto w=std::to_string(node.image->width),h=std::to_string(node.image->height);
+        body="uint x=tid%n,y=tid/n;uint index=(y*"+h+"u/n)*"+w+"u+x*"+w+"u/n;";
+        if(node.image->hdr()){
+            types.push_back(KernelValue::Vector);
+            const auto gain=literal(std::ldexp(1.f,integer(node.parameters["hdrExposure"],0,-12,12)));
+            const bool reinhard=node.parameters.getStr("hdrMapping","reinhard")=="reinhard";
+            body+="float4 raw=input0[index];";
+            if(isBufferSource(op)||op=="hdrAsset")body+="float3 mapped=raw.xyz;";
+            else{
+                body+="float3 exposed=max(raw.xyz*"+gain+",float3(0.0f));";
+                body+=reinhard?"float3 mapped=exposed/(float3(1.0f)+exposed);":"float3 mapped=min(exposed,float3(1.0f));";
+            }
+            if(op=="imageAssetChannel"){
+                const auto shift=imageChannelShift(node.parameters.getStr("channel","alpha"));
+                body+="float3 value=float3("+std::string(shift==24?"clamp(raw.w,0.0f,1.0f)":shift==16?"mapped.x":shift==8?"mapped.y":"mapped.z")+");\n";
+            }else body+="float3 value=mapped;\n";
+        }else{
+            types.push_back(KernelValue::PackedBytes);
+            body+="uint rgb=input0[index];";
+            if(op=="imageAssetChannel"){
+                const auto shift=imageChannelShift(node.parameters.getStr("channel","alpha"));
+                body+="float3 value=float3("+std::string(shift==24&&!node.image->hasAlpha?"1.0f":"float((rgb>>"+std::to_string(shift)+"u)&255u)/255.0f")+");\n";
+            }else body+="float3 value=float3(float((rgb>>16u)&255u),float((rgb>>8u)&255u),float(rgb&255u))/255.0f;\n";
+        }
+        } // legacy nearest/base sampling
+    }else if(neighborhoodOp(op)){
+        body="int x=int(tid%n),y=int(tid/n),side=int(n);\n";
+        if(op=="blur"||op=="erosion"){
+            const auto radius=std::to_string(integer(node.parameters["radius"],1,1,4));
+            body+="float v="+std::string(op=="erosion"?"1.0f":"0.0f")+";\n"
+                "for(int dy=-1;dy<=1;++dy)for(int dx=-1;dx<=1;++dx){int xx=((x+dx*"+radius+")%side+side)%side;int yy=((y+dy*"+radius+")%side+side)%side;float t=input0[uint(yy)*n+uint(xx)];"+
+                (op=="erosion"?"v=min(v,t);":"v+=t;")+"}\nfloat3 value=float3("+(op=="blur"?"v/9.0f":"v")+");\n";
+        }else{
+            const auto amount=literal(float(integer(node.parameters["amount"],4,0,16)));
+            body+="int dx=int(floor((input1[tid]-.5f)*2.0f*"+amount+"+.5f));\n";
+            body+=op=="warp"?"int dy=int(floor((input2[tid]-.5f)*2.0f*"+amount+"+.5f));\n":"int dy=-dx;\n";
+            body+="int xx=((x+dx)%side+side)%side,yy=((y+dy)%side+side)%side;float3 value=float3(input0[uint(yy)*n+uint(xx)]);\n";
+        }
+    }else if(normal){
         const auto strength=literal(scalar(node.parameters["strength"],2,0,16));
         body="uint x=tid%n,y=tid/n;float k="+strength+"*float(n)/256.0f;\n"
             "float dx=(input0[y*n+(x+1u)%n]-input0[y*n+(x+n-1u)%n])*k;\n"
@@ -198,30 +326,127 @@ inline Source compileMaterializedNode(const Program& p,size_t target,int n){
             const auto i=std::to_string(j);
             body+="float3 v"+i+"="+(types[j]==KernelValue::Scalar?"float3(input"+i+"[tid])":"input"+i+"[tid].xyz")+";\n";
         }
-        const auto expr=pointwiseExpression(node,n,[](size_t j){return "v"+std::to_string(j);});
-        body+="float3 value=clamp("+expr+",0.0f,1.0f);\n";
+        const auto expr=op=="hdrAlpha"?std::string("float3(input0[tid].w)"):pointwiseExpression(node,n,[](size_t j){return "v"+std::to_string(j);},&body);
+        body+="float3 value=clamp("+expr+(node.info->output==Kind::Radiance?",-65504.0f,65504.0f);\n":",0.0f,1.0f);\n");
     }
-    body+=output==KernelValue::Scalar?"result[tid]=value.x;":"result[tid]=float4(value,1.0f);";
-    return materializedKernel(output,types,n,body,normal||!types.empty()?std::string{}:pointwiseCommon());
+    std::string alpha="1.0f";
+    if(op=="hdrAsset")alpha="clamp(raw.w,0.0f,1.0f)";
+    else if(op=="hdrConstant")alpha=literal(scalar(node.parameters["alpha"],1));
+    else if(op=="hdrExposure")alpha="input0[tid].w";
+    else if(op=="hdrAdd")alpha="max(input0[tid].w,input1[tid].w)";
+    else if(op=="hdrMultiply")alpha="input0[tid].w*input1[tid].w";
+    else if(op=="hdrBlend")alpha="mix(input0[tid].w,input1[tid].w,input2[tid])";
+    else if(op=="hdrSetAlpha")alpha="input1[tid]";
+    body+=output==KernelValue::Scalar?"result[tid]=value.x;":"result[tid]=float4(value,"+alpha+");";
+    return materializedKernel(output,types,n,body,isCustomCompute(op)?std::string(custom_compute::shaderHelpers)+(readsCustomResources(node)?custom_compute::resourceShaderHelpers:""):normal||!types.empty()?std::string{}:pointwiseCommon(),isImageSource(op));
+}
+// Only the known pointwise operations participate. Future neighborhood,
+// sampling or side-effect operations remain materialization boundaries.
+inline bool fusionPointwise(const Node& node){
+    if(readsCustomResources(node)||node.info->output==Kind::Radiance||(std::string_view(node.info->id)=="hdrToneMap"||std::string_view(node.info->id)=="hdrAlpha"))return false;
+    const std::string_view id=node.info->id;
+    for(std::string_view op:{"formula","customScalar","customColor","constant","color","gradient","noise","fbm","voronoi","pattern","patternMask",
+        "add","subtract","multiply","min","max","invert","threshold","remap","blend","blendColor","colorize","metallicRoughness"})
+        if(id==op)return true;
+    return false;
+}
+inline Source compileFusionRegion(const Program& p,const FusionRegion& region,int n){
+    require(!region.nodes.empty()&&region.nodes.size()<=maxFusionNodes&&region.inputs.size()<=maxFusionInputs,
+        "invalid pointwise fusion region");
+    if(region.nodes.size()==1)return compileMaterializedNode(p,region.nodes.front(),n);
+    std::vector<KernelValue> types;
+    std::vector<bool> defined(p.nodes.size());
+    auto var=[](size_t node){return "fusedNode"+std::to_string(node);};
+    std::string body="uint x=tid%n,y=tid/n;float2 uv=(float2(x,y)+0.5f)/float(n);\n";
+    for(size_t i=0;i<region.inputs.size();++i){
+        const auto dep=region.inputs[i];
+        require(dep<p.nodes.size()&&!defined[dep],"invalid fusion external input");
+        const auto type=materializedValue(p.nodes[dep].info->output);
+        types.push_back(type);defined[dep]=true;
+        const auto index=std::to_string(i);
+        body+="float3 "+var(dep)+"="+(type==KernelValue::Scalar?"float3(input"+index+"[tid])":"input"+index+"[tid].xyz")+";\n";
+    }
+    bool common=false;
+    for(auto index:region.nodes){
+        require(index<p.nodes.size()&&!defined[index],"invalid fusion node identity");
+        const auto& node=p.nodes[index];
+        require(fusionPointwise(node)&&node.inputs.size()==node.info->inputs.size(),"invalid pointwise fusion node");
+        for(size_t i=0;i<node.inputs.size();++i){
+            const auto dep=node.inputs[i];
+            require(dep<p.nodes.size()&&defined[dep]&&p.nodes[dep].info->output==node.info->inputs[i],
+                "invalid fusion dependency or kind");
+        }
+        const auto expression=pointwiseExpression(node,n,[&](size_t i){return var(node.inputs[i]);});
+        body+="float3 "+var(index)+"=clamp("+expression+",0.0f,1.0f);\n";
+        // Match the typed materialized boundary: a scalar stores X and
+        // re-expands to all lanes before its consumers read it.
+        if(node.info->output==Kind::Scalar)
+            body+=var(index)+"=float3("+var(index)+".x);\n";
+        defined[index]=true;common|=node.inputs.empty()||isCustomCompute(node.info->id);
+    }
+    const auto root=region.nodes.back();
+    const auto output=materializedValue(p.nodes[root].info->output);
+    body+=output==KernelValue::Scalar?"result[tid]="+var(root)+".x;":"result[tid]=float4("+var(root)+",1.0f);";
+    return materializedKernel(output,types,n,body,common?pointwiseCommon():std::string{});
 }
 struct MaterializedSources {
     MaterializedDagPlan plan;
     std::vector<Source> nodes; // indexed by source node; unreachable entries empty
+    std::vector<std::vector<size_t>> regionMembers; // authored node indices by pass root
     std::vector<Source> packs; // target order; shared result buffer reused
-    size_t resultBytes=0,totalBytes=0;
+    size_t resultBytes=0,resultCapacityBytes=0,totalBytes=0,imageSourceBytes=0;
+    size_t reachableNodes=0,fusedNodes=0;
 };
 inline MaterializedSources compileMaterializedDag(const Program& p,const std::vector<size_t>& targets,
-        int n,size_t budget=materializedBudgetBytes){
-    require(n>=8&&n<=p.size&&n<=maxBakeSize,"invalid materialized resolution");
+        int n,size_t budget=materializedBudgetBytes,bool fusePointwise=false,bool paddedResult=false,bool incremental=false,bool rawRadiance=false,size_t residentRadianceBpp=0){
+    require(n>=8&&n<=p.size&&n<=maxBakeSize&&budget<=materializedBudgetBytes,"invalid materialized resolution or budget");
     MaterializedSources r;
-    r.resultBytes=size_t(n)*size_t(n)*4u;
-    require(r.resultBytes<budget,"materialized result exceeds budget");
-    r.plan=planMaterializedDag(p,targets,n,budget-r.resultBytes);
-    r.totalBytes=r.plan.allocatedBytes+r.resultBytes;
-    r.nodes.resize(p.nodes.size());
-    for(const auto& pass:r.plan.schedule.passes)
-        r.nodes[pass.pipeline]=compileMaterializedNode(p,pass.pipeline,n);
-    for(auto target:targets)r.packs.push_back(packMaterializedKernel(materializedValue(p.nodes[target].info->output),n));
+    if(rawRadiance)require(!paddedResult&&targets.size()==1&&targets.front()<p.nodes.size()&&p.nodes[targets.front()].info->output==Kind::Radiance,"raw HDR readback requires one radiance target");
+    if(residentRadianceBpp)require(!rawRadiance&&paddedResult&&(residentRadianceBpp==8||residentRadianceBpp==16)&&targets.size()==1&&targets.front()<p.nodes.size()&&p.nodes[targets.front()].info->output==Kind::Radiance,"resident HDR requires one radiance target");
+    const size_t bpp=residentRadianceBpp?residentRadianceBpp:rawRadiance?16u:4u;
+    r.resultBytes=size_t(n)*size_t(n)*bpp;
+    r.resultCapacityBytes=paddedResult?gfx::rgbaCopyLayout(n,n,bpp).bytes:r.resultBytes;
+    require(r.resultCapacityBytes>=r.resultBytes&&r.resultCapacityBytes<budget,"materialized result exceeds budget");
+    // Conservatively reserve every authored image source, including unused nodes.
+    for(const auto& node:p.nodes){
+        require(node.info!=nullptr,"invalid materialized node");
+        if(!isImageSource(node.info->id))continue;
+        require(node.image!=nullptr,"missing resolved image source");
+        const size_t bytes=node.image->bytes();
+        require(bytes<=budget-r.resultCapacityBytes-r.imageSourceBytes,"image source exceeds materialized budget");
+        r.imageSourceBytes+=bytes;
+    }
+    const auto slotBudget=budget-r.resultCapacityBytes-r.imageSourceBytes;
+    if(fusePointwise){
+        std::vector<std::vector<size_t>> edges;
+        std::vector<size_t> bytes;
+        std::vector<bool> pointwise;
+        for(const auto& node:p.nodes){
+            require(node.info!=nullptr,"invalid materialized node");
+            edges.push_back(node.inputs);
+            bytes.push_back(size_t(n)*size_t(n)*(node.info->output==Kind::Scalar?4u:16u));
+            pointwise.push_back(fusionPointwise(node));
+        }
+        const auto fusion=planPointwiseFusion(edges,p.order,targets,pointwise);
+        r.plan=lowerDagSlots(fusion.edges,p.order,targets,bytes,slotBudget,3,incremental);
+        r.reachableNodes=fusion.reachable;r.fusedNodes=fusion.reachable-fusion.passes;
+        r.nodes.resize(p.nodes.size());r.regionMembers.resize(p.nodes.size());
+        for(const auto& pass:r.plan.schedule.passes){
+            const auto& region=fusion.regions.at(pass.pipeline);
+            r.nodes[pass.pipeline]=compileFusionRegion(p,region,n);
+            r.regionMembers[pass.pipeline]=region.nodes;
+        }
+    }else{
+        r.plan=planMaterializedDag(p,targets,n,slotBudget,incremental);
+        r.reachableNodes=r.plan.schedule.passes.size();
+        r.nodes.resize(p.nodes.size());r.regionMembers.resize(p.nodes.size());
+        for(const auto& pass:r.plan.schedule.passes){
+            r.nodes[pass.pipeline]=compileMaterializedNode(p,pass.pipeline,n);
+            r.regionMembers[pass.pipeline]={pass.pipeline};
+        }
+    }
+    r.totalBytes=r.plan.allocatedBytes+r.resultCapacityBytes+r.imageSourceBytes;
+    for(auto target:targets)r.packs.push_back(residentRadianceBpp?packRadianceTextureKernel(n,residentRadianceBpp).source:rawRadiance?packRadianceFloatKernel(n):packMaterializedKernelAt(materializedValue(p.nodes[target].info->output),n,"tid",p.nodes[target].info->output==Kind::Radiance));
     return r;
 }
 } // namespace aiverse::render::texture_graph::gpu

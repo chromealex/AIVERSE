@@ -35,6 +35,21 @@ double volume(const Mesh &m) {
 }
 int main() {
     try {
+        // Runtime slots are not serializable offline assets even if CPU
+        // pixels happen to exist. A retired slot cannot become a GLB texture.
+        {
+            render::Model procedural;
+            render::Image image;image.width=image.height=1;image.rgba={255,255,255,255};
+            image.proceduralGraphImage=true;
+            procedural.images.push_back(image);
+            rejects([&]{exportGlb(procedural);},"runtime graph texture exported");
+            procedural.images[0].proceduralGraphRetired=true;
+            rejects([&]{exportGlb(procedural);},"retired graph slot exported");
+            procedural.images.clear();
+            procedural.materials.resize(1);
+            procedural.materials[0].proceduralGraphPins=render::withGraphMaterialPin({},0,std::make_shared<const render::ProceduralImagePin>());
+            rejects([&]{exportGlb(procedural);},"runtime material pin exported");
+        }
         auto cableDoc = emptyDocument();
         cableDoc.set("nodes", Json::parse(R"([{"id":"wire","geometry":{"kind":"cable","anchors":[[0,3,0],[6,4,0],[10,3,3]],"strands":3,"sag":0.5}}])"));
         geometry(Json::parse(R"({"kind":"cable","anchors":[[0,0,0],[3,0,0]],"segments":2})"));

@@ -157,6 +157,11 @@ public:
     const render::RetirementDiagnosticRing* gpuRetirementDiagnostics() const {
         return gpuRetirementRing_.get();
     }
+    // Native scene panels may inspect an exact resident graph output only
+    // within an owner-thread scope. No raw handle transport to Studio/MCP.
+    render::texture_graph::NativeGraphImageRead readSceneGraphMaterialImage(
+        size_t type,size_t choice,const view::LiveAppearanceMaterialTarget& target,
+        std::string_view output);
     render::Renderer3D& renderer() { return r3d_; }
     render::GpuResourceRetirement& gpuResourceRetirement() { return gpuResourceRetirement_; }
     const render::GpuResourceRetirement& gpuResourceRetirement() const { return gpuResourceRetirement_; }
@@ -705,6 +710,16 @@ private:
     graph_telemetry::Watch graphWatch_;
     graph_gpu_profile::Capture graphGpuProfile_;
     TextureGraphGpuPreview textureGraphGpuPreview_;
+    struct PendingGraphMaterialApply {
+        std::string project,request;
+        size_t type=0,choice=0;
+        view::LiveAppearanceMaterialTarget target;
+    };
+    std::optional<PendingGraphMaterialApply> pendingGraphMaterialApply_;
+    std::string graphMaterialApplyProject_,graphMaterialApplyRequest_,graphMaterialApplyState_="idle",graphMaterialApplyReason_;
+    Json graphMaterialApplyStatus() const;
+    Json graphMaterialOp(const Json& p);
+    void applyQueuedGraphMaterial();
     Json graphWatchSample(const std::string& domain,const std::string& entity) const;
     void captureGraphWatch() noexcept;
     std::vector<game::ComputerPlayer> bots_;

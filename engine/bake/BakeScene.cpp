@@ -154,12 +154,14 @@ int SceneBuilder::material(Loaded& l, const render::Material& mt, int) {
     bm.emissive = mt.emissive * mt.emissiveStrength;
     bm.doubleSided = mt.doubleSided;
     if (mt.shading == render::ShadingModel::Unlit) { bm.emissive = bm.albedo; bm.albedo = {0, 0, 0}; }   // unlit surfaces glow with their colour
-    const auto& imgs = l.model->images;
+    // This builder imports offline assets. A live graph image cannot be
+    // copied into the index-keyed CPU cache (it would copy GPU ownership).
+    const auto* source=render::resolveMaterialImage(*l.model,mt,&render::Material::baseTex);
     std::string texName;
-    if (mt.baseTex >= 0 && size_t(mt.baseTex) < imgs.size() && !imgs[size_t(mt.baseTex)].rgba.empty()) {
+    if(source&&!render::runtimeGraphImage(*source)&&!source->rgba.empty()){
         texName = l.model->path + "#" + std::to_string(mt.baseTex);
         auto& img = images_[texName];
-        if (!img) img = std::make_shared<render::Image>(imgs[size_t(mt.baseTex)]);
+        if (!img) img = std::make_shared<render::Image>(*source);
         bm.texture = img;
         if (mt.alpha == render::AlphaMode::Mask) bm.alphaCutoff = mt.alphaCutoff;
     }

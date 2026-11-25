@@ -1,6 +1,8 @@
 // Synthetic Radiance RGBE fixtures and native RHI contract tests.
 // Test SOURCE ONLY: this file does not claim a test execution result.
 #include "engine/render/HdrTexture.h"
+#include "engine/render/EnvironmentIbl.h"
+#include "engine/render/EnvironmentIblGpu.h"
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -119,6 +121,52 @@ void rleAndOrientation() {
     require(image.rgba16f[0] == 0 && image.rgba16f[1] == 0x3c00u &&
             image.rgba16f[4] == 0x3c00u, "horizontal orientation flipped");
 }
+void environmentConvolution(){
+    using namespace render::environment_ibl;
+    require(radicalInverse(0)==0.f&&radicalInverse(1)==.5f&&radicalInverse(2)==.25f,"Hammersley radical inverse");
+    const auto glossy=ggxDirection(1.f/3.f,.5f,.25f),rough=ggxDirection(1.f,.5f,.25f);
+    require(glossy.direction.z>.9f&&std::abs(rough.direction.z)<.00001f&&rough.weight<.00001f,"GGX roughness distribution");
+    require(ggxDirection(1.f,.75f,.25f).weight==0.f,"GGX below horizon rejection");
+    // At roughness=1, reflected GGX directions have uniform solid-angle
+    // density. NdotL-weighted mean of cos(theta) tends to 2/3.
+    float moment=0.f,weight=0.f;
+    for(int i=0;i<specularSamples;++i){
+        const auto q=ggxDirection(1.f,(i+.5f)/specularSamples,radicalInverse(uint32_t(i)));
+        moment+=q.direction.z*q.weight;weight+=q.weight;
+    }
+    require(weight>0.f&&std::abs(moment/weight-2.f/3.f)<.002f,"GGX normalized hemisphere moment");
+    std::string pixels;pixel(pixels,128,64,32,130);pixel(pixels,128,64,32,130);
+    render::RadianceImage image;std::string error;
+    const auto encoded=hdr("-Y 1 +X 2",pixels);
+    require(!render::parseRadianceHdr(encoded,image,error,8),"decode budget must reject before allocation");
+    require(render::parseRadianceHdr(encoded,image,error,16),"decode exact byte budget");
+    const auto atlas=convolve(image);
+    require(atlas.width==bandWidth&&atlas.height==bands*bandHeight,"IBL atlas geometry");
+    for(size_t i=0;i<atlas.rgba16f.size();i+=4)
+        require(atlas.rgba16f[i]==image.rgba16f[0]&&atlas.rgba16f[i+1]==image.rgba16f[1]&&atlas.rgba16f[i+2]==image.rgba16f[2]&&atlas.rgba16f[i+3]==0x3c00u,"constant HDR must preserve radiance in all bands and gutters");
+    render::RadianceImage nonuniform;nonuniform.width=8;nonuniform.height=4;nonuniform.rgba16f.resize(8*4*4);
+    for(int y=0;y<4;++y)for(int x=0;x<8;++x){
+        const size_t i=size_t(y*8+x)*4;nonuniform.rgba16f[i]=x<4?0x4400u:0;nonuniform.rgba16f[i+3]=0x3c00u;
+    }
+    const auto mirror=integrateBrdf(.5f,0.f);
+    require(std::abs(mirror[0]-.96875f)<.00001f&&std::abs(mirror[1]-.03125f)<.00001f,"mirror Schlick split sum");
+    const auto roughNormal=integrateBrdf(1.f,1.f);
+    require(std::abs(roughNormal[0]+roughNormal[1]-(1.f-std::log(2.f)))<.002f,"GGX Smith normal-incidence hemispherical integral");
+    const auto combined=convolveWithBrdf(image);
+    require(combined.width==bandWidth&&combined.height==combinedHeight&&combined.rgba16f.size()==size_t(bandWidth)*combinedHeight*4,"combined BRDF atlas geometry");
+    require(std::equal(atlas.rgba16f.begin(),atlas.rgba16f.end(),combined.rgba16f.begin()),"BRDF append must preserve radiance data");
+    const auto& lut=brdfLut();
+    for(size_t i=0;i<lut.size();i+=4)require(halfValue(lut[i])<=1.f&&halfValue(lut[i+1])<=1.f&&lut[i+2]==0&&lut[i+3]==0x3c00u,"finite BRDF LUT channels");
+    for(int y=1;y<=brdfSize;++y){
+        const size_t i=size_t(y)*bandWidth*4;
+        require(lut[i]==lut[i+4]&&lut[i+size_t(brdfSize+1)*4]==lut[i+size_t(brdfSize)*4],"BRDF horizontal clamp gutter");
+    }
+    const auto filtered=convolve(nonuniform);
+    const auto at=[&](int band,int x,int y){return filtered.rgba16f[(size_t(band*bandHeight+y)*bandWidth+x)*4];};
+    require(at(0,16,32)>at(0,112,32),"directional radiance preserved");
+    require(at(0,0,32)==at(0,width,32)&&at(0,width+1,32)==at(0,1,32),"longitude gutters wrap");
+    require(at(3,16,32)<at(0,16,32)&&at(3,112,32)>at(0,112,32),"roughness convolution changes directional radiance");
+}
 void errorsAndBoundary() {
     using render::hdr_detail::toHalf;
     require(toHalf(1.0f) == 0x3c00u && toHalf(0.0f) == 0 &&
@@ -142,9 +190,17 @@ void errorsAndBoundary() {
 }
 int main() {
     try {
+        {
+            std::vector<float> rgba(8*8*4);
+            for(size_t i=0;i<rgba.size();i+=4){rgba[i]=12;rgba[i+1]=6;rgba[i+2]=-2;rgba[i+3]=.25f;}
+            const auto source=render::environment_ibl::fromGraphLatLong(8,rgba);
+            require(source.width==8&&source.height==4&&render::environment_ibl::halfValue(source.rgba16f[0])==12&&source.rgba16f[2]==0&&source.rgba16f[3]==0x3c00,"graph environment lat-long mapping");
+            require(!render::environment_ibl::gpuPrefilterSource(true,8).empty()&&!render::environment_ibl::gpuPrefilterSource(false,8).empty(),"GPU IBL source missing");
+        }
         flatAndUpload();
         rleAndOrientation();
         errorsAndBoundary();
+        environmentConvolution();
     } catch (const std::exception& e) {
         std::fprintf(stderr,"HDR texture contract FAILED: %s\n",e.what());
         return 1;

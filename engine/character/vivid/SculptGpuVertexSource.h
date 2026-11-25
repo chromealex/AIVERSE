@@ -221,7 +221,8 @@ inline bool prepareSculptGpuVertexSource(
     if(selectedMaskMaterial>=0) {
         const auto& m=model.materials[std::size_t(selectedMaskMaterial)];
         candidate.maskedSelection=true;
-        candidate.maskBaseTexture=model.images[std::size_t(m.baseTex)].tex;
+        candidate.maskBaseTexture=render::resolvedMaterialTexture(model,m,&render::Material::baseTex);
+        if(!candidate.maskBaseTexture.valid())return false;
         candidate.maskUniform.alpha[0]=m.baseColor.w;
         candidate.maskUniform.alpha[1]=m.alphaCutoff;
         candidate.maskUniform.uv0[0]=m.uvOffset.x;

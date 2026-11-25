@@ -3,6 +3,8 @@
 #pragma once
 #include "engine/gfx/Gfx.h"
 #include "engine/data/Json.h"
+#include "TextureGraphGroupProfile.h"
+#include <optional>
 #include <cmath>
 #include <deque>
 #include <map>
@@ -15,30 +17,37 @@ inline const char* backend(gfx::Backend b){
     return "unknown";
 }
 class Capture {
-    struct Pending {std::string scope;uint64_t frame=0,view=0;bool adaptive=false;};
+    struct Pending {std::string scope;uint64_t frame=0,view=0;bool adaptive=false;uint64_t request=0;std::string output;std::optional<TextureGroupScope> group;};
     std::map<uint64_t,Pending> pending_;
     std::deque<Json> samples_;
     uint64_t serial_=0,epoch_=0,accepted_=0,rejected_=0,invalid_=0;
-    bool enabled_=false;
+    bool enabled_=false,textureGroups_=false;
+    TextureGroupScopeBudget groupBudget_;
+    uint64_t groupThrottled_=0;
     std::string backend_,device_,project_;
 public:
     static constexpr uint64_t prefix=0x4750000000000000ULL,mask=0x0000ffffffffffffULL;
     static constexpr size_t maxPending=32,maxSamples=120;
     bool enabled() const{return enabled_;}
-    void clear(){enabled_=false;pending_.clear();samples_.clear();accepted_=rejected_=invalid_=0;project_.clear();}
-    void start(const gfx::DeviceInfo& info,const std::string& project){
+    bool textureGroups()const{return enabled_&&textureGroups_;}
+    void clear(){enabled_=false;textureGroups_=false;groupBudget_.clear();groupThrottled_=0;pending_.clear();samples_.clear();accepted_=rejected_=invalid_=0;project_.clear();}
+    void start(const gfx::DeviceInfo& info,const std::string& project,bool textureGroups=false){
         clear();if(epoch_==std::numeric_limits<uint64_t>::max())throw std::overflow_error("GPU profile epoch exhausted");
-        ++epoch_;backend_=backend(info.backend);device_=info.name;project_=project;enabled_=true;
+        ++epoch_;backend_=backend(info.backend);device_=info.name;project_=project;textureGroups_=textureGroups;enabled_=true;
     }
     void checkProject(const std::string& project){if(!project_.empty()&&project!=project_)clear();}
     void stop(){enabled_=false;pending_.clear();}
     void expire(uint64_t frame){for(auto it=pending_.begin();it!=pending_.end();){if(frame>it->second.frame&&frame-it->second.frame>240){it=pending_.erase(it);++invalid_;}else ++it;}}
-    template<class Device> uint64_t begin(Device& dev,const char* scope,uint64_t view,bool adaptive){
+    template<class Device> uint64_t begin(Device& dev,const char* scope,uint64_t view,bool adaptive,uint64_t request=0,const char* output=nullptr,const TextureGroupScope* group=nullptr){
         if(!enabled_)return 0;
+        if(group){
+            if(!textureGroups_||!request||!group->valid()){++rejected_;return 0;}
+            if(!groupBudget_.admit(dev.frameSerial())){++groupThrottled_;return 0;}
+        }
         if(pending_.size()>=maxPending||serial_>=mask){++rejected_;return 0;}
         const auto tag=prefix|++serial_;
         // Reserve metadata before starting backend scope. No failure after begin.
-        pending_.emplace(tag,Pending{scope,dev.frameSerial(),view,adaptive});
+        pending_.emplace(tag,Pending{scope,dev.frameSerial(),view,adaptive,request,output?output:"",group?std::optional<TextureGroupScope>(*group):std::nullopt});
         if(!dev.beginGpuScope(tag)){pending_.erase(tag);++rejected_;return 0;}
         ++accepted_;return tag;
     }
@@ -51,17 +60,27 @@ public:
         Json row=Json::object();row.set("scope",Json::string(meta.scope));row.set("tag",Json::string(std::to_string(timing.tag)));
         row.set("submittedFrame",Json::string(std::to_string(meta.frame)));row.set("completionFrame",Json::string(std::to_string(completionFrame)));
         row.set("view",Json::string(std::to_string(meta.view)));row.set("milliseconds",Json::number(timing.milliseconds,6));
+        if(meta.request){row.set("request",Json::string(std::to_string(meta.request)));row.set("output",Json::string(meta.output));}
+        if(meta.group){
+            const auto& g=*meta.group;Json members=Json::array();for(const auto& id:g.members)members.push(Json::string(id));
+            row.set("groupRoot",Json::string(g.root));row.set("groupMembers",members);
+            row.set("passOrdinal",Json::number(int64_t(g.ordinal)));row.set("slot",Json::number(int64_t(g.slot)));
+            row.set("slotBytes",Json::number(int64_t(g.slotBytes)));
+        }
         samples_.push_back(std::move(row));if(samples_.size()>maxSamples)samples_.pop_front();
         return meta.adaptive?meta.view:0;
     }
     void cancel(uint64_t tag){pending_.erase(tag);}
     Json report() const{
         Json r=Json::object();r.set("available",Json::fromBool(!samples_.empty()));r.set("enabled",Json::fromBool(enabled_));
-        r.set("backend",Json::string(backend_));r.set("scopeBackendImplemented",Json::fromBool(backend_=="Metal"||backend_=="GL33"));r.set("device",Json::string(device_));r.set("epoch",Json::string(std::to_string(epoch_)));
+        r.set("backend",Json::string(backend_));r.set("scopeBackendImplemented",Json::fromBool(backend_=="Metal"||backend_=="GL33"||backend_=="Vulkan"));r.set("device",Json::string(device_));r.set("epoch",Json::string(std::to_string(epoch_)));
+        r.set("textureGroupDetail",Json::fromBool(textureGroups_));
+        r.set("textureGroupMaxPerFrame",Json::number(int64_t(TextureGroupScopeBudget::maxPerFrame)));
+        r.set("textureGroupThrottled",Json::string(std::to_string(groupThrottled_)));
         r.set("accepted",Json::string(std::to_string(accepted_)));r.set("rejected",Json::string(std::to_string(rejected_)));
         r.set("invalid",Json::string(std::to_string(invalid_)));r.set("pending",Json::number(int64_t(pending_.size())));
         Json rows=Json::array();for(const auto& s:samples_)rows.push(s);r.set("samples",rows);
-        r.set("note",Json::string("Completed native scope timestamps only. Viewport scope includes render, FX draw and post resolve; not per-node, per-material or per-pass timing. FX step scope includes encoded preview step work. Rejected queries may mean unsupported backend, encoder conflict or capacity. No CPU fallback labeled GPU."));
+        r.set("note",Json::string("Completed native scope timestamps only. Viewport scope includes render, FX draw and post resolve; not per-node, per-material or per-pass timing. FX step scope includes encoded preview step work. Texture graph aggregate scopes include node and pack dispatches; optional detail replaces materialized aggregate with dispatched region scopes and a separate pack scope. A region lists its authored members and measures the entire region, not individual fused nodes. Output identifies the triggering output, not exclusive ownership of shared DAG work. Copy scope includes texture copy and optional mip generation. Readback and CPU validation excluded. Skipped, throttled and unsupported groups have no timing. Timings are not total request latency. Rejected queries may mean unsupported backend, encoder conflict or capacity. No CPU fallback labeled GPU."));
         return r;
     }
 };
@@ -69,8 +88,8 @@ public:
 class Scope {
     gfx::Device* dev_=nullptr;Capture* capture_=nullptr;uint64_t tag_=0;
 public:
-    Scope(gfx::Device& dev,Capture& capture,const char* name,uint64_t view=0,bool adaptive=false):capture_(&capture){
-        tag_=capture.begin(dev,name,view,adaptive);if(tag_)dev_=&dev;
+    Scope(gfx::Device& dev,Capture& capture,const char* name,uint64_t view=0,bool adaptive=false,uint64_t request=0,const char* output=nullptr,const TextureGroupScope* group=nullptr):capture_(&capture){
+        tag_=capture.begin(dev,name,view,adaptive,request,output,group);if(tag_)dev_=&dev;
     }
     ~Scope(){if(dev_){dev_->endGpuScope();capture_->cancel(tag_);}}
     bool active()const{return dev_!=nullptr;}

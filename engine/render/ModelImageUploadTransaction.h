@@ -95,15 +95,20 @@ private:
 
 // Owner-thread, frame-boundary write transaction. The Stage owns all new
 // Image handles until successful commit; published material image indices
-// already point at the future append slots but MUST NOT be drawn until then.
+// already point at reserved slots but MUST NOT be drawn until then.
 class ModelImageUploadTransaction final {
 public:
+    static bool reusableGraphSlot(const Image& image,uint64_t epoch,const ModelImageRollbackPool& rollback)noexcept{
+        return image.proceduralGraphImage&&image.proceduralGraphRetired&&!image.tex.valid()&&
+            !image.virtualAlphaMask.valid()&&!image.proceduralGraphPin&&image.name.empty()&&
+            !rollback.unrecoverableBatches()&&image.proceduralSlotRetirement.reusable(epoch,rollback.pendingImages()==0);
+    }
     ModelImageUploadTransaction(gfx::Device& device,
                                ModelImageRollbackPool& rollback,
-                               RenderDeviceLifetime::Lease lease={})
-        :device_(device),rollback_(rollback),lease_(std::move(lease)) {
+                               RenderDeviceLifetime::Lease lease={},bool recycleGraphSlots=false)
+        :device_(device),rollback_(rollback),lease_(std::move(lease)),recycleGraphSlots_(recycleGraphSlots) {
         checkDevice();
-        static_assert(std::is_nothrow_move_constructible_v<Image>,
+        static_assert(std::is_nothrow_move_constructible_v<Image>&&std::is_nothrow_move_assignable_v<Image>,
                       "Image must move without throwing during final publish");
     }
     ModelImageUploadTransaction(const ModelImageUploadTransaction&)=delete;
@@ -112,30 +117,93 @@ public:
     int stage(Model& model,Image image) {
         checkDevice();
         if(committed_)throw std::logic_error("image transaction already committed");
+        if(runtimeGraphImage(image)&&(!image.proceduralGraphImage||image.proceduralGraphRetired||
+            !image.proceduralGraphPin||image.textureCache||image.borrowedTexture||
+            image.textureLease||!image.textureKey.empty()))
+            throw std::invalid_argument("invalid exclusive procedural image staging");
         for(size_t i=0;i<model.images.size();++i)
-            if(!image.name.empty() && model.images[i].name==image.name)
+            if(!image.name.empty()&&model.images[i].name==image.name){
+                if(runtimeGraphImage(image)||runtimeGraphImage(model.images[i]))
+                    throw std::invalid_argument("procedural image name collision");
                 return int(i);
+            }
         Entry* entry=nullptr;
         for(auto& e:entries_)if(e.model==&model){entry=&e;break;}
         if(!entry) {
-            entries_.push_back({&model,model.images.size(),{}});
+            entries_.push_back({&model,model.images.size(),{}, {},model.materialRevision});
             entry=&entries_.back();
         }
         for(size_t i=0;i<entry->images.size();++i)
-            if(!image.name.empty() && entry->images[i].name==image.name)
-                return int(entry->original+i);
-        const size_t index=entry->original+entry->images.size();
-        if(index>=size_t(std::numeric_limits<int>::max()))
-            throw std::overflow_error("too many material images");
+            if(!image.name.empty()&&entry->images[i].name==image.name){
+                if(runtimeGraphImage(image)||runtimeGraphImage(entry->images[i]))
+                    throw std::invalid_argument("procedural staged image name collision");
+                return int(entry->indices[i]);
+            }
+        const size_t index=reserveIndex(*entry,image);
         // Allocate the CPU slot BEFORE allocating a GPU image, so a failed
         // vector growth cannot orphan a newly created texture.
         entry->images.reserve(entry->images.size()+1);
+        entry->indices.reserve(entry->indices.size()+1);
         if(!uploadStandaloneImage(device_,image))
             throw std::runtime_error("staged material texture GPU upload failed");
         image.rgba.clear();
         image.sharedRgba.reset();
+        image.sharedRadiance16f.reset();
         image.compressed.reset();
         entry->images.push_back(std::move(image)); // nothrow move
+        entry->indices.push_back(index);
+        return int(index);
+    }
+    // Adopt an exclusively owned, already copied RGBA8 or tagged linear HDR image. The producer
+    // must hold its source buffer and texture through the real copy fence.
+    // This is an ownership move, not another texture allocation or upload.
+    // No borrowed/cached/virtual textures and no outstanding GPU work.
+    int stageCompletedGpuImage(Model& model,Image& image,
+            const RenderDeviceLifetime::Lease& producerLease,uint64_t copyFence) {
+        checkDevice();
+        if(committed_)throw std::logic_error("image transaction already committed");
+        if(!lease_.validFor(device_)||!producerLease.validFor(device_)||
+           lease_.generation()!=producerLease.generation()||
+           !device_.gpuHealthy()||!copyFence||device_.gpuCompletedFence()<copyFence)
+            throw std::runtime_error("GPU image copy is not retired in the transaction device generation");
+        if(image.name.empty()||image.width<=0||image.height<=0||!image.tex.valid()||
+           image.borrowedTexture||image.textureCache||image.textureLease||!image.textureKey.empty()||
+           !image.rgba.empty()||image.sharedRgba||image.sharedRadiance16f||image.importedLinearRadiance||image.compressed||image.gpuCompressed||
+           image.virtualFallbackMaxDimension!=0||image.virtualFallbackPreserveAlpha||
+           image.virtualAlphaMask.valid()||image.alphaCoverageThreshold||image.alphaCoverageMipmaps)
+            throw std::invalid_argument("GPU image must be an exclusively owned ordinary texture");
+        gfx::TextureInfo info{};
+        if(!device_.textureInfo(image.tex,info)||info.width!=image.width||info.height!=image.height||
+           (image.proceduralLinearRadiance?(!image.proceduralGraphImage||(info.format!=gfx::PixelFormat::RGBA16F&&info.format!=gfx::PixelFormat::RGBA32F)):info.format!=gfx::PixelFormat::RGBA8))
+            throw std::invalid_argument("GPU image metadata mismatch");
+        // Existing Model images and all staged images must have distinct
+        // ownership. The producer is responsible for exclusivity across
+        // other live Models and external texture owners.
+        auto conflict=[&](const Image& other){
+            return other.tex==image.tex||other.virtualAlphaMask==image.tex;
+        };
+        for(const auto& other:model.images)
+            if(other.name==image.name||conflict(other))
+                throw std::invalid_argument("GPU image name or handle already published");
+        Entry* entry=nullptr;
+        for(auto& e:entries_){
+            if(e.model==&model)entry=&e;
+            for(const auto& other:e.images)
+                if(conflict(other)||(e.model==&model&&other.name==image.name))
+                    throw std::invalid_argument("GPU image name or handle already staged");
+        }
+        if(!entry){
+            entries_.push_back({&model,model.images.size(),{}, {},model.materialRevision});
+            entry=&entries_.back();
+        }
+        const size_t index=reserveIndex(*entry,image);
+        // All potentially throwing allocations precede the transfer. Image
+        // has nothrow move construction; explicitly invalidate source handle.
+        entry->images.reserve(entry->images.size()+1);
+        entry->indices.reserve(entry->indices.size()+1);
+        entry->images.push_back(std::move(image));
+        entry->indices.push_back(index);
+        image.tex={};
         return int(index);
     }
     size_t pendingImages() const noexcept {
@@ -145,7 +213,7 @@ public:
     }
     struct PendingImageReference {
         Model* model=nullptr;
-        size_t appendIndex=0;
+        size_t appendIndex=0; // reserved index; may be an existing certified slot
         const Image* staged=nullptr;
     };
     // Refer only during the outer authoring transaction's preparation.
@@ -156,7 +224,7 @@ public:
         for(const auto& entry:entries_)
             for(size_t i=0;i<entry.images.size();++i)
                 result.push_back({
-                    entry.model,entry.original+i,&entry.images[i]});
+                    entry.model,entry.indices[i],&entry.images[i]});
         return result;
     }
     size_t commit() {
@@ -167,14 +235,28 @@ public:
         for(auto& entry:entries_) {
             if(entry.model->images.size()!=entry.original)
                 throw std::logic_error("Model images changed during transaction");
-            entry.model->images.reserve(entry.original+entry.images.size());
+            size_t end=entry.original;
+            for(auto index:entry.indices){
+                if(index<entry.original){
+                    if(entry.model->materialRevision!=entry.revision||!lease_.validFor(device_)||!reusableGraphSlot(entry.model->images[index],lease_.generation(),rollback_))
+                        throw std::logic_error("procedural image slot no longer reusable");
+                }else{
+                    if(index!=end)throw std::logic_error("noncontiguous image append reservation");
+                    ++end;
+                }
+            }
+            entry.model->images.reserve(end);
         }
         size_t committed=0;
         for(auto& entry:entries_) {
-            for(auto& image:entry.images) {
-                entry.model->images.push_back(std::move(image));
+            for(size_t i=0;i<entry.images.size();++i) {
+                const auto index=entry.indices[i];
+                if(index<entry.original)entry.model->images[index]=std::move(entry.images[i]);
+                else entry.model->images.push_back(std::move(entry.images[i]));
                 ++committed;
             }
+            if(std::any_of(entry.indices.begin(),entry.indices.end(),[&](size_t index){return index<entry.original;}))
+                entry.model->markMaterialChanged();
             entry.images.clear();
         }
         committed_=true;
@@ -193,7 +275,20 @@ private:
         Model* model=nullptr;
         size_t original=0;
         std::vector<Image> images;
+        std::vector<size_t> indices;
+        uint64_t revision=0;
     };
+    size_t reserveIndex(const Entry& entry,const Image& image)const{
+        if(recycleGraphSlots_&&image.proceduralGraphImage&&image.proceduralGraphPin&&lease_.validFor(device_)){
+            for(size_t i=0;i<entry.original;++i)
+                if(reusableGraphSlot(entry.model->images[i],lease_.generation(),rollback_)&&
+                   std::find(entry.indices.begin(),entry.indices.end(),i)==entry.indices.end())return i;
+        }
+        size_t index=entry.original;
+        for(auto reserved:entry.indices)if(reserved>=entry.original)++index;
+        if(index>=size_t(std::numeric_limits<int>::max()))throw std::overflow_error("too many material images");
+        return index;
+    }
     void checkDevice() const {
         if(lease_.device() && !lease_.validFor(device_))
             throw std::logic_error("image upload GPU generation expired");
@@ -203,6 +298,7 @@ private:
     RenderDeviceLifetime::Lease lease_;
     std::vector<Entry> entries_;
     bool committed_=false;
+    bool recycleGraphSlots_=false;
 };
 
 } // namespace aiverse::render

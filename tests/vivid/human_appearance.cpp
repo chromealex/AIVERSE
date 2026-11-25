@@ -24,6 +24,19 @@ namespace {
 void expect(bool ok,const char* reason){if(!ok)throw std::runtime_error(reason);}
 bool finite(render::float3 v){return std::isfinite(v.x)&&std::isfinite(v.y)&&std::isfinite(v.z);}
 void test() {
+    // The offline appearance baker must not consume a live procedural
+    // binding even when its CPU pixels and current generation are valid.
+    {
+        HumanAppearance offlineLook;offlineLook.materials["skin"]="skin";
+        render::Model graphModel;graphModel.materials.resize(1);graphModel.images.resize(1);
+        auto& mat=graphModel.materials[0];mat.name="skin";mat.baseTex=0;
+        auto& image=graphModel.images[0];image.width=image.height=1;image.rgba={255,255,255,255};
+        image.proceduralGraphImage=true;image.proceduralGraphPin=std::make_shared<const render::ProceduralImagePin>();
+        mat.proceduralGraphPins=render::withGraphMaterialPin({},0,image.proceduralGraphPin);
+        bool refused=false;
+        try{bakeHumanAppearance(graphModel,offlineLook,16);}catch(const std::exception&){refused=true;}
+        expect(refused&&graphModel.images.size()==1,"offline appearance bake accepted live graph texture");
+    }
     HumanAppearance look;
     expect(HumanAppearance::fromJson(look.toJson()).toJson()==look.toJson(),"appearance roundtrip");
     auto invalid=look.toJson();auto badValues=invalid["values"];badValues.set("skin.roughness",Json::number(-1.0));invalid.set("values",badValues);

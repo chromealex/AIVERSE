@@ -10,7 +10,7 @@ import type { MaterialData, MaterialKey, MaterialLibrary, MaterialPatch, Materia
 import './MaterialsPanel.css';
 
 const EMPTY:MaterialLibrary={library:{}};
-export default function MaterialsPanel({projectPath,previewMaterial}:{projectPath:string;previewMaterial?:string|null}){
+export default function MaterialsPanel({projectPath,previewMaterial,textureOnly=false,openTextureGraph}:{projectPath:string;previewMaterial?:string|null;textureOnly?:boolean;openTextureGraph?:()=>void}){
  const [library,setLibrary]=useState<MaterialLibrary>(EMPTY);
  const [name,setName]=useState('');
  const [query,setQuery]=useState('');
@@ -25,7 +25,7 @@ export default function MaterialsPanel({projectPath,previewMaterial}:{projectPat
  const [error,setError]=useState('');
  const [message,setMessage]=useState('');
  const [nonce,setNonce]=useState(0);
- const [graphMode,setGraphMode]=useState(false);
+ const [materialMode,setMaterialMode]=useState<'properties'|'texture'|'dependencies'|'quick'>(textureOnly?'texture':'properties');
  const connected=nativeConnected();
  const names=useMemo(()=>materialNames(library),[library]);
  const selected:MaterialData=library.library[name]??{};
@@ -100,7 +100,7 @@ export default function MaterialsPanel({projectPath,previewMaterial}:{projectPat
  };
  return <section className="materials-editor">
   <div className="materials-heading">
-   <span><Layers size={16}/> Material Library</span>
+   <span><Layers size={16}/> {textureOnly?'Texture Graph · target material':'Material Library'}</span>
    <button className="icon-button" aria-label="Reload materials" title="Reload materials"
     disabled={busy||loading||changes>0} onClick={reload}><RefreshCw size={15}/></button>
   </div>
@@ -137,17 +137,21 @@ export default function MaterialsPanel({projectPath,previewMaterial}:{projectPat
       </button>)
     }
    </aside>
-   <div className="materials-detail">
+   <div className={'materials-detail'+(materialMode==='texture'?' materials-detail--graph':'')}>
     {!name||!names.includes(name)?<div className="materials-empty">{name?'Selected material is no longer present. Discard the draft and choose another material.':'Select a material from the library.'}</div>:
      <><div className="materials-selected">
       <span className="materials-swatch" style={{background:materialSwatchColor(selected)}}/>
       <strong>{name}</strong><small>Library PBR factors</small>
      </div>
-     <StudioButton size="sm" onClick={()=>setGraphMode(v=>!v)}>{graphMode?'Properties':'Graph / texture generator'}</StudioButton>
-     {graphMode&&connected&&projectPath?<MaterialGraphPanel name={name} material={selected} draft={draft} projectPath={projectPath} disabled={busy||loading} onEdit={edit}/>:<div className="materials-fields">
+     <div className="materials-modes" role="group" aria-label="Material workspace">
+      {(textureOnly?(['texture'] as const):(['properties','dependencies','quick'] as const)).map(mode=><StudioButton key={mode} size="sm" aria-pressed={materialMode===mode} disabled={mode!=='properties'&&(!connected||!projectPath)} onClick={()=>setMaterialMode(mode)}>{mode==='properties'?'Properties':mode==='texture'?'Texture Graph':mode==='dependencies'?'Dependencies':'Quick texture'}</StudioButton>)}
+      {!textureOnly&&<StudioButton size="sm" disabled={!connected||!projectPath} onClick={openTextureGraph}>Open Texture Graph</StudioButton>}
+     </div>
+     {connected&&projectPath&&<div hidden={materialMode==='properties'} className="materials-graph-host"><MaterialGraphPanel name={name} material={selected} draft={draft} projectPath={projectPath} disabled={busy||loading} onEdit={edit} mode={materialMode}/></div>}
+     <div className="materials-fields" hidden={materialMode!=='properties'}>
       {props.map(field=><PropertyField key={name+':'+field.key} property={field}
        disabled={busy||!connected||!projectPath} onChange={v=>edit(field.key,v)}/>)}
-     </div>}</>}
+     </div></>}
    </div>
   </div>
   <footer className="materials-footer">

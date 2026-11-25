@@ -67,6 +67,13 @@ struct Writer {
 };
 } // namespace
 std::string exportGlb(const Model &m) {
+    // Export serializes CPU assets, not live graph slots or tombstones.
+    // Require an explicit authored bake instead of exporting a session
+    // generation by its recycled numerical index.
+    for(const auto& image:m.images)
+        require(!render::runtimeGraphImage(image),"GLB export: runtime graph image requires offline bake");
+    for(const auto& material:m.materials)
+        require(!material.proceduralGraphPins,"GLB export: runtime material binding requires offline bake");
     Writer w;
     auto scene = Json::object(), roots = Json::array();
     for (size_t i = 0; i < m.nodes.size(); ++i) {
@@ -102,7 +109,8 @@ std::string exportGlb(const Model &m) {
     if (!m.images.empty()) {
         auto images=Json::array(),textures=Json::array(),samplers=Json::array();
         for (const auto& im:m.images) {
-            require(im.width>0 && im.height>0 && im.rgba.size()==size_t(im.width)*size_t(im.height)*4,
+            require(im.width>0 && im.height>0 && size_t(im.width)<=im.rgba.size()/4/size_t(im.height) &&
+                    im.rgba.size()==size_t(im.width)*size_t(im.height)*4,
                     "GLB export: texture CPU pixels unavailable");
             branding::Image pixels;pixels.width=im.width;pixels.height=im.height;pixels.rgba=im.rgba;
             const auto png=branding::encodePng(pixels);

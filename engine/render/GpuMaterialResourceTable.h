@@ -92,6 +92,18 @@ public:
     uint64_t frameSerial() const { return frameSerial_; }
     size_t size() const { return values_.size(); }
     size_t capacity() const { return limit_; }
+    // CPU staging table only. True blocks image retirement until this
+    // table generation is explicitly detached; no GPU wait or ownership.
+    bool referencesTexture(gfx::TextureHandle texture) const noexcept {
+        if(!texture.valid())return false;
+        for(const auto& value:values_){
+            if(value.alphaCoverage==texture||value.virtualTexture.physicalAtlas==texture||
+               value.virtualTexture.pageTable==texture)return true;
+            for(auto handle:value.pbrTextures)if(handle==texture)return true;
+            for(auto handle:value.graphTextures)if(handle==texture)return true;
+        }
+        return false;
+    }
 
     // Exact deduplication; collisions in a 64-bit prefilter are harmless.
     // Returns invalid when full or if any requested GPU handle is invalid.

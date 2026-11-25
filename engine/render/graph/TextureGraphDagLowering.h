@@ -17,7 +17,7 @@ struct MaterializedDagPlan {
 inline MaterializedDagPlan lowerDagSlots(
         const std::vector<std::vector<size_t>>& inputs,
         const std::vector<size_t>& order,const std::vector<size_t>& targets,
-        const std::vector<size_t>& nodeBytes,size_t budget,size_t maxInputs=3){
+        const std::vector<size_t>& nodeBytes,size_t budget,size_t maxInputs=3,bool retainAll=false){
     if(nodeBytes.size()!=inputs.size()||maxInputs>3)
         throw std::invalid_argument("invalid materialized DAG shape or binding limit");
     for(size_t i=0;i<inputs.size();++i)
@@ -54,13 +54,14 @@ inline MaterializedDagPlan lowerDagSlots(
         }
         occupied[slot]=true;nodeSlot[node]=slot;
         schedule.passes.push_back(std::move(pass));
-        for(auto dep:step.releaseAfter){occupied[nodeSlot[dep]]=false;nodeSlot[dep]=none;}
+        if(!retainAll)for(auto dep:step.releaseAfter){occupied[nodeSlot[dep]]=false;nodeSlot[dep]=none;}
     }
     for(auto target:targets){
         if(nodeSlot[target]==none||!occupied[nodeSlot[target]])
             throw std::logic_error("materialized output not pinned");
         result.outputSlots.push_back(nodeSlot[target]);
     }
+    if(retainAll)result.peakLive=schedule.passes.size();
     schedule.resultSlot=result.outputSlots.back();
     if(!validPassSchedule(schedule,budget))throw std::logic_error("invalid lowered pass schedule");
     return result;

@@ -37,7 +37,15 @@ bool sameUntextured(const Material& a,const Material& b){
 bool sameBoundMaterial(Material a,Material b,const std::vector<Image>& images){
     const int ai[]={a.baseTex,a.mrTex,a.normalTex,a.occlusionTex,a.emissiveTex,a.teamTex};
     const int bi[]={b.baseTex,b.mrTex,b.normalTex,b.occlusionTex,b.emissiveTex,b.teamTex};
-    for(int k=0;k<6;++k){if((ai[k]<0)!=(bi[k]<0))return false;if(ai[k]>=0){const auto x=images[size_t(ai[k])].tex,y=images[size_t(bi[k])].tex;if(!x.valid()||!(x==y))return false;}}
+    if(a.proceduralGraphPins||b.proceduralGraphPins)return false;
+    for(int k=0;k<6;++k){
+        if((ai[k]<0)!=(bi[k]<0))return false;
+        if(ai[k]>=0){
+            if(size_t(ai[k])>=images.size()||size_t(bi[k])>=images.size())return false;
+            const auto& x=images[size_t(ai[k])];const auto& y=images[size_t(bi[k])];
+            if(runtimeGraphImage(x)||runtimeGraphImage(y)||!x.tex.valid()||!(x.tex==y.tex))return false;
+        }
+    }
     a.baseTex=a.mrTex=a.normalTex=a.occlusionTex=a.emissiveTex=a.teamTex=-1;
     b.baseTex=b.mrTex=b.normalTex=b.occlusionTex=b.emissiveTex=b.teamTex=-1;
     return sameUntextured(a,b);
@@ -945,8 +953,20 @@ void GeometryScene::loadImpl(gfx::Device& dev,const Json& json,const FileReader&
 std::unique_ptr<Model> GeometryScene::makeProxy(const std::vector<size_t>& ids,float& error){
     // Explicit baked surfaces own their switch threshold. Do not bypass it with a parent proxy.
     for(auto id:ids)if(instances_[id].surfaceProxy)return {};
-    // Transparent/masked/graph materials retain their original independent draws and sorting.
-    for(auto id:ids)for(auto& m:instances_[id].model->materials)if(m.alpha!=AlphaMode::Opaque||m.transparent||m.shaderGraph)return {};
+    // HLOD copies image descriptors into a separate Model. A procedural
+    // generation or tombstone cannot be copied/remapped into that owner.
+    // Keep the original draws (and their owner) even for unused graph slots.
+    for(auto id:ids){
+        const auto& source=*instances_[id].model;
+        for(const auto& image:source.images)if(runtimeGraphImage(image))return {};
+        for(const auto& material:source.materials){
+            if(material.proceduralGraphPins||material.alpha!=AlphaMode::Opaque||
+               material.transparent||material.shaderGraph)return {};
+            for(auto slot:{&Material::baseTex,&Material::mrTex,&Material::normalTex,
+                           &Material::occlusionTex,&Material::emissiveTex,&Material::teamTex})
+                if(material.*slot>=0&&!resolveMaterialImage(source,material,slot))return {};
+        }
+    }
     auto out=std::make_unique<Model>();out->path="geometry:hlod";
     out->meshes.emplace_back();Node node;node.mesh=0;out->nodes.push_back(node);
     std::map<std::pair<const Model*,int>,int> materials;

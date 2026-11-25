@@ -38,3 +38,14 @@
 .materials-preview{display:flex;gap:6px;align-items:center;padding:7px 10px;
   color:#a6dbff;background:#163c5d;border:1px solid #4b789e;border-radius:5px;font-size:11px}
 .materials-preview:disabled{opacity:.44}
+
+.materials-modes{display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;border-bottom:1px solid var(--studio-border);position:sticky;top:0;z-index:2;background:var(--studio-surface)}
+.materials-modes button[aria-pressed=true],.tg-tabs button[aria-pressed=true]{background:var(--au-accent-strong);color:var(--au-text)}
+.materials-detail--graph{display:flex;flex-direction:column;overflow:hidden}
+.materials-detail--graph .materials-selected,.materials-detail--graph .materials-modes{flex:none}
+.materials-graph-host{min-height:0;min-width:0}
+.materials-detail--graph .materials-graph-host{flex:1;overflow:auto}
+.materials-graph-host[hidden],.material-graph-modes>[hidden],.materials-fields[hidden]{display:none!important}
+.material-dependency-view,.material-quick-view{padding:12px}
+.material-dependency-canvas{height:420px;display:flex;flex-direction:column}
+.material-dependency-view .au-row>.au-button,.material-quick-view .au-row>.au-button{flex:0 1 auto}

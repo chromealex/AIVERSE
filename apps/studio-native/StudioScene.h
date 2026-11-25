@@ -46,12 +46,17 @@
 #include "apps/studio-native/StudioSpectraPreview.h"
 #include "apps/studio-native/StudioSpectraSources.h"
 
+namespace aiverse::editor { class Workspace; class TextureGraphGpuPreview; }
 namespace aiverse::studio {
 class StudioScene final {
 public:
     // The host makes the device for its native surface (Metal: CAMetalLayer; Vulkan: an HWND).
     explicit StudioScene(std::unique_ptr<gfx::Device> device);
     ~StudioScene();
+    Json textureGraphCapabilities() const;
+    Json textureGraphOperation(editor::Workspace& ws,const Json& params);
+    bool serviceTextureGraph(const std::string& project);
+    void invalidateTextureGraphProject();
     StudioScene(const StudioScene&) = delete;
     StudioScene& operator=(const StudioScene&) = delete;
     // Render-thread-only: ephemeral generated building preview, never an Asset.
@@ -458,6 +463,9 @@ public:
 private:
     std::unique_ptr<gfx::Device> device_;
     std::unique_ptr<render::RenderDeviceLifetime> deviceLifetime_;
+    std::unique_ptr<editor::TextureGraphGpuPreview> textureGraph_;
+    struct GraphPresentation;
+    std::unique_ptr<GraphPresentation> graphPresentation_;
     render::Renderer3D renderer_;
     world::NereidManifestHost nereid_;
     double underwaterFrameTime_=0;

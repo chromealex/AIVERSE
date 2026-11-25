@@ -1,0 +1,16 @@
+# Texture Graph Stage 38BD2 — pinned external image assets
+
+Branch: `feature/aiv20261124_texture_graph_gpu_slots`. Implementation SHA: `789619cfd5c0fe0ee5fded92655940cc4137bd23`. Previous stage: `3b876ce91145a314eab3ccc7a5d40db562f5cbd7`. No main merge.
+
+## Implemented
+- Native imageAsset node stores project content path plus SHA-256 source revision; explicit trusted ImageResolver supplies immutable original packed RGB words to the compiler. Embedded image nodes share this snapshot representation. Existing CPU nearest sampling and materialized Metal/Vulkan source buffer consume identical snapshots. Original extent <=4096 per side, combined packed source storage <=16 MiB (square maximum 2048x2048 with no other source); existing GPU DAG budget can further restrict admission. No JSON pixel enlargement or shader literals.
+- Project resolver in MaterialOps uses bounded file read, rejects traversal and symlinks, verifies SHA-256 over encoded bytes and preflights PNG/JPEG extent before decoding using existing Model.cpp stb decoder. No implicit filesystem access from runtime compiler. Missing or changed source rejects; explicit refresh pins a new revision. GPU and CPU paths use resolved snapshot for that request. Set publication revalidates pinned source; changed files reject publication.
+- Studio imageAsset inspector lists PNG/JPEG in project Assets and pins/refreshes via texture_graph_image_asset, reports original dimensions. Workspace validation/save/CPU preview/bake, GPU plan and direct Studio/legacy editor native start integrated. Existing graph_asset_dependencies reports external image paths, including function definitions.
+- Native host callers can use TextureGraphGpuOwner::start with explicit trusted resolver; queue cannot accept external snapshots yet and incremental modes are refused, CPU result cache bypassed for external images. No new GPU owner. SHA-256 reuses existing aiverse_pack library.
+- Authored strict GPU fixture with 512x512 original source, missing-resolver refusal and source byte admission; manifest updated.
+
+## Evidence
+GitHub accepted source commits 10d7204f, 1609f21a, a067feaa, 789619cf. Reviewed changed paths and exact resolver integration snippets. No native compilation, TypeScript/Vite build, CPU/GPU fixture execution, live Studio/MCP or merged-tree Mac gate performed. Main synchronization not performed.
+
+## Limits / next
+PNG/JPEG only, RGB8 nearest sampling (no alpha, HDR, mip sampling, importer color-space conversion, compressed texture path). Encoded file <=16 MiB; source decoded RGB words <=16 MiB combined, GPU total budget unchanged. Original source is referenced, not copied into an immutable asset store; missing or changed content requires explicit refresh. Source hash is verified by project resolver; other trusted host resolvers must enforce the same revision contract. Pending queue snapshots and native client convenience integration not implemented. Source decoder temporary CPU allocations are additional to packed snapshot budget. Symlink/path checks assume cooperating project filesystem (not an adversarial concurrent replacement sandbox). Next stage 38BE: HDRI/IBL using existing renderer lighting/environment system, then custom compute and consolidated acceptance.

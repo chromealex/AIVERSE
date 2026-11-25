@@ -4,6 +4,8 @@
 #include "Vulkan.h"
 #include "VkApi.h"
 #include "VkShaderCompiler.h"
+#include "VkScopeTiming.h"
+#include <deque>
 
 #include <array>
 #include <functional>
@@ -159,6 +161,9 @@ struct FrameSlot {
     VkQueryPool timing = VK_NULL_HANDLE;
     uint32_t timingCount = 0;
     std::vector<std::string> timingLabels;   // one per query, "" = frame start
+    VkQueryPool scopeTiming=VK_NULL_HANDLE;
+    ScopeTimingFrame scopeRecords;
+    bool scopeSubmitted=false;
 };
 
 class VulkanDevice final : public Device {
@@ -216,6 +221,9 @@ public:
     TextureHandle createTexture(const TextureDesc& d) override;
     void updateTexture(TextureHandle h, int x, int y, int w, int h2, const void* pixels, int rowPitchBytes) override;
     bool updateTextureRegion(TextureHandle h, const TextureUploadDesc& u) override;
+    bool supportsStorageBufferTextureCopy() const override { return supportsCompute() && gpuHealthy(); }
+    bool supportsHdrTextureMipGeneration(PixelFormat) const override;
+    bool copyStorageBufferToTexture2D(BufferHandle,TextureHandle,const BufferTextureCopy2D&) override;
     bool textureInfo(TextureHandle h, TextureInfo& out) const override;
     void destroyTexture(TextureHandle h) override;
     TextureViewHandle createTextureView(TextureHandle texture, const TextureViewDesc& desc) override;
@@ -231,6 +239,9 @@ public:
     bool readTextureAsync(TextureHandle, TextureReadbackDesc, TextureReadFn) override;
     bool gpuHealthy() const override { return healthy_; }
     bool waitIdle() override;
+    bool beginGpuScope(uint64_t tag) override;
+    void endGpuScope() override;
+    std::vector<GpuTiming> takeGpuScopeTimings() override;
     // serial_ names the currently recording VkFence-backed frame. This is
     // NOT evidence of completion. completed_ advances only after a real
     // vkWaitForFences return of VK_SUCCESS for its recorded frame slot.
@@ -249,6 +260,8 @@ public:
     void abandonRetirementTokenAfterIdle(uint64_t token) override;
 
     void beginFrame(int framebufferWidth, int framebufferHeight) override;
+    bool supportsOffscreenFrames() const override { return supportsCompute(); }
+    bool beginOffscreenFrame() override;
     void endFrame() override;
     void captureNextFrameTagged(TaggedCaptureFn fn) override {
         captureNextFrame([this,fn=std::move(fn)](int w,int h,std::vector<uint8_t> pixels){if(fn)fn(frameSerial(),w,h,std::move(pixels));});
@@ -427,6 +440,10 @@ private:
     double timingFrameMs_ = 0.0;
     void timestamp(const std::string& label, VkPipelineStageFlagBits stage);
     void collectTiming(FrameSlot& s);
+    uint32_t scopeTimestampBits_=0;
+    std::deque<GpuTiming> completedScopes_;
+    void collectScopeTiming(FrameSlot& s,bool completed);
+    void pollScopeTimings();
     std::vector<VkImageView> swapViews_;
     VkDescriptorSetLayout rotLayout_ = VK_NULL_HANDLE;
     VkPipelineLayout rotPipeLayout_ = VK_NULL_HANDLE;
@@ -450,7 +467,8 @@ private:
     uint64_t serial_ = 1, completed_ = 0;
     uint64_t nextRetirementToken_ = 1;
     std::map<uint64_t,VkFence> retirementFences_;
-    bool recording_ = false;
+    bool recording_ = false, offscreenFrame_ = false;
+    bool beginFrameInternal(int w,int h,bool offscreen);
     struct Garbage { uint64_t serial; std::function<void()> fn; };
     std::vector<Garbage> garbage_;
     CaptureFn capture_;

@@ -51,9 +51,10 @@ struct BakeGraph {
 };
 inline void bakeMaterial(render::Model& model,render::Material& material,const Json& graph,int limit) {
  const BakeGraph program(graph);
- const render::Image* source=material.baseTex<0?nullptr:&model.images.at(size_t(material.baseTex));
+ const render::Image* source=render::resolveMaterialImage(model,material,&render::Material::baseTex);
+ if(material.baseTex>=0&&(!source||render::runtimeGraphImage(*source)))throw std::runtime_error("Appearance bake requires an authored CPU texture, not a runtime graph binding");
  int w=limit,h=limit;
- if(source){if(source->width<=0||source->height<=0||source->rgba.size()!=size_t(source->width)*source->height*4)throw std::runtime_error("Appearance bake requires CPU RGBA pixels");
+ if(source){if(source->width<=0||source->height<=0||size_t(source->width)>source->rgba.size()/4/size_t(source->height)||source->rgba.size()!=size_t(source->width)*size_t(source->height)*4)throw std::runtime_error("Appearance bake requires CPU RGBA pixels");
   const float scale=std::min(1.f,float(limit)/std::max(source->width,source->height));w=std::max(1,int(source->width*scale));h=std::max(1,int(source->height*scale));}
  render::Image out;out.name=material.name+".baked";out.width=w;out.height=h;out.rgba.resize(size_t(w)*h*4);if(source){out.repeat=source->repeat;out.nearest=source->nearest;}
  const float factors[]={material.baseColor.x,material.baseColor.y,material.baseColor.z,material.baseColor.w};
@@ -66,6 +67,10 @@ inline void bakeMaterial(render::Model& model,render::Material& material,const J
   pixel=program.evaluate(pixel,(x+.5f)/w,(y+.5f)/h);
   for(int k=0;k<4;++k){float v=std::clamp(pixel[k],0.f,1.f);if(k<3)v=srgb(v);out.rgba[(size_t(y)*w+x)*4+k]=uint8_t(std::lround(v*255));}
  }
- material.baseTex=int(model.images.size());model.images.push_back(std::move(out));material.baseColor={1,1,1,1};material.mrTex=-1;material.shaderGraph.reset();
+ const int index=int(model.images.size());model.images.push_back(std::move(out));
+ render::setImportedMaterialImage(material,&render::Material::baseTex,index);
+ render::setImportedMaterialImage(material,&render::Material::mrTex,-1);
+ material.baseColor={1,1,1,1};material.shaderGraph.reset();
+ for(auto& slot:material.graphTextures)slot=-1;
 }
 }

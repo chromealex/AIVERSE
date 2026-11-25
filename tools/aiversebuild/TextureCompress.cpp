@@ -1,4 +1,7 @@
 #include "TextureCompress.h"
+#include "../../engine/render/TextureBcEncode.h"
+#include <chrono>
+#include <thread>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -7,21 +10,67 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
-#if !defined(_WIN32)
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#else
 #include <sys/wait.h>
+#include <spawn.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <cerrno>
+extern char **environ;
 #endif
 
 namespace aiverse::build {
 namespace fs = std::filesystem;
 
 namespace {
-std::string shellQuote(const std::string& s) {
+// No shell: project paths are arguments, not commands. Bound explicit codec
+// invocations to two minutes per process and terminate on timeout.
+int runCodec(const std::string& encoder,const std::vector<std::string>& args){
+    std::error_code ec;const auto executable=fs::absolute(fs::path(encoder),ec);
+    if(ec||!fs::is_regular_file(executable,ec)||ec)return -1;
 #if defined(_WIN32)
-    return "\"" + s + "\"";
+    auto quote=[](const std::wstring& value){
+        std::wstring out=L"\"";size_t slashes=0;
+        for(wchar_t c:value){
+            if(c==L'\\'){++slashes;continue;}
+            if(c==L'"'){out.append(slashes*2+1,L'\\');out+=c;}
+            else {out.append(slashes,L'\\');out+=c;}
+            slashes=0;
+        }
+        out.append(slashes*2,L'\\');out+=L'"';return out;
+    };
+    std::wstring command=quote(executable.wstring());
+    for(const auto& arg:args){command+=L' ';command+=quote(fs::path(arg).wstring());}
+    STARTUPINFOW si{};si.cb=sizeof(si);PROCESS_INFORMATION pi{};
+    if(!CreateProcessW(executable.c_str(),command.data(),nullptr,nullptr,FALSE,CREATE_NO_WINDOW,nullptr,nullptr,&si,&pi))return -1;
+    CloseHandle(pi.hThread);
+    DWORD code=1;
+    if(WaitForSingleObject(pi.hProcess,120000)==WAIT_OBJECT_0)GetExitCodeProcess(pi.hProcess,&code);
+    else {TerminateProcess(pi.hProcess,124);WaitForSingleObject(pi.hProcess,5000);code=124;}
+    CloseHandle(pi.hProcess);return int(code);
 #else
-    std::string o = "'";
-    for (char c : s) { if (c == '\'') o += "'\\''"; else o += c; }
-    return o + "'";
+    std::vector<std::string> values;values.push_back(executable.string());values.insert(values.end(),args.begin(),args.end());
+    std::vector<char*> argv;for(auto& value:values)argv.push_back(value.data());argv.push_back(nullptr);
+    posix_spawn_file_actions_t actions;if(posix_spawn_file_actions_init(&actions)!=0)return -1;
+    posix_spawn_file_actions_addopen(&actions,1,"/dev/null",O_WRONLY,0);
+    posix_spawn_file_actions_addopen(&actions,2,"/dev/null",O_WRONLY,0);
+    pid_t pid{};const int launched=posix_spawn(&pid,executable.c_str(),&actions,nullptr,argv.data(),environ);
+    posix_spawn_file_actions_destroy(&actions);
+    if(launched!=0)return -1;
+    const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(120);
+    int status=0;
+    while(std::chrono::steady_clock::now()<deadline){
+        const auto result=waitpid(pid,&status,WNOHANG);
+        if(result==pid)return WIFEXITED(status)?WEXITSTATUS(status):-1;
+        if(result<0&&errno!=EINTR)return -1;
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    kill(pid,SIGKILL);while(waitpid(pid,&status,0)<0&&errno==EINTR){}return 124;
 #endif
 }
 
@@ -200,17 +249,9 @@ bool encodeAstcKtx2(const unsigned char* rgba, int width, int height, const Astc
             f.write(t.data(), std::streamsize(t.size()));
             if (!f) { err = "cannot write " + in.string(); return false; }
         }
-        std::string cmd = shellQuote(encoder) + (opt.srgb ? " -cs " : " -cl ") + shellQuote(in.string()) + " " + shellQuote(out.string()) + " " +
-                          blockArg + " -" + preset + " -silent" + (opt.alpha ? "" : " -esw rgb1");
-#if defined(_WIN32)
-        cmd = "\"" + cmd + " >NUL 2>&1\"";
-#else
-        cmd += " >/dev/null 2>&1";
-#endif
-        int rc = std::system(cmd.c_str());
-#if !defined(_WIN32)
-        if (rc != -1 && WIFEXITED(rc)) rc = WEXITSTATUS(rc);
-#endif
+        std::vector<std::string> args={opt.srgb?"-cs":"-cl",in.string(),out.string(),blockArg,"-"+preset,"-silent"};
+        if(!opt.alpha){args.push_back("-esw");args.push_back("rgb1");}
+        const int rc=runCodec(encoder,args);
         std::string bytes, blocks;
         int bx = 0, by = 0, aw = 0, ah = 0;
         if (rc != 0 || !readFile(out, bytes) || !readAstcFile(bytes, bx, by, aw, ah, blocks) || bx != opt.block || by != opt.block || aw != w || ah != h) {
@@ -222,10 +263,37 @@ bool encodeAstcKtx2(const unsigned char* rgba, int width, int height, const Astc
         levels.push_back(std::move(blocks));
         if (!opt.mipmaps || (w == 1 && h == 1)) break;
         int nw = 0, nh = 0;
-        level = half(level, w, h, nw, nh);
+        if(opt.semanticMips){nw=std::max(1,w/2);nh=std::max(1,h/2);level=render::bc_encode::nextMip(level,w,h,opt.srgb,opt.normal);}
+        else level = half(level, w, h, nw, nh);
         w = nw; h = nh;
     }
     ktx2 = makeAstcKtx2(opt.block, opt.srgb, width, height, levels);
+    return true;
+}
+
+std::string findCompressonator(){
+    if(const char* p=std::getenv("AIVERSE_COMPRESSONATOR");p&&*p&&fs::path(p).is_absolute()&&executable(p))return p;
+    return {};
+}
+bool encodeCompressonatorDds(const std::string& input,const std::string& extension,int width,int height,
+    const std::string& format,bool mipmaps,const std::string& encoder,const std::string& tmpDir,std::string& dds,std::string& err){
+    if(encoder.empty()){err="Set AIVERSE_COMPRESSONATOR to the absolute Compressonator CLI executable";return false;}
+    if(width<8||height<8||width>1024||height>1024||input.empty()||input.size()>32u*1024u*1024u||
+       !((extension==".exr"&&(format=="bc6h"||format=="bc6hs"))||(extension==".png"&&format=="bc7"))){err="Invalid external BC input";return false;}
+    const auto in=fs::path(tmpDir)/("codec-source"+extension),out=fs::path(tmpDir)/"codec-result.dds";
+    if(fs::exists(in)||fs::exists(out)||fs::is_symlink(in)||fs::is_symlink(out)){err="Codec staging path exists";return false;}
+    {std::ofstream f(in,std::ios::binary);f.write(input.data(),std::streamsize(input.size()));f.close();if(!f){err="Cannot write codec source";return false;}}
+    int levels=1;for(int n=std::max(width,height);mipmaps&&n>1;n/=2)++levels;
+    const char* codecFormat = format == "bc7" ? "BC7" : (format == "bc6hs" ? "BC6H_SF" : "BC6H");
+    std::vector<std::string> args={"-fd",codecFormat,"-noprogress","-silent"};
+    if(mipmaps){args.push_back("-miplevels");args.push_back(std::to_string(levels));}
+    else args.push_back("-nomipmap");
+    args.push_back(in.string());args.push_back(out.string());
+    const int rc=runCodec(encoder,args);
+    std::error_code ec;
+    if(rc||fs::is_symlink(out)||!fs::is_regular_file(out,ec)||ec||fs::file_size(out,ec)>32u*1024u*1024u||ec||!readFile(out,dds)){
+        err="Compressonator failed or returned invalid DDS (exit "+std::to_string(rc)+")";return false;
+    }
     return true;
 }
 

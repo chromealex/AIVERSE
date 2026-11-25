@@ -55,6 +55,28 @@ int main() {
     AIVERSE_TEST_CHECK(missing.isObject());
     AIVERSE_TEST_CHECK(!warnings.empty());
 
+    // A file override clears only its channel, even at the same index.
+    // The original immutable appearance remains pinned.
+    render::Material generated;
+    auto colorPin=std::make_shared<const render::ProceduralImagePin>();
+    auto normalPin=std::make_shared<const render::ProceduralImagePin>();
+    generated.baseTex=7;generated.normalTex=8;
+    generated.proceduralGraphPins=render::withGraphMaterialPin({},0,colorPin);
+    generated.proceduralGraphPins=render::withGraphMaterialPin(generated.proceduralGraphPins,1,normalPin);
+    auto previous=generated;
+    AppearanceAuthoringService::applyMaterial(generated,library,Json::parse(R"({"roughness":0.4})"));
+    AIVERSE_TEST_CHECK(generated.proceduralGraphPins==previous.proceduralGraphPins);
+    AppearanceAuthoringService::applyMaterial(generated,library,Json::parse(R"({"texture":"file.png"})"),
+        [](const std::string&){return 7;});
+    AIVERSE_TEST_CHECK(generated.baseTex==7&&!(*generated.proceduralGraphPins)[0]);
+    AIVERSE_TEST_CHECK((*generated.proceduralGraphPins)[1]==normalPin);
+    AIVERSE_TEST_CHECK((*previous.proceduralGraphPins)[0]==colorPin);
+    AppearanceAuthoringService::applyMaterial(generated,library,Json::parse(R"({"normalMap":"missing.png"})"),
+        [](const std::string&){return -1;});
+    AIVERSE_TEST_CHECK(generated.normalTex==-1&&!generated.proceduralGraphPins);
+    previous=render::Material{};
+    AIVERSE_TEST_CHECK(render::graphImageUnpinned(colorPin)&&render::graphImageUnpinned(normalPin));
+
     render::Model model;
     bool failed=false;
     try {

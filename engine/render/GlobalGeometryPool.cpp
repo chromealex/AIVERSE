@@ -179,6 +179,29 @@ GeometryPoolReferencedStats geometryPoolReferencedStats(
     return result;
 }
 
+GeometryPoolReferencedStats geometryPoolPageReferencedStats(
+        gfx::Device& dev,std::span<const GeometryPoolPageReference> references) {
+    GeometryPoolReferencedStats result;
+    std::map<GeometryPoolPageReference,size_t,std::owner_less<GeometryPoolPageReference>> counts;
+    for(const auto& reference:references)
+        if(!reference.expired())++counts[reference];
+    std::lock_guard lock(poolMutex);
+    const auto it=pools.find(&dev);
+    if(it==pools.end())return result;
+    for(const auto& weak:it->second) {
+        const auto page=weak.lock();
+        if(!page)continue;
+        const auto found=counts.find(GeometryPoolPageReference(page));
+        if(found==counts.end())continue;
+        ++result.uniquePages;
+        result.referenceModels+=found->second;
+        result.allocatedBytes+=page->capacity;
+        result.occupiedBytes+=page->vertexEnd+(page->capacity-page->indexBegin);
+        counts.erase(found); // each registered page is charged once
+    }
+    return result;
+}
+
 bool globalGeometryPoolingEnabled() { return !disabled(); }
 void setGlobalGeometryPoolingEnabled(bool enabled) { poolEnabled.store(enabled, std::memory_order_relaxed); }
 bool rigidLodGeometryPoolingEnabled() { return rigidLodPoolAllowed(); }

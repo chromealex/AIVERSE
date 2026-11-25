@@ -22,7 +22,7 @@ struct DagLifetimePlan {
 inline DagLifetimePlan planDagLifetime(const std::vector<std::vector<size_t>>& inputs,
         const std::vector<size_t>& order,const std::vector<size_t>& targets) {
     const size_t n=inputs.size();
-    if(!n||n>32||order.size()!=n||targets.empty()||targets.size()>9)
+    if(!n||n>64||order.size()!=n||targets.empty()||targets.size()>9)
         throw std::invalid_argument("invalid texture DAG shape");
     std::vector<bool> seen(n),needed(n),pinned(n);
     for(auto node:order){

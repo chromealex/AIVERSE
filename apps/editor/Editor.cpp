@@ -535,18 +535,27 @@ void Editor::retirePreviewModel(std::unique_ptr<render::Model>& model) noexcept 
 }
 
 void Editor::shutdown() {
-    graphGpuProfile_.clear();
-    if (!dev_) return;
-    // Invalidate any captureNextFrame callbacks still owned by the RHI.
-    captureLifetime_->store(false,std::memory_order_release);
-    captureArmed_ = false;
-    shots_.clear();
+    if(view_.modelMutationBlocked() || !clientHost_.canShutdown())
+        throw std::logic_error("Editor shutdown: live Model read, graph transaction or quarantined hosted client");
+    if (!dev_) { graphGpuProfile_.clear(); return; }
     // Editor windows own offscreen Model/portrait/viewport allocations and
     // can still have prior-frame submissions in flight. Prove full device
     // completion BEFORE allowing destructors to destroy native GPU objects.
     if(!dev_->waitForResourceIdle())
         throw std::runtime_error(
             "Editor shutdown: GPU completion barrier failed");
+    // Resolve hosted teardown before dismantling the editor's other owners.
+    // The full-device idle proof above covers archived and active clients.
+    clientHost_.stop();
+    if(dev_->gpuHealthy())clientHost_.drainAfterGpuIdle();
+    else clientHost_.abandonOnDeviceLoss();
+    graphGpuProfile_.clear();
+    // Invalidate capture callbacks only after hosted preflight/drain.
+    captureLifetime_->store(false,std::memory_order_release);
+    captureArmed_=false;
+    shots_.clear();
+    pendingGraphMaterialApply_.reset();graphMaterialApplyProject_.clear();
+    graphMaterialApplyRequest_.clear();graphMaterialApplyState_="idle";graphMaterialApplyReason_.clear();
     textureGraphGpuPreview_.shutdownAfterIdle(*dev_);
     if(spectraGpuTelemetry_==spectraPreviewGpu_.get())
         spectraGpuTelemetry_=nullptr;
@@ -555,14 +564,7 @@ void Editor::shutdown() {
     spectraPreviewFrameOpen_=false;
     spectraPreviewRequest_.pending=false;
     spectraGpuTelemetry_=nullptr;
-    clientHost_.stop();
-    // A hosted GameClient may have submitted resources in an earlier GUI
-    // frame. Its GPU handles must survive until a true graphics completion
-    // signal; do not release them simply because the Game tab was closed.
-    if (dev_->gpuHealthy() && dev_->waitForSubmittedGpuWork())
-        clientHost_.drainAfterGpuIdle();
-    else if (!dev_->gpuHealthy())
-        clientHost_.abandonOnDeviceLoss();
+    // Hosted clients were drained at the initial GPU-idle boundary.
     gameFxBridge_.detach();
     // Nature preview retires grass Models through previewModelRetirement_
     // and stops its particles while gameFx_ is still alive.
@@ -704,7 +706,7 @@ void Editor::reloadRules() {
 // Unlike reloadRules(), do not reparse rules, restart FX or reset editor demand
 // history. The caller defers this transaction until after play mode.
 void Editor::reloadVisualAssets() {
-    if (!dev_ || playing() || clientPlaying()) return;
+    if (!dev_ || playing() || clientPlaying() || view_.modelMutationBlocked()) return;
     editSceneCacheValid_ = false;
     editSceneCache_.clear();
     view_.shutdown(*dev_);
@@ -725,7 +727,7 @@ void Editor::reloadVisualAssets() {
 
 size_t Editor::reloadVisualModelSources(
         const std::vector<std::string>& paths) {
-    if(!dev_ || playing() || clientPlaying() || paths.empty())return 0;
+    if(!dev_ || playing() || clientPlaying() || paths.empty() || view_.modelMutationBlocked())return 0;
     // The caller runs at the editor frame boundary, after the previous
     // render submission. TypeLook/animation sources are detached by GameView
     // before the independent resource owner destroys GPU allocations.
@@ -804,7 +806,8 @@ void Editor::pollVisualAssets(double dt) {
         [this](const std::string& message){ws_.log("view",message);});
     // Changes are retained throughout editor/client play. GPU mutations
     // happen only here, before the first rendering pass of a new frame.
-    if(!visualAssets_.pending() || playing() || clientPlaying())return;
+    // A blocked owner mutation is retryable, not an acknowledged edit.
+    if(!visualAssets_.pending() || playing() || clientPlaying() || view_.modelMutationBlocked())return;
     const auto impact=visualAssets_.impact();
     // A previous candidate may be waiting for native Metal/Vulkan shader
     // jobs already owned by Renderer3D. Do not rebuild scratch Models and
@@ -2699,7 +2702,11 @@ void Editor::frame(gfx::Device& dev, double dt) {
         if (gpuRetirementLastFlushSucceeded_) {
             viewportRetirement_.drainAfterGpuIdle(dev);
             gpuResourceRetirement_.drainAfterGpuIdle(dev);
-            clientHost_.drainAfterGpuIdle();
+            try { clientHost_.drainAfterGpuIdle(); }
+            catch(const std::exception& e) {
+                gpuRetirementLastFlushSucceeded_=false;
+                ws_.log("view",std::string("Hosted client retirement deferred: ")+e.what(),true);
+            }
             prisma_.releaseRetiredSizesAfterGpuIdle();
             r3d_.drainObjectMotionAfterGpuIdle();
         }
@@ -2733,7 +2740,12 @@ void Editor::frame(gfx::Device& dev, double dt) {
     pollAgentLink();
     applyChanges();
     graphGpuProfile_.checkProject(ws_.project.dir);
-    textureGraphGpuPreview_.tick(dev,ws_.project.dir);
+    if(view_.automaticGraphImageCollectionEnabled()&&!pendingGraphMaterialApply_&&!clientPlaying()){
+        const auto graphState=textureGraphGpuPreview_.status();
+        if(!graphState.getBool("busy")&&!graphState.getBool("gpuTextureSetReady")&&view_.collectAutomaticGraphImages())
+            textureGraphGpuPreview_.invalidateOutputReuseReceipt();
+    }
+    textureGraphGpuPreview_.tick(dev,ws_.project.dir,&graphGpuProfile_);
     // Poll changed presentation assets before any new frame submissions.
     // This runs even when every editor property/model window is closed.
     pollVisualAssets(dt);
@@ -2750,6 +2762,7 @@ void Editor::frame(gfx::Device& dev, double dt) {
     // Sweep only after a substantial no-use interval, before new viewport
     // submission. Never unload while the editor's play simulation is active.
     reclaimEditorAssets();
+    applyQueuedGraphMaterial();
     if (!playing() && gridRevision_ != doc().revision && time_ >= gridRebuildAt_) { syncGrid(); gridRebuildAt_ = time_ + 0.05; }
     if (sceneFlying_) {
         float k = float(std::min(1.0, dt * 4.0));

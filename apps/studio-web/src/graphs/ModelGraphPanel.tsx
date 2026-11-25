@@ -4,7 +4,7 @@ import {StudioPanel,StudioAlert,StudioEmptyState,StudioButton,StudioSelect,Studi
 import GraphCanvas from './GraphCanvas';
 import {BuildingInspectionImport} from './BuildingStructureGraphView';
 import StrataAnalysisPanel from './StrataAnalysisPanel';
-import GraphDiagnostics from './GraphDiagnosticsPanel';
+import GraphDiagnosticsPanel from './GraphDiagnosticsPanel';
 import {AnimationConditions,AnimationParameters} from './AnimationConditions';
 import {DraftHistory} from './graphFramework';
 import type {PortRef} from './graphGeometry';
@@ -108,7 +108,7 @@ export default function ModelGraphPanel({projectPath}:{projectPath:string}){
    <GraphCanvas view={{...view,nodes:view.nodes.map(n=>({...n,...positions[mode+':'+n.id]}))}} selected={active} selection={selection} onSelection={setSelection}
     label="Model graph" disabled={busy} pendingOutput={pending} onOutput={setPending} onInput={connect} onCancel={()=>setPending(null)}
     onSelect={id=>setSelection(id?[id]:[])} onMove={(id,x,y)=>move([{id,x,y}])} onMoveGroup={move}/>
-   <GraphDiagnostics view={view} policy={{cycles:mode==='states'?'allow':'reject'}}/>
+   <GraphDiagnosticsPanel view={view} policy={{cycles:mode==='states'?'allow':'reject'}}/>
    {name&&(mode==='model'||mode==='geometry')&&<StrataAnalysisPanel projectPath={projectPath} suggestedModel={'models/'+name+'.glb'} disabled={busy}/>}
    {graph&&(mode==='pose'||mode==='states')&&<AnimationParameters doc={graph} disabled={busy} onEdit={next=>edit({...draft,graph:next})}/>}
    {entry&&<StudioSection title={'Entry '+active}>{mode==='geometry'&&object(entry)&&object(entry.geometry)&&<>

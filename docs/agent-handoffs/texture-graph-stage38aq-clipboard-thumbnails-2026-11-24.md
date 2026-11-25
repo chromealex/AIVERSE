@@ -1,0 +1,5 @@
+# Stage 38AQ — Clipboard and native thumbnails
+
+Stage 38AQ: added internal node clipboard (copy/paste, missing input references disconnected), explicit CPU thumbnails for up to the existing 32 nodes using native preview and validated RGBA payload, graph semantic invalidation, optional thumbnail geometry and expanded dependency spacing. Errors visible next to preview. Exact helper blob 76c720dae3cdeda695a5957aa97faeef77e3a58a verified locally by git hash-object; 3/3 Node 22.16 tests passed (layout, duplication, semantic preview key). Full test:graphs and TypeScript/Vite build NOT RUN here; thumbnail geometry regression authored but not executed. No new native GPU change; no live GPU success inferred from screenshot. Dedicated dock window, interactive native PBR sphere/cube/model preview and resident material apply remain outstanding. No main merge.
+
+Implementation: 7da6d72de5c02fd46ef6779f5b1388458c7e48e6. Rebuild Studio web bundle and app packaging, run npm run test:graphs, then visually verify GPU auto-preview and native thumbnail display. CPU thumbnails are explicitly requested, not mislabeled GPU work.

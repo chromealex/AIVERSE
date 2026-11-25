@@ -1,12 +1,14 @@
 // Shared graph authoring facade. Workspace domain owners retain validation and persistence.
 #pragma once
 #include "Workspace.h"
+#include "MaterialOps.h"
 #include "GraphDraftEdits.h"
 #include "GraphAssetDependencies.h"
 #include "GraphRuntimeProbe.h"
 #include "GraphDebugSession.h"
 #include "engine/render/graph/TextureGraph.h"
 #include "engine/render/graph/TextureGraphGpu.h"
+#include "engine/render/graph/TextureGraphGpuTextureTransfer.h"
 #include <array>
 #include <stdexcept>
 
@@ -159,15 +161,23 @@ inline void registerGraphOps(Workspace& ws) {
             Json r=Json::object();r.set("available",Json::fromBool(false));r.set("reason",Json::string("Native common presentation profile owner unavailable in this host"));return r;
         }});
     ws.registerOp({"texture_graph_gpu_preview","Queue/read native Metal or Vulkan texture preview, single bake or full PBR set; publish completed bake explicitly.",
-        Json::parse(R"({"properties":{"action":{"type":"string","enum":["start","read","publish","cancel","plan"]},"graph":{"type":"object"},"overrides":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"requireGpu":{"type":"boolean"},"resolution":{"type":"integer","minimum":8,"maximum":128},"bake":{"type":"boolean"},"bakeSet":{"type":"boolean"},"materialized":{"type":"boolean","description":"Opt-in experimental native materialized DAG execution"},"timeoutMs":{"type":"integer","minimum":1000,"maximum":300000},"request":{"type":"string"},"textureName":{"type":"string"}},"required":["action"]})"),[&ws](const Json& p){
+        Json::parse(R"({"properties":{"action":{"type":"string","enum":["capabilities","start","read","publish","cancel","plan","materialTarget","applyMaterial","materialApplyStatus","enqueue","queueRead","queueCancel","queueRelease","studioModelTargets","studioModelApply","studioPbrPrepare","studioPbrApply","studioPbrRender","studioPbrRead"]},"graph":{"type":"object"},"overrides":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"requireGpu":{"type":"boolean"},"resolution":{"type":"integer","minimum":8,"maximum":256},"bake":{"type":"boolean"},"bakeSet":{"type":"boolean"},"materialized":{"type":"boolean","description":"Opt-in experimental native materialized DAG execution"},"materializedDag":{"type":"boolean","description":"Compatibility alias for materialized"},"incremental":{"type":"boolean","description":"Opt-in dedicated materialized pass slots and exact-source reuse; supports pointwise fusion; requires native device lease"},"fusePointwise":{"type":"boolean","description":"Opt-in bounded pointwise fusion for materialized DAG; also supported in plan inspection"},"gpuTextureTransfer":{"type":"boolean","description":"Experimental GPU-resident full materialized set; actual copied mip zero is CPU-reference validated; requires native lease"},"incrementalOutputs":{"type":"boolean","description":"Direct fence-only incremental material set for exact live target; reuse immutable previously published outputs; not supported by queue or plan"},"gpuTextureFenceOnly":{"type":"boolean","description":"Explicit material-only GPU completion without CPU pixel validation or PNG export; requires gpuTextureTransfer"},"gpuTextureMipmaps":{"type":"boolean","description":"Generate full GPU mip chain for copied textures; requires gpuTextureTransfer"},"ticket":{"type":"string"},"priority":{"type":"integer","minimum":0,"maximum":3},"discardResult":{"type":"boolean"},"timeoutMs":{"type":"integer","minimum":1000,"maximum":300000},"typeIndex":{"type":"integer","minimum":0,"maximum":65535},"choiceIndex":{"type":"integer","minimum":0,"maximum":65535},"materialIndex":{"type":"integer","minimum":0,"maximum":65535},"expectedVersion":{"type":"string"},"expectedModelPublication":{"type":"string"},"request":{"type":"string"},"textureName":{"type":"string"},"shape":{"type":"string","enum":["sphere","cube","plane","model"]},"asset":{"type":"string"},"yaw":{"type":"number"},"pitch":{"type":"number"},"zoom":{"type":"number"},"light":{"type":"number"},"lightYaw":{"type":"number"},"environment":{"type":"string"},"environmentYaw":{"type":"number"},"environmentIntensity":{"type":"number"},"reloadEnvironment":{"type":"boolean"}},"required":["action"]})"),[&ws](const Json& p){
             if(p.getStr("action")=="plan"){
+                if(p.getBool("incrementalOutputs"))throw std::invalid_argument("incremental output reuse requires a live target, not plan inspection");
                 using namespace render::texture_graph;
-                const auto program=compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object());
-                const int n=p.getBool("bake")?program.size:std::min(program.size,integer(p["resolution"],32,8,gpu::maxPreviewSize));
+                const auto program=compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object(),textureGraphImageResolver(ws));
+                const bool transfer=p.getBool("gpuTextureTransfer"),mipmaps=p.getBool("gpuTextureMipmaps"),fenceOnly=p.getBool("gpuTextureFenceOnly"),incremental=p.getBool("incremental");
+                require(!fenceOnly||transfer,"fence-only mode requires GPU texture transfer");
+                require(!mipmaps||transfer,"GPU texture mipmaps require texture transfer");
+                require(!transfer||p.getBool("bakeSet"),"GPU texture transfer requires bakeSet");
+                const int n=(p.getBool("bake")||transfer)?program.size:std::min(program.size,integer(p["resolution"],32,8,gpu::maxPreviewSize));
+                const auto transferBudget=transfer?graphGpuTextureBudget(program,mipmaps,gpu::materializedBudgetBytes,fenceOnly):gpu::TextureRequestBudget{};
+                require(!transfer||bool(transferBudget),"GPU texture request exceeds budget or has no bindable outputs");
+                const auto budget=transfer?transferBudget.dagBudget:gpu::materializedBudgetBytes;
                 std::vector<size_t> targets;std::vector<std::string> names;
-                if(p.getBool("bakeSet"))for(const auto& [name,index]:program.outputs){names.push_back(name);targets.push_back(index);}
+                if(p.getBool("bakeSet")){for(const auto& [name,index]:program.outputs){if(fenceOnly&&!materialSlot(name))continue;names.push_back(name);targets.push_back(index);}}
                 else {const auto it=program.outputs.find(p.getStr("output"));require(it!=program.outputs.end(),"unknown plan output");names.push_back(it->first);targets.push_back(it->second);}
-                const auto sources=gpu::compileMaterializedDag(program,targets,n);
+                const auto sources=gpu::compileMaterializedDag(program,targets,n,budget,p.getBool("fusePointwise"),transfer,incremental);
                 const auto& plan=sources.plan;
                 Json r=Json::object(),slots=Json::array(),passes=Json::array(),outputs=Json::array();
                 for(auto bytes:plan.schedule.slotBytes)slots.push(Json::number(int64_t(bytes)));
@@ -182,16 +192,26 @@ inline void registerGraphOps(Workspace& ws) {
                 for(size_t i=0;i<names.size();++i){Json row=Json::object();row.set("name",Json::string(names[i]));row.set("slot",Json::number(int64_t(plan.outputSlots[i])));outputs.push(row);}
                 r.set("ok",Json::fromBool(true));r.set("state",Json::string("planned"));r.set("executed",Json::fromBool(false));
                 r.set("resolution",Json::number(int64_t(n)));r.set("slotBytes",slots);r.set("passes",passes);r.set("outputs",outputs);
-                r.set("allocatedBytes",Json::number(int64_t(sources.totalBytes)));r.set("intermediateBytes",Json::number(int64_t(plan.allocatedBytes)));r.set("resultBytes",Json::number(int64_t(sources.resultBytes)));
-                r.set("nodeShaderCount",Json::number(int64_t(plan.schedule.passes.size())));r.set("packShaderCount",Json::number(int64_t(sources.packs.size())));r.set("peakLive",Json::number(int64_t(plan.peakLive)));
-                r.set("budgetBytes",Json::number(int64_t(gpu::materializedBudgetBytes)));
+                r.set("allocatedBytes",Json::number(int64_t(sources.totalBytes)));r.set("imageSourceBytes",Json::number(int64_t(sources.imageSourceBytes)));r.set("intermediateBytes",Json::number(int64_t(plan.allocatedBytes)));r.set("resultBytes",Json::number(int64_t(sources.resultBytes)));
+                r.set("nodeShaderCount",Json::number(int64_t(plan.schedule.passes.size())));
+                r.set("reachableNodeCount",Json::number(int64_t(sources.reachableNodes)));r.set("fusionElidedPasses",Json::number(int64_t(sources.fusedNodes)));r.set("packShaderCount",Json::number(int64_t(sources.packs.size())));r.set("peakLive",Json::number(int64_t(plan.peakLive)));
+                r.set("budgetBytes",Json::number(int64_t(budget)));
+                r.set("resultCapacityBytes",Json::number(int64_t(sources.resultCapacityBytes)));
+                r.set("incrementalRequested",Json::fromBool(incremental));
+                r.set("gpuTextureTransferRequested",Json::fromBool(transfer));
+                r.set("gpuTextureMipmaps",Json::fromBool(mipmaps));
+                r.set("gpuTextureFenceOnly",Json::fromBool(fenceOnly));
+                r.set("fileExportAvailable",Json::fromBool(!fenceOnly));
+                r.set("gpuTextureReservedBytes",Json::number(int64_t(transferBudget.textureBytes)));
+                r.set("gpuTextureValidationBytes",Json::number(int64_t(transferBudget.validationBytes)));
+                r.set("gpuTextureRequestBytes",Json::number(int64_t(sources.totalBytes+transferBudget.textureBytes+transferBudget.validationBytes)));
                 return r;
             }
             for(const auto& op:ws.ops())if(op.name=="texture_graph_gpu_owner_preview")return ws.call(op.name,p,"graph");
             Json r=Json::object();r.set("ok",Json::fromBool(false));r.set("state",Json::string("unavailable"));r.set("reason",Json::string("Native texture GPU preview owner unavailable in this host; use texture_graph_preview for CPU"));return r;
         }});
-    ws.registerOp({"graph_gpu_profile","Opt-in completed native RHI scope timing capture. No authored-node GPU attribution.",
-        Json::parse(R"({"type":"object","properties":{"action":{"type":"string","enum":["start","read","stop"]}},"required":["action"],"additionalProperties":false})"),[&ws](const Json& p){
+    ws.registerOp({"graph_gpu_profile","Opt-in completed native RHI scope timing capture; optional Texture Graph region detail (not per-fused-node timing).",
+        Json::parse(R"({"type":"object","properties":{"action":{"type":"string","enum":["start","read","stop"]},"textureGroupDetail":{"type":"boolean","description":"On start, replace materialized aggregate dispatch timing with per-region and output-pack scopes"}},"required":["action"],"additionalProperties":false})"),[&ws](const Json& p){
             for(const auto& op:ws.ops())if(op.name=="graph_gpu_owner_profile")return ws.call(op.name,p,"graph");
             Json r=Json::object();r.set("available",Json::fromBool(false));r.set("reason",Json::string("Native GPU scope owner unavailable in this host"));return r;
         }});

@@ -179,6 +179,14 @@ HEAD and append; do not force-push or replace their entries.
 - **Validation performed by this agent:** directly read all five mounted source files and compared XML and CTest summary. No additional local CMake/CTest was executed by this agent, and no game/test code changes were made.
 - **Next agent:** collect `extra-*.log` and the terminal `summary.txt` from the same report folder after full execution. If extras have not run, use `./run-tests.sh --no-build` on an existing Debug build, or run `./run-tests.sh` when appropriate. Do not rerun the 15-minute `aiverse_tests` merely to establish results already in this run; targeted validation of standalone suites is sufficient. Distinguish the exact validated local SHA from latest branch HEAD.
 
+## Stage 38AJ — Material Batching CPU acceptance and provenance (2026-11-24)
+
+Implementation: `f82db744f747226138770a949bcfb13e62613cb8`. Desktop normal test builds now include the existing material batching executable and register `material_batches_unit` with `--unit`; HDR-only builds retain the visual A/B executable. Targeted Stage 38 runner adds `--material-batches` (32 tests versus prior 31), checks CMake source identity, prints Git HEAD and tracked status, rejects skips and incomplete CTest counts and detects changed HEAD/status. No runtime API/save format changes; no new GPU behavior. Exact-commit source checks 10/10 PASS; no PR-triggered Actions runs returned for implementation SHA. Native compilation, 32-test Mac acceptance, live Studio/MCP, Vulkan hardware and merged-tree Mac gate NOT RUN here. Reconfigure the existing external build before the targeted runner so the newly added CTest registration exists. Do not treat dirty status as clean-checkout evidence.
+
+## Stage 38AJ — Mac acceptance summary (2026-11-24)
+
+Stage 38AJ Mac targeted acceptance: user supplied final CTest lines `32/32 Test #493: studio_model_picking ... Passed 0.01 sec` and `100% tests passed, 0 tests failed out of 32`. Record user-supplied summary PASS 32/32 (includes material_batches_unit in the requested run); full log, printed checkout SHA, tracked tree status and individual timing evidence were not supplied. Expected checkout was f1a2894cdf0488857a41d4e38afd9ca4dc1ed8a8; not independently established. Do not promote the feature gate: live Studio/MCP, Vulkan hardware and merged-tree Mac quick gate still NOT RUN.
+
 ## Algorithms Stage 45 — noise fixture registration (2026-11-24)
 - Code SHA: `9a565026a826ec3998c07a56cd5c9529ecdf0820`, branch `feature/world-processes-stage31-bidirectional-handles`.
 - Root and standalone library CMake register `library_noise`; the root test is an ordinary CTest, so the unified runner can discover it without hard-coding its name.
