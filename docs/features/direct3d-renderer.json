@@ -4,6 +4,10 @@
   "owner": "render",
   "changed_paths": [
     "CMakeLists.txt",
+    "docs/agent-handoffs/direct3d-renderer-initial.md",
+    "docs/agent-handoffs/direct3d-renderer-stage1.md",
+    "docs/devlog/systems.json",
+    "docs/features/direct3d-renderer.json",
     "engine/gfx/d3d/Direct3D.cpp",
     "engine/gfx/d3d/Direct3D.h",
     "tests/render/direct3d_device.cpp"

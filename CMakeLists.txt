@@ -1912,6 +1912,20 @@ if(AIVERSE_BUILD_TOOLS)
     target_link_libraries(aiversebuild PRIVATE aiverse_modelconv)
 endif()
 
+# Native Windows offscreen targets for engine integration and render probes.
+if(WIN32)
+    add_library(aiverse_gfx_direct3d STATIC engine/gfx/d3d/Direct3D.cpp)
+    target_include_directories(aiverse_gfx_direct3d PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+    target_link_libraries(aiverse_gfx_direct3d PRIVATE d3d11 d3d9 user32)
+    if(AIVERSE_BUILD_TESTS)
+        add_executable(aiverse_direct3d_device_tests tests/render/direct3d_device.cpp)
+        target_link_libraries(aiverse_direct3d_device_tests PRIVATE aiverse_gfx_direct3d d3dcompiler)
+        add_test(NAME render_direct3d11_warp COMMAND aiverse_direct3d_device_tests 11)
+        add_test(NAME render_direct3d9_hal COMMAND aiverse_direct3d_device_tests 9)
+        set_tests_properties(render_direct3d9_hal PROPERTIES LABELS "gpu")
+    endif()
+endif()
+
 # Self-contained headless software device. Native consumers opt in explicitly.
 add_library(aiverse_gfx_cpu STATIC engine/gfx/cpu/GfxCpu.cpp)
 target_include_directories(aiverse_gfx_cpu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
