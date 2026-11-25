@@ -51,7 +51,7 @@ export default function RulesPanel({ projectPath, onChanged }: { projectPath: st
   };
   if (!projectPath) return <div className="rules__empty">Open a project to edit its rules.</div>;
   const extendsBase = typeId && rules ? (rules.types[typeId] as { extends?: unknown })?.extends : undefined;
-  return <div className="rules">
+  return <div className="rules-container"><div className="rules">
     <aside className="rules__list">
       <label className="rules__section">Rule section
         <select value={section} disabled={busy||(section!=='types'&&raw!==null)} onChange={event=>{
@@ -116,7 +116,7 @@ export default function RulesPanel({ projectPath, onChanged }: { projectPath: st
         })}
       </>}
     </section>
-  </div>;
+  </div></div>;
 }
 
 function RuleRow({ value: v, busy, onCommit, onReset }: { value: RuleValue; busy: boolean; onCommit: (input: string | boolean) => void; onReset: () => void }) {
