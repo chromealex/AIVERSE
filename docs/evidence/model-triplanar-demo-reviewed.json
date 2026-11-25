@@ -1,0 +1,11 @@
+{
+  "sha": "04d8b082d607f9226e073e0a96e342824afe00aa",
+  "argv": [
+    "bash",
+    "-ec",
+    "ctest --test-dir /Volumes/KINGSTON/AIVERSE-builds/model-triplanar-20261125 -R \"^(shader_graph|model_triplanar_frame|studio_session)$\" --output-on-failure && python3.12 tools/site/build.py check && python3.11 tools/mcp/audit_registry.py /Volumes/KINGSTON/AIVERSE-builds/model-triplanar-20261125/aiversemcp --engine . --feature-manifest docs/features/model-triplanar.json"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/model-triplanar-demo-reviewed.log.txt",
+  "sha256": "50f78cd9f002e3ae7448c3a11944df4de757d045d00a110dbacc55acbed189d5"
+}
