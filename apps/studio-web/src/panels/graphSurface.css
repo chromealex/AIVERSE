@@ -1,0 +1,39 @@
+/* Shared drawing surface for the shader and SpectraFX topology editors. */
+.graph-canvas-scroll.graph-surface, .spectra-canvas__viewport.graph-surface {
+  background-color: var(--au-canvas);
+  background-image: radial-gradient(circle, var(--au-line) 1px, transparent 1px);
+  background-size: 20px 20px;
+  background-attachment: local;
+}
+.graph-wire {
+  fill: none;
+  stroke: var(--au-accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.graph-wire[data-kind="value"] {
+  stroke: var(--au-accent-secondary);
+  stroke-dasharray: 5 4;
+}
+.graph-wire[data-emphasis="quiet"] { opacity: .42; }
+.graph-wire[data-emphasis="active"] { stroke-width: 3; }
+.graph-node-body { fill: var(--au-panel-raised); stroke: var(--au-line-strong); }
+.graph-draggable:hover .graph-node-body { stroke: var(--au-text-soft); }
+.graph-draggable[aria-pressed="true"] .graph-node-body,
+.graph-draggable:focus-visible .graph-node-body {
+  fill: var(--au-active);
+  stroke: var(--au-accent);
+  stroke-width: 2;
+}
+.graph-node-operation { fill: var(--au-text); font-size: 13px; font-weight: 650; }
+.graph-node-id { fill: var(--au-text-soft); font: 11px ui-monospace, monospace; }
+.graph-socket { fill: var(--au-panel); stroke: var(--au-accent); stroke-width: 1.5; }
+.graph-socket--out { fill: var(--au-accent); }
+
+.graph-wire-key { display: flex; flex-wrap: wrap; gap: 14px; color: var(--au-text-soft); font-size: var(--au-font-sm); }
+.graph-wire-key span { display: inline-flex; align-items: center; gap: 5px; }
+.graph-wire-key span::before { content: ""; width: 19px; border-top: 2px solid var(--au-accent); }
+.graph-wire-key [data-kind="value"]::before { border-top: 2px dashed var(--au-accent-secondary); }
+.graph-node-accent { stroke: var(--au-accent); stroke-width: 3; stroke-linecap: round; }
+.graph-node-accent[data-source="true"] { stroke: var(--au-accent-secondary); }
+.graph-node-value { fill: var(--au-text); font: 10px ui-monospace, monospace; }

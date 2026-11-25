@@ -3,6 +3,7 @@ import { GitBranch, RefreshCw, Save, Search, RotateCcw, CheckCircle2 } from 'luc
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import type { StudioShaderGraphDocument, StudioShaderGraphOp } from '../types';
 import { layoutShaderGraph, moveShaderGraphNode, addShaderGraphNode, removeShaderGraphNode } from './shaderGraphLayout';
+import './graphSurface.css';
 import './ShaderGraphPanel.css';
 
 export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
@@ -126,7 +127,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
      document ? <>
       <div className="graph-summary"><strong>{selected}</strong><span>{document.graph.domain??'Unknown domain'}</span>
        <span>{document.nodes} nodes · {document.samples} texture samples</span>
-       <span>{dirty?'● Unsaved node positions':'Saved'}</span>
+       <span>{dirty?'Unsaved changes':'Saved'}</span>
        <select className="graph-add-select" aria-label="Graph node operation"
          value={chosenOp?.id??''} onChange={event=>setSelectedOp(event.target.value)}>
          {compatibleOps.map(op=><option key={op.id} value={op.id}>{op.id}</option>)}
@@ -135,9 +136,9 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
        <button disabled={!selectedNode||busy} onClick={deleteNode}>Delete node</button>
        <button disabled={!draft||busy} onClick={()=>void validate()}><CheckCircle2 size={13}/> Validate</button>
        <button disabled={!dirty||busy} onClick={discard}><RotateCcw size={13}/> Discard</button>
-       <button disabled={!dirty||busy} onClick={()=>void save()}><Save size={13}/> Save positions</button>
+       <button disabled={!dirty||busy} onClick={()=>void save()}><Save size={13}/> Save graph</button>
       </div>
-      <div className="graph-canvas-scroll">
+      <div className="graph-canvas-scroll graph-surface">
        <svg width={diagram.width} height={diagram.height} viewBox={'0 0 '+diagram.width+' '+diagram.height}
         role="group" aria-label={'Editable node layout for '+selected}
         onPointerMove={event=>{
@@ -154,8 +155,11 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
         onPointerCancel={()=>{drag.current=null;}}>
         {diagram.edges.map(edge=><path key={edge.key} d={'M '+edge.x1+' '+edge.y1+
           ' C '+(edge.x1+55)+' '+edge.y1+', '+(edge.x2-55)+' '+edge.y2+', '+edge.x2+' '+edge.y2}
-          fill="none" stroke="#7aa3d2" strokeWidth="2"/>)}
-        {diagram.nodes.map(node=><g key={node.id} className="graph-draggable" transform={'translate('+node.x+' '+node.y+')'}
+          className="graph-wire" data-emphasis={selectedNode?(edge.from===selectedNode||edge.to===selectedNode?'active':'quiet'):undefined}/>)}
+        {diagram.nodes.map(node=><g key={node.id} className="graph-draggable" role="button" tabIndex={0} aria-label={node.op+' · '+node.id}
+          aria-pressed={selectedNode===node.id}
+          onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();setSelectedNode(node.id);}}}
+          transform={'translate('+node.x+' '+node.y+')'}
           onPointerDown={event=>{
             if(!draft||busy)return;
             event.preventDefault();
@@ -168,10 +172,24 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
             if(event.currentTarget.hasPointerCapture(event.pointerId))
               event.currentTarget.releasePointerCapture(event.pointerId);
           }}>
-         <rect width="130" height="54" rx="7" fill={selectedNode===node.id?'#355b7e':'#233751'}
-          stroke={selectedNode===node.id?'#cbe8ff':'#6581a8'}/>
-         <text x="10" y="20" fill="#eef5ff" fontSize="11">{node.id}</text>
-         <text x="10" y="39" fill="#a6bad5" fontSize="10">{node.op}</text>
+         <title>{[node.op,node.id,...node.values].join(' · ')}</title>
+         <rect className="graph-node-body" width="130" height={node.height} rx="7"/>
+         <path className="graph-node-accent" data-source={node.values.length>0} d="M 2 10 V 27"/>
+         <svg x="11" y="0" width="108" height={node.height} overflow="hidden">
+          <text className="graph-node-operation" y="22">{node.op}</text>
+          <text className="graph-node-id" y="41">{node.id}</text>
+          {node.values.length>0&&<g>
+           {node.values.length>=3&&<rect x="0" y="51" width="12" height="12" rx="2"
+             fill={'rgb('+node.values.slice(0,3).map(v=>100*Math.min(1,Math.max(0,v))+'%').join(' ')+')'}>
+             <title>RGB components</title></rect>}
+           <text className="graph-node-value" x={node.values.length>=3?17:0} y="61">
+             {node.values.map(v=>Number(v.toPrecision(3))).join('  ')}
+           </text>
+          </g>}
+         </svg>
+         {node.inputs.map((input,index)=><circle key={index} className="graph-socket" cx="1"
+           cy={node.height/2+(index-(node.inputs.length-1)/2)*9} r="3"><title>{input}</title></circle>)}
+         <circle className="graph-socket graph-socket--out" cx="129" cy="25" r="3"/>
         </g>)}
        </svg>
       </div>

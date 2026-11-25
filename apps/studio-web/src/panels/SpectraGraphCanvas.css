@@ -21,3 +21,22 @@
 .spectra-canvas__selected {display:flex;flex-direction:column;gap:var(--au-space-1);border-top:1px solid var(--au-line);padding-top:var(--au-space-2);}
 .spectra-canvas__selected code {color:var(--au-text-soft);white-space:pre-wrap;overflow-wrap:anywhere;font-size:var(--au-font-xs);}
 .spectra-canvas__hint {font-size:var(--au-font-xs);color:var(--au-text-muted);line-height:var(--au-line-height);}
+
+.spectra-canvas__node { overflow: visible; }
+.spectra-canvas__node::before, .spectra-canvas__node::after {
+  content: "";
+  position: absolute;
+  top: 21px;
+  width: 6px;
+  height: 6px;
+  border: 1.5px solid var(--au-accent);
+  border-radius: 50%;
+  background: var(--au-panel);
+  pointer-events: none;
+}
+.spectra-canvas__node::before { left: -4px; }
+.spectra-canvas__node::after { right: -4px; background: var(--au-accent); }
+.spectra-canvas__node-head { border-radius: inherit; border-bottom-left-radius: 0; border-bottom-right-radius: 0; padding-inline: 10px; }
+.spectra-canvas__node-head svg { flex-shrink: 0; color: var(--au-accent); }
+.spectra-canvas__node-head span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spectra-canvas__node-id { padding-inline: 10px; font-family: ui-monospace, monospace; }
