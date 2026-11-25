@@ -3,6 +3,7 @@
   "id": "unit-selection-eligibility",
   "owner": "gameplay",
   "changed_paths": [
+    "CMakeLists.txt",
     "apps/client/ClientGamepadHost.cpp",
     "apps/client/ClientUi.cpp",
     "apps/client/GameClient.cpp",
@@ -23,6 +24,7 @@
     "engine/game/GameData.h",
     "engine/view/game/GameView.h",
     "skills/workflow/aiverse-unit-balance/SKILL.md",
+    "tests/editor/selection_targeting_mcp.py",
     "tests/tests_sc2.inc"
   ],
   "traits": {

@@ -3,6 +3,7 @@
   "id": "automatic-target-acquisition-order",
   "owner": "gameplay",
   "changed_paths": [
+    "CMakeLists.txt",
     "apps/studio-native/StudioSession.cpp",
     "apps/studio-native/tests/StudioSessionTests.cpp",
     "apps/studio-web/src/mock.ts",
@@ -21,6 +22,7 @@
     "engine/game/GameData.cpp",
     "engine/game/GameData.h",
     "skills/workflow/aiverse-unit-balance/SKILL.md",
+    "tests/editor/selection_targeting_mcp.py",
     "tests/tests_sc2.inc"
   ],
   "traits": {
