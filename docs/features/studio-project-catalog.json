@@ -7,6 +7,7 @@
     "apps/studio-native/StudioAgentHistoryPolicy.h",
     "apps/editor/core/Workspace.cpp",
     "apps/studio-web/src/panels/MapAreas.tsx",
+    "apps/studio-native/StudioMapAreaBounds.h",
     "apps/studio-web/src/panels/MapPlayers.tsx",
     "apps/studio-web/src/panels/MapInspector.tsx",
     "apps/studio-web/src/panels/InspectorPanel.tsx",
