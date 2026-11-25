@@ -1,0 +1,19 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/renderer-sdk-20261125
+Test project /Volumes/KINGSTON/AIVERSE-builds/renderer-sdk-20261125
+    Start 116: render_cpu_device
+1/2 Test #116: render_cpu_device ................   Passed    0.02 sec
+    Start 117: render_cpu_textured_model
+2/2 Test #117: render_cpu_textured_model ........   Passed    5.75 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Total Test time (real) =   5.82 sec
+61 entries, 0 errors
+An issue was encountered verifying workloads. For more information, run "dotnet workload update".
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:03.62
+Python, C# and Java RGBA8 match: 27648 bytes; 788 foreground pixels; sha256 7f80e9097477d022b0e1e870dc13596e7f8970d8755d7d675339107ff82a2ae4

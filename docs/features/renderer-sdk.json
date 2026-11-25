@@ -6,11 +6,19 @@
     "CMakeLists.txt",
     "apps/modelview/HeadlessModelCapture.cpp",
     "docs/agent-handoffs/renderer-sdk-initial.md",
+    "docs/agent-handoffs/renderer-sdk-integration-review.md",
     "docs/agent-handoffs/renderer-sdk-languages.md",
     "docs/agent-handoffs/renderer-sdk-native.md",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/entries/2026-11-25-render-renderer-sdk.json",
     "docs/devlog/systems.json",
+    "docs/evidence/renderer-sdk-arch.png",
+    "docs/evidence/renderer-sdk-integration-ready.json",
+    "docs/evidence/renderer-sdk-integration-ready.log.txt",
     "docs/evidence/renderer-sdk-languages.json",
     "docs/evidence/renderer-sdk-languages.log.txt",
+    "docs/evidence/renderer-sdk-reviewed.json",
+    "docs/evidence/renderer-sdk-reviewed.log.txt",
     "docs/features/renderer-sdk.json",
     "engine/render/HeadlessModelFrame.cpp",
     "engine/render/HeadlessModelFrame.h",
@@ -22,6 +30,7 @@
     "sdk/render/java/Jni.cpp",
     "sdk/render/java/org/aiverse/render/RenderModel.java",
     "sdk/render/python/aiverse_render.py",
+    "skills/visuals/aiverse-look/SKILL.md",
     "tests/render_sdk/RenderFrame.cs",
     "tests/render_sdk/RenderFrame.csproj",
     "tests/render_sdk/RenderFrame.java",
@@ -58,34 +67,46 @@
       ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Offline model rendering is covered in the shared visual skill.",
+      "evidence": [
+        "skills/visuals/aiverse-look/SKILL.md"
+      ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "The public entry points are the three external language bindings. They open read-only model files and return pixels, without authoring project state.",
+      "evidence": [
+        "sdk/render/README.md"
+      ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "The deliverable is a library loaded by external processes; it adds no Studio document operation or panel.",
+      "evidence": [
+        "sdk/render/README.md"
+      ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "No new inspectable entity, document or authored property.",
+      "evidence": [
+        "sdk/render/README.md"
+      ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "The SDK loads existing model assets. Opaque handles and frame buffers are process-local; no new persistent data is introduced.",
+      "evidence": [
+        "sdk/render/README.md"
+      ]
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "The bind-pose CPU model path supports vertex colour and base texture. This SDK exposes no shader-graph execution or graph document.",
+      "evidence": [
+        "sdk/render/README.md"
+      ]
     },
     "performance": {
       "status": "pass",
@@ -95,9 +116,12 @@
       ]
     },
     "platforms": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Verified macOS arm64 Python, C# and Java runtime; Linux arm64 Python/CPU runtime; Windows x64 compile target only. Windows DLL loading from a language client and SDK Direct3D readback remain unverified.",
+      "evidence": [
+        "docs/agent-handoffs/renderer-sdk-integration-review.md",
+        "docs/evidence/renderer-sdk-reviewed.json"
+      ]
     },
     "dependencies": {
       "status": "pass",
@@ -126,7 +150,8 @@
       "note": "Language byte parity, geometric foreground, camera, errors and CPU regression tests passed.",
       "evidence": [
         "docs/evidence/renderer-sdk-languages.json",
-        "docs/agent-handoffs/renderer-sdk-languages.md"
+        "docs/agent-handoffs/renderer-sdk-languages.md",
+        "docs/evidence/renderer-sdk-reviewed.json"
       ]
     },
     "handoff": {
@@ -144,18 +169,24 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Bilingual devlog, real Python SDK capture and runnable examples. The SDK is delivered as a native host-process library; the browser cannot load it.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-render-renderer-sdk.json",
+        "docs/evidence/renderer-sdk-arch.png",
+        "sdk/render/README.md"
+      ]
     }
   },
   "integrations": {
-    "skills": [],
+    "skills": [
+      "aiverse-look"
+    ],
     "mcp_tools": [],
     "studio_panels": [],
     "studio_methods": []
   },
   "test_reports": [
-    "docs/evidence/renderer-sdk-languages.json"
+    "docs/evidence/renderer-sdk-reviewed.json"
   ]
 }

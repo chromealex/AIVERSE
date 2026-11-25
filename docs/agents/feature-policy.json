@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "features": {
+    "renderer-sdk": {"requires": ["cpu-renderer", "direct3d-renderer"], "roadmap": {"system": "render", "id": "renderer-sdk"}, "api_paths": ["sdk/render/aiverse_render.h"]},
     "material-techniques": {"requires": [], "roadmap": {"system": "render", "id": "material-techniques"}, "api_paths": ["engine/render/MaterialTechnique.h"]},
     "quake3-bsp": {"requires": [], "roadmap": {"system": "render", "id": "quake3-bsp"}, "api_paths": ["engine/render/BspVisibility.h", "engine/render/Model.h"]},
     "modeling-volume-csg": {"requires": [], "roadmap": {"system": "studio", "id": "modeling-volume-csg"}, "api_paths": ["tools/modeling/Modeling.h"]},

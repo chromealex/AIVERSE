@@ -1,0 +1,11 @@
+{
+  "sha": "04c411db8001984bf130f7242712fef1899ff666",
+  "argv": [
+    "bash",
+    "-ec",
+    "ctest --test-dir /Volumes/KINGSTON/AIVERSE-builds/renderer-sdk-20261125 -R \"^(render_cpu_device|render_cpu_textured_model)$\" --output-on-failure && python3.12 tools/site/build.py check && /usr/bin/python3 tests/render_sdk/languages.py /Volumes/KINGSTON/AIVERSE-builds/renderer-sdk-20261125/sdk/render/libaiverse_render.dylib --work /Volumes/KINGSTON/AIVERSE-builds/renderer-sdk-20261125/tmp"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/renderer-sdk-reviewed.log.txt",
+  "sha256": "f4d96c176a92d58fa31052ddfe65daa0a5503765629cf539bb2d5fe72d6d008f"
+}

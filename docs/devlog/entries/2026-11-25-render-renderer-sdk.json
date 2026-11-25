@@ -1,0 +1,36 @@
+{
+  "id": "2026-11-25-render-renderer-sdk",
+  "date": "2026-11-25",
+  "system": "render",
+  "branch": "codex/renderer-sdk-20261125",
+  "commit": "191825e05",
+  "author": "render",
+  "title": "Кадр модели из Python, C# и Java",
+  "titleEn": "Rendering a model from Python, C# and Java",
+  "summary": "Чтение модели и её RGBA-кадра из внешнего приложения через общий C ABI.",
+  "summaryEn": "Read a model and its RGBA frame from a host application through a shared C ABI.",
+  "body": [
+    "Откройте модель один раз и меняйте размер кадра или угол камеры при следующих вызовах."
+  ],
+  "bodyEn": [
+    "Open the model once and change the frame dimensions or camera angle on subsequent calls."
+  ],
+  "verified": "На macOS приложения на трёх языках вернули одинаковые пиксели.",
+  "verifiedEn": "On macOS all three language clients returned identical pixels.",
+  "limits": "Нативные библиотеки загружаются в процесс приложения. В этой версии доступны модели в исходной позе.",
+  "limitsEn": "Native libraries load into the host process. This version renders models in their bind pose.",
+  "status": "in-progress",
+  "links": [
+    {
+      "title": "Source",
+      "href": "sdk/render/README.md"
+    }
+  ],
+  "media": [
+    {
+      "src": "docs/evidence/renderer-sdk-arch.png",
+      "caption": "Арка из OBJ, кадр Python SDK",
+      "captionEn": "OBJ arch rendered by the Python SDK"
+    }
+  ]
+}
