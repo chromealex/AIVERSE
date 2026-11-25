@@ -221,7 +221,7 @@ def include_card(s, it, ctx):
             f'<h3>{name}</h3><p>{text}</p><span class="inc-more">{ctx.T["incMore"]}</span></a>')
 
 
-def blog_posts(entries, ctx, names=None):
+def blog_posts(entries, ctx):
     """Fully expanded posts on a vertical date rail; names: system id -> name to tag each post with its topic."""
     status = {'done': ctx.T['stDone'], 'in-progress': ctx.T['stProgress'], 'experimental': ctx.T['stExperimental']}
     posts = []
@@ -241,13 +241,11 @@ def blog_posts(entries, ctx, names=None):
         if e.get('limits'):
             facts += f'<div><dt>{ctx.T["blogLimits"]}</dt><dd>{esc(e["limits"])}</dd></div>'
         src = esc(e['branch'] or '') + (f' · {esc(e["commit"])}' if e.get('commit') else '')
-        topic = (f'<a class="entry-sys" href="devblog-{esc(e["system"])}.html">{esc(names[e["system"]])}</a>'
-                 if names else '')
         links = ''.join(f'<a href="{esc(l["href"])}">{esc(l["title"])}</a>' for l in e.get('links') or [])
         posts.append(f'<li class="blog-post" id="{esc(e["id"])}" data-sys="{esc(e["system"])}">'
                      f'<time class="blog-date mono" datetime="{esc(e["date"])}">{ctx.fmt_date(e["date"])}</time>'
                      f'<span class="blog-dot" aria-hidden="true"></span><article class="blog-card">'
-                     f'<div class="entry-meta">{topic}<span class="st st-{esc(e["status"])}">{esc(status.get(e["status"], e["status"]))}</span>'
+                     f'<div class="entry-meta"><span class="st st-{esc(e["status"])}">{esc(status.get(e["status"], e["status"]))}</span>'
                      f'{f"<span>{src}</span>" if src else ""}</div>'
                      f'<h2>{esc(e["title"])}</h2><p class="summary">{esc(e["summary"])}</p>'
                      f'{gal}{body}'
@@ -259,35 +257,11 @@ LIGHTBOX = ('<div class="lightbox" id="lightbox" role="dialog" aria-modal="true"
             '<img id="lb-img" alt=""><p id="lb-cap"></p></div>')
 
 
-def blog_page(entries, systems, ctx):
-    """The engine blog: everything outside the flagship systems, newest first, filterable by topic."""
-    names = {s['id']: s['name'] for s in systems}
-    topics = [s for s in systems if any(e['system'] == s['id'] for e in entries)]
-    chips = [f'<button class="filter" type="button" data-sys="" aria-pressed="true">{ctx.T["rmAll"]}</button>']
-    chips += [f'<button class="filter" type="button" data-sys="{esc(s["id"])}" aria-pressed="false">{esc(s["name"])}</button>'
-              for s in topics]
-    empty = f'<p class="blog-empty">{ctx.T["blogEmpty"]}</p>' if not entries else ''
-    return (f'<section class="dl-hero"><div><p class="eyebrow">{ctx.T["navBlog"]}</p><h1>{ctx.T["blogHubTitle"]}</h1>'
-            f'<p>{ctx.T["blogHubLead"]}</p></div>'
-            f'<div class="dl-stats"><div><strong>{len(entries)}</strong><span>{ctx.T["blogPosts"]}</span></div>'
-            f'<div><strong>{len(topics)}</strong><span>{ctx.T["blogTopics"]}</span></div></div></section>'
-            f'<div class="dl-filters blog-filters" role="group" aria-label="{ctx.T["rmFilter"]}">{"".join(chips)}</div>'
-            f'{empty}{blog_posts(entries, ctx, names)}<div class="blog-end"></div>{LIGHTBOX}')
-
-
-BLOG_JS = """<script>
-(function(){var b=document.querySelectorAll('.blog-filters .filter');function set(id){b.forEach(function(x){x.setAttribute('aria-pressed',String(x.dataset.sys===id));});
-document.querySelectorAll('.blog-post').forEach(function(p){p.hidden=!!id&&p.dataset.sys!==id;});history.replaceState(null,'',id?'#topic='+id:location.pathname);}
-b.forEach(function(x){x.addEventListener('click',function(){set(x.dataset.sys);});});
-var m=location.hash.match(/^#topic=(.+)$/);if(m&&document.querySelector('.blog-filters [data-sys="'+m[1]+'"]'))set(m[1]);})();
-</script>"""
-
-
 def devblog_page(s, mine, ctx, flagship):
     """All stages of one system, newest first, fully expanded: the system's own development diary."""
     sid = esc(s['id'])
     name = esc(s['name'])
-    sys_href = f'system-{sid}.html' if flagship else f'blog.html#topic={sid}'
+    sys_href = f'system-{sid}.html' if flagship else f'devlog.html#system={sid}'
     first = ctx.fmt_date(mine[-1]['date']) if mine else ''
     last = ctx.fmt_date(mine[0]['date']) if mine else ''
     return (f'<section class="dl-hero"><div><p class="crumbs"><a href="./#systems">{ctx.T["crumbSystems"]}</a> / '
@@ -408,10 +382,10 @@ def roadmap_lines(flagships, ctx):
         for i, it in enumerate(rm):
             x = 3 + 94 * i / max(n - 1, 1)
             title = ctx.loc(it, 'title')
-            cls = 'done' if it['status'] == 'done' else ('cur' if i == now else 'plan')
+            cls = 'done' if it['status'] == 'done' else ('cur' if it['status'] == 'in-progress' else 'plan')
             lab = ''
             if i == now:
-                lab = f'<span class="ln-l ln-cur">{esc(short(title, 40))}</span>'
+                lab = f'<span class="ln-l ln-{cls}">{esc(short(title, 40))}</span>'
             elif it['status'] != 'done' and i == now + 1:
                 lab = f'<span class="ln-l ln-plan">{esc(short(title, 30))}</span>'
             elif i == 0:
@@ -458,10 +432,12 @@ def roadmap_page(flagships, ctx):
                 f'<ul class="nn-done">{"".join(item(it, "") for it in older)}</ul></details>') if older else ''
         dash = '<span class="nn-none">—</span>'
         cur_html = f'<ul class="nn-cur">{"".join(item(it, "") for it in cur)}</ul>' if cur else dash
+        href = (f'system-{esc(s["id"])}.html' if s.get('flagship') or s.get('core')
+                else f'devlog.html#system={esc(s["id"])}')
         rows.append(
             f'<section class="nn-row" id="{esc(s["id"])}" data-sys="{esc(s["id"])}" style="--c:{line_color(s, flagships)}">'
             f'<div class="nn-sys"><span class="nn-ring" style="--p:{pct}"><i>{len(done)}/{len(rm)}</i></span>'
-            f'<span><a class="nn-name" href="system-{esc(s["id"])}.html">{esc(s["name"])}</a>'
+            f'<span><a class="nn-name" href="{href}">{esc(s["name"])}</a>'
             f'<span class="nn-last">{ctx.T["nnLast"]} {esc(last)}</span></span></div>'
             f'<div class="nn-col" data-label="{ctx.T["nnDone"]}"><ul class="nn-done">{"".join(item(it, "") for it in recent)}</ul>{more}</div>'
             f'<div class="nn-col" data-label="{ctx.T["rmNow"]}">'

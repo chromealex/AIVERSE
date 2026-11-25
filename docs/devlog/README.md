@@ -1,13 +1,13 @@
 # Development log (website "Ход разработки")
 
-The site (`site/`, published to GitHub Pages from the `gh-pages` branch) has two data-driven parts:
+The site (`site/`, published to GitHub Pages from the `gh-pages` branch) includes these data-driven sections:
 
 - **devlog page** — `devlog.html`, one card per entry in `docs/devlog/entries/*.json`, filterable by system;
 - **"Кадр движка" on the main page** — `frames[0]` in `docs/devlog/showcase.json`;
 - **"Системы движка" on the main page** — flagship systems with cover frames in `docs/devlog/systems.json`.
 
 Entries about topics that are not flagship systems (Studio, builds, networking, meta, gameplay,
-render, world, ECS, agent tools) form the development blog, `blog.html`, filterable by topic. Their
+render, world, ECS, agent tools) appear in the same development log, `devlog.html`, filterable by system. Their
 `media` may be empty; flagship entries need at least one frame.
 
 Every system also has its own diary page, `devblog-<system>.html`: all its entries, newest first,
@@ -15,8 +15,7 @@ fully expanded with every screenshot. Each successfully finished stage gets an e
 frames; failed or partial attempts and build/test chatter stay in handoffs (AGENTS.md has the rules).
 
 Agents add entries themselves, in their own branch, in the same change as the feature
-(AGENTS.md "Ход разработки на сайте"; skill `skills/workflow/aiverse-devlog`). When the
-branch reaches `main`, `.github/workflows/site.yml` rebuilds the site and pushes `gh-pages`.
+(AGENTS.md "Ход разработки на сайте"; skill `skills/workflow/aiverse-devlog`). After integration, the MAIN integrator runs `python3 tools/site/build.py publish` from the verified main revision.
 
 ## Entry: `docs/devlog/entries/<id>.json`
 

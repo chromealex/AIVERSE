@@ -551,9 +551,6 @@ a.badge-ink { color: var(--on-ink); }
   .blog-first { padding-left: 28px; }
 }
 .blog-post[hidden] { display: none; }
-.blog-end { padding-bottom: 120px; }
-.blog-empty { color: var(--muted); padding: 40px 0 120px; }
-.blog-filters { margin-bottom: 36px; }
 
 /* main page: roadmap lines */
 .ln-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 24px; margin-bottom: 40px; }

@@ -1,6 +1,6 @@
 ---
 name: aiverse-site-publish
-description: Put a finished stage on the AIVERSE website and publish it - which site data a change touches (flagship and core systems, blog topics, docs pages, feature articles, releases), roadmap first, screenshots for visual features, and the publish command.
+description: Put a finished stage on the AIVERSE website and publish it - which site data a change touches (flagship and core systems, devlog topics, docs pages, feature articles, releases), roadmap first, screenshots for visual features, and the publish command.
 ---
 
 # Publishing to the website
@@ -42,7 +42,7 @@ Do all of this in the same commit as the devlog entry.
 |---|---|
 | A flagship system | devlog entry with `system: <id>` (frames required), its `roadmap`, `includes` and `enables`; `release` stays as the integrator set it |
 | A core system (`core: true`) | devlog entry with `system: <id>`, its `roadmap`, `includes` and `enables`; optional `cover` frame for the main-page card |
-| Something without its own system (studio, build, network, meta, gameplay, render, world, ecs, agents) | devlog entry with that topic id: goes to `blog.html`; add a topic to `systems.json` if none fits |
+| Something without its own system (studio, build, network, meta, gameplay, render, world, ecs, agents) | devlog entry with that topic id: goes to `devlog.html`; add a topic to `systems.json` if none fits |
 | One card of "Что входит" grew into a story | `includes[].id` + `docs/devlog/features/<system>/<id>.md` and `.en.md`, optional `media` |
 | A guide or format that game developers read | `site/docs.json` entry; update `docs/ru/` and `docs/en/` translations of that doc in the same commit |
 | A tagged release (integrator) | top of `docs/devlog/releases.json` with a frame (`media`) on every visible highlight; `release` of the systems it ships |
@@ -55,8 +55,8 @@ only the entry. Every text field has an `En` twin; fill both.
 ## 3. Screenshots for visual features
 
 If the change is visible, the entry carries real engine frames of it. That includes rendering,
-water, terrain, UI, editor windows, effects, animation and camera. It applies to blog topics
-too: a Studio window or a render tweak in `blog.html` needs its frame.
+water, terrain, UI, editor windows, effects, animation and camera. It applies to devlog topics
+too: a Studio window or a render tweak in `devlog.html` needs its frame.
 
 - Show before and after when something changed. Landscape, at least 1280 px wide for covers.
   No debug overlays unless the debug view is the feature.

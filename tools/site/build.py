@@ -428,7 +428,7 @@ def check_releases():
     return errors
 
 
-from render import (Ctx, ROOT_LANG, MENU_SPY_JS, roadmap_lines, FEATURE_JS, DOCS_SEARCH_JS, doc_sections, GALLERY_JS, gallery_page, CATALOG_JS, catalog_page, MARK_LIGHT, RELEASES_JS, ROADMAP_JS, TRACK_JS, BLOG_JS, Converter, blog_page, devblog_page, feature_page, docs_index, doc_page, esc, localized_entries,  # noqa: E402
+from render import (Ctx, ROOT_LANG, MENU_SPY_JS, roadmap_lines, FEATURE_JS, DOCS_SEARCH_JS, doc_sections, GALLERY_JS, gallery_page, CATALOG_JS, catalog_page, MARK_LIGHT, RELEASES_JS, ROADMAP_JS, TRACK_JS, Converter, devblog_page, feature_page, docs_index, doc_page, esc, localized_entries,  # noqa: E402
                     release_chip, releases_page, render_page, roadmap_page, showcase_html, system_page,
                     systems_html, core_html, fill_tokens)
 
@@ -584,7 +584,7 @@ def cmd_build(args):
                 sys.exit(f'site page missing: {f.relative_to(out)}')
             text = fill_tokens(f.read_text(encoding='utf-8'), ctx, name)
             # One menu for every page: the static pages take the header of _layout.html, so a new
-            # menu item (gallery, blog, ...) cannot go missing from them.
+            # menu item (gallery, roadmap, ...) cannot go missing from them.
             head_re = re.compile(r'<header class="top">.*?</header>', re.S)
             shared = head_re.search(fill_tokens(layout, ctx, name)).group(0)
             nav_id = 'devlog' if name == 'devlog.html' else None
@@ -645,11 +645,12 @@ def cmd_build(args):
                     layout, ctx, name, f'{ctx.loc(it, "name")} — {s["name"]} · AIVERSE', ctx.loc(it, 'text'),
                     feature_page(s, it, body_html, ctx), nav='systems', script=FEATURE_JS), encoding='utf-8')
                 pages += 1
-        flag_ids = {s['id'] for s in flagships}
-        blog = [e for e in loc_entries if e['system'] not in flag_ids]
-        (d / 'blog.html').write_text(render_page(
-            layout, ctx, 'blog.html', f'{T["blogHubTitle"]} · AIVERSE', T['blogHubLead'],
-            blog_page(blog, systems, ctx), nav='blog', script=FEATURE_JS + BLOG_JS), encoding='utf-8')
+        # Keep bookmarked posts and topic filters in the same language.
+        (d / 'blog.html').write_text(
+            f'<!doctype html><html lang="{lang}"><meta charset="utf-8"><title>{T["navDevlog"]}</title>'
+            '<script>location.replace("devlog.html" + location.search + location.hash.replace(/^#topic=/, "#system="));</script>'
+            '<meta http-equiv="refresh" content="0;url=devlog.html">'
+            f'<a href="devlog.html">{T["navDevlog"]}</a></html>', encoding='utf-8')
         pages += 1
         for s in systems:
             mine = [e for e in loc_entries if e['system'] == s['id']]
@@ -665,7 +666,7 @@ def cmd_build(args):
             gallery_page(loc_entries, systems, ctx), nav='gallery', script=FEATURE_JS + GALLERY_JS), encoding='utf-8')
         pages += 1
         (d / 'roadmap.html').write_text(render_page(layout, ctx, 'roadmap.html', T['rmPageTitle'], T['rmDesc'],
-                                                    roadmap_page(flagships + [s for s in systems if s.get('core') and s.get('roadmap')], ctx), nav='roadmap', script=ROADMAP_JS),
+                                                    roadmap_page([s for s in systems if s.get('roadmap')], ctx), nav='roadmap', script=ROADMAP_JS),
                                         encoding='utf-8')
         rel_cfg = {'index': rel_data['builds']['index'], 'none': T['relDlNone'],
                    'os': {'windows': 'Windows', 'macos': 'macOS', 'linux': 'Linux'}}
