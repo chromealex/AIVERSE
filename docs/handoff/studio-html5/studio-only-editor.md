@@ -441,3 +441,5 @@ Movement body fields 27f8640b55d96a0f41bd6813326839730a30c2e4: StudioSession.cpp
 Shader output stage: show live output assignments on their source nodes. Exercise assign, remove, undo and save with the required color channel protected.
 
 Shader output labels 11247b7454de6efe8ec970243639986b74a3cfcb use graph projection and measured node height. Full 295 web tests, typecheck, Vite and live WebKit assign/remove/Undo/save/restart passed; docs/evidence/studio-shader-output-bindings.json. First capture showed diagnostics and bindings shrinking the toolbar and canvas in a 420px window. Correct inspector scroll sizing and repeat capture.
+
+8e4990e9f6ea8f967bc6e97c20e2e387d9d4b04d increased the scrollable canvas and moved preview into the command bar. Desktop semantics and canvas element height passed (docs/evidence/studio-shader-output-canvas.json), but compact-shell's later flex-wrap rule still pushed the graph out of the initial viewport. Restore the panel-specific narrow toolbar priority and check the viewport intersection.
