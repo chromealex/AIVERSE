@@ -1197,6 +1197,13 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(branding["result"]["result"]["iconsVersion"].isString());
        const auto conflict=call("studio.op",R"({"op":"branding_set","params":{"expectedIconsVersion":"outdated","icons":{}}})");
        AIVERSE_TEST_CHECK(conflict.getStr("error").find("Icon settings changed")!=std::string::npos);
+       AIVERSE_TEST_CHECK(branding["result"]["result"]["splashVersion"].isString());
+       const auto staleSplash=call("studio.op",R"({"op":"branding_set","params":{"expectedSplashVersion":"stale","splash":false}})");
+       AIVERSE_TEST_CHECK(staleSplash.getStr("error").find("Splash settings changed")!=std::string::npos);
+       const auto splashFrames=call("studio.op",R"({"op":"splash_preview","params":{"frames":true,"times":[0,1],"width":64,"height":48}})");
+       AIVERSE_TEST_CHECK(!splashFrames.has("error") && !splashFrames["result"].getBool("changed"));
+       const auto& frames=splashFrames["result"]["result"]["frames"].items();
+       AIVERSE_TEST_CHECK(frames.size()==2 && frames[0].str().starts_with("iVBOR") && frames[0].str()!=frames[1].str());
        const auto android=call("studio.op",R"({"op":"icons_preview","params":{"platform":"Android"}})");
        AIVERSE_TEST_CHECK(!android.has("error") && !android["result"].getBool("changed"));
        const auto& variants=android["result"]["result"]["variants"].items();

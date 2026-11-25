@@ -45,9 +45,10 @@ struct SplashImages {      // decoded layer images (frames or sheet) of a spec
     std::vector<Image> sheets;                // per layer (empty when frames are used)
     std::vector<std::string> warnings;
 };
-SplashImages loadSplashImages(const splash::Spec& s, const std::string& projectDir);
+std::string splashPreviewPath(const std::string& projectDir, const std::string& engineDir, const std::string& asset);
+SplashImages loadSplashImages(const splash::Spec& s, const std::string& projectDir, const std::string& engineDir = {});
 Image renderSplashFrame(const splash::Spec& s, const SplashImages& imgs, float t, float progress, int W, int H);
 // Strip of frames side by side at the given times (labelled with the time), for agents.
-Image splashStrip(const splash::Spec& s, const std::string& projectDir, const std::vector<float>& times, int W, int H, std::vector<std::string>* warnings);
+Image splashStrip(const splash::Spec& s, const std::string& projectDir, const std::vector<float>& times, int W, int H, std::vector<std::string>* warnings, const std::string& engineDir = {});
 
 } // namespace aiverse::branding

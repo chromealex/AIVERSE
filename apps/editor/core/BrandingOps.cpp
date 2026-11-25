@@ -35,14 +35,14 @@ Json merged(const Json& base, const Json& patch) {
 }
 
 // Validates both blocks against the files of the project. Throws on format errors.
-Json check(const Json& manifest, const std::string& dir) {
+Json check(const Json& manifest, const std::string& dir, const std::string& engineDir) {
     std::vector<std::string> warnings;
     branding::IconSpec icons = branding::parseIcons(manifest);
     if (icons.master.empty() && fs::exists(fs::path(dir) / "icon.png")) icons.master = "icon.png";
     for (auto& w : branding::validateIcons(icons, dir)) warnings.push_back(w);
     splash::Spec sp = splash::projectSpec(manifest["splash"], &warnings);   // missing = the engine screen, false = none
     for (auto& img : sp.images())
-        if (!fs::exists(fs::path(dir) / img)) warnings.push_back("splash: image not found: " + img);
+        if (!fs::exists(branding::splashPreviewPath(dir, engineDir, img))) warnings.push_back("splash: image not found: " + img);
     branding::NativeSplash n = branding::nativeSplash(manifest);
     Json r = Json::object();
     Json res = Json::object();
@@ -93,33 +93,39 @@ void registerBrandingOps(Workspace& ws) {
         "Format: rules_schema, section 'Icons and splash'.",
         "{}", [w](const Json&) {
             needProject(*w);
-            Json r = check(w->project.manifest, w->project.dir);
+            Json r = check(w->project.manifest, w->project.dir, w->engineDir);
             r.set("icons", w->project.manifest["icons"]);
             r.set("iconsVersion", Json::string(w->project.manifest["icons"].dump()));
             if (w->project.manifest.has("icon")) r.set("icon", w->project.manifest["icon"]);
-            r.set("splash", w->project.manifest["splash"]);
+            const auto& block = w->project.manifest["splash"];
+            r.set("splash", block);
+            r.set("splashVersion", Json::string(block.dump()));
+            r.set("splashDefaults", splash::defaultBlock());
+            r.set("portrait", Json::fromBool(w->project.manifest.getStr("orientation") == "portrait"));
             return r;
         });
     add("branding_set",
         "Set game.json 'icons' and/or 'splash' (validated before saving; images are project-relative paths). Pass null to remove a block; "
         "merge=true merges objects into the existing blocks (null values remove keys). Check the result with icons_preview / splash_preview.",
-        R"({"properties": {"icons": {"description": "icons block (object) or null"}, "splash": {"description": "splash block (object) or null"},
-            "merge": {"type": "boolean"}, "expectedIconsVersion": {"type":"string","description":"Optional iconsVersion from branding_get for conflict detection"}}})",
+        R"({"properties": {"icons": {"description": "icons block (object) or null"}, "splash": {"description": "Splash settings, false to disable or null for the engine default"},
+            "merge": {"type": "boolean"}, "expectedSplashVersion": {"type":"string"}, "expectedIconsVersion": {"type":"string","description":"Optional iconsVersion from branding_get for conflict detection"}}})",
         [w](const Json& p) {
             needProject(*w);
             if (!p.has("icons") && !p.has("splash")) throw std::runtime_error("nothing to set: pass 'icons' and/or 'splash'");
             Json m = w->project.manifest;
             if (p.has("expectedIconsVersion") && p.getStr("expectedIconsVersion") != m["icons"].dump())
                 throw std::runtime_error("Icon settings changed. Reload before saving.");
+            if (p.has("expectedSplashVersion") && p.getStr("expectedSplashVersion") != m["splash"].dump())
+                throw std::runtime_error("Splash settings changed. Reload before saving.");
             const bool merge = p.getBool("merge");
             for (const char* key : {"icons", "splash"}) {
                 if (!p.has(key)) continue;
                 const Json& v = p[key];
-                if (!v.isNull() && !v.isObject()) throw std::runtime_error(std::string(key) + ": expected an object or null");
+                if (std::string(key) == "icons" && !v.isNull() && !v.isObject()) throw std::runtime_error(std::string(key) + ": expected an object or null");
                 if (v.isNull()) m.erase(key);
                 else m.set(key, merge ? merged(m[key], v) : v);
             }
-            Json r = check(m, w->project.dir);   // throws on format errors: nothing saved
+            Json r = check(m, w->project.dir, w->engineDir);   // throws on format errors: nothing saved
             Json previous = std::move(w->project.manifest);
             w->project.manifest = std::move(m);
             std::string err;
@@ -171,12 +177,12 @@ void registerBrandingOps(Workspace& ws) {
         "Render the splash screen at a few moments of its timeline (default: 5 frames over the logo sequence) into a PNG strip, "
         "with the progress bar as if loading took the minimum time. width/height of each frame in pixels (default 320x180, portrait games 180x320).",
         R"({"properties": {"times": {"type": "array", "items": {"type": "number"}, "description": "seconds"},
-            "width": {"type": "integer"}, "height": {"type": "integer"}}})",
+            "width": {"type": "integer"}, "height": {"type": "integer"}, "frames": {"type": "boolean","description":"Return separate timeline PNGs, up to 480 pixels per side"}}})",
         [w](const Json& p) {
             needProject(*w);
             std::vector<std::string> warnings;
-            splash::Spec s = splash::parseSpec(w->project.manifest["splash"], &warnings);
-            if (!s.enabled) throw std::runtime_error("game.json has no 'splash' block (set one with branding_set)");
+            splash::Spec s = splash::projectSpec(w->project.manifest["splash"], &warnings);
+            if (!s.enabled) throw std::runtime_error("Splash screen is turned off");
             const bool portrait = w->project.manifest.getStr("orientation") == "portrait";
             int W = int(std::clamp<int64_t>(p.getInt("width", portrait ? 180 : 320), 32, 1920));
             int H = int(std::clamp<int64_t>(p.getInt("height", portrait ? 320 : 180), 32, 1920));
@@ -187,7 +193,23 @@ void registerBrandingOps(Workspace& ws) {
                 for (int i = 0; i < 5; ++i) times.push_back(len * float(i) / 4.0f * 0.98f);
             }
             if (times.size() > 12) times.resize(12);
-            branding::Image strip = branding::splashStrip(s, w->project.dir, times, W, H, &warnings);
+            if (p.getBool("frames")) {
+                W = std::min(W, 480);
+                H = std::min(H, 480);
+                auto images = branding::loadSplashImages(s, w->project.dir, w->engineDir);
+                warnings.insert(warnings.end(), images.warnings.begin(), images.warnings.end());
+                Json frames = Json::array();
+                for (float t : times) {
+                    const float progress = std::clamp(t / std::max(0.5f, s.minimumTime()), 0.0f, 1.0f);
+                    auto image = branding::renderSplashFrame(s, images, t, progress, W, H);
+                    frames.push(Json::string(base64Encode(branding::encodePng(image))));
+                }
+                Json result = Json::object();
+                result.set("frames", frames);
+                result.set("warnings", strings(warnings));
+                return result;
+            }
+            branding::Image strip = branding::splashStrip(s, w->project.dir, times, W, H, &warnings, w->engineDir);
             Json r = Json::object();
             Json ts = Json::array();
             for (float t : times) ts.push(Json::number(double(t), 2));

@@ -1,3 +1,4 @@
+import SplashPanel from './SplashPanel';
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { invoke } from '../bridge';
 import './BrandingPanel.css';
@@ -32,7 +33,8 @@ async function op<T>(project: string, name: string, params: Block = {}) {
 }
 
 export default function BrandingPanel({ project, advanced }: {project: string; advanced: ReactNode}) {
-  const [section, setSection] = useState<'icons'|'advanced'>('icons');
+  const [section, setSection] = useState<'icons'|'splash'|'advanced'>('icons');
+  const [splashLocked, lockSplashTabs] = useState(false);
   const [platform, setPlatform] = useState<Platform>('iOS');
   const [data, setData] = useState<Branding>();
   const [preview, setPreview] = useState<Variants>();
@@ -111,10 +113,11 @@ export default function BrandingPanel({ project, advanced }: {project: string; a
   if (!project) return <div className="brand-page">Open a project to edit its branding.</div>;
   return <div className="brand-page">
     <header><h2>Branding</h2><nav aria-label="Branding sections">
-      <button aria-pressed={section === 'icons'} onClick={() => setSection('icons')}>App icon</button>
-      <button aria-pressed={section === 'advanced'} disabled={dirty || saving} onClick={() => setSection('advanced')}>Splash &amp; advanced</button>
+      <button disabled={splashLocked} aria-pressed={section === 'icons'} onClick={() => setSection('icons')}>App icon</button>
+      <button aria-pressed={section === 'splash'} disabled={dirty || saving} onClick={() => setSection('splash')}>Splash screen</button>
+      <button aria-pressed={section === 'advanced'} disabled={dirty || saving || splashLocked} onClick={() => setSection('advanced')}>Advanced</button>
     </nav></header>
-    {section === 'advanced' ? advanced : <>
+    {section === 'splash' ? <SplashPanel project={project} images={images} lockTabs={lockSplashTabs}/> : section === 'advanced' ? advanced : <>
       {error && <p role="alert">{error}</p>}
       {data ? <div className="brand-content"><section className="brand-settings">
         <div className="brand-heading"><h3>Master artwork</h3><small>1024 × 1024 or larger</small></div>

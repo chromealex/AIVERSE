@@ -204,7 +204,17 @@ std::string generateWebLaunch(const NativeSplash& n, const std::string& dir, con
 }
 
 // ------------------------------------------------------------------ CPU preview
-SplashImages loadSplashImages(const splash::Spec& s, const std::string& dir) {
+std::string splashPreviewPath(const std::string& dir, const std::string& engineDir, const std::string& asset) {
+    fs::path path = fs::path(dir) / asset;
+    if (!engineDir.empty() && asset.starts_with("engine/branding/") && !fs::exists(path)) {
+        const fs::path local = asset.substr(16);
+        if (!local.empty() && local == local.filename() && local != "..")
+            path = fs::path(engineDir) / "engine/assets/branding" / local;
+    }
+    return path.string();
+}
+
+SplashImages loadSplashImages(const splash::Spec& s, const std::string& dir, const std::string& engineDir) {
     SplashImages r;
     for (auto& l : s.layers) {
         r.frames.emplace_back();
@@ -212,10 +222,10 @@ SplashImages loadSplashImages(const splash::Spec& s, const std::string& dir) {
         std::string err;
         for (auto& p : l.images) {
             Image img;
-            if (!loadImageFile((fs::path(dir) / p).string(), img, &err)) r.warnings.push_back("splash: " + err);
+            if (!loadImageFile(splashPreviewPath(dir, engineDir, p), img, &err)) r.warnings.push_back("splash: " + err);
             r.frames.back().push_back(std::move(img));
         }
-        if (!l.sheet.empty() && !loadImageFile((fs::path(dir) / l.sheet).string(), r.sheets.back(), &err)) r.warnings.push_back("splash: " + err);
+        if (!l.sheet.empty() && !loadImageFile(splashPreviewPath(dir, engineDir, l.sheet), r.sheets.back(), &err)) r.warnings.push_back("splash: " + err);
     }
     return r;
 }
@@ -251,8 +261,8 @@ Image renderSplashFrame(const splash::Spec& s, const SplashImages& im, float t, 
     return out;
 }
 
-Image splashStrip(const splash::Spec& s, const std::string& dir, const std::vector<float>& times, int W, int H, std::vector<std::string>* warnings) {
-    SplashImages im = loadSplashImages(s, dir);
+Image splashStrip(const splash::Spec& s, const std::string& dir, const std::vector<float>& times, int W, int H, std::vector<std::string>* warnings, const std::string& engineDir) {
+    SplashImages im = loadSplashImages(s, dir, engineDir);
     if (warnings) warnings->insert(warnings->end(), im.warnings.begin(), im.warnings.end());
     const int pad = 8, label = 14;
     Image strip = makeImage(int(times.size()) * (W + pad) + pad, H + label + pad * 2, {0.12f, 0.12f, 0.13f, 1});
