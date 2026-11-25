@@ -15,7 +15,7 @@ using namespace aiverse;
 using namespace aiverse::render;
 struct Vertex { float4 clip, color; float2 uv; };
 
-bool read(const std::string& path, std::string& data) {
+bool readModelBytes(const std::string& path, std::string& data) {
     std::ifstream file(std::filesystem::u8path(path),std::ios::binary);
     if(!file)return false;
     std::ostringstream bytes;
@@ -146,7 +146,7 @@ bool headlessModelBackendAvailable(const std::string& backend) {
     return backend=="cpu";
 }
 std::unique_ptr<Model> loadHeadlessModel(const std::string& path) {
-    return loadModel(path,read);
+    return loadModel(path,readModelBytes);
 }
 std::vector<uint8_t> renderHeadlessModelFrame(const Model& model,const std::string& backend,
                                               int width,int height,float yaw,float pitch) {

@@ -24,3 +24,7 @@ Always look at the result: `view_focus` + `view_screenshot` after every step.
 Report: what changed, screenshots compared, per-frame costs from the warnings.
 
 Runtime library: none. Workflow over the engine MCP view tools.
+
+## Offline model preview in a host application
+
+Use the Python, C# or Java renderer bindings in `sdk/render/README.md` for a bind-pose thumbnail. Load the installed native library, open the model once, render top-down RGBA8 at the required dimensions and camera angles, then release its handle. The CPU backend runs headlessly.
