@@ -1,0 +1,31 @@
+{
+  "id": "2026-11-25-studio-world-scene",
+  "date": "2026-11-25",
+  "system": "studio",
+  "status": "in-progress",
+  "branch": "studio-only-editor",
+  "commit": "fafcd1d9a",
+  "author": null,
+  "links": [],
+  "title": "Свойства сцены в мировых координатах",
+  "titleEn": "World-space scene properties",
+  "summary": "Inspector показывает имя сцены, число коллайдеров и точек появления.",
+  "summaryEn": "Inspector shows the scene name, collider count and spawn count.",
+  "body": [
+    "Откройте вкладку Scene в Inspector. Измените имя и нажмите Apply. Сохранение проекта запишет имя в файл сцены."
+  ],
+  "bodyEn": [
+    "Open Scene in Inspector, edit its name and choose Apply. Saving the project writes the name to the scene file."
+  ],
+  "verified": "Проверено на Arena в macOS. После Undo, Redo и сохранения все исходные поля карты совпали.",
+  "verifiedEn": "Verified with Arena on macOS. All original map fields matched after Undo, Redo and Save.",
+  "limits": "Визуальная проверка Windows предстоит.",
+  "limitsEn": "Windows visual verification remains pending.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-world-scene/world-scene-inspector.png",
+      "caption": "Сцена Harbor terminal в отдельном Inspector",
+      "captionEn": "Harbor terminal in a detached Inspector"
+    }
+  ]
+}
