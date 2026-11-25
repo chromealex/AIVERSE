@@ -10,11 +10,14 @@
     "apps/editor/core/ScenarioOps.cpp",
     "apps/editor/core/ScriptOps.cpp",
     "apps/editor/core/Workspace.cpp",
+    "docs/agent-handoffs/issues-197-202-integration.md",
     "docs/agent-handoffs/native-simulation-checks-acceptance.md",
     "docs/agent-handoffs/native-simulation-checks-implementation.md",
     "docs/agent-handoffs/native-simulation-checks-initial.md",
     "docs/agents/feature-policy.json",
     "docs/devlog/systems.json",
+    "docs/evidence/issues-197-202-integrated-mac.json",
+    "docs/evidence/issues-197-202-integrated-mac.log.txt",
     "docs/evidence/native-simulation-checks-macos.json",
     "docs/evidence/native-simulation-checks-macos.log.txt",
     "docs/features/native-simulation-checks.json",
@@ -119,9 +122,10 @@
     },
     "tests": {
       "status": "pass",
-      "note": "Real stdio test covers all six tools, two absent modules, default failure, static stats, file integrity and checksum parity.",
+      "note": "Real stdio test covers all six tools, two absent modules, default failure, static stats, file integrity and checksum parity. Retested on the integrated Mac tree; see issues-197-202-integrated-mac.json.",
       "evidence": [
-        "docs/evidence/native-simulation-checks-macos.json"
+        "docs/evidence/native-simulation-checks-macos.json",
+        "docs/evidence/issues-197-202-integrated-mac.json"
       ]
     },
     "handoff": {
@@ -160,6 +164,6 @@
     "studio_methods": []
   },
   "test_reports": [
-    "docs/evidence/native-simulation-checks-macos.json"
+    "docs/evidence/issues-197-202-integrated-mac.json"
   ]
 }
