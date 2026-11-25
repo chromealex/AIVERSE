@@ -10,6 +10,7 @@ import {
   saveWorkspaceDock, workspaceDockTree, type StudioWorkspace
 } from './workspaces';
 import type { CommandEntry } from './commandSearch';
+import { StudioDialog } from './ui';
 import CommandPalette from './components/CommandPalette';
 import PanelErrorBoundary from './components/PanelErrorBoundary';
 import { ProjectLoadingDialog, SceneLoadingStrip, sceneLoadingText, useProjectLoading } from './components/ProjectLoading';
@@ -477,23 +478,19 @@ export default function App() {
     { id: 'window', label: 'Window', items: () => {
       const byTitle = (a: StudioPanel, b: StudioPanel) => STUDIO_PANEL_TITLES[a].localeCompare(STUDIO_PANEL_TITLES[b]);
       const isOpen = (panel: StudioPanel) => panelStack(dock, panel) !== null || !!floatOwner(floating, panel);
-      const toggle = (panel: StudioPanel) => floatOwner(floating, panel) ? dockHere(panel)
-        : setDock(t => panelStack(t, panel) !== null ? closeTab(t, panel) : reopenTab(t, panel, STUDIO_PANEL_HOME[panel]));
       const openPanels = STUDIO_PANELS.filter(isOpen).sort(byTitle);
-      const otherPanels = STUDIO_PANELS.filter(panel => !isOpen(panel)).sort(byTitle);
       return [
-      { id: 'ws', label: 'Workspaces', caption: true, onSelect: () => {} },
-      ...WORKSPACES.map(id => ({ id: 'ws-' + id, label: WORKSPACE_INFO[id].title, shortcut: menuShortcut(WORKSPACE_INFO[id].key),
-        checked: workspace === id, onSelect: () => switchWorkspace(id) })),
-      { id: 'reset', label: 'Reset ' + WORKSPACE_INFO[workspace].title + ' Layout', separator: true, onSelect: () => setDock(workspaceDockTree(workspace)) },
+      { id: 'find-window', label: 'Find Window…', onSelect: () => setPalette('/ ') },
+      ...openPanels.map(panel => ({ id: 'panel-' + panel, label: STUDIO_PANEL_TITLES[panel],
+        onSelect: () => showPanel(panel) })),
+      { id: 'ws', label: 'Workspaces', separator: true, onSelect: () => {}, children:
+        WORKSPACES.map(id => ({ id: 'ws-' + id, label: WORKSPACE_INFO[id].title, shortcut: menuShortcut(WORKSPACE_INFO[id].key),
+          checked: workspace === id, onSelect: () => switchWorkspace(id) })) },
+      { id: 'reset', label: 'Reset ' + WORKSPACE_INFO[workspace].title + ' Layout', onSelect: () => setDock(workspaceDockTree(workspace)) },
       ...(!FLOAT && floating.length ? [{ id: 'dock-floating', label: 'Dock All Floating Windows (' + floating.length + ')',
         onSelect: () => { for (const item of floating) void invoke('studio.windowClose', { window: item.key }).catch(console.warn); } }] : []),
       { id: 'palette', label: 'Command Palette…', shortcut: menuShortcut('K'), onSelect: () => setPalette('') },
       { id: 'tour', label: 'Welcome Tour…', onSelect: () => setTourOpen(true) },
-      { id: 'open-cap', label: 'Open', caption: true, separator: true, onSelect: () => {} },
-      ...openPanels.map(panel => ({ id: 'panel-' + panel, label: STUDIO_PANEL_TITLES[panel], checked: true, onSelect: () => toggle(panel) })),
-      { id: 'more-cap', label: 'Panels', caption: true, separator: true, onSelect: () => {} },
-      ...otherPanels.map(panel => ({ id: 'panel-' + panel, label: STUDIO_PANEL_TITLES[panel], onSelect: () => toggle(panel) })),
       ...(LEGACY_WINDOWS_NOT_MIGRATED.length ? [{ id: 'legacy', label: 'Legacy editor — not migrated yet', caption: true, separator: true, onSelect: () => {} }] : []),
       ...LEGACY_WINDOWS_NOT_MIGRATED.map(w => {
         const area = legacyWorkspace(w.id);
@@ -511,7 +508,7 @@ export default function App() {
   const paletteEntries = useMemo<CommandEntry[]>(() => {
     const out: CommandEntry[] = [];
     for (const menu of menus) for (const item of menu.items()) {
-      if (item.caption || item.id.startsWith('legacy-') || item.id.startsWith('panel-') || item.id.startsWith('ws-') || item.id === 'palette') continue;
+      if (item.children || item.caption || item.id.startsWith('legacy-') || item.id.startsWith('panel-') || item.id.startsWith('ws-') || item.id === 'palette') continue;
       out.push({ id: 'menu:' + menu.id + ':' + item.id, kind: 'command', title: item.label, hint: menu.label,
         shortcut: item.shortcut, disabled: item.disabled, run: item.onSelect });
     }
@@ -611,8 +608,8 @@ export default function App() {
     {FLOAT ? <ProjectLoadingDialog state={loading} onClose={clearLoading}/> : <ProjectSplash state={loading} onClose={clearLoading} onHub={() => setHubOpen(true)}/>}
     {dockHover && <div className="dock-drop-hint" data-native-overlay role="status">Release to dock the window's tabs here</div>}
     {tourOpen && !FLOAT && <WelcomeTour onClose={() => setTourOpen(false)}/>}
-    {hubOpen && !FLOAT && <div className="hub-modal" role="dialog" aria-modal="true" aria-label="Project hub" data-native-overlay onMouseDown={e => { if (e.target === e.currentTarget) setHubOpen(false); }}>
-      <ProjectHub onOpened={next => { setHubOpen(false); setInspectorPin(null); setSnapshot(next); }} openOther={() => { setHubOpen(false); void openProject(); }}/></div>}
+    {hubOpen && !FLOAT && <StudioDialog className="hub-modal" label="Project hub" onDismiss={() => setHubOpen(false)}>
+      <ProjectHub onOpened={next => { setHubOpen(false); setInspectorPin(null); setSnapshot(next); }} openOther={() => { setHubOpen(false); void openProject(); }}/></StudioDialog>}
     <StudioStatusBar snapshot={snapshot} connected={connected} game={game} action={sceneAction || sceneLoadingText(loading)}
       onOpenConsole={() => { showPanel('console');
         window.setTimeout(() => window.dispatchEvent(new CustomEvent('studio:console-filter', { detail: 'error' })), 0); }}/>

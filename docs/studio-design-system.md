@@ -66,3 +66,5 @@ When adding a new reusable primitive, add it to `src/ui/StudioUI.tsx`, style it 
 
 ## Validation and scope
 The new library is source-level and does not require a new npm dependency. The full React + Vite build and native WKWebView visual tests must run on Mac before declaring a design system migration complete. Legacy windows can continue using their CSS as the next agent migrates them incrementally.
+
+Use `StudioDialog` for blocking overlays such as the welcome tour and project hub. Supply an accessible label, a layout class, a dismissal callback and the dialog contents. It opens a modal HTML dialog, restores focus on close, accepts Escape and keeps editor keyboard shortcuts out of the dialog.

@@ -2617,6 +2617,13 @@
           "text": "Офлайн-диагностика регионов, контрольные точки, резервные копии и подтверждаемая очистка.",
           "textEn": "Offline region diagnostics, checkpoints, backups and confirmed retention.",
           "status": "in-progress"
+        },
+        {
+          "status": "done",
+          "date": "2026-11-25",
+          "target": null,
+          "title": "Навигация и компоновка окон Studio",
+          "titleEn": "Studio panel navigation and layout"
         }
       ],
       "enablesEn": [

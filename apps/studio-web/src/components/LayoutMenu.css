@@ -6,9 +6,9 @@
 .layout-menu-button span { white-space: nowrap; }
 .layout-menu-button:hover, .layout-menu-button[aria-expanded="true"] { background: var(--au-hover); }
 .layout-menu-button:focus-visible { outline: 2px solid var(--au-accent); outline-offset: 2px; }
-.layout-name-backdrop { position: fixed; inset: 0; z-index: 6000; }
+.layout-name-backdrop { position: fixed; inset: 0; z-index: 6000; background: transparent; }
 .layout-name {
-  position: fixed; width: 240px; padding: 10px; display: flex; flex-direction: column; gap: 8px;
+  position: fixed; width: min(240px, calc(100vw - 16px)); padding: 10px; display: flex; flex-direction: column; gap: 8px;
   background: var(--au-overlay); border: 1px solid var(--au-line-strong);
   border-radius: var(--au-radius-sm); box-shadow: var(--au-shadow-md); color: var(--au-text);
 }
