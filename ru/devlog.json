@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-25T09:41:20+00:00",
+ "generated": "2026-11-25T13:54:20+00:00",
  "lang": "ru",
  "repo": "https://github.com/chromealex/AIVERSE",
  "systems": [
@@ -154,6 +154,34 @@
    "status": "in-progress"
   },
   {
+   "id": "2026-11-25-texture-graph-gpu",
+   "date": "2026-11-25",
+   "system": "studio",
+   "title": "GPU-карты Texture Graph на модели сцены",
+   "summary": "В Studio можно выбрать материал загруженной модели и применить к нему карты из Texture Graph на время сессии.",
+   "body": [
+    "В панели Texture Graph откройте Apply to Scene model и обновите список моделей. После выбора модели и материала команда Generate and apply GPU maps рассчитывает карты и передаёт текстуры рендереру.",
+    "Для проверки материала доступны плоский предпросмотр и освещённая PBR-сфера. Ниже показаны кадры одного графа, полученные через Metal на Apple M3 Ultra."
+   ],
+   "status": "in-progress",
+   "branch": "feature/aiv20261124_texture_graph_gpu_slots",
+   "commit": "1b155c425",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-texture-graph-gpu/pbr-preview.png",
+     "caption": "Материал на освещённой сфере, нативный кадр 256 × 256."
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-texture-graph-gpu/texture-preview.png",
+     "caption": "Цветовой выход того же графа, 128 × 128."
+    }
+   ],
+   "links": [],
+   "author": null,
+   "verified": "В нативной Studio на Mac проверены применение к материалу модели, отмена GPU-запроса, повторный предпросмотр и рендер PBR.",
+   "limits": "Изменение материала модели действует в текущей сессии Studio. Интерактивная демонстрация этого нативного режима в браузере отсутствует."
+  },
+  {
    "id": "2026-11-25-terraweave-meadow-light",
    "date": "2026-11-25",
    "system": "terraweave",
@@ -232,6 +260,61 @@
    ],
    "links": [],
    "author": null
+  },
+  {
+   "id": "2026-11-25-studio-local-play-inspection",
+   "date": "2026-11-25",
+   "system": "studio",
+   "title": "Регионы и сущности в локальной сессии Studio",
+   "summary": "World Explorer показывает, каким регионам принадлежат сущности работающего мира. Паузой и одиночным шагом можно выбрать момент для снимка.",
+   "body": [
+    "Откройте карту проекта с модулем actor и запустите Play. Чтобы увидеть реестр, включите regionOwnership в правилах проекта. После шага нажмите обновление в World Explorer. Снимок содержит тик, номер сессии и число сущностей в каждой ячейке.",
+    "В панели Runtime можно выбрать сущность и прочесть её компоненты. В локальной игре с поддержкой редактирования можно на паузе изменить здоровье или энергию. Профилировщик показывает длительность тиков и время отдельных систем.",
+    "В Play Mode Review для поддерживаемых карт можно просмотреть изменения, применить выбранную группу и отменить её одним действием. Feature Readiness показывает состояние проверок проекта.",
+    "В Roads укажите число сущностей, период обновления и лимит посещений за тик. Панель покажет, успевает ли симуляция вернуться к каждой сущности за выбранный период. При редактировании Shader Graph Studio проверяет исходную версию ассета перед сохранением."
+   ],
+   "status": "in-progress",
+   "branch": "feature/aiv20261123_feature_gate",
+   "commit": "911e3ceba",
+   "author": null,
+   "verified": "В Studio на macOS World Explorer показал две сущности в двух регионах проекта streamed. На отдельной карте просмотр изменений обнаружил 11 удалений, а отмена восстановила исходную карту.",
+   "limits": "Эти панели работают в нативном редакторе и показаны на кадрах Studio. Просмотр изменений карты использует GameCore. Для actor-сессий доступен просмотр реестра.",
+   "media": [
+    {
+     "src": "../media/docs/evidence/studio-actor-g1/world-explorer-final.png",
+     "caption": "World Explorer на тике 123. Две ячейки содержат по одной активной сущности."
+    },
+    {
+     "src": "../media/docs/evidence/studio-play-ad676e70c/runtime.png",
+     "caption": "Выбранная сущность и поля редактирования в Runtime."
+    },
+    {
+     "src": "../media/docs/evidence/studio-play-ad676e70c/simulation_profiler.png",
+     "caption": "Время восьми тиков и вклад отдельных систем."
+    },
+    {
+     "src": "../media/docs/evidence/studio-play-ad676e70c/game.png",
+     "caption": "Панель просмотра изменений рядом с запущенной картой."
+    },
+    {
+     "src": "../media/docs/evidence/studio-play-ad676e70c/feature_readiness.png",
+     "caption": "Проверки зарегистрированных функций в Feature Readiness."
+    },
+    {
+     "src": "../media/docs/evidence/studio-building-budget/roads.png",
+     "caption": "При 200 000 сущностей и лимите 1 000 посещений за тик повторный обход занимает 200 тиков вместо желаемых 120."
+    },
+    {
+     "src": "../media/docs/evidence/studio-graph-647255066/stale-edit.png",
+     "caption": "Shader Graph предупреждает об изменении файла другим редактором. Черновик остаётся открыт."
+    }
+   ],
+   "links": [
+    {
+     "title": "Studio ECS inspector",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/editor-native-ecs-inspector.md"
+    }
+   ]
   },
   {
    "id": "2026-11-25-studio-graph-visuals",
@@ -318,6 +401,226 @@
    ],
    "links": [],
    "author": "render"
+  },
+  {
+   "id": "2026-11-25-render-renderer-sdk",
+   "date": "2026-11-25",
+   "system": "render",
+   "branch": "codex/renderer-sdk-20261125",
+   "commit": "191825e05",
+   "author": "render",
+   "title": "Кадр модели из Python, C# и Java",
+   "summary": "Чтение модели и её RGBA-кадра из внешнего приложения через общий C ABI.",
+   "body": [
+    "Откройте модель один раз и меняйте размер кадра или угол камеры при следующих вызовах."
+   ],
+   "verified": "На macOS приложения на трёх языках вернули одинаковые пиксели.",
+   "limits": "Нативные библиотеки загружаются в процесс приложения. В этой версии доступны модели в исходной позе.",
+   "status": "in-progress",
+   "links": [
+    {
+     "title": "Source",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/sdk/render/README.md"
+    }
+   ],
+   "media": [
+    {
+     "src": "../media/docs/evidence/renderer-sdk-arch.png",
+     "caption": "Арка из OBJ, кадр Python SDK"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-render-quake3-bsp",
+   "date": "2026-11-25",
+   "system": "render",
+   "status": "done",
+   "branch": "codex/render-capabilities-20261125",
+   "commit": "d45befebc",
+   "author": "render",
+   "title": "Уровни Quake III с текстурами и запечённым светом",
+   "summary": "AIVERSE открыл оригинальный уровень Egyptian Trouble из OpenArena. Материалы используют свою текстуру, а каждая освещённая поверхность получает свою страницу запечённого света.",
+   "body": [
+    "Камера расположена в точке наблюдения, указанной авторами карты. Из 3073 поверхностей её кластер допускает 1408. Криволинейные фрагменты сохраняют обе развёртки после тесселяции.",
+    "Карту создали Akom74 и Neon_Knight. Египетские текстуры создал Simon «sock» O’Callaghan. Карта и текстуры распространяются по GPL-2.0-or-later.",
+    "В веб-примере штатный CatalogView читает оригинальный BSP через WebAssembly. В сцене можно вращать камеру, приближать изображение и отдельно отключать текстуры и освещение."
+   ],
+   "verified": "Два теста на Mac прошли. В кадре Metal 800×500 отключение diffuse изменило 400000 пикселей, отключение lightmaps — 396284. В Chromium WebGL2 переключение текстур изменило 191422 из 210000 пикселей контрольной области, освещения — 207126, поворот камеры — 174849.",
+   "limits": "Поддерживаются статические стадии материалов. Анимированные стадии, порталы неба, коллизия и логика Quake остаются за границами импорта моделей. Минимальному клиенту сцен недоступен legacy-import.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-render-quake3-bsp/egyptian-trouble.jpg",
+     "caption": "Egyptian Trouble. Камера авторов карты, кадр AIVERSE Metal."
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-render-quake3-bsp/webgl.jpg",
+     "caption": "Тот же уровень в интерактивном CatalogView на WebGL2."
+    }
+   ],
+   "links": [
+    {
+     "title": "IBSP v46",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/models.md"
+    },
+    {
+     "title": "WebGL2 · Egyptian Trouble",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/demos/quake3-bsp/README.md"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-render-model-triplanar",
+   "date": "2026-11-25",
+   "system": "render",
+   "branch": "codex/model-triplanar-20261125",
+   "commit": "541870d27",
+   "author": "render",
+   "title": "Проекция камня на срез модели",
+   "summary": "Камень покрывает цилиндрический срез и внешние стороны модели без UV-развёртки.",
+   "body": [
+    "В Studio выберите трипланарный материал и задайте цвет, карту нормалей и длину одного повтора в метрах."
+   ],
+   "verified": "Metal отрисовал импортированный OBJ и срез GLB. После сохранения Studio восстановила назначение материала. В Chromium проверены вид спереди, вид сбоку и отдаление камеры.",
+   "limits": "Мировая проекция привязана к координатам сцены. Ступени на крупном срезе задаёт разрешение объёмной сетки.",
+   "status": "in-progress",
+   "links": [
+    {
+     "title": "Source",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/demos/model-triplanar/README.md"
+    }
+   ],
+   "media": [
+    {
+     "src": "../media/docs/evidence/model-triplanar-stone-wider-cut.png",
+     "caption": "Расширенный срез со слоем камня"
+    },
+    {
+     "src": "../media/docs/evidence/model-triplanar-web-front.png",
+     "caption": "Стены отверстия и внешняя поверхность в WebGL"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-render-material-techniques",
+   "date": "2026-11-25",
+   "system": "render",
+   "branch": "codex/material-techniques-20261125",
+   "commit": "e2f8f43e2",
+   "author": "render",
+   "title": "Техники материалов по расстоянию",
+   "summary": "Один кристалл меняет материал при отдалении камеры.",
+   "body": [
+    "В инспекторе модели можно задать схему, расстояние и запас для обратного переключения. В примере кнопки Near и Far перемещают камеру."
+   ],
+   "verified": "Захвачены кадры на Metal и в Chromium с WebGL.",
+   "limits": "Модели с техниками обходят предварительное объединение материалов.",
+   "status": "in-progress",
+   "links": [
+    {
+     "title": "Source",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/demos/material-techniques/game.json"
+    }
+   ],
+   "media": [
+    {
+     "src": "../media/docs/evidence/material-techniques-web-far.png",
+     "caption": "Дальний синий материал в WebGL"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-render-backend-thumbnails",
+   "date": "2026-11-25",
+   "system": "render",
+   "title": "Миниатюры моделей на CPU и Direct3D",
+   "summary": "Просмотрщик моделей сохраняет миниатюру в PNG без открытия окна. Можно выбрать программный рендерер или один из двух бэкендов Direct3D на Windows.",
+   "body": [
+    "Узел на кадрах состоит из 16 384 треугольников. Витки пересекаются в проекции, и буфер глубины определяет, какой окажется ближе к камере. Освещение подчёркивает изгибы поверхности. Для трёх кадров использованы одна модель, материал и камера.",
+    "Параметр --headless-capture задаёт бэкенд при запуске просмотрщика. Для моделей с текстурой он также учитывает основной цвет, UV-координаты и цвета вершин."
+   ],
+   "status": "in-progress",
+   "verified": "Миниатюры 512 × 512 получены на CPU в macOS, а также на Windows Server 2022 через Direct3D 9 HAL и Direct3D 11 WARP.",
+   "limits": "Инструмент работает с файлами в настольной системе. В браузерной сборке отсутствуют этот режим командной строки и Windows API Direct3D. На кадрах показана базовая поза модели.",
+   "branch": "codex/cpu-d3d-render-20261125",
+   "commit": "965f7c674",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-render-backend-thumbnails/cpu-macos.png",
+     "caption": "Узел с перекрывающимися витками, программный рендеринг на macOS."
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-render-backend-thumbnails/direct3d9-hal.png",
+     "caption": "Тот же ракурс и материал в Direct3D 9 HAL на Windows."
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-render-backend-thumbnails/direct3d11-warp.png",
+     "caption": "Узел, отрисованный через Direct3D 11 WARP на Windows."
+    }
+   ],
+   "links": [
+    {
+     "title": "CPU renderer",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/cpu-renderer.md"
+    },
+    {
+     "title": "Direct3D",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/direct3d.md"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-prisma-frame-compositor",
+   "date": "2026-11-25",
+   "system": "prisma",
+   "branch": "codex/render-seven-integration",
+   "commit": "1326a67f5",
+   "status": "in-progress",
+   "title": "Собственный граф постобработки для камеры",
+   "summary": "Соедините проходы выделения ярких областей, размытия и сложения. Каждый проход получает именованную текстуру и пишет результат в следующую.",
+   "body": [
+    "Для свечения можно уменьшить промежуточное разрешение, размыть результат по двум осям и сложить его с исходным кадром. Пример открывается в браузере, где можно менять интенсивность и выключать обработку."
+   ],
+   "verified": "В Chromium с WebGL2 переключатель менял число проходов с четырёх до нуля. На Metal отдельно проверена подача текстуры другой камеры.",
+   "limits": "Граф допускает до 12 проходов и восьми входных текстур камер.",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-prisma-frame-compositor/glow.png",
+     "caption": "Свечение вертикальных полос после четырёх проходов PRISMA в WebGL2."
+    }
+   ],
+   "links": [
+    {
+     "title": "Демонстрационный проект",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/demos/prisma-compositor/README.md"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-modeling-volume-csg",
+   "date": "2026-11-25",
+   "system": "studio",
+   "branch": "codex/modeling-volume-csg",
+   "commit": "33718383d",
+   "status": "in-progress",
+   "title": "Редактируемые объёмные модели в Studio",
+   "summary": "Форма объекта задаётся деревом полей. Измените радиус цилиндра, чтобы расширить отверстие, затем сохраните редактируемый исходник и экспортируйте модель в GLB.",
+   "body": [
+    "В графе модели можно объединять, вычитать и пересекать объёмы, добавлять шум и использовать объёмную текстуру плотности. Параметры источника сохраняются в проекте."
+   ],
+   "media": [
+    {
+     "src": "../media/docs/evidence/modeling-volume-csg-editor.png",
+     "caption": "Цилиндр выреза в редакторе полей Studio."
+    }
+   ],
+   "verified": "В панели Studio изменён и сохранён центр цилиндра. Увеличение радиуса пересобрало сетку, а отмена восстановила исходный GLB.",
+   "limits": "Исходное поле семплируется на сетке с разрешением от 4 до 24 по оси. На мелких деталях видна дискретизация.",
+   "links": [
+    {
+     "title": "Пример дерева полей",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/examples/modeling/volume-csg.json"
+    }
+   ]
   },
   {
    "id": "2026-11-24-spectrafx-studio",
