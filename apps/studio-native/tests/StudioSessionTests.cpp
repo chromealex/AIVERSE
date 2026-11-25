@@ -14,6 +14,8 @@
 #include "apps/studio-native/StudioAgentHistoryPolicy.h"
 #include "apps/studio-native/StudioAssetCatalog.h"
 #include "apps/studio-native/StudioPlanetForestDocument.h"
+#include "apps/studio-native/StudioMaterialPublicationJournal.h"
+#include "apps/editor/core/ProjectAssetWriteLock.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -675,6 +677,58 @@ void projectFileRecoveryWorkflow() {
     fs::create_directories(project/"content"/"A");
     fs::create_directories(project/"content"/"B");
     fs::create_directories(project/".aiverse-cache");
+    {
+        using aiverse::editor::ProjectAssetWriteLock;
+        bool rejected=false;
+        {
+            ProjectAssetWriteLock outer(project),nested(project);
+            std::thread contender([&]{try{ProjectAssetWriteLock other(project);}catch(const std::exception&){rejected=true;}});
+            contender.join();
+            AIVERSE_TEST_CHECK(rejected);
+        }
+        ProjectAssetWriteLock reacquired(project);
+        AIVERSE_TEST_CHECK(fs::is_regular_file(project/".aiverse-cache"/"asset-writer.lock"));
+    }
+    {
+        const auto fixture=project/"file-material-recovery";
+        fs::create_directories(fixture/"content/materials");
+        studio::StudioMaterialPublicationJournal publication(fixture,"stone");
+        publication.candidate(Json::parse(R"({"roughness":0.75})"));
+        std::ofstream(fixture/"materials.json")<<R"({"materials":{"stone":"content/materials/stone.material.json"}})";
+        const auto file=fixture/"content/materials/stone.material.json";
+        std::ofstream(file)<<R"({"roughness":0.75})";
+        AIVERSE_TEST_CHECK(studio::StudioMaterialPublicationJournal::inspect(fixture)[size_t(0)].getStr("status")=="material_committed");
+        std::ofstream(file)<<R"({"roughness":0.25})";
+        AIVERSE_TEST_CHECK(studio::StudioMaterialPublicationJournal::inspect(fixture)[size_t(0)].getStr("status")=="material_conflict");
+        publication.finish();
+    }
+    {
+        studio::StudioMaterialPublicationJournal publication(project,"fixture_pending");
+        const auto pending=studio::StudioMaterialPublicationJournal::inspect(project);
+        AIVERSE_TEST_CHECK(pending.size()==1 && pending[size_t(0)].getStr("status")=="incomplete_or_active");
+        publication.assets(Json::parse(R"([{"path":"GeneratedBuildingMaterials/fixture_pending/base-color.png","guid":"fixture"}])"));
+        const auto checked=studio::StudioMaterialPublicationJournal::inspect(project);
+        AIVERSE_TEST_CHECK(checked[size_t(0)]["assets"].size()==1);
+        AIVERSE_TEST_CHECK(!checked[size_t(0)]["assets"][size_t(0)].getBool("present"));
+        publication.finish();
+        AIVERSE_TEST_CHECK(studio::StudioMaterialPublicationJournal::inspect(project).size()==0);
+    }
+    {
+        studio::StudioMaterialPublicationJournal publication(project,"isolated",true);
+        fs::create_directory(publication.stage());
+        std::ofstream(publication.stage()/"base-color.png")<<"staged";
+        const auto slot=studio::StudioMaterialPublicationJournal::quarantineIsolated(project,"isolated");
+        AIVERSE_TEST_CHECK(fs::is_regular_file(project/".aiverse-cache"/"material-publications-quarantine"/slot/"journal"/"stage"/"base-color.png"));
+        AIVERSE_TEST_CHECK(!fs::exists(publication.stage()));
+        AIVERSE_TEST_CHECK(studio::StudioMaterialPublicationJournal::inspectQuarantine(project).size()==1);
+        studio::StudioMaterialPublicationJournal::restoreQuarantine(project,slot);
+        AIVERSE_TEST_CHECK(fs::is_regular_file(publication.stage()/"base-color.png"));
+        publication.finish();
+        studio::StudioMaterialPublicationJournal exposed(project,"exposed",true);
+        exposed.beginExposure();
+        bool rejected=false;try{(void)studio::StudioMaterialPublicationJournal::quarantineIsolated(project,"exposed");}catch(...){rejected=true;}
+        AIVERSE_TEST_CHECK(rejected);exposed.finish();
+    }
     std::ofstream(project/"game.json") << R"({"name":"Recovery fixture","module":"game","rules":"rules.json"})";
     std::ofstream(project/"rules.json") << R"({"types":{"unit":{"health":{"max":100}}}})";
     std::ofstream(project/"Fixture.aiverse") << R"({"format":1,"name":"Recovery fixture","manifest":"game.json"})";
@@ -822,6 +876,39 @@ void caveGraphCaptureWorkflow() {
         auto args=[&]{
             Json p=Json::object();p.set("scope",call("studio.snapshot")["result"]["graphDocument"]);return p;
         };
+        // Exercise guarded native Shader Graph saves through the actual Studio bridge.
+        fs::create_directories(project/"shaders");
+        const Json shader=Json::parse(R"({"version":1,"domain":"material","nodes":[{"id":"input","op":"input"}],"outputs":{"color":"input"}})");
+        std::ofstream(project/"shaders"/"guarded.json")<<shader.dump(2);
+        Json edited=shader;
+        edited.set("nodes",Json::parse(R"([{"id":"input","op":"input","position":[10,20]}])"));
+        Json save=Json::object();save.set("name",Json::string("guarded"));save.set("graph",edited);
+        const auto projectPath=session.workspace().project.dir;
+        Json debug=Json::parse(R"({"op":"graph_debug_session","params":{"action":"status"}})");
+        AIVERSE_TEST_CHECK(call("studio.op",debug).has("error"));
+        for(const char* op:{"graph_runtime_probe","graph_live_snapshot","graph_live_watch","graph_live_profile","graph_gpu_profile"}) {
+            Json stale=Json::object();stale.set("op",Json::string(op));stale.set("params",Json::object());
+            AIVERSE_TEST_CHECK(call("studio.op",stale).has("error"));
+            stale.set("expectedProject",Json::string("other-project"));
+            AIVERSE_TEST_CHECK(call("studio.op",stale).has("error"));
+        }
+        debug.set("expectedProject",Json::string("other-project"));
+        AIVERSE_TEST_CHECK(call("studio.op",debug).has("error"));
+        debug.set("expectedProject",Json::string(projectPath));
+        debug.set("expectedDocumentEpoch",Json::string("0"));
+        AIVERSE_TEST_CHECK(call("studio.op",debug).has("error"));
+        debug.set("expectedDocumentEpoch",call("studio.snapshot")["result"]["graphDocument"]["epoch"]);
+        const auto debugReply=call("studio.op",debug);
+        AIVERSE_TEST_CHECK(!debugReply.has("error") && !debugReply["result"].getBool("changed"));
+        save.set("expectedProject",Json::string(projectPath));
+        AIVERSE_TEST_CHECK(call("studio.shaderGraphSave",save).has("error"));
+        save.set("expected",shader);save.set("expectedProject",Json::string("other-project"));
+        AIVERSE_TEST_CHECK(call("studio.shaderGraphSave",save).has("error"));
+        AIVERSE_TEST_CHECK(Json::parseFile((project/"shaders"/"guarded.json").string())==shader);
+        save.set("expectedProject",Json::string(projectPath));
+        AIVERSE_TEST_CHECK(!call("studio.shaderGraphSave",save).has("error"));
+        AIVERSE_TEST_CHECK(call("studio.shaderGraphSave",save).has("error"));
+        AIVERSE_TEST_CHECK(Json::parseFile((project/"shaders"/"guarded.json").string())==edited);
         const auto original=args();const auto bytes=session.workspace().map.toJson();
         const auto undo=session.workspace().map.undoDepth();const auto dirty=session.workspace().map.dirty;
         bool registered=false;
@@ -844,6 +931,7 @@ void caveGraphCaptureWorkflow() {
         AIVERSE_TEST_CHECK(!call("studio.cavernsGraphInspect",args()).has("error"));
         const auto beforeReopen=args();
         session.openProject(project.string());
+        AIVERSE_TEST_CHECK(call("studio.op",debug).has("error"));
         AIVERSE_TEST_CHECK(call("studio.cavernsGraphInspect",beforeReopen).has("error"));
     }
     fs::remove_all(root);

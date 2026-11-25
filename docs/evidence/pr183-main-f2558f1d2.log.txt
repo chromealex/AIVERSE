@@ -1,0 +1,14 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/pr183-publication-20261125/mac
+Test project /Volumes/KINGSTON/AIVERSE-builds/pr183-publication-20261125/mac
+    Start 348: vfx_graph_ops
+1/2 Test #348: vfx_graph_ops ....................   Passed    0.67 sec
+    Start 588: studio_session
+2/2 Test #588: studio_session ...................   Passed    9.88 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Label Time Summary:
+EDITOR       =   9.88 sec*proc (1 test)
+SpectraFX    =   0.67 sec*proc (1 test)
+
+Total Test time (real) =  10.59 sec

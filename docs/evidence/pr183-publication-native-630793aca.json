@@ -1,0 +1,14 @@
+{
+  "sha": "630793aca93c15e4864ceb7874ddf1a79731892d",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/pr183-publication-20261125/mac",
+    "-R",
+    "^(vfx_graph_ops|studio_session)$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/pr183-publication-native-630793aca.log.txt",
+  "sha256": "14d7bceb749c2163729bb5a079c2ee82937fa7c8155e36067db29a79cd5a61d4"
+}

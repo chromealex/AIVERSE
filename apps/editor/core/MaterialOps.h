@@ -4,6 +4,8 @@
 // Format: docs/models.md "Material library".
 #pragma once
 #include "Workspace.h"
+#include <filesystem>
+#include <limits>
 #include <map>
 #include "engine/render/Model.h"
 #include "engine/render/graph/TextureGraph.h"
@@ -25,6 +27,8 @@ Json publishTextureGraphSet(Workspace& ws,const std::string& name,const Json& gr
 
 // materials.json of the open game ({"materials": {...}}); empty object when missing.
 Json materialFilePaths(const Workspace& ws);
+Json resolveMaterialLibraryIndex(const std::filesystem::path& root,const Json& index,
+                                 size_t maxFileBytes=std::numeric_limits<size_t>::max());
 Json loadMaterialLibrary(const Workspace& ws);
 void saveMaterialLibrary(Workspace& ws, const Json& lib, const std::string& what,
                          const std::map<std::string,std::string>& relocated = {});   // throws on failure

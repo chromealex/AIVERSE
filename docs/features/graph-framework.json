@@ -37,7 +37,6 @@
     "apps/studio-web/src/graphs/strataAnalysis.ts",
     "apps/studio-web/src/graphs/StrataAnalysisPanel.tsx",
     "apps/studio-web/src/graphs/graphDiagnostics.ts",
-    "apps/studio-web/src/graphs/GraphDiagnostics.tsx",
     "apps/editor/core/GraphOps.h",
     "apps/editor/core/Workspace.cpp",
     "tools/mcp/audit_registry.py",
@@ -231,7 +230,43 @@
     "engine/render/ModelShaders.h",
     "tests/render/hdr_texture.cpp",
     "engine/render/graph/TextureGraphCustomCompute.h",
-    "skills/visuals/aiverse-texture-rhi/SKILL.md"
+    "skills/visuals/aiverse-texture-rhi/SKILL.md",
+    "apps/editor/core/ProjectAssetWriteLock.h",
+    "apps/editor/core/PublicationArchive.h",
+    "apps/editor/core/PublicationIntegrity.h",
+    "apps/editor/core/TexturePublicationJournal.h",
+    "apps/editor/core/Workspace.h",
+    "apps/studio-native/StudioAssetCatalog.cpp",
+    "apps/studio-native/StudioAssetUsage.h",
+    "apps/studio-native/StudioBuildingMaterialPublish.h",
+    "apps/studio-native/StudioMaterialPublicationJournal.h",
+    "apps/studio-web/src/panels/StudioPanelRenderer.tsx",
+    "apps/studio-web/src/panels/materialSchema.ts",
+    "docs/agent-handoffs/feature-gate-stage62-owner-sync-2026-11-24.md",
+    "docs/agent-handoffs/feature-gate-stage63-ci-audit-2026-11-24.md",
+    "docs/agent-handoffs/feature-gate-stage64-debugger-scope-2026-11-24.md",
+    "docs/agent-handoffs/feature-gate-stage65-graph-runtime-scope-2026-11-24.md",
+    "docs/agent-handoffs/feature-gate-stage66-document-lifetime-2026-11-24.md",
+    "docs/agent-handoffs/feature-gate-stage67-gpu-owner-lifetime-2026-11-24.md",
+    "docs/agent-handoffs/feature-gate-stage68-material-transactions-2026-11-24.md",
+    "docs/agent-handoffs/feature-gate-stage69-publication-intent-2026-11-24.md",
+    "docs/agent-handoffs/feature-gate-stage70-publication-inspection-2026-11-24.md",
+    "docs/agent-handoffs/feature-gate-stage71-texture-publications-2026-11-24.md",
+    "docs/agent-handoffs/feature-gate-stage72-publication-integrity-2026-11-24.md",
+    "docs/agent-handoffs/feature-gate-stage73-metadata-repair-2026-11-24.md",
+    "docs/agent-handoffs/feature-gate-stage74-project-writer-lock-2026-11-24.md",
+    "docs/agent-handoffs/feature-gate-stage75-os-asset-lock-2026-11-24.md",
+    "docs/agent-handoffs/feature-gate-stage76-studio-metadata-recovery-2026-11-24.md",
+    "docs/agent-handoffs/feature-gate-stage77-publication-finalize-2026-11-24.md",
+    "docs/agent-handoffs/feature-gate-stage78-isolated-texture-quarantine-2026-11-24.md",
+    "docs/agent-handoffs/feature-gate-stage79-quarantine-restore-2026-11-24.md",
+    "docs/agent-handoffs/feature-gate-stage80-material-rollback-preview-2026-11-24.md",
+    "docs/agent-handoffs/feature-gate-stage81-recovery-coverage-2026-11-24.md",
+    "docs/agent-handoffs/feature-gate-stage82-material-isolated-staging-2026-11-24.md",
+    "docs/agent-handoffs/feature-gate-stage83-material-quarantine-restore-2026-11-24.md",
+    "docs/features/graph-framework.json",
+    "apps/studio-web/src/graphs/GraphDiagnostics.tsx",
+    "docs/agent-handoffs/pr183-publication-integration-2026-11-25.md"
   ],
   "traits": {
     "editable": true,
@@ -269,8 +304,8 @@
       "evidence": [
         "skills/workflow/aiverse-graph-authoring/SKILL.md",
         "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md",
-        "docs/evidence/feature-gate-e0b95cf24-catalog.log.txt",
-        "docs/evidence/feature-gate-e0b95cf24-skill-audit.log.txt",
+        "docs/evidence/feature-gate-a4a078735-catalog.log.txt",
+        "docs/evidence/feature-gate-a4a078735-skill-audit.log.txt",
         "skills/workflow/aiverse-graph-authoring/SKILL.md"
       ]
     },
@@ -470,7 +505,13 @@
       "texture_graph_cache",
       "texture_graph_material_variant",
       "texture_graph_gpu_preview",
-      "texture_graph_image_asset"
+      "texture_graph_image_asset",
+      "texture_graph_publications_get",
+      "texture_graph_publication_finalize",
+      "texture_graph_publication_quarantine",
+      "texture_graph_quarantine_get",
+      "texture_graph_quarantine_restore",
+      "texture_graph_publication_resume"
     ],
     "studio_panels": [
       "shader_graph",
@@ -492,17 +533,15 @@
       "studio.materials",
       "studio.materialPatch",
       "studio.assetByGuid",
-      "studio.cavernsGraphInspect"
+      "studio.cavernsGraphInspect",
+      "studio.materialPublicationRepair",
+      "studio.materialPublicationFinalize",
+      "studio.materialPublicationRollbackPreview",
+      "studio.materialPublicationRollbackEmpty",
+      "studio.materialPublicationQuarantine",
+      "studio.materialPublicationRestore",
+      "studio.materialPublicationRetry"
     ]
   },
-  "test_reports": [
-    "docs/evidence/feature-gate-e0b95cf24-contracts.json",
-    "docs/evidence/feature-gate-e0b95cf24-catalog.json",
-    "docs/evidence/feature-gate-e0b95cf24-skill-audit.json",
-    "docs/evidence/feature-gate-e0b95cf24-feature-suite.json",
-    "docs/evidence/feature-gate-e0b95cf24-native-project.json",
-    "docs/evidence/feature-gate-e0b95cf24-web.json",
-    "docs/evidence/feature-gate-e0b95cf24-studio-contracts.json",
-    "docs/evidence/feature-gate-e0b95cf24-typecheck.json"
-  ]
+  "test_reports": []
 }

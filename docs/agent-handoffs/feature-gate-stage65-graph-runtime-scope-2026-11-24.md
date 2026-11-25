@@ -1,0 +1,3 @@
+# Stage 65 — graph operation scope
+
+Parent 9e7a576f, PR #183. Scope runtime probe, live snapshot/watch/profile and GPU profile calls to project, require scope in native Studio dispatch. Model, texture, Strata and material panel requests now carry expectedProject, using existing optional native check. Texture import metadata patch also carries scope with native optional validation. Runtime probe retires pending replies on project/domain changes. Native negative fixtures authored; full build and tests NOT RUN. Other generic clients remain compatible; same-path reopen is not covered by project-path scope. Main untouched.

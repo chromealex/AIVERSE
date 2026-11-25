@@ -1,0 +1,3 @@
+# Stage 67 — GPU owner project lifetime
+
+Parent 24c4821d, PR #183. Workspace increments project lifetime on successful Project load including same path. Native Editor synchronizes before GPU RPC and owner frame completion/dispatch, invalidates queued/completed texture results and profile samples while retaining in-flight GPU resources for existing retirement. Isolated debug session checks Workspace lifetime on every operation. No claim of GPU capability in Studio host without graphics owner. Build and tests NOT RUN. Next: exercise reopen/cancel/retirement and review remaining host lifetime paths. Main untouched.

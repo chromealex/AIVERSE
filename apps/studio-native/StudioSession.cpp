@@ -36,6 +36,7 @@
 #include "engine/pack/Sha256.h"
 #include "engine/view/AttachmentLayout.h"
 #include "apps/studio-native/StudioMoveJournal.h"
+#include "apps/editor/core/ProjectAssetWriteLock.h"
 #include "apps/editor/EditorSceneNodes.h"
 #include "apps/studio-native/StudioDocumentIds.h"
 #include "apps/studio-native/StudioDocumentVisuals.h"
@@ -122,6 +123,8 @@ std::string recoveredProjectDir(const editor::Workspace& ws,const std::string& i
     // journal. Resolve that inner transaction before rolling back the outer move.
     editor::recoverProjectFileEdits(directory);
     studioRecoverAssetJournal(directory);
+    editor::ProjectAssetWriteLock projectLock(directory);
+    StudioMoveJournal::recover(directory);
     return directory;
 }
 
@@ -143,6 +146,7 @@ StudioSession::StudioSession(const std::string& engineRoot, const std::string& p
         // projects chosen through the native Open Project panel.
         (void)studioContentRoot(ws_.project.dir);
         loadAssetHistory();
+        try { const auto pending=StudioMaterialPublicationJournal::inspect(ws_.project.dir);if(pending.size())ws_.log("studio","Pending material publications: "+pending.dump(-1),true); } catch(const std::exception& e){ws_.log("studio",e.what(),true);}
     }
 }
 int StudioSession::indexFor(const std::string& id) const {
@@ -1078,6 +1082,7 @@ Json StudioSession::openProject(const std::string& path) {
     if (!ws_.openGame(directory, &error))
         throw std::runtime_error(error.empty() ? "Unable to open project" : error);
     (void)studioContentRoot(ws_.project.dir);
+    try { const auto pending=StudioMaterialPublicationJournal::inspect(ws_.project.dir);if(pending.size())ws_.log("studio","Pending material publications: "+pending.dump(-1),true); } catch(const std::exception& e){ws_.log("studio",e.what(),true);}
     ++graphDocumentEpoch_; // reopening the same project is a different document lifetime
     pendingAssetTransfer_.reset();loadAssetHistory();
     clearSelection();hidden_.clear();locked_.clear();
@@ -2560,6 +2565,10 @@ Json StudioSession::dispatchImplCore(const Json& request) {
         if (!request.isObject() || !request["id"].isNumber()) throw std::runtime_error("Invalid request envelope");
         const std::string method = request.getStr("method");
         Json params = request["params"];
+        // Cover Studio content mutations including multi-step asset transfers.
+        std::unique_ptr<editor::ProjectAssetWriteLock> assetLock;
+        if(!ws_.project.dir.empty() && (method=="studio.assetFolderCreate"||method=="studio.assetTransferCommit"||method=="studio.assetMetaPatch"||method=="studio.buildingPublishMaterial"||method=="studio.materialCreate"||method=="studio.materialPatch"))
+            assetLock=std::make_unique<editor::ProjectAssetWriteLock>(ws_.project.dir);
         if((method=="studio.lightUpdate" || method=="studio.lightDelete") && params.has("entityId")) {
             if(!params["entityId"].isString())throw std::runtime_error("Invalid light entity ID");
             bool found=false;
@@ -2609,17 +2618,24 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 ws_.engineDir,ws_.project.dir,params.getStr("recipe")));
             return reply;
         }
-        if(method=="studio.buildingPublishMaterial") {
+        if(method=="studio.buildingPublishMaterial"||method=="studio.materialPublicationRetry") {
             if(ws_.project.dir.empty())throw std::runtime_error("Open a project");
+            editor::ProjectAssetWriteLock publicationLock(ws_.project.dir);
             const auto name=params.getStr("name");
             if(!validStudioMaterialName(name)||editor::loadMaterialLibrary(ws_).has(name))
                 throw std::runtime_error("Invalid or existing material name");
-            auto result=studioBuildingPublishMaterial(ws_.engineDir,ws_.project.dir,params,
+            Json recipe=params;
+            if(method=="studio.materialPublicationRetry"){
+                if(params.getStr("expectedProject")!=ws_.project.dir||params.getStr("expectedDocumentEpoch")!=std::to_string(graphDocumentEpoch_))throw std::runtime_error("Material recovery document changed");
+                recipe=StudioMaterialPublicationJournal::retryRecipe(ws_.project.dir,name);
+                (void)StudioMaterialPublicationJournal::quarantineIsolated(ws_.project.dir,name);
+            }
+            auto result=studioBuildingPublishMaterial(ws_.engineDir,ws_.project.dir,recipe,
                 [&](const std::string& published,const Json& material){
                     if(editor::loadMaterialLibrary(ws_).has(published))
                         throw std::runtime_error("Material already exists");
                     Json request=Json::object();request.set("name",str(published));
-                    request.set("material",material);
+                    request.set("material",material);request.set("createOnly",Json::fromBool(true));
                     const auto saved=ws_.call("material_set",request,"studio");
                     if(saved.has("error"))throw std::runtime_error(saved.getStr("error"));
                 });
@@ -3122,6 +3138,8 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 Json request=Json::object();
                 request.set("graph",draft);
                 if(method=="studio.shaderGraphSave") {
+                    if(params.has("expectedDocumentEpoch") && params.getStr("expectedDocumentEpoch")!=std::to_string(graphDocumentEpoch_))
+                        throw std::runtime_error("Shader graph document reopened; reload before saving");
                     if(params.getStr("expectedProject")!=ws_.project.dir)
                         throw std::runtime_error("Shader Graph project changed; reload before saving");
                     const std::string name=params.getStr("name");
@@ -3188,6 +3206,33 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             result.set("active",Json::fromBool(!name.empty()));
             result.set("name",str(name));
             reply.set("result",std::move(result));
+        } else if (method == "studio.materialPublicationQuarantine"||method=="studio.materialPublicationRestore") {
+            if(ws_.project.dir.empty()||params.getStr("expectedProject")!=ws_.project.dir||params.getStr("expectedDocumentEpoch")!=std::to_string(graphDocumentEpoch_))throw std::runtime_error("Material recovery document changed");
+            editor::ProjectAssetWriteLock lock(ws_.project.dir);
+            if(method=="studio.materialPublicationQuarantine") (void)StudioMaterialPublicationJournal::quarantineIsolated(ws_.project.dir,params.getStr("id"));
+            else StudioMaterialPublicationJournal::restoreQuarantine(ws_.project.dir,params.getStr("id"));
+            Json result=Json::object();result.set("ok",Json::fromBool(true));reply.set("result",std::move(result));
+        } else if (method == "studio.materialPublicationRollbackPreview"||method=="studio.materialPublicationRollbackEmpty") {
+            if(ws_.project.dir.empty()||params.getStr("expectedProject")!=ws_.project.dir||params.getStr("expectedDocumentEpoch")!=std::to_string(graphDocumentEpoch_))throw std::runtime_error("Material recovery document changed");
+            const auto name=params.getStr("name");
+            if(method=="studio.materialPublicationRollbackPreview")
+                reply.set("result",StudioMaterialPublicationJournal::rollbackPreview(ws_.project.dir,name,ws_.project.rulesJson,ws_.map.toJson()));
+            else {
+                StudioMaterialPublicationJournal::rollbackEmpty(ws_.project.dir,name,ws_.project.rulesJson,ws_.map.toJson());
+                Json result=Json::object();result.set("rolledBack",Json::fromBool(true));result.set("pendingPublications",StudioMaterialPublicationJournal::inspect(ws_.project.dir));reply.set("result",std::move(result));
+            }
+        } else if (method == "studio.materialPublicationFinalize") {
+            if(ws_.project.dir.empty()||params.getStr("expectedProject")!=ws_.project.dir||params.getStr("expectedDocumentEpoch")!=std::to_string(graphDocumentEpoch_))throw std::runtime_error("Material recovery document changed");
+            StudioMaterialPublicationJournal::finalize(ws_.project.dir,params.getStr("name"));
+            Json result=Json::object();result.set("finalized",Json::fromBool(true));result.set("pendingPublications",StudioMaterialPublicationJournal::inspect(ws_.project.dir));reply.set("result",std::move(result));
+        } else if (method == "studio.materialPublicationRepair") {
+            if(ws_.project.dir.empty()||params.getStr("expectedProject")!=ws_.project.dir||params.getStr("expectedDocumentEpoch")!=std::to_string(graphDocumentEpoch_))
+                throw std::runtime_error("Material recovery document changed; refresh Studio");
+            editor::ProjectAssetWriteLock recoveryLock(ws_.project.dir);
+            StudioMaterialPublicationJournal::restoreMissingMetadata(ws_.project.dir,params.getStr("name"),params.getStr("filename"));
+            Json result=Json::object();result.set("restored",Json::fromBool(true));
+            result.set("pendingPublications",StudioMaterialPublicationJournal::inspect(ws_.project.dir));
+            reply.set("result",std::move(result));
         } else if (method == "studio.materials" || method == "studio.materialPatch" ||
                    method == "studio.materialCreate" || method=="studio.materialsToFiles") {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
@@ -3203,6 +3248,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 return str("content/"+asset->path);
             };
             if(method=="studio.materialsToFiles"){
+                editor::ProjectAssetWriteLock lock(ws_.project.dir);
                 const auto materials=editor::loadMaterialLibrary(ws_);
                 editor::saveMaterialLibrary(ws_,materials,"Convert material library to files");
             } else if (method == "studio.materialCreate") {
@@ -3237,7 +3283,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 }
                 Json request=Json::object();
                 request.set("name",str(name));
-                request.set("material",std::move(material));
+                request.set("material",std::move(material));request.set("createOnly",Json::fromBool(true));
                 const Json saved=ws_.call("material_set",request,"studio");
                 if (saved.has("error")) throw std::runtime_error(saved.getStr("error"));
             } else if (method == "studio.materialPatch") {
@@ -3295,7 +3341,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 Json request=Json::object();
                 request.set("name",str(name));
                 request.set("material",std::move(validatedPatch));
-                request.set("merge",Json::fromBool(true));
+                request.set("merge",Json::fromBool(true));request.set("requireExisting",Json::fromBool(true));
                 // material_set validates keys/base and writes materials.json atomically.
                 // Unlike MapDoc edits this is immediate disk save without Undo:
                 // explicit Apply is required in the frontend.
@@ -3311,6 +3357,8 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             Json result=Json::object();
             result.set("library",library);
             result.set("files",editor::materialFilePaths(ws_));
+            try { result.set("pendingPublications",StudioMaterialPublicationJournal::inspect(ws_.project.dir));result.set("quarantinedPublications",StudioMaterialPublicationJournal::inspectQuarantine(ws_.project.dir)); }
+            catch(const std::exception& e){result.set("publicationInspectionError",str(e.what()));}
             reply.set("result",std::move(result));
         } else if(method=="studio.nereidFlow"||method=="studio.nereidFlowSet"){
             if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
@@ -3471,9 +3519,13 @@ Json StudioSession::dispatchImplCore(const Json& request) {
         } else if (method == "studio.op") {
             const std::string op=params.getStr("op");
             if (!studioToolAllowed(op)) throw std::runtime_error("This operation is not available in Studio panels: "+op);
+            if(params.has("expectedDocumentEpoch") && params.getStr("expectedDocumentEpoch")!=std::to_string(graphDocumentEpoch_))
+                throw std::runtime_error("Graph document reopened; refresh the panel");
             if(params.has("expectedProject") && params.getStr("expectedProject")!=ws_.project.dir)
                 throw std::runtime_error("Studio operation project changed; reload before retrying");
             if (op.rfind("feature_readiness_",0)!=0 && ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
+            if((op=="graph_debug_session"||op=="graph_runtime_probe"||op=="graph_live_snapshot"||op=="graph_live_watch"||op=="graph_live_profile"||op=="graph_gpu_profile") && params.getStr("expectedProject")!=ws_.project.dir)
+                throw std::runtime_error("Graph runtime project changed; reopen the panel");
             if((op.starts_with("world_save_")||op=="world_job_start"||op.starts_with("world_simulation_lod_"))&&params.getStr("expectedProject")!=ws_.project.dir)
                 throw std::runtime_error("World maintenance project changed; reopen the panel");
             if((op=="terraweave_caverns_paint"||op=="terraweave_caverns_pick") && (params.getStr("expectedProject")!=ws_.project.dir ||
@@ -3684,6 +3736,10 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             result.set("gpuVerified",Json::fromBool(false));
             reply.set("result",std::move(result));
         } else if (method == "studio.assetMetaPatch") {
+            if(params.has("expectedDocumentEpoch") && params.getStr("expectedDocumentEpoch")!=std::to_string(graphDocumentEpoch_))
+                throw std::runtime_error("Asset document reopened; refresh the panel");
+            if(params.has("expectedProject") && params.getStr("expectedProject")!=ws_.project.dir)
+                throw std::runtime_error("Asset metadata project changed; refresh the panel");
             if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
             const std::string guid=params.getStr("guid");
             const std::string key=params.getStr("key");

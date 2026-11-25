@@ -18,10 +18,10 @@ const errorText=(e:unknown)=>e instanceof Error?e.message:String(e);
 function requireOk(result:unknown){
  if(!object(result)||result.ok!==true)throw new Error(object(result)?JSON.stringify(result.errors??result.error??result):'Native validation failed');
 }
-export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGraphDomain;projectPath:string}){
+export default function NativeGraphPanel({documentEpoch,domain,projectPath}:{documentEpoch?:string;domain:NativeGraphDomain;projectPath:string}){
  const fx=domain==='spectrafx',prefix=fx?'fx_graph':'animation_graph';
  const op=async(name:string,params:GraphObject={}):Promise<unknown>=>
-  (await invoke('studio.op',{op:name,params,expectedProject:projectPath})).result;
+  (await invoke('studio.op',{op:name,params,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch})).result;
  const [names,setNames]=useState<string[]>([]),[name,setName]=useState('');
  const [catalog,setCatalog]=useState<FxNodeInfo[]>([]),[nodeType,setNodeType]=useState('');
  const [original,setOriginal]=useState<GraphObject|null>(null),[draft,setDraft]=useState<GraphObject|null>(null);
@@ -55,7 +55,7 @@ export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGrap
    }
   });
   return ()=>{if(epoch.current===token)epoch.current++;};
- },[domain,projectPath]);
+ },[domain,projectPath,documentEpoch]);
  const view=useMemo(()=>{
   if(!draft)return {nodes:[],links:[]};
   const result=fx?fxProjection(draft,catalog):animationProjection(draft,mode);
@@ -149,7 +149,7 @@ export default function NativeGraphPanel({domain,projectPath}:{domain:NativeGrap
   {draft?<><GraphCanvas view={view} selected={active} selection={selection} onSelection={setSelection} label={domain+' graph'}
    disabled={busy} pendingOutput={pending} onOutput={setPending} onInput={connect} onCancel={()=>setPending(null)}
    onSelect={id=>setSelection(id?[id]:[])} onMove={(id,x,y)=>move([{id,x,y}])} onMoveGroup={move}/>
-   <GraphRuntimeProbePanel domain={domain} graph={draft} disabled={busy}/>
+   <GraphRuntimeProbePanel projectPath={projectPath} domain={domain} graph={draft} disabled={busy}/>
    <GraphLiveSnapshotPanel domain={domain} projectPath={projectPath}/>
    <GraphDebugSessionPanel domain={domain} graph={draft} projectPath={projectPath} disabled={busy}/>
    <GraphDiagnosticsPanel view={view} policy={fx?{cycles:'reject',cycleGroups:['exec','data']}:{cycles:mode==='states'?'allow':'reject'}}/>
