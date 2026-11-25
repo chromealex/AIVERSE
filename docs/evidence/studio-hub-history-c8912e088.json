@@ -1,0 +1,14 @@
+{
+  "sha": "c8912e0885e74afa381a768fad8759a98b1329cc",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^studio_session$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-hub-history-c8912e088.log.txt",
+  "sha256": "050e84bdead4a147664ec1d2c94262bc511dc443b58459f97e0efd854fce3fb8"
+}
