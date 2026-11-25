@@ -91,7 +91,8 @@ inline std::optional<std::array<Point3d,4>> convexSeed(std::span<const Point3d> 
         double det=dot(u,cross(v,w));if(det==0)continue;
         double r=dot(q,cross(v,w))/det,t=dot(u,cross(q,w))/det,h=dot(u,cross(v,q))/det;
         if(r>1e-10&&t>1e-10&&h>1e-10&&r+t+h<1-1e-10)return std::array<Point3d,4>{x,points[j],points[k],points[l]};
-    }return {};
+    }
+    return {};
 }
 inline PenetrationResult convexPenetrationExpanded(std::span<const Point3d> a,std::span<const Point3d> b,double tolerance=1e-7,size_t gjkBudget=64,size_t epaBudget=128){
     auto result=convexPenetration(a,b,tolerance,gjkBudget,epaBudget);

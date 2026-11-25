@@ -1,0 +1,39 @@
+{
+  "id": "2026-11-25-terraweave-meadow-light",
+  "date": "2026-11-25",
+  "system": "terraweave",
+  "title": "Луговая трава при дневном и низком солнце",
+  "titleEn": "Meadow grass in daylight and low sun",
+  "summary": "У основания высоких травинок растут короткие листья. Они заполняют просветы между пучками и отбрасывают тени на землю.",
+  "summaryEn": "Short leaves grow at the base of taller blades, filling the gaps between tufts and casting shadows on the ground.",
+  "body": [
+    "На общем плане луг тянется до дальнего склона. Вблизи видны отдельные листья, сквозь которые проходит солнечный свет. На третьем кадре камера возвращается к общему плану, чтобы показать тот же участок при низком солнце."
+  ],
+  "bodyEn": [
+    "The wide view follows the meadow towards the far slope. Up close, sunlight filters through individual blades. The third frame returns to the wide view to show the same patch under a low sun."
+  ],
+  "status": "in-progress",
+  "verified": "Три кадра сняты в редакторе AIVERSE на Mac с рендерингом Metal.",
+  "verifiedEn": "All three frames were captured in the AIVERSE editor on Mac using Metal.",
+  "limits": "Предпросмотр пресета meadow из ветки разработки.",
+  "limitsEn": "A preview of the meadow preset from the development branch.",
+  "branch": "integration/meadow-grass-20261124",
+  "commit": "8d2ce8dc6",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-terraweave-meadow-light/lit-mid.jpg",
+      "caption": "Густой луг при дневном свете",
+      "captionEn": "Dense meadow in daylight"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-terraweave-meadow-light/lit-close.jpg",
+      "caption": "У основания пучков видны короткие листья и тени",
+      "captionEn": "Short leaves and shadows at the base of the grass tufts"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-terraweave-meadow-light/lit-low-sun.jpg",
+      "caption": "Тот же луг при низком солнце",
+      "captionEn": "The same meadow under a low sun"
+    }
+  ]
+}
