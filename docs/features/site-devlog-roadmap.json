@@ -1,0 +1,156 @@
+{
+  "schema": 1,
+  "id": "site-devlog-roadmap",
+  "owner": "build",
+  "changed_paths": [
+    "docs/agent-handoffs/site-devlog-roadmap-initial.md",
+    "docs/agents/contracts/release-site.md",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/README.md",
+    "docs/devlog/systems.json",
+    "docs/evidence/site-devlog-roadmap-build.json",
+    "docs/evidence/site-devlog-roadmap-build.log.txt",
+    "docs/evidence/site-devlog-roadmap-current.json",
+    "docs/evidence/site-devlog-roadmap-current.log.txt",
+    "docs/evidence/site-devlog-roadmap-main203.json",
+    "docs/evidence/site-devlog-roadmap-main203.log.txt",
+    "docs/features/site-devlog-roadmap.json",
+    "site/_layout.html",
+    "site/devlog.js",
+    "site/i18n/en.json",
+    "site/i18n/ru.json",
+    "site/style.css",
+    "skills/workflow/aiverse-devlog/SKILL.md",
+    "skills/workflow/aiverse-site-publish/SKILL.md",
+    "tools/site/build.py",
+    "tools/site/render.py"
+  ],
+  "traits": {
+    "visible": true,
+    "simulation": false,
+    "runtime": false,
+    "editable": false
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Builds one shared feed with localized bookmark redirects.",
+      "evidence": [
+        "tools/site/build.py"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Both roadmap views use the existing system registry.",
+      "evidence": [
+        "tools/site/render.py"
+      ]
+    },
+    "native_api": {
+      "status": "not_applicable",
+      "note": "Static website navigation and editorial data have no engine native_api surface.",
+      "evidence": []
+    },
+    "skill": {
+      "status": "pass",
+      "note": "Both publishing workflows direct authors to the shared feed.",
+      "evidence": [
+        "skills/workflow/aiverse-devlog/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "not_applicable",
+      "note": "Static website navigation and editorial data have no engine mcp surface.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_applicable",
+      "note": "Static website navigation and editorial data have no engine studio surface.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_applicable",
+      "note": "Static website navigation and editorial data have no engine inspector surface.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_applicable",
+      "note": "Static website navigation and editorial data have no engine persistence surface.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "Static website navigation and editorial data have no engine graphs surface.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_applicable",
+      "note": "Static website navigation and editorial data have no engine performance surface.",
+      "evidence": []
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "English and Russian static pages exercised in Chrome on macOS.",
+      "evidence": [
+        "docs/agent-handoffs/site-devlog-roadmap-initial.md"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Uses the existing static publisher, standard library and browser APIs.",
+      "evidence": [
+        "tools/site/build.py"
+      ]
+    },
+    "headless": {
+      "status": "not_applicable",
+      "note": "Static website navigation and editorial data have no engine headless surface.",
+      "evidence": []
+    },
+    "examples": {
+      "status": "not_applicable",
+      "note": "Static website navigation and editorial data have no engine examples surface.",
+      "evidence": []
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Built both locales with 72 entries and pinned demo bundles on current main plus this site change; the source branch also recorded Chrome navigation in both languages.",
+      "evidence": [
+        "docs/evidence/site-devlog-roadmap-main203.json"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Records source and browser verification.",
+      "evidence": [
+        "docs/agent-handoffs/site-devlog-roadmap-initial.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "Updated entry routing and publishing instructions.",
+      "evidence": [
+        "docs/devlog/README.md"
+      ]
+    },
+    "publishing": {
+      "status": "pass",
+      "note": "Verified the localized publication preview and legacy URLs in Chrome. MAIN owns deployment.",
+      "evidence": [
+        "docs/agent-handoffs/site-devlog-roadmap-initial.md"
+      ]
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-devlog",
+      "aiverse-site-publish"
+    ],
+    "mcp_tools": [],
+    "studio_panels": [],
+    "studio_methods": []
+  },
+  "test_reports": [
+    "docs/evidence/site-devlog-roadmap-main203.json"
+  ]
+}

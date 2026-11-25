@@ -14,10 +14,10 @@ Every successfully finished stage of any engine system gets an entry. Entries fo
 own development diary on the site (`devblog-<system>.html`, newest first) and the shared feed.
 
 - Work outside the flagship systems (Studio, builds, networking, meta, gameplay, render, world,
-  ECS, agent tools) goes to the development blog `blog.html`: same entry file, `system` set to a
+  ECS, agent tools) goes to the shared feed `devlog.html`: same entry file, `system` set to a
   non-flagship topic from `systems.json` (add a topic there if none fits). A visible change
   (render, water, terrain, UI, editor windows, effects, animation, camera) needs real frames
-  in the blog too; only invisible work (API, refactor, tests) goes without one.
+  in the shared feed too; only invisible work (API, refactor, tests) goes without one.
 - Only successful stages: a result that works and is shown in a real frame. Failed, abandoned or
   partial attempts, build errors and red tests stay in the handoff and never reach the site.
 - A stage with nothing to show (refactor, internal API, test-only work) is written up together

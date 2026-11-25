@@ -469,9 +469,9 @@
         {
           "status": "in-progress",
           "title": "Огненные и водяные смерчи, размытие земли",
-          "text": "Смерч затягивает пожар и становится огненным вихрем (поджог, угли, жар), слабеет и гаснет над водой, водяной смерч на озере, размытый след на суше. В ветке, ждёт слияния; рельеф пока не опускается.",
+          "text": "Смерч затягивает пожар и становится огненным вихрем (поджог, угли, жар), слабеет и гаснет над водой, водяной смерч на озере, размытый след на суше. Рельеф пока не опускается.",
           "titleEn": "Fire whirls, waterspouts, scoured ground",
-          "textEn": "A tornado draws a wildfire in and becomes a fire whirl (ignition, embers, heat), weakens and is quenched over water, waterspouts on lakes, a scoured track on land. On a branch, awaiting merge; terrain is not lowered yet."
+          "textEn": "A tornado draws a wildfire in and becomes a fire whirl (ignition, embers, heat), weakens and is quenched over water, waterspouts on lakes, a scoured track on land. The terrain surface stays at its original height."
         },
         {
           "status": "planned",
@@ -569,13 +569,13 @@
       ],
       "roadmap": [
         {
-          "status": "in-progress",
-          "date": "2026-11-24",
+          "status": "done",
+          "date": "2026-11-25",
           "title": "Сборка каскадов GCC 13 arm64",
           "id": "nereid-gcc13-arm64-build",
-          "text": "Устранить предупреждение maybe-uninitialized при обновлении каскадов и подтвердить регрессию.",
+          "text": "Обновление каскадов компилируется в GCC 13 на arm64.",
           "titleEn": "GCC 13 arm64 cascade build",
-          "textEn": "Resolve the maybe-uninitialized diagnostic while updating cascades and verify the regression."
+          "textEn": "Cascade updates compile with GCC 13 on arm64."
         },
         {
           "status": "done",
@@ -3346,6 +3346,13 @@
       ],
       "roadmap": [
         {
+          "id": "site-devlog-roadmap",
+          "status": "done",
+          "date": "2026-11-25",
+          "title": "Общий дневник и дорожные карты систем",
+          "titleEn": "Shared development log and system roadmaps"
+        },
+        {
           "id": "mac-build-test-runner",
           "status": "done",
           "date": "2026-11-25",
@@ -3573,18 +3580,17 @@
           "textEn": "Positive weapon periods carry elapsed time between shots. Verify compatibility with existing Arsenal saves."
         },
         {
-          "status": "in-progress",
+          "status": "done",
           "title": "Строительная сетка",
           "text": "Координаты и привязка ячеек, поворот footprint и проверка размещения через общую библиотеку construction.",
           "titleEn": "Construction grid",
-          "textEn": "Cell coordinates and snapping, rotated footprints and placement checks through the shared construction library."
+          "textEn": "Cell coordinates and snapping, rotated footprints and placement checks through the shared construction library.",
+          "date": "2026-11-23"
         },
         {
-          "status": "in-progress",
-          "title": "Строительная сетка",
-          "text": "Координаты и привязка ячеек, поворот footprint и проверка размещения через общую библиотеку construction.",
-          "titleEn": "Construction grid",
-          "textEn": "Cell coordinates and snapping, rotated footprints and placement checks through the shared construction library."
+          "status": "planned",
+          "title": "Предпросмотр и размещение постройки в игре",
+          "titleEn": "Construction placement preview and command in the game"
         },
         {
           "status": "done",
@@ -3592,8 +3598,8 @@
           "target": null,
           "title": "Новые движения персонажа",
           "titleEn": "New character moves",
-          "text": "Рывок с зарядами в воздухе, бег и скольжение по стене, крюк (подтягивание и маятник), планирование и спрыгивание с односторонних платформ в общем автомате движения. Готово в ветке, ждёт слияния в main.",
-          "textEn": "Dash with air charges, wall run and slide, grapple (pull and swing), glide and dropping through one-way platforms in the shared movement machine. Done in a branch, waiting for the merge into main."
+          "text": "Рывок с зарядами в воздухе, бег и скольжение по стене, крюк (подтягивание и маятник), планирование и спрыгивание с односторонних платформ в общем автомате движения.",
+          "textEn": "Dash with air charges, wall run and slide, grapple (pull and swing), glide and dropping through one-way platforms in the shared movement machine."
         },
         {
           "status": "done",

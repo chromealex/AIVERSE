@@ -1,0 +1,15 @@
+{
+  "sha": "0adab8c02ffb48506a8cc6e53e8a01458ceb4061",
+  "argv": [
+    "python3.12",
+    "tools/site/build.py",
+    "build",
+    "--out",
+    "/Volumes/KINGSTON/AIVERSE-builds/site-devlog-roadmap-preview",
+    "--demo-root",
+    "/Volumes/KINGSTON/AIVERSE-builds/aiv197-202-publish/bundles"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/site-devlog-roadmap-build.log.txt",
+  "sha256": "2fe192cf2369d70dfef5ae98e9b2596908c8ee37769153bb82ed65f18b47084e"
+}
