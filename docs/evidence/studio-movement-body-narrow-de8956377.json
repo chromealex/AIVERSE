@@ -1,0 +1,10 @@
+{
+  "sha": "de8956377097a81c94027f5d94f8d48f284eadf1",
+  "argv": [
+    "bash",
+    "/tmp/unit-body-qa.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-movement-body-narrow-de8956377.log.txt",
+  "sha256": "58a7e1d468dbff6b4f4a6fa55b3b5357f8ffcbcf67a02298fbccab2b4d6797cf"
+}
