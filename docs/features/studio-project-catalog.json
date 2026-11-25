@@ -96,9 +96,11 @@
       ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Native studio_session and 287 web tests passed.",
+      "evidence": [
+        "docs/evidence/studio-project-catalog-6026efdde.json"
+      ]
     },
     "handoff": {
       "status": "pass",
@@ -132,5 +134,7 @@
       "studio.projectRule"
     ]
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/studio-project-catalog-6026efdde.json"
+  ]
 }
