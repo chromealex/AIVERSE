@@ -1,0 +1,20 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+    Start 583: studio_document_visuals
+1/2 Test #583: studio_document_visuals ..........   Passed    1.36 sec
+    Start 589: studio_session
+2/2 Test #589: studio_session ...................Subprocess aborted***Exception:   1.93 sec
+actor.spawn: intersects collision
+AIVERSE test check failed: !orientedEdit.has("error") (/tmp/aiverse-studio-only/apps/studio-native/tests/StudioSessionTests.cpp:2338)
+
+
+50% tests passed, 1 tests failed out of 2
+
+Label Time Summary:
+EDITOR    =   3.29 sec*proc (2 tests)
+
+Total Test time (real) =   3.32 sec
+
+The following tests FAILED:
+	589 - studio_session (Subprocess aborted)
+Errors while running CTest

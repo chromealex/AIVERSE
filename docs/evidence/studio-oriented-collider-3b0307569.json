@@ -1,0 +1,14 @@
+{
+  "sha": "dfdc6420f899e695fedd949af84082c9bf3ff797",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^studio_(session|document_visuals)$",
+    "--output-on-failure"
+  ],
+  "exit_code": 8,
+  "log": "docs/evidence/studio-oriented-collider-3b0307569.log.txt",
+  "sha256": "c238ea328704a759c9e6a652233ca1b65f6c18b1c94da46a848ad95889995c75"
+}

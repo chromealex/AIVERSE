@@ -2286,7 +2286,7 @@ static void worldSceneInspectorProperties() {
     fs::create_directories(project);
     std::ofstream(project/"game.json")<<R"({"module":"actor","rules":"rules.json","maps":[{"file":"map.json"}]})";
     std::ofstream(project/"rules.json")<<R"({"actor":{}})";
-    const Json original=Json::parse(R"({"players":[{"name":"One","team":1},{"name":"Two","team":2}],"colliders":[{"id":1,"min":[0,0,0],"max":[1,1,1]},{"id":2,"center":[24,1,0],"half":[1,1,1],"yaw":0.25,"marker":7}],"spawns":[[0,0,0],[4,0,4]],"custom":{"marker":7}})");
+    const Json original=Json::parse(R"({"players":[{"name":"One","team":1},{"name":"Two","team":2}],"colliders":[{"id":1,"min":[0,0,0],"max":[1,1,1]},{"id":2,"center":[24,1,0],"half":[1,1,1],"yaw":0.25,"marker":7}],"spawns":[[-6,0,-6],[4,0,4]],"custom":{"marker":7}})");
     std::ofstream(project/"map.json")<<original.dump();
     {
         studio::StudioSession session(root.string(),project.string());
