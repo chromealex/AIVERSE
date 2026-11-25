@@ -152,9 +152,11 @@
     document.getElementById('stat-systems').textContent = Object.keys(used).length;
     document.getElementById('stat-date').textContent = data.entries.length ? data.entries[0].date.slice(5).split('-').reverse().join('.') : '—';
     document.getElementById('generated').textContent = L.updated + data.generated.slice(0, 10);
-    sync();
-    if (location.hash.length > 1 && !m) {
-      var target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    var entryId = location.hash.slice(1);
+    renderSystems();
+    renderFeed();
+    if (entryId && !m) {
+      var target = document.getElementById(entryId);
       if (target) target.scrollIntoView();
     }
   }).catch(function () {
