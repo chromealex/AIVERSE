@@ -116,7 +116,7 @@ editor reads it. Details: docs/editor-world-tree.md § Game hooks.
 | `victory` | `"noStructures"` (default), `"noUnits"`, `"noEntities"`, `"keyUnits"` (lose when all `key` objects die), or an object: `{"mode": "tickets", "tickets": 500, "drain": 1}`, `{"mode": "survive", "seconds": 600}`, `{"mode": "score", "seconds": 240, "keyLoses": true}`, `{"mode": "territory", "share": 0.9}` (a team owning that share of all claimable cells wins; a player with no territory is out) |
 | `fogOfWar` | `{"mode": "full"}` — fog of war: `full` (default: unexplored black, explored dim), `explored` (the whole map starts explored, enemies only in sight), `none` (no fog, everyone sees everything); `shareAllies` (true); `lineOfSight` (false: 3D visibility by heights and blockers, see "3D line of sight"); `rockHeight` (2: undug rock as an occluder). A map may override `mode`. The other keys are visual, see "Fog of war look" |
 | `heights` | `{"blockVision": true, "missUphill": 0.3, "rangePerLevel": 1, "damagePerLevel": 0.1}` — cliff levels: lower ground can't see up, shots uphill can miss, higher ground adds range and damage. With `terrain.model: "heightfield"` the advantage is the height difference / `levelHeight` (fractional), `missUphill` scales with it (full chance from one level below) and vision follows real line of sight |
-| `targeting` | `{"overkill": false}` — `overkill: true` (StarCraft II): automatic targeting skips enemies whose hp + shields are already covered by shots in flight and by the next shots of units that chose them earlier in the same pass, so a volley spreads over several targets. Manual attack orders are not affected; the estimate uses the weapon's raw damage (before armor) |
+| `targeting` | `{"overkill": false}` — `overkill: true` (StarCraft II): automatic targeting skips enemies whose hp + shields are already covered by shots in flight and by the next shots of units that chose them earlier in the same pass, so a volley spreads over several targets. Manual attack orders are not affected; the estimate uses the weapon's raw damage (before armor)  `acquireOrder` accepts `nearest` (default, distance plus four cells for unarmed candidates) or `rowMajor` (armed candidates first, then map cells by row and column, then packed entity ID within a cell). Off-grid candidates follow mapped cells in their group. |
 | `terrain` | `{"model": "heightfield", "maxSlope": {"ground": 0.8, "sand": 0.6}, "buildSlope": 0.35, "uphillSpeed": 0.5, "downhillSpeed": 0.2, "eyeHeight": 1, "targetHeight": 0.5}` — terrain model, see "Heightfield terrain". `model`: `"levels"` (default: cliff levels + ramps), `"flat"` (levels ignored), `"heightfield"`. Other keys of this block are visual (view) and ignored by the simulation |
 | `regions` | `{"claimCost": {"food": 100}, "claimCostGrowth": 0.5, "buildOnlyOwned": true, "productionPerRegion": 0.1}` — territory (Northgard; with flags: Z) |
 | `upkeep` | `[{"supply": 50, "gatherMult": 0.7}, {"supply": 80, "gatherMult": 0.4}]` — gathering yields less with a big army (Warcraft III) |
@@ -332,6 +332,7 @@ any tag in `deficitDisables`).
 | block | meaning |
 |---|---|
 | `structure` | `{"footprint": [w, h], "on": "geyser", "takesOverNode": true, "terrain": "rock"\|"creep"\|"any", "extendsBase": true}` — `on`: must be built exactly on an object of that type (refinery on a geyser, TA extractor on a metal spot); `takesOverNode` inherits its resource |
+| `selectable` | Boolean, default `true`. With `false`, pointer hits pass through the unit and selection shortcuts and drag selection skip it. The unit still participates in the simulation. |
 | `invulnerable` | can't be damaged (trees, mines, decorations) |
 | `collider` | `true`: map entities of this type are static circles (`move.radius`, the type's layer), not units: no ECS cost, no model. Walkers treat them as ORCA obstacles and never step into one, separation pushes overlapping units out, top-down heroes and cars are stopped by them like any body that never moves. For thousands of invisible bollards / benches / flower beds. Needs `move.radius`, no `structure`; not for things scripts query or damage (`engine/game/Colliders.h`) |
 | `energy` | `{"max": 200, "regen": 0.5, "start": 50}` — mana for abilities |
@@ -2851,7 +2852,10 @@ relation of the player who caused it, `owner` = of the object it happened to, `t
 Events: `hit`, `died`, `bounty`, `spawned`, `attack`, `gathered`, `delivered`, `produced`, `ability`, `cast`,
 `impact`, `miss`, `built`, `placed`, `trained`, `researched`, `levelup`, `captured`, `sold`,
 `upgraded`, `alert` (under attack), `status`, `area`, `claimed`, `wave`, `message`, `ping` (pings of
-the client / editor). Popups never appear in cells the local player cannot see.
+the client / editor), and `order` (local movement or target orders). Order markers use the local
+input position even in unexplored cells. Other popups require local visibility. Use the
+`local_order_ring` overlay template to get an animated order point. In an order popup `{value}`
+is the submitted numeric command ID.
 
 For hit popups, `event.critical: true` selects critical hits and `false` selects normal hits; omit it to keep both. The critical flag is the result of the existing Progression critical roll, not a second random roll. `{critical}` formats 1 or 0; `{value}` still formats final damage. Use two overlays with different styles:
 

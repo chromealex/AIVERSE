@@ -59,6 +59,63 @@ TEST(sc2_magic_box) {
     CHECK(threw);
 }
 
+TEST(unit_type_selection_eligibility) {
+    const std::string rules = R"({"types":{"unit":{},"scenery":{"selectable":false}}})";
+    auto sim = makeSimJson(rules, flatMap(24, 24, R"(,"entities":[{"type":"scenery","owner":1,"pos":[5,5]}])"));
+    const auto& types = mod(*sim).rules();
+    game::SceneObject front, behind;
+    front.entity = findType(*sim, "scenery", 1);
+    front.type = types.findType("scenery");
+    behind.type = types.findType("unit");
+    CHECK(sim->world().alive(front.entity));
+    CHECK(!front.selectable(types));
+    CHECK(behind.selectable(types));
+    behind.isProjectile = true;
+    CHECK(!behind.selectable(types));
+    behind.isProjectile = false;
+    behind.visible = false;
+    CHECK(!behind.selectable(types));
+    bool rejected = false;
+    try { makeSimJson(R"({"types":{"bad":{"selectable":"false"}}})", flatMap(12, 12, "")); }
+    catch (const std::exception& error) { rejected = std::string(error.what()).find("selectable") != std::string::npos; }
+    CHECK(rejected);
+}
+
+TEST(automatic_target_acquisition_order) {
+    auto rulesWith = [](const std::string& order) {
+        return std::string("{") + kVic + order + R"(,"types":{
+            "gun":{"sight":20,"weapons":[{"range":20,"damage":1,"cooldown":5}]},
+            "prop":{"selectable":false},"decoy":{"invulnerable":true}}})";
+    };
+    const std::string map = flatMap(32, 24, R"(,"entities":[
+        {"type":"gun","owner":1,"pos":[8,10]},
+        {"type":"gun","owner":2,"pos":[9,10]},
+        {"type":"prop","owner":2,"pos":[4,2]},
+        {"type":"decoy","owner":2,"pos":[5,2]},
+        {"type":"gun","owner":2,"pos":[14,5]},
+        {"type":"gun","owner":2,"pos":[12,5]}])");
+    auto acquired = [&](const std::string& rules, int x, int z) {
+        auto sim = makeSimJson(rules, map);
+        run(*sim, 0.4);
+        const Entity gun = findType(*sim, "gun", 1);
+        const Entity target = sim->world().get<game::Combat>(gun).target;
+        CHECK(sim->world().alive(target));
+        if (sim->world().alive(target)) {
+            const Vec3 pos = posOf(*sim, target);
+            CHECK(pos.x.floorInt() == x);
+            CHECK(pos.z.floorInt() == z);
+        }
+        CHECK(mechRoundTrip(*sim, rules, map));
+    };
+    acquired(rulesWith(""), 9, 10);
+    acquired(rulesWith(R"(,"targeting":{"acquireOrder":"nearest"})"), 9, 10);
+    acquired(rulesWith(R"(,"targeting":{"acquireOrder":"rowMajor"})"), 12, 5);
+    bool rejected = false;
+    try { makeSimJson(rulesWith(R"(,"targeting":{"acquireOrder":"random"})"), map); }
+    catch (const std::exception& error) { rejected = std::string(error.what()).find("targeting.acquireOrder") != std::string::npos; }
+    CHECK(rejected);
+}
+
 TEST(sc2_overkill_targeting) {
     // four slow-shot gunners against four 10 hp targets: one 12-damage shot kills a target.
     auto rulesWith = [](bool on) {

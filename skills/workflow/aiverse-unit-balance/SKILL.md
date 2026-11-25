@@ -12,6 +12,8 @@ description: Balance units and factions of an AIVERSE game through MCP - stat co
    - Shared values go to an `"abstract": true` base that entries `extends`; levels contain only what changes.
    - Big games split rules with `"include": ["rules/units.json", ...]`; rules ops write each entry back to its file.
    - Read `rules_lint` in every answer.
+   - For acquisition fidelity, set `targeting.acquireOrder` to `nearest` or `rowMajor`. Compare two candidates inside sight with `scenario_run`; row-major scans armed targets first, then map row, column and stable entity ID. Manual attack orders keep their explicit target.
+   - Set `types.<id>.selectable` to false for simulated scenery that should pass through pointer, hover and box selection. Studio exposes both settings in Rules.
 5. Re-run the same duels/matrix, then `balance_batch` (many bot matches, `mirror` on) for win rate per faction, match length and never-built items.
 6. Never-built items: too expensive, locked behind tech the bot never takes, or dominated by another unit - fix the data, then re-check.
 

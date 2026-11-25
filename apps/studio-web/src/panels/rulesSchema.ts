@@ -1,7 +1,7 @@
 /** Rules form: known unit-type fields of rules.json, read own vs resolved ("extends") values. */
 export type RuleFieldType = 'number' | 'text' | 'boolean';
-export interface RuleField { path: string; label: string; group: string; type: RuleFieldType; min?: number; max?: number; step?: number; hint?: string }
-export const RULE_GROUPS = ['General', 'Health', 'Movement', 'Vision', 'Cost', 'Weapons', 'Flags'] as const;
+export interface RuleField { path: string; label: string; group: string; type: RuleFieldType; min?: number; max?: number; step?: number; hint?: string; defaultValue?: boolean }
+export const RULE_GROUPS = ['General', 'Health', 'Movement', 'Vision', 'Cost', 'Weapons', 'Appearance', 'Flags'] as const;
 
 export const TYPE_FIELDS: RuleField[] = [
   { path: 'name', label: 'Name', group: 'General', type: 'text' },
@@ -22,7 +22,9 @@ export const TYPE_FIELDS: RuleField[] = [
   { path: 'vision.blocks', label: 'Blocks vision', group: 'Vision', type: 'number', min: 0 },
   { path: 'cost.time', label: 'Build time', group: 'Cost', type: 'number', min: 0, hint: 'seconds' },
   { path: 'cost.supply', label: 'Supply cost', group: 'Cost', type: 'number', min: 0, step: 1 },
+  { path: 'view.impactHeight', label: 'Projectile impact height', group: 'Appearance', type: 'number', min: 0, step: 0.05, hint: 'world units above target base' },
   { path: 'worker', label: 'Worker', group: 'Flags', type: 'boolean' },
+  { path: 'selectable', label: 'Selectable', group: 'Flags', type: 'boolean', defaultValue: true },
   { path: 'invulnerable', label: 'Invulnerable', group: 'Flags', type: 'boolean' },
   { path: 'capturable', label: 'Capturable', group: 'Flags', type: 'boolean' },
   { path: 'sellable', label: 'Sellable', group: 'Flags', type: 'boolean' },
@@ -51,10 +53,14 @@ export function typeValues(typeId: string, own: unknown, resolved: unknown, reso
   const out: RuleValue[] = [];
   const add = (field: RuleField, rel: string) => {
     const o = getPath(own, rel), r = getPath(resolved, rel);
-    if (field.type === 'boolean' || o !== undefined || r !== undefined || ['name', 'health.max', 'sight'].includes(rel) || rel.startsWith('cost.'))
+    if (field.type === 'boolean' || o !== undefined || r !== undefined || ['name', 'health.max', 'sight', 'view.impactHeight'].includes(rel) || rel.startsWith('cost.'))
       out.push({ field, path: 'types.' + typeId + '.' + rel, own: o, resolved: r, inherited: o === undefined && r !== undefined });
   };
   for (const f of TYPE_FIELDS) add(f, f.path);
+  if (isObj(resolved) && isObj(resolved.structure) && Array.isArray(resolved.upgrades) && resolved.upgrades.length) {
+    const path = 'view.showUpgradeTarget';
+    add({ path, label: 'Show upgrade target during construction', group: 'Flags', type: 'boolean' }, path);
+  }
   for (const res of resources) add({ path: 'cost.' + res, label: res, group: 'Cost', type: 'number', min: 0, step: 1 }, 'cost.' + res);
   const weapons = (isObj(resolved) && Array.isArray(resolved.weapons)) ? resolved.weapons : isObj(own) && Array.isArray(own.weapons) ? own.weapons : [];
   weapons.forEach((w, i) => {

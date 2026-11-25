@@ -24,6 +24,8 @@ import sys
 import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from web_demos import copy_web_demos
+
 ROOT = Path(__file__).resolve().parents[2]
 DEVLOG = ROOT / 'docs/devlog'
 ENTRIES = DEVLOG / 'entries'
@@ -515,6 +517,11 @@ def cmd_build(args):
         shutil.rmtree(out)
     shutil.copytree(SITE, out, ignore=shutil.ignore_patterns('manifest.json', 'docs.json', '_layout.html', 'i18n', '.DS_Store'))
     manifest = json.loads((SITE / 'manifest.json').read_text(encoding='utf-8'))
+    try:
+        copy_web_demos(manifest.get('webDemos', {}), out, args.demo_root, ROOT)
+    except (OSError, ValueError) as exc:
+        print(f'error: {exc}', file=sys.stderr)
+        return 1
     copied = set()
 
     def copy_media(rel):
@@ -747,7 +754,7 @@ def cmd_publish(args):
         return 1
     out = Path(tempfile.mkdtemp(prefix='aiverse-site-'))
     try:
-        b = argparse.Namespace(out=str(out))
+        b = argparse.Namespace(out=str(out), demo_root=args.demo_root)
         if cmd_build(b):
             return 1
         index = out.parent / (out.name + '.index')
@@ -790,6 +797,9 @@ def main():
     b.set_defaults(fn=cmd_build)
     pb = sub.add_parser('publish')
     pb.add_argument('--dry-run', action='store_true')
+    for command in (b, pb):
+        command.add_argument('--demo-root', type=Path,
+                             help='directory of verified Web builds, one subdirectory per demo ID')
     pb.set_defaults(fn=cmd_publish)
     args = ap.parse_args()
     return args.fn(args)

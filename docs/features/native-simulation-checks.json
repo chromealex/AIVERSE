@@ -1,0 +1,175 @@
+{
+  "schema": 1,
+  "id": "native-simulation-checks",
+  "owner": "agents",
+  "changed_paths": [
+    "CMakeLists.txt",
+    "apps/editor/core/BalanceOps.cpp",
+    "apps/editor/core/NativeBuildOps.cpp",
+    "apps/editor/core/NativeBuildOps.h",
+    "apps/editor/core/ScenarioOps.cpp",
+    "apps/editor/core/ScriptOps.cpp",
+    "apps/editor/core/Workspace.cpp",
+    "docs/agent-handoffs/issues-197-202-integration.md",
+    "docs/agent-handoffs/native-simulation-checks-acceptance.md",
+    "docs/agent-handoffs/native-simulation-checks-implementation.md",
+    "docs/agent-handoffs/native-simulation-checks-initial.md",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/systems.json",
+    "docs/evidence/issues-197-202-final-mac.json",
+    "docs/evidence/issues-197-202-final-mac.log.txt",
+    "docs/evidence/issues-197-202-integrated-mac.json",
+    "docs/evidence/issues-197-202-integrated-mac.log.txt",
+    "docs/evidence/issues-197-202-merged-main-mac.json",
+    "docs/evidence/issues-197-202-merged-main-mac.log.txt",
+    "docs/evidence/native-simulation-checks-macos.json",
+    "docs/evidence/native-simulation-checks-macos.log.txt",
+    "docs/features/native-simulation-checks.json",
+    "docs/native-modules.md",
+    "skills/core/aiverse-native-scaffold/SKILL.md",
+    "tests/native_simulation_checks_mcp.py",
+    "tools/skills/audit.py"
+  ],
+  "traits": {
+    "editable": false,
+    "simulation": false,
+    "visible": false,
+    "runtime": false
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Six standalone MCP simulation operations return a structured diagnostic for missing modules.",
+      "evidence": [
+        "docs/evidence/native-simulation-checks-macos.json"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Operation registration reuses the project inventory and wraps the original simulation handler.",
+      "evidence": [
+        "apps/editor/core/NativeBuildOps.cpp"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "C++ editor tools use registerNativeSimulationCheck to register the schema and normal operation together.",
+      "evidence": [
+        "apps/editor/core/NativeBuildOps.h"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "Native module verification recipe covers reportMissingNativeModules and skipped checks.",
+      "evidence": [
+        "skills/core/aiverse-native-scaffold/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "pass",
+      "note": "Standalone stdio test exercised each tool and discovered its argument in tools/list.",
+      "evidence": [
+        "docs/evidence/native-simulation-checks-macos.json"
+      ]
+    },
+    "studio": {
+      "status": "not_applicable",
+      "note": "The request targets headless operation arguments. It adds no editor panel or authored property.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_applicable",
+      "note": "This is a read-only simulation command option with no inspectable object.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_applicable",
+      "note": "Diagnostics return request-scoped JSON and write no project or simulation state.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "The option does not operate on graph assets, nodes or expressions.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_applicable",
+      "note": "The module inventory runs once for an opted-in check, outside the simulation tick. No hot loop changes.",
+      "evidence": []
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "Executed Mac standalone MCP on the host architecture. Other operating systems have no separate implementation and were not exercised.",
+      "evidence": [
+        "docs/evidence/native-simulation-checks-macos.json"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Uses the existing compiledNativeIds and missingNativeModules in the editor core. The built server exercised the combined path.",
+      "evidence": [
+        "apps/editor/core/NativeBuildOps.cpp"
+      ]
+    },
+    "headless": {
+      "status": "pass",
+      "note": "Both the diagnostic and a deterministic one-second match were exercised without the editor GUI.",
+      "evidence": [
+        "docs/evidence/native-simulation-checks-macos.json"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "Developer guide shows a diagnostic response, option and subsequent build lookup.",
+      "evidence": [
+        "docs/native-modules.md"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Real stdio test covers all six tools, two absent modules, default failure, static stats, file integrity and checksum parity. Retested on the integrated Mac tree; see issues-197-202-integrated-mac.json.",
+      "evidence": [
+        "docs/evidence/native-simulation-checks-macos.json",
+        "docs/evidence/issues-197-202-final-mac.json",
+        "docs/evidence/issues-197-202-merged-main-mac.json"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Implementation and final runtime evidence are linked in the acceptance handoff.",
+      "evidence": [
+        "docs/agent-handoffs/native-simulation-checks-acceptance.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "The native modules reference documents the option, status and host requirement.",
+      "evidence": [
+        "docs/native-modules.md"
+      ]
+    },
+    "publishing": {
+      "status": "not_applicable",
+      "note": "The change exposes a headless diagnostic with no rendered or interactive surface.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-native-scaffold"
+    ],
+    "mcp_tools": [
+      "script_check",
+      "match_run",
+      "scenario_run",
+      "balance_batch",
+      "balance_duel",
+      "balance_matrix"
+    ],
+    "studio_panels": [],
+    "studio_methods": []
+  },
+  "test_reports": [
+    "docs/evidence/issues-197-202-merged-main-mac.json"
+  ]
+}

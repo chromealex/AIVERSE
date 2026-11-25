@@ -1,0 +1,243 @@
+{
+  "schema": 1,
+  "id": "local-order-feedback",
+  "owner": "gameplay",
+  "changed_paths": [
+    "CMakeLists.txt",
+    "apps/client/GameClient.cpp",
+    "apps/client/GameClient.h",
+    "apps/editor/core/OverlayOps.cpp",
+    "apps/studio-native/tests/StudioRenderLightingTests.cpp",
+    "apps/studio-native/tests/StudioSessionTests.cpp",
+    "demos/order-upgrade/README.md",
+    "demos/order-upgrade/game.json",
+    "demos/order-upgrade/maps/courtyard.json",
+    "demos/order-upgrade/rules.json",
+    "demos/order-upgrade/scripts/courtyard.lua",
+    "demos/order-upgrade/scripts/view/orders.lua",
+    "demos/order-upgrade/ui/hud/courtyard.rml",
+    "docs/agent-handoffs/issue-demos-publication.md",
+    "docs/agent-handoffs/issues-197-202-integration.md",
+    "docs/agent-handoffs/local-order-feedback-initial.md",
+    "docs/agent-handoffs/order-upgrade-implementation.md",
+    "docs/agent-handoffs/order-upgrade-validation.md",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/entries/2026-11-25-gameplay-order-upgrade.json",
+    "docs/devlog/media/2026-11-25-gameplay-order-upgrade/metal-upgrade.png",
+    "docs/devlog/media/2026-11-25-gameplay-order-upgrade/order.png",
+    "docs/devlog/media/2026-11-25-gameplay-order-upgrade/source.png",
+    "docs/devlog/media/2026-11-25-gameplay-order-upgrade/tower.png",
+    "docs/devlog/systems.json",
+    "docs/evidence/issues-197-202-final-mac.json",
+    "docs/evidence/issues-197-202-final-mac.log.txt",
+    "docs/evidence/issues-197-202-integrated-mac.json",
+    "docs/evidence/issues-197-202-integrated-mac.log.txt",
+    "docs/evidence/issues-197-202-merged-main-mac.json",
+    "docs/evidence/issues-197-202-merged-main-mac.log.txt",
+    "docs/evidence/local-order-upgrade-native-20261125.json",
+    "docs/evidence/local-order-upgrade-native-20261125.log.txt",
+    "docs/features/local-order-feedback.json",
+    "docs/game-format.md",
+    "docs/handoff/studio-html5/local-order-upgrade-authoring.md",
+    "docs/ru/game-format.md",
+    "docs/ru/scripting.md",
+    "docs/scripting.md",
+    "engine/game/ScriptApi.cpp",
+    "engine/view/game/GameOverlayData.cpp",
+    "engine/view/game/GameOverlayData.h",
+    "engine/view/game/GameOverlays.cpp",
+    "engine/view/game/GameOverlays.h",
+    "engine/view/game/GameViewScript.cpp",
+    "engine/view/game/GameViewScript.h",
+    "site/manifest.json",
+    "skills/gameplay/aiverse-view/SKILL.md",
+    "skills/workflow/aiverse-site-publish/SKILL.md",
+    "tests/extra-test-suites.txt",
+    "tests/order_upgrade_mcp.py",
+    "tests/site_web_demos.py",
+    "tests/tests.cpp",
+    "tools/site/build.py",
+    "tools/site/web_demos.py"
+  ],
+  "traits": {
+    "runtime": true,
+    "simulation": false,
+    "visible": true,
+    "editable": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Local player orders reach the Lua handler and ephemeral authored overlay once.",
+      "evidence": [
+        "apps/client/GameClient.cpp",
+        "tests/tests.cpp",
+        "docs/evidence/local-order-upgrade-native-20261125.log.txt"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "The client queues local view input separately from simulation and replay; checksum and tick remain unchanged.",
+      "evidence": [
+        "apps/client/GameClient.cpp",
+        "docs/evidence/local-order-upgrade-native-20261125.log.txt"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "ViewScripts::queueLocalOrder and OverlayContext::orders pass a presentation-only event.",
+      "evidence": [
+        "engine/view/game/GameViewScript.h",
+        "apps/client/GameClient.cpp",
+        "docs/evidence/local-order-upgrade-native-20261125.log.txt"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "The existing aiverse-view workflow documents the order ring, the Lua payload and the upgrade appearance option.",
+      "evidence": [
+        "skills/gameplay/aiverse-view/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "pass",
+      "note": "Created and read a local_order_ring through native MCP stdio and verified it after reopening the project.",
+      "evidence": [
+        "docs/agent-handoffs/order-upgrade-validation.md",
+        "docs/evidence/local-order-upgrade-native-20261125.log.txt"
+      ]
+    },
+    "studio": {
+      "status": "pass",
+      "note": "Native Studio session dispatch authors the ring with studio.op, then undoes/redoes the saved transaction.",
+      "evidence": [
+        "apps/studio-native/tests/StudioSessionTests.cpp",
+        "docs/evidence/local-order-upgrade-native-20261125.log.txt"
+      ]
+    },
+    "inspector": {
+      "status": "pass",
+      "note": "Overlays inspector reuses the native local_order_ring template and existing edit controls.",
+      "evidence": [
+        "apps/editor/core/OverlayOps.cpp",
+        "apps/studio-native/tests/StudioSessionTests.cpp",
+        "docs/evidence/local-order-upgrade-native-20261125.log.txt"
+      ]
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "Overlay definitions round-trip through project files. Click events expire in their local frame path.",
+      "evidence": [
+        "apps/studio-native/tests/StudioSessionTests.cpp",
+        "docs/evidence/local-order-upgrade-native-20261125.log.txt",
+        "docs/agent-handoffs/order-upgrade-validation.md"
+      ]
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "This option consumes authored view data and the existing animation pipeline; no graph nodes or topology change.",
+      "evidence": [
+        "skills/gameplay/aiverse-view/SKILL.md"
+      ]
+    },
+    "performance": {
+      "status": "pass",
+      "note": "Three-object courtyard instrumentation measured client and view stages across 120-frame windows. Workload and timing limits are in the validation handoff.",
+      "evidence": [
+        "docs/agent-handoffs/order-upgrade-validation.md"
+      ]
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "The local demo ran in macOS Metal and Chrome WebGL 2. Other graphics backends have no runtime evidence in this check.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-gameplay-order-upgrade.json",
+        "docs/agent-handoffs/order-upgrade-validation.md",
+        "docs/devlog/media/2026-11-25-gameplay-order-upgrade/order.png",
+        "docs/devlog/media/2026-11-25-gameplay-order-upgrade/metal-upgrade.png"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Uses the existing game view, Lua, ECS, overlay, RmlUi and native Studio dependencies.",
+      "evidence": [
+        "engine/view/game/GameViewScript.h",
+        "apps/editor/core/OverlayOps.cpp"
+      ]
+    },
+    "headless": {
+      "status": "pass",
+      "note": "Headless replays preserve authoritative simulation; all three restore checks matched 40 subsequent ticks mid-upgrade.",
+      "evidence": [
+        "docs/evidence/local-order-upgrade-native-20261125.log.txt",
+        "docs/agent-handoffs/order-upgrade-validation.md"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "Watchtower orders offers local point selection, a restartable upgrade and a toggle for script labels.",
+      "evidence": [
+        "demos/order-upgrade/README.md",
+        "demos/order-upgrade/ui/hud/courtyard.rml"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Native focused regressions, Studio session, the Rules schema, headless restore and native MCP registry ran against the recorded tree. Retested on the integrated Mac tree; see issues-197-202-integrated-mac.json.",
+      "evidence": [
+        "docs/evidence/local-order-upgrade-native-20261125.json",
+        "docs/evidence/local-order-upgrade-native-20261125.log.txt",
+        "docs/evidence/issues-197-202-final-mac.json",
+        "docs/evidence/issues-197-202-merged-main-mac.json"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Implementation SHA, verification commands, captures, web deliverables and remaining platform limits are recorded.",
+      "evidence": [
+        "docs/agent-handoffs/order-upgrade-validation.md",
+        "docs/agent-handoffs/order-upgrade-implementation.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "Developer documentation describes the project setting or callback and the playable example.",
+      "evidence": [
+        "docs/scripting.md",
+        "demos/order-upgrade/README.md"
+      ]
+    },
+    "publishing": {
+      "status": "pass",
+      "note": "Playable Web output was loaded locally. The bilingual devlog, captured frames and public route are prepared for publication by MAIN after integration.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-gameplay-order-upgrade.json",
+        "demos/order-upgrade/README.md",
+        "docs/agent-handoffs/order-upgrade-validation.md",
+        "docs/devlog/media/2026-11-25-gameplay-order-upgrade/order.png",
+        "docs/devlog/media/2026-11-25-gameplay-order-upgrade/metal-upgrade.png"
+      ]
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-view"
+    ],
+    "mcp_tools": [
+      "overlay_set",
+      "overlay_templates",
+      "overlay_get",
+      "script_write"
+    ],
+    "studio_panels": [
+      "overlays",
+      "scripts"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ]
+  },
+  "test_reports": [
+    "docs/evidence/issues-197-202-merged-main-mac.json"
+  ]
+}

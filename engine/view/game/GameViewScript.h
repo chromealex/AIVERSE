@@ -19,7 +19,7 @@ struct lua_State;
 #include "ScriptSound.h"
 #include "EntityFx.h"
 
-namespace aiverse { class Simulation; }
+namespace aiverse { class Simulation; struct SimEvent; }
 
 namespace aiverse::game {
 
@@ -94,6 +94,8 @@ public:
     void detach();
     // Per frame: dispatches the collected events and on_frame(dt).
     void update(Simulation& sim, float dt);
+    // Queue an input event for the next frame's view.on('order', fn) handlers.
+    void queueLocalOrder(const SimEvent& event);
     void setSelection(const std::vector<Entity>& selected);
     void setTargeting(const ViewTargeting& target);
     // view.set_map_drag_offset(dx, dy): window points added to a map-drag pointer before its ground pick and its release

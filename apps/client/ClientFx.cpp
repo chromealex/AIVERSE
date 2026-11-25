@@ -212,6 +212,7 @@ void ClientFx::startMatch(Simulation& sim, uint8_t viewer, const game::GameView&
     bridge_.setHeightFn([&view, &grid](float x, float z) { return view.heightAt(grid, x, z); });
     ps_.setGroundHeight([&view, &grid](float x, float z) { return view.heightAt(grid, x, z); });   // "collision" module
     bridge_.setPlayerColorFn([](int p) { return game::GameView::playerColor(p); });
+    bridge_.setProjectilePointFn([&view](Entity e, fx::float3& point) { return view.projectileImpactPathPoint(e, point); });
     bridge_.setAttackOriginFn([&view](Entity e, fx::float3& pos, fx::float3& dir) { return view.muzzleOf(e, pos, dir); });   // shots leave the model's muzzle
     bridge_.setNodeFn([&view](Entity e,const std::string& node,render::mat4& frame){return view.effectNodeOf(e,node,frame);});
     bridge_.attach(sim, viewer);

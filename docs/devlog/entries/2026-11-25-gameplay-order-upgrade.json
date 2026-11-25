@@ -1,0 +1,57 @@
+{
+  "id": "2026-11-25-gameplay-order-upgrade",
+  "date": "2026-11-25",
+  "system": "gameplay",
+  "branch": "feature/aiv199_order_upgrade_view",
+  "commit": "6b3a7ccaa",
+  "author": "gameplay",
+  "title": "Метка приказа и растущая сторожевая башня",
+  "titleEn": "Order markers and a growing watchtower",
+  "summary": "Приказ разведчику подсвечивает выбранное место. Улучшающееся здание может показать свою будущую форму с первого кадра строительства.",
+  "summaryEn": "A scout's order highlights its destination. An upgrading building can show its future shape from the first frame of construction.",
+  "body": [
+    "Выберите разведчика и щёлкните правой кнопкой по земле. В примере скрипт показывает название приказа, а оверлей рисует расходящееся кольцо. Подпись можно отключить отдельно.",
+    "Включите Show upgrade target during construction в правилах исходного здания. Как только улучшение займёт активное место в очереди, будущая башня начнёт расти. Кнопка Restart upgrade позволяет повторить переход."
+  ],
+  "bodyEn": [
+    "Select the scout and right-click the ground. The demo's view script displays the order name and an overlay draws an expanding ring. You can turn the label off independently.",
+    "Enable Show upgrade target during construction in the source building's rules. Once its upgrade occupies an active production slot, the future tower starts to grow. Use Restart upgrade to replay the transition."
+  ],
+  "verified": "В сцене с двумя сторожевыми домами и разведчиком проверены приказ на местности в Chrome и улучшение здания на macOS с Metal.",
+  "verifiedEn": "The two-house courtyard and its scout were used to check ground orders in Chrome and an upgrading building on macOS with Metal.",
+  "limits": "В примере показана плоская карта и геометрическая модель башни. Отдельный визуальный прогон для планет и спрайтов пока не выполнен.",
+  "limitsEn": "The example uses a flat map and a geometric tower model. Planet maps and sprite appearances have not received separate visual runs.",
+  "links": [
+    {
+      "title": "Watchtower orders · WebGL 2",
+      "href": "https://chromealex.github.io/AIVERSE/demos/order-upgrade/index.html?map=0&lang=en"
+    },
+    {
+      "title": "Watchtower orders · source",
+      "href": "demos/order-upgrade/README.md"
+    }
+  ],
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-gameplay-order-upgrade/source.png",
+      "caption": "В начале матча у обеих сторон одинаковый сторожевой дом.",
+      "captionEn": "Both sides start with the same guard house."
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-gameplay-order-upgrade/order.png",
+      "caption": "Кольцо отмечает точку приказа разведчику. Подпись показывает команду, полученную скриптом.",
+      "captionEn": "The ring marks the scout's destination. The label shows the command received by the view script."
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-gameplay-order-upgrade/metal-upgrade.png",
+      "caption": "Сторожевой дом принимает форму башни во время улучшения. За двором виден дом соперника.",
+      "captionEn": "The guard house takes on the tower's shape during the upgrade. The opposing guard house is visible across the courtyard."
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-gameplay-order-upgrade/tower.png",
+      "caption": "После завершения улучшения у патруля стоит готовая башня.",
+      "captionEn": "The patrol has a completed watchtower after the upgrade finishes."
+    }
+  ],
+  "status": "in-progress"
+}

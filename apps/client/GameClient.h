@@ -273,7 +273,9 @@ private:
         c.player = human_;
         if (!c.units.empty()) sound_.onCommand(*sim_, c.units[0], c.type);
         sim_->submit(c);
+        presentOrder(c);
     }
+    void presentOrder(const Command& c);
     void attachNoticeEvents(bool confirmedOnly);
     void processEvents();
     std::shared_ptr<PresentationEventQueue<SimEvent>> noticeEvents_;
@@ -461,6 +463,7 @@ private:
     void buildSelectionData(UiState& state);
     Minimap minimap_;
     std::vector<OverlayPing> pendingPings_;
+    std::vector<SimEvent> pendingOrders_;
     void pingMap(float3 point);
 
     Renderer3D r3d_;

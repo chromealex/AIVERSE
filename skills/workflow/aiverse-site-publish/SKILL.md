@@ -89,3 +89,5 @@ gh run list -R chromealex/AIVERSE --workflow pages-build-deployment -L 1   # "su
 - After publishing, open the changed pages (system page, devblog, roadmap) on
   `https://chromealex.github.io/AIVERSE/` or the local build. Check the new entry, frames and
   roadmap item are there in both languages.
+
+For a playable Web demo, add the files loaded by its verified browser build (including notices) to `webDemos.<demo-id>` in `site/manifest.json`, mapping their relative names to SHA-256 digests. Supply the matching KINGSTON builds under `<demo-root>/<demo-id>/` to `build --demo-root <demo-root>` and the first `publish --demo-root <demo-root>`. Later publishes reuse the pinned bytes from `origin/gh-pages`. A change to any declared file requires a new digest and verified build.

@@ -4069,7 +4069,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                         for (const auto& armor:attack.second.members())
                             if (!armor.second.isNumber()) throw std::runtime_error("Expected a damage multiplier for "+attack.first+" / "+armor.first);
                     }
-                } else if (path.size()>200 || !std::regex_match(path,allowed))
+                } else if (path != "targeting.acquireOrder" && (path.size()>200 || !std::regex_match(path,allowed)))
                     throw std::runtime_error("Unsupported rule field");
                 Json args=Json::object();args.set("path",str(path));
                 const bool erase=params["value"].isNull();
@@ -4089,6 +4089,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             out.set("triggers",authored["triggers"].isNull()?Json::array():authored["triggers"]);
             out.set("armorTypes",authored["armorTypes"].isNull()?Json::array():authored["armorTypes"]);
             out.set("damageTable",authored["damageTable"].isNull()?Json::object():authored["damageTable"]);
+            out.set("acquireOrder", str(ws_.project.rules.acquisitionOrder == game::AcquisitionOrder::RowMajor ? "rowMajor" : "nearest"));
             out.set("dirty",Json::fromBool(ws_.project.rulesDirty));
             reply.set("result",std::move(out));
         } else if (method == "studio.stats") {

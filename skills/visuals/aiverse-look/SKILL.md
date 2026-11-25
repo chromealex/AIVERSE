@@ -14,6 +14,7 @@ Always look at the result: `view_focus` + `view_screenshot` after every step.
 3. Materials: `texture_patterns` -> `texture_generate` (bricks, panels, wood, camo, scales, normal maps, team masks) -> `material_set` (shared `materials.json`) -> `material_apply {type, material, target|node}`.
    For automatic material selection, inspect the asset using `material_techniques_get {model}`. Use `material_techniques_set {model, rules, expected}` with the previous rules as `expected`. The same operations are available in Studio's Models panel. See `docs/models.md` for the ordered rule format.
 4. Models: `asset_import`, then the type's `view` block via `rules_merge` (model, material overrides, team colour, clips; `docs/models.md`).
+   Set `view.impactHeight` on the receiving unit type for flat-map straight projectiles. Preview from a side angle with the weapon trail enabled to check the endpoint on the body.
 5. Terrain surface: `terrain_material`, `terrain_paint_material` (`docs/terrain-textures.md`).
 6. Fog of war look: `rules_merge {path: "fogOfWar"}` (mode, colour, style, softness, lineOfSight).
 7. Phone check: `device_set` + `view_screenshot {window: game}` on a low-end device profile.

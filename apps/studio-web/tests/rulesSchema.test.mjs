@@ -22,3 +22,29 @@ test('inputs: blank inherits, numbers validated', () => {
   assert.equal(parseRuleInput(f, 'abc').ok, false);
   assert.deepEqual(parseRuleInput({ ...f, type: 'boolean' }, true), { ok: true, value: true });
 });
+
+test('selection flag defaults on and preserves inherited false', () => {
+  const row = (own, resolved) => typeValues('tree', own, resolved, []).find(v => v.field.path === 'selectable');
+  assert.equal(row({}, {}).field.defaultValue, true);
+  assert.equal(row({}, { selectable: false }).resolved, false);
+  assert.equal(row({}, { selectable: false }).inherited, true);
+  assert.equal(row({ selectable: true }, { selectable: true }).own, true);
+});
+
+test('projectile impact height is editable on a new type, including zero', () => {
+  const row = typeValues('target', {}, {}, []).find(v => v.field.path === 'view.impactHeight');
+  assert.equal(row.path, 'types.target.view.impactHeight');
+  assert.deepEqual(parseRuleInput(row.field, '0'), { ok: true, value: 0 });
+  assert.equal(parseRuleInput(row.field, '-1').ok, false);
+  assert.deepEqual(parseRuleInput(row.field, ''), { ok: true, value: null });
+});
+
+test('upgrade appearance uses inherited structure settings and writes the local type', () => {
+  const source = { structure: { footprint: [2, 2] }, upgrades: ['tower'], view: { showUpgradeTarget: true } };
+  const rows = typeValues('outpost', { extends: 'base' }, source, []);
+  const option = rows.find(row => row.path === 'types.outpost.view.showUpgradeTarget');
+  assert.equal(option.field.type, 'boolean');
+  assert.equal(option.inherited, true);
+  assert.equal(option.resolved, true);
+  assert.ok(!typeValues('scout', {}, {}, []).some(row => row.field.path === 'view.showUpgradeTarget'));
+});

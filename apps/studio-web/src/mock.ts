@@ -158,7 +158,7 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
   if (method === 'studio.planetForestLive') return {active:false};
   if (method === 'studio.planetForestArm' || method === 'studio.planetForestPlant' || method === 'studio.planetForestMove') throw new Error('Scene planting requires native Studio');
   if (method === 'studio.planetForestSet') throw new Error('Open the native Studio to edit a planetary forest');
-  if (method === 'studio.rules') return { types: { soldier: { name: 'Soldier', health: { max: 60 }, move: { speed: 2.5 }, sight: 7, cost: { gold: 50, time: 10 }, weapons: [{ id: 'sword', damage: 6, range: 1, cooldown: 1 }] } },
+  if (method === 'studio.rules') return { acquireOrder: 'nearest', types: { soldier: { name: 'Soldier', health: { max: 60 }, move: { speed: 2.5 }, sight: 7, cost: { gold: 50, time: 10 }, weapons: [{ id: 'sword', damage: 6, range: 1, cooldown: 1 }] } },
     resolved: { soldier: { name: 'Soldier', health: { max: 60 }, move: { speed: 2.5, radius: 0.4 }, sight: 7, cost: { gold: 50, time: 10 }, weapons: [{ id: 'sword', damage: 6, range: 1, cooldown: 1 }] } },
     resources: ['gold'], summary: [], dirty: false } as StudioResult['studio.rules'];
   if (method === 'studio.rulesDocument' || method === 'studio.rulesDocumentSave' || method === 'studio.rulesSet') throw new Error('Open the native Studio to edit rules');

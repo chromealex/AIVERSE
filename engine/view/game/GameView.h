@@ -89,6 +89,9 @@ struct SceneObject {
     int16_t carryRes = -1;       // resource index of the cargo
     int8_t shotWeapon = -1;      // projectiles: weapon index (of the shooter's type) that fired it; -1: unknown
     bool selected = false, hovered = false, visible = true, isProjectile = false;
+    bool selectable(const Rules& rules) const {
+        return visible && !isProjectile && type < rules.types.size() && rules.types[type].selectable;
+    }
     bool blip = false;           // not visible, but a radar / sonar contact of the viewer (Sensors.h): drawn as a dot
     float fade = 1;              // 0..1 opacity from the sim (route walkers fade at the route ends)
     bool unpowered = false;      // disabled by a power deficit / owner in low power (electric lights dim)
@@ -101,6 +104,7 @@ struct SceneObject {
     float steer = 0;             // vehicles (rules "driving"): steering angle of the front wheels, rad, + = left
     render::float3 target;
     Entity source;               // projectiles: who fired (muzzle point)
+    uint16_t shotTargetType = UINT16_MAX; // eligible straight flight; target holds interpolated ground coordinates
     uint16_t shooterType = UINT16_MAX; // projectiles: type of the unit that fired it (lights)
     // planets: body index and pos / facing / target body-local (origin = body centre); -1 = flat map
     // coordinates; kBodyTransit = between bodies: pos is the world position, facing the travel direction
@@ -114,7 +118,13 @@ struct SceneObject {
     bool posed = false, poseHasY = false;
     float poseY = 0, poseRotX = 0, poseRotZ = 0;
     render::float3 poseScale{1, 1, 1};
+    uint16_t upgradeType = kNoType; // optional visual replacement while upgrading
+    uint16_t modelType() const { return upgradeType == kNoType ? type : upgradeType; }
 };
+
+// Resolve appearance from the active production slots; selection and simulation retain the source type.
+struct Production;
+void projectProductionAppearance(SceneObject& object, const Rules& rules, const Production& production);
 
 // World-space premultiplier for SceneObject's authored pose. `facingYaw` is the
 // RTS draw yaw (models face +X: yaw = authored Y rotation + 90 degrees), `p`
@@ -665,6 +675,8 @@ public:
     // Where a drawn unit's shots leave its model: the look's "muzzle" (node + offset) in world space and the unit's
     // facing; false when the unit is not drawn yet or its model has no muzzle (effects then use the simulation point).
     bool muzzleOf(Entity e, render::float3& pos, render::float3& dir) const;
+    // Current fitted projectile point in particle space, sampled after the view draw.
+    bool projectileImpactPathPoint(Entity projectile, render::float3& point) const;
     // Named node in particle space; no model ownership escapes this query.
     bool effectNodeOf(Entity e, const std::string& node, render::mat4& frame) const;
     // Problems found while loading view blocks ("type 'knight': models/knight.glb: file not found").
@@ -879,6 +891,7 @@ private:
         float sx = 1, sz = 1;                     // shapes: footprint scaling
         bool tracer = false;                      // optional visual bullets for attack events
         std::vector<float> projectileScale;       // "projectileScale": size of the projectile ball by weapon index (missing: 1; 0: not drawn)
+        float impactHeight = -1.f; // world units above the target base
         float projectileScaleDefault = 1;
         struct ProjectileLook {
             view_adapter::ProjectileAppearance config;
@@ -965,6 +978,7 @@ private:
         bool poseValid = false;
         render::float3 launch;                    // projectiles: offset from the muzzle, decays
         bool launched = false;
+        bool straightImpact = false; // projectile last.pos is its rendered point, last.target the endpoint
         double lastSeenTime = -1;                 // previews keep their own clock
     };
 
@@ -1042,7 +1056,7 @@ private:
     void drawObject(render::Renderer3D& r, EntityAnim& st, const SceneObject& o, float ground, float alpha, const render::float4* tintOverride = nullptr,
                     const render::mat4* placement = nullptr);
     void drawProjectile(render::Renderer3D& r, uint64_t key, const SceneObject& o, float dt,
-                        render::float3 up = {0,1,0}, bool useMuzzle = true);
+                        render::float3 up = {0,1,0}, bool useMuzzle = true, const MapGrid* grid = nullptr);
     void emitClipEvents(EntityAnim& st, const ModelChoice& ch, const SceneObject& o);
     render::float3 nodeWorldPos(const EntityAnim& st, const ModelChoice& ch, int node, render::float3 offset) const;
     uint32_t stateBits(const EntityAnim& st, const SceneObject& o, bool moving) const;

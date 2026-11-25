@@ -1,0 +1,173 @@
+{
+  "schema": 1,
+  "id": "encounter-phase-determinism",
+  "owner": "gameplay",
+  "changed_paths": [
+    ".gitattributes",
+    "docs/agent-handoffs/encounter-phase-determinism-initial.md",
+    "docs/agent-handoffs/game-checksum-baseline-2026-11-25.md",
+    "docs/agent-handoffs/issues-197-202-integration.md",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/systems.json",
+    "docs/encounters.md",
+    "docs/evidence/issues-197-202-final-mac.json",
+    "docs/evidence/issues-197-202-final-mac.log.txt",
+    "docs/evidence/issues-197-202-integrated-mac.json",
+    "docs/evidence/issues-197-202-integrated-mac.log.txt",
+    "docs/evidence/issues-197-202-merged-main-mac.json",
+    "docs/evidence/issues-197-202-merged-main-mac.log.txt",
+    "docs/features/encounter-phase-determinism.json",
+    "engine/game/Encounters.cpp",
+    "skills/gameplay/aiverse-boss-encounters/SKILL.md",
+    "tests/checksums/baseline.txt",
+    "tests/checksums/check.sh",
+    "tests/checksums/runner_test.py",
+    "tests/extra-test-suites.txt",
+    "tests/tests_encounters.inc"
+  ],
+  "traits": {
+    "editable": false,
+    "simulation": true,
+    "visible": false,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Phase logic retains boss identity across the addition of reinforcements.",
+      "evidence": [
+        "engine/game/Encounters.cpp"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Tick reads the durable values before spawning and resolves live ECS state at writeback. No second owner.",
+      "evidence": [
+        "engine/game/Encounters.cpp"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "The existing Encounters native system drives both component storage modes in the regression.",
+      "evidence": [
+        "tests/tests_encounters.inc"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "Boss encounter recipe includes the spawn tick and replay verification.",
+      "evidence": [
+        "skills/gameplay/aiverse-boss-encounters/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "pass",
+      "note": "The existing match and scenario execution tools use the same simulation implementation. Registry and end-to-end match execution were exercised.",
+      "evidence": [
+        "docs/evidence/issues-197-202-final-mac.json",
+        "docs/evidence/issues-197-202-merged-main-mac.json"
+      ]
+    },
+    "studio": {
+      "status": "not_applicable",
+      "note": "This correctness repair does not introduce an authoring option or Studio workflow. Existing encounter rules retain their format.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_applicable",
+      "note": "No new inspectable property is introduced.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "Snapshot, serialized and fresh simulation restores each matched all 80 checks starting at tick 300.",
+      "evidence": [
+        "docs/evidence/issues-197-202-final-mac.json",
+        "docs/evidence/issues-197-202-merged-main-mac.json"
+      ]
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "No graph data or evaluation changes.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "pass",
+      "note": "One 61-game-second boss_arena seed-2 Release run took 18 ms in the integrated test report. The fix uses scalar state and entity lookup; no new allocation in the tick.",
+      "evidence": [
+        "docs/evidence/issues-197-202-integrated-mac.log.txt"
+      ]
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "macOS arm64 Release and x86_64 Debug exercised the transition. Windows and Linux were not independently executed.",
+      "evidence": [
+        "docs/evidence/issues-197-202-final-mac.json",
+        "docs/evidence/issues-197-202-merged-main-mac.json"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Uses the existing simulation World and Unit APIs; the tested native game requires no new module.",
+      "evidence": [
+        "engine/game/Encounters.cpp"
+      ]
+    },
+    "headless": {
+      "status": "pass",
+      "note": "The real headless host ran repeated seed-2 matches, three restore modes and the 96-case sample suite.",
+      "evidence": [
+        "docs/evidence/issues-197-202-final-mac.json",
+        "docs/evidence/issues-197-202-merged-main-mac.json"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "Existing boss_arena exercises a reinforcement phase at tick 313 with seed 2.",
+      "evidence": [
+        "docs/evidence/issues-197-202-integrated-mac.log.txt"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "The native spawn-tick regression, 8 identical final states, 3 restore modes and 96 template cases passed.",
+      "evidence": [
+        "docs/evidence/issues-197-202-final-mac.json",
+        "docs/evidence/issues-197-202-merged-main-mac.json"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "The pre-fix and post-fix evidence and intentional baseline change are detailed in the checksum handoff.",
+      "evidence": [
+        "docs/agent-handoffs/game-checksum-baseline-2026-11-25.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "Encounter guide and native workflow document the same-entity spawn transition.",
+      "evidence": [
+        "docs/encounters.md"
+      ]
+    },
+    "publishing": {
+      "status": "not_applicable",
+      "note": "The change fixes authoritative tick behavior and has no dedicated presentation surface.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-boss-encounters"
+    ],
+    "mcp_tools": [
+      "match_run",
+      "scenario_run"
+    ],
+    "studio_panels": [],
+    "studio_methods": []
+  },
+  "test_reports": [
+    "docs/evidence/issues-197-202-merged-main-mac.json"
+  ]
+}

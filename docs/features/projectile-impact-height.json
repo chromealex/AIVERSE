@@ -1,0 +1,216 @@
+{
+  "schema": 1,
+  "id": "projectile-impact-height",
+  "owner": "Game View",
+  "changed_paths": [
+    "apps/client/ClientFx.cpp",
+    "apps/editor/Editor.cpp",
+    "apps/studio-web/src/panels/rulesSchema.ts",
+    "apps/studio-web/tests/rulesSchema.test.mjs",
+    "demos/projectile-impact-height/fx/fx.json",
+    "demos/projectile-impact-height/fx/trace.json",
+    "demos/projectile-impact-height/game.json",
+    "demos/projectile-impact-height/maps/range.json",
+    "demos/projectile-impact-height/models/launcher.obj",
+    "demos/projectile-impact-height/models/range.mtl",
+    "demos/projectile-impact-height/models/tall-target.obj",
+    "demos/projectile-impact-height/models/target.obj",
+    "demos/projectile-impact-height/rules.json",
+    "docs/agent-handoffs/issues-197-202-integration.md",
+    "docs/agent-handoffs/projectile-impact-height-initial.md",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/entries/2026-11-25-render-projectile-impact-height.json",
+    "docs/devlog/media/2026-11-25-render-projectile-impact-height/after.jpg",
+    "docs/devlog/media/2026-11-25-render-projectile-impact-height/before.jpg",
+    "docs/devlog/systems.json",
+    "docs/evidence/issues-197-202-final-mac.json",
+    "docs/evidence/issues-197-202-final-mac.log.txt",
+    "docs/evidence/issues-197-202-integrated-mac.json",
+    "docs/evidence/issues-197-202-integrated-mac.log.txt",
+    "docs/evidence/issues-197-202-merged-main-mac.json",
+    "docs/evidence/issues-197-202-merged-main-mac.log.txt",
+    "docs/evidence/projectile-impact-height-authoring.json",
+    "docs/evidence/projectile-impact-height-authoring.log.txt",
+    "docs/evidence/projectile-impact-height-studio.json",
+    "docs/evidence/projectile-impact-height-studio.log.txt",
+    "docs/evidence/projectile-impact-height-verified.json",
+    "docs/evidence/projectile-impact-height-verified.log.txt",
+    "docs/evidence/projectile-impact-height-web-high.png",
+    "docs/features/projectile-impact-height.json",
+    "docs/handoff/studio-html5/issue-197-projectile-impact-height.md",
+    "docs/models.md",
+    "engine/fx/GameFx.cpp",
+    "engine/fx/GameFx.h",
+    "engine/view/game/GameLook.cpp",
+    "engine/view/game/GameView.cpp",
+    "engine/view/game/GameView.h",
+    "engine/view/game/GameViewDraw.cpp",
+    "engine/view/game/ProjectileAppearance.h",
+    "skills/visuals/aiverse-look/SKILL.md",
+    "tests/deferred_loading.cpp"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": false,
+    "visible": true,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Verified the rendered line and trail in paired native captures and switched from low to tall impact bands in WebGL2.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-render-projectile-impact-height.json",
+        "docs/evidence/projectile-impact-height-web-high.png"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "The ECS projectile remains authoritative. Presentation interpolates existing scene transforms, and particles read the displayed point.",
+      "evidence": [
+        "engine/view/game/GameView.cpp",
+        "engine/fx/GameFx.cpp"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "GameView::projectileImpactPathPoint and straightShotPoint expose current presentation data and interpolation.",
+      "evidence": [
+        "engine/view/game/GameView.h",
+        "engine/view/game/ProjectileAppearance.h"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "The look authoring recipe specifies the target setting and side-view check.",
+      "evidence": [
+        "skills/visuals/aiverse-look/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "pass",
+      "note": "rules_get and rules_merge round-tripped the target height without losing the target model.",
+      "evidence": [
+        "docs/evidence/projectile-impact-height-verified.json"
+      ]
+    },
+    "studio": {
+      "status": "pass",
+      "note": "Rules form TypeScript/Vite compiled; native StudioSession wrote the scalar and undo/redo/reopen retained the correct values.",
+      "evidence": [
+        "docs/handoff/studio-html5/issue-197-projectile-impact-height.md"
+      ]
+    },
+    "inspector": {
+      "status": "pass",
+      "note": "Edit type in Rules uses the existing typed Rules inspector and the field supports write, reset and inheritance. Verified by schema tests and native session history.",
+      "evidence": [
+        "docs/handoff/studio-html5/issue-197-projectile-impact-height.md",
+        "apps/studio-web/src/panels/RulesPanel.tsx"
+      ]
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "A fresh native MCP process reopened the edited target and read the authored height.",
+      "evidence": [
+        "docs/evidence/projectile-impact-height-verified.json"
+      ]
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "Target height is a scalar in the existing unit view. The trail consumes the displayed point regardless of its effect asset; no graph topology or nodes are authored.",
+      "evidence": [
+        "engine/fx/GameFx.cpp"
+      ]
+    },
+    "performance": {
+      "status": "pass",
+      "note": "One million optimized arm64 projections took 0.001518 s. Position interpolation allocates no heap memory and adds no draw passes. Timing excludes draw and particle submission.",
+      "evidence": [
+        "docs/handoff/studio-html5/issue-197-projectile-impact-height.md",
+        "engine/view/game/ProjectileAppearance.h"
+      ]
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "Ran a Metal client and Emscripten WebGL2 in Chrome. Additional operating systems and graphics backends were not exercised.",
+      "evidence": [
+        "docs/agent-handoffs/projectile-impact-height-initial.md",
+        "docs/evidence/projectile-impact-height-web-high.png"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Extends existing Game View, GameFx and Studio Rules. Both native simulation smoke and frontend production build ran with existing dependencies.",
+      "evidence": [
+        "docs/handoff/studio-html5/issue-197-projectile-impact-height.md",
+        "docs/evidence/projectile-impact-height-verified.json"
+      ]
+    },
+    "headless": {
+      "status": "pass",
+      "note": "The demo ran ten seconds on the native headless host and fired seven times at seed 197.",
+      "evidence": [
+        "docs/evidence/projectile-impact-height-verified.json"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "A small interactive range has two targets and a bright trail. The existing headless host ran the scene for 10s and reported 7 attacks.",
+      "evidence": [
+        "demos/projectile-impact-height/rules.json",
+        "demos/projectile-impact-height/maps/range.json"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Native interpolation tests, Rules schema, actual MCP and Studio persistence, seven-attack headless range, embedded web content and devlog verification passed. Retested on the integrated Mac tree; see issues-197-202-integrated-mac.json.",
+      "evidence": [
+        "docs/evidence/projectile-impact-height-verified.json",
+        "docs/evidence/issues-197-202-final-mac.json",
+        "docs/evidence/issues-197-202-merged-main-mac.json"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Stage records include exact code SHAs, ownership, targeted checks, remaining gates and repro scene.",
+      "evidence": [
+        "docs/handoff/studio-html5/issue-197-projectile-impact-height.md",
+        "docs/agent-handoffs/projectile-impact-height-initial.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "The models guide documents units, defaults and supported flight paths.",
+      "evidence": [
+        "docs/models.md"
+      ]
+    },
+    "publishing": {
+      "status": "pass",
+      "note": "Matched native screenshots, bilingual entry and 19.8 MiB interactive web build verified. MAIN publishes the staged route following the site-demo skill fallback.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-render-projectile-impact-height.json",
+        "docs/agent-handoffs/projectile-impact-height-initial.md"
+      ]
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-look"
+    ],
+    "mcp_tools": [
+      "rules_get",
+      "rules_merge"
+    ],
+    "studio_panels": [
+      "rules"
+    ],
+    "studio_methods": [
+      "studio.rulesSet"
+    ]
+  },
+  "test_reports": [
+    "docs/evidence/issues-197-202-merged-main-mac.json"
+  ]
+}

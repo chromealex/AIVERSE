@@ -652,9 +652,11 @@ void Encounters::spawnAdds(Simulation& sim, EncounterStore& st, EncBossState& b,
 void Encounters::tickBoss(Simulation& sim, EncounterStore& st, EncBossState& b) {
     World& w = sim.world();
     const Entity e = Entity::fromPacked(b.entity);
-    if (b.defeated || !w.alive(e) || !w.has<Unit>(e)) return;
-    Unit& u = w.get<Unit>(e);
-    const int16_t bi = R_.bossOfType[u.type];
+    const Unit* initial = w.tryGetConst<Unit>(e);
+    if (b.defeated || !initial) return;
+    const uint16_t type = initial->type;
+    const Fixed hp = initial->hp;
+    const int16_t bi = R_.bossOfType[type];
     if (bi < 0) return;
     const EncBossDef& d = R_.bosses[size_t(bi)];
     const Vec3 pos = w.get<Transform>(e).pos;
@@ -670,7 +672,7 @@ void Encounters::tickBoss(Simulation& sim, EncounterStore& st, EncBossState& b) 
     }
     b.target = tgt.valid() ? tgt.packed() : 0;
     if (!b.engaged) {
-        if (u.hp.raw <= 0 || !tgt.valid()) return;
+        if (hp.raw <= 0 || !tgt.valid()) return;
         b.engaged = true;
     }
     bool locked = false;
@@ -686,7 +688,7 @@ void Encounters::tickBoss(Simulation& sim, EncounterStore& st, EncBossState& b) 
     }
     lg::BossInput in;
     in.maxHp = std::max<int64_t>(1, m_->stat(sim, e, Stat::MaxHp).raw);
-    in.hp = std::clamp<int64_t>(u.hp.raw, 0, in.maxHp);
+    in.hp = std::clamp<int64_t>(hp.raw, 0, in.maxHp);
     const Vec3 tpos = tgt.valid() ? w.get<Transform>(tgt).pos : pos;
     if (tgt.valid()) in.targetDistance = fxMin(dist2D(tpos, pos), lg::kCombatCoordLimit);
     in.busy = busy;
@@ -697,20 +699,21 @@ void Encounters::tickBoss(Simulation& sim, EncounterStore& st, EncBossState& b) 
     b.speedMilli = step->speedMilli;
     for (auto& ev : step->events) {
         switch (ev.kind) {
-        case lg::BossEventKind::Engaged: sim.emit({kEvBossEngaged, owner, e, tgt, int64_t(u.type), pos}); break;
+        case lg::BossEventKind::Engaged: sim.emit({kEvBossEngaged, owner, e, tgt, int64_t(type), pos}); break;
         case lg::BossEventKind::PhaseEntered: sim.emit({kEvBossPhase, owner, e, tgt, ev.value - 1, pos}); break;
-        case lg::BossEventKind::Enraged: sim.emit({kEvBossEnraged, owner, e, tgt, int64_t(u.type), pos}); break;
+        case lg::BossEventKind::Enraged: sim.emit({kEvBossEnraged, owner, e, tgt, int64_t(type), pos}); break;
         case lg::BossEventKind::Attack: cast(sim, e, int(ev.value - 1), tpos, tgt, step->damageMilli); break;
         case lg::BossEventKind::SpawnAdds: spawnAdds(sim, st, b, ev); break;
         case lg::BossEventKind::Defeated: {
             b.defeated = true;
             if (b.window) lg::markBossDefeated(R_.schedule, st.schedule, idOf(e), tick);
-            sim.emit({kEvBossDefeated, u.lastAttacker, e, kNullEntity, int64_t(u.type), pos});
+            sim.emit({kEvBossDefeated, w.get<Unit>(e).lastAttacker, e, kNullEntity, int64_t(type), pos});
             break;
         }
         }
     }
-    if (b.defeated || u.hp.raw <= 0) return;
+    // Spawning adds may have relocated the ECS unit pool.
+    if (b.defeated || w.get<Unit>(e).hp.raw <= 0) return;
     // movement: hold still while an attack winds up / recovers, during a phase transition and while stunned.
     // Walking uses a move order: the weapon system neither stops nor redirects a unit with orders, so a boss whose
     // weapons outrange its pattern bands still closes in; in reach the queue is empty and its weapons fight as usual.
@@ -733,7 +736,7 @@ void Encounters::tickBoss(Simulation& sim, EncounterStore& st, EncBossState& b) 
     } else {
         hold();
         const Vec3 dir = tpos - pos;
-        if (dir.x.raw != 0 || dir.z.raw != 0) { Vec2 f = forwardOf(yawOf(dir)); u.facing = {f.x, Fixed{}, f.y}; }
+        if (dir.x.raw != 0 || dir.z.raw != 0) { Vec2 f = forwardOf(yawOf(dir)); w.get<Unit>(e).facing = {f.x, Fixed{}, f.y}; }
     }
 }
 

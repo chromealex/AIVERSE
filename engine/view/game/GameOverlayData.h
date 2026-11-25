@@ -44,6 +44,7 @@ struct OvFilter {
 constexpr uint16_t kOvKeyShift = 1000, kOvKeyCtrl = 1001, kOvKeyAlt = 1002, kOvKeySuper = 1003;
 // Pseudo event kind: a ping from the client / editor context (OverlayContext::pings).
 constexpr uint16_t kOvEventPing = 1000;
+constexpr uint16_t kViewEventOrder = 1001; // local client command, never emitted by simulation
 
 struct OvCondition {
     enum Kind : uint8_t { All, Any, Not, Always, Never, Placing, Selected, Hovered, Entity, Key, State, Var, Zoom, Cursor, Mode };

@@ -331,7 +331,7 @@ void GameView::drawPlanets(Renderer3D& r, const GameScene& s, double time, const
             if (o.isProjectile) continue;
             if (o.body == SceneObject::kBodyTransit) ++tr;
             else if (o.body >= 0 && o.body != Wd.start) ++moon;
-            else if (o.type < rules_->types.size() && (rules_->types[o.type].layer & kLayerOrbit)) ++orbit;
+            else if (o.modelType() < rules_->types.size() && (rules_->types[o.type].layer & kLayerOrbit)) ++orbit;
         }
         std::fprintf(stderr, "[planet] t=%.0f transit %d orbit-units %d on-other-bodies %d\n", s.seconds, tr, orbit, moon);
     }
@@ -509,7 +509,7 @@ void GameView::drawPlanets(Renderer3D& r, const GameScene& s, double time, const
             }
             continue;
         }
-        if (o.type >= looks_.size()) continue;
+        if (o.modelType() >= looks_.size()) continue;
         // the object in its tangent frame (flat-map style vectors: x east, y up, z south), so the flat
         // animation code (speed, yaw, aim) works unchanged; the frame turns slowly with the position
         SceneObject lo = o;
@@ -525,12 +525,12 @@ void GameView::drawPlanets(Renderer3D& r, const GameScene& s, double time, const
         EntityAnim& st = stateFor(key, lo);
         st.last = lo;
         if (!o.visible) continue;
-        const TypeLook& L = looks_[o.type];
+        const TypeLook& L = looks_[o.modelType()];
         animate(st, lo, dt, nullptr, &pv);
         drawObject(r, st, lo, 0, 1.0f, nullptr, &place);
-        if (o.selected || o.hovered) ring(place, selectionRadius(o.type), ringColor(o), 0.05f);
+        if (o.selected || o.hovered) ring(place, selectionRadius(o.modelType()), ringColor(o), 0.05f);
         if (lift > 0 && !planetNoShadow_) ring(frameAt(body, g, up, east, south), 0.35f, rgba(0, 0, 0, 110), 0.04f);   // orbit units: mark below
-        const UnitType& t = rules_->types[o.type];
+        const UnitType& t = rules_->types[o.modelType()];
         float top = t.structure ? 1.6f * L.scale * std::max(1.0f, std::max(t.footprintW, t.footprintH) * 0.6f) : 1.2f * L.scale;
         if (L.air) top += L.flyHeight;
         bars_[i] = place.transformPoint({0, top, 0});
@@ -635,7 +635,7 @@ void sceneFromSphere(Simulation& sim, GameCore& m, const Surface& S, GameScene& 
         if (auto* c = w.tryGet<Cargo>(e)) { so.carry = float(c->amount.toDouble()); so.carryRes = c->res; }
         if (auto* od = w.tryGet<Orders>(e); od && !od->queue.empty()) so.order = uint8_t(od->queue.front().type) + 1;
         if (auto* mb = w.tryGet<Mobile>(e)) so.moving = mb->moving;
-        if (auto* pr = w.tryGet<Production>(e)) so.producing = !pr->queue.empty();
+        if (auto* pr = w.tryGet<Production>(e)) projectProductionAppearance(so, R, *pr);
         if (auto* cb = w.tryGet<Combat>(e); cb && cb->target.valid() && w.alive(cb->target)) {
             if (auto* tt = w.tryGet<Transform>(cb->target); tt && S.bodyAt(tt->pos) == body) {
                 int tb;

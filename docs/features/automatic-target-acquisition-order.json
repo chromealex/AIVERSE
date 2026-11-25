@@ -1,0 +1,226 @@
+{
+  "schema": 1,
+  "id": "automatic-target-acquisition-order",
+  "owner": "gameplay",
+  "changed_paths": [
+    ".gitattributes",
+    "CMakeLists.txt",
+    "apps/studio-native/StudioSession.cpp",
+    "apps/studio-native/tests/StudioSessionTests.cpp",
+    "apps/studio-web/src/mock.ts",
+    "apps/studio-web/src/panels/RulesPanel.tsx",
+    "apps/studio-web/src/panels/rulesSchema.ts",
+    "apps/studio-web/src/types.ts",
+    "apps/studio-web/tests/rulesSchema.test.mjs",
+    "demos/selection-targeting/README.md",
+    "demos/selection-targeting/game.json",
+    "demos/selection-targeting/maps/range.json",
+    "demos/selection-targeting/rules.json",
+    "demos/selection-targeting/scripts/selection.lua",
+    "docs/agent-handoffs/automatic-target-acquisition-order-initial.md",
+    "docs/agent-handoffs/issues-197-202-integration.md",
+    "docs/agent-handoffs/selection-acquisition-implementation-2026-11-25.md",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/entries/2026-11-25-gameplay-selection-targeting.json",
+    "docs/devlog/media/2026-11-25-gameplay-selection-targeting/scenery-oak.jpg",
+    "docs/devlog/media/2026-11-25-gameplay-selection-targeting/scout.jpg",
+    "docs/devlog/media/2026-11-25-gameplay-selection-targeting/selected-oak.jpg",
+    "docs/devlog/systems.json",
+    "docs/evidence/issues-197-202-final-mac.json",
+    "docs/evidence/issues-197-202-final-mac.log.txt",
+    "docs/evidence/issues-197-202-integrated-mac.json",
+    "docs/evidence/issues-197-202-integrated-mac.log.txt",
+    "docs/evidence/issues-197-202-merged-main-mac.json",
+    "docs/evidence/issues-197-202-merged-main-mac.log.txt",
+    "docs/evidence/selection-targeting-20261125-frames/legacy-nearest.jpg",
+    "docs/evidence/selection-targeting-20261125-frames/row-major.jpg",
+    "docs/evidence/selection-targeting-20261125-mac.json",
+    "docs/evidence/selection-targeting-20261125-mac.log.txt",
+    "docs/features/automatic-target-acquisition-order.json",
+    "docs/game-format.md",
+    "docs/handoff/studio-html5/selection-targeting-rules-2026-11-25.md",
+    "docs/ru/game-format.md",
+    "engine/game/Combat.cpp",
+    "engine/game/GameData.cpp",
+    "engine/game/GameData.h",
+    "skills/workflow/aiverse-unit-balance/SKILL.md",
+    "tests/editor/selection_targeting_mcp.py",
+    "tests/tests_sc2.inc"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": true,
+    "visible": false,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "The acquisition policy runs inside the existing targeting system and changes only the comparison of eligible candidates.",
+      "evidence": [
+        "engine/game/Combat.cpp",
+        "engine/game/GameData.cpp"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "The shared deterministic targeting system reuses the active map grid and packed entity handles. It retains the existing sight, hostility, sensor and overkill filters.",
+      "evidence": [
+        "engine/game/Combat.cpp"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "Rules::acquisitionOrder exposes both policies. Missing values use nearest and unknown values raise a validation error.",
+      "evidence": [
+        "engine/game/GameData.h",
+        "engine/game/GameData.cpp",
+        "docs/evidence/selection-targeting-20261125-mac.log.txt"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "Authored examples in the unit balance workflow.",
+      "evidence": [
+        "skills/workflow/aiverse-unit-balance/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "pass",
+      "note": "The real stdio host exposed rules_get, rules_set, rules_lint and scenario_run. Mutation, rollback, reopening and damage to the expected target passed.",
+      "evidence": [
+        "docs/evidence/selection-targeting-20261125-mac.log.txt",
+        "tests/editor/selection_targeting_mcp.py",
+        "docs/agent-handoffs/selection-acquisition-implementation-2026-11-25.md"
+      ]
+    },
+    "studio": {
+      "status": "pass",
+      "note": "Native StudioSession suite exercised typed reads, writes, invalid/reset handling and resolved values. The production Studio bundle rendered the controls in Chrome.",
+      "evidence": [
+        "docs/evidence/selection-targeting-20261125-mac.log.txt",
+        "apps/studio-native/tests/StudioSessionTests.cpp",
+        "apps/studio-web/src/panels/RulesPanel.tsx"
+      ]
+    },
+    "inspector": {
+      "status": "pass",
+      "note": "Logic → Rules shows the Selectable checkbox with inherited defaults and the Auto-target order selector. The frontend schema and native session both passed.",
+      "evidence": [
+        "docs/evidence/selection-targeting-20261125-mac.log.txt",
+        "apps/studio-web/src/panels/rulesSchema.ts",
+        "apps/studio-web/src/panels/RulesPanel.tsx"
+      ]
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "A 240-tick recording replayed across 12 checkpoints; three restore paths replayed the next 60 ticks. The MCP project retained the edited order after reopening.",
+      "evidence": [
+        "docs/evidence/selection-targeting-20261125-mac.log.txt"
+      ]
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "Authored scalar rules have no graph assets or connections.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "pass",
+      "note": "512 stationary units, 240 ticks per run, three repetitions per order. Targeting cost was 0.065–0.092 ms/tick with rowMajor and 0.066–0.145 with nearest. The stack comparison adds no per-candidate heap allocation.",
+      "evidence": [
+        "docs/agent-handoffs/selection-acquisition-implementation-2026-11-25.md",
+        "engine/game/Combat.cpp"
+      ]
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "Ran on macOS (x86_64 under Rosetta) and Chrome/WebGL2. Matched Metal captures show different projectile trajectories. MinGW x86_64 compiled the changed client sources in syntax-only mode. No Windows, mobile or console runtime was exercised.",
+      "evidence": [
+        "docs/agent-handoffs/selection-acquisition-implementation-2026-11-25.md",
+        "docs/devlog/entries/2026-11-25-gameplay-selection-targeting.json",
+        "docs/evidence/selection-targeting-20261125-mac.log.txt",
+        "docs/evidence/selection-targeting-20261125-frames/legacy-nearest.jpg",
+        "docs/evidence/selection-targeting-20261125-frames/row-major.jpg"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Reuses the existing game rules, map/ECS, native Studio bridge and MCP editor host. No additional runtime libraries or services.",
+      "evidence": [
+        "docs/agent-handoffs/selection-acquisition-implementation-2026-11-25.md",
+        "engine/game/GameData.h"
+      ]
+    },
+    "headless": {
+      "status": "pass",
+      "note": "The seed-17 training range completed with four shots. Identical fresh and serialized continuations and all replay checkpoints matched.",
+      "evidence": [
+        "docs/evidence/selection-targeting-20261125-mac.log.txt"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "Training range uses simulated scenery and two targets at distinct distances and rows.",
+      "evidence": [
+        "demos/selection-targeting/rules.json",
+        "demos/selection-targeting/maps/range.json"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Two native feature filters and the overkill regression passed 22 checks in total. The report also runs the MCP scenario, Studio, frontend schema and replay. Retested on the integrated Mac tree; see issues-197-202-integrated-mac.json.",
+      "evidence": [
+        "docs/evidence/selection-targeting-20261125-mac.log.txt",
+        "docs/evidence/issues-197-202-final-mac.json",
+        "docs/evidence/issues-197-202-merged-main-mac.json"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Stage history, tested SHA, runtime results, limitations and publication route are recorded.",
+      "evidence": [
+        "docs/agent-handoffs/selection-acquisition-implementation-2026-11-25.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "Data format describes defaults and behavior in both maintained languages.",
+      "evidence": [
+        "docs/game-format.md",
+        "docs/ru/game-format.md"
+      ]
+    },
+    "publishing": {
+      "status": "pass",
+      "note": "Standalone web training range exercised in Chrome. Three real gameplay captures and bilingual entry are prepared for publication by the main integrator.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-gameplay-selection-targeting.json",
+        "docs/agent-handoffs/selection-acquisition-implementation-2026-11-25.md",
+        "docs/devlog/media/2026-11-25-gameplay-selection-targeting/scenery-oak.jpg",
+        "docs/devlog/media/2026-11-25-gameplay-selection-targeting/scout.jpg",
+        "docs/devlog/media/2026-11-25-gameplay-selection-targeting/selected-oak.jpg"
+      ]
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-unit-balance"
+    ],
+    "mcp_tools": [
+      "rules_get",
+      "rules_set",
+      "rules_lint",
+      "scenario_run"
+    ],
+    "studio_panels": [
+      "rules"
+    ],
+    "studio_methods": [
+      "studio.rules",
+      "studio.rulesSet"
+    ]
+  },
+  "test_reports": [
+    "docs/evidence/issues-197-202-merged-main-mac.json"
+  ]
+}

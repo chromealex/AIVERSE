@@ -284,7 +284,7 @@ const SceneObject* GameClient::shortcutUnit(int type, bool idleWorker) {
     const SceneObject* first = nullptr;
     auto& world = sim_->world();
     for (const auto& object : scene_.objects) {
-        if (!object.visible || object.isProjectile || !world.alive(object.entity)) continue;
+        if (!object.selectable(rules_) || !world.alive(object.entity)) continue;
         const auto* owner = world.tryGet<Owner>(object.entity);
         const auto* unit = world.tryGet<Unit>(object.entity);
         if (!owner || owner->player != human_ || !unit || unit->hp.raw <= 0 || (unit->flags & kUnitInHand)) continue;
@@ -305,7 +305,7 @@ bool GameClient::visibleSelectionUnit(Entity e) {
     const auto* unit = world.tryGet<Unit>(e);
     const auto* owner = world.tryGet<Owner>(e);
     const auto* tr = world.tryGet<Transform>(e);
-    return unit && owner && tr && unit->hp.raw > 0 && !(unit->flags & kUnitInHand) &&
+    return unit && owner && tr && rules_.types[unit->type].selectable && unit->hp.raw > 0 && !(unit->flags & kUnitInHand) &&
            (spectator_ || owner->player == human_ || mod().isVisible(*sim_, human_, tr->pos));
 }
 
@@ -714,7 +714,7 @@ void GameClient::buildCommandCard(UiState& s) {
         a.label = tr("card.all_army");
         a.id = addAction([this] {
             for (auto& o : scene_.objects)
-                if (o.owner == human_ && !o.isProjectile && !rules_.types[o.type].structure && !rules_.types[o.type].worker && !rules_.types[o.type].weapons.empty())
+                if (o.owner == human_ && !o.isProjectile && rules_.types[o.type].selectable && !rules_.types[o.type].structure && !rules_.types[o.type].worker && !rules_.types[o.type].weapons.empty())
                     selection_.push_back(o.entity);
         });
         sec.actions.push_back(a);

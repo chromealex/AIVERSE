@@ -1,0 +1,20 @@
+<rml>
+<head>
+  <title>Courtyard controls</title>
+  <link type="text/rcss" href="../theme.rcss"/>
+  <link type="text/rcss" href="../skin.rcss"/>
+  <style>
+    body { width: 100%; height: 100%; pointer-events: none; }
+    #courtyard { position: absolute; top: 62dp; right: 8dp; padding: 6dp; pointer-events: auto; }
+    #courtyard button { display: block; width: 142dp; margin: 2dp; }
+  </style>
+</head>
+<body>
+<div class="root" data-model="script">
+  <div id="courtyard" class="panel">
+    <button data-event-click="send('restart_upgrade')">Restart upgrade</button>
+    <button data-event-click="event('toggle_labels')">{{label_action}}</button>
+  </div>
+</div>
+</body>
+</rml>

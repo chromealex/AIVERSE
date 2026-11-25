@@ -1,0 +1,11 @@
+{
+  "sha": "d4802c9b25d8e3905659ba11cb54775b06bc1136",
+  "argv": [
+    "/bin/bash",
+    "-ec",
+    "\nbuild_dir=/Volumes/KINGSTON/AIVERSE-builds/selection-aiv198-mac\nfor test_name in unit_type_selection_eligibility automatic_target_acquisition_order sc2_overkill_targeting\ndo\n    \"$build_dir/aiverse_tests\" \"$test_name\"\ndone\npython3.12 tests/editor/selection_targeting_mcp.py \"$build_dir/aiversemcp\" \"$PWD\"\n/opt/homebrew/opt/node@22/bin/node --experimental-strip-types --test apps/studio-web/tests/rulesSchema.test.mjs\n\"$build_dir/aiverse_headless\" --project demos/selection-targeting --seed 17 --max-seconds 12 --record \"$build_dir/recorded-range.rpl\" --verify-restore-at 2 --verify-restore-ticks 60\n\"$build_dir/aiverse_headless\" --project demos/selection-targeting --replay \"$build_dir/recorded-range.rpl\"\npython3.12 tools/site/build.py check\ncd \"$build_dir/apps/studio-native\"\n./aiverse_studio_session_tests\n"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/selection-targeting-20261125-mac.log.txt",
+  "sha256": "63723f8f207d85337c83cdc0617c17fb171f9fb7c6555bae5e048a40f34082ac"
+}

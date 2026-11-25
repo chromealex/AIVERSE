@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { RotateCcw, Search } from 'lucide-react';
 import { invoke } from '../bridge';
+import { StudioField, StudioSelect } from '../ui';
 import type { StudioRules } from '../types';
 import { RULE_GROUPS, parseRuleInput, typeValues, type RuleValue } from './rulesSchema';
 import { fuzzyScore } from '../commandSearch';
@@ -68,6 +69,13 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged }: {
       </label>
       {section==='types'&&<>
       <button type="button" className={'rules__type'+(forestOpen?' is-active':'')} onClick={()=>setForestOpen(true)}>Planet forest</button>
+      {rules && <StudioField label="Auto-target order" htmlFor="rules-acquire-order">
+        <StudioSelect id="rules-acquire-order" value={rules.acquireOrder} disabled={busy}
+          onChange={e => void write('targeting.acquireOrder', e.target.value)}>
+          <option value="nearest">Nearest</option>
+          <option value="rowMajor">By map row</option>
+        </StudioSelect>
+      </StudioField>}
       <label className="rules__search"><Search size={12} aria-hidden="true"/>
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search types" aria-label="Search unit types"/></label>
       <div role="listbox" aria-label="Unit types" className="rules__types">
@@ -161,7 +169,7 @@ function RulesDocumentEditor({section,projectPath,raw,setRaw,onChanged}:{
 }
 
 function RuleRow({ value: v, busy, onCommit, onReset }: { value: RuleValue; busy: boolean; onCommit: (input: string | boolean) => void; onReset: () => void }) {
-  const shown = v.own ?? v.resolved;
+  const shown = v.own ?? v.resolved ?? v.field.defaultValue;
   const [draft, setDraft] = useState(v.own === undefined ? '' : String(v.own));
   useEffect(() => setDraft(v.own === undefined ? '' : String(v.own)), [v.own]);
   const id = 'rule-' + v.path.replace(/[^a-z0-9]/gi, '-');

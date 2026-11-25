@@ -1781,13 +1781,13 @@ void Workspace::registerCoreOps() {
     });
 
     // ---------------------------------------------------------------- testing
-    add("match_run", "Run a fast bot-vs-bot match on the open map (headless, deterministic) and report the outcome: winner, duration, "
+    registerNativeSimulationCheck(*this, {"match_run", "Run a fast bot-vs-bot match on the open map (headless, deterministic) and report the outcome: winner, duration, "
         "per-player economy/army timeline, event counts and fired triggers; optional event log. Use it to balance and to verify a map is playable.",
-        R"({"properties": {"seconds": {"type": "number", "description": "time limit, default 900"}, "seed": {"type": "integer"},
+        schema(R"({"properties": {"seconds": {"type": "number", "description": "time limit, default 900"}, "seed": {"type": "integer"},
             "difficulty": {"type": "integer", "description": "0 easy, 1 normal, 2 hard"},
             "events": {"description": "true = log every event (with time, players, objects), or a list of event names"},
             "maxEvents": {"type": "integer"},
-            "saveCheck": {"type": "number", "description": "at this second: save, load into a fresh simulation and run both 10 s without bots; reports whether they stay identical"}}})",
+            "saveCheck": {"type": "number", "description": "at this second: save, load into a fresh simulation and run both 10 s without bots; reports whether they stay identical"}}})"),
         [this, needProject](const Json& p) {
             needProject();
             SimConfig cfg;
@@ -1889,7 +1889,7 @@ void Workspace::registerCoreOps() {
             r.set("checksum", str(cs));
             r.set("summary", str("Тестовый матч: победа " + winner + " за " + std::to_string(sim.tick() / sim.tickRate()) + " с"));
             return r;
-        });
+        }});
 
     // ---------------------------------------------------------------- assets
     add("asset_import", "Copy a file (model .glb/.gltf, texture .png/.jpg, sound .wav/.ogg, font, UI .rml/.rcss) into the game folder.",

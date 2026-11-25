@@ -10579,6 +10579,73 @@ TEST(script_embed_requires) {
 }
 
 #include "engine/view/game/GameViewScript.h"
+TEST(local_order_feedback_is_delivered_once_without_a_tick) {
+    Json rules = Json::parseFile(kSkirmish + "/rules.json");
+    rules.set("viewScripts", Json::parse(R"(["scripts/view/order.lua"])"));
+    rules.set("$scriptSources", Json::parse(R"J({"scripts/view/order.lua":
+        "view.on('order', function(e) assert(e.event == 'order' and e.kind == 'attack' and e.queued and e.player == 1 and e.x == 0 and e.y == 2 and e.z == 0); view.notice(e.kind) end)"})J"));
+    Json map = Json::parseFile(kSkirmish + "/maps/valley.json");
+    Simulation sim(SimConfig{}, std::make_unique<game::GameCore>());
+    sim.setup(rules, map);
+    game::ViewScripts scripts;
+    CHECK(scripts.load(sim, rules, map, 1));
+    scripts.attach(sim);
+    const auto before = sim.checksum();
+    std::vector<SimEvent> events{{game::kViewEventOrder, 1, kNullEntity, kNullEntity,
+        game::kCmdAttack, {Fixed{}, Fixed::fromInt(2), Fixed{}}, kCmdQueue}};
+    scripts.queueLocalOrder(events.front());
+    scripts.update(sim, .016f);
+    const auto requests = scripts.takeRequests();
+    CHECK(requests.size() == 1 && requests.front().text == "attack");
+    scripts.update(sim, .016f);
+    CHECK(scripts.takeRequests().empty() && scripts.log().empty());
+
+    game::GameOverlays overlays;
+    overlays.init(mod(sim).rules(), Json::parse(R"([{"id":"orders","event":{"on":"order","lifetime":1,"rise":1,"grow":2},"shape":"ring"}])"), Json(), "");
+    CHECK(overlays.set().warnings.empty());
+    game::OverlayContext context;
+    context.player = 1;
+    context.orders = &events;
+    overlays.setContext(context);
+    game::GameScene scene;
+    const auto& grid = mod(sim).state(sim).grid;
+    std::vector<uint8_t> fog(size_t(grid.w * grid.h), 0);
+    overlays.prepare(scene, 0, &fog, grid, 20);
+    CHECK(overlays.popupCount() == 1);
+    events.clear();
+    overlays.prepare(scene, .5, &fog, grid, 20);
+    CHECK(overlays.popupCount() == 1);
+    overlays.prepare(scene, 2, &fog, grid, 20);
+    CHECK(overlays.popupCount() == 0 && sim.checksum() == before);
+}
+
+TEST(structure_upgrade_appearance_projects_only_active_production) {
+    game::Rules rules;
+    rules.types.resize(3);
+    auto& source = rules.types.front();
+    source.structure = true;
+    game::Production production;
+    production.queue.push_back({1, {}, {}, false});
+    production.queue.push_back({2, Fixed::fromRatio(1, 4), {}, true});
+    auto project = [&] {
+        game::SceneObject object;
+        game::projectProductionAppearance(object, rules, production);
+        return object;
+    };
+    CHECK(project().modelType() == 0);
+    source.view = Json::parse(R"({"showUpgradeTarget":true})");
+    CHECK(project().modelType() == 0);
+    source.queueSlots = 2;
+    auto preview = project();
+    CHECK(preview.type == 0 && preview.modelType() == 2 && preview.build == .25f);
+    production.queue.back().progress = Fixed{};
+    CHECK(project().modelType() == 2 && project().build == 0);
+    production.queue.pop_back();
+    CHECK(project().modelType() == 0 && project().build == 1);
+    production.queue.clear();
+    CHECK(!project().producing);
+}
+
 TEST(script_view_scripts) {
     Json rules = Json::parseFile(kSkirmish + "/rules.json");
     rules.set("viewScripts", Json::parse(R"(["scripts/view/v.lua"])"));

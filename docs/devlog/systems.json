@@ -3196,6 +3196,7 @@
         "Connect Claude Code or another MCP client."
       ],
       "roadmap": [
+        {"id": "native-simulation-checks", "status": "done", "title": "Диагностика C++-модулей перед проверкой симуляции", "titleEn": "Report missing native modules before simulation checks", "text": "MCP перечисляет отсутствующие модули проекта перед запуском проверки.", "textEn": "MCP lists missing project modules before running a simulation check.", "date": "2026-11-25"},
         {
           "id": "feature-gate",
           "title": "Единый контракт готовности фич",
@@ -3439,6 +3440,15 @@
           "textEn": "Render scene objects and independently animated models into UI elements through an offscreen texture."
         },
         {
+          "id": "projectile-impact-height",
+          "date": "2026-11-25",
+          "status": "done",
+          "title": "Высота попадания снарядов",
+          "titleEn": "Projectile impact height",
+          "text": "Привязка прямого выстрела и его следа к высоте цели.",
+          "textEn": "Straight shots and trails converge to the authored height on the target."
+        },
+        {
           "status": "done",
           "date": "2026-11-25",
           "id": "quake3-bsp",
@@ -3596,6 +3606,51 @@
           "titleEn": "Ledges, ladders and water in FPS maps",
           "text": "Метки в формате карты, чтобы хост сообщал эти режимы.",
           "textEn": "Map format tags so the host reports these modes."
+        },
+        {
+          "id": "encounter-phase-determinism",
+          "date": "2026-11-25",
+          "status": "done",
+          "title": "Повторяемые фазы боя с боссом",
+          "titleEn": "Deterministic boss phase transitions",
+          "text": "Проверка состояния босса при появлении подкрепления и после загрузки матча.",
+          "textEn": "Verify boss state when reinforcements appear and after restoring a match."
+        },
+        {
+          "id": "unit-selection-eligibility",
+          "status": "done",
+          "title": "Выбор объектов по типу юнита",
+          "titleEn": "Selection eligibility for unit types",
+          "text": "Щелчок, наведение и рамка пропускают юниты, у которых отключён выбор.",
+          "textEn": "Click, hover and box selection skip units whose type disables selection.",
+          "date": "2026-11-25"
+        },
+        {
+          "id": "automatic-target-acquisition-order",
+          "status": "done",
+          "title": "Порядок автоматического выбора цели",
+          "titleEn": "Configurable automatic target order",
+          "text": "В правилах можно выбрать поиск ближайшей цели или обход ячеек по строкам.",
+          "textEn": "Choose distance-based targeting or a row-by-row map-cell scan in the rules.",
+          "date": "2026-11-25"
+        },
+        {
+          "id": "local-order-feedback",
+          "status": "done",
+          "date": "2026-11-25",
+          "title": "Маркеры приказов",
+          "titleEn": "Order markers",
+          "text": "События локального приказа для скриптов и оверлеев.",
+          "textEn": "Local order events for scripts and overlays."
+        },
+        {
+          "id": "structure-upgrade-appearance",
+          "status": "done",
+          "date": "2026-11-25",
+          "title": "Вид здания при улучшении",
+          "titleEn": "Structure upgrade appearance",
+          "text": "Модель нового типа с прогрессом улучшения.",
+          "textEn": "Display the target model with upgrade progress."
         }
       ]
     }

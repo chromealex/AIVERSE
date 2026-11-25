@@ -178,6 +178,14 @@ void GameView::buildLook(gfx::Device& dev, const UnitType& t, TypeLook& L) {
     L.corpse = num(v["corpse"], t.structure ? 3.0f : 2.5f);
     L.corpseFade = std::max(0.0f, num(v["corpseFade"], 0.6f));
     L.turnSpeed = num(v["turnSpeed"], t.structure ? 0.0f : 10.0f);
+    if (v.has("impactHeight")) {
+        const float height = num(v["impactHeight"], -1);
+        if (std::isfinite(height) && height >= 0) L.impactHeight = height;
+        else {
+            warn(t, "impactHeight must be a finite nonnegative distance");
+            if (strictAppearanceReload_) throw std::runtime_error("invalid impactHeight");
+        }
+    }
     L.tracer = v.getBool("tracer", false);
     if (const Json& ps = v["projectileScale"]; ps.isNumber()) L.projectileScaleDefault = std::max(0.0f, num(ps, 1));
     else if (ps.isObject()) {   // {"default": 0.3, "<weapon id>": 1}: bullets small, rockets big
