@@ -1872,8 +1872,8 @@
           "status": "in-progress",
           "title": "Building StructureGraph: точные координаты проёмов, опоры и стабильные сокеты",
           "titleEn": "Building StructureGraph: explicit opening positions and stable sockets",
-          "text": "Единый граф для меша и коллизий с фиксированными и автоматическими элементами. Координаты проёмов редактируются и сохраняются в Studio. Подготавливается автономное демо генератора и редактирования пещер для браузера.",
-          "textEn": "A shared graph generates meshes and collision from exact and automatic positions. Studio edits and persists placement data. An offline browser demo of building generation and cave editing is in preparation.",
+          "text": "Единый граф для меша и коллизий с фиксированными и автоматическими элементами. Координаты проёмов редактируются и сохраняются в Studio. Подготавливается автономное демо генератора и редактирования пещер для браузера. Проверяется замена компонента при сборке Linux ARM64 с GCC 13.",
+          "textEn": "A shared graph generates meshes and collision from exact and automatic positions. Studio edits and persists placement data. An offline browser demo of building generation and cave editing is in preparation. Component replacement is under verification on the Linux ARM64 GCC 13 build.",
           "id": "building-graph-integration"
         },
         {

@@ -266,7 +266,9 @@
     "examples/world/building-caverns-web/package.json",
     "examples/world/building-caverns-web/package-lock.json",
     "examples/world/building-caverns-web/README.md",
-    "examples/world/building-caverns-web/verify.cjs"
+    "examples/world/building-caverns-web/verify.cjs",
+    "engine/core/ECS.h",
+    "tests/ecs_cow_exception_test.cpp"
   ],
   "traits": {
     "editable": true,

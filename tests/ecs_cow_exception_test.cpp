@@ -27,7 +27,32 @@ struct FragileResource {
     }
     FragileResource& operator=(const FragileResource&)=default;
 };
+// Combat and other aggregates have arrays with nonzero member defaults.
+struct TimingComponent {
+    struct Slot { int cooldown=7; };
+    int target=-1;
+    Slot timings[4]{};
+};
+
+void checkAggregateReplacement(bool paged) {
+    World world;
+    world.enableCowSnapshots(paged);
+    const auto entity=world.create();
+    auto& first=world.add<TimingComponent>(entity);
+    AIVERSE_TEST_CHECK(first.target==-1 && first.timings[3].cooldown==7);
+    first.target=42;
+    first.timings[3].cooldown=99;
+    const World snapshot=world;
+    const auto& reset=world.add<TimingComponent>(entity);
+    AIVERSE_TEST_CHECK(reset.target==-1 && reset.timings[3].cooldown==7);
+    AIVERSE_TEST_CHECK(world.countExisting<TimingComponent>()==1);
+    const auto* original=snapshot.tryGetConst<TimingComponent>(entity);
+    AIVERSE_TEST_CHECK(original && original->target==42 && original->timings[3].cooldown==99);
+}
+
 int main() {
+    checkAggregateReplacement(false);
+    checkAggregateReplacement(true);
     // Legacy Sparse Set must also roll back failed component insertion
     // without leaving a phantom dense entry or stale sparse index.
     {
