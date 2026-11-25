@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/editor/core/Workspace.cpp",
     "apps/studio-web/src/panels/MapPlayers.tsx",
     "apps/studio-web/src/panels/MapInspector.tsx",
     "apps/studio-web/src/panels/InspectorPanel.tsx",
@@ -187,15 +188,17 @@
     }
   },
   "integrations": {
-    "skills": [],
-    "mcp_tools": [],
+    "skills": ["aiverse-map-build"],
+    "mcp_tools": ["player_set", "player_remove"],
     "studio_panels": [
+      "inspector",
       "project",
       "agent"
     ],
     "studio_methods": [
       "studio.mapProperties",
       "studio.mapPropertiesSet",
+      "studio.mapPlayer",
       "studio.gameEntities",
       "studio.hierarchyGroups",
       "studio.gameSelectEntity",
@@ -244,6 +247,7 @@
     "docs/evidence/studio-hierarchy-builtins-5dcfca4d7.json",
     "docs/evidence/studio-nesting-39a838109.json",
     "docs/evidence/studio-edit-preview-de885b9d9.json",
-    "docs/evidence/studio-map-inspector-92556c5bb.json"
+    "docs/evidence/studio-map-inspector-92556c5bb.json",
+    "docs/evidence/studio-player-inspector-0b8159e06.json"
   ]
 }
