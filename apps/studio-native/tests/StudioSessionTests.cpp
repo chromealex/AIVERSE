@@ -502,7 +502,7 @@ void entityWorkflow() {
             params.set("expectedProject",Json::string(session.workspace().project.dir));
             params.set("expected",Json::string(baseline));
             auto draft=loaded["graph"];
-            draft.member("nodes").items().front().set("value",Json::parse("[0.375,0.7,1,1]"));
+            draft.member("nodes").at(0).set("value",Json::parse("[0.375,0.7,1,1]"));
             params.set("graph",draft);
             const auto saved=call("studio.shaderGraphSave",params);
             AIVERSE_TEST_CHECK(!saved.has("error") && saved["result"]["originalJson"].isString());
