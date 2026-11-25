@@ -1,0 +1,42 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/material-techniques-20261125
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/material-techniques-20261125/DartConfiguration.tcl
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/material-techniques-20261125/DartConfiguration.tcl
+Test project /Volumes/KINGSTON/AIVERSE-builds/material-techniques-20261125
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 30
+    Start  30: model_batching_policy
+
+30: Test command: /Volumes/KINGSTON/AIVERSE-builds/material-techniques-20261125/aiverse_model_batching_policy_tests
+30: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/material-techniques-20261125
+30: Test timeout computed to be: 10000000
+30: engine model batching policy: PASS
+1/2 Test  #30: model_batching_policy ............   Passed    0.80 sec
+test 336
+    Start 336: material_technique_frame
+
+336: Test command: /Volumes/KINGSTON/AIVERSE-builds/material-techniques-20261125/aiverse_material_technique_frame "/Volumes/KINGSTON/aiverse-worktrees/material-techniques-20261125/demos/material-techniques"
+336: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/material-techniques-20261125
+336: Test timeout computed to be: 90
+336: [metal-assets] libraries=0 sourceMisses=10 pipelines=14 pipelineFailures=0 archive=0 strict=0
+336: near: 7716 selected-material pixels
+336: far: 7716 selected-material pixels
+336: inspection: 7716 selected-material pixels
+2/2 Test #336: material_technique_frame .........   Passed    0.45 sec
+
+The following tests passed:
+	model_batching_policy
+	material_technique_frame
+
+100% tests passed, 0 tests failed out of 2
+
+Label Time Summary:
+GPU         =   0.45 sec*proc (1 test)
+Material    =   0.45 sec*proc (1 test)
+Metal       =   0.45 sec*proc (1 test)
+
+Total Test time (real) =   1.28 sec

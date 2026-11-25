@@ -16,7 +16,14 @@
     "demos/material-techniques/scripts/view/distance.lua",
     "demos/material-techniques/ui/hud/distance.rml",
     "docs/agent-handoffs/material-techniques-initial.md",
+    "docs/agent-handoffs/material-techniques-metal-20261125.md",
+    "docs/agent-handoffs/material-techniques-studio-20261125.md",
     "docs/devlog/systems.json",
+    "docs/evidence/material-techniques-far.png",
+    "docs/evidence/material-techniques-inspection.png",
+    "docs/evidence/material-techniques-near.png",
+    "docs/evidence/material-techniques-runtime-20261125.json",
+    "docs/evidence/material-techniques-runtime-20261125.log.txt",
     "docs/evidence/material-techniques-selection-20261125.json",
     "docs/evidence/material-techniques-selection-20261125.log.txt",
     "docs/features/material-techniques.json",
@@ -40,9 +47,11 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Real model submission resolves the authored materials on Metal.",
+      "evidence": [
+        "docs/evidence/material-techniques-runtime-20261125.log.txt"
+      ]
     },
     "architecture": {
       "status": "not_run",
@@ -50,14 +59,19 @@
       "evidence": []
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Renderer3D::setMaterialScheme and model submission select the inspection colour on Metal.",
+      "evidence": [
+        "docs/evidence/material-techniques-runtime-20261125.log.txt",
+        "engine/render/Renderer3D.h"
+      ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The existing visual look skill documents the model-sidecar operations and fallback.",
+      "evidence": [
+        "skills/visuals/aiverse-look/SKILL.md"
+      ]
     },
     "mcp": {
       "status": "not_run",
@@ -110,9 +124,12 @@
       "evidence": []
     },
     "tests": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Both model policy and actual Metal readback passed.",
+      "evidence": [
+        "docs/evidence/material-techniques-runtime-20261125.json",
+        "docs/evidence/material-techniques-runtime-20261125.log.txt"
+      ]
     },
     "handoff": {
       "status": "not_run",
@@ -120,9 +137,11 @@
       "evidence": []
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The model authoring reference documents distance units, capability names, priority, scheme and interactions with other material overrides.",
+      "evidence": [
+        "docs/models.md"
+      ]
     },
     "publishing": {
       "status": "not_run",
@@ -147,6 +166,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/material-techniques-selection-20261125.json"
+    "docs/evidence/material-techniques-runtime-20261125.json"
   ]
 }
