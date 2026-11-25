@@ -57,13 +57,27 @@
     "tools/studio/test_content_layout.py",
     "tools/studio/test_reference_pin_zoom.py",
     "tools/studio/test_scene_tools.py",
-    "apps/studio-web/tests/nested-dock.mjs"
+    "apps/studio-web/tests/nested-dock.mjs",
+    "CMakeLists.txt",
+    "engine/game/native/Build.cmake",
+    "docs/native-modules.md",
+    "engine/game/GameCore.h",
+    "tests/fps/tests.cpp",
+    "tests/fps/vehicles.inc",
+    "tests/native_project_build.py",
+    "tests/libraries/gameplay_tests.cpp",
+    "tools/skills/audit.py",
+    "apps/editor/PhysisAuthoring.h",
+    "apps/studio-native/StudioGameLaunch.h",
+    "apps/editor/windows/AttachmentAuthoringWindow.cpp",
+    "apps/editor/windows/LuaCustomInspector.h",
+    "tests/editor/lua_inspector_sandbox_tests.cpp"
   ],
   "traits": {
     "editable": false,
     "simulation": false,
     "visible": true,
-    "runtime": false
+    "runtime": true
   },
   "checks": {
     "implementation": {
@@ -81,8 +95,11 @@
     },
     "native_api": {
       "status": "not_run",
-      "note": "Native Workspace readiness query and fixed local report generation implemented in source; build and runtime validation pending.",
-      "evidence": []
+      "note": "Native Workspace readiness query and fixed local report generation implemented in source; build and runtime validation pending. Previous Feature Gate branch evidence: On Mac v10 actual built Workspace/MCP readiness refresh, status, get and dependency query exercised twice in one persistent process; successful completion and matching snapshot SHA verified. Other platforms and GUI timer not covered.",
+      "evidence": [
+        "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-refresh.log.txt",
+        "docs/agent-handoffs/feature-gate-stage45-mac-qa-2026-11-24.md"
+      ]
     },
     "skill": {
       "status": "pass",
@@ -121,19 +138,22 @@
       "evidence": []
     },
     "performance": {
-      "status": "not_applicable",
-      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "status": "not_run",
+      "note": "Shared native-module host build wiring changes; cross-platform and runtime acceptance pending.",
       "evidence": []
     },
     "platforms": {
-      "status": "not_applicable",
-      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "status": "not_run",
+      "note": "Shared native-module host build wiring changes; cross-platform and runtime acceptance pending.",
       "evidence": []
     },
     "dependencies": {
       "status": "not_run",
-      "note": "Pending actual execution and integration review.",
-      "evidence": []
+      "note": "Pending actual execution and integration review. Previous Feature Gate branch evidence: Mac v7 policy dependency report: both registered features have empty requires and no dependency declaration errors; partial compliance and native-host build fixture passed. This is declared dependency scope, not release readiness.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md",
+        "docs/evidence/feature-gate-mac-v7-summary.log.txt"
+      ]
     },
     "headless": {
       "status": "not_applicable",
@@ -142,8 +162,11 @@
     },
     "examples": {
       "status": "not_run",
-      "note": "Pending actual execution and integration review.",
-      "evidence": []
+      "note": "Pending actual execution and integration review. Previous Feature Gate branch evidence: Documented working report-generation and persistent MCP refresh/status/get/dependency query example, actually executed twice in Mac v10. No visual or publishing claim.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-stage49-acceptance-2026-11-24.md",
+        "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-refresh.log.txt"
+      ]
     },
     "tests": {
       "status": "pass",

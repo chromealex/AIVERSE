@@ -126,7 +126,10 @@
     "apps/editor/windows/SpectraGraphWindow.cpp",
     "skills/visuals/aiverse-spectrafx/SKILL.md",
     "apps/studio-web/src/panels/graphSurface.css",
-    "apps/studio-web/tests/shaderGraphLayout.test.mjs"
+    "apps/studio-web/tests/shaderGraphLayout.test.mjs",
+    "apps/studio-web/src/graphs/BuildingGeometryGraphView.tsx",
+    "apps/studio-web/src/graphs/buildingGeometryGraph.ts",
+    "apps/studio-web/tests/buildingGeometryGraph.test.mjs"
   ],
   "traits": {
     "editable": true,
@@ -152,8 +155,11 @@
     },
     "skill": {
       "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "note": "Pending implementation or actual verification. Previous Feature Gate branch evidence: Registered workflow skill exists; Mac QA v7 skill_catalog, skill_routing and skill_audit PASS. Documentation and catalog unchanged by main sync. This does not prove every runtime operation.",
+      "evidence": [
+        "skills/workflow/aiverse-graph-authoring/SKILL.md",
+        "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md"
+      ]
     },
     "mcp": {
       "status": "not_run",
@@ -210,14 +216,24 @@
     },
     "examples": {
       "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "note": "Pending implementation or actual verification. Previous Feature Gate branch evidence: Documented concrete disposable SpectraFX graph validation, dependency query, save/readback and CPU probe example from actual passing native Workspace fixture. Other owner examples and visual publishing not certified.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-stage49-acceptance-2026-11-24.md",
+        "tests/vfx_graph_ops_test.cpp",
+        "docs/evidence/feature-gate-mac-v10-be64591b1087-ctest-focused.log.txt"
+      ]
     },
     "tests": {
       "status": "not_run",
-      "note": "Historical isolated graph tests passed on prior source trees. This merged tree has not yet passed native, Studio, MCP, visual or Mac acceptance. Mac integration at a9773f75c passed 47/47 Caverns, editor and graph checks plus 9/9 Studio and Building CTests. Full merged-main acceptance remains pending.",
+      "note": "Historical isolated graph tests passed on prior source trees. This merged tree has not yet passed native, Studio, MCP, visual or Mac acceptance. Mac integration at a9773f75c passed 47/47 Caverns, editor and graph checks plus 9/9 Studio and Building CTests. Full merged-main acceptance remains pending. Previous Feature Gate branch evidence: Mac v10 source be64591b, reused v7 binaries 59558502 (only site and evidence/manifest/handoff changes): 22/22 Python and 9/9 focused CTest PASS. Historical v7 full suite 487 PASS / 0 FAIL / 1 opt-in skip; full merged-tree CTest NOT RUN in v10. Scoped automated verification only. Mac v13 at 74099694: full quick CTest rerun on synced checkout using unchanged-source v7 binaries, 487 PASS / 0 FAIL / 1 opt-in skip, 977.56 seconds; evidence integrity 10/10 and partial compliance PASS. Full log retained in original archive; repository summary excerpt recorded separately.",
       "evidence": [
-        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md",
+        "docs/evidence/feature-gate-mac-v10-be64591b1087-feature-gate.log.txt",
+        "docs/evidence/feature-gate-mac-v10-be64591b1087-ctest-focused.log.txt",
+        "docs/evidence/feature-gate-mac-v7-summary.log.txt",
+        "docs/agent-handoffs/feature-gate-stage45-mac-qa-2026-11-24.md",
+        "docs/evidence/feature-gate-mac-v13-74099694a317-ctest-summary.log.txt",
+        "docs/agent-handoffs/feature-gate-stage48-mac-qa-2026-11-24.md"
       ]
     },
     "handoff": {
@@ -230,8 +246,12 @@
     },
     "documentation": {
       "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "note": "Pending implementation or actual verification. Previous Feature Gate branch evidence: Reviewed existing feature/graph authoring contract and workflow skill; documented scope and outstanding owner acceptance requirements in stage handoff.",
+      "evidence": [
+        "docs/agents/graph-framework.md",
+        "skills/workflow/aiverse-graph-authoring/SKILL.md",
+        "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md"
+      ]
     },
     "publishing": {
       "status": "not_run",
