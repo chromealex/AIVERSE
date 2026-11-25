@@ -2514,6 +2514,9 @@ endif()
 # builds-branch tooling: index.json, and a packaged aiversemcp run from an unpacked tools-only Linux zip
 if(AIVERSE_BUILD_TESTS AND Python3_Interpreter_FOUND)
     if(TARGET aiversemcp)
+        add_test(NAME selection_targeting_mcp COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/editor/selection_targeting_mcp.py
+            $<TARGET_FILE:aiversemcp> ${CMAKE_CURRENT_SOURCE_DIR})
         add_test(NAME terraweave_meadow_mcp COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/terraweave_meadow_mcp.py $<TARGET_FILE:aiversemcp> ${CMAKE_CURRENT_SOURCE_DIR})
     endif()
     if(TARGET aiversemcp AND CMAKE_SYSTEM_NAME STREQUAL "Linux")

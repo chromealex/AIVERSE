@@ -40,7 +40,7 @@
   },
   "entities": [
     {
-      "type": "scout",
+      "type": "oak",
       "owner": 1,
       "pos": [
         8,
@@ -48,7 +48,7 @@
       ]
     },
     {
-      "type": "oak",
+      "type": "scout",
       "owner": 1,
       "pos": [
         8,
