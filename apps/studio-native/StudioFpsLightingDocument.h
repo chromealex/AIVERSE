@@ -59,14 +59,24 @@ inline Json studioMapLightingPatch(const Json& params) {
     patch.set(key,value);
     return patch;
 }
+inline Json studioLightPosition(const Json& params,double defaultX,double defaultZ) {
+    Json result=Json::object();
+    for (const char* key:{"x","z"}) {
+        const auto& coordinate=params[key];
+        const double fallback=std::string_view(key)=="x"?defaultX:defaultZ;
+        const double value=params.has(key)?coordinate.toDouble():fallback;
+        if ((params.has(key) && !coordinate.isNumber()) || !validLightScalar(key,value))
+            throw std::runtime_error("Map coordinates out of range");
+        result.set(key,Json::number(value,3));
+    }
+    return result;
+}
 inline Json editFpsLighting(Json document, const std::string& method, const Json& params) {
     if (!document.isObject()) throw std::runtime_error("FPS project document unavailable");
     if (method=="studio.lightingSet") {
         editor::patchMapLighting(document,studioMapLightingPatch(params));
     } else if (method=="studio.lightAdd") {
-        Json item=Json::object();
-        item.set("x",Json::number(int64_t(0)));
-        item.set("z",Json::number(int64_t(0)));
+        Json item=studioLightPosition(params,0,0);
         item.set("height",Json::number(int64_t(1)));
         item.set("radius",Json::number(int64_t(4)));
         item.set("intensity",Json::number(1.5,3));

@@ -1,4 +1,5 @@
 #include "StudioHierarchyGroups.h"
+#include "StudioDocumentIds.h"
 #include "engine/view/game/GameLights.h"
 #include "StudioFpsLightingDocument.h"
 #include "apps/editor/core/LegacyCameraBookmarks.h"
@@ -3024,6 +3025,24 @@ Json StudioHost::viewportInput(const Json& input) {
         }else throw std::runtime_error("Invalid character viewport input");
         return Json::object();
     }
+    if(kind=="focusLight") {
+        const auto id=input.getStr("entityId");
+        if(projectLoading_ || input.getStr("expectedDocumentEpoch")!=session_->graphDocumentScope().getStr("epoch") ||
+           id.rfind("light:",0)!=0 || id!=session_->selectedObjectId())
+            throw std::runtime_error("Select the light again before showing it in Scene");
+        const auto& map=session_->workspace().map;
+        if(map.data.planet())throw std::runtime_error("Scene light framing requires a planar map");
+        for(size_t i=0;i<map.data.extra["lights"].size();++i) {
+            const auto ref=editor::DocumentEntityRef::light(i,map.data.worldSpace);
+            if(studioDocumentId(map,ref)!=id)continue;
+            editor::DocumentTransform position;
+            if(!editor::readDocumentTransform(map,ref,position))break;
+            ensureScene();
+            onScene([&]{preview_->requestLightFocus({float(position.x),float(position.y),float(position.z)});});
+            return Json::object();
+        }
+        throw std::runtime_error("The selected light is no longer available");
+    }
     Json result = Json::object();
     // Pointer/keyboard navigation comes from HTML only in composite mode (the native view handles it
     // otherwise); toolbar commands work in both.
@@ -4072,6 +4091,18 @@ void StudioHost::handleMessage(const std::string& json) {
             reply.set("result", std::move(result));
         } else {
             if (preview_ && (method == "studio.wind" || method == "studio.windSet")) session_->setWindSceneStats(onScene([&] { return preview_->windStats(); }));
+            if (method=="studio.lightAdd" && req["params"].getBool("atSceneTarget")) {
+                const auto& map=session_->workspace().map;
+                if(map.data.planet())throw std::runtime_error("Scene target placement requires a planar map");
+                if(!preview_)throw std::runtime_error("Open Scene before placing a light at its target");
+                const auto target=onScene([&] {
+                    if(!preview_->hasSceneCamera())throw std::runtime_error("Open Scene before placing a light at its target");
+                    return preview_->cameraState().target;
+                });
+                auto& params=req.member("params");
+                params.set("x",Json::number(std::round(double(target.x)*2)*.5,3));
+                params.set("z",Json::number(std::round(double(target.z)*2)*.5,3));
+            }
             reply = session_->dispatch(req);
         }
         sendReply(reply);

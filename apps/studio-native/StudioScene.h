@@ -349,6 +349,8 @@ public:
     void setOrthographic(bool ortho);
     void setFieldOfView(float radians) { camera_.fovY = radians; }
     struct CameraState { float yaw = 0, pitch = 0, distance = 0; bool ortho = false; render::float3 target{}; float fov = 0; };
+    void requestLightFocus(render::float3 position) { pendingFocusLight_=position; }
+    bool hasSceneCamera() const { return cameraInitialized_; }
     CameraState cameraState() const { return {camera_.yaw, camera_.pitch, camera_.distance, camera_.ortho, camera_.target, camera_.fovY}; }
     void setPlanetOrbitCamera(const CameraState& state){
         tween_.active=false;camera_.target=state.target;camera_.distance=state.distance;
@@ -461,7 +463,7 @@ public:
     // World point -> view point (same units as pick / groundPoint); false when behind the camera.
     bool projectPoint(render::float3 world, float width, float height, render::float2& out) const;
     void setBrushCursor(bool visible, render::float3 center, float radius,bool volume=false,bool fill=false) { brushVisible_=visible; brushCenter_=center; brushRadius_=radius; brushVolume_=volume; brushFill_=fill; }
-    void resetCamera() { if(device_){device_->waitForResourceIdle();spectraSources_.shutdown();} lightingRevision_ = std::numeric_limits<uint64_t>::max(); cameraInitialized_ = false; planetRevision_=std::numeric_limits<uint64_t>::max(); terrainRevision_ = std::numeric_limits<uint64_t>::max(); clearDocumentModels(); }
+    void resetCamera() { pendingFocusLight_.reset(); if(device_){device_->waitForResourceIdle();spectraSources_.shutdown();} lightingRevision_ = std::numeric_limits<uint64_t>::max(); cameraInitialized_ = false; planetRevision_=std::numeric_limits<uint64_t>::max(); terrainRevision_ = std::numeric_limits<uint64_t>::max(); clearDocumentModels(); }
     // Frames actually drawn / skipped because nothing visible changed (diagnostics).
     uint64_t framesDrawn() const { return framesDrawn_; }
     uint64_t framesSkipped() const { return framesSkipped_; }
@@ -687,6 +689,7 @@ private:
     render::Camera camera_;
     std::optional<render::Camera> lensCamera_;
     std::optional<render::Camera> pendingSceneLens_;
+    std::optional<render::float3> pendingFocusLight_;
     void applyPendingSceneLens();
     render::AdaptiveShadowResolution shadowResolution_;
     bool cameraInitialized_ = false;

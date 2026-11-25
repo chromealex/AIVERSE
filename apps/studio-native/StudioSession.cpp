@@ -3472,7 +3472,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                    method == "studio.lightAdd" || method == "studio.lightUpdate" ||
                    method == "studio.lightDelete") {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
-            if (method=="studio.lightingSet" && params.has("expectedDocumentEpoch") &&
+            if (params.has("expectedDocumentEpoch") &&
                 params.getStr("expectedDocumentEpoch")!=std::to_string(graphDocumentEpoch_))
                 throw std::runtime_error("Map changed; reopen Lighting before editing");
             if (ws_.map.data.worldSpace) {
@@ -3495,15 +3495,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 const Json updated = ws_.call("lighting_set", studioMapLightingPatch(params), "studio");
                 if (updated.has("error")) throw std::runtime_error(updated.getStr("error"));
             } else if (method == "studio.lightAdd") {
-                Json input = Json::object();
-                // New authored lights go to map center for flat maps; FPS origin otherwise.
-                // Optional x/z (Inspector › Add Component › Light at the entity); else map center.
-                const double x = params["x"].isNumber() ? params["x"].toDouble() : ws_.map.data.worldSpace ? 0.0 : double(ws_.map.data.w) * 0.5;
-                const double z = params["z"].isNumber() ? params["z"].toDouble() : ws_.map.data.worldSpace ? 0.0 : double(ws_.map.data.h) * 0.5;
-                if (!validLightScalar("x",x) || !validLightScalar("z",z))
-                    throw std::runtime_error("Map coordinates out of range");
-                input.set("x", Json::number(x,3));
-                input.set("z", Json::number(z,3));
+                const Json input=studioLightPosition(params,ws_.map.data.w*.5,ws_.map.data.h*.5);
                 const Json updated = ws_.call("light_add", input, "studio");
                 if (updated.has("error")) throw std::runtime_error(updated.getStr("error"));
             } else if (method == "studio.lightUpdate" || method == "studio.lightDelete") {

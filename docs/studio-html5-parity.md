@@ -260,3 +260,5 @@ Map environment transfer: expose palette preset and removal of the map lighting 
 Local light color and halo transfer: verify legacy defaults, range checks, native Undo, map persistence and detached Lighting controls.
 
 Lighting weather preview: dedicated GPU drawable, time/cloud/storm controls, one undoable map override and independent Scene camera.
+
+Lighting placement: add lights at the Scene orbit target on a half-unit grid; retain explicit map-center placement and document-scoped Undo.

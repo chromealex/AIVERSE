@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CloudSun, Lightbulb, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import { CloudSun, Crosshair, Lightbulb, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import PropertyField from '../components/PropertyField';
 import { LIGHTING_KEYS, LIGHT_EDITABLE_KEYS, lightingProperties, lightColor, lightProperties } from './lightingSchema';
@@ -9,10 +9,10 @@ import './LightingPanel.css';
 import LightingWeatherPreview from './LightingWeatherPreview';
 import RenderLightingControls from './RenderLightingControls';
 
-interface LightingPanelProps { projectPath: string; documentEpoch?: string; selectedId: string | null; onSelect: (id: string | null) => Promise<void> }
+interface LightingPanelProps { openScene: () => void; projectPath: string; documentEpoch?: string; selectedId: string | null; onSelect: (id: string | null) => Promise<void> }
 const empty: LightingState = { lighting: null, lights: [] };
 
-export default function LightingPanel({ projectPath, documentEpoch, selectedId, onSelect }: LightingPanelProps) {
+export default function LightingPanel({ openScene, projectPath, documentEpoch, selectedId, onSelect }: LightingPanelProps) {
   const [state, setState] = useState<LightingState>(empty);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -109,10 +109,17 @@ export default function LightingPanel({ projectPath, documentEpoch, selectedId, 
         <RenderLightingControls projectPath={projectPath}/>
         <div className="lighting-section-heading lighting-list-heading">
           <span>Local lights ({state.lights.length})</span>
+        </div>
+        <div className="lighting-placement">
+          <button className="lighting-add" disabled={busy || !available || !nativeConnected()}
+            title="Place a light at the Scene camera target, snapped to half a unit"
+            onClick={() => void perform(() => invoke('studio.lightAdd', {atSceneTarget:true, expectedDocumentEpoch:documentEpoch}), true)}>
+            <Crosshair size={14}/> Add at Scene target
+          </button>
           <button className="lighting-add" disabled={busy || !available || !nativeConnected()}
             title="Add light at map center / FPS origin"
-            onClick={() => void perform(() => invoke('studio.lightAdd', {}), true)}>
-            <Plus size={14}/> Add
+            onClick={() => void perform(() => invoke('studio.lightAdd', {expectedDocumentEpoch:documentEpoch}), true)}>
+            <Plus size={14}/> Add at center
           </button>
         </div>
         {state.lights.length === 0 ? <p className="lighting-state">No authored lights in this map.</p> :
@@ -127,6 +134,14 @@ export default function LightingPanel({ projectPath, documentEpoch, selectedId, 
                 </button>)}
             </div>
             {activeLight && <div className="lighting-fields lighting-light-fields">
+              <button className="lighting-add" disabled={busy || !selectedId || !documentEpoch || !nativeConnected()}
+                onClick={async () => {
+                  if(!selectedId || !documentEpoch)return;
+                  try {
+                    await invoke('studio.viewportInput',{kind:'focusLight',entityId:selectedId,expectedDocumentEpoch:documentEpoch});
+                    openScene();
+                  } catch(err) { setError(err instanceof Error ? err.message : String(err)); }
+                }}><Crosshair size={14}/> Show in Scene</button>
               <label className="property-row"><span>Light color</span>
                 <span className="lighting-color">
                   <input type="color" aria-label="Light color" value={rgbToHex(lightColor(activeLight))}

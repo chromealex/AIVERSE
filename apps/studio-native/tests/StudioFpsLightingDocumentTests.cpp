@@ -9,6 +9,15 @@ int main() {
     AIVERSE_TEST_CHECK(fpsLightingView(doc)["lights"].size()==0);
     doc=editFpsLighting(doc,"studio.lightAdd",Json::object());
     AIVERSE_TEST_CHECK(doc["lights"].size()==1);
+    AIVERSE_TEST_CHECK(doc["lights"][0]["x"].toDouble()==0 && doc["lights"][0]["z"].toDouble()==0);
+    const Json placed=editFpsLighting(doc,"studio.lightAdd",Json::parse(R"({"x":-3.5,"z":12.5})"));
+    AIVERSE_TEST_CHECK(placed["lights"][1]["x"].toDouble()==-3.5 && placed["lights"][1]["z"].toDouble()==12.5);
+    for(const char* invalid:{R"({"x":"4"})",R"({"z":1000001})"}) {
+        bool rejected=false;
+        try { (void)editFpsLighting(doc,"studio.lightAdd",Json::parse(invalid)); }
+        catch(const std::runtime_error&) { rejected=true; }
+        AIVERSE_TEST_CHECK(rejected);
+    }
     AIVERSE_TEST_CHECK(doc["spawns"][0][0].toDouble()==1);
     Json p=Json::parse(R"({"index":0,"key":"intensity","value":3.5})");
     doc=editFpsLighting(doc,"studio.lightUpdate",p);
