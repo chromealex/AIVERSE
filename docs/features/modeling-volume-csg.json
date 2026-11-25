@@ -17,6 +17,7 @@
     "docs/evidence/.gitattributes",
     "docs/evidence/modeling-volume-csg-editor.png",
     "docs/evidence/modeling-volume-csg-export-profile.txt",
+    "docs/evidence/modeling-volume-csg-integrated-session.txt",
     "docs/evidence/modeling-volume-csg-rebuild-20261125.json",
     "docs/evidence/modeling-volume-csg-rebuild-20261125.log.txt",
     "docs/features/modeling-volume-csg.json",
@@ -93,7 +94,8 @@
       "status": "pass",
       "note": "Independent processes reopened and edited the model; undo restored byte-identical GLB.",
       "evidence": [
-        "docs/evidence/modeling-volume-csg-rebuild-20261125.log.txt"
+        "docs/evidence/modeling-volume-csg-rebuild-20261125.log.txt",
+        "docs/evidence/modeling-volume-csg-integrated-session.txt"
       ]
     },
     "graphs": {

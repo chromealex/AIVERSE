@@ -1,0 +1,13 @@
+Project /Volumes/KINGSTON/AIVERSE-builds/material-techniques-20261125/tmp/merged-native-studio/project-1795609825
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/material-techniques-20261125
+Test project /Volumes/KINGSTON/AIVERSE-builds/material-techniques-20261125
+    Start 585: studio_session
+1/1 Test #585: studio_session ...................   Passed   16.49 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+EDITOR    =  16.49 sec*proc (1 test)
+
+Total Test time (real) =  16.55 sec
+PASS StudioSession native Modeling create/apply, triplanar Material Library GUID assignment, save/reopen, bore 0.3 -> 0.5 re-export, second save/reopen. GLB bytes 1564476 -> 1579572; after triangles 7736; final revision 2; graph and wildcard binding persisted.

@@ -3,7 +3,6 @@
   "id": "model-triplanar",
   "owner": "render",
   "changed_paths": [
-    "apps/studio-web/tests/materialSchema.test.mjs",
     "CMakeLists.txt",
     "apps/editor/core/MaterialOps.cpp",
     "apps/studio-native/StudioMaterialValidation.h",
@@ -13,6 +12,7 @@
     "apps/studio-web/src/panels/MaterialsPanel.tsx",
     "apps/studio-web/src/panels/materialSchema.ts",
     "apps/studio-web/src/types.ts",
+    "apps/studio-web/tests/materialSchema.test.mjs",
     "demos/model-triplanar/README.md",
     "demos/model-triplanar/content/rock_basecolor_repeat.png",
     "demos/model-triplanar/content/rock_normal_repeat.png",
@@ -54,6 +54,7 @@
     "docs/evidence/model-triplanar-web-front.png",
     "docs/evidence/model-triplanar-web-side.png",
     "docs/evidence/model-triplanar-web-wide.png",
+    "docs/evidence/modeling-volume-csg-integrated-session.txt",
     "docs/features/model-triplanar.json",
     "docs/shader-graph.md",
     "engine/render/graph/TriplanarMaterial.h",
@@ -130,7 +131,8 @@
       "note": "Studio reopened the saved override. A later CSG edit preserved the material library and rules byte for byte.",
       "evidence": [
         "docs/evidence/model-triplanar-studio.json",
-        "docs/evidence/model-triplanar-late-cut.json"
+        "docs/evidence/model-triplanar-late-cut.json",
+        "docs/evidence/modeling-volume-csg-integrated-session.txt"
       ]
     },
     "graphs": {
