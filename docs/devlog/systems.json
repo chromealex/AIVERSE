@@ -1407,6 +1407,13 @@
           "target": null,
           "title": "DLSS: сборка и проверка адаптера NGX на Windows с RTX",
           "titleEn": "DLSS: build and check the NGX adapter on Windows with RTX"
+        },
+        {
+          "status": "done",
+          "date": "2026-11-25",
+          "title": "Пользовательские цепочки проходов и временных текстур",
+          "titleEn": "Author pass chains and intermediate render textures",
+          "id": "prisma-authored-compositor"
         }
       ],
       "taglineEn": "Post-processing and atmosphere",
@@ -3108,6 +3115,15 @@
           "text": "Атомарные составные изменения карты, устойчивые метки истории и защита от устаревших переходов.",
           "textEn": "S6f.3.4a: mixed exact-endpoint directory chains, nested GUID checks and self-contained glTF/GLB version transitions; external-resource topology fenced.",
           "status": "in-progress"
+        },
+        {
+          "status": "done",
+          "date": "2026-11-25",
+          "title": "Редактируемые объёмные CSG-модели",
+          "titleEn": "Editable volumetric CSG models",
+          "text": "Построение поверхности объекта из примитивов, текстур плотности и шума.",
+          "textEn": "Build an object surface from primitives, density textures and noise.",
+          "id": "modeling-volume-csg"
         }
       ],
       "enablesEn": [
@@ -3394,6 +3410,13 @@
       "doc": "docs/models.md",
       "roadmap": [
         {
+          "status": "done",
+          "date": "2026-11-25",
+          "id": "model-triplanar",
+          "title": "Трипланарные материалы моделей и срезов CSG без UV",
+          "titleEn": "Triplanar materials on models and UV-free CSG cut surfaces"
+        },
+        {
           "status": "in-progress",
           "title": "3D-объекты в интерфейсе",
           "text": "Вывод объектов сцены и отдельно анимированных моделей в элементы UI через внеэкранную текстуру.",
@@ -3408,6 +3431,41 @@
           "titleEn": "Projectile impact height",
           "text": "Привязка прямого выстрела и его следа к высоте цели.",
           "textEn": "Straight shots and trails converge to the authored height on the target."
+        },
+        {
+          "status": "done",
+          "date": "2026-11-25",
+          "id": "quake3-bsp",
+          "title": "Уровни Quake III BSP с видимостью по кластерам, текстурами и запечённым светом",
+          "titleEn": "Load Quake III BSP levels with cluster visibility, textures and baked lightmaps"
+        },
+        {
+          "status": "done",
+          "date": "2026-11-25",
+          "id": "material-techniques",
+          "title": "Техники материалов по расстоянию и возможностям GPU",
+          "titleEn": "Select material techniques by distance and GPU capabilities"
+        },
+        {
+          "status": "done",
+          "title": "Программный рендерер на CPU",
+          "titleEn": "Software rendering on the CPU",
+          "id": "cpu-renderer",
+          "date": "2026-11-25"
+        },
+        {
+          "status": "done",
+          "date": "2026-11-25",
+          "id": "renderer-sdk",
+          "title": "Доступ к рендереру из Python, C# и Java",
+          "titleEn": "Use the renderer from Python, C# and Java"
+        },
+        {
+          "status": "done",
+          "title": "Бэкенды Direct3D 11 и Direct3D 9 для Windows",
+          "titleEn": "Direct3D 11 and Direct3D 9 backends for Windows",
+          "id": "direct3d-renderer",
+          "date": "2026-11-25"
         }
       ]
     },

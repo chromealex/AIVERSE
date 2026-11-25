@@ -1,0 +1,36 @@
+{
+  "id": "2026-11-25-render-material-techniques",
+  "date": "2026-11-25",
+  "system": "render",
+  "branch": "codex/material-techniques-20261125",
+  "commit": "e2f8f43e2",
+  "author": "render",
+  "title": "Техники материалов по расстоянию",
+  "titleEn": "Distance-based material techniques",
+  "summary": "Один кристалл меняет материал при отдалении камеры.",
+  "summaryEn": "A single crystal switches materials as the camera moves away.",
+  "body": [
+    "В инспекторе модели можно задать схему, расстояние и запас для обратного переключения. В примере кнопки Near и Far перемещают камеру."
+  ],
+  "bodyEn": [
+    "The model inspector exposes the scheme, distance and return hysteresis. Use Near and Far in the example to move the camera."
+  ],
+  "verified": "Захвачены кадры на Metal и в Chromium с WebGL.",
+  "verifiedEn": "Frames were captured on Metal and in Chromium with WebGL.",
+  "limits": "Модели с техниками обходят предварительное объединение материалов.",
+  "limitsEn": "Models with techniques bypass precomputed material merging.",
+  "status": "in-progress",
+  "links": [
+    {
+      "title": "Source",
+      "href": "demos/material-techniques/game.json"
+    }
+  ],
+  "media": [
+    {
+      "src": "docs/evidence/material-techniques-web-far.png",
+      "caption": "Дальний синий материал в WebGL",
+      "captionEn": "Distant blue material in WebGL"
+    }
+  ]
+}

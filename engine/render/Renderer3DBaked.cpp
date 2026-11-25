@@ -2,6 +2,7 @@
 // probes, and the GI bindings of their draws. Shader side: ModelShaders.h LIGHTMAP / PROBES, BakedShaders.h.
 #include "Renderer3D.h"
 #include "BakedLighting.h"
+#include "BspVisibility.h"
 #include <cstdlib>
 #include <string>
 
@@ -27,7 +28,16 @@ void Renderer3D::setBakedQuality(BakedQuality q) {
 
 void Renderer3D::bakedItem(ModelItem& it, const ModelDraw& d, int node) {
     it.gi = 0; it.lmPage = -1;
-    if (!bakedActive() || it.mat->shading == ShadingModel::Unlit) return;
+    if (bakedQuality_ == BakedQuality::Off || it.mat->shading == ShadingModel::Unlit) return;
+    const auto& bsp=it.model->bspVisibility;
+    if (bsp && it.prim->lightmapUv && it.meshIndex==0 && it.primitiveIndex<bsp->lightmapImages.size()) {
+        const int image=bsp->lightmapImages[it.primitiveIndex];
+        if (image>=0 && size_t(image)<it.model->images.size() && it.model->images[size_t(image)].tex.valid()) {
+            it.gi=1; it.lmPage=int16_t(-2-image); it.anim={1,1,0,0}; ++bakedCountLm_;
+            return;
+        }
+    }
+    if (!bakedActive()) return;
     if (it.joints < 0 && !it.baked && it.morph < 0 && it.prim->lightmapUv && !it.model->path.empty()) {
         if (const auto* r = baked_->find(it.model->path, node, it.world)) {
             it.gi = 1; it.lmPage = int16_t(r->page);
@@ -41,6 +51,14 @@ void Renderer3D::bakedItem(ModelItem& it, const ModelDraw& d, int node) {
 }
 
 void Renderer3D::bindBakedGI(const ModelItem& it) {
+    if (it.gi==1 && it.lmPage<=-2) {
+        float gi[16]{};
+        gi[7]=1.f; gi[11]=3.f; // Normalized RGB irradiance; direct sunlight is already baked.
+        dev_->setUniforms(4,gi,sizeof gi);
+        dev_->setTexture(7,it.model->images[size_t(-2-it.lmPage)].tex);
+        dev_->setTexture(8,white_);
+        return;
+    }
     float gi[16];
     baked_->giBlock(gi);
     dev_->setUniforms(4, gi, sizeof gi);

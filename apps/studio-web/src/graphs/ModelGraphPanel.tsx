@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {invoke,nativeConnected} from '../bridge';
-import {StudioPanel,StudioAlert,StudioEmptyState,StudioButton,StudioSelect,StudioSection,StudioTextarea} from '../ui';
+import {StudioInput,StudioPanel,StudioAlert,StudioEmptyState,StudioButton,StudioSelect,StudioSection,StudioTextarea} from '../ui';
+import VolumeCsgEditor,{initialVolume} from './VolumeCsgEditor';
 import GraphCanvas from './GraphCanvas';
 import {BuildingInspectionImport} from './BuildingStructureGraphView';
 import StrataAnalysisPanel from './StrataAnalysisPanel';
@@ -95,6 +96,11 @@ export default function ModelGraphPanel({projectPath}:{projectPath:string}){
   <div className="au-row" style={{flexWrap:'wrap'}}>
    <StudioSelect aria-label="Model asset" value={name} disabled={busy||dirty} onChange={e=>open(e.target.value)}><option value="">Choose model</option>{names.map(n=><option key={n} value={n}>{n}</option>)}</StudioSelect>
    <StudioSelect aria-label="Model graph view" value={mode} onChange={e=>{const v=e.target.value;setMode(v==='pose'||v==='states'||v==='geometry'?v:'model');setSelection([]);setPending(null)}}><option value="model">Part hierarchy</option><option value="geometry">Geometry dependencies</option><option value="pose">Embedded pose graph</option><option value="states">Embedded states</option></StudioSelect>
+   {draft&&<StudioButton size="sm" disabled={busy} onClick={()=>{
+    const nodes=Array.isArray(draft.nodes)?draft.nodes:[];let i=1;
+    while(nodes.some(n=>object(n)&&n.id==='volume'+i))i++;
+    const id='volume'+i;edit({...draft,nodes:[...nodes,{id,geometry:initialVolume()}]});setMode('geometry');setSelection([id]);setPending(null);
+   }}>Add volume CSG part</StudioButton>}
    <StudioButton size="sm" disabled={!draft||busy} onClick={validate}>Validate</StudioButton>
    <StudioButton size="sm" disabled={!dirty||busy} onClick={save}>Save</StudioButton>
    <StudioButton size="sm" disabled={!dirty||busy} onClick={()=>reset(original,revision)}>Discard</StudioButton>
@@ -111,7 +117,14 @@ export default function ModelGraphPanel({projectPath}:{projectPath:string}){
    <GraphDiagnosticsPanel view={view} policy={{cycles:mode==='states'?'allow':'reject'}}/>
    {name&&(mode==='model'||mode==='geometry')&&<StrataAnalysisPanel projectPath={projectPath} suggestedModel={'models/'+name+'.glb'} disabled={busy}/>}
    {graph&&(mode==='pose'||mode==='states')&&<AnimationParameters doc={graph} disabled={busy} onEdit={next=>edit({...draft,graph:next})}/>}
+   {mode==='geometry'&&object(draft.parameters)&&Object.entries(draft.parameters).some(([,v])=>typeof v==='number')&&<StudioSection title="Model parameters">
+    {Object.entries(draft.parameters).map(([key,value])=>typeof value==='number'&&<label key={key}>{key}
+     <StudioInput type="number" step="any" disabled={busy} value={value} onChange={e=>{const next=e.currentTarget.valueAsNumber;
+      if(Number.isFinite(next)&&object(draft.parameters))edit({...draft,parameters:{...draft.parameters,[key]:next}});}}/></label>)}</StudioSection>}
    {entry&&<StudioSection title={'Entry '+active}>{mode==='geometry'&&object(entry)&&object(entry.geometry)&&<>
+    {entry.geometry.kind==='volumeCsg'&&<VolumeCsgEditor key={active} geometry={entry.geometry} disabled={busy} onEdit={geometry=>{
+     if(Array.isArray(draft.nodes))edit({...draft,nodes:draft.nodes.map(n=>object(n)&&n.id===active?{...n,geometry}:n)});
+    }}/>}
     <StudioSelect aria-label="Source material" disabled={busy} value={String(entry.material??'')} onChange={e=>edit(bindModelMaterial(draft,active,e.target.value))}><option value="">Default material</option>{modelMaterialIds(draft).map(id=><option key={id} value={id}>{id}</option>)}</StudioSelect>
     <div className="au-row"><StudioSelect aria-label="Geometry modifier" disabled={busy} value={modifierKind} onChange={e=>setModifierKind(e.target.value)}>{geometryModifierKinds.map(kind=><option key={kind} value={kind}>{kind}</option>)}</StudioSelect><StudioButton size="sm" disabled={busy} onClick={()=>edit(addGeometryModifier(draft,active,modifierKind))}>Add modifier</StudioButton></div>
     {entry.geometry.kind==='boolean'&&<StudioSelect aria-label="Boolean operation" disabled={busy} value={String(entry.geometry.operation??'union')} onChange={e=>edit(setGeometryBoolean(draft,active,e.target.value))}>

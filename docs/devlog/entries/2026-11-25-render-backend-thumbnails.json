@@ -1,0 +1,51 @@
+{
+  "id": "2026-11-25-render-backend-thumbnails",
+  "date": "2026-11-25",
+  "system": "render",
+  "title": "Миниатюры моделей на CPU и Direct3D",
+  "titleEn": "Model thumbnails on CPU and Direct3D",
+  "summary": "Просмотрщик моделей сохраняет миниатюру в PNG без открытия окна. Можно выбрать программный рендерер или один из двух бэкендов Direct3D на Windows.",
+  "summaryEn": "The model viewer can save a PNG thumbnail without opening a window. Choose the CPU rasterizer or either Direct3D backend on Windows.",
+  "body": [
+    "Узел на кадрах состоит из 16 384 треугольников. Витки пересекаются в проекции, и буфер глубины определяет, какой окажется ближе к камере. Освещение подчёркивает изгибы поверхности. Для трёх кадров использованы одна модель, материал и камера.",
+    "Параметр --headless-capture задаёт бэкенд при запуске просмотрщика. Для моделей с текстурой он также учитывает основной цвет, UV-координаты и цвета вершин."
+  ],
+  "bodyEn": [
+    "The knot contains 16,384 triangles. Its loops overlap on screen, so the depth buffer determines which surface appears closest to the camera. Lighting reveals the curvature. All three images use the same mesh, material and camera.",
+    "The --headless-capture argument selects the renderer when starting the viewer. For textured models, the preview also applies the base color, UV coordinates and vertex colors."
+  ],
+  "status": "in-progress",
+  "verified": "Миниатюры 512 × 512 получены на CPU в macOS, а также на Windows Server 2022 через Direct3D 9 HAL и Direct3D 11 WARP.",
+  "verifiedEn": "The 512 × 512 thumbnails were captured on the CPU on macOS and through Direct3D 9 HAL and Direct3D 11 WARP on Windows Server 2022.",
+  "limits": "Инструмент работает с файлами в настольной системе. В браузерной сборке отсутствуют этот режим командной строки и Windows API Direct3D. На кадрах показана базовая поза модели.",
+  "limitsEn": "The capture tool runs against files on the desktop. The browser build does not expose this command-line mode or the Windows Direct3D APIs. The images show the model in its bind pose.",
+  "branch": "codex/cpu-d3d-render-20261125",
+  "commit": "965f7c674",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-render-backend-thumbnails/cpu-macos.png",
+      "caption": "Узел с перекрывающимися витками, программный рендеринг на macOS.",
+      "captionEn": "The overlapping loops of the knot, rendered on the CPU on macOS."
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-render-backend-thumbnails/direct3d9-hal.png",
+      "caption": "Тот же ракурс и материал в Direct3D 9 HAL на Windows.",
+      "captionEn": "The same camera angle and material rendered with Direct3D 9 HAL on Windows."
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-render-backend-thumbnails/direct3d11-warp.png",
+      "caption": "Узел, отрисованный через Direct3D 11 WARP на Windows.",
+      "captionEn": "The knot rendered with Direct3D 11 WARP on Windows."
+    }
+  ],
+  "links": [
+    {
+      "title": "CPU renderer",
+      "href": "docs/cpu-renderer.md"
+    },
+    {
+      "title": "Direct3D",
+      "href": "docs/direct3d.md"
+    }
+  ]
+}

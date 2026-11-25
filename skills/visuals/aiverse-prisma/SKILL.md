@@ -1565,3 +1565,7 @@ Mac Vulkan/GLES/WebGL remain explicitly unavailable, not passed.
 New Stage98 matrix code is NOT yet compiled/verified on Mac.
 Latest handoff is
 `docs/handoffs/prisma-stage-98-latest-main-reconciled-all-in-one-20261120.md`.
+
+## Author a frame compositor
+
+Use the postfx panel or postfx_compositor_set with a validated named-target graph. For masked layers route a LENS texture camera through the consuming camera dependencies. See docs/prisma.md and examples/prisma/camera-glow.json. Verify the actual view report and GPU pixels.

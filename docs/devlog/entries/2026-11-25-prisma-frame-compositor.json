@@ -1,0 +1,36 @@
+{
+  "id": "2026-11-25-prisma-frame-compositor",
+  "date": "2026-11-25",
+  "system": "prisma",
+  "branch": "codex/render-seven-integration",
+  "commit": "1326a67f5",
+  "status": "in-progress",
+  "title": "Собственный граф постобработки для камеры",
+  "titleEn": "Custom post-processing graphs for cameras",
+  "summary": "Соедините проходы выделения ярких областей, размытия и сложения. Каждый проход получает именованную текстуру и пишет результат в следующую.",
+  "summaryEn": "Connect brightness extraction, blur and addition. Each pass reads a named texture and writes its result to the next target.",
+  "body": [
+    "Для свечения можно уменьшить промежуточное разрешение, размыть результат по двум осям и сложить его с исходным кадром. Пример открывается в браузере, где можно менять интенсивность и выключать обработку."
+  ],
+  "bodyEn": [
+    "For glow, downsample bright regions, blur them along both axes and add the result to the scene. The browser example lets you change the intensity and disable processing."
+  ],
+  "verified": "В Chromium с WebGL2 переключатель менял число проходов с четырёх до нуля. На Metal отдельно проверена подача текстуры другой камеры.",
+  "verifiedEn": "In Chromium WebGL2 the switch changed the number of passes from four to zero. A separate Metal run checked an external camera texture.",
+  "limits": "Граф допускает до 12 проходов и восьми входных текстур камер.",
+  "limitsEn": "A graph supports up to 12 passes and eight camera texture inputs.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-prisma-frame-compositor/glow.png",
+      "caption": "Свечение вертикальных полос после четырёх проходов PRISMA в WebGL2.",
+      "captionEn": "Glowing vertical bars after four PRISMA passes in WebGL2."
+    }
+  ],
+  "links": [
+    {
+      "title": "Демонстрационный проект",
+      "titleEn": "Demo project",
+      "href": "demos/prisma-compositor/README.md"
+    }
+  ]
+}

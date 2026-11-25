@@ -1,0 +1,3 @@
+# Studio Modeling volume field tree
+
+In Model source graph open a model, choose Geometry dependencies and select its volume part. Add volume CSG part creates a sphere. VolumeCsgEditor projects fields onto GraphCanvas; its wires and parameters update the model draft and the parent's native revision-checked save. The density inspector loads a chosen project SPVT frame into the field editor; Apply field parameters applies that draft. Numeric model parameters preserve named bindings in the geometry. Model source persists both fields and coordinates. TypeScript passed. Native end-to-end Studio pointer interaction and published captures remain outstanding.

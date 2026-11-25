@@ -37,7 +37,7 @@ inline bool studioMaterialTextureKey(std::string_view key) {
            key=="teamMask" || key=="metallicRoughnessMap" || key=="occlusionMap";
 }
 inline bool validStudioMaterialPreset(std::string_view preset) {
-    return preset=="matte" || preset=="metal" || preset=="glass";
+    return preset=="matte" || preset=="metal" || preset=="glass" || preset=="triplanar";
 }
 inline bool validStudioMaterialName(std::string_view name) {
     if(name.empty()||name.size()>64)return false;

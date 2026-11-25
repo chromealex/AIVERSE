@@ -1,0 +1,15 @@
+AIVERSE tests | commit=697e3c0e2 | build=/Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests | report=/Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests/test-reports/20261125-133453-21917
+  1/587 Test #574: studio_bridge ...................................   Passed    0.19 sec
+  2/587 Test #575: studio_material_schema ..........................   Passed    0.20 sec
+ 21/587 Test #585: studio_session ..................................   Passed    7.13 sec
+ 25/587 Test #346: lens_metal_frame ................................   Passed    6.14 sec
+ 40/587 Test #555: studio_render_lighting ..........................   Passed    3.72 sec
+ 54/587 Test #345: quake3_bsp_frame ................................   Passed    4.54 sec
+135/587 Test #343: model_triplanar_frame ...........................   Passed    1.16 sec
+168/587 Test #344: prisma_compositor_metal .........................   Passed    1.82 sec
+238/587 Test #342: material_technique_frame ........................   Passed    1.02 sec
+587/587 Test #121: aiverse_tests ...................................   Passed  950.82 sec
+100% tests passed, 0 tests failed out of 587
+Total Test time (real) = 950.86 sec
+PASS: all selected test stages
+Complete quick log SHA-256 0ddf5cddc1a083f4589705150785b2a4d3f934277b640464d060c6e6d4208a07

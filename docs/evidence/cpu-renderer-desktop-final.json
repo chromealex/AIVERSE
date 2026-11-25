@@ -1,0 +1,14 @@
+{
+  "sha": "d99049d1dadb8a4116c4ecd447d54c02562bb43c",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/cpu-d3d-render-20261125/mac",
+    "--output-on-failure",
+    "-R",
+    "^render_cpu_"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/cpu-renderer-desktop-final.log.txt",
+  "sha256": "4cacc4d4bcefd9fac5f40be7afaba03fda8ed4c9c622c015b425ba7cf6578642"
+}

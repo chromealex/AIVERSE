@@ -109,6 +109,11 @@ public:
         if(temporalEnabled_)return entry.screen.jittered(camera,width,height);
         return camera;
     }
+    void setCompositorCameraInputs(Entity entity, const Prisma::CameraInputs& inputs) {
+        const auto it = entries_.find(entity.packed());
+        if (it != entries_.end() && it->second->initialized)
+            it->second->post.setCompositorCameraInputs(inputs);
+    }
     PostProcess* get(Entity entity) {
         auto it=entries_.find(entity.packed());
         if(it==entries_.end() || !it->second->initialized)return nullptr;

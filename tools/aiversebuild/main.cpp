@@ -748,7 +748,7 @@ AutoModuleEvidence detectAutoModules(const Options& o) {
         if (!it->is_regular_file(ec)) continue;
         std::string ext = path.extension().string();
         std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return char(std::tolower(c)); });
-        const bool legacy = ext == ".vox" || ext == ".vxl" || ext == ".ply" || ext == ".stl" ||
+        const bool legacy = ext == ".bsp" || ext == ".vox" || ext == ".vxl" || ext == ".ply" || ext == ".stl" ||
                             ext == ".3ds" || ext == ".dae" || ext == ".mdx" || ext == ".mdl" ||
                             ext == ".3do" || ext == ".w3d";
         if ((ext == ".fbx" || ext == ".obj" || legacy) && !hasGlbSidecar(path)) {

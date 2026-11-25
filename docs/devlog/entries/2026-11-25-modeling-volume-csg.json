@@ -1,0 +1,36 @@
+{
+  "id": "2026-11-25-modeling-volume-csg",
+  "date": "2026-11-25",
+  "system": "studio",
+  "branch": "codex/modeling-volume-csg",
+  "commit": "33718383d",
+  "status": "in-progress",
+  "title": "Редактируемые объёмные модели в Studio",
+  "titleEn": "Editable volume models in Studio",
+  "summary": "Форма объекта задаётся деревом полей. Измените радиус цилиндра, чтобы расширить отверстие, затем сохраните редактируемый исходник и экспортируйте модель в GLB.",
+  "summaryEn": "Define a solid with a tree of fields. Adjust a cylinder radius to widen a bore, save its editable source and export a GLB.",
+  "body": [
+    "В графе модели можно объединять, вычитать и пересекать объёмы, добавлять шум и использовать объёмную текстуру плотности. Параметры источника сохраняются в проекте."
+  ],
+  "bodyEn": [
+    "Combine, subtract and intersect volumes in the model graph, add noise and sample a density texture. The project stores the editable source parameters."
+  ],
+  "media": [
+    {
+      "src": "docs/evidence/modeling-volume-csg-editor.png",
+      "caption": "Цилиндр выреза в редакторе полей Studio.",
+      "captionEn": "The bore cylinder in the Studio field editor."
+    }
+  ],
+  "verified": "В панели Studio изменён и сохранён центр цилиндра. Увеличение радиуса пересобрало сетку, а отмена восстановила исходный GLB.",
+  "verifiedEn": "The Studio panel saved an edited cylinder center. Increasing the bore radius rebuilt the mesh, and undo restored the original GLB.",
+  "limits": "Исходное поле семплируется на сетке с разрешением от 4 до 24 по оси. На мелких деталях видна дискретизация.",
+  "limitsEn": "The source field uses a grid resolution of 4 to 24 along each axis. Fine details can show sampling artifacts.",
+  "links": [
+    {
+      "title": "Пример дерева полей",
+      "titleEn": "Example field tree",
+      "href": "examples/modeling/volume-csg.json"
+    }
+  ]
+}

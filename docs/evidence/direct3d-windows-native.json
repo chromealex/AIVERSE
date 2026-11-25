@@ -1,0 +1,20 @@
+{
+  "sha": "e328e4cfceaed102f43460afcdf6813e82f98c7a",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "build/windows-msvc",
+    "-C",
+    "Release",
+    "--verbose",
+    "--output-on-failure",
+    "--no-tests=error",
+    "-R",
+    "^render_direct3d",
+    "--output-junit",
+    "D:\\a\\_temp/d3d-results.xml"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/direct3d-windows-native.log.txt",
+  "sha256": "56d6b721cbbb8010c786e73fd3517639486a29642fa4446575bdf1bfd34d3947"
+}

@@ -1,0 +1,14 @@
+{
+  "sha": "d45befebc11b5b9b8d804e9c1fe875e3cb310408",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/render-capabilities-20261125/mac",
+    "-R",
+    "^quake3_bsp(_frame)?$",
+    "-V"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/quake3-bsp-openarena-metal-20261125.log.txt",
+  "sha256": "dcaf620a7a836e7d4fe0c424c7ebd90575c218f95de1c02caf787359fafe32be"
+}

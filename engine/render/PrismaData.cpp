@@ -1,4 +1,5 @@
 #include "PrismaData.h"
+#include "PrismaCompositor.h"
 #include "PrismaStylePresets.h"
 #include "graph/ShaderGraph.h"
 #include <algorithm>
@@ -509,6 +510,12 @@ PrismaSettings parsePrisma(const Json& game, const Json& map, std::vector<std::s
         else if (v == "on") s.hdr = HdrMode::On;
         else if (issues) issues->push_back("postfx.hdr: expected auto, off or on");
     }
+    const Json& compositor = map.has("compositor") || map.getBool("replace")
+        ? map["compositor"] : game["compositor"];
+    if (!compositor.isNull()) {
+        try { s.compositor = PrismaCompositor::compile(compositor); }
+        catch (const std::invalid_argument& ex) { if (issues) issues->push_back(ex.what()); }
+    }
     for (auto& d : prismaCatalog()) {          // catalog order = application order
         auto it = byType.find(d.id);
         if (it == byType.end()) continue;
@@ -764,9 +771,20 @@ Json prismaCostReport(const PrismaSettings& s) {
         PrismaWork sum;
         const auto active = s.activeAt(p.tier);
         const bool hdr = s.enabled && hdrAtQuality(s.hdr, p.tier, true);
-        if (!active.empty() || hdr) {
+        const bool compositor = s.enabled && s.compositor && p.tier != PrismaQuality::Off;
+        if (!active.empty() || hdr || compositor) {
             sum = prismaBaseWork();
             for (auto* e : active) { const PrismaWork w = prismaEffectWork(*e, p.tier); sum.units += w.units; sum.passes += w.passes; }
+        }
+        if (compositor) {
+            const auto& graph = s.compositor->graph();
+            for (auto id : s.compositor->plan().order) {
+                const auto op = s.compositor->commands()[id].op;
+                const float div = float(s.compositor->divisor(graph.passes()[id].writes[0]));
+                const int taps = op == PrismaCompositorOp::Add ? 9 : op == PrismaCompositorOp::Bright ? 4 : 5;
+                sum.units += float(taps) / (div * div);
+                ++sum.passes;
+            }
         }
         const float ms = prismaMs(sum, p);
         Json t = Json::object();
@@ -774,7 +792,7 @@ Json prismaCostReport(const PrismaSettings& s) {
         t.set("tier", Json::string(prismaQualityName(p.tier)));
         t.set("hdrIfSupported", Json::fromBool(hdr));
         t.set("colorBytesPerPixel", Json::number(int64_t(hdr ? 8 : 4)));
-        t.set("effects", Json::number(int64_t(active.size())));
+        t.set("effects", Json::number(int64_t(active.size() + (compositor ? 1 : 0))));
         t.set("passes", Json::number(int64_t(sum.passes)));
         t.set("ms", n3(round2(ms)));
         t.set("fpsAt60", n3(round2(1000.0f / (1000.0f / 60.0f + ms))));

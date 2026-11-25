@@ -1,0 +1,42 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/model-triplanar-20261125
+Test project /Volumes/KINGSTON/AIVERSE-builds/model-triplanar-20261125
+    Start 258: shader_graph
+1/3 Test #258: shader_graph .....................   Passed    0.42 sec
+    Start 336: model_triplanar_frame
+2/3 Test #336: model_triplanar_frame ............   Passed    4.62 sec
+    Start 565: studio_session
+3/3 Test #565: studio_session ...................   Passed   15.21 sec
+
+100% tests passed, 0 tests failed out of 3
+
+Label Time Summary:
+EDITOR      =  15.21 sec*proc (1 test)
+GPU         =   4.62 sec*proc (1 test)
+Material    =   4.62 sec*proc (1 test)
+Metal       =   4.62 sec*proc (1 test)
+
+Total Test time (real) =  20.34 sec
+61 entries, 0 errors
+registered=425, required_families=18
+PASS core: open_game, map_validate
+PASS scene: scene_entity_list, scene_component_set
+PASS camera: lens_scene_get, lens_camera_set
+PASS animation: animation_graph_list, animation_graph_set
+PASS terrain: terrain_sculpt, terrain_material
+PASS planet_forest: planet_forest_get, planet_forest_set, planet_forest_plant, planet_forest_move, planet_forest_remove
+PASS lighting: light_list, scene_light_create
+PASS physis: physis_get, physis_set
+PASS spectrafx: fx_graph_list, fx_graph_set
+PASS postfx: postfx_get
+PASS geometry: geometry_catalog, strata_capabilities
+PASS human: human_schema, human_create
+PASS building: building_graph_diagnostics
+PASS graphs: graph_catalog, graph_list, graph_get, graph_node_catalog, graph_validate, graph_edit, graph_save, graph_diagnostics, graph_dependencies, graph_property_schema, graph_asset_dependencies, graph_runtime_capabilities, graph_runtime_probe, graph_live_snapshot, graph_live_watch, graph_live_profile, graph_gpu_profile, graph_debug_session, texture_graph_catalog, texture_graph_list, texture_graph_get, texture_graph_validate, texture_graph_set, texture_graph_preview, texture_graph_bake, texture_graph_templates, texture_graph_bake_set, texture_graph_cache, texture_graph_material_variant, texture_graph_gpu_preview
+PASS mcp: mcp_registry, feature_readiness_get, feature_readiness_query, feature_readiness_status_get, feature_readiness_refresh
+PASS simulation: simulation_budget_plan
+PASS studio_planet_view: studio_planet_forest_live, studio_planet_scene_get, studio_planet_scene_body_set, studio_planet_scene_camera_set
+PASS studio_assets: studio_asset_history, studio_asset_catalog, studio_asset_meta_patch, studio_asset_folder_create, studio_asset_dependencies, studio_asset_recovery_storage, studio_asset_trash_list, studio_asset_trash_restore_review, studio_asset_trash_restore, studio_asset_delete, studio_asset_recovery_quota_set, studio_asset_trash_cleanup_review, studio_asset_move_preview, studio_asset_move_commit, studio_agent_history_list, studio_agent_history_step, studio_agent_batch_preview, studio_agent_batch_apply, studio_history_capabilities, studio_owner_history, studio_owner_history_step, studio_save_documents, studio_asset_history_reset_review
+PASS Studio linked-only metadata and standalone refusal
+PASS tools/list == mcp_registry (count, names, guiOnly metadata)
+FEATURE {"declared_status": "pass", "id": "model-triplanar", "missing": [], "registration": "registered", "runtime_verification": "not_run", "tools": ["material_apply", "material_set", "material_triplanar"]}
+NOTE: authoring and GPU validation still need dedicated per-system tests.

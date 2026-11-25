@@ -1,0 +1,223 @@
+{
+  "schema": 1,
+  "id": "quake3-bsp",
+  "owner": "render",
+  "changed_paths": [
+    "CMakeLists.txt",
+    "apps/catalogview/main.cpp",
+    "apps/catalogview/shell.html",
+    "apps/editor/core/ModelingOps.cpp",
+    "apps/studio-native/StudioAssetCatalog.cpp",
+    "apps/studio-native/StudioTools.h",
+    "demos/quake3-bsp/README.md",
+    "demos/quake3-bsp/package.py",
+    "demos/quake3-bsp/verify-web.js",
+    "demos/quake3-bsp/view.json",
+    "docs/agent-handoffs/quake3-bsp-initial.md",
+    "docs/agent-handoffs/quake3-bsp-materials.md",
+    "docs/agent-handoffs/quake3-bsp-patches.md",
+    "docs/agent-handoffs/quake3-bsp-pvs.md",
+    "docs/agent-handoffs/quake3-bsp-webgl.md",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/entries/2026-11-25-render-quake3-bsp.json",
+    "docs/devlog/media/2026-11-25-render-quake3-bsp/egyptian-trouble.jpg",
+    "docs/devlog/media/2026-11-25-render-quake3-bsp/webgl.jpg",
+    "docs/devlog/systems.json",
+    "docs/evidence/.gitattributes",
+    "docs/evidence/quake3-bsp-egyptian-trouble.md",
+    "docs/evidence/quake3-bsp-egyptian-trouble.png",
+    "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.json",
+    "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.log.txt",
+    "docs/evidence/quake3-bsp-openarena-metal-20261125.json",
+    "docs/evidence/quake3-bsp-openarena-metal-20261125.log.txt",
+    "docs/evidence/quake3-bsp-studio-inspector.png",
+    "docs/evidence/render-seven-combined-preview.json",
+    "docs/evidence/render-seven-combined-preview.log.txt",
+    "docs/evidence/render-seven-final-mac.json",
+    "docs/evidence/render-seven-final-mac.log.txt",
+    "docs/evidence/render-seven-verified-main-mac.json",
+    "docs/evidence/render-seven-verified-main-mac.log.txt",
+    "docs/features/quake3-bsp.json",
+    "docs/models.md",
+    "engine/render/BspShaderImages.h",
+    "engine/render/BspVisibility.h",
+    "engine/render/Model.cpp",
+    "engine/render/Model.h",
+    "engine/render/ModelBsp.cpp",
+    "engine/render/ModelMerge.cpp",
+    "engine/render/Renderer3DBaked.cpp",
+    "engine/render/Renderer3DModels.cpp",
+    "skills/visuals/aiverse-assets-import/SKILL.md",
+    "tests/render/prepare_openarena_bsp.py",
+    "tests/render/quake3_bsp.cpp",
+    "tests/render/quake3_bsp_acceptance.py",
+    "tests/render/quake3_bsp_frame.cpp",
+    "tools/aiversebuild/main.cpp",
+    "tools/models/ModelConvert.cpp"
+  ],
+  "traits": {
+    "editable": false,
+    "simulation": false,
+    "visible": true,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "IBSP geometry, PVS, static shader textures and per-face baked pages rendered on Metal.",
+      "evidence": [
+        "docs/evidence/quake3-bsp-openarena-metal-20261125.log.txt",
+        "docs/evidence/quake3-bsp-egyptian-trouble.png"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Static model import and rendering share Model image ownership, typed GPU handles, PVS and the baked-lighting pipeline.",
+      "evidence": [
+        "engine/render/Renderer3DBaked.cpp"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "loadModel and Renderer3D consume IBSP v46, diffuse images and per-face lightmap pages.",
+      "evidence": [
+        "engine/render/ModelBsp.cpp"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "The asset import skill explains how to preserve the game-relative texture and shader paths.",
+      "evidence": [
+        "skills/visuals/aiverse-assets-import/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "pass",
+      "note": "The built stdio MCP opened the project and reported map surface, lightmap and PVS counts.",
+      "evidence": [
+        "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.log.txt"
+      ]
+    },
+    "studio": {
+      "status": "pass",
+      "note": "The Models ToolPanel loaded real MCP metadata and displayed the returned BSP fields.",
+      "evidence": [
+        "docs/evidence/quake3-bsp-studio-inspector.png",
+        "docs/agent-handoffs/quake3-bsp-webgl.md"
+      ]
+    },
+    "inspector": {
+      "status": "pass",
+      "note": "Playwright ran model_info from the Models panel and expanded the real bsp response. This check used a browser bridge adapter.",
+      "evidence": [
+        "docs/evidence/quake3-bsp-studio-inspector.png",
+        "docs/agent-handoffs/quake3-bsp-webgl.md"
+      ]
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "The unmodified source map, its shader definitions and textures reopen from ordinary project files.",
+      "evidence": [
+        "docs/evidence/quake3-bsp-openarena-metal-20261125.log.txt",
+        "tests/render/prepare_openarena_bsp.py"
+      ]
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "Imported immutable level geometry has no authoring graph.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "pass",
+      "note": "Single Release Mac import measured 98.07 ms; authored camera PVS admitted 1408 of 3073 surfaces.",
+      "evidence": [
+        "docs/evidence/quake3-bsp-openarena-metal-20261125.log.txt"
+      ]
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "Verified real macOS Metal and Chromium WebGL2 pixels; MinGW compiled the import, GI and CPU tests. Native Windows GPU remains unverified.",
+      "evidence": [
+        "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.log.txt",
+        "docs/agent-handoffs/quake3-bsp-webgl.md"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Uses the existing image decoders, asset reader, texture upload and lightmap shaders.",
+      "evidence": [
+        "engine/render/ModelBsp.cpp"
+      ]
+    },
+    "headless": {
+      "status": "pass",
+      "note": "Independent native model_info loaded the packaged original map and its textures without a GUI.",
+      "evidence": [
+        "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.log.txt"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "The standalone AIVERSE CatalogView package opens the licensed original level with working layer controls and camera orbit.",
+      "evidence": [
+        "demos/quake3-bsp/view.json",
+        "demos/quake3-bsp/package.py",
+        "docs/devlog/media/2026-11-25-render-quake3-bsp/webgl.jpg",
+        "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.log.txt"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Combined native CTest, real MCP and browser optical regression passed on the final code SHA.",
+      "evidence": [
+        "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.json",
+        "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.log.txt",
+        "docs/evidence/render-seven-combined-preview.json",
+        "docs/evidence/render-seven-final-mac.json",
+        "docs/evidence/render-seven-verified-main-mac.json"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Exact code SHA, artifact, reproducible tests, source credits and publication ownership recorded.",
+      "evidence": [
+        "docs/agent-handoffs/quake3-bsp-webgl.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "Static shader translation, import layout, credits and optical test reproduction documented.",
+      "evidence": [
+        "docs/models.md"
+      ]
+    },
+    "publishing": {
+      "status": "pass",
+      "note": "Bilingual devlog, two genuine captures, licensed source, reproducible interactive WebGL2 demo and a tested static-site archive are ready for the main integrator to publish.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-render-quake3-bsp.json",
+        "docs/devlog/media/2026-11-25-render-quake3-bsp/webgl.jpg",
+        "demos/quake3-bsp/README.md",
+        "docs/agent-handoffs/quake3-bsp-webgl.md"
+      ]
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-assets-import"
+    ],
+    "mcp_tools": [
+      "asset_import",
+      "model_info"
+    ],
+    "studio_panels": [
+      "models"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ]
+  },
+  "test_reports": [
+    "docs/evidence/render-seven-verified-main-mac.json"
+  ]
+}

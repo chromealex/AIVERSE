@@ -1,0 +1,14 @@
+{
+  "sha": "27fb7bc68a54cf1a1d1f6dfa02c4f67611f95467",
+  "argv": [
+    "/usr/local/bin/ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/material-techniques-20261125",
+    "-R",
+    "^model_batching_policy$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/material-techniques-selection-20261125.log.txt",
+  "sha256": "2ea6841fed321d0f686b6ba9d4f59f0b3cdad375174af871889c09f4475c6570"
+}

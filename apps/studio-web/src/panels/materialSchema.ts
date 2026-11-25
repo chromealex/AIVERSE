@@ -9,7 +9,7 @@ export const MATERIAL_EDIT_KEYS=[
   'texture','normalMap','emissiveMap','teamMask','metallicRoughnessMap','occlusionMap'
 ] as const;
 export type MaterialKey=typeof MATERIAL_EDIT_KEYS[number];
-export const MATERIAL_PRESETS=['matte','metal','glass'] as const;
+export const MATERIAL_PRESETS=['matte','metal','glass','triplanar'] as const;
 export type MaterialPreset=typeof MATERIAL_PRESETS[number];
 export type MaterialPatch=Partial<Record<MaterialKey,FieldValue>>;
 export interface MaterialField {

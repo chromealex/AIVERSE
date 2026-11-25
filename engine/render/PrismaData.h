@@ -22,6 +22,7 @@
 // how heavy the effect is). The tier is chosen per GPU (old Android: low), AIVERSE_POSTFX=off|low|medium|high.
 // The whole post chain costs nothing when no effect is active (the scene renders straight to the screen).
 #pragma once
+#include <memory>
 #include <utility>
 #include <string>
 #include <vector>
@@ -88,14 +89,16 @@ struct PrismaEffect {
     const float* color(const char* name) const;   // 3 floats
 };
 
+class PrismaCompositor;
 struct PrismaSettings {
     bool enabled = true;
     HdrMode hdr = HdrMode::Auto;
     std::vector<PrismaEffect> effects;   // at most one per type, catalog order
+    std::shared_ptr<const PrismaCompositor> compositor;
     const PrismaEffect* find(PrismaType t) const;
     // Effects that run on the given tier.
     std::vector<const PrismaEffect*> activeAt(PrismaQuality q) const;
-    bool anyActive(PrismaQuality q) const { return !activeAt(q).empty(); }
+    bool anyActive(PrismaQuality q) const { return (enabled && q != PrismaQuality::Off && compositor) || !activeAt(q).empty(); }
 };
 
 // Sanitize native/ECS-authored settings before using them for GPU uniforms.

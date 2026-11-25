@@ -1,0 +1,7 @@
+# D3D window presentation and resize
+
+Code commit 7f7ddd3b91711b72e6191f0408836c30b5c410f4. Shared public API and setup are documented in docs/direct3d.md. The offscreen factory preserves its behavior. The window factory requires a live HWND and owns the swap chain. D3D11 copies the native scene surface to the DXGI backbuffer, then presents it. D3D9 blits to an additional swap chain. Resizes allocate replacement surfaces before switching state; previously created application buffers, textures and shaders stay on the same device. Capture callbacks run after presentation. File-level coverage is in docs/features/direct3d-renderer.json.
+
+Built aiverse_direct3d_device_tests and aiverse_direct3d_rhi_tests with repository toolchain platform/cmake/mingw-w64.cmake and cmake --build /Volumes/KINGSTON/AIVERSE-builds/cpu-d3d-render-20261125/windows --target aiverse_direct3d_device_tests aiverse_direct3d_rhi_tests --parallel 2. Cross-build PASS. ctest -N -R '^render_direct3d' lists six tests. The Win32 test creates a window, renders and reads two differently sized frames with the same loaded resources. A native run still requires Windows. Wine and the VirtualBox launcher on the Mac are unavailable; cross CTest cannot start the PE binary. Native raster/presentation visual and performance acceptance and device-loss handling are pending.
+
+Repeated CPU Mac pixel CTests against this commit. See docs/evidence/cpu-renderer-window-stage-regression.json. Full merged-tree Mac quick and main integration remain pending.

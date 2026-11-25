@@ -1,0 +1,11 @@
+{
+  "sha": "458246c96cd6ad8e7010d48c351edf7a93d2ea7c",
+  "argv": [
+    "bash",
+    "-c",
+    "#!/bin/bash\nset -eu -o pipefail\nroot=/Volumes/KINGSTON/AIVERSE-builds/render-seven-integration\nexport JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-11.jdk/Contents/Home\nexport PATH=\"/opt/homebrew/opt/python@3.10/libexec/bin:$JAVA_HOME/bin:/usr/local/bin:/opt/homebrew/bin:$PATH\"\nexport PYTHONDONTWRITEBYTECODE=1\ngit rev-parse HEAD\necho \"Full registered Mac quick suite\"\nif ! ./run-tests.sh --quick --jobs 8 --build-dir \"$root/all-tests\" > \"$root/final-quick.log\" 2>&1; then\n  tail -75 \"$root/final-quick.log\"\n  exit 1\nfi\ntail -45 \"$root/final-quick.log\"\nexport AIVERSE_BACKGROUND=1\nexport AIVERSE_OPENARENA_BSP=/Volumes/KINGSTON/AIVERSE-builds/render-capabilities-20261125/oacmp1/content/maps/oacmpdm3.bsp\nexport AIVERSE_BSP_FRAME_PNG=\"$root/final-images/bsp.png\"\nexport AIVERSE_TRIPLANAR_CAPTURE=\"$root/final-images/triplanar\"\nexport AIVERSE_MATERIAL_TECHNIQUE_CAPTURE=\"$root/final-images/techniques\"\nexport AIVERSE_PRISMA_COMPOSITOR_GPU=1\nmkdir -p \"$AIVERSE_TRIPLANAR_CAPTURE\" \"$AIVERSE_MATERIAL_TECHNIQUE_CAPTURE\"\necho \"Metal opt-in tests on the combined source tree\"\nctest --test-dir \"$root/all-tests\" --no-tests=error -R '^(quake3_bsp_frame|prisma_compositor_metal|model_triplanar_frame|material_technique_frame)$' -V > \"$root/final-metal.log\" 2>&1 || { tail -100 \"$root/final-metal.log\"; exit 1; }\ncat \"$root/final-metal.log\"\nif rg -q 'Skipped|Not Run' \"$root/final-metal.log\"; then exit 1; fi\necho \"Apple Silicon shared renderer, three language integrations\"\ncmake --build \"$root/sdk-arm64\" --target aiverse_render_jni --parallel 3 > \"$root/final-sdk-build.log\" 2>&1\nPATH=\"$JAVA_HOME/bin:/opt/homebrew/bin:$PATH\" /usr/bin/python3 tests/render_sdk/languages.py \"$root/sdk-arm64/sdk/render/libaiverse_render.dylib\" --work \"$root/sdk-arm64/tmp\"\n/Library/Frameworks/Python.framework/Versions/3.12/bin/python3 tools/site/build.py check\n"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/render-seven-final-mac.log.txt",
+  "sha256": "4d254e12626a8213392bc72deef96bab9f2fe8daa605e59f6819e43eeaa2f7d5"
+}

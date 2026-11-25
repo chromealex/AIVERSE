@@ -1,0 +1,13 @@
+{
+  "id": "org.aiverse.demos.materialtechniques",
+  "name": "Material techniques",
+  "version": "1.0",
+  "module": "game",
+  "rules": "rules.json",
+  "maps": [
+    {
+      "file": "maps/gallery.json",
+      "title": "Crystal gallery"
+    }
+  ]
+}

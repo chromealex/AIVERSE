@@ -1,0 +1,1 @@
+PASS: reopened source, 7662 -> 7736 triangles after bore edit, GLB changed, rejected invalid revision/cycle, undo restored identical GLB

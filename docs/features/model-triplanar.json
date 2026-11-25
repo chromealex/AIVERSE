@@ -1,0 +1,255 @@
+{
+  "schema": 1,
+  "id": "model-triplanar",
+  "owner": "render",
+  "changed_paths": [
+    "CMakeLists.txt",
+    "apps/editor/core/MaterialOps.cpp",
+    "apps/studio-native/StudioMaterialValidation.h",
+    "apps/studio-native/StudioScene.cpp",
+    "apps/studio-native/StudioSession.cpp",
+    "apps/studio-native/tests/StudioSessionTests.cpp",
+    "apps/studio-web/src/panels/MaterialsPanel.tsx",
+    "apps/studio-web/src/panels/materialSchema.ts",
+    "apps/studio-web/src/types.ts",
+    "apps/studio-web/tests/materialSchema.test.mjs",
+    "demos/model-triplanar/README.md",
+    "demos/model-triplanar/content/rock_basecolor_repeat.png",
+    "demos/model-triplanar/content/rock_normal_repeat.png",
+    "demos/model-triplanar/game.json",
+    "demos/model-triplanar/maps/gallery.json",
+    "demos/model-triplanar/materials.json",
+    "demos/model-triplanar/models/sculpt.glb",
+    "demos/model-triplanar/rules.json",
+    "demos/model-triplanar/scripts/view/gallery.lua",
+    "demos/model-triplanar/ui/hud/gallery.rml",
+    "docs/agent-handoffs/model-triplanar-authoring.md",
+    "docs/agent-handoffs/model-triplanar-initial.md",
+    "docs/agent-handoffs/model-triplanar-integration-review.md",
+    "docs/agent-handoffs/model-triplanar-metal.md",
+    "docs/agent-handoffs/model-triplanar-stone-csg.md",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/entries/2026-11-25-render-model-triplanar.json",
+    "docs/devlog/systems.json",
+    "docs/evidence/model-triplanar-colour.png",
+    "docs/evidence/model-triplanar-demo-reviewed.json",
+    "docs/evidence/model-triplanar-demo-reviewed.log.txt",
+    "docs/evidence/model-triplanar-final.json",
+    "docs/evidence/model-triplanar-final.log.txt",
+    "docs/evidence/model-triplanar-grid.cpp",
+    "docs/evidence/model-triplanar-grid.log.txt",
+    "docs/evidence/model-triplanar-integration-ready.json",
+    "docs/evidence/model-triplanar-integration-ready.log.txt",
+    "docs/evidence/model-triplanar-late-cut.json",
+    "docs/evidence/model-triplanar-metal.json",
+    "docs/evidence/model-triplanar-metal.log.txt",
+    "docs/evidence/model-triplanar-projected.png",
+    "docs/evidence/model-triplanar-repeat.png",
+    "docs/evidence/model-triplanar-reviewed.json",
+    "docs/evidence/model-triplanar-reviewed.log.txt",
+    "docs/evidence/model-triplanar-stone-csg.png",
+    "docs/evidence/model-triplanar-stone-wider-cut.png",
+    "docs/evidence/model-triplanar-studio.json",
+    "docs/evidence/model-triplanar-studio.log.txt",
+    "docs/evidence/model-triplanar-web-front.png",
+    "docs/evidence/model-triplanar-web-side.png",
+    "docs/evidence/model-triplanar-web-wide.png",
+    "docs/evidence/modeling-volume-csg-integrated-session.txt",
+    "docs/evidence/render-seven-combined-preview.json",
+    "docs/evidence/render-seven-combined-preview.log.txt",
+    "docs/evidence/render-seven-final-mac.json",
+    "docs/evidence/render-seven-final-mac.log.txt",
+    "docs/evidence/render-seven-verified-main-mac.json",
+    "docs/evidence/render-seven-verified-main-mac.log.txt",
+    "docs/features/model-triplanar.json",
+    "docs/shader-graph.md",
+    "engine/render/graph/TriplanarMaterial.h",
+    "skills/visuals/aiverse-shader-graph/SKILL.md",
+    "tests/render/model_triplanar_frame.cpp",
+    "tests/shader_graph/compiler.cpp"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": false,
+    "visible": true,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Metal renders an imported model with all-zero UVs and an exported Modeling subtract with three separately measured cut faces.",
+      "evidence": [
+        "docs/evidence/model-triplanar-metal.json",
+        "docs/evidence/model-triplanar-projected.png",
+        "docs/evidence/model-triplanar-colour.png",
+        "docs/evidence/model-triplanar-repeat.png"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Existing graph compiler, appearance authoring, native material library, Modeling GLB and Studio bindings own their normal data.",
+      "evidence": [
+        "docs/agent-handoffs/model-triplanar-authoring.md",
+        "engine/render/graph/TriplanarMaterial.h"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "makeTriplanarMaterial and the ordinary appearance binder rendered both sources.",
+      "evidence": [
+        "docs/evidence/model-triplanar-metal.log.txt",
+        "engine/render/graph/TriplanarMaterial.h"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "Existing shader authoring skill describes the material workflow.",
+      "evidence": [
+        "skills/visuals/aiverse-shader-graph/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "pass",
+      "note": "Standalone native material_triplanar, material_set, material_apply and material_get verified on the local sample project.",
+      "evidence": [
+        "docs/agent-handoffs/model-triplanar-authoring.md",
+        "docs/evidence/model-triplanar-late-cut.json"
+      ]
+    },
+    "studio": {
+      "status": "pass",
+      "note": "Native StudioSession selected textures, created the preset, saved and reopened the map.",
+      "evidence": [
+        "docs/evidence/model-triplanar-studio.json",
+        "docs/agent-handoffs/model-triplanar-authoring.md"
+      ]
+    },
+    "inspector": {
+      "status": "pass",
+      "note": "MeshRenderer assignment was verified with the normal studio.setProperty path.",
+      "evidence": [
+        "docs/evidence/model-triplanar-studio.log.txt",
+        "docs/agent-handoffs/model-triplanar-authoring.md"
+      ]
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "Studio reopened the saved override. A later CSG edit preserved the material library and rules byte for byte.",
+      "evidence": [
+        "docs/evidence/model-triplanar-studio.json",
+        "docs/evidence/model-triplanar-late-cut.json",
+        "docs/evidence/modeling-volume-csg-integrated-session.txt"
+      ]
+    },
+    "graphs": {
+      "status": "pass",
+      "note": "Shader Graph compiler verifies sample counts, texture dependencies, no mesh UV usage, native/GLSL source and persistence.",
+      "evidence": [
+        "docs/evidence/model-triplanar-metal.log.txt",
+        "tests/shader_graph/compiler.cpp"
+      ]
+    },
+    "performance": {
+      "status": "pass",
+      "note": "400 model instances, 60 measured Metal frames. See paired off/on submission, GPU, draw, allocation and tracked memory results.",
+      "evidence": [
+        "docs/evidence/model-triplanar-grid.log.txt",
+        "docs/evidence/model-triplanar-grid.cpp",
+        "docs/agent-handoffs/model-triplanar-integration-review.md"
+      ]
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "Real macOS Metal and Chromium WebGL2 rendering, including GPU-generated surface detail. Other graphics backends and physical mobile devices were not exercised.",
+      "evidence": [
+        "docs/evidence/model-triplanar-final.json",
+        "docs/agent-handoffs/model-triplanar-integration-review.md",
+        "docs/evidence/model-triplanar-web-front.png"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Native Shader Graph operations and project-relative textures. No external shader compiler or runtime dependency added.",
+      "evidence": [
+        "docs/agent-handoffs/model-triplanar-authoring.md",
+        "engine/render/graph/TriplanarMaterial.h"
+      ]
+    },
+    "headless": {
+      "status": "pass",
+      "note": "Authored the library and assigned it via standalone MCP; Modeling independently regenerated the source.",
+      "evidence": [
+        "docs/agent-handoffs/model-triplanar-authoring.md",
+        "docs/evidence/model-triplanar-late-cut.json"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "The small gallery includes a freshly carved model, project material, repeatable textures and camera controls.",
+      "evidence": [
+        "demos/model-triplanar/README.md",
+        "docs/agent-handoffs/model-triplanar-integration-review.md"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Shader Graph and the Metal integration test passed.",
+      "evidence": [
+        "docs/evidence/model-triplanar-metal.json",
+        "docs/evidence/model-triplanar-reviewed.json",
+        "docs/evidence/model-triplanar-final.json",
+        "docs/evidence/render-seven-combined-preview.json",
+        "docs/evidence/render-seven-final-mac.json",
+        "docs/evidence/render-seven-verified-main-mac.json"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Staged SHA, commands, measured GPU data, authoring and remaining coverage recorded.",
+      "evidence": [
+        "docs/agent-handoffs/model-triplanar-authoring.md",
+        "docs/agent-handoffs/model-triplanar-metal.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "Documented rendering space, sampler cost, texture colour space, normal convention, assignment and persistence.",
+      "evidence": [
+        "docs/shader-graph.md"
+      ]
+    },
+    "publishing": {
+      "status": "pass",
+      "note": "Bilingual site entry, a self-contained gallery project with its two texture maps and a CSG export, and three verified in-game controls in Chromium.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-render-model-triplanar.json",
+        "demos/model-triplanar/README.md",
+        "docs/evidence/model-triplanar-web-front.png",
+        "docs/evidence/model-triplanar-web-side.png",
+        "docs/evidence/model-triplanar-web-wide.png"
+      ]
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-shader-graph"
+    ],
+    "mcp_tools": [
+      "material_triplanar",
+      "material_set",
+      "material_apply"
+    ],
+    "studio_panels": [
+      "materials",
+      "inspector"
+    ],
+    "studio_methods": [
+      "studio.materialCreate",
+      "studio.setProperty",
+      "studio.save"
+    ]
+  },
+  "test_reports": [
+    "docs/evidence/render-seven-verified-main-mac.json"
+  ]
+}

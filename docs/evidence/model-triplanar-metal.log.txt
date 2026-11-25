@@ -1,0 +1,44 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/model-triplanar-20261125
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/model-triplanar-20261125/DartConfiguration.tcl
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/model-triplanar-20261125/DartConfiguration.tcl
+Test project /Volumes/KINGSTON/AIVERSE-builds/model-triplanar-20261125
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 258
+    Start 258: shader_graph
+
+258: Test command: /Volumes/KINGSTON/AIVERSE-builds/model-triplanar-20261125/aiverse_shader_graph_tests
+258: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/model-triplanar-20261125
+258: Test timeout computed to be: 10000000
+258: shader graph compiler/domain/round-trip tests passed
+1/2 Test #258: shader_graph .....................   Passed    0.07 sec
+test 336
+    Start 336: model_triplanar_frame
+
+336: Test command: /Volumes/KINGSTON/AIVERSE-builds/model-triplanar-20261125/aiverse_model_triplanar_frame
+336: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/model-triplanar-20261125
+336: Test timeout computed to be: 90
+336: [metal-assets] libraries=0 sourceMisses=12 pipelines=16 pipelineFailures=0 archive=0 strict=0
+336: OBJ warm=4947 cool=11422 normalDelta=13989 repeatDelta=11799
+336: CSG warm=12317 cool=28184 normalDelta=40550 repeatDelta=30537
+336: cut back warm=912 cool=1729 normalDelta=2657 repeatDelta=2117
+336: cut wall warm=207 cool=381 normalDelta=512 repeatDelta=543
+336: cut floor warm=215 cool=525 normalDelta=728 repeatDelta=518
+2/2 Test #336: model_triplanar_frame ............   Passed    1.93 sec
+
+The following tests passed:
+	shader_graph
+	model_triplanar_frame
+
+100% tests passed, 0 tests failed out of 2
+
+Label Time Summary:
+GPU         =   1.93 sec*proc (1 test)
+Material    =   1.93 sec*proc (1 test)
+Metal       =   1.93 sec*proc (1 test)
+
+Total Test time (real) =   2.05 sec

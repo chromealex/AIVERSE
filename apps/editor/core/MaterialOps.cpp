@@ -17,6 +17,7 @@
 #include "engine/render/ExrTexture.h"
 #include "engine/render/CameraExr.h"
 #include "engine/render/EnvironmentIbl.h"
+#include "engine/render/graph/TriplanarMaterial.h"
 #include "engine/render/TextureGen.h"
 #include "engine/render/graph/TextureGraph.h"
 #include "engine/render/graph/TextureGraphContainerSource.h"
@@ -483,6 +484,70 @@ void registerMaterialOps(Workspace& ws) {
         ws.registerOp({name, desc, Json::parse(schema), std::move(fn), false});
     };
 
+    auto modelTechniques = [w](const Json& params, bool save) {
+        needProject(*w);
+        const auto root = fs::canonical(w->project.dir);
+        const auto modelName = params.getStr("model");
+        auto projectPath = [&](const std::string& name) {
+            auto path = fs::weakly_canonical(gameFile(*w, name));
+            auto relative = path.lexically_relative(root);
+            if (relative.empty() || *relative.begin() == "..")
+                throw std::runtime_error("model reference outside the project");
+            for (const auto& part : relative)
+                if (part == ".git" || part == ".aiverse-cache") throw std::runtime_error("reserved project path");
+            return path;
+        };
+        const auto modelPath = projectPath(modelName);
+        if (!fs::is_regular_file(modelPath)) throw std::runtime_error("model file missing: " + modelName);
+        const auto sidecar = fs::path(modelPath.string() + ".batching.json");
+        const bool exists = fs::exists(fs::symlink_status(sidecar));
+        const auto before = exists ? readProjectFileBytes(sidecar) : std::string{};
+        auto config = exists ? Json::parse(before) : Json::object();
+        if (!config.isObject()) throw std::runtime_error("model batching sidecar must be an object");
+        if (save) {
+            if (params.has("expected") && params["expected"] != (config.has("materialTechniques") ? config["materialTechniques"] : Json::array()))
+                throw std::runtime_error("material techniques changed; reload before saving");
+            config.set("materialTechniques", params["rules"]);
+        }
+        const auto after = config.dump(2) + "\n";
+        auto model = render::loadModel(modelName, [&](const std::string& file, std::string& out) {
+            if (file == modelName + ".batching.json") { out = after; return true; }
+            return readDisk(projectPath(file).string(), out);
+        });
+        if (save && (exists || params["rules"].size())) {
+            ProjectFileEdit edit{sidecar, before, after};
+            if (exists) {
+                applyProjectFileEdits(root, {edit});
+            } else {
+                const fs::path stage = sidecar.string() + ".stage";
+                if (!fs::create_directory(stage)) throw std::runtime_error("material technique publication busy");
+                struct Cleanup {
+                    fs::path path;
+                    ~Cleanup() { std::error_code ignored; fs::remove_all(path, ignored); }
+                } cleanup{stage};
+                const auto payload = stage / "payload";
+                std::ofstream stream(payload, std::ios::binary);
+                stream << after;
+                stream.close();
+                if (!stream) throw std::runtime_error("could not write material technique sidecar");
+                fs::create_hard_link(payload, sidecar);
+            }
+            w->note({Change::Rules,0,0,-1,-1,-1,"Material techniques: " + modelName});
+        }
+        auto result = okJson();
+        Json names = Json::array();
+        for (const auto& material : model->materials) names.push(Json::string(material.name));
+        result.set("materials", names);
+        result.set("rules", config.has("materialTechniques") ? config["materialTechniques"] : Json::array());
+        return result;
+    };
+    add("material_techniques_get", "List a model's material names and ordered technique rules.",
+        R"({"properties":{"model":{"type":"string"}},"required":["model"]})",
+        [modelTechniques](const Json& p) { return modelTechniques(p, false); });
+    add("material_techniques_set", "Replace technique rules. Use [] to clear. Pass the previous rules as expected to detect a concurrent edit.",
+        R"({"properties":{"model":{"type":"string"},"rules":{"type":"array","items":{"type":"object"}},"expected":{"type":"array"}},"required":["model","rules"]})",
+        [modelTechniques](const Json& p) { return modelTechniques(p, true); });
+
     add("material_list",
         "The game's material library (materials.json) and, per type with a model, its material overrides, node assignments, "
         "the model's own material names and mesh nodes (targets for material_apply).",
@@ -509,6 +574,18 @@ void registerMaterialOps(Workspace& ws) {
             }
             r.set("types", types);
             return r;
+        });
+
+    add("material_triplanar", "Build a UV-free world-space material. Color and optional OpenGL tangent normal maps repeat every repeatMetres world units. Save the returned material with material_set and assign with material_apply.",
+        R"({"properties":{"colorMap":{"type":"string"},"normalMap":{"type":"string"},"repeatMetres":{"type":"number","minimum":0.001,"maximum":100000}},"required":["colorMap"]})",
+        [](const Json& p) {
+            if ((p.has("repeatMetres") && !p["repeatMetres"].isNumber()) ||
+                (p.has("normalMap") && !p["normalMap"].isString()))
+                throw std::invalid_argument("Invalid triplanar material parameters");
+            Json result = okJson();
+            result.set("material", render::graph::makeTriplanarMaterial(
+                p.getStr("colorMap"), p.getStr("normalMap"), p["repeatMetres"].toDouble(1)));
+            return result;
         });
 
     add("material_get", "One library material, flattened with its \"base\" chain.",

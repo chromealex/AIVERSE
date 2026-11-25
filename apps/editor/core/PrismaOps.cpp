@@ -1,4 +1,5 @@
 #include "PrismaOps.h"
+#include "engine/render/PrismaCompositor.h"
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
@@ -277,6 +278,23 @@ void registerPrismaOps(Workspace& ws) {
             return changeAnswer(*w, {parsed}, std::string("Постэффект ") + prismaType(parsed.type).label + (scope == "map" ? " (карта)" : ""));
         });
 
+    add("postfx_compositor_set", "Validate and save a named-target frame compositor. Set graph to null to disable it, or inherit=true to remove an override.",
+        std::string(R"({"properties":{"graph":{"type":["object","null"]},"inherit":{"type":"boolean"},"expectedGraph":{"type":["object","null"]},)") + kScope + "}}",
+        [w](const Json& p) {
+            const std::string scope = scopeOf(p);
+            Json block = prismaBlock(*w, scope);
+            if (!block.isObject()) block = withEffects(block, effectsArray(block));
+            if (p.has("expectedGraph") && !(p["expectedGraph"] == block["compositor"]))
+                throw std::runtime_error("The saved compositor changed. Reload it before saving.");
+            if (p.getBool("inherit")) block.erase("compositor");
+            else {
+                if (!p.has("graph")) throw std::runtime_error("postfx_compositor_set: graph is required");
+                if (!p["graph"].isNull()) PrismaCompositor::compile(p["graph"]);
+                block.set("compositor", p["graph"]);
+            }
+            setPrismaBlock(*w, scope, block);
+            return chainReport(*w);
+        });
     add("postfx_set", "Change parameters of a post-processing effect already in the block (omitted parameters are kept); "
         "same warnings as postfx_add. On scope 'map' with no map entry yet, the map gets an override of that effect.",
         std::string(R"({"properties": {"type": {"type": "string"}, "params": {"type": "object"}, "minQuality": {"type": "string", "enum": ["low", "medium", "high"]},

@@ -1,0 +1,215 @@
+{
+  "schema": 1,
+  "id": "prisma-authored-compositor",
+  "owner": "prisma",
+  "changed_paths": [
+    "CMakeLists.txt",
+    "apps/editor/core/PrismaOps.cpp",
+    "apps/studio-native/StudioTools.h",
+    "apps/studio-web/src/panels/PostFxPanel.tsx",
+    "apps/studio-web/src/panels/PrismaCompositorEditor.tsx",
+    "demos/prisma-compositor/README.md",
+    "demos/prisma-compositor/build.sh",
+    "demos/prisma-compositor/demo.cpp",
+    "demos/prisma-compositor/index.html",
+    "docs/agent-handoffs/prisma-authored-compositor-initial.md",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/entries/2026-11-25-prisma-frame-compositor.json",
+    "docs/devlog/media/2026-11-25-prisma-frame-compositor/glow.png",
+    "docs/devlog/systems.json",
+    "docs/en/prisma.md",
+    "docs/evidence/prisma-authored-compositor-metal-20261125.json",
+    "docs/evidence/prisma-authored-compositor-metal-20261125.log.txt",
+    "docs/evidence/prisma-compositor-inspector.png",
+    "docs/evidence/prisma-compositor-inspector.txt",
+    "docs/evidence/prisma-compositor-webgl.txt",
+    "docs/evidence/render-seven-combined-preview.json",
+    "docs/evidence/render-seven-combined-preview.log.txt",
+    "docs/evidence/render-seven-final-mac.json",
+    "docs/evidence/render-seven-final-mac.log.txt",
+    "docs/evidence/render-seven-verified-main-mac.json",
+    "docs/evidence/render-seven-verified-main-mac.log.txt",
+    "docs/features/prisma-authored-compositor.json",
+    "docs/handoffs/prisma-stage-authored-compositor.md",
+    "docs/prisma.md",
+    "docs/ru/prisma.md",
+    "engine/render/CameraPostFxPool.h",
+    "engine/render/CameraRenderPipeline.h",
+    "engine/render/Prisma.cpp",
+    "engine/render/Prisma.h",
+    "engine/render/PrismaCompositor.cpp",
+    "engine/render/PrismaCompositor.h",
+    "engine/render/PrismaData.cpp",
+    "engine/render/PrismaData.h",
+    "examples/prisma/camera-glow.json",
+    "skills/visuals/aiverse-prisma/SKILL.md",
+    "tests/render/prisma_compositor.cpp",
+    "tests/render/prisma_compositor_metal.cpp"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": false,
+    "visible": true,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "CPU graph planning and actual Metal pixel readback exercised.",
+      "evidence": [
+        "engine/render/PrismaCompositor.cpp",
+        "engine/render/Prisma.cpp"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "PRISMA owns the screen-space chain; named resources and pass dependencies compile through the existing render graph. Camera inputs flow through the existing LENS target pool.",
+      "evidence": [
+        "engine/render/PrismaCompositor.cpp",
+        "engine/render/CameraRenderPipeline.h"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "Validated compiler, view-scoped texture inputs and view pass counts.",
+      "evidence": [
+        "engine/render/PrismaCompositor.h",
+        "engine/render/Prisma.h"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "Recipe for masked camera glow and acceptance.",
+      "evidence": [
+        "skills/visuals/aiverse-prisma/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "pass",
+      "note": "The compiled MCP registry contains both operations. Fresh stdio processes read the saved graph and reject invalid or stale writes.",
+      "evidence": [
+        "docs/evidence/prisma-compositor-inspector.txt"
+      ]
+    },
+    "studio": {
+      "status": "pass",
+      "note": "The production React PostFxPanel saved a custom threshold through studio.op and reloaded it in Chromium against native MCP.",
+      "evidence": [
+        "docs/evidence/prisma-compositor-inspector.png",
+        "docs/evidence/prisma-compositor-inspector.txt"
+      ]
+    },
+    "inspector": {
+      "status": "pass",
+      "note": "Loaded the glow example in the panel, confirmed invalid JSON disables saving, changed the threshold, saved and reloaded the three passes.",
+      "evidence": [
+        "docs/evidence/prisma-compositor-inspector.png",
+        "docs/evidence/prisma-compositor-inspector.txt"
+      ]
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "Verified the game graph on disk after process restart. A map override, explicit disable and inheritance survived independent save/reopen cycles.",
+      "evidence": [
+        "docs/evidence/prisma-compositor-inspector.txt"
+      ]
+    },
+    "graphs": {
+      "status": "pass",
+      "note": "Verified pass sorting, aliasing, rejection of invalid graphs and staged Metal/WebGL dispatch.",
+      "evidence": [
+        "tests/render/prisma_compositor.cpp",
+        "engine/render/PrismaCompositor.cpp",
+        "docs/evidence/prisma-compositor-webgl.txt"
+      ]
+    },
+    "performance": {
+      "status": "pass",
+      "note": "Measured a 4-pass 640x320 graph against a zero-pass baseline including readback. Resource bindings use fixed arrays capped at 12 passes and eight camera inputs. Reused targets are keyed by plan slot and resolution.",
+      "evidence": [
+        "docs/evidence/prisma-compositor-webgl.txt",
+        "engine/render/Prisma.cpp"
+      ]
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "Actual rendering exercised on macOS Metal and Chromium WebGL2. Other RHI paths are unverified.",
+      "evidence": [
+        "docs/evidence/prisma-compositor-webgl.txt",
+        "docs/evidence/prisma-authored-compositor-metal-20261125.log.txt"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Compiled demo using existing GfxGL, Shader Graph, JSON and PRISMA sources; no new runtime dependency.",
+      "evidence": [
+        "demos/prisma-compositor/build.sh"
+      ]
+    },
+    "headless": {
+      "status": "pass",
+      "note": "GPU-free compositor compilation and validation exercised via the native data test.",
+      "evidence": [
+        "tests/render/prisma_compositor.cpp"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "Saved game/map postfx block with a masked-camera glow example.",
+      "evidence": [
+        "examples/prisma/camera-glow.json"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Native x86_64 Metal pixel comparison of four 96x64 frames. CPU topology/validation test separately run. Full suite and other backends pending.",
+      "evidence": [
+        "docs/evidence/prisma-authored-compositor-metal-20261125.json",
+        "docs/evidence/render-seven-combined-preview.json",
+        "docs/evidence/render-seven-final-mac.json",
+        "docs/evidence/render-seven-verified-main-mac.json"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Implementation SHA and verification limits recorded.",
+      "evidence": [
+        "docs/handoffs/prisma-stage-authored-compositor.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "Document schema, resource lifetimes and entry points.",
+      "evidence": [
+        "docs/prisma.md"
+      ]
+    },
+    "publishing": {
+      "status": "pass",
+      "note": "Bilingual site entry, real WebGL capture and interactive WebAssembly demo built and exercised on Chromium; deployment follows main integration.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-prisma-frame-compositor.json",
+        "demos/prisma-compositor/README.md",
+        "docs/evidence/prisma-compositor-webgl.txt"
+      ]
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-prisma"
+    ],
+    "mcp_tools": [
+      "postfx_compositor_set",
+      "postfx_get"
+    ],
+    "studio_panels": [
+      "postfx"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ]
+  },
+  "test_reports": [
+    "docs/evidence/render-seven-verified-main-mac.json"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "sha": "33718383d8b118bb5b04a0d6a6bf2367293fad61",
+  "argv": [
+    "/opt/homebrew/bin/python3.11",
+    "tests/modeling/volume_csg.py",
+    "/Volumes/KINGSTON/AIVERSE-builds/modeling-volume-csg/aiverse_modeling"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/modeling-volume-csg-rebuild-20261125.log.txt",
+  "sha256": "ca9578ece899fbaa1194bc005e0b89d821f5ce32ee53249977dc728a77a08d40"
+}

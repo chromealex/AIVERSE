@@ -1,0 +1,13 @@
+{
+  "id": "org.aiverse.demos.triplanar",
+  "name": "Triplanar stone",
+  "module": "game",
+  "rules": "rules.json",
+  "maps": [
+    {
+      "file": "maps/gallery.json",
+      "title": "Stone carving"
+    }
+  ],
+  "version": "1.0"
+}
