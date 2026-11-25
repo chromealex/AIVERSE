@@ -1,0 +1,10 @@
+{
+  "sha": "fb4309337db7a5f7336e2511a114725f0a1558fc",
+  "argv": [
+    "bash",
+    "/tmp/movement-road-qa.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-movement-road-ui.log.txt",
+  "sha256": "6bf20d344a72eac09a6c2f25aa6e4b7e45620c05eb26551295455e9888f75a48"
+}
