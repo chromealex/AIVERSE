@@ -1,3 +1,6 @@
+#include "engine/render/BakedLighting.h"
+#include "engine/render/LightmapUv.h"
+#include <future>
 #include "engine/view/MaterialLibraryFiles.h"
 #include "engine/view/AppearanceAuthoringService.h"
 #include "engine/render/TextureCache.h"
@@ -414,6 +417,35 @@ std::string StudioScene::shaderPreviewError() const {
     }
     return graphPreviewPost_?graphPreviewPost_->lastError():std::string{};
 }
+struct StudioScene::SceneBake {
+    struct Load { bake::LightmapData data; std::string error; };
+    std::future<Load> pending;
+    render::BakedLighting gpu;
+    std::string project, map, error;
+    std::filesystem::file_time_type stamp{};
+    std::chrono::steady_clock::time_point nextCheck{};
+    uint64_t generation=0, pendingGeneration=0;
+    bool enabled=false, needsLoad=false, exists=false;
+};
+
+void StudioScene::setBakedSceneEnabled(bool enabled) {
+    if(!sceneBake_)sceneBake_=std::make_unique<SceneBake>();
+    if(sceneBake_->enabled==enabled)return;
+    sceneBake_->enabled=enabled;
+    sceneBake_->nextCheck={};
+    if(!enabled)syncSceneBake({},{});
+}
+
+Json StudioScene::bakedSceneStatus() const {
+    Json out=Json::object();
+    out.set("enabled",Json::fromBool(sceneBake_ && sceneBake_->enabled));
+    out.set("loaded",Json::fromBool(sceneBake_ && !sceneBake_->gpu.empty()));
+    out.set("lightmapped",Json::number(int64_t(renderer_.bakedLightmapped())));
+    out.set("probed",Json::number(int64_t(renderer_.bakedProbed())));
+    if(sceneBake_ && !sceneBake_->error.empty())out.set("message",Json::string(sceneBake_->error));
+    return out;
+}
+
 StudioScene::StudioScene(std::unique_ptr<gfx::Device> device)
     : device_(std::move(device)) {
     if (!device_) throw std::runtime_error("Scene GPU device unavailable");
@@ -547,6 +579,69 @@ static bool readPreviewAsset(const std::filesystem::path& root,const std::string
     std::ifstream input(file,std::ios::binary);if(!input)return false;
     out.resize(size_t(size));
     return bool(input.read(out.data(),std::streamsize(size)));
+}
+
+void StudioScene::syncSceneBake(const std::string& project,const std::string& mapPath) {
+    if(!sceneBake_)return;
+    auto& state=*sceneBake_;
+    const auto now=std::chrono::steady_clock::now();
+    const bool moved=project!=state.project || mapPath!=state.map;
+    const auto invalidate=[&]{
+        lightingRevision_=std::numeric_limits<uint64_t>::max();
+        sceneCacheValid_=false;lastFrameSignature_=0;
+    };
+    if(moved || now>=state.nextCheck){
+        namespace fs=std::filesystem;
+        state.nextCheck=now+std::chrono::seconds(1);
+        fs::path rel=fs::path(mapPath).lexically_relative(project);
+        const bool valid=state.enabled && !project.empty() && !rel.empty() && !rel.is_absolute() && *rel.begin()!="..";
+        std::error_code ec;
+        const auto folder=bake::bakeFolderFor(rel.generic_string());
+        const auto stamp=valid?fs::last_write_time(fs::path(project)/folder/"lightmap.json",ec):fs::file_time_type{};
+        const bool exists=valid && !ec;
+        if(moved || exists!=state.exists || (exists && stamp!=state.stamp)){
+            if(!state.gpu.empty()){
+                if(!device_->waitForResourceIdle())throw std::runtime_error("Cannot retire Scene lightmaps");
+                renderer_.setBakedLighting(nullptr);state.gpu.release();
+                invalidate();
+            }
+            state.project=project;state.map=mapPath;state.exists=exists;state.stamp=stamp;
+            ++state.generation;state.needsLoad=exists;state.error.clear();
+        }
+    }
+    if(state.pending.valid() && state.pending.wait_for(std::chrono::seconds(0))==std::future_status::ready){
+        auto load=state.pending.get();
+        if(state.generation==state.pendingGeneration){
+            state.error=std::move(load.error);
+            if(state.error.empty()){
+                const auto& terrain=load.data.terrain;
+                if(terrain.page>=0 && size_t(terrain.page)<load.data.pages.size()){
+                    bake::LightmapRegion region;region.page=uint16_t(terrain.page);
+                    std::copy_n(terrain.st,4,region.st);
+                    load.data.regions[bake::lightmapRegionKey("studio/lighting-preview",1,mat4{})]=region;
+                }
+                if(state.gpu.upload(*device_,std::move(load.data))){
+                    // The same bake can publish fresh .lmuv sidecars for already loaded models.
+                    if(!device_->waitForResourceIdle())throw std::runtime_error("Cannot refresh lightmap UVs");
+                    clearDocumentModels();invalidate();
+                }
+                else state.error="No GPU lightmaps or probes in baked output";
+            }
+        }
+    }
+    if(state.needsLoad && !state.pending.valid()){
+        state.needsLoad=false;state.pendingGeneration=state.generation;
+        const auto folder=bake::bakeFolderFor(std::filesystem::path(mapPath).lexically_relative(project).generic_string());
+        state.pending=std::async(std::launch::async,[project,folder]{
+            SceneBake::Load load;
+            try {
+                bake::loadLightmapData(folder,[&](const std::string& path,std::string& bytes){
+                    return readPreviewAsset(project,path,bytes);
+                },load.data,load.error);
+            }catch(const std::exception& e){load.error=e.what();}
+            return load;
+        });
+    }
 }
 std::unique_ptr<render::Model> StudioScene::loadContentModel(const std::string& projectPath,const std::string& asset) {
     if(asset.rfind("content/",0)!=0 || asset.size()>512 || projectPath.empty())return nullptr;
@@ -3030,6 +3125,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     static const StudioFacialPreviewBinding kNoFacialBinding{};
     const StudioFacialPreviewBinding& facialBinding=facialBindingIn?*facialBindingIn:kNoFacialBinding;
     const std::string& projectRoot=projectPath;
+    renderer_.setBakedLighting(nullptr);
     // Project changes invalidate runtime particle buffers and preview input
     // so a previous project's effect can never render in the new Scene.
     if(spectraProject_!=projectRoot){
@@ -3367,6 +3463,8 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
 
         return;
     }
+    if(sceneBake_)syncSceneBake(sceneBake_->enabled && !doc.data.planet()?projectPath:"",sceneBake_->enabled && !doc.data.planet()?doc.path:"");
+    const bool bakedScene=sceneBake_ && !sceneBake_->gpu.empty();
     if(doc.data.planet()){
         framePlanet(framebufferWidth,framebufferHeight,doc,selectedId,projectPath,rules);return;
     }
@@ -3411,7 +3509,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                 showTerrain_=rules["terrain"].getBool("render",true)&&map.extra.getStr("terrainPresentation","legacy")!="entities";
                 lightingSettings_=renderLightingSettings(doc.data.extra["renderLighting"]);
                 useLighting_=lightingSettings_.getStr("indirect")!="off" || lightingSettings_.getStr("direct")!="legacy";
-                activeLights_=studioAuthoredLights(doc,levelHeight,std::numeric_limits<size_t>::max());
+                activeLights_=studioAuthoredLights(doc,levelHeight,std::numeric_limits<size_t>::max(),bakedScene);
                 day_=previewDocumentDay(doc);
                 nereid_.configure(fpsProject?Json::object():editor::authoredWaterDocument(doc));
             }
@@ -3496,7 +3594,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         lastFrameSignature_=0;
     }
     const Json& settings=lightingSettings_;
-    const bool useLighting=(useLighting_||weatherEnvironment_.has_value())&&!planetaryChart;
+    const bool useLighting=(useLighting_||bakedScene||weatherEnvironment_.has_value())&&!planetaryChart;
     const auto& activeLights=activeLights_;
     Lighting environment;
     const auto& day=weatherEnvironment_?weatherDay_:day_;
@@ -3526,6 +3624,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                 (terrainCavernsAuthored_||sparseTerrain)?&terrainCpu_:nullptr);
             StaticShadowGeometry geometry;
             if(lightingModel_) {
+                if(bakedScene && !fpsProject)studioTerrainLightmapUv(*lightingModel_,sceneBake_->gpu.data().terrain);
                 prepareModelUpload(*lightingModel_);
                 geometry=giModelGeometry(*lightingModel_);
                 if(!uploadModel(*device_,*lightingModel_,true))throw std::runtime_error("Studio lighting upload failed");
@@ -3649,6 +3748,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     nereid_.updateUnderwater(post_,underwaterFrameTime_>0?float(opticalNow-underwaterFrameTime_):1.f/60.f);
     underwaterFrameTime_=opticalNow;
     renderThumbnail(); // at most one Assets thumbnail, offscreen, before the scene pass
+    if(bakedScene)renderer_.setBakedLighting(&sceneBake_->gpu);
     renderer_.beginScene(view, framebufferWidth, framebufferHeight);
     renderer_.setSceneSelectionOutline(true); // editor-only depth-tested silhouette
     {

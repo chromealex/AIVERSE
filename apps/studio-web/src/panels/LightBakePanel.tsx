@@ -26,6 +26,7 @@ export default function LightBakePanel({scope}:{scope?:StudioGraphDocumentScope}
   const [patch,setPatch]=useState<Settings>({});
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
+  const [display,setDisplay]=useState<boolean>();
   const [outputRevision,setOutputRevision]=useState(0);
   const [confirmClear,setConfirmClear]=useState(false);
   const [revision,refresh]=useState(0);
@@ -43,6 +44,15 @@ export default function LightBakePanel({scope}:{scope?:StudioGraphDocumentScope}
     return ()=>{active=false;};
   },[enabled,project,epoch,revision]);
 
+  useEffect(()=>{
+    if(!enabled)return;
+    let active=true;
+    const read=()=>void invoke('studio.lightBakeDisplay',{}).then(r=>{if(active)setDisplay(r.enabled);})
+      .catch(reason=>{if(active)setError(String(reason));});
+    read();
+    const stop=onNativeEvent(event=>{if(event==='lightBake.displayChanged')read();});
+    return ()=>{active=false;stop();};
+  },[enabled]);
   const write=async(op:string,params:Settings)=>{
     if(busy || !enabled)return;
     setBusy(true);setError('');
@@ -95,6 +105,9 @@ export default function LightBakePanel({scope}:{scope?:StudioGraphDocumentScope}
         setConfirmClear(false);setOutputRevision(n=>n+1);refresh(n=>n+1);
       }}>Refresh output</StudioButton>}>
         {state.bake.exists ? <>
+          <StudioCheckbox label="Show baked lighting in Scene" checked={display??false} disabled={busy || display===undefined}
+            onChange={e=>{setBusy(true);void invoke('studio.lightBakeDisplay',{enabled:e.target.checked})
+              .then(r=>setDisplay(r.enabled)).catch(reason=>setError(String(reason))).finally(()=>setBusy(false));}}/>
           <p>{state.bake.mode} · {state.bake.folder}</p>
           <dl>{['pages','regions','texels','probes'].map(key=><div key={key}><dt>{key}</dt><dd>{state.bake.stats?.[key] ?? 0}</dd></div>)}</dl>
           {epoch && state.bake.hash && !!state.bake.atlasPages?.length &&

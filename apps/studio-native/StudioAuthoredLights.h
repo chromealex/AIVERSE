@@ -23,7 +23,7 @@ inline PreviewDayLighting previewDocumentDay(const editor::MapDoc& doc) {
         lightScalar(block,"nightLevel",.18f),lightScalar(block,"clouds",0),lightScalar(block,"storm",0));
 }
 inline std::vector<render::PointLight> studioAuthoredLights(
-    const editor::MapDoc& doc,float levelHeight=1.5f,size_t limit=render::LightSystem::kMaxLights) {
+    const editor::MapDoc& doc,float levelHeight=1.5f,size_t limit=render::LightSystem::kMaxLights,bool bakedActive=false) {
     const Json& source=doc.data.extra;
     const Json& list=source["lights"];
     const auto day=previewDocumentDay(doc);
@@ -33,7 +33,7 @@ inline std::vector<render::PointLight> studioAuthoredLights(
     lights.reserve(count);
     for(size_t i=0;i<count;++i) {
         const Json& item=list[i];
-        if(!item.isObject())continue;
+        if(!item.isObject() || (bakedActive && item.getStr("bake")=="baked"))continue;
         if(item.getBool("nightOnly") && day.night<=.5f)continue;
         const float x=lightScalar(item,"x",0);
         const float z=lightScalar(item,"z",0);

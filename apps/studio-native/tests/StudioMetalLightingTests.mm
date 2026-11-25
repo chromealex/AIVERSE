@@ -1,6 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/CAMetalLayer.h>
 #include "apps/studio-native/StudioScene.h"
+#include "engine/bake/CapturedBake.h"
 #include "apps/studio-native/StudioLightingPreview.h"
 #include <filesystem>
 #include <fstream>
@@ -25,6 +26,50 @@ int aiverseMain(int argc,char** argv) { @autoreleasepool {
         doc.data.extra.set("terrainPresentation",Json::string("legacy"));
         doc.data.extra.set("lights",Json::parse(R"([{"x":4,"z":4,"height":2,"radius":12,"intensity":6,"color":[1,0.3,0.1]}])"));
         const Json empty;
+        {
+            const auto project=std::filesystem::absolute(argv[1])/"baked-scene";
+            std::filesystem::create_directories(project/"field.bake");
+            bake::CapturedBake input;
+            input.folder="field.bake";input.ex=input.ez=8;input.nx=input.nz=9;input.step=1;
+            input.heights.assign(81,0);input.settings.pageSize=64;input.settings.texelsPerUnit=2;
+            input.settings.samples=8;input.settings.probeSpacing=0;input.settings.threads=2;
+            input.settings.mode=bake::BakedMode::Subtractive;
+            input.sun.on=false;input.sky.sky=input.sky.ground={.1f,.15f,2.f};
+            const auto result=bake::runCapturedBake(input,[](const auto&,auto&){return false;},
+                [&](const auto& file,const auto& bytes){std::ofstream out(project/file,std::ios::binary);
+                    out.write(bytes.data(),bytes.size());return bool(out);},{});
+            if(!result.error.empty())throw std::runtime_error(result.error);
+            doc.path=(project/"field.json").string();
+            auto draw=[&]{scene.frame(160,160,doc,false,"","",empty,0,1.5f,project.string());};
+            scene.setBakedSceneEnabled(true);
+            for(int i=0;i<100 && !scene.bakedSceneStatus().getInt("lightmapped");++i){
+                draw();std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            }
+            if(!scene.bakedSceneStatus().getBool("loaded") || !scene.bakedSceneStatus().getInt("lightmapped"))
+                throw std::runtime_error("Missing baked terrain draw: "+scene.bakedSceneStatus().dump(-1));
+            auto capture=[&](const char* name){
+                auto sample=std::make_shared<std::promise<std::vector<uint8_t>>>();auto ready=sample->get_future();
+                scene.captureNextFrame([sample](int,int,std::vector<uint8_t> pixels){sample->set_value(std::move(pixels));});
+                for(int i=0;i<80 && ready.wait_for(std::chrono::milliseconds(4))!=std::future_status::ready;++i)draw();
+                if(ready.wait_for(std::chrono::seconds(2))!=std::future_status::ready)throw std::runtime_error("Bake framebuffer timeout");
+                auto pixels=ready.get();std::ofstream file(project/name,std::ios::binary);file<<"P6\n160 160\n255\n";
+                for(size_t i=0;i<pixels.size();i+=4)file.write(reinterpret_cast<const char*>(&pixels[i]),3);
+                return pixels;
+            };
+            const auto baked=capture("baked.ppm");
+            scene.setBakedSceneEnabled(false);draw();
+            const auto realtime=capture("realtime.ppm");
+            size_t changed=0;
+            for(size_t i=0;i<std::min(baked.size(),realtime.size());i+=4)
+                if(std::abs(int(baked[i+2])-int(realtime[i+2]))>6)++changed;
+            if(changed<100 || scene.bakedSceneStatus().getBool("loaded"))throw std::runtime_error("Scene bake toggle had no visible effect");
+            scene.setBakedSceneEnabled(true);
+            doc.path=(project/"other.json").string();draw();
+            if(scene.bakedSceneStatus().getBool("loaded"))throw std::runtime_error("Scene leak across maps");
+            std::cout<<"Baked terrain draws verified, blue channel changed at "<<changed<<" pixels\n";
+            scene.setBakedSceneEnabled(false);doc.path.clear();
+        }
+
         {
             // A second Scene instance owns the Lighting panel drawable and camera.
             // The document is shared read-only, as it is in the Studio host tick.

@@ -268,3 +268,5 @@ Light Bake transfer: map-scoped settings, quality presets and generated output i
 Light Bake migration: extract captured-scene preparation and job execution into the existing CPU bake library so both desktop hosts can submit immutable scene samples. Verify real output, content hash reuse and cancellation before HTML integration.
 
 Light Bake output inspection: display individual baked irradiance and shadow-mask atlas pages inside the HTML panel. Verify native decoding, page switching and isolation from Scene.
+
+Light Bake transfer: the main Scene loads the active planar map’s baked lighting, binds static placements, terrain and probes through Renderer3D, and exposes the legacy visibility toggle. Panel previews keep their own rendering state.

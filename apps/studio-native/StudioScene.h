@@ -434,6 +434,8 @@ public:
     void drawAttachments(int width,int height);
     void drawAnimationPose(int width,int height,const std::shared_ptr<const render::Model>& source,
                            const render::Pose& pose,float yaw);
+    void setBakedSceneEnabled(bool enabled);
+    Json bakedSceneStatus() const;
     uint32_t drawCalls() const { return renderer_.drawCalls(); }
     // Project extension gizmos (editor/extensions.lua scene_gizmos): world-space lines, circles (screen px), points.
     struct OverlayShape { int kind = 0; render::float3 a{}, b{}; float radius = 8, thickness = 2; uint8_t r = 90, g = 180, bl = 255; std::string text; };   // kind: 1 line, 2 circle, 3 point, 4 label
@@ -490,6 +492,10 @@ private:
     struct GraphPresentation;
     std::unique_ptr<GraphPresentation> graphPresentation_;
     render::Renderer3D renderer_;
+    struct SceneBake;
+    std::unique_ptr<SceneBake> sceneBake_;
+    void syncSceneBake(const std::string& project,const std::string& mapPath);
+
     world::NereidManifestHost nereid_;
     double underwaterFrameTime_=0;
     render::Prisma post_;

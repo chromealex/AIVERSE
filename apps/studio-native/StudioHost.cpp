@@ -663,6 +663,7 @@ void StudioHost::ensureScene() {
             auto created = std::make_unique<StudioScene>(platform_.createDevice(StudioSurface::Scene));
             // Default host: the native view covers HTML, so the renderer draws the
             // orientation gizmo itself; composite mode uses the HTML gizmo.
+            created->setBakedSceneEnabled(showSceneBake_);
             created->setOrientationGizmo(!composite);
             // Interactive viewport: redraw on change only, debounce lighting rebuilds.
             // AIVERSE_STUDIO_CONTINUOUS_REDRAW=1 restores drawing every tick.
@@ -3315,6 +3316,17 @@ bool StudioHost::handleHostMethod(const Json& req) {
         if (note.size() <= 1200) platform_.log("[studio-web] JS: " + note);
         return true; // diagnostics never touch Workspace or the filesystem
     }
+    if(method=="studio.lightBakeDisplay")return answer([&]{
+        if(params.has("enabled")){
+            if(params["enabled"].type()!=Json::Type::Bool)throw std::runtime_error("Expected baked lighting visibility");
+            showSceneBake_=params.getBool("enabled");
+            if(preview_)onScene([&]{preview_->setBakedSceneEnabled(showSceneBake_);});
+            sendEvent("lightBake.displayChanged","");
+        }
+        Json out=preview_?onScene([&]{return preview_->bakedSceneStatus();}):Json::object();
+        out.set("enabled",Json::fromBool(showSceneBake_));
+        return out;
+    });
     if(method=="studio.lightBakeAtlas" && hasId){
         const auto& ws=session_->workspace();
         const auto map=editor::lightBakeMapRel(ws);
