@@ -1,0 +1,35 @@
+{
+  "id": "2026-11-25-studio-local-play-inspection",
+  "date": "2026-11-25",
+  "system": "studio",
+  "title": "Регионы и сущности в локальной сессии Studio",
+  "titleEn": "Inspect regions and entities during local Studio Play",
+  "summary": "World Explorer показывает, каким регионам принадлежат сущности работающего мира. Паузой и одиночным шагом можно выбрать момент для снимка.",
+  "summaryEn": "World Explorer shows which regions own the entities in a running world. Pause and step to choose the tick to inspect.",
+  "body": [
+    "Откройте карту проекта с модулем actor и запустите Play. Чтобы увидеть реестр, включите regionOwnership в правилах проекта. После шага нажмите обновление в World Explorer. Снимок содержит тик, номер сессии и число сущностей в каждой ячейке.",
+    "В панели Runtime можно выбрать сущность и прочесть её компоненты. В локальной игре с поддержкой редактирования можно на паузе изменить здоровье или энергию. Профилировщик показывает длительность тиков и время отдельных систем.",
+    "В Play Mode Review для поддерживаемых карт можно просмотреть изменения, применить выбранную группу и отменить её одним действием. Feature Readiness показывает состояние проверок проекта."
+  ],
+  "bodyEn": [
+    "Open a map in an actor project and start Play. Enable regionOwnership in the project rules to expose the ledger. After stepping, refresh World Explorer. The snapshot includes the tick, session epoch and entity count for each cell.",
+    "Select an entity in Runtime to inspect its components. Supported local games allow health or energy edits while paused. The simulation profiler displays tick durations and per-system timings.",
+    "On supported maps, Play Mode Review previews changes and applies the selection as one undoable edit. Feature Readiness displays the project's delivery checks."
+  ],
+  "status": "in-progress",
+  "branch": "feature/aiv20261123_feature_gate",
+  "commit": "911e3ceba",
+  "author": null,
+  "verified": "В Studio на macOS World Explorer показал две сущности в двух регионах проекта streamed. На отдельной карте просмотр изменений обнаружил 11 удалений, а отмена восстановила исходную карту.",
+  "verifiedEn": "Studio on macOS showed two entities in two regions of the streamed project. On a separate map, the review identified eleven removals and undo restored the original map.",
+  "limits": "Эти панели работают в нативном редакторе и показаны на кадрах Studio. Просмотр изменений карты использует GameCore. Для actor-сессий доступен просмотр реестра.",
+  "limitsEn": "These panels run in the native editor and are shown in Studio captures. Map change review uses GameCore. Actor sessions support ledger inspection.",
+  "media": [
+    {"src":"docs/evidence/studio-actor-g1/world-explorer-final.png","caption":"World Explorer на тике 123. Две ячейки содержат по одной активной сущности.","captionEn":"World Explorer at tick 123. Two cells each contain one live entity."},
+    {"src":"docs/evidence/studio-play-ad676e70c/runtime.png","caption":"Выбранная сущность и поля редактирования в Runtime.","captionEn":"A selected entity and its editable fields in Runtime."},
+    {"src":"docs/evidence/studio-play-ad676e70c/simulation_profiler.png","caption":"Время восьми тиков и вклад отдельных систем.","captionEn":"Eight tick timings and the contribution from individual systems."},
+    {"src":"docs/evidence/studio-play-ad676e70c/game.png","caption":"Панель просмотра изменений рядом с запущенной картой.","captionEn":"The change review panel alongside the running map."},
+    {"src":"docs/evidence/studio-play-ad676e70c/feature_readiness.png","caption":"Проверки зарегистрированных функций в Feature Readiness.","captionEn":"Delivery checks for registered features in Feature Readiness."}
+  ],
+  "links": [{"title":"Studio ECS inspector","href":"docs/editor-native-ecs-inspector.md"}]
+}
