@@ -34,18 +34,39 @@ int aiverseMain(int argc,char** argv) { @autoreleasepool {
             input.heights.assign(81,0);input.settings.pageSize=64;input.settings.texelsPerUnit=2;
             input.settings.samples=8;input.settings.probeSpacing=0;input.settings.threads=2;
             input.settings.mode=bake::BakedMode::Subtractive;
+            input.settings.probeSpacing=2;input.settings.probeHeight=2;input.settings.probeSamples=16;
+            const std::string asset="content/column.obj";
+            std::filesystem::create_directories(project/"content");
+            std::ofstream(project/asset)<<"v -1 0 -1\nv 1 0 -1\nv 0 2 0\nv 0 0 1\nf 1 3 2\nf 2 3 4\nf 4 3 1\nf 1 2 4\n";
+            auto read=[&](const std::string& path,std::string& bytes){
+                std::ifstream in(project/path,std::ios::binary);if(!in)return false;
+                bytes.assign(std::istreambuf_iterator<char>(in),{});return true;
+            };
+            auto model=render::loadModel(asset,read);
+            editor::DocEntity column;column.type="column";column.x=2;column.z=4;
+            doc.data.entities.push_back(column);
+            column.x=6;doc.data.entities.push_back(column);
+            const auto proxies=studio::studioDocumentProxies(doc,false);
+            const auto object=std::find_if(proxies.begin(),proxies.end(),[](const auto& p){return p.id=="entity:0";});
+            if(object==proxies.end())throw std::runtime_error("Missing column placement");
+            const auto& base=*object;
+            const auto placement=render::mat4::translate({base.center.x,base.center.y-base.half.y,base.center.z})*render::mat4::rotateY(base.yaw);
+            bake::CapturedBake::Draw captured;captured.path=asset;
+            for(const auto& node:model->bindWorld)captured.nodeWorld.push_back(placement*node);
+            captured.still.assign(captured.nodeWorld.size(),1);input.draws.push_back(std::move(captured));
+            const auto rules=Json::parse(R"({"types":{"column":{"view":{"model":"content/column.obj"}}}})");
             input.sun.on=false;input.sky.sky=input.sky.ground={.1f,.15f,2.f};
-            const auto result=bake::runCapturedBake(input,[](const auto&,auto&){return false;},
+            const auto result=bake::runCapturedBake(input,read,
                 [&](const auto& file,const auto& bytes){std::ofstream out(project/file,std::ios::binary);
                     out.write(bytes.data(),bytes.size());return bool(out);},{});
             if(!result.error.empty())throw std::runtime_error(result.error);
             doc.path=(project/"field.json").string();
-            auto draw=[&]{scene.frame(160,160,doc,false,"","",empty,0,1.5f,project.string());};
+            auto draw=[&]{scene.frame(160,160,doc,false,"","",empty,0,1.5f,project.string(),rules);};
             scene.setBakedSceneEnabled(true);
-            for(int i=0;i<100 && !scene.bakedSceneStatus().getInt("lightmapped");++i){
+            for(int i=0;i<100 && (scene.bakedSceneStatus().getInt("lightmapped")<2 || !scene.bakedSceneStatus().getInt("probed"));++i){
                 draw();std::this_thread::sleep_for(std::chrono::milliseconds(5));
             }
-            if(!scene.bakedSceneStatus().getBool("loaded") || !scene.bakedSceneStatus().getInt("lightmapped"))
+            if(!scene.bakedSceneStatus().getBool("loaded") || scene.bakedSceneStatus().getInt("lightmapped")<2 || !scene.bakedSceneStatus().getInt("probed"))
                 throw std::runtime_error("Missing baked terrain draw: "+scene.bakedSceneStatus().dump(-1));
             auto capture=[&](const char* name){
                 auto sample=std::make_shared<std::promise<std::vector<uint8_t>>>();auto ready=sample->get_future();
@@ -56,6 +77,7 @@ int aiverseMain(int argc,char** argv) { @autoreleasepool {
                 for(size_t i=0;i<pixels.size();i+=4)file.write(reinterpret_cast<const char*>(&pixels[i]),3);
                 return pixels;
             };
+            std::cout<<"Terrain, matching and moved model receivers: "<<scene.bakedSceneStatus().dump(-1)<<"\n";
             const auto baked=capture("baked.ppm");
             scene.setBakedSceneEnabled(false);draw();
             const auto realtime=capture("realtime.ppm");
@@ -67,7 +89,7 @@ int aiverseMain(int argc,char** argv) { @autoreleasepool {
             doc.path=(project/"other.json").string();draw();
             if(scene.bakedSceneStatus().getBool("loaded"))throw std::runtime_error("Scene leak across maps");
             std::cout<<"Baked terrain draws verified, blue channel changed at "<<changed<<" pixels\n";
-            scene.setBakedSceneEnabled(false);doc.path.clear();
+            scene.setBakedSceneEnabled(false);doc.path.clear();doc.data.entities.clear();++doc.revision;
         }
 
         {
