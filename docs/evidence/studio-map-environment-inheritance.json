@@ -1,0 +1,10 @@
+{
+  "sha": "e8c00b363a051d6422196cb9baf6dc2753db8444",
+  "argv": [
+    "bash",
+    "/tmp/map-environment-qa.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-map-environment-inheritance.log.txt",
+  "sha256": "4a42cf8bdd2b7c210a0a1dbad29ab51adceab793de7fd7128c026e47313539a4"
+}
