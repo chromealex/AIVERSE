@@ -11,6 +11,8 @@
     "docs/devlog/systems.json",
     "docs/encounters.md",
     "docs/evidence/issues-197-202-final-mac.json",
+    "docs/evidence/issues-197-202-final-mac.log.txt",
+    "docs/evidence/issues-197-202-integrated-mac.json",
     "docs/evidence/issues-197-202-integrated-mac.log.txt",
     "docs/features/encounter-phase-determinism.json",
     "engine/game/Encounters.cpp",

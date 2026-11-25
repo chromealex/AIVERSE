@@ -17,13 +17,16 @@
     "docs/agents/feature-policy.json",
     "docs/devlog/systems.json",
     "docs/evidence/issues-197-202-final-mac.json",
+    "docs/evidence/issues-197-202-final-mac.log.txt",
+    "docs/evidence/issues-197-202-integrated-mac.json",
     "docs/evidence/issues-197-202-integrated-mac.log.txt",
     "docs/evidence/native-simulation-checks-macos.json",
     "docs/evidence/native-simulation-checks-macos.log.txt",
     "docs/features/native-simulation-checks.json",
     "docs/native-modules.md",
     "skills/core/aiverse-native-scaffold/SKILL.md",
-    "tests/native_simulation_checks_mcp.py"
+    "tests/native_simulation_checks_mcp.py",
+    "tools/skills/audit.py"
   ],
   "traits": {
     "editable": false,
