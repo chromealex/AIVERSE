@@ -1,0 +1,12 @@
+{
+  "sha": "d73791202eae3f00adf6df2e24619caf8bbab700",
+  "argv": [
+    "python3.12",
+    "tools/site/build.py",
+    "publish",
+    "--dry-run"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/site-publish-main-d73791202.log.txt",
+  "sha256": "0fcba020fdbc4429a51942376a17976548f8ada0d2935924cd7fa30efa01a503"
+}
