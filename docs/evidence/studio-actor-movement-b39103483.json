@@ -1,0 +1,13 @@
+{
+  "sha": "b39103483b7a5c516d43357397ab374c42304044",
+  "argv": [
+    "npm",
+    "--prefix",
+    "apps/studio-web",
+    "run",
+    "test:web"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-actor-movement-b39103483.log.txt",
+  "sha256": "909c150fbb74e28ba223b817fbf23db50ab58419c31b250804e65eb3156c6cb8"
+}

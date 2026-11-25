@@ -1,0 +1,31 @@
+{
+  "id": "2026-11-25-studio-actor-movement",
+  "date": "2026-11-25",
+  "system": "studio",
+  "status": "in-progress",
+  "branch": "studio-only-editor",
+  "commit": "b39103483",
+  "author": null,
+  "links": [],
+  "title": "Скорость движения персонажа",
+  "titleEn": "Actor movement speeds",
+  "summary": "В Actors & Cameras появились настройки скорости ходьбы и спринта.",
+  "summaryEn": "Actors & Cameras now provides walk and sprint speed controls.",
+  "body": [
+    "Откройте вкладку Movement. Скорость указана в метрах в секунду. Если увеличить скорость ходьбы выше скорости спринта, второй ползунок поднимется вместе с первым."
+  ],
+  "bodyEn": [
+    "Open Movement to edit speeds in metres per second. Raising walk speed above sprint speed moves both sliders together."
+  ],
+  "verified": "В окне macOS сохранены 12,25 и 16,5 м/с. Проверены остальные поля правил и файл карты.",
+  "verifiedEn": "Saved 12.25 and 16.5 m/s on macOS and checked the remaining rules fields and map file.",
+  "limits": "Визуальная проверка Windows предстоит.",
+  "limitsEn": "Windows visual verification remains pending.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-actor-movement/actor-movement.png",
+      "caption": "Настройки движения",
+      "captionEn": "Movement settings"
+    }
+  ]
+}

@@ -148,7 +148,7 @@ Derived from actual AIVERSE_EDITOR_WINDOW registrations in apps/editor/windows. 
 | `console` | `apps/editor/windows/ConsoleWindow.cpp` | Mac activity and build output verified. Windows verification pending |
 | `fields` | `apps/editor/windows/FieldsWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) + Scene field brush (111) |
 | `fog` | `apps/editor/windows/FogWindow.cpp` | Fog of War panel, same controls (108) |
-| `FpsWindow` | `apps/editor/windows/FpsWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) (fps + LENS). Simulation now edits tick rate, snapshot rate and player limit with guarded rules saves, verified on macOS. Legacy movement and loadout forms remain open. |
+| `FpsWindow` | `apps/editor/windows/FpsWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) (fps + LENS). Simulation now edits tick rate, snapshot rate and player limit with guarded rules saves, verified on macOS. Movement edits walk and sprint speeds in actor.motor, verified on macOS. The legacy loadout form remains open. |
 | `effects` | `apps/editor/windows/FxWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) |
 | `game` | `apps/editor/windows/GameWindow.cpp` | Partial: native shared GameClient Play map/menu/Stop, Metal surface, keyboard/mouse, runtime menu pause/resume visually verified (80); editor pause/step/restart verified (81); device dimensions/orientation/safe area/touch verified (82); runtime inspection, FPS and device chrome still pending |
 | `generate` | `apps/editor/windows/GenWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) |
