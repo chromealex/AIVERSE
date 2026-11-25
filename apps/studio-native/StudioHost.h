@@ -23,6 +23,8 @@
 #include <string>
 #include <vector>
 
+namespace aiverse::game { class GameLights; }
+
 namespace aiverse::studio {
 
 enum class StudioSurface { Scene, Game, Fx, Material, Shader, FacialRig, Character, Appearance, AnimationGraph, AnimationRig, Attachments, LensCamera, Lighting, Count };
@@ -270,7 +272,8 @@ private:
         NativeViewportPlacement placement;
         std::unique_ptr<StudioScene> renderer;
     } materialSurface_, shaderSurface_, facialRigSurface_, characterSurface_, appearanceSurface_, animationGraphSurface_, animationRigSurface_, attachmentSurface_, lensSurface_, lightingSurface_;
-    std::optional<render::Lighting> weatherEnvironment_;
+    std::unique_ptr<game::GameLights> weatherLights_;
+    double weatherStart_=0;
     PreviewDayLighting weatherDay_;
     std::string weatherEpoch_;
     std::string attachmentProject_, lensProject_;

@@ -866,25 +866,29 @@ void StudioHost::tick() {
     tickAgentScreenshot();
     pollAgentRequests();
     finishLensCapture();
-    if(weatherEnvironment_ && lightingSurface_.placement.visible && platform_.surfaceDrawable(StudioSurface::Lighting)) {
+    if(weatherLights_ && lightingSurface_.placement.visible && platform_.surfaceDrawable(StudioSurface::Lighting)) {
         if(session_->graphDocumentScope().getStr("epoch")!=weatherEpoch_) {
-            weatherEnvironment_.reset();
+            weatherLights_.reset();
             if(lightingSurface_.renderer)onScene([&]{lightingSurface_.renderer.reset();});
         } else try {
             if(!renderThread_){
                 const char* threaded=std::getenv("AIVERSE_STUDIO_RENDER_THREAD");
                 renderThread_=std::make_unique<StudioRenderThread>([this]{renderSceneFrame();},!(threaded&&std::string(threaded)=="0"));
             }
+            const double seconds=platform_.now()-weatherStart_;
             onScene([&]{platform_.sceneThreadScope([&]{
                 auto& asset=lightingSurface_;
                 if(!asset.renderer)asset.renderer=std::make_unique<StudioScene>(platform_.createDevice(StudioSurface::Lighting));
-                asset.renderer->setWeatherPreview(*weatherEnvironment_,weatherDay_);
+                render::Lighting environment;
+                weatherLights_->updateSky(environment,seconds);
+                weatherDay_.night=weatherLights_->night();
+                asset.renderer->setWeatherPreview(environment,weatherDay_,float(seconds));
                 const auto& ws=session_->workspace();
                 asset.renderer->frame(asset.placement.pixelsW,asset.placement.pixelsH,ws.map,ws.map.data.worldSpace,
                     "","",Json{},0,float(ws.project.rules.levelHeight.toDouble()),ws.project.dir,ws.project.rulesJson);
             });});
         } catch(const std::exception& e) {
-            weatherEnvironment_.reset();
+            weatherLights_.reset();
             sendEvent("lighting.previewError",e.what());
             surfaceDetached(StudioSurface::Lighting);
         }
@@ -3299,14 +3303,13 @@ bool StudioHost::handleHostMethod(const Json& req) {
         auto patch=studioMapLightingPatch(params);
         if(params.getStr("key")!="weather")throw std::runtime_error("Expected preview weather");
         const float time=float(patch["time"].toDouble()), clouds=float(patch["clouds"].toDouble()), storm=float(patch["storm"].toDouble());
-        game::GameLights lights;
+        auto lights=std::make_unique<game::GameLights>();
         const auto block=ws.map.data.worldSpace?ws.map.toJson()["lighting"]:ws.map.data.extra["lighting"];
-        lights.configure(ws.project.manifest["lighting"],block);
-        lights.setPreview(true,time,clouds,storm);
-        render::Lighting environment;
-        lights.updateSky(environment,0);
-        weatherEnvironment_=environment;weatherEpoch_=epoch;
-        weatherDay_.night=lights.night();weatherDay_.clouds=clouds;
+        lights->configure(ws.project.manifest["lighting"],block);
+        lights->setPreview(true,time,clouds,storm);
+        if(!weatherLights_ || weatherEpoch_!=epoch)weatherStart_=platform_.now();
+        weatherLights_=std::move(lights);weatherEpoch_=epoch;
+        weatherDay_.clouds=std::max(clouds,.85f*storm);
         return Json::object();
     });
     if(method=="studio.worldProcessGroupPivot")return answer([&]{

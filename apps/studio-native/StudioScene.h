@@ -468,9 +468,9 @@ public:
     // Default: draw every frame() call and rebuild lighting on every edit (tests,
     // automation, captures). The interactive Studio viewport turns this off: it
     // then skips idle frames and debounces lighting rebuilds during edit bursts.
-    void setWeatherPreview(const render::Lighting& lighting, PreviewDayLighting day) {
+    void setWeatherPreview(const render::Lighting& lighting, PreviewDayLighting day, float seconds=0) {
         weatherEnvironment_=lighting;
-        weatherDay_=day;
+        weatherDay_=day;weatherSeconds_=seconds;
     }
     void setContinuousRedraw(bool on) { continuousRedraw_ = on; }
     // Automation (AIVERSE_STUDIO_WIND_SHOTS): frame a point of interest.
@@ -782,6 +782,7 @@ private:
     Json lightingSettings_ = Json::object();
     bool useLighting_ = false;
     PreviewDayLighting day_{},weatherDay_{};
+    float weatherSeconds_=0;
     std::optional<render::Lighting> weatherEnvironment_;
     bool showTerrain_ = true;
     void rebuildProxyDraws(const editor::MapDoc& doc);

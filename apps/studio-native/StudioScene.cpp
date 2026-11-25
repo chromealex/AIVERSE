@@ -3654,7 +3654,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     renderer_.lighting=environment;
     if (weatherEnvironment_ || lightingSource.isObject()) {
         renderer_.lights.setNightGlow(day.night*1.5f);
-        renderer_.lights.setClouds(day.clouds,.6f,16.f,0,0);
+        renderer_.lights.setClouds(day.clouds,.6f,16.f,-weatherSeconds_,-.5f*weatherSeconds_);
     }
     if(!planetaryChart&&(!lightingRuntime_.direct || !lightingRuntime_.direct->enabled))
         for(const auto& light:activeLights)renderer_.lights.add(light);
