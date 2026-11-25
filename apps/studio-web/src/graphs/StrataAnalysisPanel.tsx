@@ -7,8 +7,8 @@ import {parseStrataAnalysis,strataReportGraph} from './strataAnalysis';
 import type {StrataAnalysis} from './strataAnalysis';
 
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v);
-const op=async(name:string,params:Record<string,unknown>={})=>(await invoke('studio.op',{op:name,params})).result;
-export default function StrataAnalysisPanel({projectPath,suggestedModel='',disabled=false}:{projectPath:string;suggestedModel?:string;disabled?:boolean}){
+export default function StrataAnalysisPanel({documentEpoch,projectPath,suggestedModel='',disabled=false}:{documentEpoch?:string;projectPath:string;suggestedModel?:string;disabled?:boolean}){
+ const op=async(name:string,params:Record<string,unknown>={})=>(await invoke('studio.op',{op:name,params,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch})).result;
  const [guid,setGuid]=useState(''),[path,setPath]=useState(suggestedModel);
  const [cap,setCap]=useState<Record<string,unknown>|null>(null),[report,setReport]=useState<StrataAnalysis|null>(null);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[elapsed,setElapsed]=useState<number|null>(null),[analyzed,setAnalyzed]=useState('');
@@ -21,7 +21,7 @@ export default function StrataAnalysisPanel({projectPath,suggestedModel='',disab
    setCap(r);
   }).catch(e=>{if(epoch.current===token)setError(String(e))});
   return ()=>{if(epoch.current===token)epoch.current++};
- },[projectPath,suggestedModel]);
+ },[projectPath,suggestedModel,documentEpoch]);
  const clear=()=>{setReport(null);setElapsed(null);setAnalyzed('');setError('')};
  const analyze=async()=>{
   if(lock.current||disabled||cap?.builderAvailable!==true||(!guid&&!path.trim()))return;

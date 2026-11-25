@@ -5,6 +5,7 @@
 #pragma once
 #include "engine/platform/TemplatesDir.h"
 #include <atomic>
+#include <cstdint>
 #include <functional>
 #include <mutex>
 #include <memory>
@@ -93,6 +94,7 @@ public:
     std::string buildTool;        // aiversebuild executable
     std::string gameExe;          // game client (ui_preview renders screens with it)
     Project project;
+    uint64_t projectLifetime() const noexcept { return projectLifetime_; }
     MapDoc map;
     std::vector<Activity> activity;
     std::vector<Change> changes;  // consumed by the GUI each frame
@@ -162,6 +164,7 @@ public:
     Json toolchainCheck(const std::string& target) const;
 
 private:
+    uint64_t projectLifetime_=0;
     void registerCoreOps();
     std::thread buildThread_;
     std::atomic<bool> building_{false};

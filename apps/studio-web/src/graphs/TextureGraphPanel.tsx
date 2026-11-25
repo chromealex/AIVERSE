@@ -40,7 +40,7 @@ function projection(graph:Obj,catalog:Obj[]):GraphView{
  });
  return {nodes,links};
 }
-export default function TextureGraphPanel({projectPath,disabled,onEdit,active=true}:{projectPath:string;disabled:boolean;active?:boolean;onEdit:(key:MaterialKey,value:FieldValue)=>void}){
+export default function TextureGraphPanel({documentEpoch,projectPath,disabled,onEdit,active=true}:{documentEpoch?:string;projectPath:string;disabled:boolean;active?:boolean;onEdit:(key:MaterialKey,value:FieldValue)=>void}){
  const [reuseName,setReuseName]=useState('');
  const [functionAssetName,setFunctionAssetName]=useState(''),[functionAssetRecord,setFunctionAssetRecord]=useState<{name:string;graph:Obj;originalJson?:string}|null>(null);
  const [functionName,setFunctionName]=useState(''),[functionChoice,setFunctionChoice]=useState(''),[functionOutput,setFunctionOutput]=useState('');
@@ -63,6 +63,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
  const [liveTarget,setLiveTarget]=useState<{typeIndex:number;choiceIndex:number;materialIndex:number;expectedVersion:string;expectedModelPublication:string;modelPath:string;materialName:string;proceduralLiveImages:number;proceduralTombstones:number;pendingImageRetirement:number;automaticCollectionEnabled:boolean;automaticRecyclingEnabled:boolean;automaticCollectionDetached:string;automaticCollectionDeferred:string}|null>(null);
  const [liveApply,setLiveApply]=useState('');
  const [preview,setPreview]=useState<{hex:string;width:number;height:number;source:string}|null>(null),[asset,setAsset]=useState<{guid:string;path:string;key:MaterialKey}|null>(null);
+ const [recoveryRows,setRecoveryRows]=useState<Obj[]>([]),[quarantineRows,setQuarantineRows]=useState<Obj[]>([]);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[status,setStatus]=useState('');
  const [inspectorTab,setInspectorTab]=useState<'node'|'outputs'|'parameters'>('node');
  const [gpuPolling,setGpuPolling]=useState(false),[previewKind,setPreviewKind]=useState('');
@@ -80,8 +81,8 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
  const history=useRef(new DraftHistory(JSON.stringify(template,null,2),64)),autoAttempt=useRef('');
  const epoch=useRef(0),lock=useRef(false),canvas=useRef<HTMLCanvasElement>(null);
  const latestDraft=useRef(text);latestDraft.current=text;
- useEffect(()=>{epoch.current++;lock.current=false;linkedBaselines.current.clear();setAutoDependencies(false);setDependencyStatus('');setResidentHdr(null);setHdrCapturePending(false);setBcFormat('png');setBcMips(true);setHdrExportFormat('exr');setHdrShaderGraphEnabled(false);setHdrShaderGraphName('');setBusy(false);setOriginal(null);setName('');setOverrideText('{}');setBakedSet('');setGpuRequest(null);setGpuPolling(false);setPreviewKind('');setGpuCaps(null);setPbrReady('');setPbrCapture('');setPbrImage(null);setSceneTargets([]);setSceneAsset('');setSceneMaterial('0');setModelAssets([]);setHdriAssets([]);setRenderedHdri('');setHdri('');setHdriYaw(0);setHdriIntensity(1);setImageAssets([]);setImageAssetChoice('');setPbrAsset('');setPreviewMode('texture');setQueueTicket('');setQueueInfo(null);setQueueDrafts({});setGpuReady(false);setResidentReady(false);setLiveTarget(null);setLiveApply('');setGpuStatus('');history.current=new DraftHistory(JSON.stringify(template,null,2),64);autoAttempt.current='';setClipboard(null);setSnippet([]);setSelection([]);setSelected('');setGroupTitle('');setReuseName('');setFunctionAssetName('');setFunctionAssetRecord(null);setFunctionName('');setFunctionChoice('');setFunctionOutput('');setThumbnails({key:'',images:{}});setText(history.current.current());setNames([]);setCatalog([]);setTemplates([]);setOutputTypes({});setAssets([]);setPending(null);setAsset(null);setPreview(null);setError('');setStatus('');
- return()=>{epoch.current++;lock.current=false};},[projectPath]);
+ useEffect(()=>{epoch.current++;lock.current=false;linkedBaselines.current.clear();setAutoDependencies(false);setDependencyStatus('');setResidentHdr(null);setHdrCapturePending(false);setBcFormat('png');setBcMips(true);setHdrExportFormat('exr');setHdrShaderGraphEnabled(false);setHdrShaderGraphName('');setBusy(false);setOriginal(null);setName('');setOverrideText('{}');setBakedSet('');setGpuRequest(null);setGpuPolling(false);setPreviewKind('');setGpuCaps(null);setPbrReady('');setPbrCapture('');setPbrImage(null);setSceneTargets([]);setSceneAsset('');setSceneMaterial('0');setModelAssets([]);setHdriAssets([]);setRenderedHdri('');setHdri('');setHdriYaw(0);setHdriIntensity(1);setImageAssets([]);setImageAssetChoice('');setPbrAsset('');setPreviewMode('texture');setQueueTicket('');setQueueInfo(null);setQueueDrafts({});setGpuReady(false);setResidentReady(false);setLiveTarget(null);setLiveApply('');setGpuStatus('');setRecoveryRows([]);setQuarantineRows([]);history.current=new DraftHistory(JSON.stringify(template,null,2),64);autoAttempt.current='';setClipboard(null);setSnippet([]);setSelection([]);setSelected('');setGroupTitle('');setReuseName('');setFunctionAssetName('');setFunctionAssetRecord(null);setFunctionName('');setFunctionChoice('');setFunctionOutput('');setThumbnails({key:'',images:{}});setText(history.current.current());setNames([]);setCatalog([]);setTemplates([]);setOutputTypes({});setAssets([]);setPending(null);setAsset(null);setPreview(null);setError('');setStatus('');
+ return()=>{epoch.current++;lock.current=false};},[projectPath,documentEpoch]);
  useEffect(()=>{const c=canvas.current;if(!c||!preview||preview.source!==text)return;
  const bytes=new Uint8ClampedArray(preview.hex.length/2);for(let i=0;i<bytes.length;i++)bytes[i]=parseInt(preview.hex.slice(i*2,i*2+2),16);
  c.getContext('2d')?.putImageData(new ImageData(bytes,preview.width,preview.height),0,0);
@@ -106,7 +107,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
  useEffect(()=>{if(showSearch)searchInput.current?.focus();},[showSearch]);
  useEffect(()=>{if(!active)setExpanded(false);},[active]);
  useEffect(()=>{if(!expanded)return;const fn=(e:KeyboardEvent)=>{if(e.key==='Escape')setExpanded(false);};document.addEventListener('keydown',fn);return()=>document.removeEventListener('keydown',fn);},[expanded]);
- const run=async(action:string)=>{
+ const run=async(action:string,recoveryId='')=>{
   if(lock.current||disabled||!projectPath)return;lock.current=true;setBusy(true);setError('');setStatus('');const token=epoch.current;
   try{
    if(action==='refreshDependencies'||action==='watchDependencies'){
@@ -225,6 +226,16 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
     if(!bakedSet)throw new Error('Bake a set and configure its importer first');
     const r=await op('texture_graph_material_variant',{textureName:bakedSet,materialName:variantName,base:baseMaterial});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true)throw new Error('Native material variant creation failed');setStatus('Created inherited material '+variantName+'; refresh Materials.');return;
+   }
+   if(['publications','quarantine','restore','resume','finalize'].includes(action)){
+    const actions:Record<string,string>={quarantine:'texture_graph_publication_quarantine',restore:'texture_graph_quarantine_restore',resume:'texture_graph_publication_resume',finalize:'texture_graph_publication_finalize'};
+    if(action!=='publications'){
+     const r=await op(actions[action],{id:recoveryId});if(token!==epoch.current)return;
+     if(!object(r)||r.ok!==true)throw Error('Recovery operation rejected');
+    }
+    const [pending,archived]=await Promise.all([op('texture_graph_publications_get'),op('texture_graph_quarantine_get')]);if(token!==epoch.current)return;
+    if(!object(pending)||!Array.isArray(pending.publications)||!object(archived)||!Array.isArray(archived.quarantine))throw Error('Recovery report unavailable');
+    setRecoveryRows(pending.publications.filter(object));setQuarantineRows(archived.quarantine.filter(object));return;
    }
    if(action==='cache'||action==='clearCache'){const r=await op('texture_graph_cache',{clear:action==='clearCache'});if(token===epoch.current)setStatus(JSON.stringify(r));return;}
    if(action==='studioModelTargets'){
@@ -433,7 +444,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
       for(const row of r.files.filter(object)){
         const a=index.files.find(a=>'content/'+a.path===row.path&&a.importer==='texture'&&a.guid);
         if(!a?.guid||typeof row.sRGB!=='boolean'||typeof row.output!=='string')continue;
-        const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:row.sRGB});if(token!==epoch.current)return;
+        const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:row.sRGB,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch});if(token!==epoch.current)return;
         if(patched.guid!==a.guid||patched.settings.sRGB!==row.sRGB)throw new Error('Importer color-space verification failed for '+a.path);
         configured++;const key=channels[row.output];if(key)mapped.push({guid:a.guid,path:a.path,key});
       }
@@ -444,7 +455,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
     setGpuReady(false);setResidentReady(false);setGpuRequest(null);setStatus('Published '+r.path+' via '+String(r.backend)+(typeof r.compressedBytes==='number'?' · '+String(r.compressionBackend??'cpu').toUpperCase()+' encoder · '+String(r.compressedBytes)+' / '+String(r.rgbaBytes)+' bytes':''));setAsset(null);
     const index=await invoke('studio.assets',{});if(token!==epoch.current)return;
     const a=index.files.find(a=>'content/'+a.path===r.path&&a.importer==='texture'&&a.guid);
-    if(a?.guid){const srgb=output==='color'||output==='emissive';const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:srgb});if(token!==epoch.current)return;
+    if(a?.guid){const srgb=output==='color'||output==='emissive';const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:srgb,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch});if(token!==epoch.current)return;
       if(patched.guid!==a.guid||patched.settings.sRGB!==srgb)throw new Error('Importer color-space verification failed');const key=channels[output];if(key)setAsset({guid:a.guid,path:a.path,key});}
     return;
    }
@@ -554,7 +565,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
     for(const row of r.files.filter(object)){
       const a=index.files.find(a=>'content/'+a.path===row.path&&a.importer==='texture'&&a.guid);
       if(!a?.guid||typeof row.sRGB!=='boolean'||typeof row.output!=='string')continue;
-      const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:row.sRGB});if(token!==epoch.current)return;
+      const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:row.sRGB,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch});if(token!==epoch.current)return;
       if(patched.guid!==a.guid||patched.settings.sRGB!==row.sRGB)throw new Error('Importer color-space verification failed for '+a.path);
       configured++;const key=channels[row.output];if(key)mapped.push({guid:a.guid,path:a.path,key});
     }
@@ -568,7 +579,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
     const key=channels[output];
     const assets=await invoke('studio.assets',{});if(token!==epoch.current)return;
     const a=assets.files.find(a=>'content/'+a.path===r.path&&a.importer==='texture'&&a.guid);
-    if(a?.guid){const srgb=output==='color'||output==='emissive';const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:srgb});if(token!==epoch.current)return;if(patched.guid!==a.guid||patched.settings.sRGB!==srgb)throw new Error('Importer color-space verification failed');if(key)setAsset({guid:a.guid,path:a.path,key});}else setStatus('Baked '+r.path+'; refresh Assets and assign with asset picker.');
+    if(a?.guid){const srgb=output==='color'||output==='emissive';const patched=await invoke('studio.assetMetaPatch',{guid:a.guid,key:'sRGB',value:srgb,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch});if(token!==epoch.current)return;if(patched.guid!==a.guid||patched.settings.sRGB!==srgb)throw new Error('Importer color-space verification failed');if(key)setAsset({guid:a.guid,path:a.path,key});}else setStatus('Baked '+r.path+'; refresh Assets and assign with asset picker.');
    }
   }catch(e){if(epoch.current===token){if(action==='watchDependencies'||action==='refreshDependencies')setDependencyStatus(e instanceof Error?e.message:String(e));if(action==='gpuRead')setGpuPolling(false);if(action==='studioPbrRead')setPbrCapture('');setError(e instanceof Error?e.message:String(e))}}
   finally{if(epoch.current===token){lock.current=false;setBusy(false)}}
@@ -761,6 +772,14 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
   </div>
   <section className="tg-footer">
    {status&&<StudioAlert>{status}</StudioAlert>}
+   <div className="tg-bake-row" aria-label="Texture publication recovery">
+    <StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('publications')}>Inspect pending publications</StudioButton>
+    {recoveryRows.map(r=><div key={String(r.id)}><small>{String(r.id)} · {String(r.status)}</small>
+      {r.quarantinable===true&&<><StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('quarantine',String(r.id))}>Quarantine</StudioButton><StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('resume',String(r.id))}>Resume verified stage</StudioButton></>}
+      {r.status==='destination_matches_evidence'&&r.stagePresent!==true&&<StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('finalize',String(r.id))}>Archive verified journal</StudioButton>}
+    </div>)}
+    {quarantineRows.map(r=><div key={String(r.id)}><small>{String(r.id)} · quarantined</small><StudioButton size="sm" disabled={busy||disabled} onClick={()=>void run('restore',String(r.id))}>Restore journal</StudioButton></div>)}
+   </div>
    <div className="tg-bake-row">
       <StudioInput aria-label="New texture name" value={textureName} disabled={busy||disabled} onChange={e=>setTextureName(e.target.value)}/>
     <StudioButton size="sm" variant="primary" disabled={busy||disabled||!gpuCaps?.available||!outputs.length||gpuPolling} onClick={()=>void run('gpuBakeSet')}>GPU PBR bake</StudioButton>

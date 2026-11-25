@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include "Workspace.h"
+#include "ProjectAssetWriteLock.h"
 
 namespace aiverse::editor::graph_asset {
 namespace fs = std::filesystem;
@@ -38,7 +39,7 @@ inline bool sameDocument(const Json& original, const Json& expected) {
 
 class Transaction {
 public:
-    explicit Transaction(const fs::path& path, const fs::path& projectRoot) : target_(fs::weakly_canonical(path)) {
+    explicit Transaction(const fs::path& path, const fs::path& projectRoot) : projectLock_(projectRoot), target_(fs::weakly_canonical(path)) {
         const auto relative=target_.lexically_relative(fs::weakly_canonical(projectRoot));
         if(projectRoot.empty() || relative.empty() || relative=="." || *relative.begin()==".." || fs::is_symlink(fs::symlink_status(path)))
             throw std::runtime_error("Graph write path is outside the project or is a symlink");
@@ -84,6 +85,7 @@ public:
         fs::rename(temp, target_);
     }
 private:
+    ProjectAssetWriteLock projectLock_;
     fs::path target_, lock_;
 };
 } // namespace aiverse::editor::graph_asset

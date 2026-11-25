@@ -1,0 +1,3 @@
+# Stage 68 — material library transaction
+
+Parent c7ff1dd3, PR #183. MaterialOps set/delete acquire GraphAssetTransaction before reading library and retain it through atomic replacement. Preserve other top-level document fields. Create-only native variant/Studio building material/preset operations enforce uniqueness under lock; Studio patch requires existing material. Regression fixtures for lock contention and creation/deletion authored. Existing full-library save helper now also locks its replacement but external read-modify-write clients must cooperate separately. No cross-file crash atomicity or arbitrary external writer guarantee. Build/tests NOT RUN. Main untouched.

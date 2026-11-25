@@ -1,0 +1,3 @@
+# Stage 79 — texture quarantine restore and verified resume
+
+Parent f756d184, PR #183. Native quarantine list, restore isolated journal to pending, explicit verified stage resume; validates fixed identities, vacant destination, SHA-256 and exact staged file inventory. Studio controls for inspect/quarantine/restore/resume/finalize. Regression covers incomplete stage rejection and verified single-file resume (synthetic bytes, not PNG decode). Cooperating writer lease only; external empty-directory rename race, post-publication archive failure, power-loss durability, importer reconciliation and material rollback remain limitations. Build/tests NOT RUN. Main untouched.

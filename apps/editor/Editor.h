@@ -720,6 +720,8 @@ private:
     Json graphMaterialApplyStatus() const;
     Json graphMaterialOp(const Json& p);
     void applyQueuedGraphMaterial();
+    uint64_t graphOwnerProjectLifetime_=0;
+    void syncGraphOwnerProjectLifetime();
     Json graphWatchSample(const std::string& domain,const std::string& entity) const;
     void captureGraphWatch() noexcept;
     std::vector<game::ComputerPlayer> bots_;

@@ -11,6 +11,15 @@
 
 namespace aiverse::editor {
 
+void Editor::syncGraphOwnerProjectLifetime(){
+    const auto lifetime=ws_.projectLifetime();
+    if(graphOwnerProjectLifetime_==lifetime)return;
+    graphOwnerProjectLifetime_=lifetime;
+    textureGraphGpuPreview_.invalidateProjectLifetime();
+    graphGpuProfile_.clear();
+}
+
+
 using namespace aiverse::game;
 
 Json Editor::graphMaterialApplyStatus() const {
@@ -195,6 +204,7 @@ void Editor::registerPlayOps() {
                 return r;
             }
             if(!dev_)throw std::runtime_error("native graphics owner unavailable");
+            syncGraphOwnerProjectLifetime();
             textureGraphGpuPreview_.checkProject(ws_.project.dir);
             const auto action=p.getStr("action");
             if(action=="materialTarget"||action=="applyMaterial"||action=="materialApplyStatus")return graphMaterialOp(p);
@@ -238,6 +248,7 @@ void Editor::registerPlayOps() {
             if(!dev_||ws_.project.dir.empty()){
                 Json r=Json::object();r.set("available",Json::fromBool(false));r.set("reason",Json::string("Native editor graphics owner unavailable"));return r;
             }
+            syncGraphOwnerProjectLifetime();
             graphGpuProfile_.checkProject(ws_.project.dir);
             if(action=="start")graphGpuProfile_.start(dev_->info(),ws_.project.dir,p.getBool("textureGroupDetail"));
             else if(action=="stop")graphGpuProfile_.stop();

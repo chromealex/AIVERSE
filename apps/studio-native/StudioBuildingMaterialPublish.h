@@ -2,7 +2,9 @@
 // Explicit create-only publication of one authored style slot. No browser paths.
 #include "apps/studio-native/StudioBuildingGeneration.h"
 #include "apps/studio-native/StudioMaterialValidation.h"
+#include "apps/studio-native/StudioMaterialPublicationJournal.h"
 #include <functional>
+#include "apps/editor/core/ProjectAssetWriteLock.h"
 
 namespace aiverse::studio {
 using BuildingMaterialPublishSave=std::function<void(const std::string&,const Json&)>;
@@ -12,6 +14,7 @@ inline Json studioBuildingPublishMaterial(const std::filesystem::path& engine,
     namespace fs=std::filesystem;
     using namespace buildingStudioDetail;
     if(project.empty()||!save)throw std::runtime_error("Open a project before publishing a material");
+    editor::ProjectAssetWriteLock projectLock(project);
     const auto id=params.getStr("style"),slot=params.getStr("slot"),name=params.getStr("name");
     if(!safeMaterialId(slot)||!validStudioMaterialName(name))
         throw std::runtime_error("Invalid material slot or publication name");
@@ -41,8 +44,12 @@ inline Json studioBuildingPublishMaterial(const std::filesystem::path& engine,
     if(!fs::exists(state))fs::create_directory(parent);
     const auto folder=parent/name;
     // Exclusive reservation; no overwriting a previous asset or following a link.
-    if(!fs::create_directory(folder))
+    if(fs::exists(folder)||fs::is_symlink(folder)||fs::exists(studioMetaPath(folder))||fs::is_symlink(studioMetaPath(folder)))
         throw std::runtime_error("Material asset folder already exists; choose another name");
+    StudioMaterialPublicationJournal journal(project,name,true);
+    Json recipe=Json::object();recipe.set("name",Json::string(name));recipe.set("style",Json::string(id));recipe.set("slot",Json::string(slot));recipe.set("resolution",Json::number(int64_t(resolution)));journal.recipe(recipe);
+    const auto stage=journal.stage();
+    if(!fs::create_directory(stage))throw std::runtime_error("Material staging busy");
     try{
         StudioAssetCatalog catalog(project);
         catalog.rebuild();
@@ -74,12 +81,17 @@ inline Json studioBuildingPublishMaterial(const std::filesystem::path& engine,
             const auto pixels=generateBuildingSurface(source.surfacePattern,source.id,source.surfaceSeed,
                 kBuildingSurfaceChannels[i],resolution);
             const auto bytes=building::encodeBuildingPngRgba(pixels.rgba,pixels.width,pixels.height);
-            std::ofstream stream(folder/filenames[i],std::ios::binary);
+            std::ofstream stream(stage/filenames[i],std::ios::binary);
             if(!stream||!stream.write(reinterpret_cast<const char*>(bytes.data()),std::streamsize(bytes.size())))
                 throw std::runtime_error("Cannot write generated texture");
             stream.close();
             if(!stream)throw std::runtime_error("Cannot finish generated texture");
         }
+        // Once exposure starts, failures retain all evidence and content.
+        if(fs::exists(folder)||fs::is_symlink(folder)||fs::exists(studioMetaPath(folder))||fs::is_symlink(studioMetaPath(folder)))
+            throw std::runtime_error("Material destination appeared");
+        journal.beginExposure();
+        fs::rename(stage,folder);
         catalog.rebuild();
         for(size_t i=0;i<kBuildingSurfaceChannels.size();++i){
             if(!guids[i].empty())continue;
@@ -91,19 +103,22 @@ inline Json studioBuildingPublishMaterial(const std::filesystem::path& engine,
             material.set(keys[i],Json::string("content/"+path));
             Json asset=Json::object();asset.set("path",Json::string(path));
             asset.set("guid",Json::string(entry->guid));asset.set("channel",Json::string(keys[i]));
+            asset.set("sha256",Json::string(editor::publicationFileSha256(folder/filenames[i])));
+            asset.set("metadata",Json::parseFile(studioMetaPath(folder/filenames[i]).string()));
             assets.push(std::move(asset));
         }
         Json result=Json::object();result.set("name",Json::string(name));
         result.set("path",Json::string(folder.lexically_relative(root).generic_string()));
+        journal.assets(assets);
         result.set("assets",std::move(assets));
         // Last potentially failing operation: canonical MaterialOps save.
+        journal.candidate(material);
         save(name,material);
+        journal.finish();
         return result;
     }catch(...){
-        // Only our exclusively reserved folder and its catalog sidecar.
-        ec.clear();fs::remove_all(folder,ec);
-        ec.clear();fs::remove(studioMetaPath(folder),ec);
-        try{StudioAssetCatalog repair(project);repair.rebuild();}catch(...){}
+        // Do not erase a folder after an ambiguous material commit or expose
+        // partial assets by cleanup. Pending journal remains available.
         throw;
     }
 }

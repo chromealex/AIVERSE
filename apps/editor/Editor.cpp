@@ -2663,6 +2663,7 @@ void Editor::frame(gfx::Device& dev, double dt) {
     viewportRetirement_.setBudgetBytes(retirementBudgetBytes);
     // Only completed scoped GPU queries are returned. This is a distinct
     // queue from whole-frame timing/benchmark APIs; never consume those.
+    syncGraphOwnerProjectLifetime();
     graphGpuProfile_.checkProject(ws_.project.dir);
     for (const auto& timing : dev.takeGpuScopeTimings()) {
         if (timing.valid && std::isfinite(timing.milliseconds) &&
@@ -2740,6 +2741,7 @@ void Editor::frame(gfx::Device& dev, double dt) {
         r3d_.pollPendingModelPipelineJobs();
     pollAgentLink();
     applyChanges();
+    syncGraphOwnerProjectLifetime();
     graphGpuProfile_.checkProject(ws_.project.dir);
     if(view_.automaticGraphImageCollectionEnabled()&&!pendingGraphMaterialApply_&&!clientPlaying()){
         const auto graphState=textureGraphGpuPreview_.status();

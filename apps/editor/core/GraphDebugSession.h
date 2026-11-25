@@ -16,6 +16,7 @@ class Session {
     graph_telemetry::History history_;
     graph_telemetry::Identity identity_;
     std::string project_, stopReason_="not-started";
+    uint64_t projectLifetime_=0;
     std::set<std::string> states_, nodes_;
     uint64_t serial_=0, step_=0;
     bool active_=false;
@@ -24,7 +25,7 @@ public:
         active_=false;history_.clear();fx_.reset();motion_.reset(nullptr);compiled_.reset();model_.reset();
         states_.clear();nodes_.clear();step_=0;stopReason_="stopped";project_.clear();
     }
-    void checkProject(const Workspace& ws){if(active_&&project_!=ws.project.dir)stop();}
+    void checkProject(const Workspace& ws){if(active_&&(project_!=ws.project.dir||projectLifetime_!=ws.projectLifetime()))stop();}
     Json status() const{
         Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("scope",Json::string("isolated-cpu-debugger"));
         r.set("active",Json::fromBool(active_));r.set("liveAttached",Json::fromBool(false));r.set("gpuMeasured",Json::fromBool(false));
@@ -62,7 +63,7 @@ public:
             }else throw std::invalid_argument("unsupported debug domain");
             ++serial_;const auto token=std::to_string(serial_);
             identity_={"isolated",token,"immutable-session:"+token,domain};
-            project_=ws.project.dir;active_=true;step_=0;stopReason_="ready";
+            project_=ws.project.dir;projectLifetime_=ws.projectLifetime();active_=true;step_=0;stopReason_="ready";
             return status();
         }catch(...){stop();throw;}
     }
