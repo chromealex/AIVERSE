@@ -1,6 +1,7 @@
 #include "apps/studio-native/StudioTerrainGeometry.h"
 #include "apps/studio-native/StudioSpectraFields.h"
 #include "apps/studio-native/StudioPlanetPreview.h"
+#include "apps/studio-native/StudioPlanetForestOverlays.h"
 #include "apps/studio-native/StudioPlanetLiveTerrain.h"
 #include "apps/studio-native/StudioPlanetProcessOverlays.h"
 #include "apps/studio-native/StudioPlanetRegionEditing.h"
@@ -13,6 +14,22 @@ using namespace aiverse::studio;
 using namespace aiverse::render;
 
 int main() {
+    {
+        // The trunk lies along world +X. The capsule has radius .5 m,
+        // total length 6 m; the prototype trunk is 3 m by .25 m radius.
+        mat4 body;
+        body.at(0,0)=0; body.at(1,0)=-1;
+        body.at(0,1)=1; body.at(1,1)=0;
+        body=mat4::translate({8,7,6})*body;
+        const lib::worldprocess::PlanetArborTrunk trunk{7,300,25};
+        const auto transform=studioFallenArborTransform(body,trunk,.5f,2.5f);
+        const auto root=transform.transformPoint({0,0,0});
+        const auto tip=transform.transformPoint({0,3,0});
+        const auto bark=transform.transformPoint({.25f,1.5f,0});
+        AIVERSE_TEST_CHECK(root.x==5 && root.y==7 && root.z==6);
+        AIVERSE_TEST_CHECK(tip.x==11 && tip.y==7 && tip.z==6);
+        AIVERSE_TEST_CHECK(bark.x==8 && bark.y==6.5f && bark.z==6);
+    }
     editor::MapData d;
     d.w=2; d.h=2;
     d.cells={'.','~','#','R'};
@@ -27,12 +44,12 @@ int main() {
     AIVERSE_TEST_CHECK(terrainPreviewColor('~')!=terrainPreviewColor('#'));
     for (const auto& v:mesh.vertices()) AIVERSE_TEST_CHECK(v.nrm.y>0.1f);
     auto fields=buildStudioSpectraFields(d,1.5f,true,nullptr);
-    float field=0;
-    AIVERSE_TEST_CHECK(fields->sample("terraweave","height",{0.5f,0,0.5f},field)&&std::abs(field-0.5f)<0.001f);
-    AIVERSE_TEST_CHECK(fields->sample("terraweave","clearance",{0.5f,2,0.5f},field)&&std::abs(field-1.5f)<0.001f);
-    AIVERSE_TEST_CHECK(!fields->sample("terraweave","height",{-1,0,0},field));
-    AIVERSE_TEST_CHECK(!fields->sample("physis","wind_x",{0,0,0},field));
-    AIVERSE_TEST_CHECK(!buildStudioSpectraFields(d,1.5f,false,nullptr)->sample("terraweave","height",{0,0,0},field));
+    float sampledValue=0;
+    AIVERSE_TEST_CHECK(fields->sample("terraweave","height",{0.5f,0,0.5f},sampledValue)&&std::abs(sampledValue-0.5f)<0.001f);
+    AIVERSE_TEST_CHECK(fields->sample("terraweave","clearance",{0.5f,2,0.5f},sampledValue)&&std::abs(sampledValue-1.5f)<0.001f);
+    AIVERSE_TEST_CHECK(!fields->sample("terraweave","height",{-1,0,0},sampledValue));
+    AIVERSE_TEST_CHECK(!fields->sample("physis","wind_x",{0,0,0},sampledValue));
+    AIVERSE_TEST_CHECK(!buildStudioSpectraFields(d,1.5f,false,nullptr)->sample("terraweave","height",{0,0,0},sampledValue));
     auto collision=buildStudioSpectraCollisions(d,1.5f,true);
     fx::SceneCollisionHit hit;
     fx::SceneCollisionStats collisionStats;

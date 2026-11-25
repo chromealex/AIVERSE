@@ -743,7 +743,13 @@ void StudioScene::syncPlanetForestModels(const editor::MapDoc& doc,const std::st
     if(live){
         for(const auto& row:planetLiveSnapshot_["forest"]["plants"].items()){
             if(row.getStr("body")!=planetPreview_->bodyId||row.getBool("spent"))continue;
-            if(row.getBool("physical")&&row["capsule"].isObject()){logsNeeded.insert(uint32_t(row.getInt("species")));continue;}
+            if(row.getBool("physical")&&row["capsule"].isObject()){
+                const auto species=uint32_t(row.getInt("species"));
+                if(planetForestOverlays_.arborTrunks.count(species)&&!planetForestRejectedModels_.count(species))
+                    needed.insert(species);
+                else logsNeeded.insert(species);
+                continue;
+            }
             if(row.getBool("fallen")||row.getBool("harvested"))continue;
             const auto id=uint32_t(row.getInt("species"));if(!id)continue;
             needed.insert(id);
@@ -1122,12 +1128,23 @@ void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std
             const auto& cap=row["capsule"];
             const auto center=studioForestVec(cap["center"]),axis=studioForestVec(cap["axis"]);
             const float radius=float(cap["radius"].toDouble()),half=float(cap["halfHeight"].toDouble());
-            const auto log=planetForestLogModels_.find(uint32_t(row.getInt("species")));
-            if(log==planetForestLogModels_.end()||!center||!axis||radius<=0||radius>1000||half<=0||half>1000){++missing;continue;}
+            const auto species=uint32_t(row.getInt("species"));
+            if(!center||!axis||radius<=0||radius>1000||half<=0||half>1000){++missing;continue;}
             const auto right=studioForestVec(cap["right"]);
             const auto frame=studioForestFrame(*center,*axis,right.value_or(std::abs(axis->y)<.9f?render::float3{0,1,0}:render::float3{1,0,0}));
             if(!frame){++missing;continue;}
-            // Wood proxy occupies the published capsule envelope; no inferred falling trajectory.
+            const auto trunk=planetForestOverlays_.arborTrunks.find(species);
+            const auto prototype=planetForestModels_.find(species);
+            if(trunk!=planetForestOverlays_.arborTrunks.end()&&prototype!=planetForestModels_.end()&&right){
+                render::ModelDraw draw;
+                draw.model=prototype->second.get();
+                draw.materialMask=&barkOnly;
+                draw.world=studioFallenArborTransform(*frame,trunk->second,radius,half);
+                renderer_.drawModel(draw);++rendered;continue;
+            }
+            const auto log=planetForestLogModels_.find(species);
+            if(log==planetForestLogModels_.end()){++missing;continue;}
+            // Explicit capsule recipes have no associated structural branches.
             render::ModelDraw draw;draw.model=log->second.get();
             draw.world=*frame*render::mat4::scale({radius*2,(half+radius)*2,radius*2});
             renderer_.drawModel(draw);++rendered;continue;

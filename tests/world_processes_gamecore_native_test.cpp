@@ -1859,6 +1859,18 @@ static void checkGameCorePlanetTerrainPersistence(){
     const auto base=gs->surface;
     const auto legacy=sim->serialize();
     AIVERSE_TEST_CHECK(!legacy.empty()&&uint8_t(legacy[4])==10);
+    // Main used v11 for nondefault seats on unedited maps.
+    SimSnapshot seats;
+    sim->saveState(seats);
+    AIVERSE_TEST_CHECK(!seats.players.empty());
+    auto& seat=seats.players.front();
+    seat.controller=seat.controller==SeatController::Computer?SeatController::Human:SeatController::Computer;
+    peer->loadState(seats);
+    const auto seatSave=peer->serialize();
+    const auto seatHash=peer->checksum();
+    AIVERSE_TEST_CHECK(!seatSave.empty()&&uint8_t(seatSave[4])==11);
+    AIVERSE_TEST_CHECK(peer->deserialize(legacy)&&peer->checksum()==sim->checksum());
+    AIVERSE_TEST_CHECK(peer->deserialize(seatSave)&&peer->checksum()==seatHash);
     const auto initialHash=sim->checksum();
     SimSnapshot rollback;sim->saveState(rollback);
     granular::PlanetSoilTarget target;

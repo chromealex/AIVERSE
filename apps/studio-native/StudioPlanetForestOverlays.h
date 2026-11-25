@@ -8,9 +8,20 @@ struct PlanetForestPick { uint32_t species=0;uint64_t key=0;render::float3 groun
 struct PlanetForestOverlays {
     std::vector<PlanetProcessOverlayLine> lines;
     std::vector<PlanetForestPick> picks;
+    std::map<uint32_t,lib::worldprocess::PlanetArborTrunk> arborTrunks;
     size_t plants=0,missingProfile=0,rejected=0;
     bool invalid=false,truncated=false;
 };
+// The ARBOR prototype grows from local y=0. The native capsule is centred
+// between its tips and publishes half-height excluding the end caps.
+inline render::mat4 studioFallenArborTransform(const render::mat4& body,
+        const lib::worldprocess::PlanetArborTrunk& trunk,float radius,float halfHeight){
+    const float halfLength=radius+halfHeight;
+    const float radialScale=100.f*radius/float(trunk.radiusCm);
+    const float axialScale=200.f*halfLength/float(trunk.heightCm);
+    return body*render::mat4::translate({0,-halfLength,0})*
+        render::mat4::scale({radialScale,axialScale,radialScale});
+}
 inline Json studioForestOverlayRecipe(const editor::MapDoc& doc,const Json& rules){
     if(doc.data.worldExtra.has("planetForest"))return doc.data.worldExtra["planetForest"];
     const auto* module=planetForestModuleConfig(rules);
@@ -167,6 +178,7 @@ inline PlanetForestOverlays buildPlanetForestOverlays(const editor::MapDoc& doc,
                 }else ++out.rejected;
             }
         }
+        out.arborTrunks=cfg.arborTrunks;
     }catch(const std::exception&){out.invalid=true;out.lines.clear();out.picks.clear();out.plants=0;}
     return out;
 }
