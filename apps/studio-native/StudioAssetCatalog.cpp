@@ -96,7 +96,7 @@ std::string studioImporterForPath(const fs::path& path,bool directory) {
     if(ext==".png"||ext==".jpg"||ext==".jpeg"||ext==".tga"||
        ext==".dds"||ext==".ktx"||ext==".ktx2"||ext==".webp"||
        ext==".hdr"||ext==".exr")return "texture";
-    if(ext==".glb"||ext==".gltf"||ext==".fbx"||ext==".obj"||ext==".usd")return "model";
+    if(ext==".bsp"||ext==".glb"||ext==".gltf"||ext==".fbx"||ext==".obj"||ext==".usd")return "model";
     if(ext==".wav"||ext==".ogg"||ext==".mp3"||ext==".flac")return "audio";
     return "data";
 }

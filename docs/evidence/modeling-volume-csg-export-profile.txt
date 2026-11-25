@@ -1,0 +1,5 @@
+Mac x86_64 native Modeling CLI. examples/modeling/volume-csg.json; each resolution uses one warmup and three timed exports in independent native processes. Wall includes process start, geometry build and GLB file write. RSS includes the complete CLI. Concurrent local builds were active. Runtime renderer/GPU is outside this authoring workload.
+resolution=8 triangles=1124 GLB_bytes=230700 export_wall_ms_median=749.5 peak_process_RSS_MiB=25.9 samples=3 after one warmup
+resolution=16 triangles=4152 GLB_bytes=848432 export_wall_ms_median=760.8 peak_process_RSS_MiB=30.9 samples=3 after one warmup
+resolution=20 triangles=7662 GLB_bytes=1564476 export_wall_ms_median=1049.0 peak_process_RSS_MiB=38.4 samples=3 after one warmup
+resolution=24 triangles=10752 GLB_bytes=2194832 export_wall_ms_median=1128.5 peak_process_RSS_MiB=44.2 samples=3 after one warmup

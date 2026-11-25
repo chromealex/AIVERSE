@@ -32,13 +32,13 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
         {"tiles", {"tileset_list", "tile_info", "tiles_init", "tile_paint", "tiles_remove"}},
         {"fog", {"rules_get", "rules_merge", "rules_delete"}},
         {"generate", {"gen_presets", "map_generate", "map_mirror", "map_resize", "map_validate", "map_ascii"}},
-        {"postfx", {"postfx_get", "postfx_catalog", "postfx_add", "postfx_set", "postfx_enable", "postfx_remove",
+        {"postfx", {"postfx_get", "postfx_compositor_set", "postfx_catalog", "postfx_add", "postfx_set", "postfx_enable", "postfx_remove",
                     "postfx_preset", "postfx_estimate", "postfx_lut_neutral"}},
         {"effects", {"fx_list", "fx_templates", "fx_get", "fx_set", "fx_bind", "fx_delete"}},
         {"lightbake", {"lightbake_get", "lightbake_set", "lightbake_clear"}},
         {"shader_graph", {"shader_graph_create","shader_graph_apply"}},
         {"static_geometry", {"geometry_instances_list","geometry_strata_set"}},
-        {"models", {"asset_list", "model_info", "geometry_catalog", "geometry_analyze", "strata_capabilities", "strata_model_analyze", "geometry_proxy_bake", "geometry_proxy_lod"}},
+        {"models", {"asset_list", "model_info", "material_techniques_get", "material_techniques_set", "geometry_catalog", "geometry_analyze", "strata_capabilities", "strata_model_analyze", "geometry_proxy_bake", "geometry_proxy_lod"}},
         {"scripts", {"script_api", "script_list", "script_read", "script_write", "script_check"}},
         {"overlays", {"overlay_templates", "overlay_list", "overlay_get", "overlay_set", "overlay_delete", "overlay_preview"}},
         {"branding", {"branding_get", "branding_set", "splash_preview", "icons_preview"}},
@@ -50,7 +50,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
         {"fx_graph", {"fx_graph_list", "fx_graph_node_catalog", "fx_graph_get", "fx_graph_validate", "fx_graph_set", "fx_graph_edit",
                       "fx_graph_bake", "fx_graph_delete", "fx_graph_draft_list", "fx_graph_draft_get", "fx_graph_draft_set", "fx_graph_draft_publish", "fx_graph_preview", "fx_asset_check", "fx_replay_prepare", "fx_replay_status", "fx_replay_capture", "fx_checkpoint_timeline", "fx_checkpoint_file", "fx_replay_preset_list", "fx_replay_preset_get", "fx_replay_preset_save", "fx_replay_preset_check", "fx_replay_preset_relocate_preview", "fx_replay_preset_relocate_apply", "fx_replay_preset_portable_export", "fx_replay_preset_portable_preview", "fx_replay_preset_portable_apply", "fx_replay_package_list", "fx_replay_package_export", "fx_replay_package_preview", "fx_replay_package_apply"}},
         {"fx_functions", {"fx_function_list", "fx_function_get", "fx_function_set", "fx_function_import", "fx_function_export", "fx_import_unity"}},
-        {"modeling", {"modeling_catalog", "modeling_list", "modeling_get", "modeling_create", "modeling_edit", "modeling_validate", "strata_capabilities", "strata_model_analyze", "modeling_apply", "modeling_build",
+        {"modeling", {"modeling_catalog", "modeling_volume_texture_import", "modeling_list", "modeling_get", "modeling_create", "modeling_edit", "modeling_validate", "strata_capabilities", "strata_model_analyze", "modeling_apply", "modeling_build",
                       "modeling_duplicate", "modeling_lod", "modeling_export", "modeling_graph_set", "modeling_graph_import", "modeling_graph_publish",
                       "texture_patterns", "texture_generate", "texture_graph_catalog", "texture_graph_image_asset", "texture_graph_list", "texture_graph_get", "texture_graph_validate", "texture_graph_set", "texture_graph_preview", "texture_graph_bake", "texture_graph_templates", "texture_graph_bake_set", "texture_graph_cache", "texture_graph_material_variant", "texture_graph_gpu_preview"}},
         {"anim_assets", {"modeling_list", "animation_get", "animation_asset_get", "animation_asset_save", "animation_generate", "animation_bake", "animation_sample"}},
@@ -141,7 +141,7 @@ inline StudioAuditResult studioAssetAudit(const std::filesystem::path& project, 
     std::error_code ec;
     const fs::path root = fs::weakly_canonical(project, ec);
     if (ec) return out;
-    static const std::set<std::string> known = {".png", ".jpg", ".jpeg", ".webp", ".gltf", ".glb", ".obj", ".fbx", ".lua", ".rml",
+    static const std::set<std::string> known = {".png", ".jpg", ".jpeg", ".webp", ".bsp", ".gltf", ".glb", ".obj", ".fbx", ".lua", ".rml",
                                                 ".rcss", ".wav", ".ogg", ".mp3", ".json", ".rtex", ".ktx2"};
     static const std::set<std::string> inspected = {".json", ".lua", ".rml", ".rcss"};
     const std::regex quoted(R"RE(["']([^"'\r\n]{3,240})["'])RE");

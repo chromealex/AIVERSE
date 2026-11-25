@@ -1,0 +1,8 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/cpu-d3d-render-20261125/mac
+Test project /Volumes/KINGSTON/AIVERSE-builds/cpu-d3d-render-20261125/mac
+    Start 116: render_cpu_device
+1/1 Test #116: render_cpu_device ................   Passed    0.19 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   0.22 sec

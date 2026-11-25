@@ -1,0 +1,52 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests
+Test project /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests
+    Start  29: quake3_bsp
+1/7 Test  #29: quake3_bsp .......................   Passed    0.65 sec
+    Start 116: render_cpu_device
+2/7 Test #116: render_cpu_device ................   Passed    0.21 sec
+    Start 117: render_cpu_textured_model
+3/7 Test #117: render_cpu_textured_model ........   Passed    1.00 sec
+    Start 258: prisma_compositor
+4/7 Test #258: prisma_compositor ................   Passed    0.25 sec
+    Start 342: material_technique_frame
+5/7 Test #342: material_technique_frame .........   Passed    1.26 sec
+    Start 343: model_triplanar_frame
+6/7 Test #343: model_triplanar_frame ............   Passed    1.52 sec
+    Start 344: prisma_compositor_metal
+7/7 Test #344: prisma_compositor_metal ..........   Passed    1.75 sec
+
+100% tests passed, 0 tests failed out of 7
+
+Label Time Summary:
+GPU         =   4.53 sec*proc (3 tests)
+Material    =   2.78 sec*proc (2 tests)
+Metal       =   4.53 sec*proc (3 tests)
+PRISMA      =   1.75 sec*proc (1 test)
+
+Total Test time (real) =   6.72 sec
+-- AIVERSE platform: macos
+-- Configuring done (13.3s)
+-- Generating done (4.5s)
+-- Build files have been written to: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/sdk-arm64
+[  0%] Built target aiverse_ufbx
+[  0%] Built target aiverse_gfx_cpu
+[  0%] Built target aiverse_engine
+[  0%] Built target aiverse_meshoptimizer_lod
+[  0%] Built target aiverse_zstd
+[100%] Built target aiverse_models
+[100%] Building CXX object CMakeFiles/aiverse_headless_model_frame.dir/engine/render/HeadlessModelFrame.cpp.o
+[100%] Linking CXX static library libaiverse_headless_model_frame.a
+[100%] Built target aiverse_headless_model_frame
+[100%] Linking CXX shared library libaiverse_render.dylib
+[100%] Built target aiverse_render
+[100%] Linking CXX shared library libaiverse_render_jni.dylib
+[100%] Built target aiverse_render_jni
+An issue was encountered verifying workloads. For more information, run "dotnet workload update".
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:02.54
+Python, C# and Java RGBA8 match: 27648 bytes; 788 foreground pixels; sha256 7f80e9097477d022b0e1e870dc13596e7f8970d8755d7d675339107ff82a2ae4
+69 entries, 0 errors

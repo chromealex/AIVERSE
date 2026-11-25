@@ -281,6 +281,20 @@ struct App {
     int item = -1, requested = 0, shape = kSphere, lod = kLodAuto;
     bool clusters = false, wire = false;
     Wire wireData;
+    std::vector<Material> bspBaseOverride;
+    float bspScale=1.f;
+    bool bspDiffuse=true, bspIrradiance=true, authoredCamera=false;
+    BakedQuality previousGi=BakedQuality::High;
+    void bspLayers(bool diffuse,bool irradiance) {
+        if(!model || !model->bspVisibility)return;
+        bspDiffuse=diffuse; bspIrradiance=irradiance;
+        if(!diffuse && bspBaseOverride.empty()) {
+            bspBaseOverride=model->materials;
+            for(auto& material:bspBaseOverride)material.baseTex=-1;
+        }
+        r3d.setBakedQuality(irradiance?previousGi:BakedQuality::Off);
+        report();
+    }
     int shownLevel = -1;
     uint64_t strataTrisTotal = 0, strataDrawnTris = 0;   // triangles of the cluster cut drawn last frame         // LOD level the renderer drew last frame (from its stats)
     enum class StrataState { Off, Ready, Declined, Failed } strataState = StrataState::Off;
@@ -322,7 +336,9 @@ struct App {
             j = "{\"kind\":\"model\"," + j.substr(1) + ",\"mode\":\"" +
                 (lod == kLodStrata ? "strata" : lod == kLodAuto ? "auto" : "lod") + "\",\"lod\":" + std::to_string(lod) +
                 ",\"clusters\":" + (clusters ? "true" : "false") +
-                ",\"wire\":" + (wire ? "true" : "false") + ",\"shownLevel\":" + std::to_string(shownLevel) + ",\"levels\":[";
+                ",\"wire\":" + (wire ? "true" : "false") + ",\"shownLevel\":" + std::to_string(shownLevel) +
+                (model->bspVisibility?",\"bsp\":true,\"diffuse\":"+std::string(bspDiffuse?"true":"false")+
+                ",\"irradiance\":"+(bspIrradiance?"true":"false"):"")+",\"levels\":[";
             const int n = lodLevels(*model);
             for (int l = 0; l < n; ++l)
                 j += (l ? "," : "") + std::string("{\"level\":") + std::to_string(l) + ",\"triangles\":" + std::to_string(trianglesAt(*model, l)) + "}";
@@ -432,15 +448,32 @@ struct App {
             if (img.width > 0)
                 maps += (k++ ? "," : "") + imageEntry("image", img.name, img.width, img.height, 0);
         maps += "]";
-        const float3 c = (next->boundsMin + next->boundsMax) * 0.5f;
-        const float r = std::max(0.25f, length(next->boundsMax - next->boundsMin) * 0.5f);
+        bspScale=next->bspVisibility?float(std::clamp(it["scale"].toDouble(1),.0001,1000.)):1.f;
+        const float3 c = (next->boundsMin + next->boundsMax) * (0.5f*bspScale);
+        const float r = std::max(0.25f, length(next->boundsMax - next->boundsMin) * (0.5f*bspScale));
+        if(model && model->bspVisibility)r3d.setBakedQuality(previousGi);
+        bspBaseOverride.clear();bspDiffuse=bspIrradiance=true;
+        previousGi=r3d.bakedQuality();authoredCamera=false;
         cam.target = c;
         // the sun's shadow map covers the model itself, not a frustum fitted to the camera: the
         // shadow must not come and go as the camera turns
-        r3d.setShadowBounds(next->boundsMin - float3{r, r, r} * 0.05f, next->boundsMax + float3{r, r, r} * 0.05f);
+        r3d.setShadowBounds(next->boundsMin*bspScale - float3{r, r, r} * 0.05f, next->boundsMax*bspScale + float3{r, r, r} * 0.05f);
         cam.distance = r * 2.6f;
         cam.minDistance = r * 0.3f;
         cam.maxDistance = r * 80.0f;   // far enough for the coarsest LOD (switches near 30 px on screen)
+        const auto& pose=it["camera"];
+        if(pose["eye"].size()==3 && pose["target"].size()==3) {
+            auto point=[](const Json& v){return float3{float(v[0].toDouble()),float(v[1].toDouble()),float(v[2].toDouble())};};
+            const float3 target=point(pose["target"])*bspScale,offset=point(pose["eye"])*bspScale-target;
+            const float distance=length(offset);
+            if(std::isfinite(distance) && distance>.01f) {
+                cam.target=target;cam.distance=distance;
+                cam.minDistance=std::min(cam.minDistance,distance*.05f);
+                cam.maxDistance=std::max(cam.maxDistance,distance);
+                cam.yaw=std::atan2(offset.x,offset.z);cam.pitch=std::asin(std::clamp(offset.y/distance,-1.f,1.f));
+                authoredCamera=true;autoRotate=false;
+            }
+        }
         replaceModel(std::move(next));
     }
 
@@ -490,6 +523,7 @@ struct App {
         item = index;
         if (materials()) showMaterial(it);
         else showModel(it);
+        if (model && model->bspVisibility && lod==kLodStrata)lod=kLodAuto;
         if (lod == kLodStrata) ensureStrata();
         log("showing " + it.getStr("id"));
         report();
@@ -501,7 +535,7 @@ struct App {
     }
 
     void setLod(int l) {
-        lod = l < kLodStrata ? kLodAuto : l;
+        lod = l < kLodStrata || (l==kLodStrata && model && model->bspVisibility) ? kLodAuto : l;
         if (lod == kLodStrata) ensureStrata();
         report();
     }
@@ -548,7 +582,7 @@ struct App {
     void frame(gfx::Device& d, double dt) {
         if (!dragging) {
             idle += float(dt);
-            if (idle > 4) autoRotate = true;
+            if (idle > 4 && !authoredCamera) autoRotate = true;
         }
         if (autoRotate) cam.yaw += float(dt) * 0.25f;
         r3d.beginScene(cam, d.framebufferWidth(), d.framebufferHeight());
@@ -565,13 +599,14 @@ struct App {
         } else if (model) {
             ModelDraw md;
             md.model = model.get();
-            md.world = mat4{};
+            if(!bspDiffuse && model->bspVisibility)md.materials=&bspBaseOverride;
+            md.world = model->bspVisibility?mat4::scale({bspScale,bspScale,bspScale}):mat4{};
             md.lodLevel = lod >= 0 ? lod : -1;
             r3d.drawModel(md);
             if (wire && !wireData.levels.empty()) {
                 const int level = std::clamp(lod >= 0 ? lod : std::max(shownLevel, 0), 0, int(wireData.levels.size()) - 1);
                 const auto& lines = wireData.levels[size_t(level)];
-                for (size_t i = 0; i + 1 < lines.size(); i += 2) r3d.line(lines[i], lines[i + 1], rgba(20, 18, 16, 200));
+                for (size_t i = 0; i + 1 < lines.size(); i += 2) r3d.line(lines[i]*bspScale, lines[i + 1]*bspScale, rgba(20, 18, 16, 200));
             }
         }
         gfx::PassDesc pass;
@@ -627,6 +662,9 @@ CV_EXPORT void cv_shape(int shape) {
     if (!g_app) return;
     if (!g_app->dev) { g_app->shape = std::clamp(shape, 0, kShapeCount - 1); return; }
     g_app->setShape(shape);
+}
+CV_EXPORT void cv_bsp_layers(int diffuse,int irradiance) {
+    if(g_app)g_app->bspLayers(diffuse!=0,irradiance!=0);
 }
 CV_EXPORT void cv_lod(int level) {
     if (!g_app) return;

@@ -22,7 +22,7 @@ test('patch output strips unsupported fields',()=>{
 });
 
 test('creation preset registry stays within native whitelist',()=>{
- assert.deepEqual([...MATERIAL_PRESETS],['matte','metal','glass']);
+ assert.deepEqual([...MATERIAL_PRESETS],['matte','metal','glass','triplanar']);
 });
 
 test('receiver shadow diffusion defaults to zero and survives authoring patches',()=>{

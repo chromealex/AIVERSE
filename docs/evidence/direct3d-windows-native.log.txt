@@ -1,0 +1,67 @@
+Internal ctest changing into directory: D:/a/AIVERSE/AIVERSE/build/windows-msvc
+UpdateCTestConfiguration  from :D:/a/AIVERSE/AIVERSE/build/windows-msvc/DartConfiguration.tcl
+UpdateCTestConfiguration  from :D:/a/AIVERSE/AIVERSE/build/windows-msvc/DartConfiguration.tcl
+Test project D:/a/AIVERSE/AIVERSE/build/windows-msvc
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 119
+    Start 119: render_direct3d11_warp
+
+119: Test command: D:\a\AIVERSE\AIVERSE\build\windows-msvc\Release\aiverse_direct3d_device_tests.exe "11"
+119: Working Directory: D:/a/AIVERSE/AIVERSE/build/windows-msvc
+119: Test timeout computed to be: 10000000
+1/6 Test #119: render_direct3d11_warp ...........   Passed    0.10 sec
+test 120
+    Start 120: render_direct3d9_hal
+
+120: Test command: D:\a\AIVERSE\AIVERSE\build\windows-msvc\Release\aiverse_direct3d_device_tests.exe "9"
+120: Working Directory: D:/a/AIVERSE/AIVERSE/build/windows-msvc
+120: Test timeout computed to be: 10000000
+2/6 Test #120: render_direct3d9_hal .............   Passed    0.11 sec
+test 121
+    Start 121: render_direct3d11_rhi
+
+121: Test command: D:\a\AIVERSE\AIVERSE\build\windows-msvc\Release\aiverse_direct3d_rhi_tests.exe "11"
+121: Working Directory: D:/a/AIVERSE/AIVERSE/build/windows-msvc
+121: Test timeout computed to be: 10000000
+3/6 Test #121: render_direct3d11_rhi ............   Passed    0.06 sec
+test 122
+    Start 122: render_direct3d9_rhi
+
+122: Test command: D:\a\AIVERSE\AIVERSE\build\windows-msvc\Release\aiverse_direct3d_rhi_tests.exe "9"
+122: Working Directory: D:/a/AIVERSE/AIVERSE/build/windows-msvc
+122: Test timeout computed to be: 10000000
+4/6 Test #122: render_direct3d9_rhi .............   Passed    0.05 sec
+test 123
+    Start 123: render_direct3d11_window
+
+123: Test command: D:\a\AIVERSE\AIVERSE\build\windows-msvc\Release\aiverse_direct3d_rhi_tests.exe "11" "--window"
+123: Working Directory: D:/a/AIVERSE/AIVERSE/build/windows-msvc
+123: Test timeout computed to be: 10000000
+5/6 Test #123: render_direct3d11_window .........   Passed    0.09 sec
+test 124
+    Start 124: render_direct3d9_window
+
+124: Test command: D:\a\AIVERSE\AIVERSE\build\windows-msvc\Release\aiverse_direct3d_rhi_tests.exe "9" "--window"
+124: Working Directory: D:/a/AIVERSE/AIVERSE/build/windows-msvc
+124: Test timeout computed to be: 10000000
+6/6 Test #124: render_direct3d9_window ..........   Passed    0.08 sec
+
+The following tests passed:
+	render_direct3d11_warp
+	render_direct3d9_hal
+	render_direct3d11_rhi
+	render_direct3d9_rhi
+	render_direct3d11_window
+	render_direct3d9_window
+
+100% tests passed, 0 tests failed out of 6
+
+Label Time Summary:
+GPU    =   0.33 sec*proc (4 tests)
+
+Total Test time (real) =   0.54 sec

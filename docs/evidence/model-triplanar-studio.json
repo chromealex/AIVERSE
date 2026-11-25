@@ -1,0 +1,14 @@
+{
+  "sha": "38e67d26a888c5920527b60ba89f020fd6088062",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/model-triplanar-20261125",
+    "-R",
+    "^studio_session$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/model-triplanar-studio.log.txt",
+  "sha256": "94fcc9b712ba485ef8d18a018126b2e2361f70cea2fba27f90309afa5131b3c2"
+}

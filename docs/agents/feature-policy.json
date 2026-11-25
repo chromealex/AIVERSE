@@ -1,6 +1,14 @@
 {
   "schema": 1,
   "features": {
+    "model-triplanar": {"requires": [], "roadmap": {"system": "render", "id": "model-triplanar"}, "api_paths": ["engine/render/graph/TriplanarMaterial.h"]},
+    "direct3d-renderer": {"requires": [], "roadmap": {"system": "render", "id": "direct3d-renderer"}, "api_paths": ["engine/gfx/d3d/Direct3D.h", "engine/gfx/Gfx.h"]},
+    "cpu-renderer": {"requires": [], "roadmap": {"system": "render", "id": "cpu-renderer"}, "api_paths": ["engine/gfx/Gfx.h"]},
+    "renderer-sdk": {"requires": ["cpu-renderer", "direct3d-renderer"], "roadmap": {"system": "render", "id": "renderer-sdk"}, "api_paths": ["sdk/render/aiverse_render.h"]},
+    "material-techniques": {"requires": [], "roadmap": {"system": "render", "id": "material-techniques"}, "api_paths": ["engine/render/MaterialTechnique.h"]},
+    "quake3-bsp": {"requires": [], "roadmap": {"system": "render", "id": "quake3-bsp"}, "api_paths": ["engine/render/BspVisibility.h", "engine/render/Model.h"]},
+    "modeling-volume-csg": {"requires": [], "roadmap": {"system": "studio", "id": "modeling-volume-csg"}, "api_paths": ["tools/modeling/Modeling.h"]},
+    "prisma-authored-compositor": {"requires": [], "roadmap": {"system": "prisma", "id": "prisma-authored-compositor"}, "api_paths": ["engine/render/PrismaCompositor.h"]},
     "terraweave-meadow-grass": {
       "requires": [],
       "roadmap": {"system": "terraweave", "id": "terraweave-meadow-grass"},

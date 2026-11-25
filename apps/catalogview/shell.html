@@ -103,6 +103,7 @@
   }
   function renderInfo() {
     if (!info) { infoEl.hidden = true; return; }
+    if (info.bsp) { infoEl.hidden = true; return; }
     var h = '';
     if (info.kind === 'material') {
       h += '<div class="muted">' + L.textures + '</div>' + texLines(info.maps);
@@ -136,6 +137,12 @@
     if (view.kind === 'materials') {
       SHAPES.forEach(function (s, k) { button(modes, L[s], k === state.shape, function () { setShape(k); }); });
     } else {
+      if (info && info.bsp) {
+        button(modes, ru ? 'Текстуры' : 'Diffuse textures', info.diffuse, function () { Module._cv_bsp_layers(info.diffuse ? 0 : 1, info.irradiance ? 1 : 0); });
+        button(modes, ru ? 'Запечённый свет' : 'Baked lightmaps', info.irradiance, function () { Module._cv_bsp_layers(info.diffuse ? 1 : 0, info.irradiance ? 0 : 1); });
+        modes.hidden = false;
+        return;
+      }
       var levels = info && info.levels ? info.levels.length : 1;
       button(modes, L.auto, state.lod === -1, function () { setLod(-1); });
       for (var l = 0; l < levels; ++l) (function (l) { button(modes, L.lod + l, state.lod === l, function () { setLod(l); }); })(l);

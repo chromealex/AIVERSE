@@ -1,0 +1,9 @@
+# Triplanar Studio and late CSG assignment verification
+
+Tested runtime code 541870d27, previous visual handoff 38e67d26a. Native StudioSession ctest passed on Mac (8.03 s). It used real texture GUIDs, created a Material Library triplanar preset, verified duplicate-name rejection, set the MeshRenderer material property, saved the map, loaded it back and verified that the model's wildcard material remained cliff. Stored shaderGraph sampleTexture nodes referenced the imported colour and normal image paths. StudioScene.cpp also built with the native app's flags. Production Web frontend typecheck and Vite build passed. No native WKWebView GUI session was launched.
+
+The playable local project is /Volumes/KINGSTON/AIVERSE-builds/model-triplanar-20261125/stone-project. Its standalone native material server built the stone recipe, saved it, applied it to the sculpt type and reopened it. The volume CSG server from a745e939c then enlarged the bore from 0.3 to 0.5 (revision 2) and re-exported the model. The new mesh had 7,736 triangles. Both materials.json and rules.json remained byte-identical. docs/evidence/model-triplanar-late-cut.json records both GLB hashes and both document hashes.
+
+The second Metal capture read the stored graph and new GLB with all mesh UVs zeroed. Against the previous capture, 62,186 pixels changed in the sculpture half and none in the reference block half. The normal-mapped stone covers the newly exposed interior. The increased cut reveals an irregular edge in the sampled volume mesh. The original and new frames are docs/evidence/model-triplanar-stone-csg.png and docs/evidence/model-triplanar-stone-wider-cut.png.
+
+Native MCP registry audit passed; material_triplanar, material_set and material_apply were registered. One colour map costs three fetches per fragment and adding a normal map costs three more. Device frame-time profiling, web publication and the merged-tree Mac gate remain open.

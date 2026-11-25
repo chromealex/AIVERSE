@@ -1,0 +1,15 @@
+{
+  "sha": "7f7ddd3b91711b72e6191f0408836c30b5c410f4",
+  "argv": [
+    "/usr/local/bin/ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/cpu-d3d-render-20261125/mac",
+    "--verbose",
+    "--output-on-failure",
+    "-R",
+    "^render_cpu_(device|textured_model)$"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/cpu-renderer-window-stage-regression.log.txt",
+  "sha256": "f90f37e4d56c1d6a84238bb826b5d9bb77e563f9fa7df430d35aba67f1f5b95b"
+}

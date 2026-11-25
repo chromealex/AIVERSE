@@ -616,6 +616,34 @@ int main() {
     CHECK(imported->findNode("shell") >= 0);
     CHECK(imported->nodes[size_t(imported->findNode("shell"))].runtimeMutable);
     CHECK(!imported->uploadPrepared);
+    const std::string techniqueRules = R"({"materialTechniques":[
+        {"source":"stone","use":"highlight","scheme":"inspection","requires":["rgba16f"],"maxDistance":10},
+        {"source":"stone","use":"cheap","minDistance":10}]})";
+    auto loadTechniques = [&](const std::string& policy) {
+        return loadModel("surface.obj", [&](const std::string& path, std::string& out) {
+            if (path == "surface.obj") out = "mtllib surface.mtl\nusemtl stone\n" + obj;
+            else if (path == "surface.mtl") out = "newmtl stone\nKd 1 0 0\nnewmtl highlight\nKd 0 1 0\nnewmtl cheap\nKd 0 0 1\n";
+            else if (path == "surface.obj.batching.json") out = policy;
+            else return false;
+            return true;
+        });
+    };
+    auto withTechniques = loadTechniques(techniqueRules);
+    int stone = withTechniques->findMaterial("stone");
+    const auto& techniques = withTechniques->materialTechniques;
+    CHECK(stone >= 0);
+    CHECK(techniques.select(stone, 9, TechniqueHdr, "inspection") == withTechniques->findMaterial("highlight"));
+    CHECK(techniques.select(stone, 9, 0, "inspection") == stone);
+    CHECK(techniques.select(stone, 9, TechniqueHdr, "default") == stone);
+    CHECK(techniques.select(stone, 10, TechniqueHdr, "inspection") == withTechniques->findMaterial("cheap"));
+    CHECK(loadTechniques("{}")->materialTechniques.bySource.empty());
+    for (auto bad : {R"({"source":"stone","use":"absent"})", R"({"source":"stone","use":"cheap","minDistance":-1})",
+                     R"({"source":"stone","use":"cheap","requires":["unknown"]})"}) {
+        bool rejected = false;
+        try { (void)loadTechniques(std::string("{\"materialTechniques\":[") + bad + "]}"); }
+        catch (const std::runtime_error&) { rejected = true; }
+        CHECK(rejected);
+    }
     // Distinct material objects with identical GPU state must batch together.
     // Changing an effective uniform or sampled texture must split the batch.
     Model gpuA, gpuB;

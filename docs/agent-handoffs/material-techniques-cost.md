@@ -1,0 +1,5 @@
+# Material selector CPU cost and batching implications
+
+Measured code e2f8f43e2. Apple M3 Ultra, native arm64 clang++ -std=c++20 -O2, nine runs of 200,000 selections over cyclic distances 0..255. Per-source rule rows had half-open unit intervals, required HDR and the inspection scheme. Selection was consumed in a checksum. Median times per selection were 0.56 ns for zero rows, 1.15 ns for one, 6.45 ns for 16 and 47.51 ns for the maximum 256. Benchmark source and binary were placed in /Volumes/KINGSTON/AIVERSE-builds/material-techniques-20261125/tmp/selector_benchmark.cpp and selector_benchmark. This measures the CPU rule lookup only.
+
+Opting a model into techniques disables baked material merges and cached/indexed batching paths that would otherwise replay stale material bindings. The ordinary geometry LOD path is preserved. Draw-call and GPU-frame time impact depends on the number of authored parts and model instances. Large-scene performance is still pending. Previous checkpoints include both Metal and WebGL readback, CPU selection, standalone MCP, and Studio browser persistence.

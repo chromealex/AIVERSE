@@ -6,3 +6,5 @@ ow01-mixed-53bf93625.log.txt -text
 meadow-grass-*.log.txt -text
 # Test evidence is hashed byte-for-byte. Never apply checkout line-ending conversion.
 *.log.txt -text
+# CMake printed a trailing space in the archived, SHA-256-verified failure transcript.
+render-seven-refreshed-main-mac.log.txt whitespace=-blank-at-eol

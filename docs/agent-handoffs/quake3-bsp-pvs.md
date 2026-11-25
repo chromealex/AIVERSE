@@ -1,0 +1,5 @@
+# Quake III cluster visibility
+
+Tested commit 3fa9998be109f71a83b6b7095dc613ac823e4f6b on macOS. ModelBsp.cpp maps leaf surface memberships to imported primitives and validates split planes, children and PVS rows. BspVisibility.h resolves a model-space camera through the BSP tree. Renderer3DModels.cpp applies the result to main-view visibility and keeps independent shadow flags. ModelMerge.cpp preserves primitive identities. Model.h owns the optional immutable visibility table.
+
+Built aiverse_quake3_bsp_tests in the isolated Release tree on KINGSTON. Ran ctest --test-dir /Volumes/KINGSTON/AIVERSE-builds/render-capabilities-20261125/mac -R '^quake3_bsp$' --output-on-failure. Passed 1/1, including two synthetic clusters, a shared face, a change of camera leaf and four bad visibility references. clang++ -std=c++20 -I. -Ithird_party/meshoptimizer/src -fsyntax-only engine/render/Renderer3DModels.cpp passed. No GPU comparison or merged-tree gate run. Next: patches, extracted textures, baked lighting and capture.

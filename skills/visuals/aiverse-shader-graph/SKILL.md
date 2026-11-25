@@ -22,3 +22,5 @@ Read `docs/lightbake.md`; probe GI `docs/probe-gi.md` (target mid-range Android 
 4. Re-bake after static geometry or light changes; never claim mobile frame times you did not measure.
 
 Runtime library: none. Workflow over the engine graphics tools.
+
+For UV-free imported or Modeling/CSG meshes, generate a world-space graph with `material_triplanar` (colour map, optional +Y tangent normal map and repeat length in metres). Save its returned material in the library with `material_set` and assign it to the exported or imported model with `material_apply`. See the triplanar section of `docs/shader-graph.md`.

@@ -1,0 +1,9 @@
+# Quake III BSP materials and Metal acceptance
+
+Implementation d45befebc11b5b9b8d804e9c1fe875e3cb310408 follows planning c84928eec on codex/render-capabilities-20261125. Render owns engine/render/ModelBsp.cpp, BspShaderImages.h, BspVisibility.h and the GPU binding in Renderer3DBaked.cpp. Studio and MCP use the existing models panel and model_info. The render roadmap and policy link both use quake3-bsp.
+
+The importer resolves static shader map/clampmap stages and ordinary diffuse images through FileReader and the shared model image cache. Each original BSP primitive keeps its individual irradiance page. Palette batching and merges preserve surface identity for visibility and baked lighting. Patches preserve UV2 through tessellation. Multi-stage animated effects, Quake collision and game entities are outside this static model import.
+
+On macOS, the focused CPU and actual Metal optical tests passed at the implementation SHA. tests/render/quake3_bsp.cpp exercised a material alias from shaderlist, TGA decoding, RGB page contents, UV presence and invalid page rejection as well as patch and PVS cases. Tests rendered the authored intermission camera of Egyptian Trouble with and without diffuse textures and lightmaps. Of 400,000 pixels, 400,000 changed when dropping diffuse images and 396,284 when dropping lightmaps. The importer took 98.07 ms in this run; cluster 211 admitted 1,408 of 3,073 surfaces. Treat this as one measured load, without cross-machine timing claims.
+
+Native StudioAssetCatalog classified maps/oacmpdm3.bsp as model. x86_64-w64-mingw32-g++ compiled ModelBsp.cpp, Renderer3DBaked.cpp and quake3_bsp.cpp. A Windows runtime frame and merged-tree Mac quick verification remain separate checks. tests/render/prepare_openarena_bsp.py reproduces the licensed source layout from the Debian OpenArena package. The actual screenshot, credits, test command and logs are under docs/evidence/quake3-bsp-*.

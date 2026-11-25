@@ -1,0 +1,195 @@
+{
+  "schema": 1,
+  "id": "cpu-renderer",
+  "owner": "render",
+  "changed_paths": [
+    "CMakeLists.txt",
+    "apps/modelview/HeadlessModelCapture.cpp",
+    "apps/modelview/HeadlessModelCapture.h",
+    "apps/modelview/cpu_capture.cpp",
+    "apps/modelview/main.cpp",
+    "docs/agent-handoffs/cpu-renderer-initial.md",
+    "docs/agent-handoffs/cpu-renderer-stage1.md",
+    "docs/agent-handoffs/render-backends-desktop-final.md",
+    "docs/agent-handoffs/render-backends-sampled-textures.md",
+    "docs/agent-handoffs/render-backends-windows-native.md",
+    "docs/agents/feature-policy.json",
+    "docs/cpu-renderer.md",
+    "docs/devlog/entries/2026-11-25-render-backend-thumbnails.json",
+    "docs/devlog/media/2026-11-25-render-backend-thumbnails/cpu-macos.png",
+    "docs/devlog/systems.json",
+    "docs/evidence/.gitattributes",
+    "docs/evidence/cpu-renderer-desktop-final.json",
+    "docs/evidence/cpu-renderer-desktop-final.log.txt",
+    "docs/evidence/cpu-renderer-stage2-pixels.json",
+    "docs/evidence/cpu-renderer-stage2-pixels.log.txt",
+    "docs/evidence/cpu-renderer-stage3-textures.json",
+    "docs/evidence/cpu-renderer-stage3-textures.log.txt",
+    "docs/evidence/cpu-renderer-win-ci-regression.json",
+    "docs/evidence/cpu-renderer-win-ci-regression.log.txt",
+    "docs/evidence/cpu-renderer-window-stage-regression.json",
+    "docs/evidence/cpu-renderer-window-stage-regression.log.txt",
+    "docs/evidence/cpu-renderer/arch.png",
+    "docs/evidence/render-backend-thumbnail-performance.json",
+    "docs/evidence/render-seven-combined-preview.json",
+    "docs/evidence/render-seven-combined-preview.log.txt",
+    "docs/evidence/render-seven-final-mac.json",
+    "docs/evidence/render-seven-final-mac.log.txt",
+    "docs/evidence/render-seven-verified-main-mac.json",
+    "docs/evidence/render-seven-verified-main-mac.log.txt",
+    "docs/features/cpu-renderer.json",
+    "engine/gfx/Gfx.h",
+    "engine/gfx/cpu/GfxCpu.cpp",
+    "engine/render/graph/GraphGpuProfile.h",
+    "skills/visuals/aiverse-modeling/SKILL.md",
+    "tests/render/cpu_device.cpp",
+    "tests/render/headless_model_capture.py",
+    "tests/render/thumbnail_workload.py"
+  ],
+  "traits": {
+    "editable": false,
+    "simulation": false,
+    "visible": true,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Clip-space indexed triangles, per-pixel depth, textures and framebuffer readback exercised through the Device API.",
+      "evidence": [
+        "engine/gfx/cpu/GfxCpu.cpp",
+        "docs/evidence/cpu-renderer-desktop-final.json"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Process-owned gfx::Device implements the common render interface. Model capture shares the model loader and thumbnail path across devices.",
+      "evidence": [
+        "engine/gfx/cpu/GfxCpu.cpp",
+        "apps/modelview/HeadlessModelCapture.cpp"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "Device creation, indexed geometry, sampled textures, capture and resource updates exercised through the public C++ interface.",
+      "evidence": [
+        "engine/gfx/cpu/GfxCpu.cpp",
+        "docs/evidence/cpu-renderer-desktop-final.json"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "The modeling skill documents the capture command and backend selection.",
+      "evidence": [
+        "skills/visuals/aiverse-modeling/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "not_applicable",
+      "note": "Device selection belongs to the native capture process. There is no authored operation or scene property to expose over MCP.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_applicable",
+      "note": "The backend is selected by the host when it creates a device. This feature introduces no editable Studio data.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_applicable",
+      "note": "The opaque device belongs to the process, with no inspector-facing entity or component.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_applicable",
+      "note": "GPU and raster resources have process lifetime. Capture produces PNG via the existing exporter and adds no persisted scene fields.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "Backend selection happens before any draw. It creates no graph nodes or graph assets.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "pass",
+      "note": "Five fresh process capture times on an indexed 16,384-triangle mesh, including loading, rendering and PNG encoding. Baseline for desktop previews; GPU-only frame time is outside this measurement.",
+      "evidence": [
+        "docs/evidence/render-backend-thumbnail-performance.json",
+        "tests/render/thumbnail_workload.py"
+      ]
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "CPU tests and model capture ran on Apple Silicon with the x86_64 macOS executable under Rosetta.",
+      "evidence": [
+        "docs/evidence/cpu-renderer-desktop-final.json"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "The CPU rasterizer uses the existing model and PNG code and the C++ standard library.",
+      "evidence": [
+        "CMakeLists.txt",
+        "engine/gfx/cpu/GfxCpu.cpp"
+      ]
+    },
+    "headless": {
+      "status": "pass",
+      "note": "CPU geometry capture rendered arch.obj and produced 70800 non-background pixels.",
+      "evidence": [
+        "docs/evidence/cpu-renderer/arch.png",
+        "docs/agent-handoffs/cpu-renderer-stage1.md"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "The documentation gives the native model capture command. The test exercises its rendering contract.",
+      "evidence": [
+        "docs/cpu-renderer.md",
+        "docs/evidence/cpu-renderer-desktop-final.json"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Native Mac CTest covering device rasterization and textured model PNG.",
+      "evidence": [
+        "docs/evidence/cpu-renderer-desktop-final.json",
+        "docs/evidence/render-seven-combined-preview.json",
+        "docs/evidence/render-seven-final-mac.json",
+        "docs/evidence/render-seven-verified-main-mac.json"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Stage SHA, runner, test outcomes and remaining scope.",
+      "evidence": [
+        "docs/agent-handoffs/render-backends-windows-native.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "Render API, capture invocation, supported formats and scope are documented.",
+      "evidence": [
+        "docs/cpu-renderer.md"
+      ]
+    },
+    "publishing": {
+      "status": "pass",
+      "note": "Bilingual development entry includes actual native captures and documents the desktop CLI and Windows API limits in WebGL. The release integrator deploys the validated site from main.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-render-backend-thumbnails.json",
+        "docs/devlog/media/2026-11-25-render-backend-thumbnails/cpu-macos.png"
+      ]
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-modeling"
+    ],
+    "mcp_tools": [],
+    "studio_panels": [],
+    "studio_methods": []
+  },
+  "test_reports": [
+    "docs/evidence/render-seven-verified-main-mac.json"
+  ]
+}

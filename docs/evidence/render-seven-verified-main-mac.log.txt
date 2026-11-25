@@ -1,0 +1,146 @@
+697e3c0e27d856e0d8dfe900b82ffd2621ceedc6
+-- AIVERSE platform: macos
+-- Configuring done (8.0s)
+-- Generating done (4.7s)
+-- Build files have been written to: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests
+Full registered Mac quick suite
+AUDIO             =   1.13 sec*proc (2 tests)
+Architecture      =   0.75 sec*proc (5 tests)
+BSP               =   4.54 sec*proc (1 test)
+CPU               =  12.37 sec*proc (30 tests)
+Caverns           =  15.59 sec*proc (31 tests)
+ECS               =  30.28 sec*proc (24 tests)
+EDITOR            = 128.14 sec*proc (49 tests)
+GPU               =  27.76 sec*proc (9 tests)
+IMPORT            =   3.03 sec*proc (1 test)
+LENS              =   9.46 sec*proc (2 tests)
+LIGHTING          =   4.72 sec*proc (1 test)
+Lighting          =   6.16 sec*proc (30 tests)
+MCP               =  16.09 sec*proc (6 tests)
+Material          =   2.18 sec*proc (2 tests)
+Metal             =  17.55 sec*proc (7 tests)
+MetalGPU          =  31.68 sec*proc (8 tests)
+NEREID            =   0.87 sec*proc (2 tests)
+NETWORK           =  16.73 sec*proc (7 tests)
+PERSISTENCE       =  28.71 sec*proc (14 tests)
+PHYSIS            =  54.95 sec*proc (39 tests)
+PRISMA            =   1.82 sec*proc (1 test)
+Prisma            =   0.36 sec*proc (2 tests)
+RENDER            =   6.89 sec*proc (1 test)
+RHI               =  34.37 sec*proc (10 tests)
+Renderer3D        =  10.02 sec*proc (12 tests)
+SECURITY          =   0.74 sec*proc (3 tests)
+SpectraFX         =  46.79 sec*proc (27 tests)
+TERRAWEAVE        =  15.99 sec*proc (7 tests)
+TEXTURE_GRAPH     =   1.66 sec*proc (5 tests)
+TOOLS             =   3.70 sec*proc (4 tests)
+TerraWeave        =  15.59 sec*proc (31 tests)
+VFX               =   4.70 sec*proc (3 tests)
+Vehicles          =   5.87 sec*proc (5 tests)
+Volumetrics       =   8.41 sec*proc (2 tests)
+WIND              =   6.89 sec*proc (1 test)
+World             =  20.45 sec*proc (15 tests)
+WorldProcesses    =   4.23 sec*proc (1 test)
+
+Total Test time (real) = 950.86 sec
+PASS ctest
+
+========== SUMMARY ==========
+Passed stages: 3 | Failed stages: 0
+Logs: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests/test-reports/20261125-133453-21917
+PASS: all selected test stages
+Metal opt-in tests on the combined source tree
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests/DartConfiguration.tcl
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests/DartConfiguration.tcl
+Test project /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 342
+    Start 342: material_technique_frame
+
+342: Test command: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests/aiverse_material_technique_frame "/Volumes/KINGSTON/aiverse-worktrees/render-seven-integration/demos/material-techniques"
+342: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests
+342: Test timeout computed to be: 90
+342: [metal-assets] libraries=0 sourceMisses=10 pipelines=14 pipelineFailures=0 archive=0 strict=0
+342: near: 7716 selected-material pixels
+342: far: 7716 selected-material pixels
+342: inspection: 7716 selected-material pixels
+1/5 Test #342: material_technique_frame .........   Passed    1.10 sec
+test 343
+    Start 343: model_triplanar_frame
+
+343: Test command: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests/aiverse_model_triplanar_frame
+343: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests
+343: Test timeout computed to be: 90
+343: [metal-assets] libraries=0 sourceMisses=12 pipelines=16 pipelineFailures=0 archive=0 strict=0
+343: OBJ warm=4947 cool=11422 normalDelta=13989 repeatDelta=11799
+343: CSG warm=12317 cool=28184 normalDelta=40550 repeatDelta=30537
+343: cut back warm=912 cool=1729 normalDelta=2657 repeatDelta=2117
+343: cut wall warm=207 cool=381 normalDelta=512 repeatDelta=543
+343: cut floor warm=215 cool=525 normalDelta=728 repeatDelta=518
+2/5 Test #343: model_triplanar_frame ............   Passed    1.22 sec
+test 344
+    Start 344: prisma_compositor_metal
+
+344: Test command: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests/aiverse_prisma_compositor_metal
+344: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests
+344: Test timeout computed to be: 90
+344: [metal-assets] libraries=0 sourceMisses=4 pipelines=4 pipelineFailures=0 archive=0 strict=0
+344: Fallback versus baseline maximum byte error 1
+344: PASS Metal compositor GPU readback: 6144 pixels each for baseline, two passes, camera shader and missing-camera fallback
+3/5 Test #344: prisma_compositor_metal ..........   Passed    1.38 sec
+test 345
+    Start 345: quake3_bsp_frame
+
+345: Test command: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests/aiverse_bsp_metal_frame
+345: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests
+345: Test timeout computed to be: 120
+345: [metal-assets] libraries=0 sourceMisses=11 pipelines=16 pipelineFailures=0 archive=0 strict=0
+345: BSP import 261.56 ms; PVS cluster 211 admits 1408/3073 surfaces
+345: BSP surfaces=3073 textures=43
+345: BSP changed pixels of 400000: diffuse=400000 lightmap=396284
+4/5 Test #345: quake3_bsp_frame .................   Passed    3.71 sec
+test 346
+    Start 346: lens_metal_frame
+
+346: Test command: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests/aiverse_lens_metal_frame
+346: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/render-seven-integration/all-tests
+346: Test timeout computed to be: 90
+346: [metal-assets] libraries=0 sourceMisses=18 pipelines=46 pipelineFailures=0 archive=0 strict=0
+346: LENS Metal pixels: primary/replay mismatch=0 other-camera changes=12146 nonuniform=25262
+346: PASS LENS native Metal prepared frame and independent camera pixels
+5/5 Test #346: lens_metal_frame .................   Passed    6.15 sec
+
+The following tests passed:
+	material_technique_frame
+	model_triplanar_frame
+	prisma_compositor_metal
+	quake3_bsp_frame
+	lens_metal_frame
+
+100% tests passed, 0 tests failed out of 5
+
+Label Time Summary:
+BSP         =   3.71 sec*proc (1 test)
+GPU         =  13.56 sec*proc (5 tests)
+LENS        =   6.15 sec*proc (1 test)
+Material    =   2.31 sec*proc (2 tests)
+Metal       =  13.56 sec*proc (5 tests)
+PRISMA      =   1.38 sec*proc (1 test)
+
+Total Test time (real) =  13.60 sec
+Apple Silicon shared renderer, three language integrations
+An issue was encountered verifying workloads. For more information, run "dotnet workload update".
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:01.48
+Python, C# and Java RGBA8 match: 27648 bytes; 788 foreground pixels; sha256 7f80e9097477d022b0e1e870dc13596e7f8970d8755d7d675339107ff82a2ae4
+69 entries, 0 errors

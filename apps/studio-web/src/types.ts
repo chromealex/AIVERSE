@@ -666,7 +666,7 @@ export interface StudioParams {
   'studio.materialsToFiles': Record<string, never>;
   'studio.materials': Record<string, never>;
   'studio.materialPatch': { name: string; patch: import('./panels/materialSchema').MaterialPatch };
-  'studio.materialCreate': { name: string; preset: import('./panels/materialSchema').MaterialPreset };
+  'studio.materialCreate': { name: string; preset: import('./panels/materialSchema').MaterialPreset; colorGuid?:string; normalGuid?:string; repeatMetres?:number };
   'studio.shaderGraphPreview': {name:string;projectPath:string;graph:StudioShaderGraphDocument['graph']};
   'studio.materialPreview': { name: string };
   'studio.shaderGraphs': Record<string, never>;

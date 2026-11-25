@@ -664,6 +664,30 @@ void StudioScene::syncDocumentModels(
             instanceMaterials_.clear();
         }
     }
+    // Model loaders may request .bin, textures, MTL beside the model.
+    // Resolve each request with the same root/symlink checks.
+    auto read=[root](const std::string& name,std::string& out)->bool {
+        if (name.rfind("content/",0)!=0 || name.size()>512) return false;
+        const fs::path rel(name.substr(8));
+        if (rel.empty() || rel.is_absolute()) return false;
+        fs::path file=root;
+        for(const auto& part:rel) {
+            if(part.empty()||part=="."||part=="..") return false;
+            file/=part;
+            std::error_code ec;
+            const auto st=fs::symlink_status(file,ec);
+            if(ec || fs::is_symlink(st)) return false;
+        }
+        if (!fs::is_regular_file(file)) return false;
+        std::error_code sizeError;
+        const auto bytes=fs::file_size(file,sizeError);
+        if (sizeError || bytes>256ull*1024ull*1024ull) return false;
+        std::ifstream input(file,std::ios::binary);
+        if (!input) return false;
+        out.assign(std::istreambuf_iterator<char>(input),
+                   std::istreambuf_iterator<char>());
+        return bool(input) || input.eof();
+    };
     std::set<std::string> overridden;
     // One filesystem check per unique model path per sync: hundreds of entities
     // share one file and the project may live on a slow external disk.
@@ -764,30 +788,6 @@ void StudioScene::syncDocumentModels(
             if (documentModels_.size()>=512) continue;
             if (loadedThisFrame>0 && std::chrono::steady_clock::now()-loadStart>std::chrono::milliseconds(30)) { pending=true; continue; }
             ++loadedThisFrame;lastLoaded=path;
-            // Model loaders may request .bin, textures, MTL beside the model.
-            // Resolve each request with the same root/symlink checks.
-            auto read=[root](const std::string& name,std::string& out)->bool {
-                if (name.rfind("content/",0)!=0 || name.size()>512) return false;
-                const fs::path rel(name.substr(8));
-                if (rel.empty() || rel.is_absolute()) return false;
-                fs::path file=root;
-                for(const auto& part:rel) {
-                    if(part.empty()||part=="."||part=="..") return false;
-                    file/=part;
-                    std::error_code ec;
-                    const auto st=fs::symlink_status(file,ec);
-                    if(ec || fs::is_symlink(st)) return false;
-                }
-                if (!fs::is_regular_file(file)) return false;
-                std::error_code sizeError;
-                const auto bytes=fs::file_size(file,sizeError);
-                if (sizeError || bytes>256ull*1024ull*1024ull) return false;
-                std::ifstream input(file,std::ios::binary);
-                if (!input) return false;
-                out.assign(std::istreambuf_iterator<char>(input),
-                           std::istreambuf_iterator<char>());
-                return bool(input) || input.eof();
-            };
             try {
                 auto model=render::loadModel(path,read);
                 if (!model || model->skinned() || model->vertices.empty() ||
@@ -858,8 +858,10 @@ void StudioScene::syncDocumentModels(
                                     file/=part;const auto st=fs::symlink_status(file,ec);
                                     if(ec||fs::is_symlink(st))return -1;
                                 }
-                                // Explicit HDR and BC DDS assets; bound encoded bytes and retained slots.
-                                if(file.extension()!=".exr"&&file.extension()!=".hdr"&&file.extension()!=".dds"&&file.extension()!=".ktx2")return -1;
+                                // Bound encoded bytes and retained slots for project material textures.
+                                const auto ext=file.extension();
+                                const bool colour=ext==".png"||ext==".jpg"||ext==".jpeg"||ext==".tga";
+                                if(!colour&&file.extension()!=".exr"&&file.extension()!=".hdr"&&file.extension()!=".dds"&&file.extension()!=".ktx2")return -1;
                                 if(!fs::is_regular_file(file,ec)||ec)return -1;
                                 const auto bytes=fs::file_size(file,ec);
                                 if(ec||!bytes||bytes>32u*1024u*1024u)return -1;
@@ -869,7 +871,7 @@ void StudioScene::syncDocumentModels(
                                 std::string encoded(size_t(bytes),'\0');std::ifstream stream(file,std::ios::binary);
                                 if(!stream.read(encoded.data(),std::streamsize(encoded.size()))||stream.peek()!=std::char_traits<char>::eof())return -1;
                                 render::Image image;image.name=source;
-                                if(!render::decodeMaterialImage(encoded,image)||(!image.importedLinearRadiance&&!image.compressed)||
+                                if(!render::decodeMaterialImage(encoded,image)||(!colour&&!image.importedLinearRadiance&&!image.compressed)||
                                    resident>64u*1024u*1024u||size_t(image.width)*size_t(image.height)*8u>64u*1024u*1024u-resident)return -1;
                                 const auto slot=render::addImage(*device_,model,std::move(image));
                                 if(slot>=0)renderer_.invalidateModelCachesFor(&model);

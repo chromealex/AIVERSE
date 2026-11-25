@@ -7,6 +7,7 @@
 #include "ExrTexture.h"
 #include "DdsTexture.h"
 #include "HdrTexture.h"
+#include "MaterialTechniqueData.h"
 #include "../data/Json.h"
 #include "ModelClips.h"
 #include "ModelMerge.h"
@@ -230,7 +231,7 @@ const Format kFormats[] = {
     {".fbx", loadFbx},
 #endif
 #if !defined(AIVERSE_NO_LEGACY_MODELS)
-    {".vox", loadVox}, {".vxl", loadVxl}, {".ply", loadPly}, {".stl", loadStl}, {".3ds", load3ds}, {".dae", loadDae},
+    {".bsp", loadBsp}, {".vox", loadVox}, {".vxl", loadVxl}, {".ply", loadPly}, {".stl", loadStl}, {".3ds", load3ds}, {".dae", loadDae},
     {".mdx", loadMdx}, {".mdl", loadMdl}, {".3do", load3do}, {".w3d", loadW3d},
 #endif
 };
@@ -256,6 +257,13 @@ void applyModelBatchingSidecar(Model& model, const std::string& path, const File
     if (first == std::string::npos || bytes[first] != '{') return;
     const Json config = Json::parse(bytes);
     if (!config.isObject()) throw std::runtime_error(path + ".batching.json: expected JSON object");
+    if (config.has("materialTechniques")) {
+        try {
+            model.materialTechniques = parseMaterialTechniques(config["materialTechniques"], model.materials);
+        } catch (const std::invalid_argument& error) {
+            throw std::runtime_error(path + ".batching.json: " + error.what());
+        }
+    }
     model.batching.mergeRigid = config.getBool("mergeRigid", false);
     // Opt-in far LOD: two crossed cards with a baked silhouette of the
     // finest mesh, appended as the last level of the existing chain.
@@ -355,7 +363,7 @@ std::unique_ptr<Model> loadModel(const std::string& path, const FileReader& read
         if (ext == ".obj") throw std::runtime_error(path + ": OBJ import is disabled in this build (AIVERSE_OBJ=OFF); convert to .glb");
 #endif
 #if defined(AIVERSE_NO_LEGACY_MODELS)
-        if (ext == ".vox" || ext == ".vxl" || ext == ".ply" || ext == ".stl" || ext == ".3ds" ||
+        if (ext == ".bsp" || ext == ".vox" || ext == ".vxl" || ext == ".ply" || ext == ".stl" || ext == ".3ds" ||
             ext == ".dae" || ext == ".mdx" || ext == ".mdl" || ext == ".3do" || ext == ".w3d")
             throw std::runtime_error(path + ": legacy model import is disabled in this build (AIVERSE_LEGACY_MODELS=OFF); convert to .glb");
 #endif

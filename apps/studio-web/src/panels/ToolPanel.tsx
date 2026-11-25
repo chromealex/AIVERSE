@@ -11,6 +11,7 @@ import './ToolPanel.css';
 import { StudioLoader, StudioButton } from '../ui';
 import NativeGraphPanel from '../graphs/NativeGraphPanel';
 import ModelGraphPanel from '../graphs/ModelGraphPanel';
+import MaterialTechniquePanel from './MaterialTechniquePanel';
 import StrataAnalysisPanel from '../graphs/StrataAnalysisPanel';
 
 /** Panels with a Scene brush and the brush tools each offers. */
@@ -128,7 +129,7 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
   };
   if (!projectPath) return <div className="tool__empty">Open a project to use this panel.</div>;
   const q = filter.trim().toLowerCase();
-  const shown = ops.filter(o => !spec.state.includes(o.name) && (!q || opLabel(o.name, spec.prefix).toLowerCase().includes(q) || o.name.includes(q) || o.description.toLowerCase().includes(q)));
+  const shown = ops.filter(o => !o.name.startsWith('material_techniques_') && !spec.state.includes(o.name) && (!q || opLabel(o.name, spec.prefix).toLowerCase().includes(q) || o.name.includes(q) || o.description.toLowerCase().includes(q)));
   return <div className="tool">
     {hasGraph&&<div className="au-row"><StudioButton size="sm" disabled={graphMode} onClick={()=>setGraphMode(true)}>Graph</StudioButton><StudioButton size="sm" disabled={!graphMode} onClick={()=>setGraphMode(false)}>Native operations</StudioButton></div>}
     {graphDomain&&<div hidden={!graphMode} style={{flex:1,minHeight:0,overflow:"auto"}}><NativeGraphPanel domain={graphDomain} projectPath={projectPath}/></div>}
@@ -141,6 +142,7 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
     </div>
     {error && <div className="tool__error" role="alert">{error}</div>}
     <div className="tool__scroll">
+      {panel==='models'&&<MaterialTechniquePanel key={projectPath} projectPath={projectPath}/>}
       {panel==='models'&&<StrataAnalysisPanel projectPath={projectPath}/>}
       {BRUSHES[panel] && <SceneBrushBar kinds={BRUSHES[panel]!}/>}
       {Object.entries(state).map(([name, value]) => <div key={name} className="tool__state">
