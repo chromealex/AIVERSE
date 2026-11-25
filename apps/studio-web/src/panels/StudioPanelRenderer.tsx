@@ -98,11 +98,11 @@ export interface StudioPanelContext {
 
 function PlayHierarchy({ ctx }: { ctx: StudioPanelContext }) {
   const { showLive } = useLivePlay();
-  return <LiveSwitch>{showLive ? <LiveHierarchy/> : <HierarchyPanel {...ctx}/>}</LiveSwitch>;
+  return <LiveSwitch>{showLive ? <LiveHierarchy key={ctx.snapshot?.project.path} project={ctx.snapshot?.project.path}/> : <HierarchyPanel {...ctx}/>}</LiveSwitch>;
 }
 function PlayInspector({ ctx }: { ctx: StudioPanelContext }) {
   const { showLive } = useLivePlay();
-  return <LiveSwitch>{showLive ? <LiveInspector/> : <InspectorPanel {...ctx}/>}</LiveSwitch>;
+  return <LiveSwitch>{showLive ? <LiveInspector key={ctx.snapshot?.project.path} project={ctx.snapshot?.project.path}/> : <InspectorPanel {...ctx}/>}</LiveSwitch>;
 }
 
 export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): ReactNode {

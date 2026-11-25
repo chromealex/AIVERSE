@@ -31,3 +31,8 @@
 /* Play mode tint (Unity): the editor shows that a game is running. */
 .studio.is-playing .titlebar{box-shadow:inset 0 -2px 0 var(--au-accent)}
 .studio.is-playing .nested-tabs{background:color-mix(in srgb,var(--au-accent) 9%,transparent)}
+.live-hier__pager{display:flex;align-items:center;justify-content:space-between;gap:4px;border-top:1px solid var(--au-line);padding:3px 5px;flex:none}
+.live-hier__pager .live__count{padding:0 3px;font-variant-numeric:tabular-nums}
+.live-hier__pager nav{display:flex;gap:var(--au-space-1)}
+.live-hier__pager .au-button--icon{width:26px;height:26px;min-height:26px}
+.live-hier__row{flex:none}

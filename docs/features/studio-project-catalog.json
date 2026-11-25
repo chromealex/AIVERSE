@@ -3,6 +3,10 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/panels/LivePanels.tsx",
+    "apps/studio-web/src/panels/LivePanels.css",
+    "apps/studio-web/src/panels/StudioPanelRenderer.tsx",
+    "apps/studio-native/tests/StudioSessionTests.cpp",
     "apps/studio-web/src/panels/HierarchyPanel.tsx",
     "apps/studio-web/src/panels/HierarchyPanel.css",
     "apps/studio-web/src/hierarchyFilter.ts",

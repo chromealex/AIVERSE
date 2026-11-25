@@ -1,5 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { Radio, Search } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { ChevronLeft, ChevronRight, Radio, Search } from 'lucide-react';
+import { StudioIconButton } from '../ui';
 import { invoke } from '../bridge';
 import type { StudioRuntimeEntity, StudioRuntimePage } from '../types';
 import { selectLive, setShowLive, useLivePlay } from './livePlay';
@@ -19,37 +20,57 @@ export function LiveSwitch({ children }: { children: ReactNode }) {
   </div>;
 }
 
-export function LiveHierarchy() {
+const pageSize = 100;
+
+export function LiveHierarchy({project}:{project?:string}) {
   const { selection } = useLivePlay();
   const [page, setPage] = useState<StudioRuntimePage | null>(null);
   const [query, setQuery] = useState('');
+  const [offset, setOffset] = useState(0);
+  const epoch = useRef<string | null>(null);
   const [error, setError] = useState('');
   useEffect(() => {
+    setPage(null); setError('');
     let live = true, busy = false;
     const poll = async () => {
       if (busy) return; busy = true;
-      try { const next = await invoke('studio.gameEntities', { offset: 0, limit: 100, query }); if (live) { setPage(next); setError(''); } }
+      try {
+        const next = await invoke('studio.gameEntities', { offset, limit: pageSize, query, expectedProject:project });
+        if (!live) return;
+        const changedEpoch = epoch.current !== null && epoch.current !== next.epoch;
+        epoch.current = next.epoch;
+        if (changedEpoch && offset !== 0) { setOffset(0); return; }
+        const lastOffset = Math.floor(Math.max(0, next.total - 1) / pageSize) * pageSize;
+        if (offset > lastOffset) { setOffset(lastOffset); return; }
+        setPage(next); setError('');
+      }
       catch (e) { if (live) setError(e instanceof Error ? e.message : String(e)); }
       finally { busy = false; }
     };
     void poll(); const t = window.setInterval(() => void poll(), 600);
     return () => { live = false; window.clearInterval(t); };
-  }, [query]);
+  }, [query, offset, project]);
   return <div className="live-hier">
     <label className="live-hier__search"><Search size={12} aria-hidden="true"/>
-      <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search live · t:type p:owner c:component #id" aria-label="Search live entities"/></label>
+      <input value={query} onChange={e => {setQuery(e.target.value); setOffset(0);}} placeholder="Search live · t:type p:owner c:component #id" aria-label="Search live entities"/></label>
     {error && <div className="live__error" role="alert">{error}</div>}
-    {!page?.active ? <div className="live__empty">The game is loading or in its menus.</div> :
-      <div role="listbox" aria-label="Live entities" className="live-hier__rows">
-        {page.rows.map(row => <button key={row.ref} type="button" role="option"
+    {!page ? (!error && <div className="live__empty">Reading live entities…</div>) : !page.active ? <div className="live__empty">The game is loading or in its menus.</div> :
+      <><div role="listbox" aria-label="Live entities" className="live-hier__rows">
+        {page.rows.map(row => <button key={row.ref} type="button" role="option" title={row.name + ' · ref:' + row.ref}
           aria-selected={selection?.ref === row.ref && selection.epoch === page.epoch}
           className={'live-hier__row' + (selection?.ref === row.ref && selection.epoch === page.epoch ? ' is-selected' : '')}
           onClick={() => selectLive({ epoch: page.epoch, ref: row.ref })}>
           <span className={'live-hier__owner live-hier__owner--' + Math.min(row.owner, 4)}/>
           <b>{row.name}</b><small>{row.kind}{row.health > 0 ? ' · ' + Math.round(row.health) + ' hp' : ''}</small>
         </button>)}
-        <div className="live__count">{page.rows.length < page.total ? `${page.rows.length} of ${page.total} · refine the search` : `${page.total} entities`} · tick {page.tick}</div>
-      </div>}
+        {!page.rows.length && <p className="live__empty">{query ? 'No matching live entities.' : 'No live entities.'}</p>}
+      </div><footer className="live-hier__pager">
+        <span className="live__count">{page.total > pageSize ? `${offset + 1}–${offset + page.rows.length} of ${page.total}` : `${page.total} ${page.total === 1 ? 'entity' : 'entities'}`} · tick {page.tick}</span>
+        {page.total > pageSize && <nav aria-label="Live entity pages">
+          <StudioIconButton aria-label="Previous page" title="Previous page" icon={<ChevronLeft size={14}/>} disabled={offset === 0} onClick={() => setOffset(offset - pageSize)}/>
+          <StudioIconButton aria-label="Next page" title="Next page" icon={<ChevronRight size={14}/>} disabled={offset + pageSize >= page.total} onClick={() => setOffset(offset + pageSize)}/>
+        </nav>}
+      </footer></>}
   </div>;
 }
 
@@ -65,7 +86,7 @@ function Value({ value, depth = 0 }: { value: unknown; depth?: number }) {
   return <dl className="live__fields">{entries.map(([k, v]) => <div key={k}><dt>{k}</dt><dd><Value value={v} depth={depth + 1}/></dd></div>)}</dl>;
 }
 
-export function LiveInspector() {
+export function LiveInspector({project}:{project?:string}) {
   const { selection } = useLivePlay();
   const [detail, setDetail] = useState<StudioRuntimeEntity | null>(null);
   const [error, setError] = useState('');
@@ -74,12 +95,12 @@ export function LiveInspector() {
     if (!selection) return;
     let live = true;
     const poll = async () => {
-      try { const next = await invoke('studio.gameInspect', selection); if (live) setDetail(next); }
+      try { const next = await invoke('studio.gameInspect', {...selection,expectedProject:project}); if (live) setDetail(next); }
       catch (e) { if (live) { setError(e instanceof Error ? e.message : String(e)); selectLive(null); } }
     };
     void poll(); const t = window.setInterval(() => void poll(), 500);
     return () => { live = false; window.clearInterval(t); };
-  }, [selection?.epoch, selection?.ref]);
+  }, [selection?.epoch, selection?.ref, project]);
   if (!selection) return <div className="live__empty">{error || 'Select a live entity in the Hierarchy.'}</div>;
   if (!detail) return <div className="live__empty">Reading entity…</div>;
   return <div className="live-insp">

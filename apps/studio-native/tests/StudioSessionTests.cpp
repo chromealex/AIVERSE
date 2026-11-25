@@ -1863,6 +1863,11 @@ void entityWorkflow() {
             auto page=inspector.entities(&live,"run-1",0,1,"");
             AIVERSE_TEST_CHECK(page["active"].boolean() && page["rows"].size()==1 && page["total"].integer()>=2);
             const auto ref=page["rows"][0].getStr("ref");
+            const auto second=inspector.entities(&live,"run-1",1,1,"");
+            AIVERSE_TEST_CHECK(second["total"].integer()==page["total"].integer() && second["rows"].size()==1);
+            AIVERSE_TEST_CHECK(second["rows"][0].getStr("ref")!=ref);
+            const auto filtered=inspector.entities(&live,"run-1",0,100,"ref:"+second["rows"][0].getStr("ref"));
+            AIVERSE_TEST_CHECK(filtered["total"].integer()==1 && filtered["rows"][0]==second["rows"][0]);
             const auto detail=inspector.inspect(&live,"run-1","run-1",ref);
             AIVERSE_TEST_CHECK(detail["components"].has("Transform"));
             AIVERSE_TEST_CHECK(live.checksum()==before);
