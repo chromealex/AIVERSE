@@ -1,0 +1,10 @@
+{
+  "sha": "93d06e80052f821e01287ffc440143402e2c0340",
+  "argv": [
+    "bash",
+    "/tmp/lighting-panel-fast.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-light-panel-weather-acceptance.log.txt",
+  "sha256": "79516cfaadcea111015c6714b2e4f58f17750932a32dd03a22f2fe825de30fc2"
+}

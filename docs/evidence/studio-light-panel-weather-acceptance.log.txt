@@ -1,0 +1,4 @@
+2026-11-26 01:06:58.864 AiverseStudioHTML5[14250:82052260] [studio-web] JS: CROSS bindingproof DONE_1
+2026-11-26 01:06:58.863 AiverseStudioHTML5[14250:82052260] [studio-web] JS: CROSS bindingproof VERIFIED temporary local preview, sliders, one undo and redo, saved weather
+Verified exact map override on disk
+native surface pixels 6132 day mean 37.43813872580996 night mean 18.472494020439225 map samples 1287 map brightness drop 90.36260036260036
