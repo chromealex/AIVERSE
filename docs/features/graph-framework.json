@@ -189,8 +189,10 @@
     },
     "platforms": {
       "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "note": "Pending implementation or actual verification. SpectraFX GPU checkpoint restore compiled with GCC 13.3 for GNU/Linux AArch64 and round-tripped distinct parameter and attribute lanes on Metal. Full platform acceptance is still open.",
+      "evidence": [
+        "docs/evidence/spectrafx-gcc-checkpoint-b730fc08d.json"
+      ]
     },
     "dependencies": {
       "status": "not_run",
@@ -323,6 +325,7 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integrated-graph-2a56cbf39.json"
+    "docs/evidence/integrated-graph-2a56cbf39.json",
+    "docs/evidence/spectrafx-gcc-checkpoint-b730fc08d.json"
   ]
 }
