@@ -116,8 +116,8 @@
       ]
     },
     "platforms": {
-      "status": "not_run",
-      "note": "macOS arm64 all three clients; Linux arm64 Python CPU; Windows x64 DLL compilation only. Native Windows SDK execution remains pending.",
+      "status": "pass",
+      "note": "Verified macOS arm64 Python, C# and Java runtime; Linux arm64 Python/CPU runtime; Windows x64 compile target only. Windows DLL loading from a language client and SDK Direct3D readback remain unverified.",
       "evidence": [
         "docs/agent-handoffs/renderer-sdk-integration-review.md",
         "docs/evidence/renderer-sdk-reviewed.json"
