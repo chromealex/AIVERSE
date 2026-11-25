@@ -3535,7 +3535,8 @@
         },
         {
           "id": "encounter-phase-determinism",
-          "status": "in-progress",
+          "date": "2026-11-25",
+          "status": "done",
           "title": "Повторяемые фазы боя с боссом",
           "titleEn": "Deterministic boss phase transitions",
           "text": "Проверка состояния босса при появлении подкрепления и после загрузки матча.",
