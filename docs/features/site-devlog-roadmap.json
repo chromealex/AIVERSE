@@ -10,6 +10,7 @@
     "docs/devlog/systems.json",
     "docs/agent-handoffs/site-publish-git233-intake-2026-11-25.md",
     "docs/agent-handoffs/site-publish-git233-verification-2026-11-25.md",
+    "docs/agent-handoffs/site-publish-git233-main-certification-2026-11-25.md",
     "docs/evidence/site-devlog-roadmap-build.json",
     "docs/evidence/site-devlog-roadmap-build.log.txt",
     "docs/evidence/site-devlog-roadmap-current.json",
@@ -20,6 +21,8 @@
     "docs/evidence/site-publish-git233-d35abba0b.log.txt",
     "docs/evidence/site-publish-git233-ac83a5b88.json",
     "docs/evidence/site-publish-git233-ac83a5b88.log.txt",
+    "docs/evidence/site-publish-main-d73791202.json",
+    "docs/evidence/site-publish-main-d73791202.log.txt",
     "docs/features/site-devlog-roadmap.json",
     "site/_layout.html",
     "site/devlog.js",
@@ -157,6 +160,6 @@
     "studio_methods": []
   },
   "test_reports": [
-    "docs/evidence/site-publish-git233-ac83a5b88.json"
+    "docs/evidence/site-publish-main-d73791202.json"
   ]
 }
