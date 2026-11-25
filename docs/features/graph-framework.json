@@ -544,14 +544,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-e0b95cf24-contracts.json",
-    "docs/evidence/feature-gate-e0b95cf24-catalog.json",
-    "docs/evidence/feature-gate-e0b95cf24-skill-audit.json",
-    "docs/evidence/feature-gate-e0b95cf24-feature-suite.json",
-    "docs/evidence/feature-gate-e0b95cf24-native-project.json",
-    "docs/evidence/feature-gate-e0b95cf24-web.json",
-    "docs/evidence/feature-gate-e0b95cf24-studio-contracts.json",
-    "docs/evidence/feature-gate-e0b95cf24-typecheck.json",
-    "docs/evidence/pr183-publication-native-630793aca.json"
+    "docs/evidence/pr183-publication-current-f73d31f26.json"
   ]
 }
