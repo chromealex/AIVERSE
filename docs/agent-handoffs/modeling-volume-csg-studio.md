@@ -1,0 +1,7 @@
+# Modeling volume CSG verification
+
+Tested implementation 33718383d8b118bb5b04a0d6a6bf2367293fad61, branch codex/modeling-volume-csg. Native stage 892320df792f951063c57c613a15a56273216cc1. The modeling library, workspace CLI, editor operation and MCP server were verified on macOS using compatible cached x86_64 objects and freshly compiled ModelingOps, VolumeCsg, Geometry and Document objects. The test command and output are in docs/evidence/modeling-volume-csg-rebuild-20261125.json. SPVT frame 1 extraction, rejection of an out-of-bounds frame and invalid checksum, source reopening, mesh changes, stale-revision and cycle rejection and undo all passed. Updated Studio TypeScript passed tsc --noEmit.
+
+Real stdio MCP tools/list included modeling_volume_texture_import. open_game, modeling_create and modeling_export wrote demo-project/models/sculpt.glb under /Volumes/KINGSTON/AIVERSE-builds/modeling-volume-csg: 7,662 triangles, zero degenerate, one estimated draw. The fixture is examples/modeling/volume-csg.json.
+
+Playwright drove ModelGraphPanel with the same source loaded by a local bridge to the native Modeling CLI. The test selected the sculpture geometry and bore cylinder, moved its center from x=0.15 to 0.33, applied the field and clicked Save. The native host returned revision 2. The capture is docs/evidence/modeling-volume-csg-editor.png. The browser harness did not execute the desktop WKWebView host. Native Windows, Studio WKWebView, publication and merged-tree Mac quick verification remain with integration.
