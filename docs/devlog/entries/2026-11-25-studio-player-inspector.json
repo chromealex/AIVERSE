@@ -13,21 +13,33 @@
   "summaryEn": "The Players tab in Inspector edits map participants and their starting conditions.",
   "body": [
     "Выберите игрока или добавьте новый слот. Укажите имя, команду, фракцию и стартовые ресурсы. Для сценарной стороны включите Scripted waves.",
-    "Start position задаёт координаты старта. Для планеты также выбираются тело и грань. Apply player changes применяет правки одним шагом Undo. Перед удалением слота окно предупреждает о передаче его объектов нейтральной стороне."
+    "Start position задаёт координаты старта. Для планеты также выбираются тело и грань. Apply player changes применяет правки одним шагом Undo. Перед удалением слота окно предупреждает о передаче его объектов нейтральной стороне.",
+    "Pick start in Scene переносит координаты поверхности в форму текущего игрока. Проверьте значения и нажмите Apply player changes."
   ],
   "bodyEn": [
     "Select a player or add a slot. Edit the name, team, faction and starting stock. Select Scripted waves for a scripted side.",
-    "Start position takes map coordinates, plus body and face for planetary maps. Apply player changes commits the form in one Undo step. Removal asks for confirmation before transferring that player’s objects to neutral ownership."
+    "Start position takes map coordinates, plus body and face for planetary maps. Apply player changes commits the form in one Undo step. Removal asks for confirmation before transferring that player’s objects to neutral ownership.",
+    "Pick start in Scene fills in the coordinates for the current player. Review the position and choose Apply player changes."
   ],
   "verified": "В отдельном окне macOS добавлен и сохранён третий игрок. Значения независимо прочитаны из файла карты.",
   "verifiedEn": "A detached macOS window added and saved a third player. The saved map was independently parsed.",
-  "limits": "Выбор стартовой точки кликом в Scene и проверка на Windows ещё предстоят.",
-  "limitsEn": "Clicking the Scene to set a start and Windows acceptance are pending.",
+  "limits": "Маршрут композитного окна проверен на macOS. Проверка нативного ввода мыши и Windows ещё предстоит.",
+  "limitsEn": "The composite window path was verified on macOS. Native mouse and Windows verification are pending.",
   "media": [
     {
       "src": "docs/devlog/media/2026-11-25-studio-player-inspector/player-inspector.png",
       "caption": "Игрок Harbor scouts в Inspector на macOS",
       "captionEn": "Harbor scouts player in the macOS Inspector"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-player-inspector/player-start.png",
+      "caption": "Выбранная точка старта на сеточной карте",
+      "captionEn": "Picked start on a grid map"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-player-inspector/player-planet.png",
+      "caption": "Старт на выбранной грани планеты",
+      "captionEn": "Starting position on a planet face"
     }
   ]
 }
