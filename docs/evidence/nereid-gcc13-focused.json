@@ -1,0 +1,14 @@
+{
+  "sha": "34462e5fad164ed9a2f5f4f06f3c21a201b6008b",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/nereid-gcc13-main-gate/mac",
+    "-R",
+    "^ecs_nereid_review_fixes_test$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/nereid-gcc13-focused.log.txt",
+  "sha256": "21524c64bbf413074b9b38c88b241e7c79158442e62903be3196695697aa4d2e"
+}
