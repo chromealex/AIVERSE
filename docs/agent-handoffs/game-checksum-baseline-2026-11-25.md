@@ -1,0 +1,7 @@
+# Sample-game checksum reconciliation
+
+The unchanged main tree at 942b03ba9e76fb53e103ca7254d642163ad339d2 differs from 90 of the 96 tracked checksum values. The comparison used the same 32 projects and seeds 1–3 as tests/checksums/check.sh; the SHA-256 of the 479 input file hashes was ed9dcb53b44b923ba16f0fa57dde00d80140837df91b47b4440434ea3e335eab. For ambersands seed 1, main and integration both produced fbee648655d09166, and all 443 compared checkpoints agreed. The checked-in value was 84e25c4298e5dc94. The host checks out baseline.txt as CRLF by default, while the runner writes LF, making the raw textual difference noisier.
+
+A second issue is real runtime nondeterminism. Sixteen repeated boss_arena seed 2 matches in identical main processes produced both cdf943e22f8676be and b8553ab4dea146dc. Sixteen runs on the integrated build yielded the same two outcomes. The first differing checkpoint in each case was tick 320. Repair the cause and verify repeated runs before recording a single value for each match. Reference logs and binary provenance are on KINGSTON under AIVERSE-builds/aiv197-202-checksum-reference.
+
+The owner requested the underlying problems be fixed and the result pushed to main. Keep every seed guarded. Pin the baseline to LF, compare old and new inputs and full match outputs, measure restored runs, and replace the historical values only from independently confirmed corrected results.
