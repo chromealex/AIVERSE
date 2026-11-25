@@ -1,0 +1,14 @@
+{
+  "sha": "93cd8029408b65a3dc5c7514b81a9a0ede3a926f",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/ow01-pr192-mac-f0b46a0ca",
+    "-R",
+    "^(region_gamecore_integration_test|vehicle_region_group_test)$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/ow01-mixed-93cd80294.log.txt",
+  "sha256": "8f6deb2a71e74878b735856dc0ad3843839f9aedbc8080f11e56cf99ee0e6e6b"
+}
