@@ -774,6 +774,32 @@ Json StudioSession::mapProperties(const Json& params,bool write) {
     out.set("width",num(data.w));out.set("height",num(data.h));out.set("grid",Json::fromBool(!data.planet()));
     out.set("maxSize",num(game::kMaxMapSize));out.set("entities",num(data.entities.size()));out.set("players",num(data.players.size()));
     out.set("roadsOnly",Json::fromBool(data.roadsOnly));out.set("victory",data.extra["victory"]);
+    Json roster=Json::array(),factions=Json::array(),resources=Json::array();
+    for(const auto& player:data.players){
+        Json row=Json::object(),amounts=Json::object();
+        row.set("name",str(player.name));row.set("team",num(player.team));
+        row.set("waves",Json::fromBool(player.waves));row.set("faction",str(player.faction));
+        if(player.hasStart){
+            Json start=Json::array();start.push(Json::number(double(player.startX)));start.push(Json::number(double(player.startZ)));
+            row.set("start",player.startAt.isObject()?player.startAt:std::move(start));
+        }
+        for(const auto& [id,amount]:player.resources)amounts.set(id,Json::number(double(amount)));
+        row.set("resources",std::move(amounts));roster.push(std::move(row));
+    }
+    for(const auto& faction:ws_.project.rules.factions){
+        Json item=Json::object();item.set("id",str(faction.id));item.set("name",str(faction.name));factions.push(std::move(item));
+    }
+    for(const auto& resource:ws_.project.rules.resources){
+        if(resource.kind==game::ResourceKind::Capacity)continue;
+        Json item=Json::object();item.set("id",str(resource.id));item.set("name",str(resource.name));
+        item.set("initial",Json::number(resource.start.toDouble()));resources.push(std::move(item));
+    }
+    Json surfaces=Json::array();
+    for(const auto& body:data.bodies)if(body.surface()){
+        Json item=Json::object();item.set("id",str(body.id));item.set("size",num(body.faceSize));surfaces.push(std::move(item));
+    }
+    out.set("surfaces",std::move(surfaces));
+    out.set("roster",std::move(roster));out.set("factions",std::move(factions));out.set("resources",std::move(resources));
     if(params.getBool("validate")){
         Json issues=Json::array();
         for(const auto& item:doc.validate(ws_.project.rules,ws_.project.rulesJson)){
@@ -786,6 +812,52 @@ Json StudioSession::mapProperties(const Json& params,bool write) {
         out.set("issues",std::move(issues));
     }
     return out;
+}
+Json StudioSession::mapPlayer(const Json& params){
+    const auto& data=ws_.map.data;
+    if(ws_.project.dir.empty() || data.worldSpace || !sameDocumentScope(params["scope"],graphDocumentScope()))
+        throw std::runtime_error("Map changed. Reload the player list.");
+    const auto action=params.getStr("action");
+    const int count=int(data.players.size());
+    const int slot=params.getInt("slot");
+    if(!params["slot"].isNumber() || params["slot"].toDouble()!=slot || slot<1 ||
+       (action=="add" ? slot!=count+1 || count>=16 : slot>count))
+        throw std::runtime_error("Invalid player slot");
+    Json args=Json::object();
+    if(action=="edit"){
+        const auto& changes=params["changes"];
+        if(!changes.isObject() || changes.members().empty())throw std::runtime_error("Expected player changes");
+        for(const auto& [key,value]:changes.members()){
+            if(key=="name" && value.isString())continue;
+            if(key=="team" && value.isNumber() && value.toDouble()>=std::numeric_limits<int>::min() &&
+               value.toDouble()<=std::numeric_limits<int>::max() && value.toDouble()==value.integer())continue;
+            if(key=="waves" && value.type()==Json::Type::Bool)continue;
+            if(key=="faction" && value.isString() && (value.str().empty() || std::any_of(ws_.project.rules.factions.begin(),
+               ws_.project.rules.factions.end(),[&](const auto& f){return f.id==value.str();})))continue;
+            if(key=="start"){
+                const auto coord=[](const Json& v){return v.isNumber() && std::isfinite(float(v.toDouble()));};
+                if(value.isNull() || (!data.planet() && value.isArray() && value.size()==2 && coord(value[0]) && coord(value[1])))continue;
+                if(data.planet() && value.isObject())continue; // player_set validates body, face and bounds before opening an edit.
+            }
+            if(key=="resources" && value.isObject()){
+                for(const auto& [id,amount]:value.members()){
+                    if(!amount.isNumber() || !(amount.toDouble()>=0 && amount.toDouble()<=1e6) ||
+                       std::none_of(ws_.project.rules.resources.begin(),ws_.project.rules.resources.end(),
+                         [&](const auto& r){return r.id==id && r.kind!=game::ResourceKind::Capacity;}))
+                        throw std::runtime_error("Invalid starting resource: "+id);
+                }
+                continue;
+            }
+            throw std::runtime_error("Invalid player property: "+key);
+        }
+        args=changes;
+    }else if(action=="remove"){
+        if(count<=2)throw std::runtime_error("Keep at least two player slots");
+    }else if(action!="add")throw std::runtime_error("Unknown player action");
+    args.set("player",num(slot));
+    const auto result=ws_.call(action=="remove"?"player_remove":"player_set",args,"studio");
+    if(result.has("error"))throw std::runtime_error(result.getStr("error"));
+    return snapshot();
 }
 Json StudioSession::hierarchyGroups(const Json& params) {
     if(ws_.project.dir.empty() || params.getStr("expectedProject")!=ws_.project.dir ||
@@ -2189,7 +2261,7 @@ std::string StudioSession::historyLabel(const std::string& method, const Json& p
         return key.empty() ? "Edit "+(comp.empty()?std::string("properties"):comp) : "Set "+key;
     }
     static const std::pair<const char*,const char*> names[]={
-        {"studio.mapPropertiesSet","Edit map properties"},{"studio.entityCreate","Create object"},{"studio.entityDelete","Delete"},{"studio.entitiesDelete","Delete"},
+        {"studio.mapPlayer","Edit map players"},{"studio.mapPropertiesSet","Edit map properties"},{"studio.entityCreate","Create object"},{"studio.entityDelete","Delete"},{"studio.entitiesDelete","Delete"},
         {"studio.entityDuplicate","Duplicate"},{"studio.entitiesDuplicate","Duplicate"},{"studio.entityMove","Reorder"},
         {"studio.assetPlace","Place asset"},{"studio.componentAdd","Add component"},{"studio.componentRemove","Remove component"},
         {"studio.lightAdd","Add light"},{"studio.lightUpdate","Edit light"},{"studio.lightDelete","Delete light"},
@@ -4054,6 +4126,8 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             ++graphDocumentEpoch_;
             clearSelection();hidden_.clear();locked_.clear();previewGraphTitle_.clear();previewGraphFactors_=Json();previewMaterialName_.clear();refreshMaterialPreview();
             reply.set("result",snapshot());
+        } else if(method=="studio.mapPlayer"){
+            reply.set("result",mapPlayer(params));
         } else if(method=="studio.mapProperties" || method=="studio.mapPropertiesSet"){
             reply.set("result",mapProperties(params,method=="studio.mapPropertiesSet"));
         } else if (method == "studio.hierarchyGroups") {

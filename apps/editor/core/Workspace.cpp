@@ -1709,22 +1709,40 @@ void Workspace::registerCoreOps() {
             r.set("summary", str(added ? "Дорога добавлена" : "Дорога удалена"));
             return r;
         });
-    add("player_set", "Change player N (1-based): name, team, faction, start [x,z] (faction start units spawn there), waves (scripted side), resources {id: amount}, "
+    add("player_set", "Change player N (1-based): name, team, faction, start [x,z] (faction start units spawn there) (on a planet: {body,face,x,y}) or null to clear it, waves (scripted side), resources {id: amount}, "
         "ai {preset: easy|normal|hard|rush|defender|economist, thinkTicks, aggression, any rules ai knob} for this slot's computer player ({} clears it).",
         R"({"properties": {"player": {"type": "integer"}, "name": {"type": "string"}, "team": {"type": "integer"}, "faction": {"type": "string"},
-            "start": {"type": "array", "items": {"type": "number"}}, "waves": {"type": "boolean"}, "resources": {"type": "object"},
+            "start": {"type": ["array","object","null"], "items": {"type": "number"}}, "waves": {"type": "boolean"}, "resources": {"type": "object"},
             "ai": {"type": "object"}}, "required": ["player"]})",
         [this](const Json& p) {
             int n = pi(p, "player");
+            if(n<1 || (n>int(map.data.players.size()) && n>16)) throw std::runtime_error("player out of range");
+            const auto& start=p["start"];
+            if(start.isObject()){
+                const int index=map.data.findBody(start.getStr("body"));
+                if(index<0 || !map.data.bodies[size_t(index)].surface()) throw std::runtime_error("Unknown starting surface");
+                const auto within=[](const Json& v,int limit){
+                    return v.isNumber() && v.toDouble()>=0 && v.toDouble()<=limit;
+                };
+                const int size=map.data.bodies[size_t(index)].faceSize;
+                if(!within(start["face"],5) || start["face"].toDouble()!=start["face"].integer() ||
+                   !within(start["x"],size) || !within(start["y"],size)) throw std::runtime_error("Invalid start on planet face");
+            }
             map.beginEdit();
             while (int(map.data.players.size()) < n && map.data.players.size() < 16)
                 map.data.players.push_back({"Player " + std::to_string(map.data.players.size() + 1), int(map.data.players.size() + 1)});
-            if (n < 1 || n > int(map.data.players.size())) throw std::runtime_error("player out of range");
             auto& pl = map.data.players[size_t(n - 1)];
             if (p.has("name")) pl.name = ps(p, "name");
             if (p.has("team")) pl.team = pi(p, "team");
             if (p.has("faction")) pl.faction = ps(p, "faction");
-            if (p.has("start")) { pl.hasStart = true; pl.startX = float(p["start"][0].toDouble()); pl.startZ = float(p["start"][1].toDouble()); }
+            if (p.has("start")) {
+                pl.hasStart=!start.isNull();
+                pl.startAt=start.isObject()?start:Json{};
+                if(pl.hasStart){
+                    pl.startX=float((start.isObject()?start["x"]:start[0]).toDouble());
+                    pl.startZ=float((start.isObject()?start["y"]:start[1]).toDouble());
+                }
+            }
             if (p.has("waves")) pl.waves = p.getBool("waves");
             if (p.has("ai")) {   // validated like the loader does (map players[i].ai)
                 game::parseAIPlayerRules(p["ai"], "players[" + std::to_string(n - 1) + "].ai");

@@ -88,3 +88,6 @@
 .insp-map p,.insp-map li{overflow-wrap:anywhere}
 .insp-map ul{padding-left:18px}
 .insp-map [role=alert]{color:var(--au-danger);margin:0}
+
+.insp-map__size[hidden]{display:none}
+.insp-map[aria-label="Map players"] > label{margin-top:12px}

@@ -118,6 +118,7 @@ public:
 private:
     Json snapshot() const;
     Json graphDocumentScope() const;
+    Json mapPlayer(const Json& params);
     Json mapProperties(const Json& params,bool write);
     Json hierarchyGroups(const Json& params);
     editor::WorldPreview hierarchyPreview_;

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Map as MapIcon } from 'lucide-react';
+import { MapPlayers } from './MapPlayers';
 import { invoke } from '../bridge';
 import type { StudioGraphDocumentScope, StudioMapProperties, StudioMapChanges, StudioSnapshot } from '../types';
 import { StudioButton, StudioInput } from '../ui';
@@ -14,9 +15,10 @@ interface Props {
   onApply:(snapshot:StudioSnapshot)=>void;
   onSelect:(id:string)=>void;
   busy:boolean;
+  players:boolean;
 }
 
-export function MapInspector({scope,onApply,onSelect,busy}:Props){
+export function MapInspector({scope,onApply,onSelect,busy,players}:Props){
   const [data,setData]=useState<StudioMapProperties>();
   const [draft,setDraft]=useState<{base:StudioMapProperties;fields:ReturnType<typeof form>}>();
   const [error,setError]=useState('');
@@ -58,6 +60,7 @@ export function MapInspector({scope,onApply,onSelect,busy}:Props){
     catch(e){setError(String(e));}
     finally{setPending(false);}
   };
+  if(players)return <MapPlayers data={data} revision={scope.revision} busy={busy} onApply={onApply}/>;
   return <form className="insp-map" aria-label="Map properties" onSubmit={e=>{e.preventDefault();void apply();}}>
     <header><MapIcon size={19}/><div><h2>{data.name || 'Untitled map'}</h2>
       <small>{data.entities} objects · {data.players} players</small></div></header>
