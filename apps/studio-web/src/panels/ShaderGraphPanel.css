@@ -45,3 +45,6 @@
   .graph-summary>*{flex:none;white-space:nowrap}
   .graph-bindings{max-height:45%}
 }
+.graph-edit-port{cursor:crosshair}
+.graph-edit-pin{fill:#90c8e8;stroke:#223649;stroke-width:1px}
+.graph-edit-port:hover .graph-edit-pin,.graph-edit-port:focus .graph-edit-pin,.graph-edit-port[aria-pressed=true] .graph-edit-pin{fill:#fff6cf;stroke:#ffbb61;stroke-width:2px}

@@ -12,6 +12,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  const [operations,setOperations]=useState<StudioShaderGraphOp[]>([]);
  const [selectedOp,setSelectedOp]=useState('');
  const [selectedNode,setSelectedNode]=useState('');
+ const [wireSource,setWireSource]=useState('');
  const [pendingName,setPendingName]=useState('');
  const [selected,setSelected]=useState('');
  const [document,setDocument]=useState<StudioShaderGraphDocument|null>(null);
@@ -43,7 +44,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  },[connected,projectPath,nonce]);
  useEffect(()=>{
   let closed=false;
-  setDocument(null);dispatch({type:'load',graph:null});setMessage('');setSelectedNode('');
+  setDocument(null);dispatch({type:'load',graph:null});setMessage('');setSelectedNode('');setWireSource('');
   if(!selected)return;
   setBusy(true);setError('');
   void invoke('studio.shaderGraphGet',{name:selected})
@@ -85,9 +86,15 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
   if(!draft||!selectedNode||busy)return;
   const next=removeShaderGraphNode(draft,selectedNode);
   if(next===draft){setError('Cannot delete a node still referenced by the graph.');return;}
-  setDraft(next);setSelectedNode('');
+  setDraft(next);setSelectedNode('');setWireSource('');
   setMessage('Unused node removed from local draft.');
   setError('');
+ };
+ const connectInput=(target:string,slot:number,id:string)=>{
+  if(!draft)return;
+  const next=setShaderInput(draft,target,slot,id);
+  if(next===draft){setError('This connection would create a cycle.');return;}
+  setDraft(next);setSelectedNode(target);setWireSource('');setMessage('');setError('');
  };
  const validate=async()=>{
   if(!draft||busy)return;
@@ -108,13 +115,14 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
   }catch(e){setError(e instanceof Error?e.message:String(e));}
   finally{setBusy(false);}
  };
- const discard=()=>{if(document){setDraft(structuredClone(document.graph));setMessage('Draft discarded.');setError('');}};
+ const discard=()=>{if(document){setDraft(document.graph);setWireSource('');setMessage('Draft discarded.');setError('');}};
  return <section className="studio-shader-graphs">
   <header className="graph-heading"><span><GitBranch size={16}/> Shader Graphs</span>
    <button className="icon-button" aria-label="Reload Shader Graphs"
     disabled={busy||dirty} title={dirty?'Save or discard changes before reloading':'Reload Shader Graphs'} onClick={()=>setNonce(n=>n+1)}><RefreshCw size={15}/></button>
   </header>
-  <p className="graph-readonly">Select a node to edit its inputs. Drag nodes to arrange the graph.</p>
+  <p className="graph-readonly">{wireSource?<>Choose an input for {wireSource}. <button onClick={()=>setWireSource('')}>Cancel</button></>
+   :'Select a node to edit its properties, or connect an output to an input.'}</p>
   {error&&<p className="graph-error" role="alert">{error}</p>}
   {pendingName&&<div className="graph-pending">
     <span>Discard unsaved changes and open {pendingName}?</span>
@@ -145,8 +153,8 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
        </select>
        <button disabled={!draft||busy||!chosenOp} onClick={createNode}>+ Node</button>
        <button disabled={!inspected||busy} onClick={deleteNode}>Delete node</button>
-       <button disabled={!history.past.length||busy} onClick={()=>{dispatch({type:'undo'});setError('');setMessage('');}}>Undo edit</button>
-       <button disabled={!history.future.length||busy} onClick={()=>{dispatch({type:'redo'});setError('');setMessage('');}}>Redo edit</button>
+       <button disabled={!history.past.length||busy} onClick={()=>{dispatch({type:'undo'});setWireSource('');setError('');setMessage('');}}>Undo edit</button>
+       <button disabled={!history.future.length||busy} onClick={()=>{dispatch({type:'redo'});setWireSource('');setError('');setMessage('');}}>Redo edit</button>
        <button disabled={!draft||busy} onClick={()=>void validate()}><CheckCircle2 size={13}/> Validate</button>
        <button disabled={!dirty||busy} onClick={discard}><RotateCcw size={13}/> Discard</button>
        <button disabled={!dirty||busy} onClick={()=>void save()}><Save size={13}/> Save graph</button>
@@ -154,6 +162,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
       <div className="graph-canvas-scroll graph-surface">
        <svg width={diagram.width} height={diagram.height} viewBox={'0 0 '+diagram.width+' '+diagram.height}
         role="group" aria-label={'Editable node layout for '+selected}
+        onKeyDown={event=>{if(event.key==='Escape'&&wireSource){event.stopPropagation();setWireSource('');}}}
         onPointerMove={event=>{
           if(!drag.current||!draft)return;
           const current=drag.current;
@@ -205,6 +214,14 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
            cy={node.height/2+(index-(node.inputs.length-1)/2)*9} r="3"><title>{input}</title></circle>)}
          <circle className="graph-socket graph-socket--out" cx="129" cy="25" r="3"/>
         </g>)}
+        {diagram.nodes.map(node=><g key={node.id} transform={'translate('+node.x+' '+node.y+')'}>
+         <ShaderPort x={129} y={25} label={'Output of '+node.id} active={wireSource===node.id}
+           onActivate={()=>{setWireSource(wireSource===node.id?'':node.id);setSelectedNode(node.id);setError('');}}/>
+         {wireSource&&node.inputs.map((_,index)=><ShaderPort key={index} x={1}
+           y={node.height/2+(index-(node.inputs.length-1)/2)*9}
+           label={'Connect to '+node.id+' input '+(index+1)}
+           onActivate={()=>connectInput(node.id,index,wireSource)}/>)}
+        </g>)}
        </svg>
       </div>
       {draft&&<div className="graph-bindings">
@@ -224,10 +241,8 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
         </>}
 
         {inspected.inputs?.map((id,slot)=><label key={slot}>Input {slot+1}
-         <select value={id} onChange={event=>{
-          const next=setShaderInput(draft,inspected.id,slot,event.target.value);
-          if(next===draft){setError('This connection would create a cycle.');return;}
-          setDraft(next);setMessage('');setError('');
+         <select aria-label={'Input '+(slot+1)} value={id} onChange={event=>{
+          connectInput(inspected.id,slot,event.target.value);
          }}>{sourceOptions}</select></label>)}
        </fieldset>}
        <details><summary>Graph outputs</summary><fieldset>
@@ -257,4 +272,14 @@ function ShaderComponentInput({channel,value,onEdit}:{channel:string;value:numbe
     if(input.validity.valid&&Number.isFinite(input.valueAsNumber))onEdit(input.valueAsNumber);
    }}
    onBlur={()=>{focused.current=false;setText(String(value));}}/>;
+}
+
+function ShaderPort({x,y,label,active,onActivate}:{x:number;y:number;label:string;active?:boolean;onActivate:()=>void}){
+ return <g className="graph-edit-port" role="button" tabIndex={0} aria-label={label} aria-pressed={active}
+   transform={'translate('+x+' '+y+')'} onClick={onActivate} onKeyDown={event=>{
+    if(event.key==='Enter'||event.key===' '){event.preventDefault();onActivate();}
+   }}>
+   <title>{label}</title><circle r={active===undefined?4.5:8} fill="transparent"/>
+   <circle r="3.5" className="graph-edit-pin"/>
+ </g>;
 }
