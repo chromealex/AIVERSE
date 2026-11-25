@@ -3,6 +3,9 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/panels/MapInspector.tsx",
+    "apps/studio-web/src/panels/InspectorPanel.tsx",
+    "apps/studio-web/src/panels/InspectorPanel.css",
     "apps/studio-web/src/panels/HierarchyPreviewRow.tsx",
     "apps/studio-native/StudioEntityNesting.h",
     "apps/studio-native/StudioHierarchyGroups.h",
