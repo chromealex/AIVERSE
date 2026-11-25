@@ -489,7 +489,7 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
     return [self core]->placeAsset(asset.UTF8String,point.x,point.y,[self w],[self h]);
 }
 - (BOOL)acceptsFirstMouse:(NSEvent*)event {
-    if ([self isMemberOfClass:[StudioMetalView class]] && [self core] && [self core]->playerStartArmed()) return YES;
+    if ([self isMemberOfClass:[StudioMetalView class]] && [self core] && ([self core]->playerStartArmed() || [self core]->brushArmed())) return YES;
     return [super acceptsFirstMouse:event];
 }
 - (void)primaryMouse:(NSEvent*)event phase:(int)phase {
