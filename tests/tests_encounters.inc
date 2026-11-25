@@ -150,6 +150,27 @@ TEST(encounters_boss_phases_attacks_adds_and_defeat) {
     CHECK(!encStore(*sim).boss(golem.packed()));
 }
 
+// A phase transition can grow the Unit pool while the boss is still processing its movement.
+TEST(encounters_add_wave_stops_boss_on_spawn_tick) {
+    const std::string map = encMap(R"({"type":"golem","owner":2,"pos":[20.5,14.5]},{"type":"dummy","owner":1,"pos":[20.5,6.5]})");
+    for (bool paged : {false, true}) {
+        auto sim = makeSimJson(kEncRules, map);
+        sim->world().enableCowSnapshots(paged);
+        sim->step();
+        const Entity boss = findType(*sim, "golem", 2);
+        auto& world = sim->world();
+        world.get<game::Unit>(boss).hp = Fixed::fromInt(1100);
+        game::Order move;
+        move.type = game::OrderType::Move;
+        move.point = at(20, 6);
+        mod(*sim).issue(*sim, boss, move, false);
+        sim->step();
+        CHECK(countType(*sim, "crawler", 2) == 3);
+        CHECK(world.get<game::Orders>(boss).queue.empty());
+        CHECK(!world.get<game::Mobile>(boss).moving);
+    }
+}
+
 TEST(encounters_telegraph_damage_statuses_immunity_and_abilities) {
     auto sim = makeSimJson(kEncRules, encMap(R"({"type":"mage","owner":1,"pos":[10.5,10.5]},{"type":"dummy","owner":2,"pos":[14.5,10.5]})", false));
     auto* en = mod(*sim).encounters();
