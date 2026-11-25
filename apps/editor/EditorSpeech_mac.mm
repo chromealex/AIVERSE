@@ -23,7 +23,11 @@ SFSpeechRecognizer* g_recognizer = nil;
 SFSpeechAudioBufferRecognitionRequest* g_request = nil;   // guarded by g_m (the tap thread appends to it)
 SFSpeechRecognitionTask* g_task = nil;
 NSArray<NSString*>* g_vocab = nil;
-int g_gen = 0;   // task generation: callbacks of a replaced task are ignored
+bool g_tapInstalled = false;
+std::atomic<bool> g_recording{false};
+std::atomic<int> g_gen{0}; // recognizer callbacks from replaced tasks are ignored
+unsigned g_session = 0;
+int g_emptyTasks = 0;
 
 std::string joined() {   // under g_m
     if (g_done.empty()) return g_part;
@@ -39,7 +43,9 @@ void fail(const std::string& e) {
 }
 
 void shutdown() {   // main thread
-    if (g_engine) { [g_engine stop]; [g_engine.inputNode removeTapOnBus:0]; }
+    g_recording = false;
+    if (g_engine) [g_engine stop];
+    if (g_tapInstalled) { [g_engine.inputNode removeTapOnBus:0]; g_tapInstalled = false; }
     if (g_task) [g_task cancel];
     g_engine = nil; g_task = nil;
     std::lock_guard<std::mutex> lk(g_m);
@@ -54,26 +60,26 @@ void finish() {   // the text so far is the result
     }
     g_listening = false;
     g_finishing = false;
-    dispatch_async(dispatch_get_main_queue(), ^{ shutdown(); });
+    ++g_gen;
+    shutdown();
 }
 
 void newTask();
 
 void taskEnded(int gen) {   // main thread: a task ended by itself
     if (gen != g_gen) return;
-    static int empty = 0;   // tasks in a row that ended with nothing heard: a broken recognizer must not spin
     {
         std::lock_guard<std::mutex> lk(g_m);
-        empty = g_part.empty() ? empty + 1 : 0;
+        g_emptyTasks = g_part.empty() ? g_emptyTasks + 1 : 0;
         g_done = joined();
         g_part.clear();
     }
-    if (g_listening && empty < 4) { newTask(); return; }   // still dictating: go on
-    if (g_listening && empty >= 4) {
+    if (g_listening && g_emptyTasks < 4) { newTask(); return; }   // still dictating: go on
+    if (g_listening && g_emptyTasks >= 4) {
         std::lock_guard<std::mutex> lk(g_m);
         if (g_done.empty()) g_err = "ничего не распознано: проверьте микрофон (Системные настройки → Звук → Вход)";
     }
-    empty = 0;
+    g_emptyTasks = 0;
     finish();
 }
 
@@ -104,18 +110,20 @@ void begin(const std::string& locale) {   // main thread
     g_engine = [[AVAudioEngine alloc] init];
     AVAudioInputNode* input = g_engine.inputNode;
     AVAudioFormat* format = [input outputFormatForBus:0];
-    if (format.sampleRate <= 0) { fail("нет микрофона"); g_engine = nil; return; }
+    if (format.sampleRate <= 0 || format.channelCount == 0) { fail("нет микрофона"); g_engine = nil; return; }
     newTask();
     [input installTapOnBus:0 bufferSize:2048 format:format block:^(AVAudioPCMBuffer* buffer, AVAudioTime*) {
         std::lock_guard<std::mutex> lk(g_m);
         if (g_request) [g_request appendAudioPCMBuffer:buffer];
     }];
+    g_tapInstalled = true;
     [g_engine prepare];
     NSError* err = nil;
     if (![g_engine startAndReturnError:&err]) {
         fail(std::string("микрофон не запустился: ") + (err ? err.localizedDescription.UTF8String : "?"));
+        ++g_gen;
         shutdown();
-    }
+    } else g_recording = true;
 }
 } // namespace
 
@@ -130,37 +138,56 @@ void start(const std::string& locale, const std::vector<std::string>& vocabulary
     NSMutableArray<NSString*>* vocab = [NSMutableArray array];
     for (const auto& w : vocabulary) [vocab addObject:@(w.c_str())];
     g_vocab = vocab;
+    g_emptyTasks = 0;
     g_hasResult = false;
     g_listening = true;
     const std::string loc = locale;
+    const auto session = ++g_session;
     [SFSpeechRecognizer requestAuthorization:^(SFSpeechRecognizerAuthorizationStatus status) {
-        if (status != SFSpeechRecognizerAuthorizationStatusAuthorized) {
-            fail("нет доступа к распознаванию речи: Системные настройки → Конфиденциальность и безопасность → Распознавание речи → AIVERSE Editor");
-            return;
-        }
-        [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL granted) {
-            if (!granted) { fail("нет доступа к микрофону: Системные настройки → Конфиденциальность и безопасность → Микрофон → AIVERSE Editor"); return; }
-            dispatch_async(dispatch_get_main_queue(), ^{ if (g_listening) begin(loc); });
-        }];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (session != g_session || !g_listening) return;
+            if (status != SFSpeechRecognizerAuthorizationStatusAuthorized) {
+                fail("Speech recognition access is required. Check Privacy & Security in System Settings.");
+                return;
+            }
+            [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL granted) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if (session != g_session || !g_listening) return;
+                    if (granted) begin(loc);
+                    else fail("Microphone access is required. Check Privacy & Security in System Settings.");
+                });
+            }];
+        });
     }];
+}
+
+void cancel() {
+    ++g_session;
+    ++g_gen;
+    g_listening = false;
+    g_finishing = false;
+    g_hasResult = false;
+    shutdown();
 }
 
 void stop() {
     if (!g_listening) return;
     g_finishing = true;
     g_listening = false;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if (g_engine) { [g_engine stop]; [g_engine.inputNode removeTapOnBus:0]; }
-        SFSpeechAudioBufferRecognitionRequest* r = nil;
-        {
-            std::lock_guard<std::mutex> lk(g_m);
-            r = g_request;
-        }
-        if (r) [r endAudio];   // the task gives its final text, then taskEnded() -> finish()
-        else finish();         // nothing started (permissions pending)
+    g_recording = false;
+    if (g_engine) [g_engine stop];
+    if (g_tapInstalled) { [g_engine.inputNode removeTapOnBus:0]; g_tapInstalled = false; }
+    SFSpeechAudioBufferRecognitionRequest* request = nil;
+    { std::lock_guard<std::mutex> lock(g_m); request = g_request; }
+    if (!request) { finish(); return; }
+    [request endAudio];
+    const auto session = g_session;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+        if (session == g_session && g_finishing) finish();
     });
 }
 
+bool recording() { return g_recording; }
 bool busy() { return g_listening || g_finishing; }
 bool listening() { return g_listening; }
 std::string transcript() { std::lock_guard<std::mutex> lk(g_m); return joined(); }

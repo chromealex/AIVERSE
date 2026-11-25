@@ -117,6 +117,7 @@ void StudioHost::cancelSpectraCapture() {
     if(shot){std::lock_guard<std::mutex> lock(shot->mutex);shot->cancelled=true;}
 }
 void StudioHost::shutdown() {
+    wizardDictation_.cancel();
     *alive_ = false;
     retireBuildingPanelPreview();
     cancelSpectraCapture();
@@ -261,6 +262,7 @@ void StudioHost::webReady() {
 // Opens a project on a background thread (the UI shows the splash), then resumes the Scene, which streams
 // models in with a per-frame budget. requestId < 0: --project / last project.
 void StudioHost::openProject(const std::string& path, int64_t requestId) {
+    wizardDictation_.cancel();
     if (projectLoading_) return;
     if(preview_&&!textureGraphScope_.empty()){
         try{onScene([&]{preview_->invalidateTextureGraphProject();});}catch(const std::exception& e){if(requestId>=0)sendError(Json::number(requestId),e.what());return;}
@@ -3418,6 +3420,13 @@ bool StudioHost::handleHostMethod(const Json& req) {
                 else reply.set("result", *result);
                 sendReply(reply);
             });
+        return true;
+    }
+    if (method == "studio.wizardDictation") {
+        Json reply = Json::object(); reply.set("id", req["id"]);
+        reply.set("result", wizardDictation_.handle(params));
+        if (params.getStr("action") == "start") platform_.dictationStarted();
+        sendReply(reply);
         return true;
     }
     if (method == "studio.wizardFetchArt") {

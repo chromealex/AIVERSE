@@ -6,6 +6,8 @@
     "apps/studio-web/src/components/ProjectHub.tsx",
     "apps/studio-web/src/components/GameWizard.tsx",
     "apps/studio-web/src/components/GameWizardSettings.tsx",
+    "apps/studio-web/src/components/WizardDictation.tsx",
+    "apps/studio-native/StudioWizardDictation.h",
     "apps/editor/core/GameWizardContent.cpp",
     "tools/wizard/fetch_art.py",
     "apps/studio-native/StudioHost.cpp",
@@ -143,6 +145,7 @@
       "studio.wizardPlan",
       "studio.wizardArt",
       "studio.wizardFetchArt",
+      "studio.wizardDictation",
       "studio.wizardCreate"
     ]
   },

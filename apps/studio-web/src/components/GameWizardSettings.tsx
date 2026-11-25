@@ -1,14 +1,16 @@
+import type { ReactNode } from 'react';
 import type { StudioResult, WizardPlanInput } from '../types';
 
 export const wizardPages = ['Concept', 'Project', 'Levels', 'Economy', 'Distribution'] as const;
 export type WizardPage = typeof wizardPages[number];
 type Keys<T> = { [K in keyof WizardPlanInput]: WizardPlanInput[K] extends T ? K : never }[keyof WizardPlanInput];
 interface Props {
+  dictation: ReactNode;
   page: WizardPage; draft: WizardPlanInput; options: StudioResult['studio.wizardOptions'];
   edit: <K extends keyof WizardPlanInput>(key: K, value: WizardPlanInput[K]) => void;
 }
 
-export function GameWizardSettings({ page, draft, options, edit }: Props) {
+export function GameWizardSettings({ page, draft, options, edit, dictation }: Props) {
   const number = (key: Keys<number>, label: string, min: number, max: number, disabled = false) =>
     <label>{label}<input className="au-input" type="number" min={min} max={max} required disabled={disabled}
       value={Number.isFinite(draft[key]) ? draft[key] : ''} onChange={e => edit(key, e.target.valueAsNumber)}/></label>;
@@ -55,6 +57,7 @@ export function GameWizardSettings({ page, draft, options, edit }: Props) {
   if (page === 'Economy') return <>
     <h3>Progression and rewards</h3>
     <label>Meta game idea<textarea rows={3} value={draft.metaIdea} onChange={e => edit('metaIdea', e.target.value)}/></label>
+    {dictation}
     <div className="wizard__grid">{['Reward currency', 'Premium currency'].map((label, i) =>
       <label key={label}>{label}<input className="au-input" pattern="\S+" value={draft.currencies[i] ?? ''}
         onChange={e => { const values = [...draft.currencies]; values[i] = e.target.value; edit('currencies', values); }}/></label>)}

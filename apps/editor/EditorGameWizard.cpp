@@ -250,21 +250,6 @@ std::string tutorialText(const std::string& mode) {
 // appended to the field when the recognizer is done.
 std::string* g_dictTarget = nullptr;
 
-// Words the recognizer should expect in a game pitch: game names (often English inside Russian speech) and genre terms.
-const std::vector<std::string>& dictationVocabulary() {
-    static const std::vector<std::string> v = {
-        "StarCraft", "StarCraft 2", "Warcraft", "Warcraft 3", "Command & Conquer", "Red Alert", "Age of Empires", "Company of Heroes",
-        "Dune", "Total War", "They Are Billions", "Northgard", "Stronghold", "Settlers", "Anno", "Rise of Nations", "Supreme Commander",
-        "Clash Royale", "Clash of Clans", "Brawl Stars", "Rush Royale", "Kingdom Rush", "Bloons", "Plants vs Zombies", "Dota", "League of Legends",
-        "Mindustry", "Factorio", "RimWorld", "Frostpunk", "Northgard", "Bad North", "Mini Metro", "Auto Chess", "Hearthstone",
-        "RTS", "MOBA", "tower defense", "Tower Defense", "idle", "roguelike", "рогалик", "PvP", "PvE", "GDD", "ГДД", "мета", "метагейм",
-        "юниты", "юнит", "апгрейды", "апгрейд", "прокачка", "фракции", "фракция", "ресурсы", "лут", "боссы", "босс", "волны", "лейны",
-        "гарнизон", "башни", "казармы", "рабочие", "харвестер", "микро", "макро", "туман войны", "скирмиш", "кампания", "туториал",
-        "софт валюта", "хард валюта", "гемы", "кристаллы", "золото", "боевой пропуск", "батл пасс", "ежедневные награды", "сундуки",
-        "лутбоксы", "гача", "кланы", "лидерборд", "рейтинг", "ивенты", "оффлайн доход", "монетизация", "реклама за награду", "инапы",
-        "мобилка", "портрет", "сай-фай", "стимпанк", "фэнтези", "постапокалипсис", "зомби", "орки", "эльфы", "роботы", "мехи"};
-    return v;
-}
 void dictate(const char* id, std::string& target, const WizardSpec& S) {
     ImGui::PushID(id);
     std::string done;
@@ -300,12 +285,8 @@ void dictate(const char* id, std::string& target, const WizardSpec& S) {
         if (listening) speech::stop();
         else if (!mine) {
             const std::string lang = S.languages.empty() ? "ru" : S.languages[0];
-            const std::string locale = lang == "ru" ? "ru-RU" : lang == "en" ? "en-US" : lang == "uk" ? "uk-UA" : lang == "kk" ? "kk-KZ"
-                                     : lang == "de" ? "de-DE" : lang == "fr" ? "fr-FR" : lang == "es" ? "es-ES" : lang == "pt" ? "pt-BR"
-                                     : lang == "it" ? "it-IT" : lang == "tr" ? "tr-TR" : lang == "zh" ? "zh-CN" : lang == "ja" ? "ja-JP"
-                                     : lang == "ko" ? "ko-KR" : lang;
             g_dictTarget = &target;
-            speech::start(locale, dictationVocabulary());
+            speech::start(speech::localeForLanguage(lang), speech::pitchVocabulary());
         }
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Наговорите в микрофон — текст добавится в поле (язык: первый язык игры)");

@@ -9,6 +9,7 @@
 #include "apps/studio-native/StudioViewportLayout.h"
 #include "apps/studio-native/StudioRenderThread.h"
 #include "engine/data/Json.h"
+#include "StudioWizardDictation.h"
 #include "engine/platform/Platform.h"
 #include <atomic>
 #include <deque>
@@ -54,6 +55,7 @@ public:
     // Dialogs. Callbacks run on the main thread; an empty path / list means cancelled.
     virtual bool confirmDiscardChanges(const std::string& title, const std::string& message, const std::string& discardLabel) = 0;
     virtual void chooseProject(std::function<void(std::string)> done) = 0;
+    virtual void dictationStarted() {}
     virtual void chooseFolder(const std::string& message, const std::string& startDir, std::function<void(std::string)> done) = 0;
     virtual void chooseSaveFile(const std::string& startDir, const std::string& defaultName, std::function<void(std::string)> done) = 0;
     virtual void chooseImportSources(const std::string& startDir, std::function<void(std::vector<std::filesystem::path>)> done) = 0;
@@ -107,6 +109,7 @@ public:
     void openProject(const std::string& path, int64_t requestId);
     // Before the main window closes or the app quits. False: keep it open.
     bool confirmClose();
+    void cancelWizardDictation() { wizardDictation_.cancel(); }
     void shutdown();
 
     // Events to every web view (window.__aiverseReceive).
@@ -300,6 +303,7 @@ private:
     double fxShotStartedAt_=0;
     uint64_t nextFxShotId_=1;
     uint64_t wizardArtRequest_ = 0;
+    StudioWizardDictation wizardDictation_;
     bool wizardCreating_ = false;
     bool readyEmitted_ = false, projectLoading_ = false, loadingShown_ = false, surfaceSnap_ = false;
     std::shared_ptr<bool> alive_ = std::make_shared<bool>(true); // background completions after shutdown

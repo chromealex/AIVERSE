@@ -101,3 +101,5 @@ Open File → Project Hub → Game wizard. Enter the idea, optionally choose a f
 Use Project for language order, platforms, version, seed and branding. Levels configures generation, difficulty, boss interval, starting resources and tutorial behavior. Economy configures currencies, XP, player profile, upgrades, shop and daily rewards. Distribution selects stores, purchases and the interstitial ad interval. Editing a setting clears the old plan. Preview again before creating the project.
 
 In Concept, enter a direct artwork link and click Download artwork. The wizard accepts individual files, ZIP and tar archives over HTTP or HTTPS. A successful download becomes the artwork source for the next plan and project. If a download fails, the previous source stays selected.
+
+On macOS, Dictate under Game idea or Meta game idea starts recognition in the primary game language. The field stays editable while the partial transcript is shown. Stop dictation appends the final phrase. Leaving the field’s page or closing the hub discards the pending phrase. Other desktop platforms use system dictation in the text field.

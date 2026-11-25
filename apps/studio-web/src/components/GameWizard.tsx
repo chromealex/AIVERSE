@@ -3,9 +3,11 @@ import { invoke } from '../bridge';
 import type { StudioResult, StudioSnapshot, WizardPlanInput } from '../types';
 import { StudioLoader } from '../ui';
 
+import WizardDictation from './WizardDictation';
 import { GameWizardSettings, wizardPages, type WizardPage } from './GameWizardSettings';
 
-export default function GameWizard({ onOpened, onBusy }: { onOpened: (snapshot: StudioSnapshot) => void; onBusy: (busy: boolean) => void }) {
+export default function GameWizard({ visible, onOpened, onBusy }: { visible: boolean; onOpened: (snapshot: StudioSnapshot) => void; onBusy: (busy: boolean) => void }) {
+  const [dictating, setDictating] = useState(false);
   const [page, setPage] = useState<WizardPage>('Concept');
   const [artUrl, setArtUrl] = useState('');
   const [artName, setArtName] = useState('');
@@ -27,6 +29,15 @@ export default function GameWizard({ onOpened, onBusy }: { onOpened: (snapshot: 
   function edit<K extends keyof WizardPlanInput>(key: K, value: WizardPlanInput[K]) {
     version.current++;
     setDraft(current => current && { ...current, [key]: value });
+    setPlan(undefined); setError(''); setRunning(false);
+  }
+  function appendSpeech(key: 'idea' | 'metaIdea', text: string) {
+    version.current++;
+    setDraft(current => {
+      if (!current) return current;
+      const previous = current[key];
+      return { ...current, [key]: previous + (previous && !/\s$/.test(previous) ? ' ' : '') + text };
+    });
     setPlan(undefined); setError(''); setRunning(false);
   }
   async function preview() {
@@ -69,6 +80,9 @@ export default function GameWizard({ onOpened, onBusy }: { onOpened: (snapshot: 
     finally { setCreating(false); onBusy(false); }
   }
   if (!draft || !options) return error ? <p role="alert">{error}</p> : <StudioLoader label="Loading game wizard…" size={18}/>;
+  const dictation = (key: 'idea' | 'metaIdea') => visible && <WizardDictation key={key}
+    field={key === 'idea' ? 'game idea' : 'meta game idea'} language={draft.languages[0] ?? 'en'}
+    onText={text => appendSpeech(key, text)} onBusy={setDictating}/>;
   return <div className="hub__workspace wizard">
     <form className="wizard__form" onSubmit={event => { event.preventDefault(); void preview(); }}>
       <fieldset className="wizard__fields" disabled={creating || fetching}>
@@ -78,6 +92,7 @@ export default function GameWizard({ onOpened, onBusy }: { onOpened: (snapshot: 
       {page === 'Concept' ? <><h3>Game concept</h3>
       <label>Game title<input className="au-input" required value={draft.title} onChange={e => edit('title', e.target.value)}/></label>
       <label>Game idea<textarea rows={3} placeholder="Describe what the player does" value={draft.idea} onChange={e => edit('idea', e.target.value)}/></label>
+      {dictation('idea')}
       <fieldset className="wizard__art"><legend>Artwork, models and audio</legend>
         {draft.artDir && <p>{artName || draft.artDir}</p>}
         <button type="button" className="au-button au-button--sm" onClick={() => void chooseArtwork()}>Choose artwork folder…</button>
@@ -100,8 +115,8 @@ export default function GameWizard({ onOpened, onBusy }: { onOpened: (snapshot: 
       <div className="wizard__grid">
         <label>Orientation<select value={draft.orientation} onChange={e => edit('orientation', e.target.value)}>
           {['auto','portrait','landscape'].map(id => <option key={id}>{id}</option>)}</select></label>
-      </div></> : <GameWizardSettings page={page} draft={draft} options={options} edit={edit}/>}
-      <button className="au-button au-button--primary" disabled={running || !draft.title.trim()}>{running && <StudioLoader size={14}/>}Preview game plan</button>
+      </div></> : <GameWizardSettings page={page} draft={draft} options={options} edit={edit} dictation={page === 'Economy' && dictation('metaIdea')}/>}
+      <button className="au-button au-button--primary" disabled={dictating || running || !draft.title.trim()}>{running && <StudioLoader size={14}/>}Preview game plan</button>
       </fieldset>
       {error && <p className="hub__error" role="alert">{error}</p>}
     </form>
@@ -113,7 +128,7 @@ export default function GameWizard({ onOpened, onBusy }: { onOpened: (snapshot: 
       </dl>
       <label className="wizard__verify"><input type="checkbox" checked={draft.verifyLevels} disabled={creating}
         onChange={e => setDraft({ ...draft, verifyLevels: e.target.checked })}/>Verify levels with bots</label>
-      <button type="button" disabled={creating || fetching} className="au-button au-button--primary" onClick={() => void create()}>
+      <button type="button" disabled={dictating || creating || fetching} className="au-button au-button--primary" onClick={() => void create()}>
         {creating && <StudioLoader size={14}/>}Create game in folder…</button></> : <p>Preview the plan to see the matching template, tutorial and levels.</p>}
     </aside>
   </div>;

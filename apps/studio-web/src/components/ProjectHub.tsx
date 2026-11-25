@@ -105,7 +105,7 @@ export default function ProjectHub({ onOpened, openOther, compact }: {
     </nav>
     {error && <p className="hub__error" role="alert">{error}</p>}
     <div className="hub__body">
-    {wizardVisited && <div hidden={page !== 'wizard'}><GameWizard onOpened={onOpened} onBusy={active => setBusy(active ? 'wizard' : '')}/></div>}
+    {wizardVisited && <div hidden={page !== 'wizard'}><GameWizard visible={page === 'wizard'} onOpened={onOpened} onBusy={active => setBusy(active ? 'wizard' : '')}/></div>}
     {page === 'wizard' ? null : page === 'projects' ? <section aria-label="Recent projects">
       <label className="hub__search"><Search size={15}/><input type="search" aria-label="Search recent projects" placeholder="Find by name or folder" value={projectQuery} onChange={e => setProjectQuery(e.target.value)}/></label>
       {!hub && !error && <StudioLoader size={20} label="Loading recent projects…"/>}

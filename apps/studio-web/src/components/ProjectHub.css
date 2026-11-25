@@ -67,3 +67,6 @@
 .wizard__form .wizard__check { display: flex; align-items: center; gap: 8px; }
 .wizard__check input { width: auto; margin: 0; }
 .wizard__art label { margin-block: 10px 5px; }
+.wizard__dictation { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.wizard__dictation:empty { display: none; }
+.wizard__dictation > p { width: 100%; }

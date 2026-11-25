@@ -139,6 +139,7 @@ namespace studio = aiverse::studio;
     // Floating panel windows (Unity-style undocked tabs), one panel per window.
     NSMutableDictionary<NSString*,NSWindow*>* floatWindows_;
     NSMutableDictionary<NSString*,WKWebView*>* floatWebs_;
+    __weak WKWebView* dictationWeb_;
     __unsafe_unretained WKWebView* currentWeb_; // sender of the bridge message being handled
     BOOL closingFloats_;            // main window closes: keep the float list for next launch
     NSTimer* dockWatch_;            // a floating window is being dragged: dock it when dropped over the main window
@@ -262,6 +263,7 @@ public:
             (*cb)(result==NSModalResponseOK && panel.URL.path.length ? std::string(panel.URL.path.UTF8String) : std::string());
         }];
     }
+    void dictationStarted() override { shell_->dictationWeb_ = shell_->currentWeb_; }
     void chooseFolder(const std::string& message, const std::string& startDir, std::function<void(std::string)> done) override {
         NSOpenPanel* panel=[NSOpenPanel openPanel];
         panel.canChooseFiles=NO;panel.canChooseDirectories=YES;panel.canCreateDirectories=YES;panel.allowsMultipleSelection=NO;
@@ -1050,6 +1052,7 @@ static NSString* studioFloatPanel(NSWindow* window,NSDictionary<NSString*,NSWind
     }
     [web.configuration.userContentController removeScriptMessageHandlerForName:@"aiverse"];
     [floatWindows_ removeObjectForKey:panel];[floatWebs_ removeObjectForKey:panel];
+    if (dictationWeb_ == web) { core_->cancelWizardDictation(); dictationWeb_ = nil; }
     if (currentWeb_==web) currentWeb_=nil;
     if (!closingFloats_) core_->sendEvent("window.floatClosed",panel.UTF8String);
 }
@@ -1270,8 +1273,12 @@ static NSString* studioFloatPanel(NSWindow* window,NSDictionary<NSString*,NSWind
     (void)view; (void)navigation;
     NSLog(@"[studio-web] navigation error: %@",error);
 }
+- (void)webView:(WKWebView*)view didStartProvisionalNavigation:(WKNavigation*)navigation {
+    (void)navigation;
+    if (dictationWeb_ == view) { core_->cancelWizardDictation(); dictationWeb_ = nil; }
+}
 - (void)webViewWebContentProcessDidTerminate:(WKWebView*)view {
-    (void)view;
+    if (dictationWeb_ == view) { core_->cancelWizardDictation(); dictationWeb_ = nil; }
     NSLog(@"[studio-web] WebKit content process terminated");
 }
 - (void)webView:(WKWebView*)view didFinishNavigation:(WKNavigation*)navigation {
