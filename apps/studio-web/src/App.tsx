@@ -6,7 +6,7 @@ import {
   STUDIO_PANELS, STUDIO_PANEL_TITLES, STUDIO_PANEL_HOME, DOCK_PRESET_EVENT, closeTab, dockStacks, panelStack, reopenTab
 } from './nestedDock';
 import {
-  WORKSPACES, WORKSPACE_INFO, legacyWorkspace, readActiveWorkspace, readWorkspaceDock, saveActiveWorkspace,
+  WORKSPACES, WORKSPACE_INFO, readActiveWorkspace, readWorkspaceDock, saveActiveWorkspace,
   saveWorkspaceDock, workspaceDockTree, type StudioWorkspace
 } from './workspaces';
 import type { CommandEntry } from './commandSearch';
@@ -23,7 +23,6 @@ import LayoutMenu from './components/LayoutMenu';
 import engineLogo from '../../../engine/assets/branding/mark.png';
 import NestedDockWorkspace from './components/NestedDockWorkspace';
 import StudioMenuBar, { type StudioMenu } from './components/StudioMenuBar';
-import { LEGACY_WINDOWS_NOT_MIGRATED } from './legacyWindows';
 import WelcomeTour, { tourSeen } from './components/WelcomeTour';
 import ProjectHub from './components/ProjectHub';
 import ProjectSplash from './components/ProjectSplash';
@@ -491,11 +490,6 @@ export default function App() {
         onSelect: () => { for (const item of floating) void invoke('studio.windowClose', { window: item.key }).catch(console.warn); } }] : []),
       { id: 'palette', label: 'Command Palette…', shortcut: menuShortcut('K'), onSelect: () => setPalette('') },
       { id: 'tour', label: 'Welcome Tour…', onSelect: () => setTourOpen(true) },
-      ...(LEGACY_WINDOWS_NOT_MIGRATED.length ? [{ id: 'legacy', label: 'Legacy editor — not migrated yet', caption: true, separator: true, onSelect: () => {} }] : []),
-      ...LEGACY_WINDOWS_NOT_MIGRATED.map(w => {
-        const area = legacyWorkspace(w.id);
-        return { id: 'legacy-' + w.id, label: w.title + (area ? '  ·  ' + WORKSPACE_INFO[area].title : ''), disabled: true, onSelect: () => {} };
-      }),
     ]; } },
   ];
 
@@ -522,11 +516,6 @@ export default function App() {
       const panel = stack.active;
       out.push({ id: 'float:' + panel, kind: 'window', title: 'Open ' + STUDIO_PANEL_TITLES[panel] + ' in New Window',
         hint: 'Undock into its own window (second monitor)', run: () => floatOut(panel, false) });
-    }
-    for (const w of LEGACY_WINDOWS_NOT_MIGRATED) {
-      const area = legacyWorkspace(w.id);
-      out.push({ id: 'legacy:' + w.id, kind: 'window', title: w.title, legacy: true, disabled: true,
-        hint: (area ? WORKSPACE_INFO[area].title + ' workspace · ' : '') + 'not migrated to HTML5 yet — use the legacy editor', run: () => {} });
     }
     for (const entity of snapshot?.scene.entities ?? []) out.push({ id: 'entity:' + entity.id, kind: 'entity', title: entity.name,
       hint: entity.kind + ' · select and frame (F)', run: () => { void select(entity.id).then(() => invoke('studio.viewportInput', { kind: 'focus' })).catch(console.warn); } });
