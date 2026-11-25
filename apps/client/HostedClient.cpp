@@ -302,6 +302,9 @@ void HostedClient::event(const Event& in) {
     client_->event(e);
 }
 
+const game::ViewScripts* HostedClient::viewScripts() const {
+    return inMatch() ? &client_->viewScripts() : nullptr;
+}
 Simulation* HostedClient::simulation() { return client_ && step_ >= kSteps ? client_->simulation() : nullptr; }
 bool HostedClient::loading() const { return client_ && (step_ < kSteps || client_->mapLoading()); }
 std::string HostedClient::errorText() const { return client_ ? client_->errorText() : std::string(); }

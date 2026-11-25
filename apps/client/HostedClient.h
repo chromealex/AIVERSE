@@ -17,6 +17,7 @@
 
 namespace aiverse { class Simulation; class Json; }
 namespace aiverse::client { class GameClient; }
+namespace aiverse::game { class ViewScripts; }
 
 namespace aiverse::client {
 
@@ -61,6 +62,7 @@ public:
     bool quitRequested() const { return view_.quitRequested; }
     bool capturing() const { return captured_; }
     Simulation* simulation();
+    const game::ViewScripts* viewScripts() const;
     bool inMatch() const;
     // Forward editor-authored cave SDF into the SAME GameClient used by Play.
     // Visual only; game collision and navigation are separate owners.

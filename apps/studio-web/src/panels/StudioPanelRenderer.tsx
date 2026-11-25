@@ -1,3 +1,4 @@
+import type { StudioScriptMessage } from '../types';
 // AI-friendly rendering surface: keep App.tsx as the application shell.
 // For a new editor panel, register a typed panel ID in nestedDock.ts,
 // then insert one render case below. All data mutations still use Studio Bridge.
@@ -87,7 +88,7 @@ export interface StudioPanelContext {
   scriptLocation:{path:string;line:number} | null;
   openScript:(path:string,line:number)=>void;
   consumeScriptLocation:()=>void;
-  scriptErrors?: { tick:number; text:string }[];
+  scriptErrors?: StudioScriptMessage[];
   playing?: boolean;
   showPanel: (panel: StudioPanel) => void;
   reportError: (message: string) => void;

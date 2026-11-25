@@ -9,7 +9,9 @@
     "apps/studio-native/StudioGameSurface.cpp",
     "apps/studio-native/StudioHost.cpp",
     "apps/studio-web/src/components/StudioStatusBar.tsx",
-    "apps/studio-web/src/panels/ProjectToolPanels.tsx"
+    "apps/studio-web/src/panels/ProjectToolPanels.tsx",
+    "apps/client/HostedClient.cpp",
+    "apps/client/GameClient.h"
   ],
   "traits": {
     "editable": false,

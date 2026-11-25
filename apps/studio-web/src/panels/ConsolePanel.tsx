@@ -1,3 +1,4 @@
+import type { StudioScriptMessage } from '../types';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CircleX, Copy, Info, Search, Trash2, TriangleAlert } from 'lucide-react';
 import { invoke } from '../bridge';
@@ -9,7 +10,7 @@ import './ConsolePanel.css';
 
 /** Console: editor/agent activity with level and source filters; entity ids and files are links. */
 export default function ConsolePanel({ logs, select, project, scriptErrors, openScript }: {
-  openScript:(path:string,line:number)=>void; scriptErrors?: { tick:number; text:string }[]; project: string; logs: StudioLog[]; select: (id: string | null) => Promise<void>;
+  openScript:(path:string,line:number)=>void; scriptErrors?: StudioScriptMessage[]; project: string; logs: StudioLog[]; select: (id: string | null) => Promise<void>;
 }) {
   const [mode,setMode] = useState('Activity');
   const [level, setLevel] = useState<ConsoleLevel>('all');
@@ -28,8 +29,8 @@ export default function ConsolePanel({ logs, select, project, scriptErrors, open
   const visible = useMemo(() => {
     const start = cleared ? logs.lastIndexOf(cleared) + 1 : 0;
     const activity = logs.slice(Math.max(0, start));
-    for (const { tick, text } of scriptErrors ?? []) {
-      activity.push({level:'error', source:'Lua', time:String(tick), text:`Tick ${tick} · ${text}`});
+    for (const { tick, text, source } of scriptErrors ?? []) {
+      activity.push({level:'error', source:source==='view'?'Lua view':'Lua', time:String(tick), text:`Tick ${tick} · ${text}`});
     }
     return activity;
   }, [logs, cleared, scriptErrors]);

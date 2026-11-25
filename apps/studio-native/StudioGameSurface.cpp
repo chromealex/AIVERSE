@@ -20,6 +20,7 @@
 #include "engine/sim/CommonComponents.h"
 #include "engine/game/GameCore.h"
 #include "engine/game/Script.h"
+#include "engine/view/game/GameViewScript.h"
 #include "engine/world/WorldPersistenceDiagnostics.h"
 #include "engine/world/SimulationLod.h"
 #include "apps/studio-native/StudioRuntimeEdit.h"
@@ -446,13 +447,25 @@ Json StudioGameSurface::scriptLog(bool errorsOnly) const {
     if (!sim) return rows;
     const auto* game = dynamic_cast<const game::GameCore*>(&sim->module());
     const auto* scripts = game ? game->scripts() : nullptr;
-    if (!scripts || (errorsOnly && !scripts->errorCount())) return rows;
-    for (const auto& entry : scripts->log()) {
-        if (errorsOnly && !entry.error) continue;
+    const auto* view = actor_ ? nullptr : host_->viewScripts();
+    struct Message { const game::ScriptLogEntry* entry; const char* source; };
+    std::vector<Message> messages;
+    const auto collect = [&](const auto* vm, const char* source) {
+        if (!vm) return;
+        for (const auto& entry : vm->log())
+            if (!errorsOnly || entry.error) messages.push_back({&entry,source});
+    };
+    if (!errorsOnly || (scripts && scripts->errorCount())) collect(scripts,"simulation");
+    collect(view,"view");
+    std::stable_sort(messages.begin(),messages.end(),[](const Message& a,const Message& b) {
+        return a.entry->tick < b.entry->tick;
+    });
+    for (const auto& [entry,source] : messages) {
         Json row = Json::object();
-        row.set("tick", Json::number(int64_t(entry.tick)));
-        row.set("text", Json::string(entry.text));
-        row.set("error", Json::fromBool(entry.error));
+        row.set("tick", Json::number(int64_t(entry->tick)));
+        row.set("text", Json::string(entry->text));
+        row.set("error", Json::fromBool(entry->error));
+        row.set("source", Json::string(source));
         rows.push(std::move(row));
     }
     return rows;

@@ -171,6 +171,7 @@ public:
     // Hosting (the editor's Game window, apps/editor/ClientHost.cpp): frames render into these textures
     // instead of the screen; the host also sets platform::setHostedView around every call.
     void setHostTarget(gfx::TextureHandle color, gfx::TextureHandle depth, int w, int h) { hostColor_ = color; hostDepth_ = depth; hostW_ = w; hostH_ = h; }
+    const game::ViewScripts& viewScripts() const { return viewScripts_; }
     Simulation* simulation() { return sim_.get(); }
     // Editor Play/hosted clients: update visual cave SDF without restarting
     // the current match. This is presentation-only, never a physics ACK.

@@ -1,3 +1,4 @@
+import type { StudioScriptMessage } from '../types';
 import { useCallback, useEffect, useMemo, useRef, useLayoutEffect, useState, type KeyboardEvent } from 'react';
 import { AlertTriangle, CheckCircle2, FilePlus2, Play, Plus, RefreshCw, RotateCcw, Save, ScanSearch, Trash2 } from 'lucide-react';
 import { invoke } from '../bridge';
@@ -91,7 +92,7 @@ export function FogPanel(ctx: Ctx) {
 /* ---------------- Scripts (Lua) ---------------- */
 interface ScriptFile { path: string; role: string }
 function ScriptPlayLog({playing}:{playing:boolean}) {
-  const [rows,setRows] = useState<{tick:number; text:string; error:boolean}[]>([]);
+  const [rows,setRows] = useState<StudioScriptMessage[]>([]);
   const [errorsOnly,setErrorsOnly] = useState(false);
   const [failure,setFailure] = useState('');
   useEffect(() => {
@@ -118,7 +119,7 @@ function ScriptPlayLog({playing}:{playing:boolean}) {
     <div ref={list} className="console__list transcript-lines" aria-label="Lua play-test log"
       onScroll={e=>{const el=e.currentTarget;follow.current=el.scrollHeight-el.clientHeight-el.scrollTop<24;}}>
       {shown.map((row,i)=><div key={i} className="transcript-line" data-level={row.error?'Errors':'Info'}>
-        <span title="Simulation tick">{row.tick}</span><code>{row.text}</code></div>)}
+        <span title="Simulation tick">{row.tick}</span><code><small className="scripts-page__source">{row.source==='view'?'View':'Simulation'}</small>{row.text}</code></div>)}
       {(!shown.length || failure) && <p className="ptp__hint">{failure || (!playing ? 'Play the map to see its Lua messages.' : errorsOnly ? 'No Lua errors.' : 'Waiting for Lua messages…')}</p>}
     </div>
   </>;
