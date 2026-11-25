@@ -1,0 +1,10 @@
+{
+  "sha": "ff2bb36300bc965152932f40528784e8c1afc6cd",
+  "argv": [
+    "bash",
+    "/tmp/studio-overlay-acceptance.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-overlay-placement.log.txt",
+  "sha256": "ad515a3f0d3c74737551d3bc26eaaaf7e1d355b82ed95944f439ae1b0119adba"
+}
