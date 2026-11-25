@@ -1,0 +1,29 @@
+
+> @aiverse/studio-web@0.1.0 typecheck
+> tsc --noEmit
+
+298 web tests
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+2026-11-26 01:20:40.219 AiverseStudioHTML5[25792:82105721] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/bake-panel-eO6nJl/Catalog.app/Contents/Resources/studio-web
+2026-11-26 01:20:40.352 AiverseStudioHTML5[25792:82105721] [studio-web] served index.html (6135 bytes)
+2026-11-26 01:20:40.355 AiverseStudioHTML5[25792:82105721] [studio-web] served assets/index-km2yWDuq.js (1521169 bytes)
+2026-11-26 01:20:40.393 AiverseStudioHTML5[25792:82105721] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 01:20:40.753 AiverseStudioHTML5[25792:82105721] [studio-web] served index.html (6135 bytes)
+2026-11-26 01:20:40.755 AiverseStudioHTML5[25792:82105721] [studio-web] served assets/index-km2yWDuq.js (1521169 bytes)
+2026-11-26 01:20:40.791 AiverseStudioHTML5[25792:82105721] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html?window=bakeproof&panels=lightbake
+2026-11-26 01:20:40.966 AiverseStudioHTML5[25792:82105721] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 01:20:40.967 AiverseStudioHTML5[25792:82105721] [studio-web] JS: CROSS bakeproof document.changed {"message":""}
+2026-11-26 01:20:41.151 AiverseStudioHTML5[25792:82105721] [studio-web] JS: CROSS bakeproof document.changed {"message":""}
+2026-11-26 01:20:41.151 AiverseStudioHTML5[25792:82105721] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 01:20:41.153 AiverseStudioHTML5[25792:82105721] [studio-web] JS: CROSS bakeproof document.changed {"message":""}
+2026-11-26 01:20:41.154 AiverseStudioHTML5[25792:82105721] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 01:20:41.154 AiverseStudioHTML5[25792:82105721] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 01:20:41.189 AiverseStudioHTML5[25792:82105721] [studio-web] JS: CROSS bakeproof document.changed {"message":""}
+2026-11-26 01:20:41.190 AiverseStudioHTML5[25792:82105721] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 01:20:41.190 AiverseStudioHTML5[25792:82105721] [studio-web] JS: CROSS bakeproof document.changed {"message":""}
+2026-11-26 01:20:41.191 AiverseStudioHTML5[25792:82105721] [studio-web] JS: CROSS bakeproof SHOT_panel
+2026-11-26 01:20:42.143 AiverseStudioHTML5[25792:82105721] [studio-web] JS: CROSS bakeproof FAIL undefined is not an object (evaluating 'button('Cancel').click')

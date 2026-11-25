@@ -523,3 +523,5 @@ Lighting camera acceptance on f60cded8e (native commands 49e018e9d). Final detac
 Light Bake transfer: map-scoped settings, quality presets and generated output inspection in a dedicated HTML panel. Resolve bake folders alongside the actual map for nested and root map paths. Background baking and renderer consumption require separate native parity verification.
 
 Light Bake settings transfer 154c1cd1a. LightBakePanel.tsx and its shared Studio form controls replace the generic operation form. LightBakeOps.cpp resolves the open map relative to the project. Typecheck passed. Next verify preset and one-step Undo against an actual Studio session, inspect bake-folder selection and capture the detached panel.
+
+Advanced numeric fields bf15e48f3 activate Apply as soon as the number is valid. In the first Mac test, all 298 web tests, typecheck, production and native builds passed. Native settings, Undo, Redo and capture succeeded. The test clicked Cancel in the same JS task as Clear, before React committed the confirmation row. Wait for the visible confirmation buttons and repeat. Report docs/evidence/studio-bake-panel.json.

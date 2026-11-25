@@ -1,0 +1,10 @@
+{
+  "sha": "bf15e48f3aa2afb1bbae3372162d45bf6863dd50",
+  "argv": [
+    "bash",
+    "/tmp/bake-panel-accept.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-bake-panel.log.txt",
+  "sha256": "98fe1ee9acfbb646777162de8f321131be78a7669b67f7807d7fde71a0e39a65"
+}
