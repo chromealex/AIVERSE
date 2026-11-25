@@ -3,7 +3,21 @@
   "id": "material-techniques",
   "owner": "render",
   "changed_paths": [
-    "engine/render/MaterialTechnique.h"
+    "apps/editor/core/MaterialOps.cpp",
+    "apps/studio-native/StudioTools.h",
+    "docs/agent-handoffs/material-techniques-initial.md",
+    "docs/devlog/systems.json",
+    "docs/features/material-techniques.json",
+    "docs/models.md",
+    "engine/render/MaterialTechnique.h",
+    "engine/render/MaterialTechniqueData.h",
+    "engine/render/Model.cpp",
+    "engine/render/Model.h",
+    "engine/render/ModelMerge.cpp",
+    "engine/render/Renderer3D.h",
+    "engine/render/Renderer3DModels.cpp",
+    "skills/visuals/aiverse-look/SKILL.md",
+    "tests/render/model_batching_policy.cpp"
   ],
   "traits": {
     "editable": true,
@@ -104,10 +118,20 @@
     }
   },
   "integrations": {
-    "skills": [],
-    "mcp_tools": [],
-    "studio_panels": [],
-    "studio_methods": []
+    "skills": [
+      "aiverse-look"
+    ],
+    "mcp_tools": [
+      "material_techniques_get",
+      "material_techniques_set"
+    ],
+    "studio_panels": [
+      "models"
+    ],
+    "studio_methods": [
+      "studio.op",
+      "studio.ops"
+    ]
   },
   "test_reports": []
 }

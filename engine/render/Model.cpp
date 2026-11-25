@@ -4,6 +4,7 @@
 #include "AlphaCoverageMips.h"
 #include <filesystem>
 #include "Model.h"
+#include "MaterialTechniqueData.h"
 #include "../data/Json.h"
 #include "ModelClips.h"
 #include "ModelMerge.h"
@@ -253,6 +254,13 @@ void applyModelBatchingSidecar(Model& model, const std::string& path, const File
     if (first == std::string::npos || bytes[first] != '{') return;
     const Json config = Json::parse(bytes);
     if (!config.isObject()) throw std::runtime_error(path + ".batching.json: expected JSON object");
+    if (config.has("materialTechniques")) {
+        try {
+            model.materialTechniques = parseMaterialTechniques(config["materialTechniques"], model.materials);
+        } catch (const std::invalid_argument& error) {
+            throw std::runtime_error(path + ".batching.json: " + error.what());
+        }
+    }
     model.batching.mergeRigid = config.getBool("mergeRigid", false);
     // Opt-in far LOD: two crossed cards with a baked silhouette of the
     // finest mesh, appended as the last level of the existing chain.

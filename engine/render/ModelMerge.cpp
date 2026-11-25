@@ -52,7 +52,7 @@ bool materialBatchCompatible(const MeshDef& mesh, const MaterialBatch& batch, co
 
 size_t prepareMaterialBatches(Model& m) {
     if (m.vertices.empty() || m.indices.empty() || m.vb.valid() || m.ib.valid() || m.geometry ||
-        !m.variants.empty() || !m.skins.empty() || m.materials.size() > kMaxMaterialPalette) return 0;
+        !m.materialTechniques.bySource.empty() || !m.variants.empty() || !m.skins.empty() || m.materials.size() > kMaxMaterialPalette) return 0;
     // weights[0] is spare only in rigid models. Shared vertices may also belong to another mesh.
     for (const auto& mesh : m.meshes) {
         if (mesh.deformable || !mesh.materialBatches.empty()) return 0;
@@ -173,6 +173,7 @@ ModelMergeResult mergeStaticPrimitives(Model& m, const ModelMergeOptions& o) {
     auto skip = [&](const char* why) { r.reason = why; return r; };
     if (m.vertices.empty() || m.indices.empty()) return skip("no CPU geometry (merge before uploadModel)");
     if (!m.skins.empty() || !m.clips.empty()) return skip("skinned or animated");
+    if (!m.materialTechniques.bySource.empty()) return skip("material techniques");
     if (!m.variants.empty()) return skip("material variants");
     if (m.geometry) return skip("built geometry data (clusters, occluders)");
     const float3 extent = m.boundsMax - m.boundsMin;

@@ -1306,6 +1306,8 @@ public:
     void bindTrace(int textureSlot);
     bool ssrActive() const { return ssrThisFrame_; }       // the scene targets are bound this frame (water SSR)
 
+    void setMaterialScheme(std::string scheme) { materialScheme_ = std::move(scheme); }
+    const std::string& materialScheme() const { return materialScheme_; }
     void setMaterialQuality(MaterialQuality q);
     MaterialQuality materialQuality() const { return matQuality_; }
     static MaterialQuality defaultMaterialQualityFor(const gfx::Device& dev, bool mobile);
@@ -1957,6 +1959,7 @@ private:
     void drawGeometryBatch(const uint32_t* items, uint32_t count, int phase);
     bool geometryMainView_ = true;
     int geometryShadowSize_=0;
+    std::string materialScheme_ = "default";
     MaterialQuality matQuality_ = MaterialQuality::High;
     std::vector<ModelItem> modelItems_;
     StrataPreviewStats strataPreviewStats_{};
