@@ -1,0 +1,2 @@
+# Stage 158 plan
+Base bc56c7a8523392f205f6bcf088f95c2b68b83cb4. Reuse existing Box3D consequence and terrain publishers, move reusable implementations out of examples into optional native library headers. Install one post-forest system in explicitly opted-in single-authority GameCore host, not ordinary Fixed lockstep peers. Stage all body checkpoint outputs before committing, reset projections on rollback/failure. Full-body bounded terrain for this stage; standing tree collisions and replication/replay acceptance remain open. No tests executed.

@@ -17,6 +17,7 @@ REQUIRED = {
     "camera": ("lens_scene_get", "lens_camera_set"),
     "animation": ("animation_graph_list", "animation_graph_set"),
     "terrain": ("terrain_sculpt", "terrain_material"),
+    "planet_forest": ("planet_forest_get", "planet_forest_set", "planet_forest_plant", "planet_forest_move", "planet_forest_remove"),
     "lighting": ("light_list", "scene_light_create"),
     "physis": ("physis_get", "physis_set"),
     "spectrafx": ("fx_graph_list", "fx_graph_set"),
@@ -27,6 +28,18 @@ REQUIRED = {
     "graphs": ("graph_catalog", "graph_list", "graph_get", "graph_node_catalog", "graph_validate", "graph_edit", "graph_save", "graph_diagnostics", "graph_dependencies", "graph_property_schema", "graph_asset_dependencies", "graph_runtime_capabilities", "graph_runtime_probe", "graph_live_snapshot", "graph_live_watch", "graph_live_profile", "graph_gpu_profile", "graph_debug_session", "texture_graph_catalog", "texture_graph_list", "texture_graph_get", "texture_graph_validate", "texture_graph_set", "texture_graph_preview", "texture_graph_bake", "texture_graph_templates", "texture_graph_bake_set", "texture_graph_cache", "texture_graph_material_variant", "texture_graph_gpu_preview"),
     "mcp": ("mcp_registry", "feature_readiness_get", "feature_readiness_query", "feature_readiness_status_get", "feature_readiness_refresh"),
     "simulation": ("simulation_budget_plan",),
+    "studio_planet_view": ("studio_planet_forest_live", "studio_planet_scene_get", "studio_planet_scene_body_set", "studio_planet_scene_camera_set"),
+    "studio_assets": ("studio_asset_history", "studio_asset_catalog", "studio_asset_meta_patch",
+                      "studio_asset_folder_create", "studio_asset_dependencies",
+                      "studio_asset_recovery_storage", "studio_asset_trash_list",
+                      "studio_asset_trash_restore_review", "studio_asset_trash_restore",
+                      "studio_asset_delete", "studio_asset_recovery_quota_set",
+                      "studio_asset_trash_cleanup_review", "studio_asset_move_preview",
+                      "studio_asset_move_commit", "studio_agent_history_list",
+                      "studio_agent_history_step", "studio_agent_batch_preview",
+                      "studio_agent_batch_apply", "studio_history_capabilities",
+                      "studio_owner_history", "studio_owner_history_step",
+                      "studio_save_documents", "studio_asset_history_reset_review"),
 }
 
 def main():
@@ -72,6 +85,8 @@ def main():
         {"jsonrpc":"2.0","method":"notifications/initialized","params":{}},
         {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}},
         {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"mcp_registry","arguments":{}}},
+        *[{"jsonrpc":"2.0","id":100+i,"method":"tools/call","params":{"name":name,"arguments":{}}}
+          for i,name in enumerate(REQUIRED["studio_assets"] + REQUIRED["studio_planet_view"])],
     ]
     try:
         done = subprocess.run(cmd, input="\n".join(map(json.dumps, requests))+"\n",
@@ -106,6 +121,12 @@ def main():
     listed = {t["name"] for t in tools}
     if len(listed) != len(tools) or responses[2]["result"].get("nextCursor"):
         print("ERROR: duplicate or incomplete tools/list", file=sys.stderr)
+        return 2
+    # Destructive recovery and arbitrary picker/file paths remain native only.
+    forbidden = {"studio_asset_history_reset_apply", "studio_asset_trash_purge",
+                 "studio_asset_trash_cleanup_apply", "studio_asset_import_preview"}
+    if forbidden & listed:
+        print("ERROR: native-only operations exposed:", sorted(forbidden & listed), file=sys.stderr)
         return 2
     missing = {group: [n for n in names if n not in listed]
                for group, names in REQUIRED.items()}
@@ -147,6 +168,15 @@ def main():
     if any(not isinstance(t.get("guiOnly"), bool) for t in registry.values()):
         print("ERROR: missing guiOnly metadata", file=sys.stderr)
         return 2
+    for i,name in enumerate(REQUIRED["studio_assets"] + REQUIRED["studio_planet_view"]):
+        if not registry.get(name, {}).get("studioLinkOnly"):
+            print("ERROR: missing Studio link restriction:", name, file=sys.stderr)
+            return 2
+        result = responses.get(100+i, {}).get("result", {})
+        if not result.get("isError") or not any("Requires an authenticated HTML5 Studio agent link" in item.get("text","") for item in result.get("content",[])):
+            print("ERROR: standalone Studio operation did not refuse:", name, file=sys.stderr)
+            return 2
+    print("PASS Studio linked-only metadata and standalone refusal")
     print("PASS tools/list == mcp_registry (count, names, guiOnly metadata)")
     for ident, (status, names) in sorted(features.items()):
         absent = sorted(names - listed)

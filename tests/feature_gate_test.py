@@ -49,13 +49,24 @@ class McpAuditTest(unittest.TestCase):
 
     def responses(self):
         names = sorted({name for group in mcp_audit.REQUIRED.values() for name in group})
+        linked = mcp_audit.REQUIRED["studio_assets"] + mcp_audit.REQUIRED["studio_planet_view"]
         payload = {"count": len(names), "tools": [
-            {"name": name, "guiOnly": False} for name in names]}
+            {"name": name, "guiOnly": False, "studioLinkOnly": name in linked}
+            for name in names]}
         return [
             {"id": 1, "result": {"protocolVersion": "2024-11-05"}},
             {"id": 2, "result": {"tools": [{"name": name} for name in names]}},
             {"id": 3, "result": {"content": [{"type": "text", "text": json.dumps(payload)}]}}
+        ] + [
+            {"id": index, "result": {"isError": True, "content": [
+                {"type": "text", "text": "Requires an authenticated HTML5 Studio agent link"}]}}
+            for index, _ in enumerate(linked, start=100)
         ]
+
+    def test_standalone_studio_requires_link(self):
+        responses = self.responses()
+        responses[-1]["result"]["isError"] = False
+        self.assertEqual(self.run_audit(responses)[0], 2)
 
     def test_protocol_failures(self):
         self.assertEqual(self.run_audit(self.responses())[0], 0)

@@ -1,0 +1,13 @@
+{
+  "name": "World Processes: Planet and Moon",
+  "id": "org.aiverse.world-processes-planet-demo",
+  "version": "1.0",
+  "module": "game",
+  "rules": "rules.json",
+  "maps": [
+    {
+      "file": "maps/planet.json",
+      "title": "Planet and moon process laboratory"
+    }
+  ]
+}

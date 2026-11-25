@@ -39,7 +39,7 @@ export function pasteValues(copied: CopiedComponent | null, target: StudioInspec
   return Object.keys(out).length ? out : null;
 }
 export function canRemove(component: StudioInspectorComponent): boolean {
-  if (component.id === 'Transform' || component.id === 'Unit' || component.id === 'NereidWater' || component.id === 'Light') return false;
+  if (component.id === 'Transform' || component.id === 'SurfacePlacement' || component.id === 'Unit' || component.id === 'NereidWater' || component.id === 'Light') return false;
   if (component.id === 'MeshRenderer') return component.properties.some(p => p.key === 'asset' && p.editable !== false);
   return true;
 }

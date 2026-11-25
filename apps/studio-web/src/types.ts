@@ -48,24 +48,40 @@ export interface StudioAssetList {
   folders?: StudioAsset[];
   root?: 'content';
 }
+export type StudioTrashAction = 'restore' | 'purge';
+export interface StudioTrashEntry {
+  id:string; status:'retained'|'invalid'; path?:string; guid?:string;
+  kind?:'deleted'|'created'|'replacement'; role?:string; directory?:boolean; bytes?:number; slotBytes?:number; historyProtected?:boolean; error?:string;
+}
+export interface StudioRecoveryStorage {trashBytes:number;checkpointBytes:number;journalBytes:number;quotaMiB:number;overQuota:boolean;warning:boolean;availableBytes:number}
+export interface StudioTrashPage {items:StudioTrashEntry[];total:number;truncated:boolean;recoveryPending:boolean;recoveryReason?:string;historyWarning?:string;storage?:StudioRecoveryStorage;storageError?:string}
+export interface StudioAssetHistoryResetReview {token:string;version:string;reason:string;checkpointBytes:number;legacyMarker:boolean}
+export interface StudioTrashReview extends StudioTrashEntry {action:StudioTrashAction;token:string;version:string}
+export interface StudioTrashBatchReview {items:StudioTrashEntry[];bytes:number;token:string;version:string}
+export interface StudioTrashBatchResult {ok:boolean;removed:string[];failedId?:string;error?:string}
 export interface StudioAssetTransferItem {
   id: number; name: string; from: string; to: string; directory: boolean;
-  conflict: string; guid: string | null;
+  conflict: string; guid: string | null; replacementAvailable?: boolean;
 }
 export interface StudioAssetTransferPlan {
   token: string; source: 'internal' | 'external'; items: StudioAssetTransferItem[];
   references?: Array<{ id: number; document: string; owner: string; field: string;
-    from: string; to: string; writable: boolean }>;
+    from: string; to: string; writable: boolean; validateOnApply?:boolean; preservesDefault?:boolean; repairCandidate?:boolean }>;
 }
 export type StudioAssetConflictAction =
   'import' | 'skip' | 'keep-both' | 'replace' | 'new-guid';
 export interface StudioAssetTransferResult {
+  historyRecorded?: boolean;
   files: string[]; issues: Array<{name: string; message: string}>;
   repairedMaterialReferences?: number;
+  repairedResourceDocuments?: number;
 }
+export interface StudioDependencyCoverage {gltf:number;glb:number;obj:number;dae:number;opaqueGlb:number;unsupportedModels:number;symlinks:number;unsupportedUris:number;missingLibraries:number;embedded:number;complete:boolean;note:string}
+export interface StudioDependencyPage {items:StudioAssetReference[];token:string;total:number;incoming:number;outgoing:number;unresolved:number;coverage:StudioDependencyCoverage;depth:number;path:string;guid:string}
 export interface StudioAssetReference {
   document: string; owner: string; field: string; path: string;
   guid: string; writable: boolean;
+  direction?: 'incoming' | 'outgoing'; depth?: number; cycle?: boolean;
 }
 export interface StudioAssetDetail extends StudioAsset {
   importer: string; guid: string; directory: boolean; settings: Record<string,unknown>;
@@ -85,7 +101,7 @@ export type StudioCaveGraphCapture =
   | {scope:StudioGraphDocumentScope;status:'ready';report:unknown};
 export interface StudioSnapshot {
   graphDocument?: StudioGraphDocumentScope;
-  project: { name: string; path: string; dirty: boolean };
+  project: { name: string; path: string; dirty: boolean; historyVersion?: string; assetHistoryVersion?: string };
   scene: { name: string; entities: StudioEntity[] };
   selectedId: string | null;
   /** Whole selection, primary (selectedId) last. */
@@ -110,9 +126,63 @@ export interface StudioRuntimeEntity {ref:string; epoch:string; tick:number; com
 export interface StudioGameDeviceChrome { corner:number; cutout?:{x:number;y:number;width:number;height:number;radius:number}; insets:{left:number;top:number;right:number;bottom:number} }
 export interface StudioGameDevice { id:string; landscape:boolean; safeArea:boolean; width:number; height:number; touch:boolean; chrome?:StudioGameDeviceChrome }
 export interface StudioGameDeviceOption { id:string; name:string; group:string }
+export interface EvolveLiveRegion { id:string; minXcm:number; minZcm:number; maxXcm:number; maxZcm:number; fertility:number; pollution:number; succession:number; durability:number }
+export interface PlanetLiveProcessSummary {sampleTick:number;truncated:boolean;rejected:number;cells:unknown[]}
+export interface PlanetEvolveLiveRegion {id:string;body:string;fertility:number;pollution:number;succession:number;durability:number;chartClipped:boolean;edges:(number[]|null)[][]}
+export interface PlanetEvolveLiveState {sampleTick:number;regionCount:number;truncated:boolean;rejected:number;clipped:number;regions:PlanetEvolveLiveRegion[]}
+export interface PlanetGravityLiveBody {body:string;minMagnitude:number;maxMagnitude:number;zero:number;inward:number;outward:number;tangent:number;samples:{face:number;x:number;y:number;position:number[];up:number[];acceleration:number[];magnitude:number;radial:number;kind:'zero'|'inward'|'outward'|'tangent'}[]}
+export interface PlanetGravityLiveState {available:boolean;fieldCount:number;usesDefaultSettings:boolean;sampleTick:number;truncated:boolean;rejected:number;bodies:PlanetGravityLiveBody[]}
+export type AetherLayer = 'off'|'smoke'|'toxin'|'oxygen';
+export interface PlanetAetherLiveCell {id:string;body:string;position:number[];mass:number[];sourceRate:number[]}
+export interface PlanetAetherLiveDuct {id:string;body:string;from:string;to:string;a:number[];b:number[];oneWay:boolean;cap:number;potentialAvailable:boolean;head?:number[];bias?:number[];potential?:number[]}
+export interface PlanetAetherLiveState {available:boolean;sampleTick:number;policy:'unknown'|'diffusion'|'stratified';gravityCapped:boolean;cellCount:number;ductCount:number;fluxCount:number;truncated:boolean;rejected:number;crossBody:number;omittedDucts:number;cells:PlanetAetherLiveCell[];ducts:PlanetAetherLiveDuct[]}
+export interface PlanetFractureLiveMember {id:string;body:string;position:number[];anchored:boolean;broken:boolean;detached:boolean;collapse?:{delivery:string;key:string;tick:number};natureFracture?:{delivery:string;key:string;climateTick:string};stress?:{climateTick:string;windLoadN:number;bendingMomentNm:number;normalizedLoad:number;accumulatedDamage:number;fractured:boolean}}
+export interface PlanetFractureLiveBond {id:string;body:string;first:string;second:string;a:number[];b:number[];strength:number;damage:number;enabled:boolean;activeSupportEdge:boolean}
+export interface PlanetFractureLiveState {available:boolean;sampleTick:number;memberCount:number;bondCount:number;anchored:number;broken:number;detached:number;pending:number;truncated:boolean;rejected:number;crossBody:number;omittedBonds:number;members:PlanetFractureLiveMember[];bonds:PlanetFractureLiveBond[]}
+export interface PlanetMorphLiveNode {id:string;enabled:boolean;anchored:boolean;current:number[];rest:number[];displacement:number[];velocity:number[];configuredForce:number[];projected:boolean;body?:string;owner?:string;unitsPerMetre?:number;position?:number[];restPosition?:number[];binding?:{owner:string;unitsPerMetre:number;impulseMilli:number;relative:boolean;enabled:boolean};currentGravityLoad?:number[];pendingImpact?:{tick:number;impulse:number[]}}
+export interface PlanetMorphLiveSpring {id:string;first:string;second:string;enabled:boolean;stiffness:number;residual:number[];projected:boolean;body?:string;a?:number[];b?:number[]}
+export interface PlanetMorphLiveState {available:boolean;sampleTick:number;nodeCount:number;springCount:number;forceCount:number;gravityInstalled:boolean;gravityCapped:boolean;truncated:boolean;rejected:number;unprojected:number;omittedSprings:number;frameMismatch:number;crossBody:number;nodes:PlanetMorphLiveNode[];springs:PlanetMorphLiveSpring[]}
+export interface PlanetEchoLiveLocation {id:string;placed:boolean;body?:string;position?:number[]}
+export interface PlanetEchoLiveZone extends PlanetEchoLiveLocation {enabled:boolean}
+export interface PlanetEchoLiveEmitter extends PlanetEchoLiveLocation {zone:string;intensity:number;enabled:boolean;active:boolean}
+export interface PlanetEchoLiveReceiver extends PlanetEchoLiveLocation {zone:string;threshold:number;enabled:boolean;zoneActive:boolean;hearingAvailable:boolean;valid?:boolean;audible?:boolean;intensity?:number;source?:string;sourcePosition?:number[]}
+export interface PlanetEchoLivePortal {id:string;from:string;to:string;enabled:boolean;bidirectional:boolean;loss:number;active:boolean;placed:boolean;body?:string;a?:number[];b?:number[]}
+export interface PlanetEchoLiveState {available:boolean;sampleTick:number;zoneCount:number;portalCount:number;emitterCount:number;receiverCount:number;truncated:boolean;rejected:number;unplaced:number;omittedPortals:number;crossBody:number;staleHearing:number;audible:number;zones:PlanetEchoLiveZone[];portals:PlanetEchoLivePortal[];emitters:PlanetEchoLiveEmitter[];receivers:PlanetEchoLiveReceiver[]}
+export interface PlanetCrowdLocation {id:string;enabled:boolean;placed:boolean;body?:string;position?:number[];support?:{status:'supported'|'airborne'|'weak'|'outward'|'steep';acceleration:number[];normal:number[];clearance:number;inward:number}}
+export interface PlanetCrowdAgent extends PlanetCrowdLocation {eligible?:boolean;allocated?:string;reservationValid?:boolean;reservationPosition?:number[];preferences:string[];orderCount?:number;moving?:boolean;flow?:boolean;velocity?:number[];pathCursor?:number;pathCount?:number;goal?:number[];routeTruncated?:boolean;route?:(number[]|null)[]}
+export interface PlanetCrowdSlot extends PlanetCrowdLocation {occupancy:number}
+export interface PlanetCrowdLiveState {available:boolean;sampleTick:number;agentCount:number;slotCount:number;preferenceCount:number;gravityEnabled:boolean;gravityCapped:boolean;truncated:boolean;rejected:number;stale:number;unplaced:number;crossBody:number;invalidReservation:number;routePoints:number;agents:PlanetCrowdAgent[];slots:PlanetCrowdSlot[]}
+export interface PlanetCircuitLocation {id:string;placed:boolean;body?:string;position?:number[];enabled:boolean}
+export interface PlanetCircuitNode extends PlanetCircuitLocation {supply:number;demand:number;drive:boolean;outputAvailable:boolean;powered?:boolean;signal?:boolean}
+export interface PlanetCircuitWire {id:string;from:string;to:string;enabled:boolean;bidirectional:boolean;active:boolean;outputsAvailable:boolean;bothPowered?:boolean;placed:boolean;body?:string;a?:number[];b?:number[]}
+export interface PlanetCircuitGate extends PlanetCircuitLocation {operation:string;inputA:string;inputB?:string;output:string;inputsValid:boolean;outputAvailable:boolean;outputSignal?:boolean}
+export interface PlanetCircuitSwitch extends PlanetCircuitLocation {node:string;closed:boolean;nodeValid:boolean}
+export interface PlanetCircuitDevice extends PlanetCircuitLocation {node:string;kind:string;requireSignal:boolean;outputAvailable:boolean;valid?:boolean;active?:boolean;transition?:number;changedTick?:number}
+export interface PlanetCircuitLiveState {available:boolean;sampleTick:number;nodeCount:number;wireCount:number;gateCount:number;switchCount:number;deviceCount:number;powered:number;high:number;activeDevices:number;truncated:boolean;rejected:number;unplaced:number;crossBody:number;omittedWires:number;staleOutputs:number;nodes:PlanetCircuitNode[];wires:PlanetCircuitWire[];gates:PlanetCircuitGate[];switches:PlanetCircuitSwitch[];devices:PlanetCircuitDevice[]}
+export interface PlanetSocietyLocation {id:string;placed:boolean;body?:string;position?:number[];enabled:boolean}
+export interface PlanetSocietyPerson extends PlanetSocietyLocation {credibility:number;acceptance:number;knowledgeAvailable:boolean;knowledge?:string;topicCount?:number}
+export interface PlanetSocietyContact {id:string;source:string;target:string;enabled:boolean;trust:number;score:number;threshold:number;eligibleNow:boolean;sourceOnlyTopics?:string;placed:boolean;body?:string;a?:number[];b?:number[]}
+export interface PlanetSocietyMessage extends PlanetSocietyLocation {source:string;topics:string;sourceValid:boolean;personPosition?:number[]}
+export interface PlanetSocietyTrigger extends PlanetSocietyLocation {person:string;topics:string;actionId:number;mode:string;once:boolean;outputAvailable:boolean;active?:boolean;fired?:boolean;transition?:number;changedTick?:number;personPosition?:number[]}
+export interface PlanetSocietyLiveState {available:boolean;sampleTick:number;personCount:number;contactCount:number;messageCount:number;triggerCount:number;eligibleContacts:number;activeTriggers:number;firedTriggers:number;truncated:boolean;rejected:number;unplaced:number;crossBody:number;omittedContacts:number;staleOutputs:number;people:PlanetSocietyPerson[];contacts:PlanetSocietyContact[];messages:PlanetSocietyMessage[];triggers:PlanetSocietyTrigger[]}
+export interface EvolveLiveState {forestTerrain?:{active:boolean;tick?:number;grid?:{body:string;faceSize:number;radius:number;step:number;side:number;corners:number[]}};forest?:StudioPlanetForestLive;diagnosticBudget?:{payloadLimitBytes:number;lineLimit:number;sampleLayers:number;trimmedLayers:string[];omittedLayers:string[]};society?:PlanetSocietyLiveState;circuit?:PlanetCircuitLiveState;crowd?:PlanetCrowdLiveState;echo?:PlanetEchoLiveState;morph?:PlanetMorphLiveState;fracture?:PlanetFractureLiveState;aether?:PlanetAetherLiveState;gravity?:PlanetGravityLiveState;evolve?:PlanetEvolveLiveState;topology?:'planet';epoch?:string;imprint?:PlanetLiveProcessSummary;granular?:PlanetLiveProcessSummary & {available:boolean;cellSizeCm:number;fieldCount:number;tiles:number};logs?:{x:number;z:number;ratio:number}[];soil?:{x:number;z:number;units:string}[];absorbedUnits?:string;respiredUnits?:string;active:boolean;tick?:number;regions:EvolveLiveRegion[];plantCount?:number;plants?:{id:string;x:number;z:number;fallen:boolean;dead?:boolean;recruited?:boolean;mature?:boolean;ageTicks?:string;matureTicks?:string;shadeStress?:string;floodStress?:string;droughtStress?:string}[];weather?:{x:number;z:number;size:number;rain:number;temperature:number;wetness:number}[]}
+export type WorldProcessDiagnosticLane = {available:false;error:string} | {
+  available:true;tick:number;hot:number;warm:number;cold:number;executed:number;deferred:number;
+  budget:number;selected:number;pending:number;urgent:number;urgentSelected:number;queued:number;removed:number;
+  oldestPendingTicks:number;mode:'serial'|'parallel';
+  samples:{id:string;requestedTick:number;sampleTick:number}[];
+  waiting:{id:string;requestedTick:number;urgent:boolean}[];
+};
+export type WorldProcessDiagnostics = {active:false} | {
+  active:true;epoch:string;tick:number;observerAvailable:boolean;cellSizeCm:number;
+  topology?:'planet';focusSurface?:{body:string;face:number;x:number;y:number;gravityLocal:[number,number,number]}|null;
+  config:{enabled:boolean;hotCells:number;warmCells:number;warmTicks:number;coldTicks:number};
+  lanes:Record<'evolve'|'crowd'|'society',WorldProcessDiagnosticLane>;
+};
+export type EvolveLayer = 'combined' | 'fertility' | 'pollution' | 'succession' | 'durability' | 'off';
 export interface StudioPlayReview {token:string;tick:number;moved:number;amounts:number;removed:number;skipped:number}
 export interface StudioGameState { device:StudioGameDevice; epoch?:string;canReviewPlayChanges?:boolean;runtimeDebugEdited?:boolean; paused: boolean; canControl: boolean; canStep: boolean; active: boolean; loading: boolean; progress: number; inMatch: boolean; tick: number; error: string }
-export type StudioMethod = 'studio.spectraPackageChoose' | 'studio.spectraAssetCheck' | 'studio.spectraPreview' | 'studio.renderLighting' | 'studio.renderLightingSet' | 'studio.nereidFlow' | 'studio.nereidFlowSet' | 'studio.gameEntities' | 'studio.gameInspect' | 'studio.gameDevices' | 'studio.gameDevice' | 'studio.gameControl' | 'studio.gameStart' | 'studio.gameStop' | 'studio.gameState' | 'studio.project' | 'studio.newMap' | 'studio.openMap' | 'studio.saveAs' | 'studio.entityCatalog' | 'studio.entityCreate' | 'studio.entityDelete' | 'studio.entityDuplicate' | 'studio.snapshot' | 'studio.propertiesFor' | 'studio.inspect' | 'studio.componentCatalog' | 'studio.componentAdd' | 'studio.componentRemove' | 'studio.setProperties' | 'studio.entitiesDelete' | 'studio.entitiesDuplicate' | 'studio.entityFlags' | 'studio.assetPlace' | 'studio.rules' | 'studio.rulesSet' | 'studio.windowOpen' | 'studio.windowClose' | 'studio.windowBroadcast' | 'studio.windowTitle' | 'studio.buildInfo' | 'studio.buildToolchain' | 'studio.buildStart' | 'studio.buildLog' | 'studio.buildEstimate' | 'studio.buildReveal' | 'studio.entitiesAlign' | 'studio.history' | 'studio.historyJump' | 'studio.ops' | 'studio.op' | 'studio.agentInfo' | 'studio.sceneBrush' | 'studio.splineEdit' | 'studio.hub' | 'studio.hubTemplates' | 'studio.hubOpen' | 'studio.hubCreate' | 'studio.stats' | 'studio.cavernsPreview' | 'studio.gpuStats' | 'studio.keepPlayChanges' | 'studio.extensions' | 'studio.extensionAction' | 'studio.extensionCreate' | 'studio.attachmentsGet' | 'studio.attachmentsSet' | 'studio.agentStart' | 'studio.agentStop' | 'studio.agentReset' | 'studio.inputGet' | 'studio.inputSet' | 'studio.assetAudit' | 'studio.assetThumbnail' | 'studio.assetUsage' | 'studio.entityMove' | 'studio.select' | 'studio.setProperty' | 'studio.save' | 'studio.undo' | 'studio.redo' | 'studio.viewportRect' | 'studio.viewportInput' | 'studio.openProject' | 'studio.assets' | 'studio.assetByGuid' | 'studio.assetReferences' | 'studio.assetMetaPatch' | 'studio.assetFolderCreate' | 'studio.assetMovePreview' | 'studio.assetImportPreview' | 'studio.assetTransferCommit' | 'studio.lighting' | 'studio.lightingSet' | 'studio.lightAdd' | 'studio.lightUpdate' | 'studio.lightDelete' | 'studio.materials' | 'studio.materialPatch' | 'studio.materialCreate' | 'studio.materialPreview' | 'studio.shaderGraphs' | 'studio.shaderGraphGet' | 'studio.shaderGraphValidate' | 'studio.shaderGraphSave' | 'studio.shaderGraphCatalog' | 'studio.facialRigList' | 'studio.facialRigGet' | 'studio.facialRigValidate' | 'studio.facialRigSave' | 'studio.facialPreviewBind' | 'studio.facialPreviewControls' | 'studio.facialPreviewInfo' | 'studio.humanAppearanceInfo' | 'studio.humanAppearanceApply' | 'studio.humanAppearanceSave' | 'studio.humanAppearanceLoad' | 'studio.humanAppearanceList' | 'studio.humanAppearanceFromAsset' | 'studio.humanWardrobeFromAsset' | 'studio.humanPreviewAnimation' | 'studio.humanStudioLighting' | 'studio.humanFaceFitScan' | 'studio.humanHeadBodyImport' | 'studio.humanWardrobeInfo' | 'studio.humanCharacterBuild' | 'studio.humanCharacterBuildStatus' | 'studio.wind' | 'studio.windSet' | 'studio.humanAppearanceThumbnails' | 'studio.humanLookCapture' | 'studio.humanCamera' | 'studio.humanCompare' | 'studio.humanRuler' | 'studio.humanClipList' | 'studio.humanClipAdd' | 'studio.humanClipRemove' | 'studio.humanMakeupAlign' | 'studio.humanTryOn' | 'studio.humanPlaceInGame' | 'studio.humanPackageList' | 'studio.humanPackageExport' | 'studio.humanPackageImport' | 'studio.humanFacePick' | 'studio.humanSculpt' | 'studio.humanSculptStroke' | 'studio.humanSculptUndo' | 'studio.humanCreatorInfo' | 'studio.humanCreatorSet' | 'studio.humanCreatorPreset' | 'studio.humanCreatorUndo' | 'studio.humanCreatorRedo' | 'studio.humanCreatorRoute' | 'studio.humanCreatorRig' | 'studio.humanCreatorSkin' | 'studio.humanCreatorNew' | 'studio.humanCreatorSave' | 'studio.humanCreatorLoad' | 'studio.humanCreatorList' | 'studio.humanCreatorPreview' | 'studio.humanMetaHuman' | 'studio.buildingRecipes' | 'studio.buildingReadRecipe' | 'studio.buildingRegenerate' | 'studio.buildingStaleMaterials' | 'studio.buildingSurfacePreview' | 'studio.buildingPublishMaterial' | 'studio.buildingCatalog' | 'studio.buildingPreview' | 'studio.buildingPreviewView' | 'studio.buildingPreviewStop' | 'studio.buildingTextureProvenance' | 'studio.buildingGraphOverlay' | 'studio.buildingInspect' | 'studio.buildingGenerate' | 'studio.cavernsGraphInspect' | 'studio.gameProfile' | 'studio.gameRegions' | 'studio.gameEdit' | 'studio.previewPlayChanges';
+export type StudioMethod = 'studio.cavernsPreview' | 'studio.buildingRecipes' | 'studio.buildingReadRecipe' | 'studio.buildingRegenerate' | 'studio.buildingStaleMaterials' | 'studio.buildingSurfacePreview' | 'studio.buildingPublishMaterial' | 'studio.buildingCatalog' | 'studio.buildingPreview' | 'studio.buildingPreviewView' | 'studio.buildingPreviewStop' | 'studio.buildingTextureProvenance' | 'studio.buildingGraphOverlay' | 'studio.buildingInspect' | 'studio.buildingGenerate' | 'studio.cavernsGraphInspect' | 'studio.planetSceneBody' | 'studio.planetForestMove' | 'studio.planetForestArm' | 'studio.planetForestPlant' | 'studio.planetForest' | 'studio.planetForestSet' | 'studio.planetForestLive' | 'studio.worldProcessDiagnostics' | 'studio.evolveState' | 'studio.evolveLayer' | 'studio.worldProcessAreaPreview' | 'studio.worldProcessGroupPivot' | 'studio.worldProcessAreaBatchResize' | 'studio.renderLighting' | 'studio.renderLightingSet' | 'studio.nereidFlow' | 'studio.nereidFlowSet' | 'studio.gameEntities' | 'studio.gameInspect' | 'studio.gameDevices' | 'studio.gameDevice' | 'studio.gameControl' | 'studio.gameStart' | 'studio.gameStop' | 'studio.gameState' | 'studio.project' | 'studio.newMap' | 'studio.openMap' | 'studio.saveAs' | 'studio.entityCatalog' | 'studio.entityCreate' | 'studio.entityDelete' | 'studio.entityDuplicate' | 'studio.snapshot' | 'studio.propertiesFor' | 'studio.inspect' | 'studio.componentCatalog' | 'studio.componentAdd' | 'studio.componentRemove' | 'studio.setProperties' | 'studio.entitiesDelete' | 'studio.entitiesDuplicate' | 'studio.entityFlags' | 'studio.assetPlace' | 'studio.rules' | 'studio.rulesSet' | 'studio.windowOpen' | 'studio.windowClose' | 'studio.windowBroadcast' | 'studio.windowTitle' | 'studio.buildInfo' | 'studio.buildToolchain' | 'studio.buildStart' | 'studio.buildLog' | 'studio.buildEstimate' | 'studio.buildReveal' | 'studio.entitiesAlign' | 'studio.history' | 'studio.historyJump' | 'studio.ops' | 'studio.op' | 'studio.agentInfo' | 'studio.sceneBrush' | 'studio.splineEdit' | 'studio.hub' | 'studio.hubTemplates' | 'studio.hubOpen' | 'studio.hubCreate' | 'studio.stats' | 'studio.gpuStats' | 'studio.keepPlayChanges' | 'studio.extensions' | 'studio.extensionAction' | 'studio.extensionCreate' | 'studio.attachmentsGet' | 'studio.attachmentsSet' | 'studio.agentStart' | 'studio.agentStop' | 'studio.agentReset' | 'studio.inputGet' | 'studio.inputSet' | 'studio.assetAudit' | 'studio.assetThumbnail' | 'studio.assetUsage' | 'studio.entityMove' | 'studio.select' | 'studio.setProperty' | 'studio.save' | 'studio.undo' | 'studio.redo' | 'studio.viewportRect' | 'studio.viewportInput' | 'studio.openProject' | 'studio.assets' | 'studio.assetByGuid' | 'studio.assetReferences' | 'studio.assetMetaPatch' | 'studio.assetFolderCreate' | 'studio.assetMovePreview' | 'studio.assetImportPreview' | 'studio.assetTransferCommit' | 'studio.lighting' | 'studio.lightingSet' | 'studio.lightAdd' | 'studio.lightUpdate' | 'studio.lightDelete' | 'studio.materials' | 'studio.materialPatch' | 'studio.materialCreate' | 'studio.materialPreview' | 'studio.shaderGraphs' | 'studio.shaderGraphGet' | 'studio.shaderGraphValidate' | 'studio.shaderGraphSave' | 'studio.shaderGraphCatalog' | 'studio.facialRigList' | 'studio.facialRigGet' | 'studio.facialRigValidate' | 'studio.facialRigSave' | 'studio.facialPreviewBind' | 'studio.facialPreviewControls' | 'studio.facialPreviewInfo' | 'studio.humanAppearanceInfo' | 'studio.humanAppearanceApply' | 'studio.humanAppearanceSave' | 'studio.humanAppearanceLoad' | 'studio.humanAppearanceList' | 'studio.humanAppearanceFromAsset' | 'studio.humanWardrobeFromAsset' | 'studio.humanPreviewAnimation' | 'studio.humanStudioLighting' | 'studio.humanFaceFitScan' | 'studio.humanHeadBodyImport' | 'studio.humanWardrobeInfo' | 'studio.humanCharacterBuild' | 'studio.humanCharacterBuildStatus' | 'studio.wind' | 'studio.windSet' | 'studio.humanAppearanceThumbnails' | 'studio.humanLookCapture' | 'studio.humanCamera' | 'studio.humanCompare' | 'studio.humanRuler' | 'studio.humanClipList' | 'studio.humanClipAdd' | 'studio.humanClipRemove' | 'studio.humanMakeupAlign' | 'studio.humanTryOn' | 'studio.humanPlaceInGame' | 'studio.humanPackageList' | 'studio.humanPackageExport' | 'studio.humanPackageImport' | 'studio.humanFacePick' | 'studio.humanSculpt' | 'studio.humanSculptStroke' | 'studio.humanSculptUndo' | 'studio.humanCreatorInfo' | 'studio.humanCreatorSet' | 'studio.humanCreatorPreset' | 'studio.humanCreatorUndo' | 'studio.humanCreatorRedo' | 'studio.humanCreatorRoute' | 'studio.humanCreatorRig' | 'studio.humanCreatorSkin' | 'studio.humanCreatorNew' | 'studio.humanCreatorSave' | 'studio.humanCreatorLoad' | 'studio.humanCreatorList' | 'studio.humanCreatorPreview' | 'studio.humanMetaHuman' | 'studio.gameProfile' | 'studio.gameRegions' | 'studio.gameEdit' | 'studio.projectHistory' | 'studio.projectHistoryStep' | 'studio.assetHistory' | 'studio.assetHistoryStep' | 'studio.agentHistoryStep' | 'studio.agentUndoAll' | 'studio.agentBatchPreview' | 'studio.agentBatchApply' | 'studio.previewPlayChanges' | 'studio.assetDependencyPage' | 'studio.assetDelete' | 'studio.assetRecoveryQuota' | 'studio.assetTrashBatchReview' | 'studio.assetTrashBatchApply' | 'studio.assetHistoryResetReview' | 'studio.assetHistoryResetApply' | 'studio.assetTrashList' | 'studio.assetTrashReview' | 'studio.assetTrashApply' | 'studio.spectraPackageChoose' | 'studio.spectraAssetCheck' | 'studio.spectraPreview';
 export interface StudioSceneBrush { armed: boolean; kind: 'terrain' | 'paint' | 'tiles' | 'field' | 'objects' | 'road' | 'river' | 'caverns';
   op: 'raise' | 'lower' | 'smooth' | 'flatten' | 'noise' | 'erode'; radius: number; strength: number; layer: number; tile: string; field: string;
   fieldMode: 'set' | 'add' | 'max' | 'erase'; value: number; type: string; owner: number; count: number; spread: number; roadType: string; width: number; caveMode?: 'carve'|'fill'|'shaft'; caveY?: number; caveDepth?:number; caveSurface?: boolean }
@@ -149,9 +219,11 @@ export interface StudioTemplate { id: string; name: string; description: string;
   source?: 'engine' | 'catalog'; official?: boolean; version?: string; size?: number; preview?: string }
 export interface StudioHub { recent: Array<{ dir: string; name: string; lastOpened: number; exists: boolean }>;
   templates: StudioTemplate[]; defaultLocation: string }
-export interface StudioAgentChange { op: string; args: string; ok: boolean; undoable: boolean; position: number; error?: string }
+export interface StudioAgentChange { op: string; args: string; ok: boolean; undoable: boolean; position: number; error?: string;
+  scope?:'map'|'project'|'assets'|'untracked'; historyId?:string; historyVersion?:string; applied?:boolean; canUndo?:boolean; canRedo?:boolean }
+export interface StudioAgentBatch {direction:'undo'|'redo';available:boolean;reason?:string;token?:string;steps?:Array<{scope:'map'|'project'|'assets';historyId:string}>}
 export interface StudioAgentInfo { lines: string[]; total: number; running: boolean; port: number; clients: number; changes: StudioAgentChange[];
-  startPosition: number; cli: string; mcp: boolean; conversation: boolean; result?: string }
+  startPosition: number; historyVersion?:string; batchUndo?:StudioAgentBatch; batchRedo?:StudioAgentBatch; cli: string; mcp: boolean; conversation: boolean; result?: string }
 // World maintenance uses decimal strings for uint64 values, never JS numbers.
 export interface StudioWorldRegion {cell:[number,number,number];live:number;materialized:number}
 export interface StudioWorldStatus {
@@ -388,6 +460,9 @@ export interface StudioParams {
     gpuAllocationSeed?:number;
     speed?:number;loop?:boolean;count?:number;maxSide?:number;
   };
+  'studio.worldProcessAreaPreview': {owner:string;revision:number;selectionKey:string;clear?:boolean;scaleNumerator?:number;scaleNumeratorZ?:number;pivot?:'shared'|'individual'|'custom';pivotXcm?:number|null;pivotZcm?:number|null};
+  'studio.worldProcessGroupPivot': Record<string,never>;
+  'studio.worldProcessAreaBatchResize': {entityIds:string[];axis:'x'|'z'|'both';pivot:'shared'|'individual'|'custom';scaleNumerator:number;scaleDenominator:number;scaleNumeratorZ?:number;scaleDenominatorZ?:number;pivotXcm?:number|null;pivotZcm?:number|null};
   'studio.wind':Record<string,never>;
   'studio.windSet':Partial<WindSettings>;
   'studio.nereidFlow':Record<string,never>;
@@ -402,7 +477,7 @@ export interface StudioParams {
   'studio.gameEdit': {expectedProject:string;epoch:string;ref:string;expectedTick:number;field:StudioRuntimeEditField['id'];expectedRaw:string;value:string};
   'studio.gameDevices': Record<string,never>;
   'studio.gameDevice': Pick<StudioGameDevice,'id'|'landscape'|'safeArea'>;
-  'studio.gameControl': {action:'pause'|'resume'|'step'|'restart'};
+  'studio.gameControl': {action:'pause'|'resume'|'step'|'restart'|'checkpointSave'|'checkpointRestore'|'speed1'|'speed2'|'speed5'|'speed10'|'speed25'|'speed50'|'speed100'};
   'studio.project': Record<string, never>;
   'studio.cavernsGraphInspect': {scope:StudioGraphDocumentScope};
   'studio.newMap': {width: number; height: number; name: string};
@@ -470,6 +545,13 @@ export interface StudioParams {
   'studio.entitiesDuplicate': { entityIds: string[] };
   'studio.entityFlags': { entityIds: string[]; hidden?: boolean; locked?: boolean };
   'studio.assetPlace': { asset: string; x: number; z: number };
+  'studio.planetSceneBody': {body?:string;mapPath?:string;expectedRevision?:string};
+  'studio.planetForestArm': {armed:boolean;mapPath?:string;expectedRevision?:string;species?:number;key?:number;habit?:'tree'|'shrub';action?:'plant'|'pick'|'move'};
+  'studio.planetForestMove': {mapPath:string;expectedRevision:string;species:number;key:number;at:{body:string;face:number;x:number;y:number}};
+  'studio.planetForestPlant': {mapPath:string;expectedRevision:string;species:number;habit:'tree'|'shrub';at:{body:string;face:number;x:number;y:number}};
+  'studio.planetForest': Record<string, never>;
+  'studio.planetForestSet': {mapPath:string;expectedRevision:string;forest:unknown;catalog:unknown};
+  'studio.planetForestLive': Record<string, never>;
   'studio.rules': Record<string, never>;
   'studio.rulesSet': { path: string; value: unknown };
   /** Open (or focus) floating window `window` holding `panels`; ifOutside opens only when the mouse is outside every Studio window. */
@@ -480,9 +562,13 @@ export interface StudioParams {
   'studio.buildInfo': Record<string,never>;
   'studio.entitiesAlign': { entityIds: string[]; mode: StudioAlignMode };
   'studio.history': Record<string,never>;
+  'studio.projectHistory': Record<string,never>;
+  'studio.projectHistoryStep': { direction: 'undo' | 'redo'; expectedVersion: string };
+  'studio.assetHistory': Record<string,never>;
+  'studio.assetHistoryStep': { direction: 'undo' | 'redo'; expectedVersion: string };
   'studio.assetThumbnail': { path: string };
   'studio.assetUsage': { path?: string };
-  'studio.historyJump': { position: number };
+  'studio.historyJump': { position: number; expectedVersion?:string };
   /** Tool panel ops (Terrain, Roads, PostFX, ...) with their JSON schemas. */
   'studio.ops': { panel: string };
   /** Run one Workspace op of a tool panel (validated, undoable like an agent edit). */
@@ -492,6 +578,13 @@ export interface StudioParams {
   'studio.assetAudit': Record<string,never>;
   /** Agent panel: transcript lines from `from`, change list, link status. */
   'studio.agentInfo': { from?: number };
+  'studio.worldProcessDiagnostics': {budget:number;focus?:string};
+  'studio.evolveState': Record<string, never>;
+  'studio.evolveLayer': {layer?: EvolveLayer;live?:boolean;granularCellCm?:number;liveGravity?:boolean;aetherLayer?:AetherLayer;liveFracture?:boolean;liveMorph?:boolean;liveEcho?:boolean;liveCrowd?:boolean;liveCircuit?:boolean;liveSociety?:boolean;liveForest?:boolean};
+  'studio.agentHistoryStep': { scope:'map'|'project'|'assets';historyId:string;expectedVersion:string;direction:'undo'|'redo' };
+  'studio.agentUndoAll': {expectedVersion:string};
+  'studio.agentBatchPreview': {direction:'undo'|'redo'};
+  'studio.agentBatchApply': {direction:'undo'|'redo';token:string;confirmed:boolean};
   'studio.sceneBrush': Partial<StudioSceneBrush> & { expectedProject?: string; expectedMap?: string };
   'studio.splineEdit': { kind: '' | 'road' | 'river' };
   'studio.hub': Record<string,never>;
@@ -526,10 +619,20 @@ export interface StudioParams {
   'studio.spectraAssetCheck': {guid:string};
   'studio.assets': Record<string, never>;
   'studio.assetByGuid': { guid: string };
-  'studio.assetReferences': Record<string, never>;
+  'studio.assetReferences': { path?: string; depth?: number };
+  'studio.assetDependencyPage': {expectedProject:string;path:string;depth:number;direction:'all'|'incoming'|'outgoing';offset:number;limit:number;expectedToken?:string};
   'studio.assetMetaPatch': {guid:string;key:string;value:string|number|boolean};
   'studio.assetFolderCreate': { parent: string; name: string };
-  'studio.assetMovePreview': { paths: string[]; destination: string };
+  'studio.assetDelete': { path:string; guid:string; expectedProject:string; expectedVersion:string; confirmed:boolean };
+  'studio.assetRecoveryQuota': { expectedProject:string;expectedMiB:number;quotaMiB:number };
+  'studio.assetHistoryResetReview': {expectedProject:string};
+  'studio.assetHistoryResetApply': {expectedProject:string;token:string;expectedVersion:string;confirmed:boolean};
+  'studio.assetTrashList': { expectedProject:string;offset:number;limit:number };
+  'studio.assetTrashBatchReview': {expectedProject:string;ids:string[]};
+  'studio.assetTrashBatchApply': {expectedProject:string;ids:string[];token:string;expectedVersion:string;confirmed:boolean};
+  'studio.assetTrashReview': { expectedProject:string;id:string;action:StudioTrashAction };
+  'studio.assetTrashApply': { expectedProject:string;id:string;action:StudioTrashAction;token:string;expectedVersion:string;confirmed:boolean };
+  'studio.assetMovePreview': { paths: string[]; destination: string; newName?: string };
   'studio.spectraPackageChoose': Record<string,never>;
   'studio.assetImportPreview': { destination: string };
   'studio.assetTransferCommit': { token: string; decisions: Array<{id:number;action:StudioAssetConflictAction}> };
@@ -577,6 +680,9 @@ export interface StudioResult {
   'studio.buildingPreviewStop': {active:boolean};
   'studio.buildingGenerate': StudioBuildingGenerated;
   'studio.spectraPreview': StudioSpectraPreviewState;
+  'studio.worldProcessAreaPreview': {ok?:boolean;stale?:boolean};
+  'studio.worldProcessGroupPivot': {pivotXcm:number;pivotZcm:number;custom:boolean};
+  'studio.worldProcessAreaBatchResize': number;
   'studio.wind':WindState;
   'studio.windSet':WindState;
   'studio.nereidFlow':NereidFlowState;
@@ -659,6 +765,13 @@ export interface StudioResult {
   'studio.entitiesDuplicate': StudioSnapshot;
   'studio.entityFlags': StudioSnapshot;
   'studio.assetPlace': StudioSnapshot;
+  'studio.planetSceneBody': {override:string;activeBody:string};
+  'studio.planetForestArm': {armed:boolean};
+  'studio.planetForestPlant': StudioPlanetForestDocument;
+  'studio.planetForestMove': StudioPlanetForestDocument;
+  'studio.planetForest': StudioPlanetForestDocument;
+  'studio.planetForestSet': StudioPlanetForestDocument;
+  'studio.planetForestLive': StudioPlanetForestLive;
   'studio.rules': StudioRules;
   'studio.rulesSet': StudioRules;
   'studio.windowOpen': { opened: boolean };
@@ -668,6 +781,10 @@ export interface StudioResult {
   'studio.buildInfo': StudioBuildInfo;
   'studio.entitiesAlign': StudioSnapshot;
   'studio.history': StudioHistory;
+  'studio.projectHistory': StudioProjectHistory;
+  'studio.projectHistoryStep': StudioProjectHistory & { snapshot: StudioSnapshot };
+  'studio.assetHistory': StudioAssetHistory;
+  'studio.assetHistoryStep': StudioAssetHistory & { snapshot: StudioSnapshot };
   'studio.assetThumbnail': { url?: string; pending?: boolean; none?: boolean };
   'studio.assetUsage': { path?: string; mentions?: Array<{ file: string; line: number; text: string }>; unused?: string[]; scannedFiles?: number };
   'studio.historyJump': StudioHistory & { snapshot: StudioSnapshot };
@@ -676,6 +793,13 @@ export interface StudioResult {
   'studio.inputGet': StudioInputInfo;
   'studio.inputSet': StudioInputInfo;
   'studio.agentInfo': StudioAgentInfo;
+  'studio.worldProcessDiagnostics': WorldProcessDiagnostics;
+  'studio.evolveState': EvolveLiveState;
+  'studio.evolveLayer': {layer: EvolveLayer;live:boolean;granularCellCm?:number;liveGravity?:boolean;aetherLayer?:AetherLayer;liveFracture?:boolean;liveMorph?:boolean;liveEcho?:boolean;liveCrowd?:boolean;liveCircuit?:boolean;liveSociety?:boolean;liveForest?:boolean};
+  'studio.agentHistoryStep': StudioSnapshot;
+  'studio.agentUndoAll': StudioSnapshot;
+  'studio.agentBatchPreview': StudioAgentBatch;
+  'studio.agentBatchApply': StudioSnapshot;
   'studio.sceneBrush': StudioSceneBrush;
   'studio.hub': StudioHub;
   'studio.hubTemplates': { templates: StudioTemplate[]; error?: string };
@@ -709,8 +833,18 @@ export interface StudioResult {
   'studio.assets': StudioAssetList;
   'studio.assetByGuid': StudioAssetDetail;
   'studio.assetReferences': StudioAssetReference[];
+  'studio.assetDependencyPage': StudioDependencyPage;
   'studio.assetMetaPatch': StudioAssetDetail;
   'studio.assetFolderCreate': { path: string };
+  'studio.assetDelete': { path:string; backup:string; historyRecorded:boolean };
+  'studio.assetRecoveryQuota': StudioRecoveryStorage;
+  'studio.assetHistoryResetReview': StudioAssetHistoryResetReview;
+  'studio.assetHistoryResetApply': {ok:boolean};
+  'studio.assetTrashList': StudioTrashPage;
+  'studio.assetTrashBatchReview': StudioTrashBatchReview;
+  'studio.assetTrashBatchApply': StudioTrashBatchResult;
+  'studio.assetTrashReview': StudioTrashReview;
+  'studio.assetTrashApply': {ok:boolean};
   'studio.assetMovePreview': StudioAssetTransferPlan;
   'studio.spectraPackageChoose': {name:string;projectPath:string;path:string}|{cancelled:true};
   'studio.assetImportPreview': StudioAssetTransferPlan | { cancelled: true };
@@ -768,4 +902,12 @@ export interface MetaHumanReport { pending?:boolean; detected:boolean; score:num
   rig?: { halfJoints:number; twistJoints:number; jawJoint:boolean; eyeJoints:boolean } }
 export type StudioAlignMode = 'minX' | 'centerX' | 'maxX' | 'minZ' | 'centerZ' | 'maxZ' | 'distributeX' | 'distributeZ' | 'ground';
 /** Undo history: applied steps first (oldest → newest), then the redo branch; position = applied count. */
-export interface StudioHistory { steps: Array<{ label: string; done: boolean }>; position: number }
+export interface StudioHistory { steps: Array<{ label: string; done: boolean }>; position: number; version?:string; scope?:'map'; strokeActive?:boolean; persistent?:boolean; persistenceWarning?:string }
+export interface StudioProjectHistory { scope:'project'; steps: StudioHistory['steps']; position:number; version:string; strokeActive:boolean; canUndo:boolean; canRedo:boolean; bytes:number; maxBytes:number; maxSteps:number; blockedReason?:string; persistent?:boolean; persistenceWarning?:string }
+
+export type StudioAssetHistory = Omit<StudioProjectHistory,'scope'> & {scope:'assets'};
+
+export interface StudioPlanetForestMarker {id:string;type:string;placement:{body:string;face:number;x:number;y:number}}
+export interface StudioPlanetForestDocument {available:boolean;mapPath:string;revision:string;moduleEnabled:boolean;physicsRequested:boolean;override:boolean;forest:unknown;catalog:unknown;markers:StudioPlanetForestMarker[];presets?:string[];bodies?:string[]}
+export interface StudioPlanetForestPlant {viewPriority?:number;species:number;key:string;body:string;cell:number;ageTicks:string;supportPermille:number;dead:boolean;fallen:boolean;harvested:boolean;spent:boolean;physical:boolean;remainingUnits:string|null;initialUnits:string|null;pending?:boolean;motionTick?:number|null;awake?:boolean;position?:number[];up?:number[];rootRadiusCm?:number;rootDepthCm?:number;east?:number[];habit?:'tree'|'shrub'|'grass';sizePermille?:number;foliagePermille?:number;exposedCm?:number;visibleRoots?:boolean;windLocal?:number[];stormWindLocal?:number[];mappedWeather?:boolean;seasonPermille?:number;climateTick?:string;capsule?:{center:number[];axis:number[];right?:number[];radius:number;halfHeight:number}}
+export interface StudioPlanetForestLive {active:boolean;focusBody?:string;focusPlantCount?:number;cameraPrioritized?:boolean;viewCandidates?:number;tick?:number;plantCount?:number;deadCount?:number;fallenCount?:number;spentCount?:number;physicalCount?:number;pendingCount?:number;rejected?:number;truncated?:boolean;windZonesCapped?:boolean;stormsCapped?:boolean;plants?:StudioPlanetForestPlant[]}

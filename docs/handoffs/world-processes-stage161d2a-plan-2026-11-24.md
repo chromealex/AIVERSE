@@ -1,0 +1,2 @@
+# Stage 161D2a — in progress
+Scope: authored forest diagnostic lines in existing native Scene; canonical body-local positions, ARBOR prototype branch skeleton and root/capsule recipe outlines, bounded cache. Distinguish preview from live physics. Acceptance: active-body filtering, marker/direct parity, shared native parser, deterministic bounded geometry, no ECS writes, no suppression by live gravity. Live snapshot and Scene editing follow separately. Native Mac verification deferred.

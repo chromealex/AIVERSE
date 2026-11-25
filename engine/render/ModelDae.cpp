@@ -98,25 +98,6 @@ bool decompose(const mat4& m, float3& t, quat& r, float3& s) {
 }
 
 // UTF-16 files (with a BOM) to UTF-8; anything else is returned as is
-std::string toUtf8(const std::string& b) {
-    if (b.size() < 2) return b;
-    const bool le = uint8_t(b[0]) == 0xFF && uint8_t(b[1]) == 0xFE, be = uint8_t(b[0]) == 0xFE && uint8_t(b[1]) == 0xFF;
-    if (!le && !be) return b;
-    std::string o;
-    o.reserve(b.size() / 2);
-    for (size_t i = 2; i + 1 < b.size(); i += 2) {
-        uint32_t c = le ? uint8_t(b[i]) | (uint8_t(b[i + 1]) << 8) : (uint8_t(b[i]) << 8) | uint8_t(b[i + 1]);
-        if (c >= 0xD800 && c < 0xDC00 && i + 3 < b.size()) {
-            const uint32_t d = le ? uint8_t(b[i + 2]) | (uint8_t(b[i + 3]) << 8) : (uint8_t(b[i + 2]) << 8) | uint8_t(b[i + 3]);
-            if (d >= 0xDC00 && d < 0xE000) { c = 0x10000 + ((c - 0xD800) << 10) + (d - 0xDC00); i += 2; }
-        }
-        if (c < 0x80) o += char(c);
-        else if (c < 0x800) { o += char(0xC0 | (c >> 6)); o += char(0x80 | (c & 63)); }
-        else if (c < 0x10000) { o += char(0xE0 | (c >> 12)); o += char(0x80 | ((c >> 6) & 63)); o += char(0x80 | (c & 63)); }
-        else { o += char(0xF0 | (c >> 18)); o += char(0x80 | ((c >> 12) & 63)); o += char(0x80 | ((c >> 6) & 63)); o += char(0x80 | (c & 63)); }
-    }
-    return o;
-}
 
 std::string urlId(const std::string& u) { return !u.empty() && u[0] == '#' ? u.substr(1) : u; }
 
@@ -226,7 +207,7 @@ public:
         : path_(path), warnings_(w), model_(std::make_unique<Model>()), tex_{path, dirOf(path), read, w, *model_, {}} {}
 
     std::unique_ptr<Model> load(const std::string& bytes) {
-        try { doc_ = xml::parse(toUtf8(bytes)); }
+        try { doc_ = xml::parse(xml::toUtf8(bytes)); }
         catch (const std::exception& e) { fail(e.what()); }
         if (doc_.name != "COLLADA") fail("not a Collada file (root element <" + doc_.name + ">)");
         indexIds(doc_, 0);

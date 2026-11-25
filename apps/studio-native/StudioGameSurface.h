@@ -4,6 +4,9 @@
 #include "engine/data/Json.h"
 #include "apps/studio-native/StudioGameDevice.h"
 #include "apps/studio-native/StudioRuntimeInspect.h"
+#include "apps/studio-native/StudioWorldProcessDiagnostics.h"
+#include "apps/studio-native/StudioWorldProcessLiveOptions.h"
+#include "apps/studio-native/StudioForestCameraFocus.h"
 
 namespace aiverse::studio {
 // Independent native surface; the authoring Scene keeps its own device/epoch.
@@ -27,6 +30,12 @@ public:
     Json editRuntime(const Json& params);
     // Keep play changes: where each map entity is now (index into the map's entities), or removed:true.
     Json mapEntityStates();
+    Json ecologyState(const StudioWorldProcessLiveOptions& options={},const std::string& focusBody={},const std::optional<StudioForestCameraFocus>& camera={},Json* forestRender=nullptr);
+    Json planetForestState(const std::string& focusBody={},const std::optional<StudioForestCameraFocus>& camera={});
+    bool planetMatch() const;
+    bool launchedMapCurrent() const;
+    bool planetSnapshotCurrent(const Json& snapshot) const;
+    Json worldProcessDiagnostics(int cap,const std::string& focus);
     const StudioGameLaunch& launchPlan() const{return launch_;}
     bool canReview(const editor::Workspace& ws) const;
 private:
@@ -38,6 +47,7 @@ private:
     StudioGameDevice profile_;
     float inputScale_=1;
     StudioRuntimeInspect inspector_;
+    StudioWorldProcessDiagnostics worldProcessDiagnostics_;
     uint64_t runtimeEpoch_=0;
     bool matchObserved_=false;
     bool runtimeDebugEdited_=false;

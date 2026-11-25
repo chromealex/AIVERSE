@@ -15,6 +15,8 @@ export interface FieldDescriptor {
   description?: string;
   /** Optional asset kinds accepted by reference-picker fields. */
   assetKinds?: Array<'image' | 'model' | 'audio' | 'code' | 'document'>;
+  /** Real map entity reference, resolved from native-supplied options (never runtime ECS index). */
+  entityReference?: boolean;
   /** Multi-selection: values differ between the selected objects (shown as "—"). */
   mixed?: boolean;
 }

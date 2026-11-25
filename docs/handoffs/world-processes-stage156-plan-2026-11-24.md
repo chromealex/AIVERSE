@@ -1,0 +1,2 @@
+# Stage 156 plan
+Base bb2e6b509e2ed7777b23b9dde06d1147905f47c4. Opt-in naturalFallPermille (0 disabled); standing dead plants with nonzero remaining wood at or below threshold latch existing root-support fall and durable outbox, using actual PHYSIS gravity and deterministic fallback direction. No new biomass/physics solver; atomic staged owner, no duplicate natural/erosion fall. Native consequence owner still supplies actual shape; add explicit delivery helper and fixture if feasible. Source and documentation only, tests deferred.

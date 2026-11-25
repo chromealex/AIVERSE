@@ -135,6 +135,7 @@ public:
     bool updateBrushCursor(double x, double y, double w, double h);
     void brushAdjust(double factor, bool disarm);
     bool splineDrag(int phase, double x, double y, double w, double h);
+    bool worldProcessDrag(int phase, double x, double y, double w, double h, bool symmetric = false, bool snap = false);
     bool terrainStroke(int phase, double x, double y, double w, double h);
     bool placeAsset(const std::string& asset, double x, double y, double w, double h);
     bool placeType(const std::string& type, double x, double y, double w, double h);
@@ -275,12 +276,52 @@ private:
     uint32_t buildingGraphOverlayLayers_=1;
     Json splineCache_;
     std::string splineDrag_, lastActionCaption_, hoverId_, pendingProject_;
+    // Scene-only drag scratch. Source of truth remains MapDoc; commit once
+    // on pointer release via the existing StudioSession Undoable RPC.
+    struct WorldProcessDrag {
+        bool active=false;
+        std::uint8_t mode=0;
+        std::string owner,component,key,targetType,previewTarget,label;
+        render::float3 previewPoint{};
+        float baseline=1.f,value=0.f,valueZ=0.f;
+        bool symmetric=false;
+        bool snap=false;
+        bool neighborSnap=false;
+        std::string snapTarget;
+        render::float3 snapGuideA{},snapGuideB{};
+        bool valid=false;
+    } wpDrag_;
+    // Repeated clicks at overlapping handles cycle through stable candidates.
+    std::string wpHitOwner_;
+    double wpHitX_=0,wpHitY_=0;
+    std::size_t wpHitOrdinal_=0;
+    Json wpNumericPreview_;
+    Json forestPlantArm_; // one-shot, bound to project/map/revision
+    StudioWorldProcessLiveOptions wpLiveOptions_;
+    double wpLiveRefresh_=0;
+    Json wpLiveSnapshot_;
+    Json wpForestRenderSnapshot_; // native-only; never returned by browser or MCP
+    std::string wpLivePlanetProject_,wpLivePlanetMapPath_;
+    uint64_t wpLivePlanetRevision_=0;
+    bool worldProcessPlanetMapCurrent() const;
+    std::string worldProcessSceneBody();
+    std::optional<StudioForestCameraFocus> worldProcessForestCamera();
+    Json sampleWorldProcessLive();
+    Json planetSceneBodyRequest(const Json& params);
+    Json planetForestLiveRequest();
+    Json planetViewAgentRequest(const std::string& name,const Json& params);
+    std::int64_t wpPreviewRevision_=-1;
+    std::string wpPreviewOwner_;
+    std::string wpPreviewSelection_;
+    bool wpCustomPivot_=false;
+    render::float3 wpGroupPivot_{};
+    std::vector<std::string> wpPivotSelection_;
     unsigned lightingStatusTicks_ = 0;
     int lastLoadDone_ = -1, lastLoadTotal_ = -1;
     double lastCameraYaw_ = 0, lastCameraPitch_ = 0, lastCameraDistance_ = 0;
     bool lastCameraOrtho_ = false, cameraSent_ = false;
     // sceneMouse state (shells that use the neutral mapping)
-    struct { double pressX = 0, pressY = 0; bool dragged = false, move = false, stroke = false, spline = false, marquee = false, active = false; } mouse_;
+    struct { double pressX = 0, pressY = 0; bool dragged = false, move = false, stroke = false, spline = false, worldProcess = false, forest = false, marquee = false, active = false; } mouse_;
     double lastHoverTime_ = 0;
 };
 

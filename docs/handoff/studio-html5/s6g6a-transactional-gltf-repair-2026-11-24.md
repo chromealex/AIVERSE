@@ -1,0 +1,13 @@
+# S6g.6.1 — transactional stationary glTF URI repair (2026-11-24)
+
+Owner Studio; branch feature/studio-html5. Base 8717b20c7aaea64f27cd3e148cbf219211ba0bac; roadmap aecf65be484885d351788941eee96f3e30532fd2; implementation 9a5f8b3b7fcac591d7044597fe58ea659cad0591; JSON mutable access fix 314c4308cd1700e8c4c7f007edab73ff2f2ced73; recovery fixtures c700346a27ec32542b3a9229c87feeeef81415c6.
+
+## Implementation
+- Typed stationary textual .gltf buffer/image URI repair uses actual complete selected move set, relative URI encoding, exact slot validation and bounded complete before/after document bytes. No arbitrary JSON path replacement. Unchanged resource resolutions and nonrepairable resource guards remain.
+- Native internal Studio transfer opts into repair only with retained history; legacy direct caller must opt in. Existing linked MCP move uses same native owner. Preview includes repairCandidate, UI explains repair and reports repaired document count.
+- ProjectHistory MovePlan retains project-relative resourceEdits with memory budget accounting. Asset history checkpoint encodes/decodes bounded repair entries; rejects overlap with move endpoints. Individual replay validates exact baseline and semantic equivalence of typed resolved slots while restoring original formatting.
+- Existing StudioMoveJournal v4 records stationary resource edits; nested existing-file journal publishes resource bytes, outer rollback restores exact original bytes and relocation paths. Existing v1–v3 recovery retained. Unsupported path overlap rejected.
+- Regression scenarios: auto repair, exact undo/redo, reopened checkpoint, callback failure rollback and direct pending-v4 crash recovery; existing test targets reused. Skill and MCP docs updated.
+
+## Evidence / limitations
+GitHub changes committed and read back; source review caught immutable Json operator[] assignment and corrected to at(). C++ build, CTest, frontend checks, native MCP transport, crash fault injection execution, Mac UI and performance NOT RUN. No main merge. This is the first repair substage, not all formats or all move cases. Only stationary lowercase textual .gltf owners supported; moving models requiring rewritten bytes, binary GLB and OBJ/MTL/DAE editing, map/rules repair, coordinated batch replay of repaired moves, and noncooperating concurrent writers remain unsupported. Full graph still has coverage gaps. History can remain fenced if crash interrupts checkpoint publication. Next S6g.6.2: moved-owner repair and digest-aware relocation journal, additional typed format repairs; then dependent chain and durable cross-owner save work. Final QA required.

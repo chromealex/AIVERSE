@@ -124,6 +124,199 @@
           "titleEn": "TerraWeave Caverns",
           "text": "Проверка подземной геометрии, навигации, входов и восстановления на объединённой ветке.",
           "textEn": "Verify underground geometry, navigation, entrances and restore on the integrated branch."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: MCP Live и камера",
+          "titleEn": "Planetary forest: linked MCP live and camera",
+          "text": "Stage 161D5d: авторизованные Live-снимки, выбор тела, камера; операции представления вне истории карты.",
+          "textEn": "Stage 161D5d: authenticated live snapshot, body and camera operations; transient view changes outside map history."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: MCP-редактирование",
+          "titleEn": "Planetary forest: MCP authoring",
+          "text": "Stage 161D5c: общие операции Workspace, проверка ревизии, создание, перемещение и удаление растений, полная конфигурация и история.",
+          "textEn": "Stage 161D5c: shared Workspace operations, revision checks, plant create/move/remove, complete configuration and history."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: пространственная выборка камеры",
+          "titleEn": "Planetary forest: camera-prioritized live sampling",
+          "text": "Stage 161D5b: приоритет видимой области, ближайшие растения и реальные позиции упавших стволов, общий лимит.",
+          "textEn": "Stage 161D5b: viewport priority, nearby plants and actual fallen log positions within shared bounds."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: выбор тела и перетаскивание",
+          "titleEn": "Planetary forest: body selector and drag relocation",
+          "text": "Stage 161D5a: независимый выбор тела, предварительная геометрия перемещения и одна транзакция на отпускании мыши.",
+          "textEn": "Stage 161D5a: independent body selection, relocation preview and one transaction on pointer release."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: живой рельеф и выборка активного тела",
+          "titleEn": "Planetary forest: live terrain and active body sampling",
+          "text": "Stage 161D4c3: ограниченный снимок высот Surface, отдельный GPU-меш, приоритет активного тела.",
+          "textEn": "Stage 161D4c3: bounded Surface height snapshot, separate GPU mesh, active body priority."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: обновление материалов и штормовой ветер",
+          "titleEn": "Planetary forest: texture refresh and storm presentation",
+          "text": "Stage 161D4c2: отслеживание PBR-файлов, видовые материалы брёвен, PHYSIS штормы в касательной системе, частичная сезонная прозрачность.",
+          "textEn": "Stage 161D4c2: PBR file tracking, species log materials, tangent-space PHYSIS storms, partial seasonal opacity."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: ветер и сезонная листва PHYSIS",
+          "titleEn": "Planetary forest: PHYSIS wind and seasonal canopy",
+          "text": "Stage 161D4c1: явные климатические привязки, локальный ветер в касательной системе, GPU-риг ARBOR, сезонный оттенок и сброс листвы.",
+          "textEn": "Stage 161D4c1: explicit climate anchors, tangent-space local wind, ARBOR GPU rig, seasonal tint and leaf suppression."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: объёмная Live-визуализация",
+          "titleEn": "Planetary forest: live mesh visualization",
+          "text": "Рост и отмирание из ECS, обнажённые корни и ветви упавших деревьев ARBOR в положении физического ствола.",
+          "textEn": "ECS growth and mortality, exposed roots and fallen ARBOR branches aligned with the physical trunk pose.",
+          "id": "planet-forest-authoring"
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: объёмный ARBOR в Scene",
+          "titleEn": "Planetary forest: rendered ARBOR trees in Scene",
+          "text": "Stage 161D4a: общие прототипы ARBOR с тремя LOD, PBR-пакетами и сферическим размещением; ограниченный кеш GPU.",
+          "textEn": "Stage 161D4a: shared three-tier ARBOR prototypes, PBR texture sets and spherical placement; bounded GPU cache."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: выбор и перемещение в Scene",
+          "titleEn": "Planetary forest: Scene selection and relocation",
+          "text": "Stage 161D3: выбор стабильного species/key, подсветка, перемещение одним кликом через MapDoc, отмена и Undo.",
+          "textEn": "Stage 161D3: stable species/key picking, highlighting, one-click relocation via MapDoc, cancellation and Undo."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: live-диагностика ECS",
+          "titleEn": "Planetary forest: completed-tick ECS diagnostics",
+          "text": "Stage 161D2b: положения корней и физических капсул из авторитетного снимка, переключатель Live, общие лимиты.",
+          "textEn": "Stage 161D2b: root positions and physical capsules from authoritative snapshot, Live toggle and shared budgets."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: нативная диагностика геометрии",
+          "titleEn": "Planetary forest: native geometry diagnostics",
+          "text": "Stage 161D2a: линии реального прототипа ARBOR, корневая опора и контур проектной капсулы на активном теле; отдельный лимит геометрии.",
+          "textEn": "Stage 161D2a: actual ARBOR prototype branches, root footprint and authored capsule outline on active body; independent geometry budget."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: редактирование размещения и выбор текстур",
+          "titleEn": "Planetary forest: placement editing and texture folder picker",
+          "text": "Stage 161D1: редактируемые body/face/x/y, переключение marker/direct, выбор папки content через Assets; сохранение и Undo через существующий валидатор. Геометрические оверлеи отдельно.",
+          "textEn": "Stage 161D1: editable body/face/x/y, marker/direct conversion, content folder choice from Assets; existing validator and Undo. Geometry overlays separately."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: посадка на поверхности Scene",
+          "titleEn": "Planetary forest: direct Scene planting",
+          "text": "Stage 161C: канонические body/face/x/y без служебных ECS-объектов, one-shot Scene pick, Undo.",
+          "textEn": "Stage 161C: canonical body/face/x/y without artificial ECS markers, one-shot Scene pick, Undo."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: Studio и Inspector",
+          "titleEn": "Planetary forest: Studio and Inspector",
+          "text": "Stage 161A: редактирование карты, общий валидатор профилей и экологии, выбор существующих маркеров, диагностика живого ECS.",
+          "textEn": "Stage 161A: map authoring, shared profile/ecology validation, existing marker selection, live ECS diagnostics."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: статические коллайдеры и завершение падений",
+          "titleEn": "Planetary forest: static collision and pending fall lifecycle",
+          "text": "Stage 160: обновление коллайдеров роста, переход к динамическому телу, завершение истраченных событий.",
+          "textEn": "Stage 160: growth collision updates, dynamic handoff and spent pending receipts."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: коллайдеры из скелета ARBOR",
+          "titleEn": "Planetary forest: ARBOR skeleton-derived collision",
+          "text": "Stage 159: точные вид и seed, размеры ствола, возраст и остаточная масса при падении.",
+          "textEn": "Stage 159: exact species and seed, trunk dimensions, age and remaining mass at fall."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: физический хост",
+          "titleEn": "Planetary forest: physics host",
+          "text": "Stage 158: явный single-authority native host, отдельные сцены тел, существующие коллайдеры и checkpoint.",
+          "textEn": "Stage 158: explicit single-authority native host, body-scoped scenes, existing collision and checkpoint owners."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: удаление разложившихся физических тел",
+          "titleEn": "Planetary forest: spent physical body retirement",
+          "text": "Stage 157: удаление по нулевому остатку древесины и точной подтверждённой квитанции; сохранение баланса и rollback.",
+          "textEn": "Stage 157: retire on zero remaining wood and exact acknowledged receipt; preserve ledger and rollback."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: падение после естественной гибели",
+          "titleEn": "Planetary forest: natural mortality fall",
+          "text": "Stage 156: опциональный порог остатка древесины, существующий root fall outbox и PHYSIS, физический владелец принимает событие.",
+          "textEn": "Stage 156: optional remaining wood threshold, existing root fall outbox and PHYSIS; physical owner consumes the event."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: интерполяция физических поз",
+          "titleEn": "Planetary forest: physical pose interpolation",
+          "text": "Stage 155: последовательные подтверждённые позы, без экстраполяции и с учётом rollback и видимости.",
+          "textEn": "Stage 155: consecutive confirmed poses, no extrapolation, with rollback and visibility guards."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: авторские виды ARBOR",
+          "titleEn": "Planetary forest: authored ARBOR species",
+          "text": "Stage 154: общая схема видов TerraWeave, пользовательские профили и текстуры, привязка по ID.",
+          "textEn": "Stage 154: shared TerraWeave species schema, custom profiles and textures, binding by ID."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: видимость по Fog of War",
+          "titleEn": "Planetary forest: fog-of-war visibility",
+          "text": "Stage 153: отображать текущее состояние только в видимых ячейках, без истории и без раскрытия скрытых изменений через декоративные деревья.",
+          "textEn": "Stage 153: publish current state only in visible cells, without history or exposing hidden changes through decorative trees."
+        },
+        {
+          "status": "in-progress",
+          "target": null,
+          "title": "Планетарный лес: визуализация разложения и точная привязка падений",
+          "titleEn": "Planetary forest: decay presentation and exact fall binding",
+          "text": "Stage 152: толщина древесины из текущего остатка, привязка физического тела к конкретной квитанции падения. Проверка сборки и GPU ещё требуется.",
+          "textEn": "Stage 152: wood thickness from remaining mass, physical body matched to the exact fall receipt. Build and GPU verification still required."
         }
       ],
       "taglineEn": "Procedural terrain and nature",
@@ -366,6 +559,15 @@
         "Править уклон и течение реки в редакторе и размывать берега вместе с TerraWeave."
       ],
       "roadmap": [
+        {
+          "status": "in-progress",
+          "date": "2026-11-24",
+          "title": "Сборка каскадов GCC 13 arm64",
+          "id": "nereid-gcc13-arm64-build",
+          "text": "Устранить предупреждение maybe-uninitialized при обновлении каскадов и подтвердить регрессию.",
+          "titleEn": "GCC 13 arm64 cascade build",
+          "textEn": "Resolve the maybe-uninitialized diagnostic while updating cascades and verify the regression."
+        },
         {
           "status": "done",
           "date": "2026-11-18",
@@ -1711,6 +1913,16 @@
         "Assemble mechanics from ready systems instead of writing them per game.",
         "Give every player and the replay the same match outcome.",
         "Save and load a match at any moment."
+      ],
+      "roadmap": [
+        {
+          "id": "fixed-spatial-algorithms",
+          "status": "in-progress",
+          "text": "Математика с фиксированной точкой, пространственные запросы и пакетный шум для систем симуляции.",
+          "textEn": "Fixed-point math, spatial queries and batched noise for simulation systems.",
+          "title": "Математика симуляции",
+          "titleEn": "Simulation math"
+        }
       ]
     },
     {
@@ -2641,6 +2853,38 @@
           "target": null,
           "title": "Читаемые узлы и связи графов",
           "titleEn": "Readable graph nodes and connections"
+        },
+        {
+          "id": "studio-linked-asset-mcp",
+          "title": "MCP для ассетов и восстановления",
+          "titleEn": "Linked asset and recovery MCP",
+          "text": "S6i: чтение графа, корзины и квот; обратимое удаление по GUID, подтверждённое восстановление, явные границы необратимых операций.",
+          "textEn": "S6i: graph, trash and quota readback; GUID-based reversible deletion, confirmed restore, linked agent-owned history navigation and explicit availability metadata.",
+          "status": "in-progress"
+        },
+        {
+          "id": "studio-recovery-storage-quota",
+          "title": "Квоты восстановления Studio",
+          "titleEn": "Studio recovery storage quotas",
+          "text": "S6h: учёт сохранённых данных и журналов, проектный лимит, защита восстановления и явная очистка без автоудаления.",
+          "textEn": "S6h: account retained data and journals, project budget, history-protected reviewed batch purge and staging-space preflight without automatic deletion.",
+          "status": "in-progress"
+        },
+        {
+          "id": "studio-asset-dependency-graph",
+          "title": "Граф зависимостей ассетов",
+          "titleEn": "Asset dependency graph",
+          "text": "S6g: точные ссылки в картах и ресурсы glTF, прямые и обратные зависимости, безопасный предварительный просмотр; без автоматической перезаписи неизвестных зависимостей.",
+          "textEn": "S6g.6.5: streaming large GLB repair, compact JSON-prefix history, tail identity and durable staged publication.",
+          "status": "in-progress"
+        },
+        {
+          "id": "studio-map-history-transactions",
+          "title": "Транзакции и история редактора",
+          "titleEn": "Editor history and transactions",
+          "text": "Атомарные составные изменения карты, устойчивые метки истории и защита от устаревших переходов.",
+          "textEn": "S6f.3.4a: mixed exact-endpoint directory chains, nested GUID checks and self-contained glTF/GLB version transitions; external-resource topology fenced.",
+          "status": "in-progress"
         }
       ],
       "enablesEn": [
@@ -2853,6 +3097,15 @@
           "titleEn": "One loading screen in every project",
           "text": "Экран загрузки движка теперь и в FPS, и в воксельных проектах; проект в game.json оставляет его, меняет отдельные поля, ставит свой или убирает совсем.",
           "textEn": "The engine loading screen now also runs in FPS and voxel projects; in game.json a project keeps it, changes single fields, sets its own or removes it entirely."
+        },
+        {
+          "status": "done",
+          "date": "2026-11-25",
+          "target": null,
+          "title": "Ограничить очередь проверок GitHub Actions",
+          "titleEn": "Bound the GitHub Actions check queue",
+          "text": "Новые коммиты PR отменяют устаревшие проверки той же ветки; публикация сайта сохраняется.",
+          "textEn": "New PR commits cancel stale checks for the same branch while site publication remains unaffected."
         }
       ]
     },
@@ -2991,6 +3244,13 @@
           "text": "Положительный период оружия переносит остаток времени между выстрелами. Проверяем чтение прежних сохранений Arsenal.",
           "titleEn": "Fractional weapon cooldowns",
           "textEn": "Positive weapon periods carry elapsed time between shots. Verify compatibility with existing Arsenal saves."
+        },
+        {
+          "status": "in-progress",
+          "title": "Строительная сетка",
+          "text": "Координаты и привязка ячеек, поворот footprint и проверка размещения через общую библиотеку construction.",
+          "titleEn": "Construction grid",
+          "textEn": "Cell coordinates and snapping, rotated footprints and placement checks through the shared construction library."
         },
         {
           "status": "in-progress",

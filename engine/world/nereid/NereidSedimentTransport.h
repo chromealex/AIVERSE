@@ -54,6 +54,21 @@ inline uint32_t absoluteFlowCmPerSec(Fixed flow){
         50000ull:(raw*100ull+Fixed::kOne/2)/Fixed::kOne;
     return uint32_t(speed);
 }
+// Shared fractional advection kernel. distance is in centimetres, velocity
+// is Fixed m/s. Split the volume product to avoid overflow for cm^3 banks.
+inline uint64_t transferFractionMicro(Fixed velocity,uint32_t distanceCm,uint32_t dtMs){
+    if(!distanceCm)return 0;
+    constexpr uint64_t micro=1000000;
+    const auto bounded=std::min<uint64_t>(absoluteRaw(velocity.raw),50000ull*Fixed::kOne/100);
+    return std::min<uint64_t>(micro,bounded*100ull*dtMs*1000ull/
+        (uint64_t(Fixed::kOne)*distanceCm));
+}
+inline uint64_t fractionalTransfer(uint64_t amount,uint64_t fraction,uint32_t& carry){
+    constexpr uint64_t micro=1000000;
+    const uint64_t remainder=(amount%micro)*fraction+carry;
+    carry=uint32_t(remainder%micro);
+    return (amount/micro)*fraction+remainder/micro;
+}
 } // namespace sediment_detail
 
 inline SedimentTransportStep advectSuspendedSediment(
@@ -127,20 +142,11 @@ inline SedimentTransportStep advectSuspendedSediment(
         // 100cm cell and 16ms tick). Keep sub-centimetre mass in MICRO-cm
         // units, using Fixed raw velocity before rounding to cm/s.
         // 1m/s on a 1m grid over 16ms -> fraction 16000/1e6.
-        constexpr uint64_t kMicro=1000000ull;
-        const uint64_t raw=sediment_detail::absoluteRaw(
-            alongX?source.flow.x.raw:source.flow.z.raw);
-        const uint64_t bounded=std::min<uint64_t>(
-            raw,50000ull*Fixed::kOne/100);
-        const uint64_t fraction=std::min<uint64_t>(kMicro,
-            bounded*100ull*dtMs*1000ull/
-            (uint64_t(Fixed::kOne)*uint64_t(gridSpacingCm)));
-        const uint64_t request=
-            uint64_t(source.suspendedCm)*fraction+
-            source.carryMicroCm;
+        const auto fraction=sediment_detail::transferFractionMicro(
+            alongX?source.flow.x:source.flow.z,uint32_t(gridSpacingCm),dtMs);
         const uint32_t desired=uint32_t(std::min<uint64_t>(
-            settings.maxTransferCmPerTick,request/kMicro));
-        source.carryMicroCm=uint32_t(request%kMicro);
+            settings.maxTransferCmPerTick,
+            sediment_detail::fractionalTransfer(source.suspendedCm,fraction,source.carryMicroCm)));
         // Conservative target capacity, intentionally not counting its
         // simultaneous outgoing transfer as free space. This costs some
         // throughput at a full estuary but guarantees no overflow.

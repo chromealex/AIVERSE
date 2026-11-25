@@ -1,0 +1,8 @@
+# Stage 144 — durable planetary physical consequence delivery
+Date: 2026-11-24. Base c8a7461b2af1f19c88318da29f742fe7bf770ed0. Branch feature/world-processes-stage31-bidirectional-handles.
+
+EVOLVE gains opt-in persisted PlanetRootDeliveryResource with sorted complete root placement bindings and bounded fall events, acknowledgement tombstones and retry/rollback semantics. Existing TerraWeave rooted state remains authoritative; append fall events and commit support state on the same staged World. Stable key species/key/tick/terrainRevision. Explicit owner mapping API validates complete population and bodies; no guessed planar coordinates. Existing direct root adapter callers without resource retain previous output contract.
+
+PlanetPhysicalDelivery.h enumerates selected body FRACTURE existing pending receipts and EVOLVE plant falls, supports atomic owner callbacks + acknowledgements. PHYSIS primary outbox overlap remains excluded by the existing FRACTURE adapter. No native handles in persistence; no spawn/ack before owner durable consequence. Automatic bank config rootFalls:true registers delivery resource and accepts rooted population only once the owner has registered complete spherical bindings, appending all falls in the bank batch. Empty/malformed mapping rejects. Event budget 16384 including tombstones; no automatic pruning.
+
+Fixture extended for binding, once-only fall, reject/retry/ack and rollback. No compile/test execution. Actual durable shape/motion owner, original collider/navmesh removal, Box3D plant publishing and automatic delivery callbacks are NOT implemented here. Owner must register bindings and supply callbacks; callbacks must not acknowledge without durable effect. No main merge.

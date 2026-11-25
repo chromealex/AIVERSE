@@ -49,6 +49,7 @@ struct Query {
     float stepTop; // motor-local y: an edge above this is a wall
     MotorBasis basis;
     bool freeMotion=false;
+    bool allowGround=true;
 };
 
 bool accept(b3ShapeId shape, BodyHandle self) {
@@ -115,7 +116,7 @@ float rayFcn(b3ShapeId shape, b3Pos, b3Vec3 normal, float fraction, uint64_t, in
 // A contact under the lower cap is ground when its plane is walkable, or when it is the edge of a
 // walkable top (a step or a ledge corner): a short ray just past the edge finds that top.
 bool walkable(const Query& q, b3Vec3 pos, const PlaneHit& h, float cosMax, b3Vec3* surface) {
-    if (h.point.y > q.capsule.center1.y + 1e-4f || h.plane.normal.y <= 0) return false;
+    if (!q.allowGround || h.point.y > q.capsule.center1.y + 1e-4f || h.plane.normal.y <= 0) return false;
     if (h.plane.normal.y >= cosMax) { if (surface) *surface = h.plane.normal; return true; }
     if (pos.y + h.point.y > q.stepTop) return false;
     float l = lenXZ(h.point);
@@ -133,6 +134,7 @@ struct Ground { bool found = false; b3BodyId body = b3_nullBodyId; b3Vec3 point{
 
 // Walkable surface within kSkin under the lower cap.
 Ground probe(const Query& q, b3Vec3 pos, float cosMax) {
+    if (!q.allowGround) return {};
     Query wide = q;
     wide.capsule.radius += kSkin;
     Planes planes;
@@ -156,7 +158,7 @@ enum class Mode { Walk, Fall };
 // planes, so gravity slides down steep slopes and ceilings stop jumps.
 b3CollisionPlane solverPlane(const Query& q, b3Vec3 pos, const PlaneHit& h, Mode mode, float cosMax) {
     b3CollisionPlane cp{h.plane, FLT_MAX, 0, true};
-    if (mode == Mode::Fall) return cp;
+    if (mode == Mode::Fall || !q.allowGround) return cp;
     float ny = h.plane.normal.y;
     if (ny > 0 && walkable(q, pos, h, cosMax, nullptr)) {
         cp.plane = {{0, 1, 0}, ny >= cosMax ? h.plane.offset / ny : 0.0f};
@@ -224,7 +226,7 @@ CharacterInput CharacterInput::unpack(const uint8_t* data, size_t size) {
 }
 
 static void stepCharacterLocal(b3WorldId world, const CharacterParams& p, CharacterState& st, const CharacterInput& in, float dt, Pushes* out,
-                   BodyHandle self,const MotorBasis& basis) {
+                   BodyHandle self,const MotorBasis& basis,bool allowGround=true) {
     if (out) out->clear();
     st.groundTurn = 0;
     if (!b3World_IsValid(world) || !validParams(p) || !finite(st.position, kMaxCoord) || !inRange(dt, 1e-5f, 0.1f)) {
@@ -234,7 +236,7 @@ static void stepCharacterLocal(b3WorldId world, const CharacterParams& p, Charac
     if (!finite(st.velocity, p.maxSpeed * 2)) st.velocity = {0, 0, 0};
     const float cosMax = std::cos(p.maxSlope);
     const b3Vec3 start = st.position;
-    const Query q{world, {kCategoryQuery, p.mask, 0, nullptr}, self, characterCapsule(p), start.y + std::max(0.0f, p.stepHeight - 0.01f),basis};
+    const Query q{world, {kCategoryQuery, p.mask, 0, nullptr}, self, characterCapsule(p), start.y + std::max(0.0f, p.stepHeight - 0.01f),basis,false,allowGround};
 
     // Ground at the start: walkable surface and its velocity (moving platforms carry the character).
     Ground g0 = probe(q, start, cosMax);
@@ -383,14 +385,23 @@ void stepCharacter(b3WorldId world,const CharacterParams& p,CharacterState& st,c
 }
 bool stepCharacterOriented(b3WorldId world,const CharacterParams& p,CharacterState& st,const CharacterInput& in,float dt,
                            b3Quat localToWorld,Pushes* out,BodyHandle self){
+    return stepCharacterOriented(world,p,st,in,dt,localToWorld,true,out,self);
+}
+bool validCharacterOrientation(b3Quat q){
+    const float n=b3DotQuat(q,q);
+    return std::isfinite(n)&&std::abs(n-1.f)<.001f;
+}
+bool stepCharacterOriented(b3WorldId world,const CharacterParams& p,CharacterState& st,const CharacterInput& in,float dt,
+                           b3Quat localToWorld,bool allowGround,Pushes* out,BodyHandle self){
     if(out)out->clear();
     if(!b3World_IsValid(world)||!validParams(p)||!finite(st.position,kMaxCoord)||
-       !inRange(dt,1e-5f,.1f)||!b3IsValidQuat(localToWorld))return false;
+       !inRange(dt,1e-5f,.1f)||!validCharacterOrientation(localToWorld))return false;
+    localToWorld=b3NormalizeQuat(localToWorld);
     const MotorBasis basis{st.position,localToWorld};
     CharacterState local=st;local.position={0,0,0};
     local.velocity=basis.toLocalVector(st.velocity);
     Pushes pushes;
-    stepCharacterLocal(world,p,local,in,dt,out?&pushes:nullptr,self,basis);
+    stepCharacterLocal(world,p,local,in,dt,out?&pushes:nullptr,self,basis,allowGround);
     local.position=basis.toWorldPoint(local.position);
     local.velocity=basis.toWorldVector(local.velocity);
     if(!finite(local.position,kMaxCoord)||!finite(local.velocity,1000))return false;

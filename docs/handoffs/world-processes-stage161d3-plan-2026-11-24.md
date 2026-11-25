@@ -1,0 +1,2 @@
+# Stage 161D3 — delivery record
+Explicit one-shot pick mode from forest inspector, native authored overlay identity + occlusion-aware screen selection, selected highlight, inspector readback, one-shot direct relocation by stable species/key in existing MapDoc validator. Marker-bound plants must be explicitly converted first; no moving shared entities. Revision/project/path checks, cancel, no undo for picking or invalid edit. No drag preview or live mutations. Acceptance deferred to Mac. Next: textured ARBOR preview.

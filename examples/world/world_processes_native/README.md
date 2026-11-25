@@ -1,0 +1,358 @@
+# AIVERSE — MORPH + GRANULAR physical native host
+
+This is an **opt-in** integration layer above the engine. It reuses the
+canonical ECS World, Box3D Scene, Renderer3D, GPU Device, and TerraWeave soil
+authority. It does not implement another physics or renderer.
+
+## Native files and actual APIs
+
+| Header | Purpose |
+|---|---|
+| MorphModelStream.h | Morph real imported ModelVertex data per visual instance through the existing full vertexOverride path |
+| MorphBox3DContactBridge.h | Quantize real Box3D begin contacts into replayable one-shot MORPH Impact inputs |
+| GranularTerraWeaveBinding.h | Bake a 2D granular field into render MeshBuilder slabs and matching Box3D static top triangles, sampling TerraWeave EarthworksLayer |
+| GranularWorldIntegration.h | Stage 16x16 resident tiles from one completed ECS+soil state and publish separately on Box3D and GPU threads |
+| GranularTerraWeaveTransfer.h | Dig/Fill real TerraWeave authoritative ECS soil and debit/credit GRANULAR cell mass using exact movedVolumeCm3 |
+| PhysicalSceneHost.h | Convenience host facade for the above lifecycle, rollback invalidation and shutdown |
+
+The minimal module in examples/native/world_processes does **not** link
+Box3D or Renderer3D. A native game that wants physical presentation must
+also include this directory and link its own scene host target against
+the existing render/model and optional AIVERSE::physics libraries.
+
+## Example lifecycle (native project C++20)
+
+~~~cpp
+#include "examples/world/world_processes_native/PhysicalSceneHost.h"
+using namespace aiverse;
+using namespace aiverse::examples::world_processes_native;
+
+// Your existing host owns the Simulation, gfx::Device, Renderer3D,
+// physics::Scene, terrain ECS authority and source imported Model.
+PhysicalSceneHost processes;
+
+// Before uploadModel, set model.batching.allowGeometryPool=false.
+// Retain original ModelVertex + index spans and map model-relative
+// vertex indices to MORPH Entity IDs with 16-bit normalized weights.
+processes.addMorphVisual(instanceId, device, model,
+                         pristineVertices, sourceIndices, influences);
+
+// AFTER authoritative Box3D scene.step() (not on other clients):
+std::vector<MorphContactInput> contacts;
+processes.collectMorphPhysicsInputs(scene, simulation.world(),
+                                    rigidBodyToMorphNode,
+                                    nextEcsTick, contacts);
+// Record/replicate these integer inputs in the existing replay channel.
+// BEFORE the matching MORPH tick:
+processes.applyRecordedMorphInputs(simulation.world(), contacts, nextEcsTick);
+
+// AFTER completed gameplay tick, with the matching TerraWeave soil revision:
+auto frame=processes.prepareGranular(simulation.world(),
+                                    earthworks, residentTiles,
+                                    granularPlacements, simulation.tick());
+// Box3D owner thread, between Scene::step() calls:
+if (!processes.publishPhysics(scene, frame)) {
+    // Gate game physics until publication is repaired.
+}
+// Graphics owner thread, between Renderer3D render frames:
+if (!processes.publishRender(device, frame)) {
+    // Keep last valid frame and retry.
+}
+
+// During the renderer's normal scene frame:
+processes.updateMorphVisuals(simulation.world());
+renderer.beginScene(camera, viewportWidth, viewportHeight);
+render::ModelDraw draw;
+draw.model=&model;
+draw.world=modelTransform;
+processes.attachMorphVisual(instanceId, draw);
+renderer.drawModel(draw);
+processes.drawGranular(renderer);
+renderer.render(pass);
+
+// Optional TerraWeave Dig/Fill (authoritative ECS World barrier):
+GranularTerraTransfer transfer;
+transfer.field=fieldEntity;
+transfer.x=0;transfer.row=0;
+transfer.mode=terraweave::EarthworkMode::Fill;
+GranularTerraTransferResult output;
+processes.transferTerrainMass(simulation.world(), terrainConfig,
+                              transfer, simulation.tick(), output);
+
+// After rollback/load to an earlier tick, rehydrate all derived patches:
+processes.resetAfterRollback(scene,device);
+terraBinding.reconcile(simulation.world(),worldScene,true);
+// Then prepare/publish new GRANULAR tiles from the restored World.
+// On scene shutdown, after last draw has been retired:
+processes.shutdownAfterIdle(scene,device);
+~~~
+
+Variable names such as model, earthworks, residentTiles, camera, pass,
+scene, device and simulation are intentionally supplied by the concrete
+project host. Including these headers alone does not auto-create a Box3D
+Scene or bind every game object.
+
+## Invariants
+
+- Box3D is the only rigid solver. MORPH vertex skinning updates the real
+  Renderer3D ModelDraw presentation stream. A coarse kinematic collider is
+  available, but collision triangles do NOT automatically deform per vertex.
+- MORPH uses packed generation-safe Entity references. Contacts are
+  quantized on the authoritative server and recorded before they become
+  one-shot ECS impacts. Never rerun float Box3D on each network client.
+- GRANULAR field rows map to a local authored downstream (+Z) axis. They
+  do not infer the full 3D terrain gradient or replace TerraWeave slope
+  erosion. Existing Earthworks provides all ground heights.
+- GRANULAR physics is a sparse static top-surface overlay above the real
+  TerraWeave collider. Actual Dig/Fill edits use the existing authoritative
+  TerraWeave ECS resource, not the renderer's height field.
+- The host must gate simulation and presentation when a multi-tile batch
+  partially fails to publish; every individual tile preserves its old
+  collider on allocation failure.
+- Separate renderer and Box3D lifetime fences matter. Recreate publishers
+  after rollback to an earlier tick rather than reusing future revisions.
+- Local prefab/game-specific visual/physics bindings and content import
+  remain the host's responsibility. There is no engine-wide implicit opt-in.
+
+## Verification status
+
+At the user's request tests are deferred. These are committed source
+integrations, **not** verified Mac/Metal, Vulkan, GLES or Box3D runtime
+acceptance. No screenshots or passing CTest have been produced for the
+Stage17+ physical integration. Complete handoffs:
+docs/handoffs/world-processes-stage17-morph-render-box3d-2026-11-23.md
+docs/handoffs/world-processes-stage18-granular-terra-box3d-2026-11-23.md
+docs/handoffs/world-processes-stage19-physical-native-host-2026-11-23.md
+
+
+## CIRCUIT, EVOLVE and SOCIETY gameplay integration (Stage22–25)
+
+Include the new optional native facade:
+
+~~~cpp
+#include "examples/world/world_processes_native/WorldProcessGameplayHost.h"
+using namespace aiverse::examples::world_processes_native;
+WorldProcessGameplayHost bindings;
+
+// Connect a real existing Box3D kinematic door to its CIRCUIT Device Entity.
+CircuitDoorBinding door;
+door.body=realKinematicBodyHandle; // existing physics::Scene owner
+door.closedPosition={0,0,0};
+door.openPosition={0,4,0};
+bindings.circuitDevices().bindDoor(doorDeviceEntity,door);
+
+// Real project lighting/animation/pump/alarms and AI/quest owners supply
+// idempotent callbacks; this module does NOT create synthetic game objects.
+bindings.circuitDevices().setCallback(
+    [&](const CircuitDeviceAction& event) {
+        // Route event.device, event.kind and event.active to your existing
+        // light/animation/pump/audio/trigger system.
+        return applyExistingDeviceState(event);
+    });
+bindings.npcReactions().setDispatch(
+    [&](const NpcKnowledgeAction& event) {
+        // Route actionId, person, topics and transition to the existing
+        // behavior tree / dialogue / quest graph owner.
+        return dispatchExistingNpcEvent(event);
+    });
+
+// Player switch interaction at authoritative command barrier:
+bindings.setSwitch(sim.world(), switchEntity, true);
+
+// Optional PHYSIS source -> EVOLVE climate rates. Only after the PHYSIS and
+// EVOLVE owner entities exist and before the fixed tick system runs:
+evolve::ClimateLink climate;
+climate.rainEnrichment=100;
+climate.droughtConsumption=30;
+bindings.attachClimate(sim.world(),climateLinkEntity,
+                       regionEntity,physisCellEntity,climate);
+
+// Wrap the existing TerraWeave forest climate callback with EVOLVE region
+// effects (finite, world-centimetre bounds). It reuses the real ecology API.
+auto forestClimate=bindings.forestClimate(
+    sim.world(),
+    {{regionEntity,-10000,-10000,10000,10000,true}},
+    existingPhysisNereidClimateSampler);
+// Pass forestClimate into TerraWeave's existing advanceForestEcology(...).
+
+// AFTER the completed simulation tick: CIRCUIT outputs and SOCIETY trigger
+// results were written into the authoritative ECS:
+if(!bindings.reconcile(sim.world(),sim.tick(),&box3dScene))
+    gateGameplayOutputsAndRetry();
+
+// After rollback/load, reset external acknowledgements and reapply real
+// state from the restored World:
+bindings.resetAfterRollback();
+bindings.reconcile(sim.world(),sim.tick(),&box3dScene,true);
+~~~
+
+The identifiers realKinematicBodyHandle, doorDeviceEntity, switchEntity,
+sim, regionEntity, physisCellEntity, existingPhysisNereidClimateSampler,
+applyExistingDeviceState and dispatchExistingNpcEvent belong to your
+existing game host; the example does not invent an engine-wide singleton.
+
+CIRCUIT authored map schemas: CircuitNode/Wire/Gate/Switch/Device. Device
+kinds: generic(0), light(1), door(2), motor(3), pump(4), alarm(5).
+ECS systems are installed in phase order: switch inputs, power/logic solver,
+then device outputs. Box3D kinematic doors are moved only by the real native
+physics::Scene; the host callback owns the graphics/FX presentation.
+
+EVOLVE authored map schemas: EvolveRegion and EvolvePressure. A separate
+native PHYSIS ClimateLink is optional and must bind to **real** existing
+physis::Atmosphere + Surface ECS entities. The EVOLVE region then limits the
+real TerraWeave forest ecology nutrient and light climate sampler without
+replacing the TerraWeave plant registry.
+
+SOCIETY authored map schemas: SocietyPerson/Contact/Message/NpcTrigger.
+NpcTrigger has stable person ID, nonzero knowledge-topic hex mask,
+positive actionId, condition mode, once and enabled. The SOCIETY system
+records stable transition counters; its native callback routes to the
+project's actual NPC/quest systems and should dedupe by trigger Entity
+generation plus transition number.
+
+Source code only; these new stages have **not** been compiled or run under
+the user's deferred-testing instruction. Refer to handoffs stages 22–25.
+
+
+## Studio Scene gizmos and all-ten showcase generator (Stages 26–27)
+
+The **existing** Studio native Scene viewport now uses
+`apps/studio-native/StudioWorldProcessesGizmos.h` inside
+`StudioHost::rebuildOverlay()`. This is the same real
+`StudioScene::OverlayShape` renderer that already shows
+Lua extension gizmos and spline handles. It reads the actual
+MapDoc-authoring components and draws bounded, colored lines/points/rings:
+
+- MORPH cyan nodes, anchored rings, springs and impulse targets.
+- CROWD green agents, goals and preferred slots.
+- IMPRINT orange cell traces, diffusion links, trackers.
+- CIRCUIT yellow graph wires, switches and devices.
+- GRANULAR bounded sandy field rectangle and label.
+- EVOLVE region circle and pressure connections.
+- SOCIETY contacts, messages and NPC trigger targets.
+
+EVOLVE circle radii and GRANULAR grid cell sizes are **editor
+visual aids**, not automatically authoritative climate/terrain bounds.
+The optional `DocEntity.extra.worldProcessGizmo.radiusMetres`
+and `cellSizeMetres` metadata configure the drawing only.
+Full runtime simulation still uses existing native host data.
+
+### Generate a valid project copy
+
+Use an existing game with valid source maps, rules, non-collider
+entity types and assets. The Python generator **never overwrites
+your original project or an existing destination**:
+
+~~~sh
+python3 examples/world/world_processes_native/create_showcase.py \
+  --source-project /path/to/ExistingGame \
+  --source-map maps/duel.json \
+  --destination /path/to/AiverseWorldProcessesShowcase \
+  --carrier-type VALID_SPAWNABLE_NON_COLLIDER_TYPE \
+  --owner 0
+~~~
+
+The generator copies that game project, adds
+`maps/world_processes_showcase.json` with 10-mechanic
+components from the checked-in
+`examples/native/world_processes/authoring-examples.json`,
+and appends the new map to the copied `game.json`.
+It enables the `world_processes` native-module declaration in
+the copied rules; a native game host **must actually compile/link**
+the module from `examples/native/world_processes/`.
+`VALID_SPAWNABLE_NON_COLLIDER_TYPE` must be a **real** entity type
+already defined by that game's rules. A collider-only type has no live
+GameCore ECS Entity and will fail map hydration.
+
+Use Studio to open the generated project and choose the new map.
+The physical MORPH/GRANULAR scene host and native device/NPC owner callbacks
+are optional additional integrations; this script does not manufacture
+a production-ready PBR/Box3D game or invent missing native asset types.
+
+**Tests deliberately deferred.** No macOS/Vulkan Studio visual capture,
+Python generator execution, native CMake build or playable-game acceptance
+has yet verified this Stage26/27 source.
+
+## Authoritative EVOLVE areas and overlapping Studio handles (Stage30)
+
+An EVOLVE region now has a gameplay-affecting rectangular spatial footprint:
+add `EvolveArea` on the **same authored map entity** as `EvolveRegion`:
+
+```json
+{
+  "EvolveRegion": {
+    "durability": 1000000000,
+    "fertility": 500000000,
+    "succession": 0,
+    "pollution": 0,
+    "enabled": true
+  },
+  "EvolveArea": {
+    "halfWidthCm": 800,
+    "halfDepthCm": 500,
+    "enabled": true
+  }
+}
+```
+
+The area's center comes from the map entity's `pos`; the extents
+are persisted as `evolve::Area` ECS on that same live Entity and
+participate in save/load and rollback. Native host usage:
+
+```cpp
+// After map hydration and the completed EVOLVE tick:
+auto ecology = bindings.forestClimate(
+    sim.world(), existingPhysisNereidClimateSampler);
+// Pass ecology to TerraWeave's normal advanceForestEcology(...).
+```
+
+The `forestClimate(World&,baseline)` overload **reads the actual**
+`evolve::Area` ECS bounds and uses the existing
+`TerraWeaveForestEcology.h` callback; no manually synchronized
+region list is needed. The older explicit zones overload remains
+available for projects owning external region maps.
+
+In Studio, `EvolveArea` draws a world-space rectangle. Its
+X/Z handles update `halfWidthCm`/`halfDepthCm` through one
+`studio.worldProcessAreaSet` Undoable edit on release. A map with
+only `worldProcessGizmo.radiusMetres` still draws a visual-only
+legacy circle and does **not** define ecology coverage.
+Overlapping handles can be selected by repeated clicking near the
+same screen location; the active component/field is labeled.
+No tests have been executed on this stage per user request.
+
+## Stage 101: planetary render / physical owner adapters
+
+- `PlanetProcessGeometry.h` derives curved GRANULAR top quads and IMPRINT cell quads from canonical Surface, ECS position and completed tick. GRANULAR mass fraction controls radial fill height; explicit transverse thickness, shared column boundaries, outward winding. Not volumetric collision or actual terrain mutation.
+- `PlanetGranularIntegration.h` and `PhysicalSceneHost::preparePlanetGranular` build the existing immutable patch type with identical render and Box3D vertices/indices, revision signature and resident tile budgets. Existing publishers/fences remain sole owners. Simulation-space anchor coordinates only; orbital/camera-relative rebase and actual GameView attachment remain host work. On rollback reset the existing publisher before republishing older ticks.
+- MORPH `projectMorphContactDirection` and opt-in `collectPlanetMorphPhysicsInputs` reuse the existing owner frame (WorldTransform or surface yaw) for contact normals before quantization. Scene axes must match simulation axes. Record integer inputs at the existing authoritative replay barrier; never simulate Box3D on lockstep clients. Existing ModelStream is reused; deformation of rigid collision hull not implemented.
+- FRACTURE `PlanetFractureDelivery.h::projectPlanetCollapse` validates the existing pending event, reads frame and PHYSIS gravity, rejects overlapping active PHYSIS primary fracture outbox. No spawn or acknowledgement. Physical owner must durably commit/deduplicate before acknowledging existing event. Use existing `physics::applyPhysisToBody` once before each Box3D step for dynamic bodies in canonical simulation coordinates; never add full gravity again.
+- IMPRINT quad is a read-only overlay packet; host still owns visibility/material/upload/drawing. Actual planet client integration, GPU/Box3D acceptance, dynamic fracture debris and terrain/lifecycle owner dependencies remain open. Build/tests NOT RUN.
+
+## Planetary physical composition (Stage 126)
+
+Include `PlanetProcessHost.h` in a project already owning the real Scene, Device and Simulation. For each completed tick use `PlanetHostStamp{epoch, terrainRevision, sim.tick()-1, bodyId}` and the canonical immutable shared Surface. Call `prepare`, `publishPhysics`, publish/retire durable debris projections as needed, then `stepPhysics` with existing characters and MORPH contact mappings. Use `recordContacts` to durably record the copied next-tick MORPH inputs; feed them via `enqueueMorphContactInputs` before that tick. Do not also call Scene::step separately. `publishRender` publishes the same frozen geometry, and `updateMorph` / `attachMorph` / `drawGranular` use the matching body frame. For CPU-only hosts use `skipRender` instead; cannot skip once a GPU owner is registered. Complete requires both record and render acknowledgements. On failure after side effects stop and restore/reconcile physics before resetting. On epoch/body switch reset; before destruction explicitly shutdown. Native owner thread serialization and GPU fences are caller obligations. No automatic physics activation in the minimal native module. The optional CTest `world_processes_planet_host_test` is a CPU/Box3D fixture; GPU and production host acceptance remain unverified. See Stage126 handoff.
+
+### Stage 128: authoritative debris motion handoff
+
+After `stepPhysics`, call `recordPhysicsOutputs(stamp, contacts, debrisStates)` via its callback: persist the copied MORPH input and handle-free debris state in one native owner transaction, deduplicated by epoch/body/completed tick. `recordContacts` is only valid when no live debris was captured. Rejected callbacks retry the same immutable batch without stepping again. Restore the existing durable shape record with `restorePlanetDebrisMotion` before republishing after reset. Position uses canonical Fixed coordinates, rotation/velocity are native Box3D outputs; this is not a lockstep deterministic solver or a complete physics world checkpoint. Owner still persists shape, removes original support colliders and reconciles rollback; no new ECS resource. Tests authored, not run.
+
+### Stage 132: native spherical terrain collision
+
+Opt in via the final `PlanetTerrainCollisionConfig{true}` argument to `PlanetProcessHost::prepare`. Host owns six-face coverage in 16x16 cell chunks for face sizes 2..96. Mesh triangles use the canonical body-local Surface corners and outward winding; changed height chunks replace their static Box3D bodies before the sole physics step. Old/new handles overlap only during serialized publication; unchanged chunks retain their handles. A capacity/validation failure blocks the host step; rollback/shutdown retire this projection. Do not install a duplicate terrain collider in the same scene. This is a triangulated coarse surface, not exact bilinear or visual fine relief. Large-planet streaming and authoritative dynamic body wake/penetration policy remain open. Tests authored, NOT RUN.
+
+### Stage 133: bounded spherical collision residency
+
+For large bodies, opt into `PlanetTerrainCollisionConfig.streamed` and supply `regions` as canonical simulation positions with 1..64 graph-cell rings, plus a resident tile budget. The existing Surface neighbor graph crosses face seams; selected 16x16 chunks are published using the same Box3D owner, with same-revision load/evict and stable unchanged handles. The supported canonical face size is now 512 in streamed mode. Owner supplies all swept collision/query regions (character capsule, debris, other dynamics and GRANULAR contacts); host checks character start/end and debris positions plus one neighbor ring, but these are admission guards rather than a swept-volume guarantee. Post-step escape faults and needs reconciliation. No asynchronous I/O or automatic scene-wide motion prediction. Fixture authored, NOT RUN.
+
+### Stage 141: MORPH static deformed mesh collision
+
+Pass a complete per-tick `span<PlanetMorphCollisionRequest>` to the final PlanetProcessHost::prepare argument. Requests identify native owner model frame, pristine collision vertices, triangles and same weighted ECS node bindings/configuration as the visual stream. Prepared CPU meshes are published before the sole Box3D step; omitted instance IDs retire, identical meshes retain handles, replacements allocate before old handles retire. Caller supplies matching render/collision assets and refreshes contact handle mappings after publication. This is static mesh projection only; Box3D has no dynamic triangle mesh support. Replacements can create artificial contact-begin events; do not treat every replacement begin as a new authoritative impact without owner filtering. No automatic moving soft body simulation. Tests authored, NOT RUN.
+
+### Stage 142: moving MORPH node proxies and contact routing
+
+Optional final `nodeProxies` prepare argument specifies stable instance/node IDs and sphere shape. Nodes follow their canonical completed-tick model frame as kinematic spheres with stable handles; no self-contacts and no additional PHYSIS acceleration. Static mesh requests may supply a representative contactNode. Host builds contact maps automatically and coalesces repeated target/opposite identity begins for two ticks. This conservative debounce may suppress legitimate rapid impacts and is reset on rollback; authoritative replay must use recorded quantized inputs. No dynamic compound rigid body, actual soft body, or full contact manifold tracking. Tests authored, NOT RUN.
+
+### Stage 146: source representation switch
+
+Pass complete per-body `PlanetSourceCollider` requests to the final `PlanetProcessHost::prepare` parameter. Source identities are existing FRACTURE entity IDs or EVOLVE species/plant IDs. Only colliders owned by this publisher are removed. Call `drawSourceOrConsequence` instead of drawing the original asset independently; explicitly supply standing/fallen model draws and body-relative asset offset. Durable records/receipts suppress the standing representation; rollback recreates it. No automatic GameCore Unit deletion or third-party renderer hooks. Tests authored, NOT RUN.

@@ -1,15 +1,14 @@
 {
   "schema": 1,
   "features": {
-    "open-world-mixed-residency": {
+    "nereid-gcc13-arm64-build": {
       "requires": [],
       "roadmap": {
-        "system": "world",
-        "id": "open-world-mixed-residency"
+        "system": "nereid",
+        "id": "nereid-gcc13-arm64-build"
       },
       "api_paths": [
-        "engine/world/RegionLifecycleRuntime.h",
-        "engine/world/VehicleRegionTransfer.h"
+        "engine/world/NereidCascadeScene.h"
       ]
     },
     "feature-gate": {
@@ -119,6 +118,53 @@
       },
       "api_paths": [
         "apps/studio-native/StudioSession.h"
+      ]
+    },
+    "fixed-math-spatial-algorithms": {
+      "requires": [],
+      "roadmap": {
+        "system": "ecs",
+        "id": "fixed-spatial-algorithms"
+      },
+      "api_paths": [
+        "engine/core/FixedQuaternion.h",
+        "libraries/include/aiverselib/algorithms/NoiseBatch.h"
+      ]
+    },
+    "studio-document-history": {
+      "requires": [],
+      "roadmap": {
+        "system": "studio",
+        "id": "studio-linked-asset-mcp"
+      },
+      "api_paths": [
+        "apps/editor/core/ProjectHistory.h",
+        "apps/studio-native/StudioHistoryCoordinator.h"
+      ]
+    },
+    "world-processes-planet-authoring": {
+      "requires": [
+        "fixed-math-spatial-algorithms",
+        "studio-document-history"
+      ],
+      "roadmap": {
+        "system": "terraweave",
+        "id": "planet-forest-authoring"
+      },
+      "api_paths": [
+        "apps/studio-native/StudioWorldProcessesEditing.h",
+        "libraries/include/aiverselib/world/WorldProcessesNativeModule.h"
+      ]
+    },
+    "open-world-mixed-residency": {
+      "requires": [],
+      "roadmap": {
+        "system": "world",
+        "id": "open-world-mixed-residency"
+      },
+      "api_paths": [
+        "engine/world/RegionLifecycleRuntime.h",
+        "engine/world/VehicleRegionTransfer.h"
       ]
     }
   },

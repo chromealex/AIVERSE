@@ -1,0 +1,2 @@
+# Stage 154 — plan
+Base 2175502b44cedfddcb09b7cdc51ae8f57d42c690. Reuse existing TerraWeave forest species authoring parser for planetary authoritative instances. Map world.terraweaveForest uses existing species and botanicalTextures fields, no planar placement on sphere. Exact species lookup, legacy palette fallback, shared one-model-per-species, transactional CPU/GPU preparation; clear authored prototypes when map changes. No simulation changes. Add source fixture and docs. Build and GPU acceptance pending.

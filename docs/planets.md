@@ -232,3 +232,17 @@ Measured (llvmpipe software GL, 1280 x 760, faceSize 128 planet with radius 81 +
 surface view 63 chunks / 40k triangles, planet view 55 chunks / 35k triangles, system view 18 chunks / 11.5k
 triangles; ~55 ms per frame at surface / planet zoom vs ~30 ms for the flat skirmish map on the same renderer
 (CPU culling + selection < 0.1 ms; the cost is fill rate of the software rasteriser).
+
+### Authored planetary forest species (Stage 154)
+
+The map's `world.terraweaveForest` optionally uses the existing TerraWeave forest species recipe schema. The authoritative planetary renderer selects the exact numeric species ID, not a modulo preset. For example:
+
+```json
+{"world":{"terraweaveForest":{"botanicalTextures":"textures","species":[{"id":42,"preset":"oak","prototypeSeed":7},{"id":77,"shape":"columnar","minHeightCm":500,"maxHeightCm":500,"branches":5}]}}}
+```
+
+This excerpt goes beside the existing `world.bodies`. Up to 64 unique IDs; existing botanical presets, custom profile fields, seed and optional PBR texture families are reused. Missing species retain the built-in fallback palette. Only current authoritative trees use this catalogue; cosmetic scatter and planar placement fields do not change. No arbitrary imported mesh support, Studio/MCP authoring or GPU acceptance yet. The map reload owns model uploads/retirement; no per-tree mesh or simulation authority is added.
+
+### ARBOR-derived falling trunk collision (Stage 159)
+
+For a species in the native `planetForest` configuration, set `naturalFallBody: {"fromArbor":true,"density":600,"frictionPermille":500}` and enable `naturalFallPermille`. Define the same species ID in the map's `world.terraweaveForest.species`. The shared CPU ARBOR profile and prototype seed produce a structural trunk capsule; age/vigor, shrub factor, body flora scale and remaining wood mass at delivery determine its dimensions. The native physics shape remains frozen after creation. Explicit radiusCm/halfHeightCm and fromArbor are mutually exclusive. This approximation does not collide individual branches or leaves. Actual motion still requires the explicitly installed single-authority physics host. Compilation and acceptance pending.

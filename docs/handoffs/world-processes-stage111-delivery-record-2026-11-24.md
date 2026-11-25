@@ -1,0 +1,5 @@
+# Stage 111 — planetary FRACTURE live diagnostics
+
+Base 343785a8. In progress. Read existing Member, Bond, Collapse and optional PHYSIS NatureStressOutput/NatureFractureOutbox on members after the completed simulation tick. Display anchor, intact/broken/detached states, damaged/severed/disabled bonds, durable pending/acknowledged events and real available stress output with separate climate clock. Bounded stable body-local geometry; omit cross-body visual edges without changing support topology. Existing native Scene and typed Live settings, no support solver rerun, no physical delivery or acknowledgement. Source fixtures for cascade, bond damage, outbox and body separation. Tests deferred; no main merge.
+
+Status: source c6033069; fixture 81bef90153d25a6b16750d64064db7f3869a2f40. Build, tests and visual acceptance NOT RUN. Next MORPH.

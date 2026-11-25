@@ -1,0 +1,8 @@
+# Stage 128 — planetary FRACTURE native motion handoff
+Date: 2026-11-24. Base efca8c3087e1efad81825111ae670b8c67ce4f0c. Branch: feature/world-processes-stage31-bidirectional-handles.
+
+FRACTURE projection previously had no post-step owner readback. Add stable handle-free motion checkpoint capture from the actual Box3D Scene: event identity, body, canonical Fixed position, native rotation/linear and angular velocity, awake state. Validate current acknowledged receipt, dynamic live handle, body/frame and restorable motion before publishing the batch. Failure after physics step latches Fault through existing host guard. Merge saved motion into the existing owner shape record with identity checks; recreate via existing projection API and restore sleep state.
+
+PlanetProcessHost freezes the motion output alongside next-tick MORPH contacts after its sole Scene step. The owner records both in one transaction through recordPhysicsOutputs, retrying the same batch on rejection; contact-only recording cannot drop live debris. Explicit reset clears the transient batch. No extra durable ECS owner, no separate Box3D scene, no lockstep float resampling. The real authoritative gameplay record, support collider removal, full solver snapshot/replication and production activation remain owner responsibilities. TerraWeave spherical terrain/lifecycle and MORPH model binding remain open.
+
+Fixture extended with rejection, retry, duplicate, cross-body restore and actual native re-publication from saved pose. Source inspection only; native compilation and CTest not run. Stage 127 CI may be superseded by new PR head. No main merge.

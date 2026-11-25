@@ -277,6 +277,21 @@ if(AIVERSE_BUILD_TESTS AND APPLE)
     set_tests_properties(studio_session PROPERTIES LABELS "EDITOR")
 endif()
 
+# Keep the dependency-light history contract in the ordinary CTest inventory.
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_studio_owner_history_tests tests/StudioOwnerHistoryTests.cpp)
+    target_include_directories(aiverse_studio_owner_history_tests PRIVATE "${PROJECT_SOURCE_DIR}")
+    target_link_libraries(aiverse_studio_owner_history_tests PRIVATE aiverse_engine aiverse_pack)
+    add_test(NAME studio_owner_history COMMAND aiverse_studio_owner_history_tests)
+    set_tests_properties(studio_owner_history PROPERTIES LABELS "EDITOR")
+    if(TARGET aiversemcp AND Python3_Interpreter_FOUND)
+        add_test(NAME studio_mcp_registry
+            COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/mcp/audit_registry.py"
+                "$<TARGET_FILE:aiversemcp>" --engine "${PROJECT_SOURCE_DIR}")
+        set_tests_properties(studio_mcp_registry PROPERTIES LABELS "EDITOR;MCP" TIMEOUT 90)
+    endif()
+endif()
+
 foreach(target aiverse_studio aiverse_studio_session_tests aiverse_studio_human_appearance_session_tests aiverse_studio_human_creator_tests
         aiverse_studio_render_lighting_tests aiverse_studio_metal_lighting_tests)
     if(TARGET ${target})
