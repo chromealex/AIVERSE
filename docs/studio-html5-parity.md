@@ -227,3 +227,5 @@ Skinned preview stage: publish the evaluated native pose and draw its imported m
 Animation Graph and Animation Rig now render the selected skinned model in their own native drawables beside the evaluated skeleton in wide panels. In bundled Mac Studio the weighted arm followed the wrist through 15 frame steps to 0.50 s, with Scene hidden. Both windows were separately opened and captured. Windows runtime and the independent attachment authoring preview remain open.
 
 Attachments stage: preserve both affine transforms while editing, publish draft parent and socket children to the owning HTML window, verify on a real imported model and retain last good publication on failure.
+
+LENS camera authoring stage. Replace schema-only camera collection edits in Actors & Cameras with a responsive record list and native-validated draft editor. Preserve unknown fields, separate project and revision guards, and actual saved-file evidence. Camera output preview and recording require independent runtime acceptance.

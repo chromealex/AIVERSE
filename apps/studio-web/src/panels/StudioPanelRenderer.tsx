@@ -29,6 +29,7 @@ import RuntimePanel from './generated/RuntimePanel';
 import BuildPanel from './BuildPanel';
 import ConsolePanel from './ConsolePanel';
 import StaticGeometryPanel from './StaticGeometryPanel';
+import LensCameraPanel from './LensCameraPanel';
 import ToolPanel from './ToolPanel';
 import SpectraDataInterfacesPanel from './SpectraDataInterfacesPanel';
 import SpectraLibraryPanel from './SpectraLibraryPanel';
@@ -110,9 +111,10 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'postfx': return <PostFxPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'terrain': case 'water': case 'roads': case 'tiles': case 'generate':
       case 'effects': case 'lightbake': case 'models': case 'overlays': case 'branding':
-      case 'fields': case 'physis': case 'actor': case 'raid': case 'balance': case 'fx_functions': case 'modeling':
+      case 'fields': case 'physis': case 'raid': case 'balance': case 'fx_functions': case 'modeling':
       case 'anim_assets': case 'model_anim': case 'project_import':
         return <ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
+      case 'actor': return <LensCameraPanel key={snapshot?.project.path} project={snapshot?.project.path??''} operations={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
       case 'anim_graph': case 'anim_rig': return <AnimationGraphPanel key={panel+snapshot?.project.path} rigMode={panel==='anim_rig'} projectPath={snapshot?.project.path??''} tools={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
       case 'fx_library': return <SpectraLibraryPanel key={snapshot?.project.path ?? ''} projectPath={snapshot?.project.path ?? ''} showPanel={ctx.showPanel}/>;
       case 'fx_graph': return <SpectraDataInterfacesPanel projectPath={snapshot?.project.path ?? ''}
