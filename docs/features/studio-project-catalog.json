@@ -192,7 +192,7 @@
   },
   "integrations": {
     "skills": ["aiverse-map-build"],
-    "mcp_tools": ["player_set", "player_remove", "map_area"],
+    "mcp_tools": ["player_set", "player_remove", "map_area", "region_paint"],
     "studio_panels": [
       "inspector",
       "project",
