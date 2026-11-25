@@ -1,0 +1,161 @@
+{
+  "schema": 1,
+  "id": "renderer-sdk",
+  "owner": "render",
+  "changed_paths": [
+    "CMakeLists.txt",
+    "apps/modelview/HeadlessModelCapture.cpp",
+    "docs/agent-handoffs/renderer-sdk-initial.md",
+    "docs/agent-handoffs/renderer-sdk-languages.md",
+    "docs/agent-handoffs/renderer-sdk-native.md",
+    "docs/devlog/systems.json",
+    "docs/evidence/renderer-sdk-languages.json",
+    "docs/evidence/renderer-sdk-languages.log.txt",
+    "docs/features/renderer-sdk.json",
+    "engine/render/HeadlessModelFrame.cpp",
+    "engine/render/HeadlessModelFrame.h",
+    "sdk/render/CMakeLists.txt",
+    "sdk/render/README.md",
+    "sdk/render/aiverse_render.cpp",
+    "sdk/render/aiverse_render.h",
+    "sdk/render/csharp/RenderModel.cs",
+    "sdk/render/java/Jni.cpp",
+    "sdk/render/java/org/aiverse/render/RenderModel.java",
+    "sdk/render/python/aiverse_render.py",
+    "tests/render_sdk/RenderFrame.cs",
+    "tests/render_sdk/RenderFrame.csproj",
+    "tests/render_sdk/RenderFrame.java",
+    "tests/render_sdk/languages.py"
+  ],
+  "traits": {
+    "editable": false,
+    "simulation": false,
+    "visible": true,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Three language runtimes produced the same RGBA model frame.",
+      "evidence": [
+        "docs/evidence/renderer-sdk-languages.json"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "All three wrappers call the v1 C ABI over the same C++ frame rendering path as modelview.",
+      "evidence": [
+        "engine/render/HeadlessModelFrame.cpp",
+        "docs/agent-handoffs/renderer-sdk-languages.md"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "Installed C header and shared library; non-square frames, repeat use, errors and camera changes exercised.",
+      "evidence": [
+        "sdk/render/aiverse_render.h",
+        "docs/evidence/renderer-sdk-languages.json"
+      ]
+    },
+    "skill": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "mcp": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "pass",
+      "note": "Measured 40 warmed frames per size including native CPU rasterization and copying.",
+      "evidence": [
+        "docs/agent-handoffs/renderer-sdk-languages.md"
+      ]
+    },
+    "platforms": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Stacked on CPU backend a1735673d. Cross-language smoke checks use installed SDKs without package downloads.",
+      "evidence": [
+        "docs/agent-handoffs/renderer-sdk-languages.md"
+      ]
+    },
+    "headless": {
+      "status": "pass",
+      "note": "No window or GPU driver needed for the tested CPU workflow.",
+      "evidence": [
+        "docs/evidence/renderer-sdk-languages.json"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "Python, C# and Java examples are present with a real per-language execution.",
+      "evidence": [
+        "docs/evidence/renderer-sdk-languages.json",
+        "sdk/render/README.md"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Language byte parity, geometric foreground, camera, errors and CPU regression tests passed.",
+      "evidence": [
+        "docs/evidence/renderer-sdk-languages.json",
+        "docs/agent-handoffs/renderer-sdk-languages.md"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Handoff identifies tested code, backend dependency, platform coverage and integration work.",
+      "evidence": [
+        "docs/agent-handoffs/renderer-sdk-languages.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "Build/install/use/lifetime and backend support documented.",
+      "evidence": [
+        "sdk/render/README.md"
+      ]
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [],
+    "mcp_tools": [],
+    "studio_panels": [],
+    "studio_methods": []
+  },
+  "test_reports": [
+    "docs/evidence/renderer-sdk-languages.json"
+  ]
+}
