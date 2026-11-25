@@ -13,6 +13,7 @@ import type { StudioEntity, StudioInspector, StudioSnapshot } from '../types';
 import { invoke } from '../bridge';
 import type { StudioPanel } from '../nestedDock';
 import ViewportPlaceholder from '../components/ViewportPlaceholder';
+import MovementRoadTool from '../components/MovementRoadTool';
 import SceneToolbar from '../components/SceneToolbar';
 import RulesPanel from './RulesPanel';
 import AssetsPanel from '../components/AssetsPanel';
@@ -152,6 +153,8 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
           <div className="viewport-toolbar">
             <div className="viewport-tools">
               <SceneToolbar enabled={connected && sceneMode !== 'welcome'} projectPath={snapshot?.project.path ?? ''}/>
+              {connected && sceneMode !== 'welcome' && snapshot?.scene.mapRegions && snapshot.graphDocument &&
+                <MovementRoadTool key={snapshot.graphDocument.epoch+snapshot.graphDocument.mapPath} scope={snapshot.graphDocument}/>}
               <span className="toolbar-divider"/>
               <button type="button" className="viewport-control" title="Focus selected object (F)"
                 aria-label="Focus selected Scene object" disabled={!connected || !selected}

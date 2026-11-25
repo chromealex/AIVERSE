@@ -20,6 +20,8 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
   const element = useRef<HTMLElement>(null);
   const drag = useRef<{ x: number; y: number; startX: number; startY: number; moved: boolean; mode: DragMode; button: number } | null>(null);
   const pendingDelta = useRef<{ x: number; y: number; raf: number; mode: Exclude<DragMode, 'select' | 'handle'> }>({ x: 0, y: 0, raf: 0, mode: 'orbit' });
+  const roadToken=useRef('');
+  const roadPointer=useRef<{id:number;token:string;x:number;y:number}|null>(null);
   const areaToken=useRef('');
   const areaPointer=useRef<{id:number;token:string}|null>(null);
   const flying = useRef(false);
@@ -42,6 +44,8 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
   useEffect(() => {
     if (!native) return;
     return onNativeEvent((event, payload) => {
+      if(event==='roadPick.armed')roadToken.current=(payload as {token:string}).token;
+      if(event==='roadPick.finished' && roadToken.current===(payload as {token:string}).token)roadToken.current='';
       if(event==='area.armed' || event==='area.picked'){
         const token=(payload as {token?:string})?.token;
         if(token && event==='area.armed')areaToken.current=token;
@@ -232,6 +236,7 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
       width:bounds.width,height:bounds.height});
   }
   function cancelPointer(event:React.PointerEvent<HTMLElement>){
+    if(roadPointer.current?.id===event.pointerId)roadPointer.current=null;
     const area=areaPointer.current;
     if(area){
       if(area.id!==event.pointerId)return;
@@ -248,7 +253,12 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
     onPointerDown={event => {
       if (!composite() || !active || !gpuReady) return;
       event.currentTarget.focus();
-      if(areaPointer.current || drag.current)return;
+      if(areaPointer.current || roadPointer.current || drag.current)return;
+      if(roadToken.current && event.button===0 && !event.altKey && !event.ctrlKey && !event.metaKey){
+        roadPointer.current={id:event.pointerId,token:roadToken.current,x:event.clientX,y:event.clientY};
+        event.currentTarget.setPointerCapture(event.pointerId);
+        return;
+      }
       if(areaToken.current && event.button===0 && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey){
         areaPointer.current={id:event.pointerId,token:areaToken.current};
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -297,6 +307,18 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
       } else if (state.moved && state.mode!=='select') sendDelta(dx,dy,state.mode);
     }}
     onPointerUp={event => {
+      const road=roadPointer.current;
+      if(road && event.pointerId===road.id && event.button===0){
+        roadPointer.current=null;
+        if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);
+        if(road.token===roadToken.current && !event.altKey && !event.ctrlKey && !event.metaKey &&
+            Math.hypot(event.clientX-road.x,event.clientY-road.y)<5){
+          const bounds=event.currentTarget.getBoundingClientRect();
+          void send({kind:'pick',roadToken:road.token,chain:event.shiftKey,x:event.clientX-bounds.left,
+            y:event.clientY-bounds.top,width:bounds.width,height:bounds.height});
+        }
+        return;
+      }
       const area=areaPointer.current;
       if(area){
         if(event.pointerId!==area.id || event.button!==0)return;

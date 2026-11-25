@@ -347,6 +347,10 @@ private:
     std::size_t wpHitOrdinal_=0;
     Json wpNumericPreview_;
     void finishScenePick(Json result);
+    void roadPick(double x, double y, double w, double h, bool chain);
+    bool pickingRoad_ = false;
+    std::string roadOrigin_;
+    Json roadScope_;
     std::string scenePickerToken_;
     bool pickingArea_=false;
     Json areaScope_;

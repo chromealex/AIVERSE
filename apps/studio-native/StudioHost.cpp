@@ -2274,10 +2274,12 @@ bool StudioHost::humanPick(StudioSurface surface,double x,double y,double w,doub
 void StudioHost::finishScenePick(Json result){
     if(scenePickerToken_.empty())return;
     result.set("token",Json::string(scenePickerToken_));
+    const bool road=pickingRoad_;
+    pickingRoad_=false;roadOrigin_.clear();roadScope_=Json{};
     const bool area=pickingArea_;
     scenePickerToken_.clear();pickingArea_=false;areaOrigin_.reset();areaScope_=Json{};
     if(area && preview_)onScene([&]{preview_->showAreaBounds({});});
-    sendEventPayload(area?"area.picked":"playerStart.picked",result);
+    sendEventPayload(road?"roadPick.finished":area?"area.picked":"playerStart.picked",result);
 }
 void StudioHost::updateAreaPick(int phase,double x,double y,double w,double h){
     if(projectLoading_ || !session_ || !preview_ || session_->graphDocumentScope()!=areaScope_){
@@ -2301,7 +2303,47 @@ void StudioHost::updateAreaPick(int phase,double x,double y,double w,double h){
     }else result.set("error",Json::string("Both corners must be inside the map."));
     finishScenePick(std::move(result));
 }
+void StudioHost::roadPick(double x, double y, double w, double h, bool chain) {
+    if (!pickingRoad_) return;
+    Json update = Json::object();
+    update.set("token", Json::string(scenePickerToken_));
+    try {
+        if (projectLoading_ || !session_ || !preview_ || session_->graphDocumentScope() != roadScope_)
+            throw std::runtime_error("Map changed. Start a new road.");
+        const auto& doc = session_->workspace().map;
+        const auto hit = onScene([&] { return preview_->pick(float(x),float(y),float(w),float(h),doc,false); });
+        if (hit == roadOrigin_ && !hit.empty()) return;
+        Json ids = Json::array();
+        const bool endpoint = hit.starts_with("entity:");
+        if (endpoint && !roadOrigin_.empty()) ids.push(Json::string(roadOrigin_));
+        if (endpoint) ids.push(Json::string(hit));
+        Json params = Json::object();
+        params.set("ids", ids);
+        const auto selection = request("studio.select", params);
+        if (selection.has("error")) throw std::runtime_error(selection.getStr("error"));
+        sendEvent("selection.changed","");
+        if (ids.size() == 2) {
+            const auto& connected = selection["result"]["selectedRoad"];
+            if (connected.isNull()) throw std::runtime_error("Choose two editable map objects.");
+            params.set("scope", roadScope_);
+            params.set("linked", Json::fromBool(!connected.boolean()));
+            const auto edit = request("studio.selectedRoadSet", params);
+            if (edit.has("error")) throw std::runtime_error(edit.getStr("error"));
+            const auto& result = edit["result"];
+            roadOrigin_ = chain ? result["selectedIds"][1].str() : "";
+            roadScope_ = result["graphDocument"];
+            sendEvent("document.changed","");
+        } else roadOrigin_ = endpoint ? hit : "";
+        update.set("hasOrigin",Json::fromBool(!roadOrigin_.empty()));
+        sendEventPayload("roadPick.changed",update);
+    } catch (const std::exception& e) {
+        update.set("error",Json::string(e.what()));
+        finishScenePick(std::move(update));
+    }
+}
+
 void StudioHost::select(double x, double y, double w, double h, const std::string& mode) {
+    if (pickingRoad_) { roadPick(x,y,w,h,false); return; }
     if(!scenePickerToken_.empty() && mode=="replace"){
         if(pickingArea_)return;
         Json result=Json::object(),start;
@@ -2421,7 +2463,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
         if(!projectLoading_&&session_->strokeCancel())sendEvent("document.changed", "");
         m = {};
         m.active = true; m.pressX = x; m.pressY = y;
-        if(!scenePickerToken_.empty()&&!mods.alt&&!mods.command&&!mods.ctrl&&!mods.shift){m.playerStart=true;if(pickingArea_)updateAreaPick(0,x,y,w,h);return;}
+        if(!scenePickerToken_.empty()&&!mods.alt&&!mods.command&&!mods.ctrl&&(pickingRoad_||!mods.shift)){m.playerStart=true;if(pickingArea_)updateAreaPick(0,x,y,w,h);return;}
         if(forestPlantArm_.isObject()&&!mods.alt&&!mods.command&&!mods.ctrl&&!mods.shift){m.forest=true;return;}
         // Explicit authored World Processes handles have priority only when
         // the clicked point is within their small screen-space hit radius.
@@ -2477,6 +2519,11 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
     m = {};
     if (!st.active) return;
     if(st.playerStart){
+        if(pickingRoad_){
+            if(!st.dragged && std::hypot(x-st.pressX,y-st.pressY)<5.0 && !mods.alt && !mods.command && !mods.ctrl)
+                roadPick(x,y,w,h,mods.shift);
+            return;
+        }
         if(pickingArea_){
             if(mods.alt||mods.command||mods.ctrl||mods.shift)finishScenePick(Json::object());
             else updateAreaPick(2,x,y,w,h);
@@ -3058,7 +3105,10 @@ Json StudioHost::viewportInput(const Json& input) {
         if (!input["x"].isNumber() || !input["y"].isNumber() || !input["width"].isNumber() || !input["height"].isNumber() ||
             !finite({x, y, w, h}) || w < 2 || h < 2 || w > 20000 || h > 20000 || x < 0 || y < 0 || x > w || y > h)
             throw std::runtime_error("Invalid pick coordinates");
-        select(x, y, w, h, "replace");
+        if (input.has("roadToken")) {
+            if (pickingRoad_ && input.getStr("roadToken")==scenePickerToken_)
+                roadPick(x,y,w,h,input.getBool("chain"));
+        } else if (!pickingRoad_) select(x, y, w, h, "replace");
         return ok();
     }
     throw std::runtime_error("Unsupported viewport input");
@@ -3245,7 +3295,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
         Json out=Json::object();out.set("active",Json::fromBool(false));return out;
     });
     if(method=="studio.planetSceneBody")return answer([&]{return planetSceneBodyRequest(params);});
-    if(method=="studio.playerStartPick" || method=="studio.areaPick")return answer([&]{
+    if(method=="studio.playerStartPick" || method=="studio.areaPick" || method=="studio.roadPick")return answer([&]{
         const auto token=params.getStr("token");
         if(token.empty()||token.size()>128)throw std::runtime_error("Invalid Scene picker token");
         if(params.getBool("armed")){
@@ -3258,6 +3308,14 @@ bool StudioHost::handleHostMethod(const Json& req) {
                 const auto& map=session_->workspace().map.data;
                 if(map.planet()||map.worldSpace)throw std::runtime_error("Area drawing requires a flat grid map.");
                 areaScope_=session_->graphDocumentScope();pickingArea_=true;
+            }
+            if(method=="studio.roadPick"){
+                const auto& map=session_->workspace().map.data;
+                if (map.planet() || map.worldSpace || session_->graphDocumentScope()!=params["scope"])
+                    throw std::runtime_error("Choose a current grid map to edit roads.");
+                roadScope_=params["scope"];pickingRoad_=true;
+                Json armed=Json::object();armed.set("token",Json::string(token));
+                sendEventPayload("roadPick.armed",armed);
             }
             scenePickerToken_=token;
             if(pickingArea_ && htmlComposite_){
