@@ -25,6 +25,13 @@ bake::BakeSettings lightBakeSettings(const Workspace& ws) {
     return s;
 }
 
+void applyLightBakeSettings(Workspace& ws,const bake::BakeSettings& settings) {
+    Json block=Json::parse(bake::settingsToJson(settings));
+    ws.map.beginEdit();
+    ws.map.data.extra.set("bake",std::move(block));
+    ws.map.touched();
+}
+
 // Keep page filenames native. The bridge accepts only a page index and channel.
 static Json bakeIndex(const std::string& dir,const std::string& rel,Json& index) {
     Json r = Json::object();
@@ -119,6 +126,20 @@ Json lightBakeAtlasPreview(const std::string& project,const std::string& relativ
     return result;
 }
 
+void registerLightBakeRuntimeOps(Workspace& ws,const LightBakeRuntimeHandler& handler) {
+    auto add=[&](const char* name,const char* description,Json schema) {
+        ws.registerOp({name,description,std::move(schema),[handler,name](const Json& params){
+            if(!handler)throw std::runtime_error("Open a Studio project and connect to its editor link");
+            return handler(name,params);
+        },true});
+    };
+    Json schema=Json::object();
+    for(const auto& op:ws.ops())if(op.name=="lightbake_set"){schema=op.schema;break;}
+    schema.member("properties").set("force",Json::parse(R"({"type":"boolean"})"));
+    add("lightbake_bake","Start baking the open map in the background. Optional settings update the map. Poll lightbake_status for progress.",std::move(schema));
+    add("lightbake_status","Read background bake progress, the last result and the open map's baked lighting statistics.",Json::object());
+}
+
 void registerLightBakeOps(Workspace& ws) {
     Workspace* w = &ws;
     ws.registerOp({"lightbake_atlas_preview","Preview one RGBM irradiance or sun visibility page of the open map.",
@@ -149,9 +170,7 @@ void registerLightBakeOps(Workspace& ws) {
             bake::BakeSettings s = lightBakeSettings(*w);
             std::string err;
             if (!bake::settingsFromJson(p.dump(-1), s, err)) throw std::runtime_error(err);
-            w->map.beginEdit();
-            w->map.data.extra.set("bake", Json::parse(bake::settingsToJson(s)));
-            w->map.touched();
+            applyLightBakeSettings(*w,s);
             Json r = Json::object();
             r.set("ok", Json::fromBool(true));
             r.set("settings", Json::parse(bake::settingsToJson(s)));
@@ -173,6 +192,7 @@ void registerLightBakeOps(Workspace& ws) {
             w->log("lightbake", "cleared " + bake::bakeFolderFor(rel));
             return r;
         }});
+    registerLightBakeRuntimeOps(ws);
 }
 
 } // namespace aiverse::editor

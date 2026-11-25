@@ -332,7 +332,9 @@ private:
     std::string bakeEpoch_,bakeMessage_;
     uint64_t bakeRevision_=0;
     void tickLightBake();
-    Json lightBakeJob(const Json& params);
+    bool bakeFailed_=false;
+    Json lightBakeJob(const Json& params,const Json& settings = {});
+    Json linkedLightBake(const std::string& name,const Json& params);
     std::shared_ptr<bool> alive_ = std::make_shared<bool>(true); // background completions after shutdown
     double nextGizmoPoll_ = 0, nextAgentPoll_ = 0, lastSceneFrame_ = 0, sceneFrameMs_ = 0;
     uint64_t sceneFrameCount_ = 0;

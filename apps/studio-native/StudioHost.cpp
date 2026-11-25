@@ -115,6 +115,9 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
     editor::registerStudioPlayTools(session_->workspace(), [this](const std::string& method, const Json& params) {
         return localPlayOperation(method, params, agentPlayReview_);
     });
+    editor::registerLightBakeRuntimeOps(session_->workspace(),[this](const std::string& name,const Json& params){
+        return linkedLightBake(name,params);
+    });
     session_->workspace().setSpectraPreviewHandler([this](const Json& p) {
         return runSpectraPreview(p);
     });
@@ -130,6 +133,7 @@ void StudioHost::shutdown() {
     retireBuildingPanelPreview();
     cancelSpectraCapture();
     if(session_) {
+        editor::registerLightBakeRuntimeOps(session_->workspace());
         session_->workspace().setSpectraPreviewHandler({});
         editor::registerStudioPlayTools(session_->workspace());
     }
@@ -817,6 +821,7 @@ void StudioHost::tickLightBake() {
     try {
         const auto result=bakeJob_.poll();
         if (!result) return;
+        bakeFailed_=stale || !result->error.empty();
         if (stale) bakeMessage_="Map changed during baking";
         else if (!result->error.empty()) bakeMessage_=result->error;
         else if (result->unchanged) {
@@ -830,11 +835,39 @@ void StudioHost::tickLightBake() {
                 std::to_string(result->stats.probes)+(result->stats.probes==1?" probe":" probes");
             if(!result->warnings.empty())bakeMessage_+="\n"+result->warnings;
         }
-    } catch (const std::exception& e) { bakeMessage_=e.what(); }
+    } catch (const std::exception& e) { bakeFailed_=true; bakeMessage_=e.what(); }
     bakeFiles_.reset();
     sendEventPayload("lightBake.finished",Json::string(bakeEpoch_));
 }
-Json StudioHost::lightBakeJob(const Json& params) {
+Json StudioHost::linkedLightBake(const std::string& name,const Json& params) {
+    const auto epoch=session_->graphDocumentScope().getStr("epoch");
+    Json command=Json::object();
+    command.set("expectedDocumentEpoch",Json::string(epoch));
+    if(name=="lightbake_bake") {
+        Json settings=Json::object();
+        for(const auto& [key,value]:params.members())if(key!="force")settings.set(key,value);
+        if(params.has("force") && params["force"].type()!=Json::Type::Bool)throw std::runtime_error("Expected boolean force");
+        command.set("action",Json::string("start"));
+        command.set("force",Json::fromBool(params.getBool("force")));
+        lightBakeJob(command,settings);
+        Json result=Json::object();
+        result.set("ok",Json::fromBool(true));result.set("started",Json::fromBool(true));
+        result.set("next",Json::string("Poll lightbake_status until state is idle"));
+        return result;
+    }
+    auto status=lightBakeJob(command);
+    const auto display=preview_?onScene([&]{return preview_->bakedSceneStatus();}):Json::object();
+    status.set("state",Json::string(status.getBool("running")?"baking":"idle"));
+    status.set("progress",status["fraction"]);
+    status.set("failed",Json::fromBool(bakeEpoch_==epoch && bakeFailed_));
+    status.set("bake",editor::lightBakeInfo(session_->workspace()));
+    status.set("loaded",Json::fromBool(display.getBool("loaded")));
+    status.set("lightmappedPrimitives",Json::number(int64_t(display.getInt("lightmapped"))));
+    status.set("probePrimitives",Json::number(int64_t(display.getInt("probed"))));
+    return status;
+}
+
+Json StudioHost::lightBakeJob(const Json& params,const Json& settings) {
     if (projectLoading_) throw std::runtime_error("Project is loading");
     const auto& ws=session_->workspace();
     const auto epoch=session_->graphDocumentScope().getStr("epoch");
@@ -850,13 +883,20 @@ Json StudioHost::lightBakeJob(const Json& params) {
         auto input=onScene([&]{return preview_->captureLightBake(*mapSnapshot_,ws.project.dir,ws.project.rules);});
         input.folder=bake::bakeFolderFor(relative);
         input.settings=editor::lightBakeSettings(ws);
+        if(settings.size()){
+            std::string error;
+            if(!bake::settingsFromJson(settings.dump(-1),input.settings,error))throw std::runtime_error(error);
+        }
         input.force=params.getBool("force");
         const auto info=editor::lightBakeInfo(ws);
         if(info.getBool("exists"))bake::parseHex64(info.getStr("hash"),input.oldHash);
         auto files=std::make_shared<StudioLightBakeFiles>(ws.project.dir,input.folder);
+        const auto applied=input.settings;
         bakeJob_.start(std::move(input),
             [files](const auto& path,auto& bytes){return files->read(path,bytes);},
             [files](const auto& path,const auto& bytes){return files->stage(path,bytes);});
+        if(settings.size())editor::applyLightBakeSettings(session_->workspace(),applied);
+        bakeFailed_=false;
         bakeFiles_=std::move(files);
         bakeEpoch_=epoch;
         bakeRevision_=ws.map.revision;

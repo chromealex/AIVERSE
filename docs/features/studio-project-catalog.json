@@ -9,6 +9,7 @@
     "apps/studio-web/src/panels/LightBakePanel.css",
     "apps/studio-native/StudioLightBakeFiles.h",
     "apps/studio-native/StudioLightBakeJob.h",
+    "apps/editor/core/LightBakeOps.h",
     "apps/editor/core/LightBakeCapture.h",
     "engine/bake/CapturedBake.cpp",
     "engine/bake/CapturedBake.h",

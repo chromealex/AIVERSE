@@ -274,3 +274,5 @@ Light Bake transfer: the main Scene loads the active planar map’s baked lighti
 Light Bake transfer: capture the native Studio document placements, terrain and lighting into the background baker input.
 
 Light Bake transfer: connect the map-scoped job to the HTML panel and publish completed outputs.
+
+Light Bake transfer: restore the linked lightbake_bake and lightbake_status operations in HTML Studio, including optional settings and renderer counters.

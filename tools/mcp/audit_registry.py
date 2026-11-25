@@ -18,7 +18,7 @@ REQUIRED = {
     "animation": ("animation_graph_list", "animation_graph_set"),
     "terrain": ("terrain_sculpt", "terrain_material", "terraweave_meadow_get", "terraweave_meadow_set"),
     "planet_forest": ("planet_forest_get", "planet_forest_set", "planet_forest_plant", "planet_forest_move", "planet_forest_remove"),
-    "lighting": ("light_list", "scene_light_create"),
+    "lighting": ("light_list", "scene_light_create", "lightbake_get", "lightbake_set", "lightbake_bake", "lightbake_status"),
     "physis": ("physis_get", "physis_set"),
     "spectrafx": ("fx_graph_list", "fx_graph_set"),
     "postfx": ("postfx_get",),
