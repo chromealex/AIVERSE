@@ -2,9 +2,9 @@
 .spectra-canvas {display:flex;flex-direction:column;gap:var(--au-space-3);min-width:0;}
 .spectra-canvas__toolbar {display:flex;align-items:end;flex-wrap:wrap;gap:var(--au-space-2);}
 .spectra-canvas__toolbar .au-field {min-width:min(100%,180px);flex:1;}
-.spectra-canvas__spacer {flex:1;}
+.spectra-canvas__zoom-tools {display:inline-flex;align-items:center;gap:var(--au-space-1);margin-inline-start:auto;}
 .spectra-canvas__zoom {color:var(--au-text-muted);font-size:var(--au-font-xs);min-width:38px;text-align:center;}
-.spectra-canvas__viewport {overflow:auto;scrollbar-gutter:stable;max-height:410px;min-height:220px;height:34vh;background:var(--au-canvas);border:1px solid var(--au-line);border-radius:var(--au-radius-md);background-image:linear-gradient(90deg,var(--au-line) 1px,transparent 1px),linear-gradient(var(--au-line) 1px,transparent 1px);background-size:24px 24px;}
+.spectra-canvas__viewport {overflow:auto;scrollbar-gutter:stable;max-height:560px;min-height:240px;height:48vh;background:var(--au-canvas);border:1px solid var(--au-line);border-radius:var(--au-radius-md);background-image:linear-gradient(90deg,var(--au-line) 1px,transparent 1px),linear-gradient(var(--au-line) 1px,transparent 1px);background-size:24px 24px;}
 .spectra-canvas__extent {position:relative;}
 .spectra-canvas__world {position:relative;transform-origin:0 0;}
 .spectra-canvas__edges {position:absolute;inset:0;pointer-events:none;}
@@ -21,3 +21,22 @@
 .spectra-canvas__selected {display:flex;flex-direction:column;gap:var(--au-space-1);border-top:1px solid var(--au-line);padding-top:var(--au-space-2);}
 .spectra-canvas__selected code {color:var(--au-text-soft);white-space:pre-wrap;overflow-wrap:anywhere;font-size:var(--au-font-xs);}
 .spectra-canvas__hint {font-size:var(--au-font-xs);color:var(--au-text-muted);line-height:var(--au-line-height);}
+
+.spectra-canvas__node { overflow: visible; }
+.spectra-canvas__node::before, .spectra-canvas__node::after {
+  content: "";
+  position: absolute;
+  top: 21px;
+  width: 6px;
+  height: 6px;
+  border: 1.5px solid var(--au-accent);
+  border-radius: 50%;
+  background: var(--au-panel);
+  pointer-events: none;
+}
+.spectra-canvas__node::before { left: -4px; }
+.spectra-canvas__node::after { right: -4px; background: var(--au-accent); }
+.spectra-canvas__node-head { border-radius: inherit; border-bottom-left-radius: 0; border-bottom-right-radius: 0; padding-inline: 10px; }
+.spectra-canvas__node-head svg { flex-shrink: 0; color: var(--au-accent); }
+.spectra-canvas__node-head span { min-width: 0; overflow-wrap: anywhere; }
+.spectra-canvas__node-id { padding-inline: 10px; font-family: ui-monospace, monospace; }

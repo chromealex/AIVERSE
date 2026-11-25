@@ -18,3 +18,22 @@ test('malformed edges or extreme positions are bounded',()=>{
  assert.equal(r.nodes[0].x,0);assert.equal(r.nodes[1].x,2000);
  assert.equal(r.edges.length,1);assert.ok(r.width<=2200);
 });
+
+test('all sixteen input wires terminate inside their destination card',()=>{
+ const inputs=Array(16).fill('a');
+ const diagram=layoutShaderGraph({nodes:[{id:'a',op:'input'},{id:'b',op:'mix',inputs}]});
+ const target=diagram.nodes[1];
+ assert.equal(diagram.edges.length,16);
+ assert.equal(new Set(diagram.edges.map(e=>e.y2)).size,16);
+ assert.ok(diagram.edges.every(e=>e.from==='a'&&e.to==='b'&&e.y2>target.y&&e.y2<target.y+target.height));
+});
+
+test('value cards keep empty operand slots at their authored indices',()=>{
+ const diagram=layoutShaderGraph({nodes:[
+  {id:'value',op:'constant',value:[0.2,0.4,0.6,1,2]},
+  {id:'target',op:'mix',inputs:[null,'value']}
+ ]});
+ assert.deepEqual(diagram.nodes[0].values,[0.2,0.4,0.6,1]);
+ assert.deepEqual(diagram.nodes[1].inputs,['','value']);
+ assert.equal(diagram.edges[0].key,'value>target:1');
+});

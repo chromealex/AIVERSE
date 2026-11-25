@@ -276,9 +276,6 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
           {validation&&<StudioAlert tone={validation.ok===true?'success':'warning'} title="Compiler diagnostics">
             {diagnostics(validation)} {validation.emitters!==undefined&&' · '+String(validation.emitters)+' emitter(s)'}
           </StudioAlert>}
-          <SpectraNativePreview key={projectPath} graph={graph} projectPath={projectPath}
-            libraryAsset={selected&&!dirty?{name:selected.name,draft:selected.draft}:undefined}
-            disabled={busy}/>
           <StudioSection title="Graph Nodes & Links">
             <SpectraGraphCanvas graph={graph} disabled={busy}
               onError={setError}
@@ -288,6 +285,9 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
           <SpectraCurveEditor graph={graph} disabled={busy} onError={setError}
             onEdit={next=>{setGraph(next);setValidation(null);setError('');
               setStatus('Curve/Gradient changed in local draft. Validate and save before publishing.');}}/>
+          <SpectraNativePreview key={projectPath} graph={graph} projectPath={projectPath}
+            libraryAsset={selected&&!dirty?{name:selected.name,draft:selected.draft}:undefined}
+            disabled={busy}/>
           <StudioSection title="Instance parameters">
             <div className="spectra-di__items">
               {names.map(([name,p])=><button key={name} type="button" disabled={busy}

@@ -174,7 +174,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
      document ? <>
       <div className="graph-summary"><strong>{selected}</strong><span>{document.graph.domain??'Unknown domain'}</span>
        <span>{draft?.nodes?.length??document.nodes} nodes · {document.samples} saved texture samples</span>
-       <span>{dirty?'● Unsaved graph draft':'Saved'}</span>
+       <span>{dirty?'Unsaved changes':'Saved'}</span>
        <StudioInput aria-label="Search node catalog" placeholder="Find node…" value={nodeQuery} onChange={e=>setNodeQuery(e.target.value)}/>
        <select className="graph-add-select" aria-label="Graph node operation"
          value={chosenOp?.id??''} onChange={event=>setSelectedOp(event.target.value)}>

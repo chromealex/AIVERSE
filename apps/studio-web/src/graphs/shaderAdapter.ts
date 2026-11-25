@@ -5,7 +5,7 @@ import type {GraphSource,ShaderNodeOperation} from '../panels/shaderGraphLayout'
 
 export function shaderProjection(source:GraphSource,operations:readonly ShaderNodeOperation[]=[]):GraphView {
  const diagram=layoutShaderGraph(source);
- const nodes=diagram.nodes.map(n=>({id:n.id,label:n.op,x:n.x,y:n.y,
+ const nodes=diagram.nodes.map(n=>({id:n.id,label:n.op,values:n.values,x:n.x,y:n.y,
   inputs:Array.from({length:Math.max(n.inputs.length,Math.min(16,operations.find(o=>o.id===n.op&&o.domains.includes(source.domain??'material'))?.inputs??0))},(_,index)=>({id:String(index),type:'float4'})),
   outputs:[{id:'value',type:'float4'}]}));
  const links=diagram.nodes.flatMap(n=>n.inputs.flatMap((from,index)=>from?[{

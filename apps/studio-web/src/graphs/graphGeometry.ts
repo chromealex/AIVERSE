@@ -3,13 +3,13 @@ import type {Point,Positioned} from './graphSelection';
 
 export interface PortRef {node:string;port:string}
 export interface PortGeometry extends PortRef,Point {type:string;direction:'input'|'output'}
-export interface WireGeometry {id:string;x1:number;y1:number;x2:number;y2:number}
+export interface WireGeometry {id:string;from:string;to:string;x1:number;y1:number;x2:number;y2:number}
 export const nodeWidth=130;
 export const portY=(index:number)=>25+index*14;
 export const nodeHeight=(inputs:readonly Port[],outputs:readonly Port[])=>Math.max(54,38+Math.max(inputs.length,outputs.length)*14);
 export function graphGeometry(view:GraphView,preview:readonly Positioned[]=[]){
  const moved=new Map(preview.map(p=>[p.id,p]));
- const nodes=view.nodes.map(n=>({...n,...moved.get(n.id),height:nodeHeight(n.inputs,n.outputs)}));
+ const nodes=view.nodes.map(n=>({...n,...moved.get(n.id),height:Math.max(nodeHeight(n.inputs,n.outputs),n.values?.length?73:0)}));
  const byId=new Map(nodes.map(n=>[n.id,n]));
  const ports:PortGeometry[]=[];
  for(const n of nodes){
@@ -22,7 +22,7 @@ export function graphGeometry(view:GraphView,preview:readonly Positioned[]=[]){
   if(!from||!to)continue;
   const output=from.outputs.findIndex(p=>p.id===e.output),input=to.inputs.findIndex(p=>p.id===e.input);
   if(output<0||input<0)continue;
-  wires.push({id:e.id,x1:from.x+nodeWidth,y1:from.y+portY(output),x2:to.x,y2:to.y+portY(input)});
+  wires.push({id:e.id,from:e.from,to:e.to,x1:from.x+nodeWidth,y1:from.y+portY(output),x2:to.x,y2:to.y+portY(input)});
  }
  return {nodes,ports,wires};
 }

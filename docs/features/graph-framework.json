@@ -122,7 +122,9 @@
     "apps/editor/core/ShaderGraphOps.cpp",
     "apps/editor/windows/ShaderGraphWindow.cpp",
     "apps/editor/windows/SpectraGraphWindow.cpp",
-    "skills/visuals/aiverse-spectrafx/SKILL.md"
+    "skills/visuals/aiverse-spectrafx/SKILL.md",
+    "apps/studio-web/src/panels/graphSurface.css",
+    "apps/studio-web/tests/shaderGraphLayout.test.mjs"
   ],
   "traits": {
     "editable": true,
