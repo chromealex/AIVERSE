@@ -3,6 +3,7 @@
 // efficiency, and a static table of every unit's numbers (DPS per armor type, value per cost).
 // Everything runs headless on copies of the open rules/map; nothing is saved.
 #include "BalanceOps.h"
+#include "NativeBuildOps.h"
 #include <algorithm>
 #include <cmath>
 #include <map>
@@ -412,7 +413,7 @@ Json stats(Workspace& ws, const Json& p) {
 } // namespace
 
 void registerBalanceOps(Workspace& ws) {
-    ws.registerOp({"balance_batch",
+    registerNativeSimulationCheck(ws, {"balance_batch",
         "Many bot-vs-bot matches on the open map over consecutive seeds: win rate per player slot and per faction, match "
         "length (avg/median/min/max), timeouts, what gets built and lost per game, types the bots never build. "
         "'factions' {\"1\": id, ...} overrides the map's factions; 'mirror' swaps the two factions on every other run so "
@@ -421,14 +422,14 @@ void registerBalanceOps(Workspace& ws) {
             "seconds": {"type": "number", "description": "time limit per match, default 900"}, "difficulty": {"type": "integer"},
             "factions": {"type": "object"}, "mirror": {"type": "boolean"}}})"),
         [&ws](const Json& p) { return batch(ws, p); }});
-    ws.registerOp({"balance_duel",
+    registerNativeSimulationCheck(ws, {"balance_duel",
         "Arena fight on an empty field: group a vs group b attack-moving into each other, several seeds. Reports win rate, "
         "survivors, hp left and cost efficiency (enemy value destroyed per own value lost). 'equalCost' sizes b to a's cost. "
         "a / b: {\"type\": id, \"count\": n} or a type id.",
         Json::parse(R"({"properties": {"a": {}, "b": {}, "runs": {"type": "integer"}, "seconds": {"type": "number"},
             "distance": {"type": "integer"}, "equalCost": {"type": "boolean"}, "weights": {"type": "object"}}, "required": ["a", "b"]})"),
         [&ws](const Json& p) { return duel(ws, p); }});
-    ws.registerOp({"balance_matrix",
+    registerNativeSimulationCheck(ws, {"balance_matrix",
         "Who counters whom: every listed combat unit (default: all with weapons and a cost, up to 10) fights every other "
         "with the same resource budget. Returns the win-rate table (row vs column) and a ranking.",
         Json::parse(R"({"properties": {"types": {"type": "array", "items": {"type": "string"}}, "budget": {"type": "number"},

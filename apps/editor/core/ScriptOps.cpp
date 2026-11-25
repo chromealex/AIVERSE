@@ -2,6 +2,7 @@
 // checked before saving) / check (compile + a short headless bot match) / api (the reference as JSON).
 // Work without the GUI (aiversemcp). Paths are confined to scripts/ of the game folder.
 #include "ScriptOps.h"
+#include "NativeBuildOps.h"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -137,7 +138,7 @@ void registerScriptOps(Workspace& ws) {
             ws.note({Change::Project, 0, 0, -1, -1, -1, (existed ? "Изменён скрипт " : "Создан скрипт ") + rel});
             return r;
         }});
-    ws.registerOp({"script_check",
+    registerNativeSimulationCheck(ws, {"script_check",
         "Compile every script of the open game and run a headless bot match on the open map for `seconds` (default 60): "
         "returns syntax errors, runtime errors (file:line) and the script log. Run it after script_write.",
         Json::parse(R"({"properties": {"seconds": {"type": "number"}, "seed": {"type": "integer"}}})"),

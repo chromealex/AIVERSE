@@ -3156,6 +3156,7 @@
         "Connect Claude Code or another MCP client."
       ],
       "roadmap": [
+        {"id": "native-simulation-checks", "status": "in-progress", "title": "Диагностика C++-модулей перед проверкой симуляции", "titleEn": "Report missing native modules before simulation checks", "text": "MCP перечисляет отсутствующие модули проекта перед запуском проверки.", "textEn": "MCP lists missing project modules before running a simulation check."},
         {
           "id": "feature-gate",
           "title": "Единый контракт готовности фич",

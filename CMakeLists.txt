@@ -5139,6 +5139,10 @@ if(AIVERSE_BUILD_TESTS AND TARGET aiversemcp AND Python3_EXECUTABLE)
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/lens_mcp_test.py
         $<TARGET_FILE:aiversemcp> ${CMAKE_CURRENT_SOURCE_DIR})
     set_tests_properties(lens_mcp_stdio PROPERTIES TIMEOUT 60)
+    add_test(NAME native_simulation_checks_mcp COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/native_simulation_checks_mcp.py
+        $<TARGET_FILE:aiversemcp> ${CMAKE_CURRENT_SOURCE_DIR})
+    set_tests_properties(native_simulation_checks_mcp PROPERTIES LABELS "MCP" TIMEOUT 120)
     add_test(NAME simulation_budget_mcp COMMAND ${Python3_EXECUTABLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/simulation_budget_mcp_test.py
         $<TARGET_FILE:aiversemcp> ${CMAKE_CURRENT_SOURCE_DIR})

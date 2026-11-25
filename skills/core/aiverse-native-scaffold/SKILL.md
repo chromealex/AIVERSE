@@ -20,3 +20,5 @@ contain the project's gameplay behavior or that a generic reference selector is 
 
 Runtime library: none. This recipe integrates an existing engine subsystem or runs host tools;
 it does not provide a separate runtime implementation. Pin the engine revision for that owner.
+
+For MCP simulation verification on a generic editor, add `reportMissingNativeModules: true` to the normal check arguments. Inspect `simulationRan: false` and `missing` before interpreting a result. See the examples in `docs/native-modules.md`; use `native_status` to locate the project build.

@@ -4,6 +4,7 @@
 // of checks ("t1 is dead by 10 s", "player 1 has >= 500 gold"). Runs headless and deterministic on
 // copies of the open rules and map; nothing is saved.
 #include "ScenarioOps.h"
+#include "NativeBuildOps.h"
 #include <algorithm>
 #include <cmath>
 #include <memory>
@@ -404,7 +405,7 @@ void registerScenarioOps(Workspace& ws) {
         "stopOnResult": {"type": "boolean", "description": "stop when the match is decided (default true)"},
         "victory": {"type": "object", "description": "override the map's victory block"},
         "fogOfWar": {"type": "string", "description": "full | explored | none"}}})J");
-    ws.registerOp({"scenario_run",
+    registerNativeSimulationCheck(ws, {"scenario_run",
         "Headless scripted test of a mechanic on a copy of the open map (nothing is saved): place named objects, give commands at "
         "given seconds, let bots play some slots, then get event and trigger logs, watched objects and pass/fail checks. "
         "Commands: " + commandNames() + ". " + kCommandHelp + " Event names: " + simEventNames() + ".",

@@ -384,3 +384,14 @@ for a reserved seat or a spectator place); the match then starts like any networ
 Limits: `net::HttpServer` / `HttpClient` are HTTP/1.1 without TLS and without keep-alive, native builds
 only; a browser build has no raw TCP, so a TCP matchmaker needs a WebSocket endpoint on the backend
 side; the rule sets of a match on a remote server are those of the map (the data hash is fixed).
+
+### Check simulations from a generic MCP host
+
+Pass `"reportMissingNativeModules": true` to `script_check`, `match_run`, `scenario_run`, `balance_batch`, `balance_duel` or `balance_matrix`.
+When the current host lacks modules declared by the open project, it returns a diagnostic before starting the simulation.
+
+```json
+{"status":"missing_native_modules","simulationRan":false,"missing":["economy","encounters"]}
+```
+
+Use `native_status` to inspect the project build and `native_build` to build a host containing those modules. Running the check on a compatible host produces its usual simulation result. Omitting the option preserves each tool's existing error handling. Static `balance_stats` reads the authored rules without starting a match.
