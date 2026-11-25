@@ -67,9 +67,8 @@ function PlanCanvas({plan,pick}:{plan:Plan;pick:PickPosition}) {
     style={{cursor:'crosshair',width:'100%',height:240,display:'block',background:'var(--au-surface)',borderRadius:8}}/>;
 }
 
-export default function OverlayPlan({scope,placeType,x,z,pick,selectionKey}:{selectionKey:string;pick:PickPosition;scope:StudioGraphDocumentScope;placeType:string;x:string;z:string}) {
+export default function OverlayPlan({scope,placeType,x,z,pick,selectionKey,ids,setVisible}:{ids:string[];setVisible:(id:string,visible:boolean)=>void;selectionKey:string;pick:PickPosition;scope:StudioGraphDocumentScope;placeType:string;x:string;z:string}) {
   const [catalog,setCatalog]=useState<string[]>([]);
-  const [ids,setIds]=useState<string[]>([]);
   const [plan,setPlan]=useState<Plan>();
   const [error,setError]=useState('');
   const {epoch,revision,projectPath}=scope;
@@ -91,7 +90,7 @@ export default function OverlayPlan({scope,placeType,x,z,pick,selectionKey}:{sel
   return <StudioSection title="Ground overlays">
     <div role="group" aria-label="Preview overlays" style={{display:'flex',flexWrap:'wrap',gap:'6px 14px',marginBottom:10}}>
       {catalog.map(id=><label key={id}><input type="checkbox" checked={ids.includes(id)}
-        onChange={e=>setIds(e.target.checked?[...ids,id]:ids.filter(i=>i!==id))}/> {id}</label>)}
+        onChange={e=>setVisible(id,e.target.checked)}/> {id}</label>)}
     </div>
     {error && <StudioAlert tone="danger">{error}</StudioAlert>}
     {plan && <><PlanCanvas plan={plan} pick={pick}/>{!plan.primitives.length && <p>No visible geometry at this position.</p>}</>}

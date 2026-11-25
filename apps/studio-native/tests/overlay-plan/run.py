@@ -1,6 +1,8 @@
 """Exercise the ground overlay panel in macOS Studio. Pass a built app and a scratch directory."""
 import argparse
 import json
+import re
+import sys
 from pathlib import Path
 import shutil
 import subprocess
@@ -15,8 +17,8 @@ here = Path(__file__).resolve().parent
 root = here.parents[3]
 
 
-def stack(panel):
-    return dict(id="stack-" + panel, kind="stack", tabs=[panel], active=panel)
+def stack(region, panel):
+    return dict(id="dock-" + region, kind="stack", tabs=[panel], active=panel)
 
 
 def split(node, ratio, first, second):
@@ -33,6 +35,7 @@ with tempfile.TemporaryDirectory(dir=args.scratch) as temp:
     rows[4] = rows[4][:3] + "~~" + rows[4][5:]
     original = json.dumps(map_data)
     map_file.write_text(original)
+    (map_file.parent / "second.json").write_text(original)
     rules = project / "rules.json"
     data = json.loads(rules.read_text())
     data["overlays"] = [
@@ -45,8 +48,8 @@ with tempfile.TemporaryDirectory(dir=args.scratch) as temp:
     bundle = work / "PreviewTest.app"
     subprocess.run(["ditto", args.bundle, bundle], check=True)
     index = bundle / "Contents/Resources/studio-web/index.html"
-    layout = dict(version=3, root=split("root", .22, stack("hierarchy"),
-                  split("body", .65, stack("overlays"), stack("inspector"))))
+    layout = dict(version=3, root=split("root", .22, stack("left", "hierarchy"),
+                  split("body", .65, stack("center", "console"), stack("right", "inspector"))))
     setup = '''
 localStorage.setItem('aiverse.studio.workspace','scene');
 localStorage.setItem('aiverse.studio.ws.added.scene.agent','1');
@@ -68,8 +71,14 @@ new MutationObserver(()=>{if(document.querySelector('.viewport'))window.testScen
                                 stdout=output, stderr=subprocess.STDOUT)
         try:
             deadline = time.monotonic() + 120
+            linked = False
             while host.poll() is None and time.monotonic() < deadline:
                 messages = log.read_text(errors="replace")
+                match = re.search(r"CROSS main LINK_PORT (\d+)", messages)
+                if match and not linked:
+                    subprocess.run([sys.executable, here / "linked.py", bundle / "Contents/MacOS/aiversemcp",
+                                    root, match.group(1), log], timeout=55, check=True)
+                    linked = True
                 if "CROSS main FAIL" in messages or "CROSS main DONE_1" in messages:
                     break
                 time.sleep(.15)

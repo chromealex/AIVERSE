@@ -33,7 +33,18 @@
 
     await wait(() => document.querySelector('[aria-label="Play"]'), 'shell');
     document.querySelector('[aria-label="Close tour"]')?.click();
-    await wait(() => checkbox('sensor_radius'), 'project overlay catalog');
+    await wait(() => !document.querySelector('[aria-label="Opening project"]'), 'project ready');
+    if (checkbox('sensor_radius')) throw Error('Overlays must initially be closed');
+    log('LINK_PORT '+(await rpc('studio.agentInfo')).port);
+    await wait(() => checkbox('sensor_radius')?.checked && checkbox('build_site')?.checked &&
+      document.getElementById('overlay-x')?.value==='4', 'linked preview opens panel and restores both ids');
+    checkbox('sensor_radius').click();
+    await wait(() => !checkbox('sensor_radius').checked, 'local change applied');
+    log('LINK_LOCAL');
+    await wait(() => !checkbox('build_site').checked && document.getElementById('overlay-structure').value==='' &&
+      !document.querySelector('canvas[aria-label="Ground overlays on the open map"]'), 'off clears ghost and overlays');
+    log('LINK_OFF');
+    await wait(() => document.getElementById('overlay-structure').value==='outpost', 'linked selection restored');
     const before = (await rpc('studio.snapshot')).graphDocument;
     checkbox('sensor_radius').click();
     const canvas = await wait(() => document.querySelector('canvas[aria-label="Ground overlays on the open map"]'), 'ground plan');
@@ -67,7 +78,15 @@
     if (!(single.primitives.length>0 && single.primitives.length<all.primitives.length)) throw Error('Hierarchy selection was ignored');
     const after = (await rpc('studio.snapshot')).graphDocument;
     if (before.revision!==after.revision || window.testSceneWasPresent) throw Error('Document or Scene changed');
-    log('VERIFIED project colors, forced rings, concurrent overlays, water click, deselection and Hierarchy selection');
+    const nextMap=await rpc('studio.openMap',{file:'maps/second.json'});
+    if(nextMap.graphDocument.epoch===before.epoch)throw Error('Map epoch did not change');
+    const reset=(await rpc('studio.op',{op:'overlay_preview',params:{}})).result;
+    if(reset.version!==0 || reset.preview.length || 'x' in reset || 'z' in reset)throw Error('Preview leaked across documents');
+    let stale=false;
+    try { await rpc('studio.op',{op:'overlay_preview',params:{ids:['sensor_radius']},expectedDocumentEpoch:before.epoch}); }
+    catch { stale=true; }
+    if(!stale)throw Error('Stale UI overlay command accepted');
+    log('VERIFIED map isolation and stale command rejection; project colors, forced rings, concurrent overlays, water click, deselection and Hierarchy selection');
     log('DONE_1');
   } catch (error) { log('FAIL '+error.message); }
 })();

@@ -1,8 +1,7 @@
 // Agent ops for overlays (rules.json / game.json "overlays", see engine/view/game/GameOverlayData.h):
 // overlay_templates, overlay_list, overlay_get, overlay_set, overlay_delete. Every change is validated
 // against the open game's rules, saved, and reloads the editor views (live in the play-test).
-// overlay_preview (show overlays in the Scene / Game views regardless of their conditions) needs the
-// editor window: the Overlays window registers the real implementation.
+// overlay_preview needs a live editor host. HTML Studio registers its panel handler in StudioOverlayPlan.h.
 #pragma once
 #include "Workspace.h"
 

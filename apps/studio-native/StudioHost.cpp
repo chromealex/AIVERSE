@@ -105,7 +105,10 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
     : platform_(platform), engineRoot_(engineRoot), htmlComposite_(htmlComposite) {
     // The project opens asynchronously after the UI loads (splash and progress).
     session_ = std::make_unique<StudioSession>(engineRoot, std::string());
-    registerStudioOverlayPlan(*session_);
+    registerStudioOverlayPlan(*session_, [this](const Json& state, bool reveal) {
+        sendEventPayload("overlay.preview", state);
+        if (reveal) sendEventPayload("ui.showPanel", Json::parse(R"({"panel":"overlays"})"));
+    });
     session_->setPlanetViewAgentProvider([this](const std::string& name,const Json& args){return planetViewAgentRequest(name,args);});
     session_->setMaterialSlotProvider([this](const std::string& asset) {
         return preview_ ? onScene([&] { return preview_->modelMaterialSlots(asset); }) : std::vector<std::string>{};

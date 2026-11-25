@@ -81,7 +81,7 @@ export const STUDIO_PANEL_HOME: Record<StudioPanel,string> = {
   models: "dock-right",
   scripts: "dock-center",
   input: "dock-right",
-  overlays: "dock-right",
+  overlays: "dock-center",
   branding: "dock-right",
   asset_audit: "dock-right",
   agent: "dock-bottom",

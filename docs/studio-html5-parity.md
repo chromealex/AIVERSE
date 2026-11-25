@@ -162,7 +162,7 @@ Derived from actual AIVERSE_EDITOR_WINDOW registrations in apps/editor/windows. 
 | `AnimationWindow` | `apps/editor/windows/ModelAnimationWindow.cpp` | Model inspection and edit operations. The separate AnimationTimeline plays and scrubs authoring-model clips with a skeleton preview. Verify imported-model playback separately. |
 | `models` | `apps/editor/windows/ModelWindow.cpp` | Model operations plus MaterialTechniquePanel and StrataAnalysisPanel. Verify preview of the original model without overrides. |
 | `ModelingWindow` | `apps/editor/windows/ModelingWindow.cpp` | ModelGraphPanel opens by default inside ToolPanel. Native modeling operations are also available. Verify navigation from the active model to Attachments. |
-| `overlays` | `apps/editor/windows/OverlaysWindow.cpp` | Shared template and asset operations; independent placement footprint and selectable ground-overlay map plan with GameOverlays geometry, forced anchors, authored colors and Hierarchy selection. Legacy overlay_preview still requires its live host handler; screen overlays, textured icons and the structure model ghost remain pending. |
+| `overlays` | `apps/editor/windows/OverlaysWindow.cpp` | Shared template and asset operations; independent placement footprint and selectable ground-overlay map plan with GameOverlays geometry, forced anchors, authored colors and Hierarchy selection. Linked overlay_preview opens the HTML panel, shares selection and placement with it, handles partial updates and clears the preview on off. Screen overlays, textured icons and the structure model ghost remain pending. |
 | `physis` | `apps/editor/windows/PhysisWindow.cpp` | PHYSIS get, validate and set operations. Verify the old demo stepping, field raster, palettes and contours in HTML. |
 | `postfx` | `apps/editor/windows/PrismaWindow.cpp` | PostFxPanel edits game and map chains, effect parameters and quality tiers, estimates cost and applies presets. Verify per-camera diagnostics and local volume authoring. |
 | `studio_asset_audit` | `apps/editor/windows/ProjectAuditWindow.cpp` | Asset Audit panel (108) |
@@ -286,3 +286,5 @@ Roads transfer: author road nodes from a map-local network diagram, with revisio
 Overlays transfer: share authored terrain sampling and preview a structure footprint against the open map inside the Overlays panel. Forced overlay rendering remains a separate acceptance item.
 
 Overlays transfer: draw selected ground overlays on an independent plan using GameOverlays anchor evaluation and geometry emission. Verify authored colors, forced selection and placement.
+
+Overlays transfer: bind the legacy overlay_preview command to document-scoped HTML panel state, including partial changes, off and linked MCP calls.

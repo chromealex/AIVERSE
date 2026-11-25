@@ -10,6 +10,7 @@ inline bool studioPlanetViewAgentOperation(const std::string& op){
 inline const char* studioAgentHistoryPolicy(const std::string& op){
     static const std::set<std::string> reads={
         "studio_runtime_entities","studio_runtime_inspect","studio_runtime_regions","studio_play_review_preview",
+        "overlay_preview","overlay_plan_preview","overlay_placement_preview",
         "lightbake_status","lightbake_get","mcp_registry","simulation_budget_plan","game_info","rules_get","rules_list",
         "region_list","map_list","map_info","map_ascii","map_get","map_validate","entity_list","planet_forest_get",
         "studio_planet_forest_live","studio_planet_scene_get",

@@ -15,8 +15,81 @@ inline bool groundPlanShape(const game::OverlayDef& def) {
            def.shape != OvShape::Text && def.shape != OvShape::Bar;
 }
 
-inline void registerStudioOverlayPlan(StudioSession& session) {
+inline void registerStudioOverlayPlan(StudioSession& session, std::function<void(const Json&, bool)> notify) {
     auto& ws = session.workspace();
+    Json schema;
+    for (const auto& op : ws.ops()) if (op.name == "overlay_preview") { schema = op.schema; break; }
+    schema.member("properties").set("reveal", Json::parse(R"({"type":"boolean"})"));
+    schema.member("properties").set("entry", Json::parse(R"({"type":"object","properties":{"id":{"type":"string"},"visible":{"type":"boolean"}},"required":["id","visible"]})"));
+    ws.registerOp({"overlay_preview", "Show ground overlays in the HTML Overlays panel. Supply ids, a structure type or map coordinates. off clears the preview. Empty arguments read the current selection.",
+        schema, [&session, notify = std::move(notify), state = Json::object()](const Json& patch) mutable {
+            const auto& ws = session.workspace();
+            if (ws.project.dir.empty()) throw std::runtime_error("Open a project first");
+            const auto epoch = session.graphDocumentScope().getStr("epoch");
+            if (state.getStr("epoch") != epoch) {
+                state = Json::object();
+                state.set("epoch", Json::string(epoch));
+                state.set("ok", Json::fromBool(true));
+                state.set("preview", Json::array());
+                for (const auto& type : ws.project.rules.types) if (type.structure) {
+                    state.set("placeType", Json::string(type.id));
+                    break;
+                }
+                state.set("version", Json::number(int64_t(0)));
+            }
+            if (!patch.size()) return state;
+            if (patch.has("reveal") && patch["reveal"].type()!=Json::Type::Bool)
+                throw std::runtime_error("reveal must be a boolean");
+            Json next = state;
+            if (patch.has("off") && patch["off"].type()!=Json::Type::Bool) throw std::runtime_error("off must be a boolean");
+            if (patch.getBool("off")) {
+                next.set("preview", Json::array());
+                next.set("placeType", Json::string(""));
+                next.erase("x"); next.erase("z");
+            } else {
+                const auto& rules = ws.project.rules;
+                if (patch.has("ids") || patch.has("entry")) {
+                    Json requested = patch["ids"];
+                    if (patch.has("entry")) {
+                        const auto& entry = patch["entry"];
+                        if (patch.has("ids") || !entry["id"].isString() || entry["visible"].type()!=Json::Type::Bool)
+                            throw std::runtime_error("Pass ids or one entry with id and visible");
+                        requested = Json::array();
+                        for (const auto& id : state["preview"].items()) if (id.str()!=entry.getStr("id")) requested.push(id);
+                        if (entry.getBool("visible")) requested.push(entry["id"]);
+                    }
+                    if (!requested.isArray()) throw std::runtime_error("ids must be an array");
+                    const auto catalog = game::loadOverlaySet(rules, ws.project.rulesJson["overlays"], ws.project.manifest["overlays"]);
+                    std::set<std::string> allowed, seen;
+                    for (const auto& def : catalog.defs) if (groundPlanShape(def)) allowed.insert(def.id);
+                    Json ids = Json::array();
+                    for (const auto& id : requested.items()) {
+                        if (!id.isString() || !allowed.count(id.str())) throw std::runtime_error("Unavailable ground overlay: " + id.dump());
+                        if (seen.insert(id.str()).second) ids.push(id);
+                    }
+                    next.set("preview", ids);
+                }
+                if (patch.has("placeType")) {
+                    const auto& type = patch["placeType"];
+                    const int index = rules.findType(type.str());
+                    if (!type.isString() || (!type.str().empty() && (index < 0 || !rules.types[size_t(index)].structure)))
+                        throw std::runtime_error("Choose a structure type");
+                    next.set("placeType", type);
+                }
+                for (const char* axis : {"x", "z"}) if (patch.has(axis)) {
+                    const auto& value = patch[axis];
+                    if (value.isNull()) { next.erase(axis); continue; }
+                    const int extent = *axis == 'x' ? ws.map.data.w : ws.map.data.h;
+                    if (!value.isNumber() || value.toDouble() < 0 || value.toDouble() >= extent)
+                        throw std::runtime_error(std::string(axis) + " must be inside the map");
+                    next.set(axis, value);
+                }
+            }
+            next.set("version", Json::number(state.getInt("version") + int64_t(1)));
+            state = next;
+            notify(state, patch.getBool("reveal", true) && !patch.getBool("off"));
+            return state;
+        }, true});
     ws.registerOp({"overlay_plan_preview", "Preview ground overlay definitions in project draw order on the map plan.",
         Json::parse(R"({"properties":{"ids":{"type":"array","items":{"type":"string"}},"placeType":{"type":"string"},"x":{"type":"number"},"z":{"type":"number"}}})"),
         [&ws, &session](const Json& args) {

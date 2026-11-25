@@ -3,6 +3,9 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/panels/useOverlayPreview.ts",
+    "apps/studio-web/src/nestedDock.ts",
+    "apps/studio-native/tests/overlay-plan/linked.py",
     "apps/studio-native/StudioOverlayPlan.h",
     "apps/editor/core/OverlayPreviewTerritory.h",
     "apps/studio-native/tests/overlay-plan/run.py",
