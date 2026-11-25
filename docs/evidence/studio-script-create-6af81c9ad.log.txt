@@ -1,0 +1,11 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+    Start 577: studio_session
+1/1 Test #577: studio_session ...................   Passed   11.02 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+EDITOR    =  11.02 sec*proc (1 test)
+
+Total Test time (real) =  11.07 sec
