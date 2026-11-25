@@ -411,6 +411,9 @@ Json StudioGameSurface::profile(const std::string& action,uint32_t steps) {
 Json StudioGameSurface::entities(int offset,int limit,const std::string& query) {
     return inspector_.entities(liveSimulation(),std::to_string(runtimeEpoch_),offset,limit,query);
 }
+void StudioGameSurface::selectEntity(const std::string& epoch,const std::string& ref) {
+    inspector_.select(liveSimulation(),std::to_string(runtimeEpoch_),epoch,ref);
+}
 Json StudioGameSurface::inspect(const std::string& epoch,const std::string& ref) {
     auto* sim=liveSimulation();
     Json out=inspector_.inspect(sim,std::to_string(runtimeEpoch_),epoch,ref);
@@ -484,6 +487,8 @@ Json StudioGameSurface::state(bool includeScriptErrors) const {
     out.set("error",Json::string(error_));
     auto* sim=liveSimulation();
     out.set("tick",Json::number(int64_t(sim?sim->tick():0)));
+    const auto selected=inspector_.selectedRef(sim,std::to_string(runtimeEpoch_));
+    if(!selected.empty())out.set("selectedLiveRef",Json::string(selected));
     if (includeScriptErrors) out.set("scriptErrors", scriptLog(true));
     return out;
 }

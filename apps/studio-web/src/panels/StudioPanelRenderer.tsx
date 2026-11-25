@@ -91,6 +91,8 @@ export interface StudioPanelContext {
   openScript:(path:string,line:number)=>void;
   consumeScriptLocation:()=>void;
   scriptErrors?: StudioScriptMessage[];
+  liveSelection?: import('./livePlay').LiveRef | null;
+  onLiveSelection?: (state:import('../types').StudioGameState)=>void;
   playing?: boolean;
   showPanel: (panel: StudioPanel) => void;
   reportError: (message: string) => void;
@@ -98,11 +100,11 @@ export interface StudioPanelContext {
 
 function PlayHierarchy({ ctx }: { ctx: StudioPanelContext }) {
   const { showLive } = useLivePlay();
-  return <LiveSwitch>{showLive ? <LiveHierarchy key={ctx.snapshot?.project.path} project={ctx.snapshot?.project.path}/> : <HierarchyPanel {...ctx}/>}</LiveSwitch>;
+  return <LiveSwitch>{showLive ? <LiveHierarchy selection={ctx.liveSelection} onSelected={ctx.onLiveSelection} key={ctx.snapshot?.project.path} project={ctx.snapshot?.project.path}/> : <HierarchyPanel {...ctx}/>}</LiveSwitch>;
 }
 function PlayInspector({ ctx }: { ctx: StudioPanelContext }) {
   const { showLive } = useLivePlay();
-  return <LiveSwitch>{showLive ? <LiveInspector key={ctx.snapshot?.project.path} project={ctx.snapshot?.project.path}/> : <InspectorPanel {...ctx}/>}</LiveSwitch>;
+  return <LiveSwitch>{showLive ? <LiveInspector selection={ctx.liveSelection} key={ctx.snapshot?.project.path} project={ctx.snapshot?.project.path}/> : <InspectorPanel {...ctx}/>}</LiveSwitch>;
 }
 
 export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): ReactNode {

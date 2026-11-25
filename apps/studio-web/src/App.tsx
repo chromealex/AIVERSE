@@ -19,8 +19,8 @@ import StudioStatusBar from './components/StudioStatusBar';
 import EvolveGroupNumeric from './components/EvolveGroupNumeric';
 import WorkspaceTabs from './components/WorkspaceTabs';
 import type { StudioPanel } from './nestedDock';
-import type { StudioAsset, StudioEntity, StudioGameState, StudioInspector, StudioSnapshot } from './types';
-import HeaderGameControls from './components/HeaderGameControls';
+import type { StudioAsset, StudioEntity, StudioInspector, StudioSnapshot } from './types';
+import HeaderGameControls, {useStudioGameState} from './components/HeaderGameControls';
 import LayoutMenu from './components/LayoutMenu';
 import engineLogo from '../../../engine/assets/branding/mark.png';
 import NestedDockWorkspace from './components/NestedDockWorkspace';
@@ -72,7 +72,11 @@ export default function App() {
   const [palette, setPalette] = useState<string | null>(null); // null = closed, else initial query
   const [paletteAssets, setPaletteAssets] = useState<StudioAsset[]>([]);
   const [scriptLocation,setScriptLocation] = useState<{project:string; path:string; line:number} | null>(null);
-  const [game, setGame] = useState<StudioGameState | null>(null);
+  const [connected] = useState(nativeConnected);
+  const panelIds = useMemo(() => treePanels(dock), [dock]);
+  const watchPlay = !FLOAT || panelIds.some(id => ['hierarchy','inspector','scripts','console'].includes(id));
+  const [game,setGame] = useStudioGameState(connected && !!snapshot?.project.path && watchPlay,
+    !FLOAT || panelIds.includes('console'), snapshot?.project.path);
   const [sceneAction, setSceneAction] = useState('');
   const [hoverId, setHoverId] = useState('');
   const [dockHover, setDockHover] = useState(false); // a floating window is dragged over the main window
@@ -80,7 +84,6 @@ export default function App() {
   // Requests answered while the native side opens a project are expected, not errors.
   useEffect(() => { if (error === 'Project is loading') setError(''); }, [error]);
   useEffect(() => { resetLive(); }, [game?.active,game?.epoch]); // live refs belong to one session
-  const [connected] = useState(nativeConnected);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [tourOpen, setTourOpen] = useState(() => !tourSeen());
   const [hubOpen, setHubOpen] = useState(false);
@@ -340,7 +343,8 @@ export default function App() {
     scriptLocation: scriptLocation?.project === snapshot?.project.path ? scriptLocation : null,
     openScript: (path,line) => { setScriptLocation({project:snapshot?.project.path ?? '',path,line}); showPanel('scripts'); },
     consumeScriptLocation: () => setScriptLocation(null),
-    scriptErrors: game?.scriptErrors, playing: !!game?.active
+    liveSelection: game?.epoch && game.selectedLiveRef ? {epoch:game.epoch,ref:game.selectedLiveRef} : null,
+    onLiveSelection: setGame, scriptErrors: game?.scriptErrors, playing: !!game?.active
   })}</PanelErrorBoundary>;
 
   const project = connected && !!snapshot?.project.path;
@@ -561,7 +565,7 @@ export default function App() {
       </button>
       <div className="header-drag-space"/>
       </div>
-      <HeaderGameControls enabled={connected && !!snapshot?.project.path} onState={setGame}
+      <HeaderGameControls enabled={connected && !!snapshot?.project.path} state={game} setState={setGame}
         onPlay={()=>showPanel('game')} onError={setError}/>
       <div className="titlebar__side titlebar__side--right">
       <div className="header-drag-space"/>

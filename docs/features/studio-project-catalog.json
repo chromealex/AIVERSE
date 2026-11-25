@@ -3,6 +3,13 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-native/StudioGameSurface.cpp",
+    "apps/studio-native/StudioGameSurface.h",
+    "apps/studio-native/StudioRuntimeInspect.h",
+    "apps/studio-web/src/panels/livePlay.ts",
+    "apps/studio-web/src/components/HeaderGameControls.tsx",
+    "apps/studio-web/src/types.ts",
+    "apps/studio-web/src/mock.ts",
     "apps/studio-web/src/panels/LivePanels.tsx",
     "apps/studio-web/src/panels/LivePanels.css",
     "apps/studio-web/src/panels/StudioPanelRenderer.tsx",

@@ -2,8 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, Radio, Search } from 'lucide-react';
 import { StudioIconButton } from '../ui';
 import { invoke } from '../bridge';
-import type { StudioRuntimeEntity, StudioRuntimePage } from '../types';
-import { selectLive, setShowLive, useLivePlay } from './livePlay';
+import type { StudioRuntimeEntity, StudioRuntimePage, StudioGameState } from '../types';
+import { type LiveRef, setShowLive, useLivePlay } from './livePlay';
 import './LivePanels.css';
 
 /** Scene / Live switch shown above Hierarchy and Inspector while the game runs (Unity play mode). */
@@ -22,8 +22,7 @@ export function LiveSwitch({ children }: { children: ReactNode }) {
 
 const pageSize = 100;
 
-export function LiveHierarchy({project}:{project?:string}) {
-  const { selection } = useLivePlay();
+export function LiveHierarchy({project,selection,onSelected}:{project?:string;selection?:LiveRef|null;onSelected?:(state:StudioGameState)=>void}) {
   const [page, setPage] = useState<StudioRuntimePage | null>(null);
   const [query, setQuery] = useState('');
   const [offset, setOffset] = useState(0);
@@ -59,7 +58,10 @@ export function LiveHierarchy({project}:{project?:string}) {
         {page.rows.map(row => <button key={row.ref} type="button" role="option" title={row.name + ' · ref:' + row.ref}
           aria-selected={selection?.ref === row.ref && selection.epoch === page.epoch}
           className={'live-hier__row' + (selection?.ref === row.ref && selection.epoch === page.epoch ? ' is-selected' : '')}
-          onClick={() => selectLive({ epoch: page.epoch, ref: row.ref })}>
+          onClick={() => {
+            if(project) void invoke('studio.gameSelectEntity',{expectedProject:project,epoch:page.epoch,ref:row.ref})
+              .then(onSelected).catch(e=>setError(String(e)));
+          }}>
           <span className={'live-hier__owner live-hier__owner--' + Math.min(row.owner, 4)}/>
           <b>{row.name}</b><small>{row.kind}{row.health > 0 ? ' · ' + Math.round(row.health) + ' hp' : ''}</small>
         </button>)}
@@ -86,23 +88,25 @@ function Value({ value, depth = 0 }: { value: unknown; depth?: number }) {
   return <dl className="live__fields">{entries.map(([k, v]) => <div key={k}><dt>{k}</dt><dd><Value value={v} depth={depth + 1}/></dd></div>)}</dl>;
 }
 
-export function LiveInspector({project}:{project?:string}) {
-  const { selection } = useLivePlay();
+export function LiveInspector({project,selection}:{project?:string;selection?:LiveRef|null}) {
   const [detail, setDetail] = useState<StudioRuntimeEntity | null>(null);
   const [error, setError] = useState('');
   useEffect(() => {
     setDetail(null); setError('');
     if (!selection) return;
-    let live = true;
+    let live = true, busy = false;
     const poll = async () => {
-      try { const next = await invoke('studio.gameInspect', {...selection,expectedProject:project}); if (live) setDetail(next); }
-      catch (e) { if (live) { setError(e instanceof Error ? e.message : String(e)); selectLive(null); } }
+      if(busy)return; busy=true;
+      try { const next = await invoke('studio.gameInspect', {...selection,expectedProject:project}); if (live) {setDetail(next);setError('');} }
+      catch (e) { if (live) { setError(e instanceof Error ? e.message : String(e)); setDetail(null); } }
+      finally {busy=false;}
     };
     void poll(); const t = window.setInterval(() => void poll(), 500);
     return () => { live = false; window.clearInterval(t); };
   }, [selection?.epoch, selection?.ref, project]);
   if (!selection) return <div className="live__empty">{error || 'Select a live entity in the Hierarchy.'}</div>;
-  if (!detail) return <div className="live__empty">Reading entity…</div>;
+  if (error) return <p className="live__error" role="alert">{error}</p>;
+  if (!detail || detail.ref!==selection.ref || detail.epoch!==selection.epoch) return <div className="live__empty">Reading entity…</div>;
   return <div className="live-insp">
     <header><b>Entity {detail.ref}</b><small>tick {detail.tick}</small></header>
     {Object.entries(detail.components).map(([name, value]) => <details key={name} open className="live-insp__comp">

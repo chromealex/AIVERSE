@@ -3009,11 +3009,16 @@ Json StudioHost::localPlayOperation(const std::string& method, const Json& param
         if(!game_)throw std::runtime_error("No local game running");
         return game_->editRuntime(params);
     }
-    if (method == "studio.gameEntities" || method == "studio.gameInspect") {
+    if (method == "studio.gameSelectEntity" || method == "studio.gameEntities" || method == "studio.gameInspect") {
         // Older clients omit expectedProject. Entity Debugger always sends it.
         if(params.has("expectedProject")&&(session_->workspace().project.dir.empty()||
             params.getStr("expectedProject")!=session_->workspace().project.dir))
             throw std::runtime_error("Runtime inspection project changed");
+        if(method=="studio.gameSelectEntity"){
+            if(!game_ || !params.has("expectedProject"))throw std::runtime_error("Select an entity in an open game");
+            game_->selectEntity(params.getStr("epoch"),params.getStr("ref"));
+            return gameState();
+        }
         if (method == "studio.gameEntities") {
             if (!params["offset"].isNumber() || !params["limit"].isNumber() || !params["query"].isString() ||
                 params["offset"].toDouble() < 0 || params["offset"].toDouble() > 10000000 ||
@@ -3338,7 +3343,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
     if (method == "studio.spectraPreview")
         return answer([&]{return runSpectraPreview(params);});
     if (method == "studio.viewportInput") return answer([&] { return viewportInput(params); });
-    if (method == "studio.gameEntities" || method == "studio.gameInspect" || method == "studio.gameRegions" ||
+    if (method == "studio.gameSelectEntity" || method == "studio.gameEntities" || method == "studio.gameInspect" || method == "studio.gameRegions" ||
         method == "studio.gameProfile" || method == "studio.gameEdit" ||
         method == "studio.previewPlayChanges" || method == "studio.keepPlayChanges") {
         return answer([&] {

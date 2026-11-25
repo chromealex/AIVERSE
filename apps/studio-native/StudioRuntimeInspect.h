@@ -9,6 +9,8 @@ namespace aiverse::studio {
 // UI projection of the hosted world's real entities; never an editable mirror.
 class StudioRuntimeInspect {
     editor::WorldModel model_;
+    uint64_t selectedRef_=0;
+    std::string selectedEpoch_;
     struct Filter {
         std::string shared;
         std::vector<std::string> stable,cell,handle;
@@ -56,7 +58,27 @@ class StudioRuntimeInspect {
         out.set("revision",world::worldCounter(record->revision));
         return out;
     }
+    static uint64_t checkedRef(Simulation* sim,const std::string& currentEpoch,const std::string& epoch,const std::string& ref) {
+        if(epoch!=currentEpoch)throw std::runtime_error("This entity belongs to a previous game session");
+        if(ref.empty()||ref.size()>20)throw std::runtime_error("Invalid runtime entity reference");
+        uint64_t packed=0;auto parsed=std::from_chars(ref.data(),ref.data()+ref.size(),packed);
+        if(parsed.ec!=std::errc{} || parsed.ptr!=ref.data()+ref.size() || packed==0)
+            throw std::runtime_error("Invalid runtime entity reference");
+        auto* mod=sim?dynamic_cast<game::GameCore*>(&sim->module()):nullptr;
+        if(!mod)throw std::runtime_error("No inspectable game is running");
+        const Entity entity=editor::worldEntity(packed);
+        if(!sim->world().alive(entity))throw std::runtime_error("Runtime entity no longer exists");
+        return packed;
+    }
 public:
+    void select(Simulation* sim,const std::string& currentEpoch,const std::string& epoch,const std::string& ref) {
+        selectedRef_=checkedRef(sim,currentEpoch,epoch,ref);
+        selectedEpoch_=epoch;
+    }
+    std::string selectedRef(Simulation* sim,const std::string& epoch) const {
+        if(!selectedRef_ || !sim || selectedEpoch_!=epoch || !sim->world().alive(editor::worldEntity(selectedRef_)))return {};
+        return std::to_string(selectedRef_);
+    }
     Json entities(Simulation* sim,const std::string& epoch,int offset,int limit,const std::string& query) {
         if(offset<0 || limit<1 || limit>100 || query.size()>256)
             throw std::runtime_error("Invalid runtime query");
@@ -88,15 +110,9 @@ public:
         out.set("rows",std::move(rows));out.set("total",Json::number(int64_t(total)));return out;
     }
     Json inspect(Simulation* sim,const std::string& currentEpoch,const std::string& epoch,const std::string& ref) {
-        if(epoch!=currentEpoch)throw std::runtime_error("This entity belongs to a previous game session");
-        if(ref.empty()||ref.size()>20)throw std::runtime_error("Invalid runtime entity reference");
-        uint64_t packed=0;auto parsed=std::from_chars(ref.data(),ref.data()+ref.size(),packed);
-        if(parsed.ec!=std::errc{} || parsed.ptr!=ref.data()+ref.size() || packed==0)
-            throw std::runtime_error("Invalid runtime entity reference");
-        auto* mod=sim?dynamic_cast<game::GameCore*>(&sim->module()):nullptr;
-        if(!mod)throw std::runtime_error("No inspectable game is running");
+        const auto packed=checkedRef(sim,currentEpoch,epoch,ref);
+        auto* mod=dynamic_cast<game::GameCore*>(&sim->module());
         const Entity entity=editor::worldEntity(packed);
-        if(!sim->world().alive(entity))throw std::runtime_error("Runtime entity no longer exists");
         Json out=editor::inspectEntity(*sim,*mod,entity,Json::object());
         const World& w=sim->world();
         out.set("ownership",ownership(w,w.resourceConst<world::RegionEntityLedger>(),entity));
