@@ -197,7 +197,7 @@
   },
   "integrations": {
     "skills": ["aiverse-map-build"],
-    "mcp_tools": ["player_set", "player_remove", "map_area", "region_paint", "region_list", "region_name"],
+    "mcp_tools": ["rules_merge", "player_set", "player_remove", "map_area", "region_paint", "region_list", "region_name"],
     "studio_panels": [
       "actor",
       "scene",
