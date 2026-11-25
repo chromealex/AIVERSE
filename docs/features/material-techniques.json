@@ -19,6 +19,7 @@
     "docs/agent-handoffs/material-techniques-initial.md",
     "docs/agent-handoffs/material-techniques-metal-20261125.md",
     "docs/agent-handoffs/material-techniques-studio-20261125.md",
+    "docs/agent-handoffs/material-techniques-web-20261125.md",
     "docs/devlog/systems.json",
     "docs/evidence/material-techniques-far.png",
     "docs/evidence/material-techniques-inspection.png",
@@ -30,6 +31,8 @@
     "docs/evidence/material-techniques-runtime-20261125.log.txt",
     "docs/evidence/material-techniques-selection-20261125.json",
     "docs/evidence/material-techniques-selection-20261125.log.txt",
+    "docs/evidence/material-techniques-web-far.png",
+    "docs/evidence/material-techniques-web-near.png",
     "docs/features/material-techniques.json",
     "docs/models.md",
     "engine/render/MaterialTechnique.h",
@@ -119,9 +122,14 @@
       "evidence": []
     },
     "platforms": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Mac Metal and WebGL2 on Chromium each selected the expected real material colours. Other devices were not run.",
+      "evidence": [
+        "docs/agent-handoffs/material-techniques-web-20261125.md",
+        "docs/evidence/material-techniques-runtime-20261125.json",
+        "docs/evidence/material-techniques-web-near.png",
+        "docs/evidence/material-techniques-web-far.png"
+      ]
     },
     "dependencies": {
       "status": "not_run",
@@ -137,9 +145,14 @@
       ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The packaged demo ran in Chromium with verified Near, Far and Reset actions.",
+      "evidence": [
+        "demos/material-techniques/game.json",
+        "docs/agent-handoffs/material-techniques-web-20261125.md",
+        "docs/evidence/material-techniques-web-near.png",
+        "docs/evidence/material-techniques-web-far.png"
+      ]
     },
     "tests": {
       "status": "pass",
