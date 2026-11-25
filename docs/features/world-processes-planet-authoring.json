@@ -384,10 +384,10 @@
       ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "The current physics-enabled Mac candidate passed all 11 selected World Processes, Box3D and Studio tests. Await the commit-bound acceptance report.",
+      "status": "pass",
+      "note": "All 11 focused native World Processes, physics and Studio cases passed on the refreshed checkout.",
       "evidence": [
-        "docs/agent-handoffs/world-processes-pr124-current-main-2026-11-25.md"
+        "docs/evidence/pr124-world-processes-48352ee2.json"
       ]
     },
     "handoff": {
@@ -412,5 +412,7 @@
       ]
     }
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/pr124-world-processes-48352ee2.json"
+  ]
 }
