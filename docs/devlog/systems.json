@@ -3167,6 +3167,11 @@
       "roadmap": [
         {
           "status": "in-progress",
+          "title": "Трипланарные материалы моделей и срезов CSG без UV",
+          "titleEn": "Triplanar materials on models and UV-free CSG cut surfaces"
+        },
+        {
+          "status": "in-progress",
           "title": "3D-объекты в интерфейсе",
           "text": "Вывод объектов сцены и отдельно анимированных моделей в элементы UI через внеэкранную текстуру.",
           "titleEn": "3D objects in UI",
