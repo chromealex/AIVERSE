@@ -304,6 +304,7 @@
     "docs/evidence/studio-baked-scene-metal.json",
     "docs/evidence/studio-baked-scene-receivers.json",
     "docs/evidence/studio-captured-bake-job.json",
+    "docs/evidence/studio-light-bake-background-ui.json",
     "docs/evidence/studio-light-game-frame.json",
     "docs/evidence/studio-light-rgb-swatch.json",
     "docs/evidence/studio-light-beacon-authoring.json",

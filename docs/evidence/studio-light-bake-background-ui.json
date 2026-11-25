@@ -1,0 +1,10 @@
+{
+  "sha": "bb4697dfa1639af0c7f67800a7c486bce50c2c45",
+  "argv": [
+    "bash",
+    "/tmp/studio-bake-job-acceptance.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-light-bake-background-ui.log.txt",
+  "sha256": "a45dcaef33145f85402951ab12897c1ae50518a9db8b09aded3c299735f8ff2e"
+}
