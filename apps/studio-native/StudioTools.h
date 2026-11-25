@@ -24,7 +24,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
         {"building_generator", {"building_graph_diagnostics"}},
         {"feature_readiness", {"feature_readiness_get", "feature_readiness_query", "feature_readiness_status_get", "feature_readiness_refresh"}},
         {"terrain", {"map_info", "terrain_sculpt", "terrain_level", "terrain_height", "terrain_heights", "terrain_paint",
-                     "terrain_paint_material", "terrain_material", "terrain_detail", "heightmap_import", "heightmap_export"}},
+                     "terraweave_meadow_get", "terraweave_meadow_set", "terrain_paint_material", "terrain_material", "terrain_detail", "heightmap_import", "heightmap_export"}},
         {"caverns", {"terraweave_caverns_paint","terraweave_caverns_pick"}},
         {"water", {"water_types", "water_network", "water_set", "water_delete", "water_shores", "water_bake", "nereid_water_state"}},
         {"roads", {"simulation_budget_plan", "road_types", "road_network", "road_add", "road_delete", "road_node_set", "road_edge_set", "road_split",

@@ -84,6 +84,7 @@ int main(int argc,char** argv){try{
         cover.push(Json::number(int64_t(mask.sandPermille>grassSandLimit||h>grassMaxElevation?0:950)));
     }
     ground.set("version",Json::number(int64_t(2)));ground.set("grassMaskSource",Json::string("terra-nereid-shore-v1"));ground.set("grassSandLimitPermille",Json::number(grassSandLimit));
+    if (doc["grass"].has("meadow")) ground.set("meadow", doc["grass"]["meadow"]);
     ground.set("sandPermille",sand);ground.set("wetPermille",wetness);
     ground.set("originXcm",Json::number(minX));ground.set("originZcm",Json::number(minZ));ground.set("stepCm",Json::number(int64_t(100)));ground.set("columns",Json::number(nx));ground.set("rows",Json::number(nz));ground.set("waterHeightCm",waterHeights);ground.set("heightCm",heights);ground.set("coverPermille",cover);
     for(const auto& p:doc["grassPatches"].items())grass.push(p);ground.set("patches",grass);write(out/"ground.json",ground.dump());
