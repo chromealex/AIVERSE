@@ -1,0 +1,14 @@
+{
+  "sha": "2920a1645e772d92a71c70ac17ec3d623c9f035f",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/meadow-gallery-193",
+    "-R",
+    "^terraweave_grass_meadow$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/meadow-grass-2920a1645.log.txt",
+  "sha256": "dfb0bfcd07a31c40b0f97903c8784e3e6b1ca45af27d698d5efda8b8f2198fd1"
+}

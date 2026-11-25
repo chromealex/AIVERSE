@@ -1217,6 +1217,18 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(call("studio.op",R"({"op":"map_new","params":{}})").has("error"));
        const auto info=call("studio.op",R"({"op":"map_info","params":{}})");
        AIVERSE_TEST_CHECK(!info.has("error") && !info["result"].getBool("changed"));
+       const auto readMeadow = [&] { return call("studio.op",R"({"op":"terraweave_meadow_get","params":{}})"); };
+       AIVERSE_TEST_CHECK(readMeadow()["result"]["result"]["meadow"].isNull());
+       AIVERSE_TEST_CHECK(!call("studio.op",R"({"op":"terraweave_meadow_set","params":{"preset":"wetland"}})").has("error"));
+       AIVERSE_TEST_CHECK(readMeadow()["result"]["result"]["meadow"].str()=="wetland");
+       editor::MapDoc reloadedMeadow;
+       AIVERSE_TEST_CHECK(reloadedMeadow.loadJson(session.workspace().map.toJson(), nullptr));
+       AIVERSE_TEST_CHECK(reloadedMeadow.data.extra["grass"]["meadow"].str()=="wetland");
+       const auto depthWithMeadow = session.workspace().map.undoDepth();
+       AIVERSE_TEST_CHECK(call("studio.op",R"({"op":"terraweave_meadow_set","params":{"config":{"species":[{"preset":"unknown"}]}}})").has("error"));
+       AIVERSE_TEST_CHECK(session.workspace().map.undoDepth()==depthWithMeadow);
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error"));
+       AIVERSE_TEST_CHECK(readMeadow()["result"]["result"]["meadow"].isNull());
        const auto merged=call("studio.op",R"({"op":"rules_merge","params":{"path":"fogOfWar","value":{"mode":"explored"}}})");
        AIVERSE_TEST_CHECK(!merged.has("error") && merged["result"].getBool("changed"));
        const auto fog=call("studio.op",R"({"op":"rules_get","params":{"path":"fogOfWar"}})");
