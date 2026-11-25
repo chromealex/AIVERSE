@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-25T13:54:20+00:00",
+ "generated": "2026-11-25T14:40:50+00:00",
  "lang": "ru",
  "repo": "https://github.com/chromealex/AIVERSE",
  "systems": [
@@ -469,6 +469,41 @@
    ]
   },
   {
+   "id": "2026-11-25-render-projectile-impact-height",
+   "date": "2026-11-25",
+   "system": "render",
+   "title": "Высота попадания снаряда",
+   "summary": "Высота попадания задаётся отдельно для каждого типа цели. Видимый снаряд и его след идут от дула к этой точке.",
+   "body": [
+    "На полигоне оранжевая полоса отмечает высоту попадания. Выберите установку и укажите другую мишень правой кнопкой, чтобы сменить цель."
+   ],
+   "status": "in-progress",
+   "verified": "Оба кадра сняты клиентом AIVERSE на Mac с одного ракурса.",
+   "limits": "Для обычных прямых выстрелов на плоской карте. Высота измеряется от основания цели в мировых единицах.",
+   "links": [
+    {
+     "title": "Полигон",
+     "href": "https://chromealex.github.io/AIVERSE/demos/projectile-impact-height/?map=0"
+    },
+    {
+     "title": "Настройка модели",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/models.md"
+    }
+   ],
+   "branch": "feature/aiv197_projectile_height",
+   "commit": "27ff5b374",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-render-projectile-impact-height/before.jpg",
+     "caption": "До изменения след проходит над низкой мишенью"
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-render-projectile-impact-height/after.jpg",
+     "caption": "След опускается к оранжевой метке на низкой мишени"
+    }
+   ]
+  },
+  {
    "id": "2026-11-25-render-model-triplanar",
    "date": "2026-11-25",
    "system": "render",
@@ -621,6 +656,92 @@
      "href": "https://github.com/chromealex/AIVERSE/blob/main/examples/modeling/volume-csg.json"
     }
    ]
+  },
+  {
+   "id": "2026-11-25-gameplay-selection-targeting",
+   "date": "2026-11-25",
+   "system": "gameplay",
+   "branch": "feature/aiv198_selection_acquisition",
+   "commit": "7409fd3c0",
+   "author": "gameplay",
+   "title": "Выбор разведчика под деревом и порядок обстрела целей",
+   "summary": "На полигоне разведчик виден из-под кроны только по кольцу выделения. Щёлкните по дереву, чтобы выбрать разведчика, или включите выбор самих деревьев клавишей E.",
+   "body": [
+    "Флаг Selectable в правилах типа управляет щелчком, наведением и рамкой. На полигоне клавиша D возвращает деревья в исходное состояние. Выделение снимается, а дуб остаётся на карте.",
+    "Две красные мишени стоят на разном расстоянии от разведчика. На полигоне он стреляет в дальнюю, потому что её ячейка находится в более ранней строке карты. Чтобы сравнить поведение, выберите Nearest в поле Auto-target order в Studio и перезапустите матч."
+   ],
+   "verified": "В Chrome на Mac щелчок под кроной и рамка вокруг двух деревьев выбрали только разведчика. После E открылась карточка дуба, а после D она исчезла. На той же карте с фиксированным зерном урон получили разные мишени при смене порядка.",
+   "limits": "Настройки меняют выбор мышью и автоматическую стрельбу. Демонстрационная карта плоская.",
+   "links": [
+    {
+     "title": "Training range · Web",
+     "href": "https://chromealex.github.io/AIVERSE/demos/selection-targeting/?map=0"
+    },
+    {
+     "title": "Training range · source",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/demos/selection-targeting/README.md"
+    }
+   ],
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-gameplay-selection-targeting/scout.jpg",
+     "caption": "Щелчок по кроне открыл карточку разведчика. Он стреляет в мишень в верхней строке."
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-gameplay-selection-targeting/selected-oak.jpg",
+     "caption": "Клавиша E включила выбор дуба. Кольцо и подпись указывают на отдельно стоящее дерево."
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-gameplay-selection-targeting/scenery-oak.jpg",
+     "caption": "После D под неподвижным указателем осталось дерево без подсветки, а карточка закрылась."
+    }
+   ],
+   "status": "in-progress"
+  },
+  {
+   "id": "2026-11-25-gameplay-order-upgrade",
+   "date": "2026-11-25",
+   "system": "gameplay",
+   "branch": "feature/aiv199_order_upgrade_view",
+   "commit": "6b3a7ccaa",
+   "author": "gameplay",
+   "title": "Метка приказа и растущая сторожевая башня",
+   "summary": "Приказ разведчику подсвечивает выбранное место. Улучшающееся здание может показать свою будущую форму с первого кадра строительства.",
+   "body": [
+    "Выберите разведчика и щёлкните правой кнопкой по земле. В примере скрипт показывает название приказа, а оверлей рисует расходящееся кольцо. Подпись можно отключить отдельно.",
+    "Включите Show upgrade target during construction в правилах исходного здания. Как только улучшение займёт активное место в очереди, будущая башня начнёт расти. Кнопка Restart upgrade позволяет повторить переход."
+   ],
+   "verified": "В сцене с двумя сторожевыми домами и разведчиком проверены приказ на местности в Chrome и улучшение здания на macOS с Metal.",
+   "limits": "В примере показана плоская карта и геометрическая модель башни. Отдельный визуальный прогон для планет и спрайтов пока не выполнен.",
+   "links": [
+    {
+     "title": "Watchtower orders · WebGL 2",
+     "href": "https://chromealex.github.io/AIVERSE/demos/order-upgrade/index.html?map=0&lang=en"
+    },
+    {
+     "title": "Watchtower orders · source",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/demos/order-upgrade/README.md"
+    }
+   ],
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-gameplay-order-upgrade/source.png",
+     "caption": "В начале матча у обеих сторон одинаковый сторожевой дом."
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-gameplay-order-upgrade/order.png",
+     "caption": "Кольцо отмечает точку приказа разведчику. Подпись показывает команду, полученную скриптом."
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-gameplay-order-upgrade/metal-upgrade.png",
+     "caption": "Сторожевой дом принимает форму башни во время улучшения. За двором виден дом соперника."
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-gameplay-order-upgrade/tower.png",
+     "caption": "После завершения улучшения у патруля стоит готовая башня."
+    }
+   ],
+   "status": "in-progress"
   },
   {
    "id": "2026-11-24-spectrafx-studio",

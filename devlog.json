@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-25T13:54:20+00:00",
+ "generated": "2026-11-25T14:40:50+00:00",
  "lang": "en",
  "repo": "https://github.com/chromealex/AIVERSE",
  "systems": [
@@ -469,6 +469,41 @@
    ]
   },
   {
+   "id": "2026-11-25-render-projectile-impact-height",
+   "date": "2026-11-25",
+   "system": "render",
+   "title": "Projectile impact height",
+   "summary": "Each target type can set its impact height. The visible projectile and its trail follow the same line from the muzzle to that point.",
+   "body": [
+    "The orange band on each range target marks its impact height. Select the launcher and right-click another target to switch."
+   ],
+   "status": "in-progress",
+   "verified": "Both frames were captured with the AIVERSE Mac client from the same camera position.",
+   "limits": "Applies to ordinary straight shots on flat maps. Heights are measured from the target base in world units.",
+   "links": [
+    {
+     "title": "Open firing range",
+     "href": "https://chromealex.github.io/AIVERSE/demos/projectile-impact-height/?map=0"
+    },
+    {
+     "title": "Model setup",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/models.md"
+    }
+   ],
+   "branch": "feature/aiv197_projectile_height",
+   "commit": "27ff5b374",
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-render-projectile-impact-height/before.jpg",
+     "caption": "Before the change, the trail passes above the short target"
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-25-render-projectile-impact-height/after.jpg",
+     "caption": "The trail descends toward the orange band on the short target"
+    }
+   ]
+  },
+  {
    "id": "2026-11-25-render-model-triplanar",
    "date": "2026-11-25",
    "system": "render",
@@ -621,6 +656,92 @@
      "href": "https://github.com/chromealex/AIVERSE/blob/main/examples/modeling/volume-csg.json"
     }
    ]
+  },
+  {
+   "id": "2026-11-25-gameplay-selection-targeting",
+   "date": "2026-11-25",
+   "system": "gameplay",
+   "branch": "feature/aiv198_selection_acquisition",
+   "commit": "7409fd3c0",
+   "author": "gameplay",
+   "title": "Selecting a scout under a tree and choosing which target gets hit first",
+   "summary": "A tree canopy hides the scout on the training range. Click through the tree to select the scout, or press E to make the oaks selectable.",
+   "body": [
+    "The Selectable flag on a unit type controls clicks, hover and box selection. Press D on the range to switch the trees back to scenery. The selection clears and the oak stays on the map.",
+    "Two red targets stand at different distances from the scout. On the range it fires at the farther target because its cell lies in an earlier map row. To compare the two policies, set Auto-target order to Nearest in Studio and restart the match."
+   ],
+   "verified": "In Chrome on Mac, clicking the canopy and dragging a box around both trees selected the scout alone. E enabled the oak's selection card and D cleared it. Running the same seeded range under each acquisition policy damaged a different target.",
+   "limits": "The controls cover pointer selection and automatic fire. The training range uses a flat map.",
+   "links": [
+    {
+     "title": "Training range · Web",
+     "href": "https://chromealex.github.io/AIVERSE/demos/selection-targeting/?map=0"
+    },
+    {
+     "title": "Training range · source",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/demos/selection-targeting/README.md"
+    }
+   ],
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-gameplay-selection-targeting/scout.jpg",
+     "caption": "Clicking the canopy opened the scout's card. It is firing at the target in the earlier row."
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-25-gameplay-selection-targeting/selected-oak.jpg",
+     "caption": "After pressing E, clicking the standalone oak shows its selection ring and card."
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-25-gameplay-selection-targeting/scenery-oak.jpg",
+     "caption": "D cleared the card and hover outline while the pointer stayed over the oak."
+    }
+   ],
+   "status": "in-progress"
+  },
+  {
+   "id": "2026-11-25-gameplay-order-upgrade",
+   "date": "2026-11-25",
+   "system": "gameplay",
+   "branch": "feature/aiv199_order_upgrade_view",
+   "commit": "6b3a7ccaa",
+   "author": "gameplay",
+   "title": "Order markers and a growing watchtower",
+   "summary": "A scout's order highlights its destination. An upgrading building can show its future shape from the first frame of construction.",
+   "body": [
+    "Select the scout and right-click the ground. The demo's view script displays the order name and an overlay draws an expanding ring. You can turn the label off independently.",
+    "Enable Show upgrade target during construction in the source building's rules. Once its upgrade occupies an active production slot, the future tower starts to grow. Use Restart upgrade to replay the transition."
+   ],
+   "verified": "The two-house courtyard and its scout were used to check ground orders in Chrome and an upgrading building on macOS with Metal.",
+   "limits": "The example uses a flat map and a geometric tower model. Planet maps and sprite appearances have not received separate visual runs.",
+   "links": [
+    {
+     "title": "Watchtower orders · WebGL 2",
+     "href": "https://chromealex.github.io/AIVERSE/demos/order-upgrade/index.html?map=0&lang=en"
+    },
+    {
+     "title": "Watchtower orders · source",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/demos/order-upgrade/README.md"
+    }
+   ],
+   "media": [
+    {
+     "src": "media/docs/devlog/media/2026-11-25-gameplay-order-upgrade/source.png",
+     "caption": "Both sides start with the same guard house."
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-25-gameplay-order-upgrade/order.png",
+     "caption": "The ring marks the scout's destination. The label shows the command received by the view script."
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-25-gameplay-order-upgrade/metal-upgrade.png",
+     "caption": "The guard house takes on the tower's shape during the upgrade. The opposing guard house is visible across the courtyard."
+    },
+    {
+     "src": "media/docs/devlog/media/2026-11-25-gameplay-order-upgrade/tower.png",
+     "caption": "The patrol has a completed watchtower after the upgrade finishes."
+    }
+   ],
+   "status": "in-progress"
   },
   {
    "id": "2026-11-24-spectrafx-studio",
