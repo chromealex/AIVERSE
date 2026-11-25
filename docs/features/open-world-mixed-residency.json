@@ -1,0 +1,156 @@
+{
+  "schema": 1,
+  "id": "open-world-mixed-residency",
+  "owner": "World region lifecycle",
+  "changed_paths": [
+    "engine/world/RegionLifecycleRuntime.h",
+    "engine/world/VehicleRegionTransfer.h",
+    "tests/world/region_gamecore_integration_test.cpp",
+    "tests/world/vehicle_region_group_test.cpp",
+    "skills/world/aiverse-region-lifecycle/SKILL.md",
+    "docs/agent-handoffs/open-world-mixed-group.md",
+    "docs/agent-handoffs/open-world-reference-admission.md",
+    "docs/open-world-framework.md"
+  ],
+  "traits": {
+    "editable": false,
+    "simulation": true,
+    "visible": false,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "The queued transition waits for crossing links to be released.",
+      "evidence": [
+        "engine/world/RegionLifecycleRuntime.h",
+        "tests/world/region_gamecore_integration_test.cpp"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Authoritative ECS reads at the existing structural barrier. Seat identity resolution remains host-owned.",
+      "evidence": [
+        "engine/world/RegionLifecycleRuntime.h",
+        "engine/world/VehicleRegionTransfer.h"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "GuardedPolicy accepts native enumerators; VehicleRegionTransfer uses the host seat mapping.",
+      "evidence": [
+        "engine/world/RegionLifecycleRuntime.h",
+        "engine/world/VehicleRegionTransfer.h",
+        "tests/world/region_gamecore_integration_test.cpp"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "Registered region lifecycle skill documents reference enumeration and crew admission.",
+      "evidence": [
+        "skills/world/aiverse-region-lifecycle/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "not_applicable",
+      "note": "Native setup-time C++ callbacks have no authored operation.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_applicable",
+      "note": "No authored settings or editing surface for native callback registration.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_applicable",
+      "note": "Admission adds no editable component fields.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "Fresh pending and dormant loads preserve entity generations, seats, damage and group ownership.",
+      "evidence": [
+        "tests/world/region_gamecore_integration_test.cpp"
+      ]
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "Parking uses the existing fixed tick queue and no authored graph.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "pass",
+      "note": "100 native GameCore transitions on Mac Debug: p95 transfer with parking 0.149 ms and waking 0.165 ms. No renderer in this measurement.",
+      "evidence": [
+        "docs/agent-handoffs/open-world-mixed-group.md"
+      ]
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "Verified macOS x86_64 Debug. Other platforms unverified for this stage; inherited Linux arm64 GCC ICE tracked in the PR.",
+      "evidence": [
+        "docs/agent-handoffs/open-world-mixed-group.md"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Adds header-only predicates over existing ECS and vehicle owners. Target linkage unchanged.",
+      "evidence": [
+        "engine/world/RegionLifecycleRuntime.h",
+        "engine/world/VehicleRegionTransfer.h"
+      ]
+    },
+    "headless": {
+      "status": "pass",
+      "note": "GameCore commands drive the queue without a renderer.",
+      "evidence": [
+        "tests/world/region_gamecore_integration_test.cpp"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "The GameCore native module configures typed codecs, semantic seats and foreign links.",
+      "evidence": [
+        "tests/world/region_gamecore_integration_test.cpp",
+        "skills/world/aiverse-region-lifecycle/SKILL.md"
+      ]
+    },
+    "tests": {
+      "status": "not_run",
+      "note": "Merged-tree native tests and provenance pending; prior stage evidence is in the handoff.",
+      "evidence": [
+        "tests/world/vehicle_region_group_test.cpp",
+        "tests/world/region_gamecore_integration_test.cpp"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Separate stage records identify the code commits and executed checks.",
+      "evidence": [
+        "docs/agent-handoffs/open-world-mixed-group.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "Host contract, setup example and limits are documented.",
+      "evidence": [
+        "skills/world/aiverse-region-lifecycle/SKILL.md",
+        "docs/open-world-framework.md"
+      ]
+    },
+    "publishing": {
+      "status": "not_applicable",
+      "note": "Headless tick admission has no visual output; the World roadmap records the scope.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-region-lifecycle"
+    ],
+    "mcp_tools": [],
+    "studio_panels": [],
+    "studio_methods": []
+  },
+  "test_reports": []
+}

@@ -1,6 +1,17 @@
 {
   "schema": 1,
   "features": {
+    "open-world-mixed-residency": {
+      "requires": [],
+      "roadmap": {
+        "system": "world",
+        "id": "open-world-mixed-residency"
+      },
+      "api_paths": [
+        "engine/world/RegionLifecycleRuntime.h",
+        "engine/world/VehicleRegionTransfer.h"
+      ]
+    },
     "feature-gate": {
       "requires": [],
       "roadmap": {
