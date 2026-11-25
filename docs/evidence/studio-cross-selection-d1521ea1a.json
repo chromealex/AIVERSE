@@ -1,0 +1,14 @@
+{
+  "sha": "d1521ea1a12c6bacc702ddd4f62e26b9040783d7",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^studio_session$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-cross-selection-d1521ea1a.log.txt",
+  "sha256": "9d698f17c6e637c41b2c0a3a6e92ec32a66c00556523c0c9fe0cd10914f18dde"
+}
