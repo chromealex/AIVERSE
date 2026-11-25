@@ -4,7 +4,7 @@
   "system": "studio",
   "status": "in-progress",
   "branch": "studio-only-editor",
-  "commit": "5dcfca4d7",
+  "commit": "e45eee54e",
   "author": null,
   "links": [],
   "title": "Поиск объектов по компонентам в Hierarchy",
@@ -13,11 +13,13 @@
   "summaryEn": "Use Group by to browse objects by category, origin or component, both on the map and during play.",
   "body": [
     "Раскройте группу компонента, чтобы увидеть все объекты с этим компонентом. Если у объекта несколько компонентов, выделение видно в каждой раскрытой группе.",
-    "Проект может добавить свои группировки, например по полю скрипта и владельцу. В режиме Live можно открыть вложенную группу, выбрать сущность и вернуться к списку по строке пути."
+    "Проект может добавить свои группировки, например по полю скрипта и владельцу. В режиме Live можно открыть вложенную группу, выбрать сущность и вернуться к списку по строке пути.",
+    "В режиме Nesting раскройте родительскую сущность. Два одноимённых спутника остаются разными объектами, и выбранный спутник снова подсвечивается после раскрытия ветки."
   ],
   "bodyEn": [
     "Expand a component to see every object that owns it. Selecting an object highlights it in each expanded group it belongs to.",
-    "Projects can add groupings such as a script field followed by owner. In Live, open a nested group, select an entity and use the path to return to its ancestors."
+    "Projects can add groupings such as a script field followed by owner. In Live, open a nested group, select an entity and use the path to return to its ancestors.",
+    "In Nesting, expand a parent entity to see its children. Companions with identical names keep separate identities, and the selected companion stays highlighted when the branch reopens."
   ],
   "verified": "В отдельном окне Studio на macOS выбранный дуб виден в группах «Положение» и «Владелец». В живой симуляции открыта группа Scouts.",
   "verifiedEn": "In a detached macOS Studio window, the selected oak appears under both position and owner. The live simulation capture shows the Scouts group.",
@@ -33,6 +35,11 @@
       "src": "docs/evidence/studio-project-catalog/hierarchy-live-groups.png",
       "caption": "Живые сущности в группе Scouts",
       "captionEn": "Live entities in the Scouts group"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-hierarchy-groups/hierarchy-nesting.png",
+      "caption": "Второй из двух призванных спутников выделен под Scout",
+      "captionEn": "The second summoned companion selected under Scout"
     }
   ]
 }
