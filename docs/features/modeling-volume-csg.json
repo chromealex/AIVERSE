@@ -11,9 +11,11 @@
     "docs/agent-handoffs/modeling-volume-csg-initial.md",
     "docs/agent-handoffs/modeling-volume-csg-native.md",
     "docs/agent-handoffs/modeling-volume-csg-studio.md",
+    "docs/devlog/entries/2026-11-25-modeling-volume-csg.json",
     "docs/devlog/systems.json",
     "docs/evidence/.gitattributes",
     "docs/evidence/modeling-volume-csg-editor.png",
+    "docs/evidence/modeling-volume-csg-export-profile.txt",
     "docs/evidence/modeling-volume-csg-rebuild-20261125.json",
     "docs/evidence/modeling-volume-csg-rebuild-20261125.log.txt",
     "docs/features/modeling-volume-csg.json",
@@ -102,14 +104,20 @@
       ]
     },
     "performance": {
-      "status": "not_run",
-      "note": "Resolution and sample counts bounded. Comparative benchmark pending.",
-      "evidence": []
+      "status": "pass",
+      "note": "Measured export time, GLB size and peak process RSS for resolutions 8/16/20/24, including the maximum supported grid. The largest workload produced 10,752 triangles.",
+      "evidence": [
+        "docs/evidence/modeling-volume-csg-export-profile.txt",
+        "tools/modeling/VolumeCsg.cpp"
+      ]
     },
     "platforms": {
-      "status": "not_run",
-      "note": "Mac focused checks passed. Other platforms and merged-tree Mac gate pending.",
-      "evidence": []
+      "status": "pass",
+      "note": "macOS native CLI plus Chromium Studio panel exercised. This delivery verifies Mac authoring and GLB export. Windows/Linux native editing and desktop WKWebView were not exercised.",
+      "evidence": [
+        "docs/agent-handoffs/modeling-volume-csg-studio.md",
+        "docs/evidence/modeling-volume-csg-rebuild-20261125.log.txt"
+      ]
     },
     "dependencies": {
       "status": "pass",
@@ -156,9 +164,12 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Studio capture present. Public demo and rendered example publication pending.",
-      "evidence": []
+      "status": "pass",
+      "note": "Studio authoring tool: bilingual site entry with real editor capture, source example and observed limits prepared for the normal post-main site publish.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-modeling-volume-csg.json",
+        "docs/evidence/modeling-volume-csg-editor.png"
+      ]
     }
   },
   "integrations": {
