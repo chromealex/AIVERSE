@@ -2574,8 +2574,8 @@
           "id": "studio-play-review",
           "title": "Безопасный перенос изменений из Play",
           "titleEn": "Play Mode change review",
-          "text": "Изолированная игровая сессия, проверка исходной карты и выборочный предварительный просмотр переноса изменений. Добавляются локальные MCP-команды предпросмотра и однократного применения к той же сохранённой карте.",
-          "textEn": "Isolated local session, source map revision guard and selective preview of play-to-scene changes. Add typed local MCP preview and one-shot apply for the same saved map.",
+          "text": "Изолированная игровая сессия, проверка исходной карты и выборочный предварительный просмотр переноса изменений. Добавляются локальные MCP-команды предпросмотра и однократного применения к той же сохранённой карте. При массовом удалении проверить перенос индексов дорог за один проход.",
+          "textEn": "Isolated local session, source map revision guard and selective preview of play-to-scene changes. Add typed local MCP preview and one-shot apply for the same saved map. Verify single-pass road index remapping for bulk removals.",
           "status": "in-progress"
         },
         {

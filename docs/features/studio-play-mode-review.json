@@ -106,7 +106,7 @@
     },
     "performance": {
       "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "note": "Measure batch preview, apply and undo with 200 removals among 2000 entities and 1999 roads; verify endpoint remapping.",
       "evidence": [
         "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
       ]

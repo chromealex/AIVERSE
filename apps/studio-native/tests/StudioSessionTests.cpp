@@ -408,6 +408,23 @@ void authoredEntityWorkflow() {
        }
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && doc.undoDepth()==depth);
    }
+   // A review can report the same dead entity twice. Compact once and preserve road endpoints.
+   {
+       auto& map=session.workspace().map;
+       auto original=map.data;
+       const auto sample=map.data.entities.front();
+       map.data.entities.assign(5,sample);
+       for(size_t i=0;i<5;++i)map.data.entities[i].x=float(i);
+       map.data.roads={{0,2},{1,4},{2,4},{4,3}};
+       const auto depth=map.undoDepth();
+       const auto kept=call("studio.keepPlayChanges",R"({"entities":[{"index":3,"removed":true},{"index":1,"removed":true},{"index":3,"removed":true}],"removeDead":true})");
+       AIVERSE_TEST_CHECK(!kept.has("error")&&kept["result"]["removed"].integer()==2);
+       AIVERSE_TEST_CHECK(map.data.entities.size()==3&&map.data.entities[0].x==0&&map.data.entities[1].x==2&&map.data.entities[2].x==4);
+       const std::vector<std::pair<int,int>> expectedRoads={{0,1},{1,2}};
+       AIVERSE_TEST_CHECK(map.data.roads==expectedRoads&&map.undoDepth()==depth+1);
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error")&&map.data.entities.size()==5&&map.data.roads.size()==4);
+       map.data=std::move(original);
+   }
    // Extensions: the example script gives widgets, an action command, a change command and a gizmo.
    {
        AIVERSE_TEST_CHECK(!call("studio.extensions")["result"].getBool("exists"));

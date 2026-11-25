@@ -2768,20 +2768,31 @@ Json StudioSession::dispatchImpl(const Json& request) {
             }
             int removed=0;
             if (!dead.empty()) {
-                std::sort(dead.rbegin(),dead.rend());
-                dead.erase(std::unique(dead.begin(),dead.end()),dead.end());
-                begin();
-                for (size_t idx:dead) {
-                    // Roads are entity index pairs: drop the ones that end here, shift the rest.
-                    std::vector<std::pair<int,int>> roads;
-                    for (auto [a,b]:d.roads) {
-                        if (a==int(idx)||b==int(idx)) continue;
-                        roads.push_back({a>int(idx)?a-1:a,b>int(idx)?b-1:b});
-                    }
-                    d.roads=std::move(roads);
-                    d.entities.erase(d.entities.begin()+long(idx));
-                    ++removed;
+                // Map each original ordinal once so every surviving road keeps its endpoints.
+                const size_t originalCount=d.entities.size();
+                std::vector<int> remap(originalCount);
+                for(size_t index:dead)remap[index]=-1;
+                size_t kept=0;
+                for(size_t index=0;index<originalCount;++index){
+                    if(remap[index]<0)continue;
+                    remap[index]=static_cast<int>(kept);
+                    if(kept!=index)d.entities[kept]=std::move(d.entities[index]);
+                    ++kept;
                 }
+                removed=static_cast<int>(originalCount-kept);
+                d.entities.resize(kept);
+                auto deleted=[&](int index){
+                    return index>=0&&size_t(index)<originalCount&&remap[size_t(index)]<0;
+                };
+                auto newIndex=[&](int index){
+                    if(index<0)return index;
+                    return size_t(index)<originalCount?remap[size_t(index)]:index-removed;
+                };
+                std::erase_if(d.roads,[&](const auto& road){
+                    return deleted(road.first)||deleted(road.second);
+                });
+                for(auto& [a,b]:d.roads){a=newIndex(a);b=newIndex(b);}
+                begin();
             }
             if(begun&&!dryRun){
                 ws_.map.beginEdit();ws_.map.data=std::move(staged);
