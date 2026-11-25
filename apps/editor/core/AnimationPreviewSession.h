@@ -12,6 +12,7 @@ namespace aiverse::editor {
 class AnimationPreviewSessions {
     struct Preview {
         std::string project;
+        float ground = 0;
         int64_t token = 0;
         std::unique_ptr<render::Model> model;
         render::AnimationGraphInstance player;
@@ -32,6 +33,22 @@ class AnimationPreviewSessions {
         if(!v.isNumber()||!std::isfinite(n)||std::abs(n)>1e9)throw std::runtime_error("Invalid animation control value");
         return n;
     }
+    static void setGround(Preview& preview,float height) {
+        auto environment=std::make_shared<render::AnimationEnvironment>();
+        environment->sphereContact=[height](render::float3 center,float radius,render::IKHit& hit){
+            return render::ikSpherePlane(center,radius,{0,height,0},{0,1,0},hit);
+        };
+        environment->raycast=[height](render::float3 start,render::float3 end,render::IKHit& hit){
+            const auto direction=end-start;
+            if(std::abs(direction.y)<1e-8f)return false;
+            const float t=(height-start.y)/direction.y;
+            if(t<0||t>1)return false;
+            hit={start+direction*t,{0,1,0},0,1};
+            return true;
+        };
+        preview.player.parameters().environment=std::move(environment);
+        preview.ground=height;
+    }
     static Json evaluate(Preview& preview,float dt) {
         if(dt>0)preview.player.update(dt);
         preview.player.evaluate(preview.pose);
@@ -43,6 +60,24 @@ class AnimationPreviewSessions {
         out.set("state",Json::string(preview.player.state()));
         out.set("time",Json::number(double(preview.player.stateTime()),6));
         out.set("token",Json::number(preview.token));
+        if(preview.player.hasContacts()){
+            const auto contact=preview.player.contactReport();
+            Json report=Json::object();
+            report.set("ground",Json::number(double(preview.ground)));
+            report.set("stable",Json::fromBool(contact.stable));
+            report.set("supports",Json::number(int64_t(contact.supports)));
+            report.set("supportError",Json::number(double(contact.supportError),6));
+            report.set("penetration",Json::number(double(contact.penetration),6));
+            report.set("balanceError",Json::number(double(contact.balanceError),6));
+            const auto climb=preview.player.locomotionReport();
+            if(climb.active){
+                report.set("attached",Json::fromBool(climb.attached));
+                report.set("stanceFeet",Json::number(int64_t(climb.supports)));
+                report.set("steppingFeet",Json::number(int64_t(climb.stepping)));
+                report.set("footError",Json::number(double(climb.footError),6));
+            }
+            out.set("contact",std::move(report));
+        }
         return out;
     }
 public:
@@ -64,6 +99,7 @@ public:
             render::AnimationGraphs children;
             if(!bind)for(const auto& [name,child]:doc["graphs"].members())children.emplace(name,child);
             next->player.reset(render::AnimationGraph::compile(*next->model,graph,{}, {},children));
+            if(next->player.hasContacts())setGround(*next,0);
             next->token=++serial_;
             Json out=evaluate(*next,0),bones=Json::array(),inputs=Json::object();
             for(const auto& node:next->model->nodes){
@@ -91,7 +127,10 @@ public:
             }else if(value.isNumber()&&controls.values.count(name))controls.values[name]=float(numeric(value));
             else throw std::runtime_error("Unknown animation control or incompatible value");
         }
+        const float ground=params.has("ground")?float(numeric(params["ground"])):slot->ground;
+        if(params.has("ground")&&!slot->player.hasContacts())throw std::runtime_error("This graph has no contact rig");
         slot->player.parameters()=std::move(controls);
+        if(ground!=slot->ground)setGround(*slot,ground);
         return evaluate(*slot,float(dt));
     }
 };

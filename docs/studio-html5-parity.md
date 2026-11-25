@@ -217,3 +217,5 @@ Facial Rig preview migration: independent model binding, controls and drawable i
 Character Creator and VIVID Appearance render on separate native surfaces. The Scene frame receives no character binding. The HTML5 workspace hosts every docked and floating panel inside the same responsive page container. Individual visual acceptance is in progress. Windows preview input and photo overlay acceptance remain open.
 
 Animation Graph and Animation Rig each own a native playback session. Their HTML skeleton previews support play, pause, frame stepping, bind pose, three projections and joint selection. On macOS, picking a wrist and applying it to a rig unit persisted the bone name to the graph asset. GPU skinned mesh playback and interactive ground contacts remain open.
+
+Animation preview ground height and solver diagnostics run in the owning panel. On macOS the two-foot rig reported two stable supports at zero and none at −10 without advancing playback. Independent sessions are covered by studio_animation_preview. The live climbing readout still needs an articulated climbing fixture in the desktop app.

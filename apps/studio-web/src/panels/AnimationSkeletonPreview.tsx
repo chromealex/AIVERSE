@@ -4,7 +4,9 @@ import {invoke} from '../bridge';
 type Point=[number,number,number];
 type Inputs=Record<string,number|Point>;
 type Bone={name:string;parent:number};
-type Frame={points:Point[];state:string;time:number;token:number};
+type Contact={ground:number;stable:boolean;supports:number;supportError:number;penetration:number;balanceError:number;
+ attached?:boolean;stanceFeet?:number;steppingFeet?:number;footError?:number};
+type Frame={contact?:Contact;points:Point[];state:string;time:number;token:number};
 type Opened=Frame&{bones:Bone[];inputs:Inputs};
 type Plane='Front'|'Side'|'Top';
 function project(p:Point,plane:Plane){
@@ -28,9 +30,11 @@ export default function AnimationSkeletonPreview({projectPath,graph,scope,panel,
  const [opened,setOpened]=useState<Opened|null>(null),[frame,setFrame]=useState<Frame|null>(null);
  const [plane,setPlane]=useState<Plane>('Front'),[fit,setFit]=useState<Point[]>([]),[selected,select]=useState(-1);
  const [inputs,setInputs]=useState<Inputs>({}),[error,setError]=useState('');
+ const pendingGround=useRef<number|undefined>(undefined);
  const running=useRef(false),changes=useRef<Inputs>({}),steps=useRef(0);
  useEffect(()=>{
   let active=true,token=0,timer=0,last=performance.now();
+  pendingGround.current=undefined;
   setOpened(null);setFrame(null);setError('');select(-1);setPlaying(false);running.current=false;changes.current={};steps.current=0;
   async function command<T>(params:Record<string,unknown>){
    const response=await invoke('studio.op',{op:'animation_graph_preview',expectedProject:projectPath,params:{panel,...params}});
@@ -43,8 +47,9 @@ export default function AnimationSkeletonPreview({projectPath,graph,scope,panel,
     const now=performance.now(),dt=running.current?Math.min(.25,(now-last)/1000):steps.current?1/30:0;
     last=now;
     const edits=changes.current;changes.current={};if(steps.current)steps.current--;
-    if(dt||Object.keys(edits).length){
-     const next=await command<Frame>({action:'frame',token,dt,inputs:edits});
+    const height=pendingGround.current;pendingGround.current=undefined;
+    if(dt||height!==undefined||Object.keys(edits).length){
+     const next=await command<Frame>({action:'frame',token,dt,inputs:edits,...(height===undefined?{}:{ground:height})});
      if(active)setFrame(next);
     }
     if(active)timer=window.setTimeout(tick,33);
@@ -75,12 +80,25 @@ export default function AnimationSkeletonPreview({projectPath,graph,scope,panel,
   {error&&<p role="alert">{error}</p>}
   {opened&&frame?<div className="motion-preview-page">
    <div className="motion-preview-stage"><svg viewBox={[area.left,area.top,area.width,area.height].join(' ')} aria-label="Evaluated skeleton">
+    {frame.contact&&plane!=='Top'&&<line className="motion-ground" x1={area.left} x2={area.left+area.width} y1={-frame.contact.ground} y2={-frame.contact.ground}/>}
     {opened.bones.map((bone,i)=>{const parent=points[bone.parent],p=points[i];return parent&&p?<line key={i} x1={parent[0]} y1={parent[1]} x2={p[0]} y2={p[1]} className={selected===i?'selected':''}/>:null;})}
     {points.map((p,i)=><g key={i} role="button" tabIndex={0} aria-pressed={selected===i} aria-label={'Select joint '+opened.bones[i].name} onClick={()=>pick(i)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick(i);}}}>
      <title>{opened.bones[i].name}</title><circle cx={p[0]} cy={p[1]} r={radius*1.9} fill="transparent"/><circle className="motion-joint" cx={p[0]} cy={p[1]} r={radius}/></g>)}
    </svg><div className="motion-clock">{frame.state&&<span>{frame.state}</span>} <output>{frame.time.toFixed(2)} s</output></div></div>
    <div className="motion-preview-fields"><label>Selected joint<select value={selected} onChange={e=>pick(Number(e.target.value))}><option disabled value={-1}>Pick a joint</option>{opened.bones.map((b,i)=><option value={i} key={i}>{b.name||'Node '+i}</option>)}</select></label>
     {selected>=0&&<output>{['X','Y','Z'].map((k,i)=>k+' '+frame.points[selected][i].toFixed(3)).join(' · ')}</output>}
+    {frame.contact&&<fieldset className="motion-contact"><legend>Ground contact</legend>
+     <label>Ground height<input type="number" step="0.01" key={frame.token} defaultValue={frame.contact.ground} onChange={e=>{
+      const height=e.target.valueAsNumber;if(Number.isFinite(height))pendingGround.current=height;
+     }}/></label>
+     <strong>{frame.contact.attached!==undefined?(frame.contact.attached?'Attached':'Detached'):
+      frame.contact.stable?'Stable':frame.contact.supports?'Unstable':'Unsupported'}</strong>
+     <dl>{(frame.contact.attached===undefined?[
+      ['Supports',frame.contact.supports],['Support error',frame.contact.supportError.toFixed(3)],
+      ['Penetration',frame.contact.penetration.toFixed(3)],['Balance error',frame.contact.balanceError.toFixed(3)]
+     ]:[['Stance feet',frame.contact.stanceFeet],['Stepping feet',frame.contact.steppingFeet],
+      ['Foot error',frame.contact.footError?.toFixed(3)]]).map(([key,val])=><div key={key}><dt>{key}</dt><dd>{val}</dd></div>)}</dl>
+    </fieldset>}
     {Object.entries(inputs).map(([key,val])=>typeof val==='number'?<label key={key}>{key}<input type="number" step="any" value={val} onChange={e=>{if(Number.isFinite(e.target.valueAsNumber))input(key,e.target.valueAsNumber);}}/></label>:
      <fieldset key={key}><legend>{key}</legend>{val.map((v,i)=><label key={i}>{['X','Y','Z'][i]}<input type="number" step="any" value={v} onChange={e=>{if(Number.isFinite(e.target.valueAsNumber)){const next:Point=[...val];next[i]=e.target.valueAsNumber;input(key,next);}}}/></label>)}</fieldset>)}
    </div></div>:!error&&<p role="status">Loading model and evaluating pose…</p>}

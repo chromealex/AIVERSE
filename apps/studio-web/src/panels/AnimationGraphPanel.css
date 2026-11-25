@@ -24,3 +24,7 @@
 .motion-joint{fill:var(--au-panel);stroke:var(--au-accent);stroke-width:2;vector-effect:non-scaling-stroke}.motion-preview-stage g{cursor:pointer}.motion-preview-stage [aria-pressed=true] .motion-joint{fill:var(--au-accent)}
 .motion-clock{position:absolute;left:10px;bottom:8px;pointer-events:none;color:var(--au-text-soft);font-variant-numeric:tabular-nums}
 @container studio-page (min-width:550px){.motion-preview-page{grid-template-columns:minmax(0,2fr) minmax(150px,1fr)}}
+
+.motion-preview-stage line.motion-ground{stroke:var(--au-text-soft);stroke-width:1;stroke-dasharray:5 4}
+.motion-contact dl{margin:0}.motion-contact dl div{display:flex;justify-content:space-between;gap:8px}
+.motion-contact dd{margin:0;font-variant-numeric:tabular-nums}

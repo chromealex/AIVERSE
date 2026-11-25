@@ -53,6 +53,18 @@ def verify(process):
     assert "error" in command("graph", "frame", token=live["token"], dt=0.1)
     assert command("rig", "close", token=rest["token"]) == {}
 
+    unit = {"op": "fullBodyIK", "bone": "Arm", "effectors": [],
+            "contacts": {"world": True, "feet": [{"bone": "Wrist"}]}}
+    graph["nodes"].append({"id": "body", "kind": "rig", "input": "lift", "units": [unit]})
+    graph["output"] = "body"
+    live = command("graph", "open", graph=graph)
+    other = command("rig", "open", graph=graph)
+    assert live["contact"]["supports"] == 1, live
+    dropped = command("graph", "frame", token=live["token"], ground=-10)
+    assert dropped["contact"]["ground"] == -10 and dropped["contact"]["supports"] == 0, dropped
+    fixed = command("rig", "frame", token=other["token"], dt=0)
+    assert fixed["contact"]["ground"] == 0 and fixed["contact"]["supports"] == 1, fixed
+
 
 server, engine = sys.argv[1:]
 with tempfile.TemporaryDirectory(prefix="studio-animation-preview-") as directory:
