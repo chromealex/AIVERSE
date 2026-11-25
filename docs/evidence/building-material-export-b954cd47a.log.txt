@@ -1,0 +1,25 @@
+/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage21-fixed/materials/medieval-fantasy.glb: style 'medieval-fantasy', 1016 triangles
+/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage21-fixed/materials/dark-fantasy.glb: style 'dark-fantasy', 1188 triangles
+/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage21-fixed/materials/steampunk.glb: style 'steampunk', 904 triangles
+/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage21-fixed/materials/cyberpunk.glb: style 'cyberpunk', 1452 triangles
+/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage21-fixed/materials/scifi-space.glb: style 'scifi-space', 1020 triangles
+/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage21-fixed/materials/alien-civilization.glb: style 'alien-civilization', 1210 triangles
+/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage21-fixed/materials/post-apocalypse.glb: style 'post-apocalypse', 852 triangles
+/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage21-fixed/materials/modern.glb: style 'modern', 1092 triangles
+/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage21-fixed/materials/ancient-civilizations.glb: style 'ancient-civilizations', 888 triangles
+/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage21-fixed/materials/asian-historical.glb: style 'asian-historical', 1080 triangles
+/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage21-fixed/materials/solarpunk.glb: style 'solarpunk', 1072 triangles
+/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage21-fixed/materials/underwater.glb: style 'underwater', 1166 triangles
+PASS medieval-fantasy: {'meshes': 1, 'images': 76, 'materials': 19}
+PASS dark-fantasy: {'meshes': 1, 'images': 76, 'materials': 19}
+PASS steampunk: {'meshes': 1, 'images': 76, 'materials': 19}
+PASS cyberpunk: {'meshes': 1, 'images': 76, 'materials': 19}
+PASS scifi-space: {'meshes': 1, 'images': 76, 'materials': 19}
+PASS alien-civilization: {'meshes': 1, 'images': 76, 'materials': 19}
+PASS post-apocalypse: {'meshes': 1, 'images': 76, 'materials': 19}
+PASS modern: {'meshes': 1, 'images': 76, 'materials': 19}
+PASS ancient-civilizations: {'meshes': 1, 'images': 76, 'materials': 19}
+PASS asian-historical: {'meshes': 1, 'images': 76, 'materials': 19}
+PASS solarpunk: {'meshes': 1, 'images': 76, 'materials': 19}
+PASS underwater: {'meshes': 1, 'images': 76, 'materials': 19}
+ALL 12 generated PBR GLB files: PASS {'meshes': 12, 'images': 912, 'materials': 228}

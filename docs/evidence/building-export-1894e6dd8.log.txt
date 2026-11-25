@@ -1,0 +1,24 @@
+Compiling real C++ exporter: clang++ -std=c++20 -O1 -Wno-misleading-indentation -I. -Ilibraries/include tools/buildings/building_style_export.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage21-fixed/aiverse_building_export
+[01/20] PASS barracks  12 x  8 x  11  seed  3: 2424 triangles
+[02/20] PASS barracks  16 x 10 x  14  seed  7: 2444 triangles
+[03/20] PASS barracks  24 x 13 x  18  seed 11: 2816 triangles
+[04/20] PASS barracks  32 x 18 x  26  seed 19: 3148 triangles
+[05/20] PASS barracks  44 x 23 x  34  seed 42: 3392 triangles
+[06/20] PASS command   18 x 11 x  18  seed  3: 4454 triangles
+[07/20] PASS command   24 x 14 x  22  seed  7: 4478 triangles
+[08/20] PASS command   32 x 18 x  28  seed 11: 4914 triangles
+[09/20] PASS command   42 x 24 x  36  seed 19: 4966 triangles
+[10/20] PASS command   55 x 32 x  46  seed 42: 5990 triangles
+[11/20] PASS factory   16 x  9 x  11  seed  3: 2992 triangles
+[12/20] PASS factory   24 x 12 x  18  seed  7: 3000 triangles
+[13/20] PASS factory   32 x 16 x  24  seed 11: 2964 triangles
+[14/20] PASS factory   45 x 22 x  33  seed 19: 3340 triangles
+[15/20] PASS factory   60 x 30 x  46  seed 42: 4140 triangles
+[16/20] PASS depot     10 x  7 x  10  seed  3: 1522 triangles
+[17/20] PASS depot     14 x  9 x  12  seed  7: 1610 triangles
+[18/20] PASS depot     20 x 12 x  18  seed 11: 1614 triangles
+[19/20] PASS depot     30 x 16 x  24  seed 19: 1842 triangles
+[20/20] PASS depot     42 x 22 x  33  seed 42: 1886 triangles
+
+RESULT: 20/20 PASS, 0/20 FAILED
+Models / reports / viewer scripts: /Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage21-fixed/recipes

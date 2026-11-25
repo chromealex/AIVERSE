@@ -4,8 +4,16 @@
 # Keep compatible with macOS's default Bash 3.2.
 set -Eeuo pipefail
 
-ROOT="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$(dirname "$0")" && pwd -P)"
 BUILD_DIR="$ROOT/build/all-tests"
+KINGSTON="/Volumes/KINGSTON"
+LOCAL_MAC=0
+# Hosted CI has no user's external drive. Local macOS must never silently
+# fall back to internal storage, including an explicit --build-dir.
+if [[ "$(uname -s)" == Darwin && "${GITHUB_ACTIONS:-}" != true ]]; then
+    LOCAL_MAC=1
+    BUILD_DIR="$KINGSTON/AIVERSE-builds/$(basename "$ROOT")/all-tests"
+fi
 JOBS=4
 CTEST_JOBS=2
 RUN_EXTRA=1
@@ -20,7 +28,7 @@ AIVERSE complete test runner (from any directory)
   ./run-tests.sh --quick          Configure, build and run all CTest only
   ./run-tests.sh --no-build       Reuse previously configured/built binaries
   ./run-tests.sh --filter REGEX   Only matching CTest (extra suites skipped)
-  ./run-tests.sh --build-dir DIR  Choose build directory (default: build/all-tests)
+  ./run-tests.sh --build-dir DIR  Choose build directory (local Mac: KINGSTON/AIVERSE-builds/<worktree>/all-tests; otherwise build/all-tests)
   ./run-tests.sh --jobs N         Build parallelism (default: 4)
   ./run-tests.sh --ctest-jobs N   CTest parallelism (default: 2)
   ./run-tests.sh --help           This help
@@ -65,6 +73,40 @@ case "$BUILD_DIR" in
     /*) ;;
     *) BUILD_DIR="$ROOT/$BUILD_DIR" ;;
 esac
+
+if (( LOCAL_MAC )); then
+    # A leftover /Volumes/KINGSTON directory is not a mounted external disk.
+    [[ -d "$KINGSTON" && -w "$KINGSTON" ]] &&
+        mount | grep -F " on $KINGSTON (" >/dev/null ||
+        die "KINGSTON is not mounted and writable: $KINGSTON"
+    kingston_real="$(cd "$KINGSTON" && pwd -P)"
+    case "$BUILD_DIR/" in
+        */../*|*/./*) die "Use a normalized Mac build path: $BUILD_DIR" ;;
+    esac
+    # Resolve the nearest existing parent before creating anything. Reject
+    # local paths, including symlinks that escape the external drive.
+    parent="$BUILD_DIR"
+    while [[ ! -e "$parent" && ! -L "$parent" ]]; do
+        parent="$(dirname "$parent")"
+    done
+    parent_real="$(cd "$parent" && pwd -P)" ||
+        die "Cannot resolve build directory: $parent"
+    case "$parent_real/" in
+        "$kingston_real/"*) ;;
+        *) die "Mac build directory must be on KINGSTON: $BUILD_DIR" ;;
+    esac
+    mkdir -p "$BUILD_DIR" || die "Cannot create build directory: $BUILD_DIR"
+    build_real="$(cd "$BUILD_DIR" && pwd -P)"
+    case "$build_real/" in
+        "$kingston_real/"*) ;;
+        *) die "Mac build directory resolves outside KINGSTON: $BUILD_DIR" ;;
+    esac
+    # Keep the caller's path for CMake cache compatibility.
+    tmp="$build_real/tmp"
+    [[ ! -L "$tmp" ]] || die "Build temporary directory must not be a symlink: $tmp"
+    mkdir -p "$tmp" || die "Cannot create KINGSTON temporary directory"
+    export TMPDIR="$tmp/"
+fi
 
 command -v ctest >/dev/null 2>&1 || die "ctest is missing: install CMake"
 if (( ! SKIP_BUILD )); then

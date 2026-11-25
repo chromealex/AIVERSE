@@ -31,6 +31,10 @@
 #include "engine/render/AdaptiveShadowResolution.h"
 #include "engine/render/RenderDeviceLifetime.h"
 #include "apps/studio-native/StudioFacialGpuPreview.h"
+#include "apps/studio-native/StudioCavernsPreview.h"
+#include "apps/studio-native/StudioPlanetGlobe.h"
+#include "engine/render/NativePresentationRetirement.h"
+#include "apps/editor/TerraWeaveSparsePreview.h"
 #include "apps/studio-native/StudioSpectraPreview.h"
 #include "apps/studio-native/StudioSpectraSources.h"
 
@@ -42,6 +46,11 @@ public:
     ~StudioScene();
     StudioScene(const StudioScene&) = delete;
     StudioScene& operator=(const StudioScene&) = delete;
+    // Render-thread-only: ephemeral generated building preview, never an Asset.
+    // On replace/clear the old GPU model retires after a verified device idle.
+    bool setBuildingPreview(std::unique_ptr<render::Model> model,
+                            std::string* error=nullptr);
+    bool hasBuildingPreview() const noexcept {return bool(buildingPreview_)&&buildingPreviewGpuReady_;}
     void frame(int framebufferWidth, int framebufferHeight, const editor::MapDoc& doc,
                bool fpsProject, const std::string& selectedId,
                const std::string& previewName, const Json& previewFactors,
@@ -245,6 +254,36 @@ public:
         return result;
     }
     void captureNextFrame(gfx::Device::CaptureFn callback) { lastFrameSignature_=0; device_->captureNextFrame(std::move(callback)); }
+    void setCaveGlobe(std::string body,const std::string& project,const std::string& map);
+    bool caveGlobeRequested()const noexcept{return !globeBody_.empty();}
+    Json pickCaveGlobe(float x,float y,float width,float height,const editor::MapDoc& doc,
+                       const std::string& project)const;
+    Json cavernsPreview(const Json& input) {
+        if(input.has("enabled")||input.has("isolate")||input.has("paging")||input.has("budgets")) {
+            if(!device_||!cavernsPreview_.configure(*device_,input))
+                throw std::runtime_error("Caverns preview GPU retirement refused");
+            lastFrameSignature_=0;planetCutDrawn_=false;
+        }
+        auto result=cavernsPreview_.stats();
+        result.set("globeBody",Json::string(globeBody_));
+        result.set("globeReady",Json::fromBool(globeReady_));
+        result.set("globeError",Json::string(globeError_));
+        const auto shown=planetCutDrawn_&&planetCutPlan_?planetCutPlan_->acceptedEntrances.size():size_t(0);
+        result.set("terrainCutEntrances",Json::string(std::to_string(terrainCutStats_.cutEntrances+shown)));
+        result.set("terrainRejectedEntrances",Json::string(std::to_string(terrainCutStats_.rejectedEntrances-
+            std::min(shown,terrainCutStats_.rejectedEntrances))));
+        result.set("terrainTriangles",Json::string(std::to_string(planetCutDrawn_?planetCutTriangles_:terrainCutStats_.triangles)));
+        const auto& rimDiagnostic=cavernsPreview_.planetRimDiagnostic();
+        result.set("terrainCutDiagnostic",Json::string(!planetCutError_.empty()?planetCutError_:
+            !rimDiagnostic.empty()?rimDiagnostic:planetCutDrawn_?"Paired chart surface and collar":terrainCutStats_.cutDiagnostic));
+        result.set("terrainCutSupported",Json::fromBool(terrainCutStats_.handled));
+        result.set("sparseTerrainResident",Json::string(std::to_string(sparseTerrainPreview_.residentCount())));
+        result.set("sparseTerrainAuthored",Json::string(std::to_string(sparseTerrainPreview_.authoredCount())));
+        result.set("sparseTerrainDiagnostic",Json::string(sparseTerrainError_.empty()?sparseTerrainPreview_.surfaceGroupDiagnostic():sparseTerrainError_));
+        result.set("sparseCertifiedEdges",Json::string(std::to_string(sparseTerrainPreview_.certifiedSurfaceEdges())));
+        result.set("sparsePlannedOpenings",Json::string(std::to_string(sparseTerrainPreview_.plannedSurfaceOpenings())));
+        return result;
+    }
     using FxTaggedCaptureFn=std::function<void(uint64_t,int,int,std::vector<uint8_t>,Json)>;
     void captureNextFrameTagged(FxTaggedCaptureFn callback) {
         lastFrameSignature_=0;
@@ -343,6 +382,7 @@ public:
     std::vector<std::string> idsInRect(float x0, float y0, float x1, float y1, float width, float height,
                                        const editor::MapDoc& map, bool fpsProject) const;
     // Ray through (x, y) onto the ground plane y = 0 (asset drops).
+    bool caveScreenRay(float x,float y,float width,float height,render::float3& origin,render::float3& direction)const;
     bool groundPoint(float x, float y, float width, float height, render::float3& out) const;
     // Material slot names of a loaded content model (for the Inspector's Mesh Renderer).
     std::vector<std::string> modelMaterialSlots(const std::string& asset) const;
@@ -355,7 +395,7 @@ public:
     void setOverlayShapes(std::vector<OverlayShape> shapes) { overlayShapes_ = std::move(shapes); }
     // World point -> view point (same units as pick / groundPoint); false when behind the camera.
     bool projectPoint(render::float3 world, float width, float height, render::float2& out) const;
-    void setBrushCursor(bool visible, render::float3 center, float radius) { brushVisible_=visible; brushCenter_=center; brushRadius_=radius; }
+    void setBrushCursor(bool visible, render::float3 center, float radius,bool volume=false,bool fill=false) { brushVisible_=visible; brushCenter_=center; brushRadius_=radius; brushVolume_=volume; brushFill_=fill; }
     void resetCamera() { if(device_){device_->waitForResourceIdle();spectraSources_.shutdown();} lightingRevision_ = std::numeric_limits<uint64_t>::max(); cameraInitialized_ = false; terrainRevision_ = std::numeric_limits<uint64_t>::max(); clearDocumentModels(); }
     // Frames actually drawn / skipped because nothing visible changed (diagnostics).
     uint64_t framesDrawn() const { return framesDrawn_; }
@@ -386,12 +426,37 @@ private:
     render::Mesh cube_;
     render::Mesh studioCyclorama_;
     render::Mesh terrain_;
+    render::Mesh planetCutTerrain_;
+    render::Mesh globeMesh_;
+    std::optional<StudioPlanetGlobe> globe_;
+    std::string globeBody_,globeProject_,globeMap_,globeError_;
+    const editor::MapDoc* globeDoc_=nullptr; // identity only
+    uint64_t globeRevision_=0;
+    bool globeReady_=false;
+    void renderCaveGlobe(int width,int height,const editor::MapDoc& doc);
+    std::shared_ptr<const terraweave::caverns::CaveSurfaceGroupPlan> planetCutPlan_;
+    const editor::MapDoc* planetTerrainDoc_=nullptr; // identity only
+    std::string planetTerrainProject_,planetCutError_;
+    size_t planetCutTriangles_=0;
+    bool planetCutDrawn_=false;
+    render::MeshBuilder terrainCpu_;
+    TerrainPreviewStats terrainCutStats_;
+    render::NativePresentationRetirement terrainRetirement_;
+    editor::TerraWeaveSparsePreview sparseTerrainPreview_;
+    render::NativePresentationRetirement sparseTerrainRetirement_;
+    std::string sparseTerrainProject_;
+    std::string planetChartIdentity_;
+    std::string sparseTerrainError_;
+    bool terrainWasShown_=false,terrainCavernsAuthored_=false;
     std::unique_ptr<render::Model> materialSphere_;
+    std::unique_ptr<render::Model> buildingPreview_;
+    bool buildingPreviewGpuReady_=false;
     // Built-in Mesh Renderer primitives (StaticModel.asset "" / builtin:cube / builtin:sphere).
     std::unique_ptr<render::Model> builtinCube_, builtinSphere_;
     std::map<std::string,std::vector<render::Material>> primitiveMaterials_; // per frame, per entity
     render::Model* builtinPrimitive(bool sphere);
     StudioFacialGpuPreview facialGpu_;
+    StudioCavernsPreview cavernsPreview_;
     StudioSpectraSources spectraSources_;
     std::unique_ptr<StudioSpectraPreview> spectraPreview_=std::make_unique<StudioSpectraPreview>();
     std::string spectraEngineAssetRoot_;
@@ -510,6 +575,7 @@ private:
     void drawSelectionBox(const render::Camera& view, int width, int height);
     std::vector<OverlayShape> overlayShapes_;
     std::optional<SkyShot> skyShot_;
+    bool brushVolume_=false,brushFill_=false;
     bool brushVisible_ = false; render::float3 brushCenter_{}; float brushRadius_ = 0;
     void drawBrushCursor(const render::Camera& view, int width, int height);
     void drawTransformGizmo(const render::Camera& view, int width, int height);

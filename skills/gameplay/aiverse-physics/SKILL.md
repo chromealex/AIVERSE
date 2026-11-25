@@ -123,3 +123,8 @@ for (const auto& e : scene->sensorEvents()) { /* begin / end, ends of destroyed 
 
 For skill-only changes run `tools/skills/catalog.py generate`, `check`,
 `tests/skills/catalog_test.py`, `tools/libraries/catalog.py check` and validate local links.
+
+## Stage54v1 — PHYSIS-oriented native motion
+- The existing Box3D character motor exposes `stepCharacterOriented` and `Scene::moveCharacterOriented`: quaternion maps local +Y to actual support up. Local yaw/input, world-space state and pushes; rotate capsule, rays, collision planes and platform velocities through the same solver. Ordinary +Y API remains available. Caller owns tick, proxy synchronization and physics step.
+- `engine/world/TerraWeaveCavernsPlanetMotion.h` reads actual PHYSIS gravityAt in simulation-anchor coordinates, derives chart tangent basis, adapts existing Fixed stepMotion and existing ECS cave steering request. No Transform writer or second gravity solver. `stepCavePlanetCharacter` in the optional physics bridge checks region admission and uses the same oriented motor. Zero/near-zero gravity refuses grounded motor; existing host must select flight/swim/etc. mode. Rigid-body force bridge remains existing applyPhysisToBody (no double gravity).
+- Existing chart-Y pathfinding support is still conservative; 54v2 handles navigation. No automatic game-host motor wiring, no native tests run. Native API and source fixtures only.

@@ -660,3 +660,7 @@ record: `docs/agent-handoffs/review-fixes-ecs-scene-2026-11-21.md`.
   Full CMake build, CTest, RTS/FPS headless matches: **NOT RUN** (builds only
   on KINGSTON). Deterministic simulation code paths are unchanged except the
   load-time validator, which only rejects invalid saves.
+
+## Linux ARM64 GCC 13.3 aggregate replacement, 2026-11-25
+
+Source 5d6e08f3937c46bc198f93564160c4e645aaf631 on PR #190 gives the replacement aggregate in the paged Pool<T>::emplace path a local name before move assignment. The Ubuntu GCC build and an independent GNU/Linux AArch64 cross-build both reproduced the internal compiler error for Combat on the parent code. Release compilation of the corrected Economy.cpp and GameCore.cpp produced ELF AArch64 objects. Six Mac CTests covered snapshots, replacement, exceptions, parallel writers and rollback. [Stage report](agent-handoffs/building-caverns-integration-stage32-2026-11-25.md).

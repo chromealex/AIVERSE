@@ -1,0 +1,11 @@
+{
+  "sha": "b954cd47aceffd107f0dcc52f544d39bdb862b29",
+  "argv": [
+    "bash",
+    "-ec",
+    "bin=/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/aiversemcp\npython3.12 tests/feature_gate_test.py\npython3.12 tools/agents/check_contracts.py\npython3.12 tools/skills/catalog.py check\npython3.12 tools/mcp/audit_registry.py \"$bin\" --engine \"$PWD\" --feature-dir docs/features\npython3.12 tests/simulation_budget_mcp_test.py \"$bin\" \"$PWD\"\npython3.12 tools/mcp/test_building_diagnostics_stdio.py \"$bin\" \"$PWD\""
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/integration-tools-b954cd47a.log.txt",
+  "sha256": "3c0b8186b61e8029584f5912447279f78ec6dc1612f87342172b1ae1f493c1a6"
+}

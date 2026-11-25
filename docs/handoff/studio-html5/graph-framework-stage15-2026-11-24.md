@@ -1,0 +1,12 @@
+# Shared Graph Framework — stage 15 — 2026-11-24
+
+Branch: feature/aiv20261123_feature_gate; draft PR #120.
+Implementation HEAD: 11cd050f387cb2e9aec31444ebf099550a3072c7
+
+Added graph_live_snapshot core command with optional native editor owner callback. MotionWeave snapshot checks exact packed entity ID and live ECS generation in native editor play-test, copies current committed GameView graph state, health, pose validity, active compiled dependency program and bounded notify records. Rejects stale, dead, uninitialized and generic-view instances. No pointer escapes owner thread. This is an adapter to existing native editor presentation, NOT integration with modern generic ECS animation execution or separate HTML5 runtime host. SpectraFX snapshot exposes shared particle-system counters and existing optional GPU preview history (estimated particles, not GPU timing). Explicit unavailable for hosts without owner or unsupported domains. No auto-start or simulation mutation. Studio inspector requests a snapshot, reports unavailable if not registered, and does not map unrelated live state to edited assets. Isolated CPU probe now highlights its own active program. No live attach session, cross-process transport, continuous history, pause/step/breakpoints or measured per-node/GPU durations.
+
+Changed paths: engine/view/game/GameView.h, apps/editor/EditorPlayOps.cpp, apps/editor/core/GraphOps.h, apps/studio-native/StudioTools.h, apps/studio-web/src/graphs/{GraphLiveSnapshotPanel.tsx,GraphRuntimeProbePanel.tsx,NativeGraphPanel.tsx,GraphCanvas.tsx}, tools/mcp/audit_registry.py, tests/vfx_graph_ops_test.cpp, docs/features/graph-framework.json, docs/agents/graph-framework.md, skills/workflow/aiverse-graph-authoring/SKILL.md.
+
+Verification: NOT RUN. GitHub writes confirmed; existing owner signatures and generation liveness method inspected. Added regression for unavailable owner in headless Workspace. No C++ or TS compile, CTest, MCP process, real live entity snapshot, Studio/GPU QA, CI or Mac merged-tree gate. No publication/main merge. Main policy PR #122 still requires reconciliation.
+
+Next: inspect modern shared ECS animation/FX host for lifetime-safe published identity and graph revision snapshots. Add opt-in bounded history keyed by world epoch, entity generation and graph program identity; no legacy FPS coupling. Only introduce isolated debugger stepping/breakpoints or explicit host-approved pause controls after ownership contract. Verify all graph features in real checkout.

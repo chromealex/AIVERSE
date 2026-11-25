@@ -1,0 +1,8 @@
+# Stage 36C — retry 11: KINGSTON build storage
+
+
+## KINGSTON local macOS storage guard — 2026-11-24
+- Implementation: cce6e0799608bdf3241f4c6940b077260142a829, integration/building-graph-stage36b-20261124. User's Stage 36C quick build stopped at 94% with ENOSPC because the prior default was worktree-local. Local Darwin now defaults to /Volumes/KINGSTON/AIVERSE-builds/<worktree>/all-tests, checks the volume is actually mounted and writable, rejects build paths whose physical parent or final directory is outside KINGSTON, and exports TMPDIR beneath the build directory. Hosted GitHub Actions and non-Darwin keep the portable default. Existing explicit external paths remain supported; no cache migration or deletion. Preserve script executable mode.
+- Tests: added fake-Darwin missing-mount rejection before invoking CMake/CTest, portable fake-tool tests simulate Linux. Actual Bash syntax, smoke, native Mac build and CTest NOT RUN in this connector session. Run bash -n run-tests.sh and python3 tests/test_unified_runner.py, then quick gate with the exact existing external cache path if compatible. If the CMake cache was physically moved and its recorded path no longer matches, configure a fresh external directory or preserve the original path via a valid external symlink. Never fall back to internal storage.
+
+User source checkout remains ~/Projects/AIVERSE-building-stage36c. Example default: /Volumes/KINGSTON/AIVERSE-builds/AIVERSE-building-stage36c/all-tests. If user already created a different external directory, use --build-dir with that exact path. VFX assertion repair 18ae4912 remains pending native verification. No main merge.

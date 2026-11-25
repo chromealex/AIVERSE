@@ -1,0 +1,12 @@
+# Shared Graph Framework — stage 29 — 2026-11-24
+
+Branch: feature/aiv20261123_feature_gate; draft PR #120.
+Implementation HEAD: af29bfcc46e896b3f99da80d4f5b5c115123c9eb
+
+Added GPU PBR set mode to native texture_graph_gpu_preview start (bakeSet=true), immutable graph and overrides snapshot, ordered sequential output jobs, one pending readback range, full CPU-reference acceptance per output, exact duplicate-target reuse and completed-output backend provenance. At most nine retained images (36 MiB logical upper bound), output/scratch GPU buffers at most 8 MiB; existing graph work budget applies. Same-sized buffers reused across completed plans, one exact last pipeline plan; distinct closures still recompute, not general intermediate DAG caching. RequireGpu prevents publication of any failed set; explicit publish requires exact request and all outputs complete. Shared native MaterialOps publisher stages all PNGs and manifest then renames into new set directory, with same existing cooperating-writer guarantee. CPU set uses same publisher and records CPU provenance. Studio queues, reads progress, publishes set, resolves GUIDs and configures sRGB, supports inherited material variant after metadata verification. No direct runtime texture binding, expanded pipeline LRU, arbitrary multi-pass scheduler, cross-process live HTML5 provider or performance evidence.
+
+Changed paths: apps/editor/core/{MaterialOps.h,MaterialOps.cpp,TextureGraphGpuPreview.h,GraphOps.h}, apps/editor/EditorPlayOps.cpp, apps/studio-web/src/graphs/TextureGraphPanel.tsx, tests/vfx_graph_ops_test.cpp, docs/agents/graph-framework.md, skills/workflow/aiverse-graph-authoring/SKILL.md. Existing manifest already lists paths and MCP op.
+
+Verification: NOT RUN. GitHub source writes confirmed; authored shared publisher provenance and headless set refusal fixtures. No native/TS/shader compilation, actual GPU set or repeated buffer execution, CPU parity measurements, CTest, CI or Mac merged-tree gate. No main merge. Coordinate texture/RHI owners; reconcile main policy PR #122.
+
+Next: advance runtime GPU texture ownership and material binding only through existing texture/material owner APIs, or finish Building/Caverns graph contracts first; add actual compile and GPU acceptance before calling production-ready. Consider explicit cancel and timeout for long native readbacks, bounded pipeline LRU and shared intermediate scheduling.

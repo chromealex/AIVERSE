@@ -4,6 +4,8 @@
 #pragma once
 #include "examples/world/terraweave_native/Integration.h"
 #include "engine/world/TerraWeaveNereidObstacleBridge.h"
+#include "engine/world/TerraWeaveCavernsPlanetNativeHost.h"
+#include "engine/world/TerraWeaveCavernsPlanetExteriorCollision.h"
 #include <functional>
 #include <span>
 #include <set>
@@ -99,4 +101,21 @@ publishObstructionsAfterPhysics(
         stableWaterIdForEcs,policy);
 }
 
+// Use in the project's existing native motor system, not as a second ECS
+// system. The project owns proxy state, real exterior motor/coverage and
+// the position component. The Cave host handles the exclusive dispatch.
+template<class Target>
+inline terraweave::caverns::CavePlanetDispatchResult dispatchPlanetCaveActor(
+        terraweave::caverns::CavePlanetNativeHost<Target>& host,Simulation& sim,Entity entity,
+        const physics::CharacterParams& params,physics::CharacterState& state,
+        physics::BodyHandle proxy,const terraweave::caverns::CavePlanetMotorDispatchInput& input){
+    return host.dispatchMotor(sim,entity,params,state,proxy,input);
+}
+// Optional owner-loop tick: the module already has one registered motor
+// using dispatchPlanetCaveActor. Do not also call sim.step()/scene.step().
+template<class Target>
+inline auto stepPlanetCaveTick(terraweave::caverns::CavePlanetNativeHost<Target>& host,
+        const std::set<uint64_t>& extraPins={}){
+    return host.stepNativeTick(extraPins);
+}
 } // namespace aiverse::examples::terraweave_native

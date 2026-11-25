@@ -1,0 +1,331 @@
+{
+  "schema": 1,
+  "id": "graph-framework",
+  "owner": "studio",
+  "changed_paths": [
+    "apps/studio-web/src/graphs/graphFramework.ts",
+    "engine/fx/SpectraGpuParticles.cpp",
+    "tests/spectrafx_metal_allocator.mm",
+    "apps/studio-web/src/graphs/GraphCanvas.tsx",
+    "apps/studio-web/src/panels/ShaderGraphPanel.tsx",
+    "apps/studio-web/tests/graphFramework.test.mjs",
+    "apps/studio-web/package.json",
+    "docs/agents/graph-framework.md",
+    "skills/workflow/aiverse-graph-authoring/SKILL.md",
+    "tools/skills/catalog.py",
+    "skills/catalog.json",
+    "docs/devlog/systems.json",
+    "apps/studio-web/src/graphs/shaderAdapter.ts",
+    "apps/studio-web/src/graphs/GraphCanvas.css",
+    "apps/studio-web/src/panels/shaderGraphLayout.ts",
+    "apps/studio-web/tests/shaderGraphEdit.test.mjs",
+    "apps/studio-web/src/graphs/graphSelection.ts",
+    "apps/studio-web/src/graphs/graphGeometry.ts",
+    "apps/studio-web/src/graphs/nativeGraphAdapters.ts",
+    "apps/studio-web/src/graphs/NativeGraphPanel.tsx",
+    "apps/studio-web/src/panels/ToolPanel.tsx",
+    "apps/studio-web/tests/nativeGraphAdapters.test.mjs",
+    "apps/studio-web/src/graphs/ModelGraphPanel.tsx",
+    "apps/studio-native/StudioTools.h",
+    "apps/studio-web/src/graphs/AnimationConditions.tsx",
+    "apps/studio-web/src/graphs/generatorProjections.ts",
+    "apps/studio-web/src/panels/generated/TerraweaveGeneratorPanel.tsx",
+    "apps/studio-web/src/graphs/materialGraph.ts",
+    "apps/studio-web/src/graphs/MaterialGraphPanel.tsx",
+    "apps/studio-web/src/panels/MaterialsPanel.tsx",
+    "apps/editor/core/MaterialOps.cpp",
+    "apps/studio-web/src/graphs/strataAnalysis.ts",
+    "apps/studio-web/src/graphs/StrataAnalysisPanel.tsx",
+    "apps/studio-web/src/graphs/graphDiagnostics.ts",
+    "apps/studio-web/src/graphs/GraphDiagnostics.tsx",
+    "apps/editor/core/GraphOps.h",
+    "apps/editor/core/Workspace.cpp",
+    "tools/mcp/audit_registry.py",
+    "tests/vfx_graph_ops_test.cpp",
+    "apps/editor/core/GraphDraftEdits.h",
+    "apps/editor/core/GraphPropertySchema.h",
+    "apps/editor/core/GraphAssetDependencies.h",
+    "apps/editor/core/GraphRuntimeProbe.h",
+    "apps/studio-web/src/graphs/GraphRuntimeProbePanel.tsx",
+    "engine/view/game/GameView.h",
+    "apps/editor/EditorPlayOps.cpp",
+    "apps/studio-web/src/graphs/GraphLiveSnapshotPanel.tsx",
+    "engine/render/graph/GraphTelemetry.h",
+    "apps/editor/core/GraphDebugSession.h",
+    "apps/studio-web/src/graphs/GraphDebugSessionPanel.tsx",
+    "engine/animation/EcsAnimationSystems.h",
+    "engine/animation/MotionWeaveTelemetry.h",
+    "engine/view/View.h",
+    "engine/view/game/GameView.cpp",
+    "apps/editor/Editor.h",
+    "apps/editor/Editor.cpp",
+    "tests/view/view.cpp",
+    "engine/render/graph/GraphWatch.h",
+    "engine/fx/FxInternal.h",
+    "engine/fx/ParticleSystem.h",
+    "engine/fx/ParticleSystem.cpp",
+    "engine/render/graph/GraphExecutionProfile.h",
+    "engine/render/AnimationGraph.h",
+    "engine/render/AnimationGraph.cpp",
+    "apps/studio-web/src/graphs/GraphExecutionProfilePanel.tsx",
+    "engine/render/graph/GraphGpuProfile.h",
+    "apps/studio-web/src/graphs/GraphGpuProfilePanel.tsx",
+    "engine/render/TextureGen.h",
+    "engine/render/TextureGen.cpp",
+    "engine/render/graph/TextureGraph.h",
+    "apps/studio-web/src/graphs/TextureGraphPanel.tsx",
+    "engine/render/graph/TextureGraphTemplates.h",
+    "engine/render/graph/TextureGraphCache.h",
+    "engine/render/graph/TextureGraphGpu.h",
+    "apps/editor/core/TextureGraphGpuPreview.h",
+    "engine/render/graph/TextureGraphGpuPatterns.h",
+    "apps/editor/core/MaterialOps.h",
+    "engine/gfx/vulkan/VkDevice.h",
+    "engine/gfx/vulkan/VkCompute.cpp",
+    "engine/render/graph/TextureGraphMaterialBinding.h",
+    "engine/view/AppearanceAssetRegistry.h",
+    "tests/view/appearance_prepared.cpp",
+    "engine/render/graph/TextureGraphPipelineCache.h",
+    "tests/render/texture_graph_pipeline_cache.cpp",
+    "CMakeLists.txt",
+    "engine/render/graph/TextureGraphSharedScratch.h",
+    "tests/render/texture_graph_shared_scratch.cpp",
+    "engine/render/graph/TextureGraphLiveness.h",
+    "tests/render/texture_graph_liveness.cpp",
+    "engine/render/graph/TextureGraphPassSchedule.h",
+    "tests/render/texture_graph_pass_schedule.cpp",
+    "engine/render/graph/TextureGraphDagLowering.h",
+    "tests/render/texture_graph_dag_lowering.cpp",
+    "engine/render/graph/TextureGraphKernelSource.h",
+    "tests/render/texture_graph_kernel_source.cpp",
+    "engine/render/graph/TextureGraphMaterializedDispatch.h",
+    "tests/render/texture_graph_materialized_dispatch.cpp",
+    "apps/studio-web/src/graphs/buildingGraphInspection.ts",
+    "apps/studio-web/src/graphs/BuildingStructureGraphView.tsx",
+    "apps/studio-web/tests/buildingGraphInspection.test.mjs",
+    "apps/studio-web/src/graphs/caveGraphInspection.ts",
+    "apps/studio-web/src/graphs/CaveStructureGraphView.tsx",
+    "apps/studio-web/tests/caveGraphInspection.test.mjs",
+    "apps/studio-native/StudioSession.cpp",
+    "apps/studio-native/StudioSession.h",
+    "apps/studio-native/tests/StudioSessionTests.cpp",
+    "apps/studio-web/src/types.ts",
+    "apps/studio-web/src/mock.ts",
+    "apps/studio-web/src/graphs/graphInspectionCapture.ts",
+    "apps/studio-web/tests/graphInspectionCapture.test.mjs",
+    "apps/studio-web/src/graphs/buildingCandidateCapture.ts",
+    "apps/studio-web/tests/buildingCandidateCapture.test.mjs",
+    "apps/studio-web/src/graphs/buildingRoomTopology.ts",
+    "apps/studio-web/src/graphs/BuildingRoomTopologyView.tsx",
+    "apps/studio-web/tests/buildingRoomTopology.test.mjs",
+    "apps/studio-web/src/graphs/GraphDiagnosticsPanel.tsx",
+    "apps/editor/core/GraphAssetTransaction.h",
+    "apps/editor/core/SpectraGraphOps.cpp",
+    "apps/editor/core/ShaderGraphOps.cpp",
+    "apps/editor/windows/ShaderGraphWindow.cpp",
+    "apps/editor/windows/SpectraGraphWindow.cpp",
+    "skills/visuals/aiverse-spectrafx/SKILL.md",
+    "apps/studio-web/src/panels/graphSurface.css",
+    "apps/studio-web/tests/shaderGraphLayout.test.mjs"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": false,
+    "visible": true,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "not_run",
+      "note": "Building owner and Stage 53-54 guarded graph writes plus planetary inspection are present in the integration staging tree. Full Caverns owner reconciliation and merged-tree acceptance remain pending.",
+      "evidence": []
+    },
+    "architecture": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "native_api": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "skill": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "mcp": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification. Native Studio on Mac generated a building GLB and displayed its independent preview and authored room graph. The Caverns inspector was verified after a document identity fix.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+      ]
+    },
+    "inspector": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "platforms": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification. SpectraFX GPU checkpoint restore compiled with GCC 13.3 for GNU/Linux AArch64 and round-tripped distinct parameter and attribute lanes on Metal. Full platform acceptance is still open.",
+      "evidence": [
+        "docs/evidence/spectrafx-gcc-checkpoint-b730fc08d.json"
+      ]
+    },
+    "dependencies": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "headless": {
+      "status": "pass",
+      "note": "The native Workspace graph regression passed without a GPU or a UI. Real stdio then confirmed project-scoped guarded writes, reordered preconditions, stale rejection and readback for Shader and SpectraFX.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage27-2026-11-25.md",
+        "tests/vfx_graph_ops_test.cpp",
+        "docs/evidence/integrated-acceptance-3e2a609f0.json"
+      ]
+    },
+    "examples": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "tests": {
+      "status": "not_run",
+      "note": "Historical isolated graph tests passed on prior source trees. This merged tree has not yet passed native, Studio, MCP, visual or Mac acceptance. Mac integration at a9773f75c passed 47/47 Caverns, editor and graph checks plus 9/9 Studio and Building CTests. Full merged-main acceptance remains pending.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Owner stages and the merged guarded-write regressions are recorded with source and acceptance results.",
+      "evidence": [
+        "docs/handoff/studio-html5/graph-framework-stage35e-2026-11-24.md",
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+      ]
+    },
+    "documentation": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Pending implementation or actual verification.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-graph-authoring"
+    ],
+    "mcp_tools": [
+      "shader_graph_catalog",
+      "shader_graph_get",
+      "shader_graph_validate",
+      "shader_graph_set",
+      "fx_graph_list",
+      "fx_graph_get",
+      "fx_graph_node_catalog",
+      "fx_graph_edit",
+      "fx_graph_validate",
+      "fx_graph_set",
+      "animation_graph_list",
+      "animation_graph_get",
+      "animation_graph_validate",
+      "animation_graph_set",
+      "modeling_list",
+      "modeling_get",
+      "modeling_edit",
+      "modeling_validate",
+      "terraweave_preview",
+      "terraweave_generate",
+      "terraweave_forest_get",
+      "terraweave_forest_set",
+      "texture_patterns",
+      "texture_generate",
+      "material_set",
+      "strata_capabilities",
+      "strata_model_analyze",
+      "graph_catalog",
+      "graph_list",
+      "graph_get",
+      "graph_node_catalog",
+      "graph_validate",
+      "graph_edit",
+      "graph_save",
+      "graph_diagnostics",
+      "graph_dependencies",
+      "graph_property_schema",
+      "graph_asset_dependencies",
+      "graph_runtime_capabilities",
+      "graph_runtime_probe",
+      "graph_live_snapshot",
+      "graph_debug_session",
+      "graph_live_watch",
+      "graph_live_profile",
+      "graph_gpu_profile",
+      "texture_graph_catalog",
+      "texture_graph_list",
+      "texture_graph_get",
+      "texture_graph_validate",
+      "texture_graph_set",
+      "texture_graph_preview",
+      "texture_graph_bake",
+      "texture_graph_templates",
+      "texture_graph_bake_set",
+      "texture_graph_cache",
+      "texture_graph_material_variant",
+      "texture_graph_gpu_preview"
+    ],
+    "studio_panels": [
+      "shader_graph",
+      "fx_graph",
+      "anim_graph",
+      "modeling",
+      "terraweave_generator",
+      "materials",
+      "models"
+    ],
+    "studio_methods": [
+      "studio.shaderGraphCatalog",
+      "studio.shaderGraphGet",
+      "studio.shaderGraphValidate",
+      "studio.shaderGraphSave",
+      "studio.op",
+      "studio.assets",
+      "studio.materials",
+      "studio.materialPatch",
+      "studio.assetByGuid",
+      "studio.cavernsGraphInspect"
+    ]
+  },
+  "test_reports": [
+    "docs/evidence/integrated-graph-2a56cbf39.json",
+    "docs/evidence/spectrafx-gcc-checkpoint-b730fc08d.json"
+  ]
+}

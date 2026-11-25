@@ -1,0 +1,5 @@
+# Integration path coverage and compliance
+
+Integration source commit `447e9151191e277665656a754266578a366c45ba` records changed paths in the Building Graph, graph framework, TerraWeave Caverns, recurring work budget and five Studio feature manifests. The Studio and recurring-budget scopes were reconstructed from their owners' implementation commits. Each new record references its own handoff. Unknown runtime and publication criteria remain pending.
+
+On macOS with Python 3.12, `python3.12 tools/agents/check_feature.py docs/features/*.json` validated all ten manifest structures. Strict audit against `69a1189c4` returned exit 1 with 359 diagnostics, including mirrored readiness errors, but zero uncovered paths (286 uncovered paths on the prior squash). One diagnostic identified the Building Simulation trait, now enabled. The feature gate's 20 Python tests passed on the source commit, recorded in `docs/evidence/integration-feature-gate-447e91511.json`. This does not establish strict feature readiness. Full Mac and native Studio verification are running on the equivalent runtime code in squash candidate `92b687449`.
