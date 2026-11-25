@@ -284,8 +284,8 @@ bool encodeCompressonatorDds(const std::string& input,const std::string& extensi
     if(fs::exists(in)||fs::exists(out)||fs::is_symlink(in)||fs::is_symlink(out)){err="Codec staging path exists";return false;}
     {std::ofstream f(in,std::ios::binary);f.write(input.data(),std::streamsize(input.size()));f.close();if(!f){err="Cannot write codec source";return false;}}
     int levels=1;for(int n=std::max(width,height);mipmaps&&n>1;n/=2)++levels;
-    std::vector<std::string> args={"-fd",format=="bc7"?"BC7":"BC6H","-noprogress","-silent"};
-    if(format=="bc6hs"){args.push_back("-Signed");args.push_back("1");}
+    const char* codecFormat = format == "bc7" ? "BC7" : (format == "bc6hs" ? "BC6H_SF" : "BC6H");
+    std::vector<std::string> args={"-fd",codecFormat,"-noprogress","-silent"};
     if(mipmaps){args.push_back("-miplevels");args.push_back(std::to_string(levels));}
     else args.push_back("-nomipmap");
     args.push_back(in.string());args.push_back(out.string());

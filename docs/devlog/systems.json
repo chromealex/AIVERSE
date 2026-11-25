@@ -1967,7 +1967,9 @@
      "status": "in-progress",
      "target": null,
      "title": "Повторное использование сохранённых параметризованных графов текстур",
-     "titleEn": "Reuse saved parameterized texture graphs"
+     "titleEn": "Reuse saved parameterized texture graphs",
+     "text": "Проверяем экспорт текстур BC и ASTC с мипами и чтение результатов графа через Vulkan.",
+     "textEn": "Verifying BC and ASTC texture export with mipmaps and Vulkan graph readback."
     }
    ]
   },
