@@ -4221,3 +4221,12 @@ LENS drives it from `CameraLensComponent::driveDepthOfField` through
 is capped at 500 m) and `maxBlur` = background disc radius at infinity in render
 pixels (clamped to 16). This is the same 8-tap screen-space defocus, not a physical
 bokeh. See `docs/handoffs/prisma-stage-96-lens-physical-dof.md`.
+
+
+## Authored frame compositor
+
+A game or map can supply `postfx.compositor`. In Studio open Post effects → Frame compositor, load the glow example, and wire an output port to an input port. Edit target names, resolution divisors, pass operations and parameters in Targets and passes. Save graph validates the complete document before replacing the current scope. A map inherits the game graph unless it replaces the postfx block, declares a graph, or disables it with `compositor:null`.
+
+Use the scene color as `scene`. To isolate objects, configure a LENS texture camera with a visibility mask, then add its target asset key to the consumer camera's reads. A compositor source such as `{"id":"selected","cameraInput":0}` reads that first declared dependency. The managed camera pipeline binds those textures per submission and camera. Standalone native hosts call `Prisma::setCompositorCameraInputs` during the frame before resolve. The full example is in `examples/prisma/camera-glow.json`.
+
+Declare 1–12 named targets and one producer per target. A target's optional divisor is 1, 2, 4 or 8. Declare one full-resolution output. A pass has an id, op, inputs and target. Supported operations are downsample, bright (amount is the threshold), blurX and blurY (amount is the radius multiplier), add (filtered first input multiplied by amount plus the second input), and shaderGraph (a nested postfx shader graph in graph, sampled primary input and optional asset textures). PRISMA compiles dependencies before drawing, and temporary targets with disjoint lifetimes share compatible storage. The graph executes after scene contributions and before screen-space lighting, metering and tonemapping. A missing camera source or shader preserves the incoming scene. `effectReport(viewId)->compositorPasses` reports encoded passes. Use `postfx_compositor_set` from MCP and `postfx_get` to read the stored document.

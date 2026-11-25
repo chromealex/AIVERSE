@@ -1,0 +1,3 @@
+[metal-assets] libraries=0 sourceMisses=4 pipelines=4 pipelineFailures=0 archive=0 strict=0
+Fallback versus baseline maximum byte error 1
+PASS Metal compositor GPU readback: 6144 pixels each for baseline, two passes, camera shader and missing-camera fallback

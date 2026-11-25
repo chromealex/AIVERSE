@@ -1,4 +1,6 @@
 #include "Prisma.h"
+#include "PrismaCompositor.h"
+#include <array>
 #include "../gfx/GpuTier.h"
 #include "PrismaVolumes.h"
 #include "PrismaRhiExecutor.h"
@@ -53,7 +55,7 @@ enum Role { kScene = 0, kAa = 1, kBloomDown = 10, kBloomUp = 20, kTilt0 = 30, kT
            kAoBuffer = 60, kAoOut = 61, kSsrOut = 62, kFlare0 = 63, kFlare1 = 64, kFlare2 = 65,
            kStreak0 = 66, kStreak1 = 67, kHalo0 = 68, kHalo1 = 69, kHalo2 = 70,
            kSmaaEdges = 140, kSmaaWeights = 141, kPostLdr0 = 142, kPostLdr1 = 143, kFsrOut = 144,
-           kHistogramBins = 150, kHistogramMean = 151 };
+           kHistogramBins = 150, kHistogramMean = 151, kCompositorSlot = 256 };
 
 struct SimpleU { float px[4]; float p0[4]; float sun[4]; };
 // Only the HDR luminance prefilter needs the camera-authored region.
@@ -553,6 +555,7 @@ void Prisma::releaseRetiredSizesAfterGpuIdle() {
     unfencedTargets_.clear();
 }
 void Prisma::shutdown() {
+    compositorInputFence_ = 0;
     clearSceneHdrContributor();
     if (!dev_) return;
     checkGpuDevice(*dev_);
@@ -660,6 +663,7 @@ void Prisma::configure(const Json& game, const Json& map, std::vector<std::strin
 }
 
 void Prisma::setSettings(PrismaSettings s) {
+    compositorInputFence_ = 0;
     // Native/ECS callers may bypass parsePrisma. Normalize all authored
     // numeric/color/bool parameters against the GPU-free catalog before
     // they can be observed by any shader-building or render pass.
@@ -1704,7 +1708,8 @@ gfx::PassDesc Prisma::scenePass(const gfx::PassDesc& out, int w, int h) {
 }
 
 void Prisma::draw(Sized& s, const Target& dst, gfx::PipelineHandle pipe, const void* u, size_t size,
-                  std::initializer_list<std::pair<int, gfx::TextureHandle>> tex) {
+                  std::initializer_list<std::pair<int, gfx::TextureHandle>> tex,
+                  std::span<const gfx::TextureHandle> graphImages) {
     if (!dst.tex.valid() || !pipe.valid()) return; // never redirect a failed effect to the screen
     gfx::PassDesc p;
     p.colorTarget = dst.tex;
@@ -1716,13 +1721,91 @@ void Prisma::draw(Sized& s, const Target& dst, gfx::PipelineHandle pipe, const v
     dev_->setVertexBuffer(triangle_);
     dev_->setUniforms(0, u, size);
     for (auto& [slot, t] : tex) dev_->setTexture(slot, t);
+    for (size_t i = 0; i < graphImages.size(); ++i) dev_->setTexture(5 + int(i), graphImages[i]);
     dev_->draw(3);
     dev_->endPass();
     ++stats_.passes;
 }
 
+Prisma::Target Prisma::runCompositor(Sized& sized, Target scene, const PrismaCompositor& compositor,
+                                     const CameraInputs& cameraInputs, float flip, int& encoded) {
+    constexpr auto bound = PrismaCompositor::maxPasses;
+    std::array<Target, bound + PrismaCompositor::maxCameraInputs + 1> resources{};
+    std::array<gfx::PipelineHandle, bound> pipelines{};
+    std::array<std::array<gfx::TextureHandle,4>, bound> images{};
+    resources[0] = scene;
+    const auto& graph = compositor.graph();
+    const auto& plan = compositor.plan();
+    for (PrismaGraphId i = 1; i < graph.resources().size(); ++i) {
+        if (graph.resources()[i].external) {
+            const auto texture = cameraInputs[size_t(compositor.cameraInput(i))];
+            gfx::TextureInfo info{};
+            if (!texture.valid() || !dev_->textureInfo(texture, info) || info.width <= 0 || info.height <= 0 ||
+                (info.format != gfx::PixelFormat::RGBA16F && info.format != gfx::PixelFormat::RGBA8)) {
+                error_ = "PRISMA compositor missing camera input: " + graph.resources()[i].name;
+                return scene;
+            }
+            resources[i] = {texture, info.width, info.height, info.format};
+            continue;
+        }
+        const int div = int(compositor.divisor(i));
+        const int w = std::max(1, scene.w / div), h = std::max(1, scene.h / div);
+        resources[i] = target(sized, kCompositorSlot + plan.resources[i].slot, w, h);
+        if (!resources[i].tex.valid() || !depthFor(sized, w, h, true).valid()) {
+            error_ = "PRISMA compositor could not allocate its attachments";
+            return scene;
+        }
+    }
+    using Op = PrismaCompositorOp;
+    for (const auto id : plan.order) {
+        const auto& cmd = compositor.commands()[id];
+        const Op op = cmd.op;
+        if (op == Op::ShaderGraph) {
+            pipelines[id] = composite(0, &cmd.shader, &cmd.shaderKey);
+            if (!pipelines[id].valid()) return scene;
+            for (size_t i = 0; i < cmd.textures.size(); ++i) {
+                images[id][i] = graphTexture(cmd.textures[i]);
+                const auto entry = graphTextures_.find(cmd.textures[i]);
+                if (entry == graphTextures_.end() || !entry->second.valid()) return scene;
+            }
+            continue;
+        }
+        const Prog p = op == Op::Bright ? kPrefilter : op == Op::Downsample ? kDown :
+                       op == Op::Add ? kUp : kBlur;
+        pipelines[id] = program(p);
+        if (!pipelines[id].valid()) return scene;
+    }
+    for (const auto id : plan.order) {
+        const auto& pass = graph.passes()[id];
+        const auto& cmd = compositor.commands()[id];
+        const Target input = resources[pass.reads[0]], output = resources[pass.writes[0]];
+        SimpleU u{};
+        put(u.px, 1.f / input.w, 1.f / input.h, flip, 0);
+        put(u.p0, cmd.op == Op::BlurY ? 0.f : cmd.amount,
+            cmd.op == Op::BlurY ? cmd.amount : cmd.op == Op::Bright ? 0.5f : 0.f, 0, 0);
+        if (cmd.op == Op::ShaderGraph) {
+            CompositeU uniforms{};
+            put(uniforms.px, 1.f / input.w, 1.f / input.h, flip, 0);
+            const double now = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+            if (graphEpoch_ < 0) graphEpoch_ = now;
+            uniforms.graphFrame[0] = float(now - graphEpoch_);
+            draw(sized, output, pipelines[id], &uniforms, sizeof uniforms, {{0,input.tex}},
+                 {images[id].data(), cmd.textures.size()});
+        } else if (cmd.op == Op::Add)
+            draw(sized, output, pipelines[id], &u, sizeof u, {{0, input.tex}, {1, resources[pass.reads[1]].tex}});
+        else
+            draw(sized, output, pipelines[id], &u, sizeof u, {{0, input.tex}});
+        ++encoded;
+    }
+    return resources[compositor.output()];
+}
+
 void Prisma::resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame& f) {
     checkGpuDevice(dev);
+    CameraInputs compositorInputs{};
+    if (compositorInputFence_ && compositorInputFence_ == dev.gpuSubmissionFence() && compositorInputView_ == viewId_)
+        compositorInputs = compositorInputs_;
+    compositorInputFence_ = 0;
     SceneHdrContributor contribution;
     if(sceneHdrFence_==dev.gpuSubmissionFence()&&sceneHdrView_==viewId_)contribution=std::move(sceneHdrContributor_);
     clearSceneHdrContributor();
@@ -1735,6 +1818,7 @@ void Prisma::resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame
     effectReport.sceneReady = sceneReady_;
     effectReport.width = f.width;
     effectReport.height = f.height;
+    effectReport.compositorPasses = 0;
     effectReport.shaderGraphTextures = 0;
     effectReport.shaderGraphFallback = false;
     effectReport.autoExposureTextureSlot = -1;
@@ -1824,6 +1908,11 @@ void Prisma::resolve(gfx::Device& dev, const gfx::PassDesc& out, const PostFrame
            info.width==w&&info.height==h&&info.format==gfx::PixelFormat::RGBA16F){
             scene.tex=result;++stats_.passes;++stats_.effects;
         }else error_="External HDR scene contribution rejected; retaining scene color";
+    }
+
+    if (settings_.compositor) {
+        scene = runCompositor(set, scene, *settings_.compositor, compositorInputs, flip, effectReport.compositorPasses);
+        if (effectReport.compositorPasses) ++stats_.effects;
     }
 
     // ---- 2026-11-22: screen-space AO and reflections change scene radiance, so they

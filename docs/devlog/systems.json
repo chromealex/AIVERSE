@@ -1401,7 +1401,7 @@
           "titleEn": "DLSS: build and check the NGX adapter on Windows with RTX"
         },
         {
-          "status": "planned",
+          "status": "in-progress",
           "title": "Пользовательские цепочки проходов и временных текстур",
           "titleEn": "Author pass chains and intermediate render textures"
         }
