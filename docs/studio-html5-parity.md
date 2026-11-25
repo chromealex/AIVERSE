@@ -145,7 +145,7 @@ Derived from actual AIVERSE_EDITOR_WINDOW registrations in apps/editor/windows. 
 | `animation_attachments` | `apps/editor/windows/AttachmentAuthoringWindow.cpp` | Attachments edits both transforms and previews the parent, socket and static or MotionWeave child on its own native surface. Mac docked layouts and failed reimport verified. |
 | `branding` | `apps/editor/windows/BrandingWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) |
 | `build` | `apps/editor/windows/BuildWindow.cpp` | Build panel: toolchain, estimate, build, log (103) |
-| `console` | `apps/editor/windows/ConsoleWindow.cpp` | Partial; native visual parity pending |
+| `console` | `apps/editor/windows/ConsoleWindow.cpp` | Mac activity and build output verified. Windows verification pending |
 | `fields` | `apps/editor/windows/FieldsWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) + Scene field brush (111) |
 | `fog` | `apps/editor/windows/FogWindow.cpp` | Fog of War panel, same controls (108) |
 | `FpsWindow` | `apps/editor/windows/FpsWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) (fps + LENS) |
@@ -233,3 +233,5 @@ LENS camera authoring stage. Replace schema-only camera collection edits in Acto
 Camera navigation parity stage. Cover the Follow-body toggle, native preset list and editable framing, plus the explicit command that takes Scene to the selected camera.
 
 Current camera acceptance covers authoring from the active Scene projection and native physical-lens readouts for finite and infinite focus intervals.
+
+Console in the Mac bundle displayed 49 lines from a successful size estimate. Copy full log matched all 3103 bytes on disk. The Errors filter was exercised on that successful run. Windows and a real failed build remain pending.

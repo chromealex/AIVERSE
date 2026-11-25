@@ -1270,6 +1270,12 @@ void authoredEntityWorkflow() {
        const auto log=call("studio.buildLog",R"({"from":999999})");
        AIVERSE_TEST_CHECK(!log.has("error") && log["result"]["text"].str().empty());
        AIVERSE_TEST_CHECK(log["result"]["next"].integer()==log["result"]["size"].integer());
+       auto& workspace=const_cast<editor::Workspace&>(session.workspace());
+       workspace.appendBuildLog("новая строка");
+       const auto replay=call("studio.buildLog",R"({"from":999999,"run":999999})");
+       AIVERSE_TEST_CHECK(replay["result"]["from"].integer()==0);
+       AIVERSE_TEST_CHECK(replay["result"]["text"].str().find("новая строка")!=std::string::npos);
+       AIVERSE_TEST_CHECK(replay["result"]["run"].integer()==log["result"]["run"].integer());
    }
    // Align: one undo step, labelled in History; History jump undoes/redoes to a position.
    {

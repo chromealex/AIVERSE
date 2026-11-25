@@ -517,10 +517,36 @@ void Workspace::appendBuildLog(const std::string& line) {
     buildLog_ += line + "\n";
 }
 
+Json Workspace::buildLogChunk(int64_t requestedFrom, int64_t expectedRun) {
+    std::lock_guard<std::mutex> lock(buildMutex_);
+    const bool running = building_.load();
+    const int runs = runCount_.load();
+    const int64_t run = int64_t(runs) + (running ? 1 : 0);
+    size_t from = size_t(std::clamp<int64_t>(requestedFrom, 0, int64_t(buildLog_.size())));
+    if (expectedRun >= 0 && expectedRun != run) from = 0;
+    const auto continuation = [&](size_t at) {
+        return (static_cast<unsigned char>(buildLog_[at]) & 0xc0) == 0x80;
+    };
+    while (from < buildLog_.size() && continuation(from)) ++from;
+    size_t end = std::min(buildLog_.size(), from + 256 * 1024);
+    while (end < buildLog_.size() && end > from && continuation(end)) --end;
+    Json out = Json::object();
+    out.set("from", Json::number(int64_t(from)));
+    out.set("next", Json::number(int64_t(end)));
+    out.set("size", Json::number(int64_t(buildLog_.size())));
+    out.set("text", Json::string(buildLog_.substr(from,end-from)));
+    out.set("run", Json::number(run));
+    out.set("runs", Json::number(int64_t(runs)));
+    out.set("running", Json::fromBool(running));
+    out.set("exitCode", Json::number(int64_t(buildRc_)));
+    out.set("label", Json::string(runLabel_));
+    out.set("logFile", Json::string(logFile_));
+    return out;
+}
+
 void Workspace::startCommand(const std::string& command, const std::string& shown, const std::string& label) {
     if (building_) throw std::runtime_error("a build is already running");
     if (buildThread_.joinable()) buildThread_.join();
-    building_ = true;
     std::string cmd = command + " 2>&1";
 #if defined(_WIN32)
     cmd = "\"" + cmd + "\"";   // cmd.exe strips the outer quotes of a command that starts with one
@@ -529,6 +555,7 @@ void Workspace::startCommand(const std::string& command, const std::string& show
     const fs::path logFile = fs::path(logsDir()) / (keep ? label + "-" + stamp("%Y%m%d-%H%M%S") + ".log" : "build-estimate.log");
     {
         std::lock_guard<std::mutex> lk(buildMutex_);
+        building_ = true;
         buildLog_ = shown + "\n";
         buildRc_ = 0;
         runLabel_ = label;
@@ -571,6 +598,7 @@ void Workspace::startCommand(const std::string& command, const std::string& show
         lf.close();
         std::error_code ec;
         if (keep) aiverse::pack::copyFileReplace(logFile, logFile.parent_path() / "build-last.log", ec);
+        std::lock_guard<std::mutex> lock(buildMutex_);
         ++runCount_;
         building_ = false;
     });

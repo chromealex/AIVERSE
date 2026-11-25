@@ -3255,9 +3255,10 @@ bool StudioHost::handleHostMethod(const Json& req) {
         fs::path path = fs::path(ws.project.dir) / "Builds";
         if (!target.empty()) path /= target;
         if (params.getBool("log")) path = const_cast<editor::Workspace&>(ws).lastLogFile();
+        if (params.getBool("logFolder")) path = ws.logsDir();
         std::error_code ec;
         if (path.empty() || !fs::exists(path, ec)) throw std::runtime_error("Nothing built there yet");
-        platform_.revealInFileManager(path);
+        platform_.revealInFileManager(path, params.getBool("logFolder"));
         Json r = Json::object(); r.set("ok", Json::fromBool(true)); return r;
     });
     if (method == "studio.humanMakeupAlign") return answer([&] {

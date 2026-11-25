@@ -56,7 +56,7 @@ public:
     virtual void chooseFolder(const std::string& message, const std::string& startDir, std::function<void(std::string)> done) = 0;
     virtual void chooseSaveFile(const std::string& startDir, const std::string& defaultName, std::function<void(std::string)> done) = 0;
     virtual void chooseImportSources(const std::string& startDir, std::function<void(std::vector<std::filesystem::path>)> done) = 0;
-    virtual void revealInFileManager(const std::filesystem::path& path) = 0;
+    virtual void revealInFileManager(const std::filesystem::path& path, bool openFolder) = 0;
     // Per-user cache folder (asset thumbnails) and the last opened project (reopened on the next launch).
     virtual std::filesystem::path cacheDir() = 0;
     virtual void rememberLastProject(const std::string& dir) = 0;

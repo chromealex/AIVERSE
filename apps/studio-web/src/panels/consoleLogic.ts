@@ -35,3 +35,10 @@ export function logParts(text: string): LogPart[] {
   if (last < text.length) out.push({ kind: 'text', text: text.slice(last) });
   return out;
 }
+
+export function buildLineLevel(text: string) {
+  if (/\berror\s*:|fatal error|\bfailed\b|AIVERSE_MISSING_TOOLCHAIN|ошибка|не удал/iu.test(text)) return 'Errors';
+  if (/\bwarning\s*:|предупреждение|внимание/iu.test(text)) return 'Warnings';
+  if (/=== OK ===|готово|сборка завершена|установка завершена/iu.test(text)) return 'Success';
+  return 'Info';
+}

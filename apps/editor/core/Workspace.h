@@ -145,6 +145,7 @@ public:
     // background build (aiversebuild)
     bool building() const { return building_; }
     std::string logsDir() const;   // <engine>/logs, created on demand
+    Json buildLogChunk(int64_t from, int64_t expectedRun = -1);
     std::string buildLog() { std::lock_guard<std::mutex> lk(buildMutex_); return buildLog_; }
     // extraArgs: more aiversebuild flags (Build window: --estimate --out ..., --audio, --no-atlas, ...)
     void startBuild(const std::string& target, const std::string& config, const std::string& extraArgs = "");

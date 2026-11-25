@@ -4,6 +4,7 @@ import { invoke } from '../bridge';
 import type { StudioBuildEstimate, StudioBuildInfo, StudioSnapshot, StudioToolchain } from '../types';
 import { StudioAlert, StudioBadge, StudioButton, StudioCheckbox, StudioField, StudioSelect, StudioLoader } from '../ui';
 import { buildErrors, buildPhase, buildSteps, formatBytes, missingToolchain, runTarget } from './buildLogic';
+import { useBuildTranscript } from './useBuildTranscript';
 import './BuildPanel.css';
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
@@ -21,12 +22,11 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
   const [toolchain, setToolchain] = useState<StudioToolchain | null>(null);
   const [checking, setChecking] = useState(false);
   const [estimate, setEstimate] = useState<StudioBuildEstimate | null>(null);
-  const [log, setLog] = useState('');
-  const [state, setState] = useState({ running: false, exitCode: 0, runs: 0, label: '' });
+  const {state,reload:reloadTranscript,error:transcriptError}=useBuildTranscript(projectPath,MAX_LOG);
+  const log=state.text;
   const [error, setError] = useState('');
   const [startedAt, setStartedAt] = useState(0);
   const [now, setNow] = useState(Date.now());
-  const offset = useRef(0);
   const logBox = useRef<HTMLPreElement>(null);
   const follow = useRef(true);
 
@@ -35,7 +35,7 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
     try { const next = await invoke('studio.buildInfo', {}); setInfo(next); }
     catch (e) { setError(message(e)); }
   }, [projectPath]);
-  useEffect(() => { setInfo(null); setLog(''); offset.current = 0; void refreshInfo(); }, [refreshInfo]);
+  useEffect(() => { setInfo(null); void refreshInfo(); }, [refreshInfo]);
   useEffect(() => { window.localStorage.setItem('aiverse.studio.build.target', target); }, [target]);
   // Saved project history can change manifest identity without changing the project path.
   useEffect(() => { if (snapshot?.project.historyVersion) void refreshInfo(); }, [snapshot?.project.historyVersion, refreshInfo]);
@@ -57,29 +57,7 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
     return () => { live = false; };
   }, [projectPath, target, state.runs, snapshot?.project.historyVersion]);
 
-  // Stream the log by offset; fast while a run is active, slow otherwise (a run may come from MCP).
-  useEffect(() => {
-    if (!projectPath) return;
-    let live = true, timer = 0;
-    const poll = async () => {
-      try {
-        const r = await invoke('studio.buildLog', { from: offset.current });
-        if (!live) return;
-        if (r.size < offset.current) { offset.current = 0; setLog(''); } // a new run reset the log
-        else {
-          offset.current = r.next; // UTF-8 byte offset (not the JS string length)
-          if (r.text) setLog(prev => { const next = prev + r.text; return next.length > MAX_LOG ? next.slice(-MAX_LOG) : next; });
-        }
-        setState(prev => {
-          if (prev.runs !== r.runs || prev.running !== r.running) void refreshInfo();
-          return { running: r.running, exitCode: r.exitCode, runs: r.runs, label: r.label };
-        });
-        timer = window.setTimeout(poll, r.running ? 400 : 2000);
-      } catch { if (live) timer = window.setTimeout(poll, 3000); }
-    };
-    void poll();
-    return () => { live = false; window.clearTimeout(timer); };
-  }, [projectPath, refreshInfo]);
+  useEffect(()=>{if(state.runs||state.running)void refreshInfo();},[state.runs,state.running,refreshInfo]);
   useEffect(() => {
     if (!state.running) return;
     const t = window.setInterval(() => setNow(Date.now()), 1000);
@@ -90,10 +68,10 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
   const start = async (kind: 'build' | 'estimate', withInstall = installMissing) => {
     setError('');
     try {
-      offset.current = 0; setLog(''); follow.current = true;
+      follow.current = true;
       await invoke('studio.buildStart', { target, config, installMissing: withInstall, estimate: kind === 'estimate' });
       setStartedAt(Date.now()); setNow(Date.now());
-      setState(s => ({ ...s, running: true, label: kind === 'estimate' ? 'estimate' : 'build-' + target }));
+      reloadTranscript(kind === 'estimate' ? 'estimate' : 'build-'+target);
     } catch (e) { setError(message(e)); }
   };
   const save = async () => {
@@ -142,7 +120,7 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
       {info && <p className="build__out" title={info.outDir}>Output: {info.outDir}</p>}
     </aside>
     <section className="build__main" aria-label="Build status">
-      {error && <StudioAlert tone="danger">{error}<button type="button" className="build__dismiss" aria-label="Dismiss" onClick={() => setError('')}>×</button></StudioAlert>}
+      {(error||transcriptError) && <StudioAlert tone="danger">{error || transcriptError}{error && <button type="button" className="build__dismiss" aria-label="Dismiss" onClick={() => setError('')}>×</button>}</StudioAlert>}
       {info && !info.toolFound && <StudioAlert tone="danger" title="aiversebuild not found">
         The packager is built with Studio (CMake target aiversebuild). Rebuild Studio, or set AIVERSE_BUILD_TOOL.</StudioAlert>}
       {info?.dirty && <StudioAlert tone="warning" title="Unsaved changes">A build packs the files on disk.

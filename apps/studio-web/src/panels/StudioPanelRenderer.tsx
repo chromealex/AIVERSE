@@ -160,7 +160,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
             <ViewportPlaceholder title="Scene viewport" active/>}
         </>;
       case 'console':
-        return <ConsolePanel logs={snapshot?.logs ?? []} select={id => select(id)}/>;
+        return <ConsolePanel key={snapshot?.project.path} project={snapshot?.project.path ?? ''} logs={snapshot?.logs ?? []} select={id => select(id)}/>;
       case 'lighting':
         return <LightingPanel projectPath={snapshot?.project.path ?? ''} selectedId={snapshot?.selectedId ?? null} onSelect={select}/>;
       case 'materials':

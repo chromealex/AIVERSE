@@ -611,10 +611,10 @@ export interface StudioParams {
   'studio.agentReset': { from?: number };
   'studio.buildToolchain': { target: string };
   'studio.buildStart': { target: string; config: 'Release' | 'Debug'; installMissing?: boolean; estimate?: boolean };
-  'studio.buildLog': { from: number };
+  'studio.buildLog': { from: number; run?: number; project?: string };
   'studio.buildEstimate': { target: string };
   /** Show a build folder (or the last build log) in Finder. */
-  'studio.buildReveal': { target?: string; log?: boolean };
+  'studio.buildReveal': { target?: string; log?: boolean; logFolder?:boolean };
   /** UI-only event (name starts with "ui.") delivered to every Studio window. */
   'studio.windowBroadcast': { event: string; payload: unknown };
   'studio.save': Record<string, never>;
@@ -906,7 +906,7 @@ export interface StudioToolchainRequirement { id: string; name: string; required
   path?: string; version?: string; detail?: string; install?: string; size?: string; manual?: string }
 export interface StudioToolchain { target: string; host: string; hostSupported: boolean; hostNote?: string; ok: boolean; missing: string[];
   requirements: StudioToolchainRequirement[] }
-export interface StudioBuildLog { from: number; next: number; text: string; size: number; running: boolean; label: string; exitCode: number; runs: number; logFile: string }
+export interface StudioBuildLog { run:number; from: number; next: number; text: string; size: number; running: boolean; label: string; exitCode: number; runs: number; logFile: string }
 export interface StudioBuildEstimate { target: string; pack: Record<string, unknown>; atlas: Record<string, unknown>; split?: Record<string, unknown>;
   heaviest: Array<{ path?: string; file?: string; bytes?: number; storedBytes?: number }> }
 

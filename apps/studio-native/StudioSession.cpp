@@ -1972,25 +1972,9 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
         return out;
     }
     if (method == "studio.buildLog") {
-        const std::string log = ws_.buildLog();
-        // Offsets are UTF-8 bytes (the log is Russian/English text): never split a character,
-        // the reply must stay valid UTF-8. The client continues from `next`.
-        size_t from = size_t(std::clamp<int64_t>(params["from"].integer(0), 0, int64_t(log.size())));
-        while (from < log.size() && (static_cast<unsigned char>(log[from]) & 0xC0) == 0x80) ++from;
-        constexpr size_t kChunk = 256 * 1024;
-        size_t end = std::min(log.size(), from + kChunk);
-        while (end < log.size() && end > from && (static_cast<unsigned char>(log[end]) & 0xC0) == 0x80) --end;
-        Json out = Json::object();
-        out.set("from", Json::number(int64_t(from)));
-        out.set("next", Json::number(int64_t(end)));
-        out.set("text", str(log.substr(from, end - from)));
-        out.set("size", Json::number(int64_t(log.size())));
-        out.set("running", Json::fromBool(ws_.building()));
-        out.set("label", str(ws_.runLabel()));
-        out.set("exitCode", Json::number(int64_t(ws_.buildResult())));
-        out.set("runs", Json::number(int64_t(ws_.runCount())));
-        out.set("logFile", str(ws_.lastLogFile()));
-        return out;
+        if (params.has("project") && params.getStr("project") != ws_.project.dir)
+            throw std::runtime_error("Build log project changed");
+        return ws_.buildLogChunk(params.getInt("from"),params.getInt("run",-1));
     }
     // studio.buildEstimate: the size report of the last estimate run for `target`.
     if (!knownBuildTarget(target)) throw std::runtime_error("Unknown build target");

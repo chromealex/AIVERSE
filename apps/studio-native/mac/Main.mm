@@ -296,7 +296,8 @@ public:
             (*cb)(std::move(sources));
         }];
     }
-    void revealInFileManager(const std::filesystem::path& path) override {
+    void revealInFileManager(const std::filesystem::path& path, bool openFolder) override {
+        if(openFolder){[[NSWorkspace sharedWorkspace] openURL:[NSURL fileURLWithPath:ns(path.string()) isDirectory:YES]];return;}
         [[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[[NSURL fileURLWithPath:ns(path.string())]]];
     }
     std::filesystem::path cacheDir() override {

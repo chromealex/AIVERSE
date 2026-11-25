@@ -1,0 +1,136 @@
+{
+  "schema": 1,
+  "id": "studio-console-build-log",
+  "owner": "Studio HTML5 / build console",
+  "changed_paths": [
+    "apps/editor/core/Workspace.cpp",
+    "apps/studio-native/StudioSession.cpp",
+    "apps/studio-web/src/panels/ConsolePanel.tsx"
+  ],
+  "traits": {
+    "editable": false,
+    "simulation": false,
+    "visible": true,
+    "runtime": false
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "See the referenced implementation or run evidence.",
+      "evidence": [
+        "apps/studio-web/src/panels/ConsoleBuildOutput.tsx"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "See the referenced implementation or run evidence.",
+      "evidence": [
+        "apps/editor/core/Workspace.cpp"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "See the referenced implementation or run evidence.",
+      "evidence": [
+        "apps/studio-native/StudioSession.cpp"
+      ]
+    },
+    "skill": {
+      "status": "not_applicable",
+      "note": "Read-only viewer for an existing build operation.",
+      "evidence": []
+    },
+    "mcp": {
+      "status": "not_applicable",
+      "note": "Read-only viewer for an existing build operation.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "pass",
+      "note": "See the referenced implementation or run evidence.",
+      "evidence": [
+        "docs/evidence/studio-console-html5/build-output.png"
+      ]
+    },
+    "inspector": {
+      "status": "not_applicable",
+      "note": "Read-only viewer for an existing build operation.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_applicable",
+      "note": "Read-only viewer for an existing build operation.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "Read-only viewer for an existing build operation.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "platforms": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "dependencies": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "headless": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "examples": {
+      "status": "pass",
+      "note": "Real macOS size estimate in Console.",
+      "evidence": [
+        "docs/evidence/studio-console-html5/build-output.png"
+      ]
+    },
+    "tests": {
+      "status": "not_run",
+      "note": "Record focused tests against the stage SHA.",
+      "evidence": [
+        "apps/studio-native/tests/StudioSessionTests.cpp"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "See the referenced implementation or run evidence.",
+      "evidence": [
+        "docs/agent-handoffs/studio-console-build-log-initial.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "See the referenced implementation or run evidence.",
+      "evidence": [
+        "docs/studio-html5-parity.md"
+      ]
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [],
+    "mcp_tools": [],
+    "studio_panels": [
+      "console"
+    ],
+    "studio_methods": [
+      "studio.buildLog",
+      "studio.buildReveal"
+    ]
+  },
+  "test_reports": []
+}

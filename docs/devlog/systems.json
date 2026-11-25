@@ -3065,7 +3065,8 @@
           "status": "in-progress",
           "target": null,
           "title": "HTML Studio — единственный редактор",
-          "titleEn": "HTML Studio as the sole editor"
+          "titleEn": "HTML Studio as the sole editor",
+          "detail": "Console HTML5 показывает вывод сборщика, поиск и фильтры диагностики."
         },
         {
           "id": "studio-graph-legibility",

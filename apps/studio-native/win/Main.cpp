@@ -385,7 +385,8 @@ public:
             done(std::move(sources));
         });
     }
-    void revealInFileManager(const fs::path& path) override {
+    void revealInFileManager(const fs::path& path, bool openFolder) override {
+        if(openFolder){ShellExecuteW(main_, L"open",path.c_str(),nullptr,nullptr,SW_SHOWNORMAL);return;}
         const std::wstring args = L"/select,\"" + path.wstring() + L"\"";
         ShellExecuteW(main_, L"open", L"explorer.exe", args.c_str(), nullptr, SW_SHOWNORMAL);
     }

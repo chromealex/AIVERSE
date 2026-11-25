@@ -4,12 +4,14 @@ import { invoke } from '../bridge';
 import { copyText, selectionIn } from '../clipboard';
 import type { StudioLog } from '../types';
 import { filterLogs, levelCounts, logParts, logSource, logSources, type ConsoleLevel } from './consoleLogic';
+import BuildOutput from './ConsoleBuildOutput';
 import './ConsolePanel.css';
 
 /** Console: editor/agent activity with level and source filters; entity ids and files are links. */
-export default function ConsolePanel({ logs, select }: {
-  logs: StudioLog[]; select: (id: string | null) => Promise<void>;
+export default function ConsolePanel({ logs, select, project }: {
+  project: string; logs: StudioLog[]; select: (id: string | null) => Promise<void>;
 }) {
+  const [mode,setMode] = useState('Activity');
   const [level, setLevel] = useState<ConsoleLevel>('all');
   const [source, setSource] = useState('');
   const [query, setQuery] = useState('');
@@ -19,7 +21,7 @@ export default function ConsolePanel({ logs, select }: {
   const follow = useRef(true);
   // The status bar's problem counter opens the Console on errors.
   useEffect(() => {
-    const open = (e: Event) => { const l = (e as CustomEvent<ConsoleLevel>).detail; if (l) setLevel(l); };
+    const open = (e: Event) => { const l = (e as CustomEvent<ConsoleLevel>).detail; if (l) { setMode('Activity'); setLevel(l); } };
     window.addEventListener('studio:console-filter', open);
     return () => window.removeEventListener('studio:console-filter', open);
   }, []);
@@ -53,9 +55,11 @@ export default function ConsolePanel({ logs, select }: {
   };
   const openEntity = (id: string) => void select(id).then(() => invoke('studio.viewportInput', { kind: 'focus' })).catch(console.warn);
   const levelButton = (id: ConsoleLevel, label: string, icon: React.ReactNode, count?: number) =>
-    <button type="button" className={'console__level' + (level === id ? ' is-on' : '')} aria-pressed={level === id}
+    <button type="button" className={'console__level' + (level === id ? ' is-on' : '')} aria-label={label || id} aria-pressed={level === id}
       onClick={() => setLevel(level === id && id !== 'all' ? 'all' : id)}>{icon}{label}{count !== undefined && <b>{count}</b>}</button>;
   return <div className="console">
+    <nav className="console__views" aria-label="Console views">{['Activity','Build output'].map(name => <button type="button" key={name} aria-pressed={mode === name} onClick={() => setMode(name)}>{name}</button>)}</nav>
+    {mode === 'Build output' ? <BuildOutput project={project}/> : <>
     <div className="console__bar" role="toolbar" aria-label="Console filters">
       {levelButton('all', 'All', null)}
       {levelButton('info', '', <Info size={12}/>, counts.info)}
@@ -85,5 +89,6 @@ export default function ConsolePanel({ logs, select }: {
       </div>)}
       {!shown.length && <div className="console__empty">{visible.length ? 'Nothing matches the filter.' : 'No messages.'}</div>}
     </div>
+    </>}
   </div>;
 }
