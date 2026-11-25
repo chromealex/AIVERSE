@@ -9,8 +9,11 @@
           "title": "Обзор движка", "titleEn": "Engine overview",
           "lead": "Устройство движка, сборка, форматы, подсистемы и платформы.", "leadEn": "Layout, building, formats, subsystems and platforms." },
         { "id": "engine-import", "source": "docs/engine-import.md",
-          "title": "Импорт из Unity и Godot", "titleEn": "Import from Unity and Godot",
-          "lead": "Как перенести проект: что переносится точно, что приблизительно.", "leadEn": "Porting a project: what transfers exactly and what approximately." }
+          "title": "Перенос проекта из другого движка", "titleEn": "Porting a project from another engine",
+          "lead": "Как перенести проект: что переносится точно, что приблизительно.", "leadEn": "Porting a project: what transfers exactly and what approximately." },
+        { "id": "warcraft3-import", "source": "docs/warcraft3-import.md",
+          "title": "Импорт карт Warcraft III", "titleEn": "Importing Warcraft III maps",
+          "lead": "Рельеф, модели и размещение объектов в проекте AIVERSE.", "leadEn": "Terrain, model resolution and object placement in an AIVERSE project." }
       ]
     },
     {

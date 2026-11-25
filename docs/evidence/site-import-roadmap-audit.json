@@ -1,0 +1,15 @@
+{
+  "sha": "9a3d1a9a7639baba77f3065e173d4dc91764b9e2",
+  "argv": [
+    "python3.12",
+    "tools/site/build.py",
+    "build",
+    "--out",
+    "/Volumes/KINGSTON/AIVERSE-builds/roadmap-import-preview",
+    "--demo-root",
+    "/Volumes/KINGSTON/AIVERSE-builds/aiv197-202-publish/bundles"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/site-import-roadmap-audit.log.txt",
+  "sha256": "58ceb7bb442d01fb57aed8677dfbb0c3001f87d079a507e864861125cec3c10a"
+}

@@ -1,11 +1,14 @@
-# Warcraft III files in AIVERSE (Stage 1)
+# Importing Warcraft III maps into AIVERSE
 
-AIVERSE can already load Warcraft III `.mdx` / `.mdl` models and `.blp`
-textures natively; see `engine/render/ModelMdx.cpp`, `ModelMdl.cpp`,
-`ImageBlp.cpp`, and `docs/models.md`. This stage adds a read-only Warcraft
-III map importer plus an MPQ unpacker following `tools/unpackers/PROTOCOL.md`.
+Use the project importer to register a map with terrain, units and doodads. Supply extracted Warcraft III game data to resolve models referenced from outside the map. Binary map archives require StormLib.
 
-## Quick start
+```bash
+python3 tools/importers/warcraft3/cli.py --source MyMap.w3x --project /path/to/project --game-data /path/to/extracted-game-data
+```
+
+See **Stage 3** below for model resolution, project files and limits.
+
+## Extracting the map data only
 
 Given a map archive from **your own** Warcraft III installation or a map you
 have rights to use:
@@ -74,10 +77,7 @@ same transform exactly once.
 
 ### Explicit limits
 
-This first stage is **not** a runnable Warcraft III game or a World Editor
-clone. It does not yet populate ECS entities, convert terrain to TerraWeave,
-spawn doodads or units, resolve object definitions, execute JASS/Lua, render
-Warcraft particles/ribbons or read Reforged's installed CASC storage.
+The standalone extraction command writes intermediate files. The project importer also installs native map entities as described in Stage 3.
 
 The importer refuses overwriting `content/Warcraft3/<name>`; import into a
 new project or rename the input first. Extraction is atomic and bounded.
@@ -92,7 +92,7 @@ python3 -m unittest discover -s tests/tools -p test_warcraft3_import.py -v
 
 Tests use generated W3E v11 and v12, WPM, WTS, IMP, bad-size cases,
 archive signature checks, an unpacked folder, and overwrite protection.
-A real StormLib/MPQ integration acceptance test is still required.
+Archive reading was also exercised with StormLib 9.26 and a generated MPQ map.
 
 ## Stage 2: map metadata, units, doodads, object overrides and Studio preview
 
@@ -110,7 +110,7 @@ The importer additionally parses:
   typed v1/v2 object modifications and raw metadata field IDs. This is not
   yet an SLK-merged or AIVERSE gameplay-ready definition.
 - `placements.json`: transformed Warcraft object coordinates and creation IDs;
-  **not yet live ECS entities**.
+  intermediate data for scene installation.
 - `studio-map.json`: transposed W3E heightfield using AIVERSE's existing MapDoc
   `terrain.corners` representation (signed 1/16 of a map unit). This preview
   is not native Warcraft splat/cliff/water rendering.
@@ -140,12 +140,6 @@ Acceptance command (synthetic fixture validation):
 ```bash
 python3 -m unittest discover -s tests/tools -p 'test_warcraft3*.py' -v
 ```
-
-Next: implement the missing game-version layouts and actual model/SLK mapping;
-instantiate game objects via native ECS, bind water through NEREID and vegetation
-through TerraWeave, and visually verify the map with a legitimately supplied
-Warcraft III map in Studio.
-
 
 ## Stage 3 — native model-backed scene entities (2026-11-23)
 
@@ -231,8 +225,7 @@ JSON but are **not** published into live TerraWeave/NEREID/nav data yet.
 Runtime particles/ribbons and exact HD material parity remain unsupported.
 
 Unpacker archive discovery cannot enumerate protected MPQ entries absent from
-`(listfile)` or known paths. Real MPQ/StormLib ABI and gameplay/render tests
-are still pending. Never redistribute or commit extracted copyrighted game
+`(listfile)` or known paths. The archive path has been checked with StormLib and a generated MPQ. Gameplay and rendering on a user-supplied map still need verification. Never redistribute or commit extracted copyrighted game
 resources unless the rights allow it.
 
 Run the offline synthetic regression on the AIVERSE checkout:
