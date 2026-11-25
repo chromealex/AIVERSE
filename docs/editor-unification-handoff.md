@@ -2111,3 +2111,7 @@ Editor build PASS; SpectraFX 20/20 PASS (16.78s), five real Metal checks with
 no skips; actual PRISMA frame review 5/5 PASS. Two unused GraphWindow helpers
 removed; cleanup build has zero warnings. Full repository/platform/manual UI
 coverage remains unrun. Exact commands and integration decisions: `docs/agent-handoffs/inspector-spectrafx-lighting-sync-2026-11-20.md`.
+
+### 2026-11-25 — Studio local actor sessions
+
+Commit 275cc902e4947a90ca0f6869f9cd20aa29ae28fd adds the native Studio host adapter in apps/fps/HostedActorClient.h and apps/fps/client.cpp, saved-map selection in engine/actor/Project.h, and the StudioGameLaunch and StudioGameSurface integration. Studio reads the same authority server simulation as the standalone loopback client. The first native run observed two materialized identities in two regions, a stable paused tick, one-step advancement, restart and stop. The exact run scope, capture and follow-up are in docs/agent-handoffs/studio-actor-g1-2026-11-25.md.
