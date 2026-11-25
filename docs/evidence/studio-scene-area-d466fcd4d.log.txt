@@ -1,0 +1,11 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+    Start 585: studio_terrain_geometry
+1/1 Test #585: studio_terrain_geometry ..........   Passed    1.82 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+EDITOR    =   1.82 sec*proc (1 test)
+
+Total Test time (real) =   1.86 sec
