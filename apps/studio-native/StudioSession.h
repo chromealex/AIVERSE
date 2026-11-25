@@ -19,6 +19,7 @@
 #include "apps/editor/core/WizardAgent.h"
 #include "apps/studio-native/StudioLuaPanel.h"
 namespace aiverse::studio {
+bool sameDocumentScope(const Json& supplied, const Json& current);
 class StudioSession {
 public:
     void setWizardArtDir(const std::string& dir) { wizardArtDir_ = dir; }

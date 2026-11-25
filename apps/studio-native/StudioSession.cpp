@@ -777,7 +777,7 @@ Json StudioSession::graphDocumentScope() const {
     return scope;
 }
 // WebKit and WebView2 may reorder object members in bridge requests.
-static bool sameDocumentScope(const Json& supplied,const Json& current) {
+bool sameDocumentScope(const Json& supplied,const Json& current) {
     return supplied.isObject() && supplied.size()==current.size() &&
         std::all_of(current.members().begin(),current.members().end(),[&](const auto& field){
             return supplied[field.first]==field.second;

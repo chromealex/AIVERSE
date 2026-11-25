@@ -3311,9 +3311,10 @@ bool StudioHost::handleHostMethod(const Json& req) {
             }
             if(method=="studio.roadPick"){
                 const auto& map=session_->workspace().map.data;
-                if (map.planet() || map.worldSpace || session_->graphDocumentScope()!=params["scope"])
+                const auto current = session_->graphDocumentScope();
+                if (map.planet() || map.worldSpace || !sameDocumentScope(params["scope"],current))
                     throw std::runtime_error("Choose a current grid map to edit roads.");
-                roadScope_=params["scope"];pickingRoad_=true;
+                roadScope_=current;pickingRoad_=true;
                 Json armed=Json::object();armed.set("token",Json::string(token));
                 sendEventPayload("roadPick.armed",armed);
             }
