@@ -804,6 +804,21 @@ void StudioHost::fxCameraZoom(double wheel) {
 void StudioHost::tick() {
     publishBuildingPanelFrame();
     if (projectLoading_) return; // the background thread owns the session right now
+    if(!networkPlayers_.empty() && platform_.now()>=nextNetworkPlayerCheck_){
+        nextNetworkPlayerCheck_=platform_.now()+0.5;
+        std::erase_if(networkPlayers_,[&](const NetworkPlayer& player){
+            const auto status=player.exitStatus();
+            if(!status)return false;
+            if(*status && session_->workspace().project.dir==player.project){
+                const std::string name=player.mode=="listen"?"Host":"Client";
+                const auto message=name+" exited with code "+std::to_string(*status)+
+                    (player.mode=="listen"?". Check that ports 27100 and 27101 are available.":". Check the server address and project.");
+                session_->workspace().log("multiplayer",message,true);
+                sendEvent("networkPlay.error",message);
+            }
+            return true;
+        });
+    }
     pollScriptChanges();
     tickGame();
     tickTextureGraph(session_->workspace().project.dir); // independent of Scene visibility
@@ -3464,7 +3479,8 @@ bool StudioHost::handleHostMethod(const Json& req) {
     if (method == "studio.spectraPreview")
         return answer([&]{return runSpectraPreview(params);});
     if(method=="studio.networkPlay")return answer([&]{
-        platform_.launchNetworkPlayer(studioNetworkArguments(session_->workspace(),params));
+        auto status=platform_.launchNetworkPlayer(studioNetworkArguments(session_->workspace(),params));
+        networkPlayers_.push_back({params.getStr("project"),params.getStr("mode"),std::move(status)});
         return Json::object();
     });
     if (method == "studio.viewportInput") return answer([&] { return viewportInput(params); });

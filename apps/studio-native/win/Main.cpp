@@ -382,7 +382,7 @@ public:
             done(std::move(sources));
         });
     }
-    void launchNetworkPlayer(const std::vector<std::string>& args) override {
+    NetworkExitStatus launchNetworkPlayer(const std::vector<std::string>& args) override {
         const auto exe=studio::studioNetworkPlayer(exeDir()/L"AiverseGame.exe");
         // CreateProcess receives one command line. Escape quotes and trailing backslashes for the CRT.
         auto quote=[](const std::wstring& value){
@@ -398,7 +398,12 @@ public:
         STARTUPINFOW startup{};startup.cb=sizeof(startup);PROCESS_INFORMATION process{};
         if(!CreateProcessW(exe.c_str(),command.data(),nullptr,nullptr,FALSE,0,nullptr,nullptr,&startup,&process))
             throw std::runtime_error("AiverseGame could not start (Windows error "+std::to_string(GetLastError())+").");
-        CloseHandle(process.hThread);CloseHandle(process.hProcess);
+        CloseHandle(process.hThread);
+        auto child=std::shared_ptr<void>(process.hProcess,[](HANDLE h){CloseHandle(h);});
+        return [child]() -> std::optional<int> {
+            if(WaitForSingleObject(child.get(),0)==WAIT_TIMEOUT)return std::nullopt;
+            DWORD code=1;GetExitCodeProcess(child.get(),&code);return int(code);
+        };
     }
     void revealInFileManager(const fs::path& path, bool openFolder) override {
         if(openFolder){ShellExecuteW(main_, L"open",path.c_str(),nullptr,nullptr,SW_SHOWNORMAL);return;}

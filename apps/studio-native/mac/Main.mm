@@ -293,7 +293,7 @@ public:
             (*cb)(std::move(sources));
         }];
     }
-    void launchNetworkPlayer(const std::vector<std::string>& args) override {
+    NetworkExitStatus launchNetworkPlayer(const std::vector<std::string>& args) override {
         const std::filesystem::path bundle=NSBundle.mainBundle.bundlePath.UTF8String;
         const auto exe=studio::studioNetworkPlayer(bundle.parent_path()/"AiverseGame.app/Contents/MacOS/AiverseGame");
         NSTask* task=[[NSTask alloc] init];
@@ -303,6 +303,10 @@ public:
         task.arguments=argv;
         NSError* error=nil;
         if(![task launchAndReturnError:&error])throw std::runtime_error(error.localizedDescription.UTF8String);
+        return [task]() -> std::optional<int> {
+            if(task.running)return std::nullopt;
+            return task.terminationStatus;
+        };
     }
     void revealInFileManager(const std::filesystem::path& path, bool openFolder) override {
         if(openFolder){[[NSWorkspace sharedWorkspace] openURL:[NSURL fileURLWithPath:ns(path.string()) isDirectory:YES]];return;}

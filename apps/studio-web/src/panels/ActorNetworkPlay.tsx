@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { invoke } from '../bridge';
+import { useEffect, useState } from 'react';
+import { invoke, onNativeEvent } from '../bridge';
 import { StudioButton, StudioField, StudioInput, StudioSection } from '../ui';
 
 export function ActorNetworkPlay({project}:{project:string}) {
@@ -7,6 +7,12 @@ export function ActorNetworkPlay({project}:{project:string}) {
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState('');
   const [error,setError]=useState('');
+  useEffect(()=>onNativeEvent((event,payload)=>{
+    if(event==='networkPlay.error'){
+      setError((payload as {message:string}).message);
+      setMessage('');
+    }
+  }),[]);
   async function launch(mode:'listen'|'connect') {
     setBusy(true);setMessage('');setError('');
     try {
