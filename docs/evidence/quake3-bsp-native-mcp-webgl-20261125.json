@@ -1,0 +1,13 @@
+{
+  "sha": "7dd0b2bd23d74cf7a81547f61f4d88667fcaabdf",
+  "argv": [
+    "/opt/homebrew/bin/python3.11",
+    "tests/render/quake3_bsp_acceptance.py",
+    "/Volumes/KINGSTON/AIVERSE-builds/render-capabilities-20261125/mac",
+    "/Volumes/KINGSTON/AIVERSE-builds/render-capabilities-20261125/web-demo",
+    "/Users/aleksandrfeer/.codex/skills/playwright/scripts/playwright_cli.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.log.txt",
+  "sha256": "c687df154892e8e6b31a085563cf027769a275c68750def9e342f825f0f7f6fd"
+}

@@ -17,6 +17,7 @@
     "docs/agent-handoffs/quake3-bsp-materials.md",
     "docs/agent-handoffs/quake3-bsp-patches.md",
     "docs/agent-handoffs/quake3-bsp-pvs.md",
+    "docs/agent-handoffs/quake3-bsp-webgl.md",
     "docs/agents/feature-policy.json",
     "docs/devlog/entries/2026-11-25-render-quake3-bsp.json",
     "docs/devlog/media/2026-11-25-render-quake3-bsp/egyptian-trouble.jpg",
@@ -25,8 +26,11 @@
     "docs/evidence/.gitattributes",
     "docs/evidence/quake3-bsp-egyptian-trouble.md",
     "docs/evidence/quake3-bsp-egyptian-trouble.png",
+    "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.json",
+    "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.log.txt",
     "docs/evidence/quake3-bsp-openarena-metal-20261125.json",
     "docs/evidence/quake3-bsp-openarena-metal-20261125.log.txt",
+    "docs/evidence/quake3-bsp-studio-inspector.png",
     "docs/features/quake3-bsp.json",
     "docs/models.md",
     "engine/render/BspShaderImages.h",
@@ -82,24 +86,26 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The built stdio MCP opened the project and reported map surface, lightmap and PVS counts.",
+      "evidence": [
+        "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.log.txt"
+      ]
     },
     "studio": {
       "status": "pass",
-      "note": "Native Studio catalog classifies BSP as a model; the Models panel routes model_info through studio.op.",
+      "note": "The Models ToolPanel loaded real MCP metadata and displayed the returned BSP fields.",
       "evidence": [
-        "docs/agent-handoffs/quake3-bsp-materials.md",
-        "apps/studio-native/StudioAssetCatalog.cpp",
-        "apps/studio-web/src/panels/toolPanels.ts"
+        "docs/evidence/quake3-bsp-studio-inspector.png",
+        "docs/agent-handoffs/quake3-bsp-webgl.md"
       ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Models panel exposes BSP fields from model_info. Native desktop pointer interaction has not been exercised.",
+      "status": "pass",
+      "note": "Playwright ran model_info from the Models panel and expanded the real bsp response. This check used a browser bridge adapter.",
       "evidence": [
-        "docs/agent-handoffs/quake3-bsp-materials.md"
+        "docs/evidence/quake3-bsp-studio-inspector.png",
+        "docs/agent-handoffs/quake3-bsp-webgl.md"
       ]
     },
     "persistence": {
@@ -123,11 +129,11 @@
       ]
     },
     "platforms": {
-      "status": "not_run",
-      "note": "macOS Metal passed. Windows MinGW compiled the importer and GI binding; a Windows runtime frame remains unverified.",
+      "status": "pass",
+      "note": "Verified real macOS Metal and Chromium WebGL2 pixels; MinGW compiled the import, GI and CPU tests. Native Windows GPU remains unverified.",
       "evidence": [
-        "docs/agent-handoffs/quake3-bsp-materials.md",
-        "docs/evidence/quake3-bsp-openarena-metal-20261125.log.txt"
+        "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.log.txt",
+        "docs/agent-handoffs/quake3-bsp-webgl.md"
       ]
     },
     "dependencies": {
@@ -138,29 +144,35 @@
       ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Independent native model_info loaded the packaged original map and its textures without a GUI.",
+      "evidence": [
+        "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.log.txt"
+      ]
     },
     "examples": {
       "status": "pass",
-      "note": "Reproducible external Debian/OpenArena fixture.",
+      "note": "The standalone AIVERSE CatalogView package opens the licensed original level with working layer controls and camera orbit.",
       "evidence": [
-        "tests/render/prepare_openarena_bsp.py"
+        "demos/quake3-bsp/view.json",
+        "demos/quake3-bsp/package.py",
+        "docs/devlog/media/2026-11-25-render-quake3-bsp/webgl.jpg",
+        "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.log.txt"
       ]
     },
     "tests": {
       "status": "pass",
-      "note": "Focused CPU importer regression and opt-in native OpenArena Metal differential test passed.",
+      "note": "Combined native CTest, real MCP and browser optical regression passed on the final code SHA.",
       "evidence": [
-        "docs/evidence/quake3-bsp-openarena-metal-20261125.json"
+        "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.json",
+        "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.log.txt"
       ]
     },
     "handoff": {
       "status": "pass",
-      "note": "Code SHA, capture, license, checks and integration scope recorded.",
+      "note": "Exact code SHA, artifact, reproducible tests, source credits and publication ownership recorded.",
       "evidence": [
-        "docs/agent-handoffs/quake3-bsp-materials.md"
+        "docs/agent-handoffs/quake3-bsp-webgl.md"
       ]
     },
     "documentation": {
@@ -171,11 +183,13 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "The native screenshot, credits, source link and reproduction are ready locally. Public site and standalone web demo are pending.",
+      "status": "pass",
+      "note": "Bilingual devlog, two genuine captures, licensed source, reproducible interactive WebGL2 demo and a tested static-site archive are ready for the main integrator to publish.",
       "evidence": [
-        "docs/evidence/quake3-bsp-egyptian-trouble.png",
-        "docs/evidence/quake3-bsp-egyptian-trouble.md"
+        "docs/devlog/entries/2026-11-25-render-quake3-bsp.json",
+        "docs/devlog/media/2026-11-25-render-quake3-bsp/webgl.jpg",
+        "demos/quake3-bsp/README.md",
+        "docs/agent-handoffs/quake3-bsp-webgl.md"
       ]
     }
   },
@@ -195,6 +209,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/quake3-bsp-openarena-metal-20261125.json"
+    "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.json"
   ]
 }
