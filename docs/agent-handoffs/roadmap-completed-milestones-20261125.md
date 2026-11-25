@@ -1,0 +1,17 @@
+# Completed public roadmap milestones
+
+Base 60f7b2fc2. Stage f075fb4e6 changes docs/devlog/systems.json only. Reviewed the 83 in-progress rows against their stated scope and source, tests, integration records and remaining acceptance. 35 move to done, dated to the 2026-11-25 verification. No new capabilities, public APIs or release claims.
+
+| Scope promoted | Evidence in main |
+|---|---|
+| PHYSIS CI compilation and tests | GitHub Actions run 44920430478 completed its build and CTest steps on macOS and Ubuntu with Box3D. |
+| Shared simulation math | docs/features/fixed-math-spatial-algorithms.json and docs/evidence/pr124-world-processes-48352ee2.log.txt cover native results and scalar/NEON output comparisons. |
+| Fractional cooldown and old Arsenal timer | tests/libraries/systems_engine_tests.cpp covers cadence; tests/tests_arsenal.inc exercises the legacy hand cooldown migration. |
+| Planetary forest authoring, collision, falls, retirement, species, interpolation, visibility and decay | tests/editor/planet_forest_mcp.py, tests/world_processes_gamecore_native_test.cpp, tests/world_processes_planet_host_test.cpp and tests/planet_forest_visual_test.cpp. All four fixtures passed locally on 60f7b2fc2 with Box3D enabled. docs/agent-handoffs/world-processes-pr124-current-main-2026-11-25.md records the native Studio Metal capture of the fallen ARBOR tree at its physical pose. |
+| Building styles, composition, primitive clearance, fitting, floors/windows, stairs/shafts and generator panel | tests/libraries/building_style_tests.cpp, building_feature_tests.cpp and building_structure_graph_tests.cpp in that directory; docs/evidence/building-export-1894e6dd8.log.txt, building-material-export-b954cd47a.log.txt and building-studio-b954cd47a.log.txt in the same evidence directory. The building preview, topology and Studio tests plus export and native viewer captures cover the bounded panel and geometry workflows. |
+| World identity, relationships, projectile/race state, transfers, compaction, finalized ticks, restart, WAL, backups and retention | tests/world/actor_region_position_test.cpp, region_entity_ledger_test.cpp, actor_region_lifecycle_test.cpp and region_gamecore_integration_test.cpp in that directory cover shifted handles, stable references, replay, tombstones, recovery and group transfer. |
+| Authority recovery, async writes, streamed content and background operator jobs | tests/fps/tests.cpp (durableAuthorityRestart and streamedPersistenceContent), tests/world/world_operator_jobs_test.cpp and tests/world/world_persistence_mcp_test.py. docs/agent-handoffs/open-world-stage38-final-merged-mac-and-studio-2026-11-24.md records the World CTests and real MCP acceptance. |
+
+Broader world integration and Studio panels remain open where live operator acceptance or platform coverage is outstanding. The forest visual snapshot tests do not certify every Studio interaction or GPU path. The programmatic graph, camera, importer, and hardware milestones retain their own remaining scope. This audit does not infer completion from PR merge or compilation alone.
+
+Python 3.12 site check: 72 entries, zero errors. Site build: 152 pages, two locales, 164 media files. Parsed the generated English and Russian boards and found all 35 titles under their owning system's completed list, with none of those titles still in progress. Next: verify the squash candidate on Mac and publish from main.
