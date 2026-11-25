@@ -4,6 +4,7 @@ import { invoke, onNativeEvent } from '../bridge';
 import type { StudioAgentInfo, StudioAgentChange, StudioAgentBatch, StudioSnapshot } from '../types';
 import { StudioIconButton, StudioButton, StudioAlert } from '../ui';
 import { copyText } from '../clipboard';
+import { emptyDraft, readAgentDraft, type AgentDraft } from './agentDraft';
 import { agentLineKind } from './agentLogic';
 import './AgentPanel.css';
 import { StudioLoader } from '../ui';
@@ -18,9 +19,30 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
   const projectPath = snapshot?.project.path ?? '';
   const [info, setInfo] = useState<StudioAgentInfo | null>(null);
   const [lines, setLines] = useState<string[]>([]);
-  const [prompt, setPrompt] = useState('');
+  const draftKey = 'studio.agentDraft:' + projectPath;
+  const [draft, setDraft] = useState(() => readAgentDraft(draftKey));
+  const { text: prompt, brief: editingBrief } = draft;
   const [copied, setCopied] = useState(false);
-  const [editingBrief, setEditingBrief] = useState(false);
+  const [draftWarning, setDraftWarning] = useState('');
+  const saveDraft = (next: AgentDraft) => {
+    setDraft(next);
+    setCopied(false);
+    try {
+      if (next.text) localStorage.setItem(draftKey, JSON.stringify(next));
+      else localStorage.removeItem(draftKey);
+      setDraftWarning('');
+    } catch { setDraftWarning('Draft storage is unavailable. Copy your text before closing this window.'); }
+  };
+  useEffect(() => {
+    const sync = (event: StorageEvent) => {
+      if (event.key === draftKey || event.key === null) {
+        setDraft(readAgentDraft(draftKey));
+        setCopied(false);
+      }
+    };
+    window.addEventListener('storage', sync);
+    return () => window.removeEventListener('storage', sync);
+  }, [draftKey]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [navigating,setNavigating]=useState(false);
@@ -56,9 +78,7 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
     try {
       const response = await invoke('studio.agentInfo', { from: total.current, briefForProject: projectPath });
       if (!response.wizardBrief) throw new Error('Wizard brief unavailable');
-      setCopied(false);
-      setEditingBrief(true);
-      setPrompt(response.wizardBrief);
+      saveDraft({ text: response.wizardBrief, brief: true });
       requestAnimationFrame(() => {
         const field = composer.current;
         if (field) {
@@ -79,7 +99,13 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
     const text = prompt.trim();
     if (!text || busy || !info?.cli || !info.mcp || promptBytes > 20000 || info.running) return;
     setBusy(true);
-    try { apply(await invoke('studio.agentStart', { prompt: text, from: total.current })); setPrompt(''); setEditingBrief(false); setError(''); }
+    try {
+      apply(await invoke('studio.agentStart', { prompt: text, from: total.current }));
+      const current = readAgentDraft(draftKey);
+      if (!current.text || (current.text === prompt && current.brief === editingBrief)) saveDraft(emptyDraft);
+      else setDraft(current);
+      setError('');
+    }
     catch (e) { setError(message(e)); }
     finally { setBusy(false); }
   };
@@ -194,11 +220,12 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
       <div><strong>Game wizard brief</strong><small>WIZARD_TASK.md</small></div>
       <StudioButton size="sm" disabled={busy} onClick={() => void loadBrief()}>Load draft</StudioButton>
     </div>}
+    {draftWarning && <div className="agent__error" role="status">{draftWarning}</div>}
     {promptBytes > 20000 && <div className="agent__error" role="status">Shorten the draft to 20,000 UTF-8 bytes to send ({promptBytes.toLocaleString()} bytes).</div>}
     {editingBrief && <div className="agent__draft-title"><strong>Game wizard brief</strong><small>WIZARD_TASK.md</small></div>}
     <div className="agent__composer">
       <textarea ref={composer} aria-label="Agent request" className="au-input" rows={prompt.includes('\n') ? 5 : 2} placeholder={info?.conversation ? 'Follow up… (⌘↩ to send)' : 'Ask the agent… (⌘↩ to send)'}
-        value={prompt} onChange={e => { setPrompt(e.target.value); setCopied(false); if (!e.target.value) setEditingBrief(false); }} onKeyDown={onKey} disabled={busy || !!info?.running}/>
+        value={prompt} onChange={e => saveDraft({ text: e.target.value, brief: !!e.target.value && editingBrief })} onKeyDown={onKey} disabled={busy || !!info?.running}/>
       <div className="agent__composer-actions">
       {editingBrief && <StudioButton size="sm" onClick={() => void copyBrief()}>{copied ? 'Copied' : 'Copy draft'}</StudioButton>}
       {info?.running
