@@ -4,7 +4,7 @@
   "system": "studio",
   "status": "in-progress",
   "branch": "studio-only-editor",
-  "commit": "e45eee54e",
+  "commit": "35e08058e",
   "author": null,
   "links": [],
   "title": "Поиск объектов по компонентам в Hierarchy",
@@ -14,12 +14,14 @@
   "body": [
     "Раскройте группу компонента, чтобы увидеть все объекты с этим компонентом. Если у объекта несколько компонентов, выделение видно в каждой раскрытой группе.",
     "Проект может добавить свои группировки, например по полю скрипта и владельцу. В режиме Live можно открыть вложенную группу, выбрать сущность и вернуться к списку по строке пути.",
-    "В режиме Nesting раскройте родительскую сущность. Два одноимённых спутника остаются разными объектами, и выбранный спутник снова подсвечивается после раскрытия ветки."
+    "В режиме Nesting раскройте родительскую сущность. Два одноимённых спутника остаются разными объектами, и выбранный спутник снова подсвечивается после раскрытия ветки.",
+    "До запуска игры Hierarchy показывает также объекты, созданные скриптами предпросмотра. У строки Preview можно раскрыть тип, владельца, здоровье и компоненты. Кнопка обновления рядом с Group by повторно читает скрипты проекта."
   ],
   "bodyEn": [
     "Expand a component to see every object that owns it. Selecting an object highlights it in each expanded group it belongs to.",
     "Projects can add groupings such as a script field followed by owner. In Live, open a nested group, select an entity and use the path to return to its ancestors.",
-    "In Nesting, expand a parent entity to see its children. Companions with identical names keep separate identities, and the selected companion stays highlighted when the branch reopens."
+    "In Nesting, expand a parent entity to see its children. Companions with identical names keep separate identities, and the selected companion stays highlighted when the branch reopens.",
+    "Before Play, Hierarchy also shows entities created by preview scripts. Expand a Preview row to inspect its type, owner, health and components. Refresh beside Group by reads the project scripts again."
   ],
   "verified": "В отдельном окне Studio на macOS выбранный дуб виден в группах «Положение» и «Владелец». В живой симуляции открыта группа Scouts.",
   "verifiedEn": "In a detached macOS Studio window, the selected oak appears under both position and owner. The live simulation capture shows the Scouts group.",
@@ -40,6 +42,11 @@
       "src": "docs/devlog/media/2026-11-25-studio-hierarchy-groups/hierarchy-nesting.png",
       "caption": "Второй из двух призванных спутников выделен под Scout",
       "captionEn": "The second summoned companion selected under Scout"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-hierarchy-groups/hierarchy-edit-preview.png",
+      "caption": "Два объекта предпросмотра под разведчиком до Play",
+      "captionEn": "Two preview entities beneath the scout before Play"
     }
   ]
 }
