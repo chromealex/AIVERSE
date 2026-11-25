@@ -339,9 +339,23 @@ struct EmitterDef {
     float endTime() const;  // when this emitter stops creating particles (loop: infinity)
 };
 
+struct ModelMaterialTrack {
+    std::string material;
+    std::vector<FxColorKey> color;
+    float2 uvSpeed{};
+    std::vector<std::string> textures;
+};
+struct AnimatedModelEffect {
+    std::string source, clip;
+    float duration = 1;
+    bool loop = false;
+    std::vector<ModelMaterialTrack> materials;
+};
+
 struct EffectDef {
     std::vector<EmitterDef> emitters;
     std::vector<FxForceField> forceFields;
+    AnimatedModelEffect model;
     bool looping() const;   // any looping emitter: lives until stop()
     float lifetime() const; // longest time until the last particle dies (looping: infinity)
 };

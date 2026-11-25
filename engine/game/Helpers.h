@@ -15,7 +15,7 @@ inline const Fixed kOne = Fixed::fromInt(1);
 inline Fixed dist2D(Vec3 a, Vec3 b) { return Surface::onSphere(a) ? (a - b).length() : (a - b).xz().length(); }
 // Drop the height of a flat-map position (planet positions are 3D and kept as they are).
 inline Vec3 flat(Vec3 v) { if (Surface::onSphere(v)) return v; v.y = Fixed{}; return v; }
-inline bool canHit(const WeaponDef& w, uint8_t layer) { return layerHit(w.targets, layer); }
+inline bool canHit(const WeaponDef& w, uint8_t layer, uint64_t tags) { return weaponTargetMatches(w, layer, tags); }
 inline Fixed maxWeaponRange(const UnitType& t) {
     Fixed r{};
     for (auto& w : t.weapons) r = fxMax(r, w.range);

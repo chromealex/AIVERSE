@@ -116,6 +116,7 @@ Config readConfig(const Json& root) {
         v.bulletGravity=number(w,"bulletGravity",10_fx,Fixed{},100_fx);
         if(w.has("flight")){
             v.flight=projectile::parseProjectileFlight(w["flight"],"actor.weapon.flight");
+            if(v.flight.arc)throw JsonError("actor.weapon.flight arc requires a target-aim host; use gravity/verticalSpeed for direction-only fire");
             if(v.bulletSpeed<=Fixed{})throw JsonError("actor.weapon.flight requires bulletSpeed > 0");
             if(!w["flight"].has("gravity"))v.flight.gravity=v.bulletGravity;
         }

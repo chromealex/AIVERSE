@@ -330,6 +330,7 @@ struct ModelDraw {
     // (layers & Renderer3D::visibilityMask()) != 0; skipped draws also cast
     // no shadow in that view. Default layer 0 (bit 1).
     uint32_t layers = 1;
+    uint32_t flashColor = 0; // 0 = legacy warm highlight, otherwise packed RGB8 + 1
 };
 
 enum DrawFlags : uint32_t {
@@ -1690,7 +1691,7 @@ private:
         gfx::DrawIndexedIndirectCommand gpuLodNear{}, gpuLodFar{};
         float gpuLodMaxPixels = 0, gpuLodError = 0;
         float3 gpuLodBoundsMin{}, gpuLodBoundsMax{};
-        mat4 world; float4 tint; float3 team; float flash; uint32_t flags;
+        mat4 world; float4 tint; float3 team; float flash; uint32_t flags; uint32_t flashColor = 0;
         uint64_t motionPersistentId = 0; // 0: transient, never tracked
         int motionNodeIndex = -1;
         int32_t joints;     // offset into jointData_ (floats), -1 when not palette-skinned

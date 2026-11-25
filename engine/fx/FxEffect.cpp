@@ -268,12 +268,13 @@ float EmitterDef::endTime() const {
 }
 
 bool EffectDef::looping() const {
+    if (!model.source.empty() && model.loop) return true;
     for (auto& e : emitters) if (e.loop && (e.continuous() || !e.bursts.empty())) return true;
     return false;
 }
 
 float EffectDef::lifetime() const {
-    float t = 0;
+    float t = model.source.empty() ? 0 : model.loop ? std::numeric_limits<float>::infinity() : model.duration;
     for (auto& e : emitters) {
         float life = e.life.max;
         if (e.lifeBySpeed.enabled) for (auto& k : e.lifeBySpeed.keys) life = std::max(life, e.life.max * k.k);
@@ -1016,9 +1017,32 @@ bool parseEffect(const Json& j, const std::string& where, EffectDef& out, std::v
     };
     if (!j.isObject()) { errors.push_back(where + ": expected an object with \"emitters\""); return false; }
     for (auto& [k, v] : j.members())
-        if (k != "emitters" && k != "comment" && k != "forceFields") errors.push_back(where + ": unknown field '" + k + "'");
+        if (k != "emitters" && k != "comment" && k != "forceFields" && k != "model") errors.push_back(where + ": unknown field '" + k + "'");
+    if (j.has("model")) {
+        const auto& m = j["model"];
+        auto& model = out.model;
+        model.source = m.getStr("source"); model.clip = m.getStr("clip");
+        model.duration = float(m["duration"].toDouble(1));
+        model.loop = m.getBool("loop");
+        if (model.source.empty() || !std::isfinite(model.duration) || model.duration <= 0)
+            errors.push_back(where + ".model: expected source and positive duration");
+        if (m.has("materials") && !m["materials"].isArray()) errors.push_back(where+".model.materials: expected array");
+        for (const auto& item : m["materials"].items()) {
+            ModelMaterialTrack track;
+            track.material = item.getStr("material");
+            if (item.has("color") && !colorKeys(item["color"],track.color))
+                errors.push_back(where+".model.materials.color: invalid RGBA gradient");
+            Reader reader{item,where+".model.materials",errors};
+            reader.vec2("uvSpeed",track.uvSpeed,-10000,10000);
+            for (const auto& texture : item["textures"].items()) {
+                if (!texture.isString() || texture.str().empty()) errors.push_back(where+".model.materials.textures: expected model image names");
+                else track.textures.push_back(texture.str());
+            }
+            model.materials.push_back(std::move(track));
+        }
+    }
     const Json& list = j["emitters"];
-    if (!list.isArray() || list.size() == 0) { errors.push_back(where + ".emitters: expected a non-empty array"); return false; }
+    if ((j.has("emitters") && !list.isArray()) || (list.size() == 0 && out.model.source.empty())) { errors.push_back(where + ".emitters: expected a non-empty array"); return false; }
     if (list.size() > size_t(kMaxEmitters)) errors.push_back(where + ".emitters: at most " + std::to_string(kMaxEmitters) + " emitters");
 
     for (size_t i = 0; i < std::min(list.size(), size_t(kMaxEmitters)); ++i) {
@@ -1147,6 +1171,26 @@ Json effectToJson(const EffectDef& def,bool includeSdf) {
         list.push(e);
     }
     root.set("emitters", list);
+    if (!def.model.source.empty()) {
+        const auto& model = def.model;
+        Json m = Json::object(), tracks = Json::array();
+        m.set("source",Json::string(model.source)); m.set("duration",numJ(model.duration));
+        if (model.loop) m.set("loop",Json::fromBool(true));
+        if (!model.clip.empty()) m.set("clip",Json::string(model.clip));
+        for (const auto& track : model.materials) {
+            Json item = Json::object();
+            if (!track.material.empty()) item.set("material",Json::string(track.material));
+            if (!track.color.empty()) item.set("color",colorKeysJ(track.color));
+            Json speed=Json::array(); speed.push(numJ(track.uvSpeed.x)); speed.push(numJ(track.uvSpeed.y));
+            item.set("uvSpeed",speed);
+            Json frames=Json::array();
+            for (const auto& texture : track.textures) frames.push(Json::string(texture));
+            if (frames.size()) item.set("textures",frames);
+            tracks.push(item);
+        }
+        if (tracks.size()) m.set("materials",tracks);
+        root.set("model",m);
+    }
     if (!def.forceFields.empty()) {
         Json a = Json::array();
         for (auto& f : def.forceFields) {

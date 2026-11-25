@@ -10,6 +10,7 @@ extern "C" {
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <memory>
 
 namespace aiverse::ui {

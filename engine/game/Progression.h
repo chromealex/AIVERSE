@@ -72,7 +72,7 @@ public:
 
     // ---- hooks of the unit pipelines (GameHost): no effect on units outside the table
     void modStat(Simulation& sim, Entity e, Stat s, Fixed& value) const;              // GameHost::stat
-    Fixed damage(Simulation& sim, Entity target, Entity source, Fixed amount) const;  // incoming multiplier, crits
+    Fixed damage(Simulation& sim, Entity target, Entity source, Fixed amount, bool* critical = nullptr) const;  // incoming multiplier, crits
     int16_t hitPayload(Simulation& sim, Entity source) const;                         // perk on-hit payload (rolls the chance)
     void beforeShot(Simulation& sim, Projectile& p) const;                            // bullet variant, splash, on-hit
     void afterShot(Simulation& sim, Projectile& p) const;                             // ricochet / fly-through counts

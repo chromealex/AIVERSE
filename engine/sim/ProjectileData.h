@@ -18,6 +18,9 @@ struct ProjectileFlight {
     Fixed gravity{}, verticalSpeed{}; // acceleration down local up; launch velocity along up
     uint16_t splitBudget = 64;
     std::vector<ProjectileModifier> modifiers;
+    // Target-fitted arc, evaluated by a host with an aim point.
+    bool arc = false;
+    Fixed arcHeight{}, arcHeightPerDistance{};
 };
 ProjectileFlight parseProjectileFlight(const Json& j, const std::string& where);
 }

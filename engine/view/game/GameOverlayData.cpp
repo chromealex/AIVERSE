@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <stdexcept>
 
@@ -499,11 +500,11 @@ void parseEvent(const Rules& R, const Json& j, OverlayDef& d, const std::string&
         return;
     }
     if (!j.isObject()) fail(where, "expected an event name or {\"on\": ...}");
-    onlyKeys(j, {"on", "lifetime", "rise", "grow", "spread", "by", "owner", "types", "max"}, where);
+    onlyKeys(j, {"on", "lifetime", "rise", "grow", "spread", "by", "owner", "types", "max", "critical", "bountyResource"}, where);
     if (!j.has("on")) fail(where, "needs \"on\": event name(s)");
     for (auto& s : strings(j["on"], where + ".on")) {
         uint16_t k = overlayEventKind(s);
-        if (!k) fail(where + ".on", "unknown event '" + s + "' (hit, died, spawned, attack, gathered, delivered, produced, ability, cast, "
+        if (!k) fail(where + ".on", "unknown event '" + s + "' (hit, died, bounty, spawned, attack, gathered, delivered, produced, ability, cast, "
                                     "impact, miss, built, placed, trained, researched, levelup, captured, sold, upgraded, alert, status, "
                                     "area, claimed, wave, message, ping)");
         d.event.kinds.push_back(k);
@@ -518,7 +519,20 @@ void parseEvent(const Rules& R, const Json& j, OverlayDef& d, const std::string&
         else if (k == "owner") d.event.on = parseRelations(v, w);
         else if (k == "types") parseTypes(R, v, d.event.types, w);
         else if (k == "max") d.event.max = std::clamp(int(number(v, w)), 1, 512);
+        else if (k == "critical") {
+            if (v.type() != Json::Type::Bool) fail(w, "expected boolean");
+            d.event.critical = v.boolean(false) ? 1 : 0;
+        } else if (k == "bountyResource") {
+            if (!v.isString()) fail(w, "expected resource ID");
+            d.event.bountyResource = R.findResource(v.str());
+            if (d.event.bountyResource < 0) fail(w, "unknown resource '" + v.str() + "'");
+        }
     }
+    if (d.event.critical >= 0 && (d.event.kinds.size() != 1 || d.event.kinds.front() != kEvHit))
+        fail(where, "critical requires event on: hit");
+    if (d.event.bountyResource >= 0)
+        for (uint16_t kind : d.event.kinds) if (kind != kEvDied && kind != kEvBounty)
+            fail(where, "bountyResource requires died or bounty events");
     d.hasEvent = true;
 }
 
@@ -616,7 +630,7 @@ render::float4 parseOverlayColor(const Json& j, const std::string& where, bool* 
 namespace {
 struct EvName { const char* name; uint16_t kind; };
 const EvName kEvents[] = {
-    {"hit", kEvHit}, {"died", kEvDied}, {"spawned", kEvSpawned}, {"attack", kEvAttack}, {"gathered", kEvGathered},
+    {"hit", kEvHit}, {"died", kEvDied}, {"bounty", kEvBounty}, {"spawned", kEvSpawned}, {"attack", kEvAttack}, {"attack_release", kEvAttackReleased}, {"gathered", kEvGathered},
     {"delivered", kEvDelivered}, {"produced", kEvProduced}, {"ability", kEvAbility}, {"cast", kEvCastStart}, {"impact", kEvImpact},
     {"miss", kEvMiss}, {"built", kEvBuildDone}, {"placed", kEvBuildPlaced}, {"trained", kEvTrainDone}, {"researched", kEvResearched},
     {"levelup", kEvLevelUp}, {"captured", kEvCaptured}, {"sold", kEvSold}, {"upgraded", kEvUpgraded}, {"alert", kEvAlert},
@@ -807,6 +821,16 @@ Json overlayTemplates() {
    "overlay": {"id": "damage_numbers", "event": {"on": "hit", "lifetime": 1.0, "rise": 1.6, "spread": 0.5},
      "shape": {"type": "text", "text": "-{value}", "size": 1.1},
      "style": {"color": "#ffe070ff", "colors": {"own": "#ff7060ff"}, "fadeOut": 0.4, "lift": 1.4}}},
+  {"id": "critical_damage_numbers", "name": "Critical damage",
+    "description": "Critical hits only, with a separate style.",
+    "overlay": {"id": "critical_damage_numbers", "event": {"on": "hit", "critical": true, "lifetime": 1.2, "rise": 1.6},
+      "shape": {"type": "text", "text": "CRIT -{value}", "size": 1.4},
+      "style": {"color": "#ff9850ff", "fadeOut": 0.4, "lift": 1.8}}},
+  {"id": "bounty_popup", "name": "Kill reward",
+    "description": "Actual resources credited to the local player for a kill, one popup per resource.",
+    "overlay": {"id": "bounty_popup", "event": {"on": "bounty", "by": "own", "lifetime": 1.4, "rise": 1.2},
+      "shape": {"type": "text", "text": "+{amount} {resource}", "size": 1.1},
+      "style": {"color": "#ffd84aff", "fadeOut": 0.5, "lift": 1.6}}},
   {"id": "resource_popup", "name": "Resource gained",
    "description": "'+N gold' floating up where an own worker delivers resources.",
    "overlay": {"id": "resource_popup", "event": {"on": "gathered", "by": "own", "lifetime": 1.4, "rise": 1.2},

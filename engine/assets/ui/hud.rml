@@ -25,24 +25,48 @@
             <span class="item" data-for="it : top" data-class-warn="it.warn" data-attr-style="it.style">{{it.text}}<span class="sub" data-if="it.sub != ''">{{it.sub}}</span></span>
             <button class="small" data-for="a : topActions" data-class-active="a.active" data-event-click="act(a.id)" data-event-dblclick="act(a.id)">{{a.label}}<span class="cost" data-if="a.cost != ''">{{a.cost}}</span></button>
             <span class="item">{{clock}}</span>
+            <button class="small" data-if="hasMessageLog" data-event-click="message_log()">{{ 'hud.messages' | tr(lang) }}</button>
             <button class="small" data-event-click="pause()">{{ 'hud.menu' | tr(lang) }}</button>
         </div>
     </div>
 
     <div id="notices">
-        <div class="notice" data-for="n : notices">{{n}}</div>
+        <div data-for="n : noticeRows" data-attr-class="'notice ' + n.sub">{{n.text}}</div>
+    </div>
+    <div id="message-log" class="panel" data-if="messageLogOpen">
+        <div class="row" data-if="canChat">
+            <input id="match-chat-input" type="text" class="grow" data-value="chatInput" maxlength="256" data-event-keydown="match_chat(ev.key_identifier)"/>
+            <button class="small" data-event-click="match_chat()">{{ 'hud.send_chat' | tr(lang) }}</button>
+        </div>
+        <div data-for="n : messageHistory" data-attr-class="'notice ' + n.sub">{{n.text}}</div>
     </div>
 
     <div id="minimap" class="panel" data-attr-style="minimapStyle">
+        <button class="selection-shortcut" data-for="a : selectionShortcuts" data-class-disabled="!a.enabled" data-event-click="act(a.id)">
+            <img data-if="a.image != ''" data-attr-src="a.image"/>{{a.label}}
+        </button>
         <img id="minimap-img" src="#minimap"/>
     </div>
 
+    <div class="replay-controls panel" data-if="watchingReplay">
+        <button data-event-click="matchFile('toggle')">{{ (replayPaused ? 'matchfiles.play' : 'matchfiles.pause') | tr(lang) }}</button>
+        <button data-event-click="matchFile('speed')">{{replaySpeed}}</button>
+    </div>
     <div id="card" class="panel" data-if="showCard">
         <div class="dim" data-if="!hasSelection">{{emptyHint}}</div>
+        <div data-if="showPortrait"><img class="selection-portrait" src="#portrait"/></div>
         <div class="title" data-if="hasSelection">{{selTitle}}</div>
         <div class="info" data-for="l : selInfo">{{l}}</div>
+        <div class="card-grid" data-if="cardGridStyle != ''" data-attr-style="cardGridStyle">
+            <div data-for="a : card" class="card-slot" data-attr-style="a.cellStyle">
+                <button data-if="a.positioned" data-class-disabled="!a.enabled" data-class-active="a.active" data-event-click="act(a.id)">
+                    <span class="label">{{a.label}}</span><span class="cost" data-if="a.cost != ''">{{a.cost}}</span><span class="hotkey" data-if="a.hotkey != ''">{{a.hotkey}}</span>
+                    <span class="tip" data-if="a.tip != ''">{{a.tip}}</span>
+                </button>
+            </div>
+        </div>
         <div class="cells">
-            <div data-for="a : card" data-attr-class="(a.header ? 'header ' : 'cell ') + a.kind">
+            <div data-for="a : card" data-attr-class="a.positioned ? 'hidden-slot' : ((a.header ? 'header ' : 'cell ') + a.kind)">
                 <div class="section-title" data-if="a.header &amp;&amp; a.label != ''">{{a.label}}</div>
                 <button data-if="!a.header" data-class-disabled="!a.enabled" data-class-active="a.active" data-event-click="act(a.id)" data-event-dblclick="act(a.id)">
                     <span class="label">{{a.label}}</span><span class="cost" data-if="a.cost != ''">{{a.cost}}</span><span class="hotkey" data-if="a.hotkey != ''">{{a.hotkey}}</span>
@@ -76,6 +100,14 @@
             <h1 data-if="screen == 'paused'">{{ 'pause.title' | tr(lang) }}</h1>
             <button class="wide" data-if="screen == 'paused'" data-event-click="resume()">{{ 'pause.resume' | tr(lang) }}</button>
             <button class="wide" data-if="screen == 'paused' &amp;&amp; hasHowto" data-event-click="howto()">{{ 'ui.howto' | tr(lang) }}</button>
+            <div data-if="canSaveMatch">
+                <button data-event-click="matchFile('save')">{{ 'matchfiles.save' | tr(lang) }}</button>
+                <button data-event-click="matchFile('record')">{{ 'matchfiles.record' | tr(lang) }}</button>
+                <div data-if="saveSlots.size > 0">{{ 'matchfiles.load' | tr(lang) }}
+                    <button data-for="slot : saveSlots" data-event-click="matchFile('load',slot)">{{slot}}</button>
+                </div>
+            </div>
+            <p data-if="error != ''">{{error}}</p>
             <div class="choice shadows">
                 <button data-class-active="shadows == 0" data-event-click="shadows = 0">{{ 'pause.shadows_off' | tr(lang) }}</button>
                 <button data-class-active="shadows == 1" data-event-click="shadows = 1">{{ 'pause.shadows_low' | tr(lang) }}</button>

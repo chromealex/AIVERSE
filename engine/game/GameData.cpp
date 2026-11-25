@@ -1,4 +1,5 @@
 #include "GameData.h"
+#include "engine/mechanics/MultiTargetSelection.h"
 #include "../../engine/data/JsonCompose.h"
 #include "EffectsData.h"
 #include "ProgressionData.h"
@@ -182,6 +183,20 @@ Rules loadRules(const Json& j) {
     if (needsExtends(j)) return loadRules(resolveExtends(j));   // "extends" / "abstract" entries (engine/data/JsonCompose.h)
     if (j.has("designs")) return loadRules(expandDesigns(j));   // agent-mech UD
     Rules r;
+    if (j.has("minUnitSpeed")) {
+        if (!j["minUnitSpeed"].isNumber() || j["minUnitSpeed"].fx().raw < 0)
+            throw std::runtime_error("minUnitSpeed: expected nonnegative number");
+        r.hasMinUnitSpeed = true;
+        r.minUnitSpeed = j["minUnitSpeed"].fx();
+    }
+    if (j.has("maxUnitSpeed")) {
+        if (!j["maxUnitSpeed"].isNumber() || j["maxUnitSpeed"].fx().raw < 0)
+            throw std::runtime_error("maxUnitSpeed: expected nonnegative number");
+        r.hasMaxUnitSpeed = true;
+        r.maxUnitSpeed = j["maxUnitSpeed"].fx();
+    }
+    if (r.hasMinUnitSpeed && r.hasMaxUnitSpeed && r.minUnitSpeed > r.maxUnitSpeed)
+        throw std::runtime_error("minUnitSpeed must not exceed maxUnitSpeed");
     if (j.has("ai")) {
         if (!j["ai"].isObject()) throw std::runtime_error("ai: expected object");
         const auto controller = j["ai"].getStr("controller", "builtin");
@@ -263,6 +278,7 @@ Rules loadRules(const Json& j) {
         ResourceDef d;
         d.id = id;
         d.name = rj.getStr("name", id);
+        d.hudLabelFormat = rj.getStr("hudLabelFormat");
         std::string kind = rj.getStr("kind", "stock");
         d.kind = kind == "flow" ? ResourceKind::Flow : kind == "capacity" ? ResourceKind::Capacity : ResourceKind::Stock;
         d.start = rj.getFx("start");
@@ -430,6 +446,8 @@ Rules loadRules(const Json& j) {
         UnitType& t = r.types[ti++];
         const std::string where = "type '" + id + "'";
         t.name = tj.getStr("name", id);
+        t.cardSlot = tj["cardSlot"];
+        t.hotkey = tj.getStr("hotkey");
         t.tags = tagsOf(tj["tags"]);
         if (const Json& h = tj["health"]; h.isObject()) {
             t.maxHp = h.getFx("max", t.maxHp);
@@ -480,7 +498,40 @@ Rules loadRules(const Json& j) {
             w.minRange = wj.getFx("minRange");
             w.damage = wj.getFx("damage", w.damage);
             w.cooldown = wj.getFx("cooldown", w.cooldown);
+            if (wj.has("preciseCooldown") && wj["preciseCooldown"].type() != Json::Type::Bool)
+                fail(where + " weapon " + w.id, "preciseCooldown must be a boolean");
+            w.preciseCooldown = wj.getBool("preciseCooldown", w.cooldown.raw > 0);
+            for (const char* key : {"windup", "backswing"})
+                if (wj.has(key) && (!wj[key].isNumber() || wj[key].fx().raw < 0 || wj[key].fx() > Fixed::fromInt(60)))
+                    fail(where + " weapon " + w.id, std::string(key) + " must be seconds in [0, 60]");
+            w.windup = wj.getFx("windup");
+            w.backswing = wj.getFx("backswing");
+            if (w.preciseCooldown && w.cooldown.raw <= 0)
+                fail(where + " weapon " + w.id, "preciseCooldown requires positive cooldown");
             w.targets = parseLayers(wj["targets"], kLayerGround | kLayerNaval | kLayerSandOnly);
+            auto weaponTags = [&](const char* key) {
+                uint64_t mask = 0;
+                if (!wj.has(key)) return mask;
+                if (!wj[key].isArray()) fail(where + " weapon " + w.id, std::string(key) + " must be an array");
+                for (const auto& tag : wj[key].items()) {
+                    const uint64_t bit = tag.isString() ? r.tagMask(tag.str()) : 0;
+                    if (!bit) fail(where + " weapon " + w.id, std::string(key) + ": unknown unit tag '" + tag.str() + "'");
+                    mask |= bit;
+                }
+                return mask;
+            };
+            w.targetTags = weaponTags("targetTags");
+            w.ignoreTags = weaponTags("ignoreTags");
+            if (wj.has("extraTargets")) {
+                const auto n = wj.getInt("extraTargets", -1);
+                if (!wj["extraTargets"].isNumber() || n < 0 ||
+                    n > int64_t(lib::mechanics::kMaxExtraWeaponTargets) ||
+                    wj["extraTargets"].fx() != Fixed::fromInt(n))
+                    fail(where + " weapon " + w.id, "extraTargets must be an integer in [0, 16]");
+                w.extraTargets = uint8_t(n);
+            }
+            w.extraTargetTags = weaponTags("extraTargetTags");
+            w.extraIgnoreTags = weaponTags("extraIgnoreTags");
             if (w.targets & kLayerGround) w.targets |= kLayerSandOnly | kLayerNaval;
             w.projectileSpeed = wj.getFx("projectileSpeed");
             if (wj.has("flight")) {
@@ -700,6 +751,8 @@ Rules loadRules(const Json& j) {
         TechDef& t = r.techs[ki++];
         const std::string where = "tech '" + id + "'";
         t.name = kj.getStr("name", id);
+        t.cardSlot = kj["cardSlot"];
+        t.hotkey = kj.getStr("hotkey");
         if (const Json& c = kj["cost"]; c.isObject()) {
             amounts(where + " cost", c, t.cost, {"time"});
             t.time = c.getFx("time", t.time);
@@ -764,6 +817,7 @@ Rules loadRules(const Json& j) {
     }
     if (const Json& ps = j["possession"]; ps.isObject()) {
         r.possession.enabled = true;
+        r.possession.firstPerson = ps.getBool("firstPerson", false);
         amounts("possession.cost", ps["cost"], r.possession.cost, {});
         amounts("possession.drain", ps["drain"], r.possession.drain, {});
     }
@@ -867,7 +921,7 @@ Rules loadRules(const Json& j) {
     // anything beyond the original instant effects switches the effect engine on (old games stay bit-identical)
     bool adv = r.userStatuses > 0 || r.loadoutSlots > 0 || !r.traps.empty();
     for (auto& t : r.types) if (t.onDeath >= 0) adv = true;
-    for (auto& pl : r.payloads) for (auto& e : pl) if (e.kind > EffectKind::Blink || e.chance < Fixed::fromInt(1) || e.targetChance < Fixed::fromInt(1) || e.randomAmount || e.limit > 0 || e.filter.explicitShape) adv = true;
+    for (auto& pl : r.payloads) for (auto& e : pl) if (e.kind > EffectKind::Blink || e.chance < Fixed::fromInt(1) || e.targetChance < Fixed::fromInt(1) || e.randomAmount || e.useWeaponDamage || e.limit > 0 || e.filter.explicitShape) adv = true;
     for (auto& rs : r.resources) if (rs.regen.raw != 0) adv = true;
     for (auto& t : r.types) {
         if (!t.statuses.empty() || t.blocksLanes || t.level != 1) adv = true;

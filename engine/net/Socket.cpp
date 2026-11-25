@@ -1,6 +1,8 @@
 #ifndef __EMSCRIPTEN__
 #include "Socket.h"
 #include <cstring>
+#include <set>
+#include <vector>
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -19,6 +21,10 @@ static void initSockets() {
 }
 #else
 #include <arpa/inet.h>
+#if !defined(__ANDROID__) || __ANDROID_API__ >= 24
+#include <ifaddrs.h>
+#include <net/if.h>
+#endif
 #include <cerrno>
 #include <fcntl.h>
 #include <netdb.h>
@@ -96,6 +102,14 @@ bool Address::resolve(const std::string& host, uint16_t port, Address& out, bool
 }
 
 // ---------------------------------------------------------------- UDP
+bool UdpSocket::openBroadcast(uint16_t port) {
+    if (!open(port,AF_INET)) return false;
+    int on = 1;
+    if (::setsockopt(s_,SOL_SOCKET,SO_BROADCAST,reinterpret_cast<const char*>(&on),sizeof(on)) == 0) return true;
+    close();
+    return false;
+}
+
 bool UdpSocket::open(uint16_t port, int family, bool loopbackOnly) {
     initSockets();
     close();
@@ -131,6 +145,54 @@ bool UdpSocket::open(uint16_t port, int family, bool loopbackOnly) {
 
 void UdpSocket::close() { if (s_ != SocketHandle(AIVERSE_INVALID)) { closeSock(s_); s_ = SocketHandle(AIVERSE_INVALID); } }
 bool UdpSocket::isOpen() const { return s_ != SocketHandle(AIVERSE_INVALID); }
+
+bool UdpSocket::sendBroadcast(const Address& to, const uint8_t* data, size_t n) {
+    if (!isOpen() || to.family() != AF_INET) return false;
+    const auto* destination = reinterpret_cast<const sockaddr_in*>(to.storage);
+    if (destination->sin_addr.s_addr != htonl(INADDR_BROADCAST)) return sendTo(to, data, n);
+
+    std::set<uint32_t> broadcasts;
+    auto addSubnet = [&](const sockaddr_in& address, const sockaddr_in& mask) {
+        const uint32_t hostBits = ~ntohl(mask.sin_addr.s_addr);
+        if (hostBits > 1 && mask.sin_addr.s_addr != 0)
+            broadcasts.insert(address.sin_addr.s_addr | ~mask.sin_addr.s_addr);
+    };
+#ifdef _WIN32
+    std::vector<INTERFACE_INFO> interfaces(16);
+    DWORD bytes = 0;
+    while (interfaces.size() <= 1024) {
+        if (WSAIoctl(s_, SIO_GET_INTERFACE_LIST, nullptr, 0, interfaces.data(),
+                     DWORD(interfaces.size() * sizeof(INTERFACE_INFO)), &bytes, nullptr, nullptr) == 0) {
+            for (size_t i = 0; i < bytes / sizeof(INTERFACE_INFO); ++i) {
+                const auto& iface = interfaces[i];
+                if ((iface.iiFlags & (IFF_UP | IFF_BROADCAST)) == (IFF_UP | IFF_BROADCAST))
+                    addSubnet(iface.iiAddress.AddressIn, iface.iiNetmask.AddressIn);
+            }
+            break;
+        }
+        if (WSAGetLastError() != WSAEFAULT) break;
+        interfaces.resize(interfaces.size() * 2);
+    }
+#elif !defined(__ANDROID__) || __ANDROID_API__ >= 24
+    ifaddrs* interfaces = nullptr;
+    if (getifaddrs(&interfaces) == 0) {
+        for (auto* iface = interfaces; iface; iface = iface->ifa_next) {
+            if (!iface->ifa_addr || !iface->ifa_netmask || iface->ifa_addr->sa_family != AF_INET ||
+                (iface->ifa_flags & (IFF_UP | IFF_BROADCAST)) != (IFF_UP | IFF_BROADCAST)) continue;
+            addSubnet(*reinterpret_cast<const sockaddr_in*>(iface->ifa_addr),
+                      *reinterpret_cast<const sockaddr_in*>(iface->ifa_netmask));
+        }
+        freeifaddrs(interfaces);
+    }
+#endif
+    bool sent = false;
+    for (uint32_t address : broadcasts) {
+        Address subnet = to;
+        reinterpret_cast<sockaddr_in*>(subnet.storage)->sin_addr.s_addr = address;
+        if (sendTo(subnet, data, n)) sent = true;
+    }
+    return sent || sendTo(to, data, n);
+}
 
 bool UdpSocket::sendTo(const Address& to, const uint8_t* data, size_t n) {
     if (!isOpen()) return false;

@@ -8,6 +8,7 @@
 #include "../../engine/core/ECS.h"
 #include "../../engine/core/Fixed.h"
 #include "GameData.h"
+#include "engine/mechanics/AttackTiming.h"
 
 namespace aiverse::game {
 
@@ -84,6 +85,7 @@ enum CommandType : uint16_t {
     kCmdRepair,         // builders; target = damaged own / allied unit (rules "repair" units: mobile ones too)
     kCmdReclaim,        // builders; target = resource node (gather) or a unit to take apart (rules "reclaim")
     kCmdSelfDestruct,   // units: arm the countdown (rules "selfDestruct"); again: disarm
+    kCmdChat,         // param = UTF-8 byte count; args = little-endian packed text
     // top-down heroes (rules "topDown", TopDown.h). Engine-reserved hero ids (engine/net/HeroInput.h: net::kCmdHeroInput / kCmdHeroAbility), so hosted battles,
     // the battle load test and every top-down game share one command scheme.
     kCmdTopDown = 0xF100, // no units; param = topdown::pack(Input): sticky move vector / aim / fire of the player's hero
@@ -194,7 +196,23 @@ enum GameEvent : uint16_t {
     kEvAssault,         // a unit assaulted a defended garrison: player = attacker, a = structure, b = the unit, value = defenders lost
     kEvNative,          // emitted by native modules for the view / scripts: value, a, b, pos are the module's (docs/native-modules.md)
     kEvFieldOp,         // field operations (FieldOps.h): value = FieldOpEvent | data << 8, a = unit, b = projectile (intercepted)
+    kEvAttackWindup,    // attack clip starts; a = attacker, b = target, value = weapon index
+    kEvAttackCancelled, // windup interrupted without consuming cooldown
+    kEvAttackRecoveryEnd, // backswing completed; value = weapon index
+    kEvBounty,            // actual resource credit: player = recipient, a = victim, value = Fixed raw
+    kEvChat,              // player = sender; message holds the submitted text
+    kEvPlayerLeft,        // player = departing slot; value = replacement SeatController
+    kEvCampaignFightEnd,  // a = fighter, b = guard for capture, value = 1 capture / 0 retreat
+    kEvCampaignWound,     // a = fighter, b = attacker, value = affected part
+    kEvAttackReleased,  // timed weapon reached its damage point
 };
+constexpr uint16_t kAttackStartsWindup = 1u; // kEvAttack.flags
+// Physical shot cues fire at release for both instantaneous and timed attacks.
+inline uint16_t weaponCueEventType(uint16_t type, uint16_t flags) {
+    if (type == kEvAttack && (flags & kAttackStartsWindup)) return 0;
+    return type == kEvAttackReleased ? uint16_t(kEvAttack) : type;
+}
+constexpr uint16_t kHitCritical = 1u << 0; // kEvHit.flags
 // kEvModePhase values
 enum ModePhaseEvent : int64_t { kModeSdCounter = 1, kModeSdPreview, kModeSdStart, kModeSdEnd, kModeTimeStep, kModeTimeUp,
                                 kModeKohAlarm, kModeDomHeld, kModeZoneLost, kModeZoneChanged };
@@ -283,6 +301,7 @@ struct Combat {
     int8_t slot = -1;
     uint32_t slotTick = 0;
     Vec3 slotPos{};
+    lib::mechanics::AttackTimingState attackTiming[4]{};
 };
 
 struct Cargo { int16_t res = -1; Fixed amount{}; Entity lastNode = kNullEntity; Vec3 lastPos{}; bool field = false; };
@@ -341,7 +360,7 @@ struct Projectile {
     Fixed onHitChance{};
     uint16_t sourceType = 0xFFFF;
     Vec3 start{};
-    Fixed travel{}, total{};  // arc progress
+    Fixed travel{}, total{};  // legacy arc progress; fitted flight: peak and duration (zero duration = ballistic continuation)
     Fixed scale = Fixed::fromInt(1);
     ProjectileProgram program;
     int8_t weapon = -1;       // weapon index of sourceType (bonus damage, armor class, crew kills)
@@ -358,8 +377,23 @@ struct TeleportBack { Vec3 home{}; uint32_t at = 0; Entity caster = kNullEntity;
 struct Transit { int16_t from = 0, to = 0; uint32_t depart = 0, arrive = 0; Vec3 fromWorld{}, toWorld{}; Vec3 arrival{}; };
 struct Squad { Fixed reinforceTimer{}; bool reinforcing = false; };
 
-struct Buff { Stat stat = Stat::Damage; Fixed add{}; Fixed mul = Fixed::fromInt(1); uint32_t until = 0; uint16_t sourceType = kNoType; };
+struct Buff { Stat stat = Stat::Damage; Fixed add{}; Fixed mul = Fixed::fromInt(1); uint32_t until = 0; uint16_t sourceType = kNoType; uint16_t stackingGroup = 0; };
 struct Buffs { std::vector<Buff> list; uint32_t stunUntil = 0; };
+
+// Grouped modifiers retain distinct strengths until their own expiration. Equal
+// modifiers from the same type are interchangeable; refreshing extends their lifetime.
+inline void upsertTimedBuff(Buffs& buffs, const Buff& incoming) {
+    for (auto& current : buffs.list) {
+        if (current.stat != incoming.stat || current.sourceType != incoming.sourceType ||
+            current.stackingGroup != incoming.stackingGroup) continue;
+        if (!incoming.stackingGroup) { current = incoming; return; }
+        if (current.add == incoming.add && current.mul == incoming.mul) {
+            if (incoming.until > current.until) current.until = incoming.until;
+            return;
+        }
+    }
+    buffs.list.push_back(incoming);
+}
 struct AbilityState { uint32_t readyAt[8] = {}; uint8_t charges[8] = {}; uint32_t chargeAt[8] = {}; bool init = false; uint32_t busyUntil = 0; };
 // A running status effect (unit, structure or player).
 struct StatusInst {

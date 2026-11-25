@@ -30,6 +30,7 @@ std::vector<ScriptCommandDef> parseScriptCommands(const Json& rules, const Rules
         d.id = id;
         d.label = j.getStr("label", id);
         d.icon = j.getStr("icon");
+        d.cardSlot = j["cardSlot"];
         d.hotkey = j.getStr("hotkey");
         d.tip = j.getStr("tip");
         d.fn = j.getStr("fn", "on_command");

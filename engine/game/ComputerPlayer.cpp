@@ -1337,7 +1337,7 @@ bool ComputerPlayer::expand(Simulation& sim, GameCore& m, const std::vector<int>
 Fixed ComputerPlayer::structureDps(const Rules& R, const UnitType& u, const UnitType& s) {
     Fixed best{};
     for (auto& wd : u.weapons) {
-        if (!layerHit(wd.targets, s.layer)) continue;
+        if (!weaponTargetMatches(wd, s.layer, s.tags)) continue;
         Fixed raw = wd.damage * R.damageMult(wd.damageType, s.armorType);
         for (auto& [tags, add] : wd.bonus) if (s.tags & tags) raw += add;
         const Fixed fin = fxMax(raw - s.armor, raw / 10);

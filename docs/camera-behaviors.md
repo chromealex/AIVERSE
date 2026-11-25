@@ -39,6 +39,8 @@ camera block it writes and starts from a named preset; there are no per-game cam
 Unknown preset names are reported by `resolveCameraPreset` and the block's own keys are used. Adding a preset is a
 data change in `CameraPresets.h`; the keys are those of the body's block.
 
+For fixed-width legacy framing, set `camera.designAspect` in game.json to the design width divided by height. For a 4:3 view use `set_manifest {"path":"camera.designAspect","value":1.333333}`. The projected frame fills the viewport and mouse picking uses the same projection.
+
 ## Studio and MCP
 
 `lens_camera_presets` (MCP / Studio agent) lists every preset with its body and keys, or one by `name`. The Studio
@@ -54,3 +56,9 @@ with `yaw` / `pitch` added. A `Follow` rig with a `CameraFollowComponent` (camer
 allowed, `"bounds": [minX, minZ, maxX, maxZ]`) runs the follow body itself: angle, distance, smoothing, velocity lead,
 speed zoom, lens and bounds, the same code as the game follow camera. Shake (`CameraShakeComponent`) and the physical lens (`CameraLensComponent`) apply on top
 of every mode. Test: `camera_behavior` (presets, every body, ECS Chase / FirstPerson against the view chase camera).
+
+### Campaign first-person encounters
+
+Set `"possession": {"firstPerson": true}` in the rules. Select an owned mobile unit and use its possession action. The campaign keeps simulating the same entities. The camera starts along the fighter's facing direction. Move with the possession movement bindings, look with the mouse, hold Ctrl to crouch and use the possession fire binding. Escape releases the fighter. The project can set sensitivity, pitch limits and projection in the manifest's `camera.firstPerson` block.
+
+Nearby hostile combat units act as observers. Running and firing raise suspicion at a greater distance than crouched movement. A fully alerted guard within 1.5 world units ends the encounter. Scripts receive `campaign_fight_end` with the fighter in A, the guard in B and value 1 for capture. A retreat has an empty B and value 0. The campaign script decides what capture means for ownership and objectives. `campaign_wound` reports the fighter, attacker and numeric wound location. Locations 1–3 are a deterministic fallback for campaign damage with no hit region. Health state persists on the fighter and pain lowers movement speed and eye height during possession.

@@ -7,6 +7,7 @@
 #include "Internal.h"
 #include "Environment.h"
 #include <algorithm>
+#include <cstdlib>
 #include <stdexcept>
 
 namespace aiverse::game {

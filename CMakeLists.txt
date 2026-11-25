@@ -438,6 +438,7 @@ endif()
 add_library(aiverse_net STATIC
     engine/net/Loopback.cpp
     engine/net/Socket.cpp
+    engine/net/LanDiscovery.cpp
     engine/net/PlainHttp.cpp
     engine/net/Reliable.cpp
     engine/net/Udp.cpp
@@ -1483,6 +1484,13 @@ elseif(AIVERSE_PLATFORM STREQUAL "windows")
     target_link_libraries(aiverse_runtime PUBLIC opengl32 user32 gdi32 shell32)
 else()
     target_link_libraries(aiverse_runtime PUBLIC X11 EGL GLESv2)
+    find_path(AIVERSE_XCURSOR_INCLUDE X11/Xcursor/Xcursor.h)
+    find_library(AIVERSE_XCURSOR_LIB Xcursor)
+    if(AIVERSE_XCURSOR_INCLUDE AND AIVERSE_XCURSOR_LIB)
+        target_include_directories(aiverse_runtime PRIVATE ${AIVERSE_XCURSOR_INCLUDE})
+        target_compile_definitions(aiverse_runtime PRIVATE AIVERSE_WITH_XCURSOR=1)
+        target_link_libraries(aiverse_runtime PRIVATE ${AIVERSE_XCURSOR_LIB})
+    endif()
 endif()
 
 # Shared presentation visibility field; independent of game genre.
@@ -2136,6 +2144,9 @@ foreach(t ${AIVERSE_GAME_CLIENT_TARGETS})
     if(TARGET ${t})
         target_sources(${t} PRIVATE apps/client/ClientUi.cpp apps/client/ClientActions.cpp apps/client/ClientScript.cpp apps/client/ClientScriptCmd.cpp apps/client/ClientScriptUi.cpp apps/client/Minimap.cpp apps/client/Lobby.cpp apps/client/ClientPlanet.cpp apps/client/MinimapPlanet.cpp)
         target_link_libraries(${t} PRIVATE aiverse_ui aiverse_net)
+        if(NOT EMSCRIPTEN)
+            target_link_libraries(${t} PRIVATE aiverse_net_server)
+        endif()
         if(AIVERSE_CLIENT_WITH_FX)
             target_sources(${t} PRIVATE apps/client/ClientFx.cpp)
             target_link_libraries(${t} PRIVATE aiverse_game_fx)
@@ -2551,6 +2562,9 @@ if(TARGET aiverse_editor OR AIVERSE_BUILD_STUDIO_HTML5)
     # Shared game runtime host; editor shells own controls and native surfaces.
     # Existing in-game overlay rendering remains inside GameClient, not Studio UI.
     add_library(aiverse_hosted_client STATIC apps/client/HostedClient.cpp ${AIVERSE_CLIENT_CORE_SOURCES})
+    if(NOT EMSCRIPTEN)
+        target_link_libraries(aiverse_hosted_client PRIVATE aiverse_net_server)
+    endif()
     target_include_directories(aiverse_hosted_client PUBLIC "${PROJECT_SOURCE_DIR}")
     target_link_libraries(aiverse_hosted_client PUBLIC aiverse_runtime aiverse_game_view
         aiverse_net_city aiverse_splash aiverse_net aiverse_game_audio aiverse_atlas

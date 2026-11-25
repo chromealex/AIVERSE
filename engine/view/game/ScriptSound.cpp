@@ -25,12 +25,28 @@ float field(lua_State* L, int t, const char* k, float def) {
 }
 uint32_t handle(lua_State* L, int i) { return lua_isinteger(L, i) ? uint32_t(lua_tointeger(L, i)) : 0u; }
 
+bool positionFields(lua_State* L, ScriptSoundPlay& p) {
+    if (!lua_istable(L, 2)) return false;
+    lua_getfield(L, 2, "x");
+    lua_getfield(L, 2, "y");
+    lua_getfield(L, 2, "z");
+    if (lua_isnil(L, -3) && lua_isnil(L, -2) && lua_isnil(L, -1)) { lua_pop(L, 3); return false; }
+    p.x = float(luaL_checknumber(L, -3));
+    p.y = float(luaL_optnumber(L, -2, 0));
+    p.z = float(luaL_checknumber(L, -1));
+    lua_pop(L, 3);
+    if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z))
+        luaL_error(L, "sound: position must be finite");
+    return true;
+}
+
 // sound.play(name, {gain, pan, pitch, variant (1-based), at, loop}) -> handle | nil
 int sPlay(lua_State* L) {
     const char* name = luaL_checkstring(L, 1);
     ScriptSound* h = host(L);
     if (!h) { lua_pushnil(L); return 1; }
     ScriptSoundPlay p;
+    p.positional = positionFields(L, p);
     p.gain = std::max(0.0f, field(L, 2, "gain", 1));
     p.pan = field(L, 2, "pan", 0);
     p.pitch = field(L, 2, "pitch", 1);
@@ -48,7 +64,11 @@ int sPlay(lua_State* L) {
 // sound.set(handle, {gain, pan, pitch})
 int sSet(lua_State* L) {
     ScriptSound* h = host(L);
-    if (h && handle(L, 1)) h->set(handle(L, 1), field(L, 2, "gain", NAN), field(L, 2, "pan", NAN), field(L, 2, "pitch", NAN));
+    if (h && handle(L, 1)) {
+        ScriptSoundPlay p;
+        if (positionFields(L, p)) h->position(handle(L, 1), p.x, p.y, p.z);
+        h->set(handle(L, 1), field(L, 2, "gain", NAN), field(L, 2, "pan", NAN), field(L, 2, "pitch", NAN));
+    }
     return 0;
 }
 int sStop(lua_State* L) {

@@ -6,7 +6,7 @@
 
 namespace aiverse {
 
-bool Replay::save(const std::string& path) const {
+std::string Replay::encode() const {
     ByteWriter w;
     w.u32(kMagic); w.u32(kVersion);
     w.str(module); w.str(rulesPath); w.str(mapPath);
@@ -16,17 +16,25 @@ bool Replay::save(const std::string& path) const {
     for (auto& c : commands) writeCommand(w, c);
     w.u32(uint32_t(checksums.size()));
     for (auto& [t, h] : checksums) { w.u32(t); w.u64(h); }
+    return std::string(reinterpret_cast<const char*>(w.buf.data()), w.buf.size());
+}
+
+bool Replay::save(const std::string& path) const {
+    const auto bytes = encode();
     std::ofstream f(path, std::ios::binary);
     if (!f) return false;
-    f.write(reinterpret_cast<const char*>(w.buf.data()), std::streamsize(w.buf.size()));
+    f.write(bytes.data(), std::streamsize(bytes.size()));
     return bool(f);
 }
 
 bool Replay::load(const std::string& path, std::string* err) {
     std::ifstream f(path, std::ios::binary);
     if (!f) { if (err) *err = "cannot open " + path; return false; }
-    std::vector<uint8_t> data((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-    ByteReader r(data.data(), data.size());
+    return decode(std::string(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>()), err);
+}
+
+bool Replay::decode(const std::string& bytes, std::string* err) {
+    ByteReader r(reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size());
     if (r.u32() != kMagic) { if (err) *err = "not a replay file"; return false; }
     if (r.u32() != kVersion) { if (err) *err = "unsupported replay version"; return false; }
     module = r.str(); rulesPath = r.str(); mapPath = r.str();

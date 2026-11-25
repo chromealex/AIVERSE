@@ -832,11 +832,12 @@ void Traffic::collect(Simulation& sim) {
     if (!st) return;
     st->blows.erase(std::remove_if(st->blows.begin(), st->blows.end(), [&](const TrafficBlow& b) { return b.tick + 3 < sim.tick(); }), st->blows.end());
     for (const SimEvent& ev : sim.events()) {
-        if (ev.type != kEvAttack && ev.type != kEvHit && ev.type != kEvDied) continue;
+        const uint16_t cue = weaponCueEventType(ev.type, ev.flags);
+        if (cue != kEvAttack && ev.type != kEvHit && ev.type != kEvDied) continue;
         Fixed blow{};
         if (ev.type == kEvHit && st->blows.size() < 1024) st->blows.push_back({ev.a, Fixed::fromRaw(ev.value), sim.tick()});
         if (ev.type == kEvDied) for (auto& b : st->blows) if (b.e == ev.a) blow = fxMax(blow, b.damage);
-        if (st->happened.size() < 4096) st->happened.push_back({ev.type, ev.type == kEvDied ? uint16_t(ev.value) : uint16_t(0), ev.pos, ev.a, ev.b, blow});
+        if (st->happened.size() < 4096) st->happened.push_back({cue, ev.type == kEvDied ? uint16_t(ev.value) : uint16_t(0), ev.pos, ev.a, ev.b, blow});
     }
 }
 

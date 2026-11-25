@@ -118,6 +118,9 @@ public:
     const std::string& lastError() const { return error_; }
 
     void setQuality(FxQuality q);
+    // Low, medium, high. A negative entry restores the engine default.
+    void setParticleBudgets(std::array<int,3> budgets);
+    static constexpr int maxConfiguredParticles = 65536;
     FxQuality quality() const { return quality_; }
     void setFileReader(FileReader r) { reader_ = std::move(r); }
     void setTextureLoader(TextureLoader l);
@@ -173,6 +176,14 @@ public:
     // This does NOT recompile the effect/graph or mutate gameplay ECS.
     bool setProgramParameter(FxHandle h, uint32_t slot, float value,
                              bool affectExisting = false);
+    struct ModelInstance {
+        FxHandle handle;
+        int effect;
+        render::mat4 world;
+        float time;
+        float4 tint;
+    };
+    void modelInstances(std::vector<ModelInstance>& out) const;
     void move(FxHandle h, float3 pos);                 // attached effects (trails, burning buildings)
     void move(FxHandle h, float3 pos, float3 dir);
     void stop(FxHandle h);                             // stops emitting; live particles fade out
@@ -232,6 +243,8 @@ private:
     std::unique_ptr<Impl> impl_;
     render::GpuResourceRetirement* gpuRetirement_ = nullptr;
     FxQuality quality_ = FxQuality::Medium;
+    std::array<int,3> particleBudgets_{-1,-1,-1};
+    QualityLimits effectiveLimits(FxQuality q) const;
     FileReader reader_;
     std::vector<std::string> errors_;
     FxStats stats_;

@@ -5,6 +5,7 @@
 //
 // The public part of Editor is the API windows use; keep it small and stable.
 #pragma once
+#include "engine/fx/AnimatedModelEffectView.h"
 #include "SceneRenderable.h"
 #include <array>
 #include <cmath>
@@ -658,6 +659,7 @@ private:
     double spectraPreviewNextBurst_=0;
     std::array<float,8> spectraPreviewParams_{};
     fx::float3 spectraPreviewPosition_{};
+    fx::AnimatedModelEffectView modelEffectView_;
     fx::ParticleSystem gameFx_;
     game::GameFx gameFxBridge_;
     render::TextureCache fxTextures_;          // sprite textures of effects (same loader as sprites)

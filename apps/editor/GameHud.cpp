@@ -54,6 +54,8 @@ void GameHud::init(Editor& ed) {
     c.BindEventCallback("support_click", [invoke](Rml::DataModelHandle, Rml::Event&, ArgsList a) {
         if (a.size() >= 2 && a[1].Get<float>(-1) < 0) invoke(a);
     });
+    c.BindEventCallback("match_chat", [](Rml::DataModelHandle, Rml::Event&, ArgsList) {});
+    c.BindEventCallback("message_log", [](Rml::DataModelHandle, Rml::Event&, ArgsList) {});
     c.BindEventCallback("pause", [&ed](Rml::DataModelHandle, Rml::Event&, ArgsList) { ed.playPaused = true; });
     c.BindEventCallback("resume", [&ed](Rml::DataModelHandle, Rml::Event&, ArgsList) { ed.playPaused = false; });
     c.BindEventCallback("restart", [this](Rml::DataModelHandle, Rml::Event&, ArgsList) { request_ = 1; });
