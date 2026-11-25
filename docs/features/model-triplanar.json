@@ -12,16 +12,21 @@
     "apps/studio-web/src/panels/MaterialsPanel.tsx",
     "apps/studio-web/src/panels/materialSchema.ts",
     "apps/studio-web/src/types.ts",
+    "docs/agent-handoffs/model-triplanar-authoring.md",
     "docs/agent-handoffs/model-triplanar-initial.md",
     "docs/agent-handoffs/model-triplanar-metal.md",
     "docs/agent-handoffs/model-triplanar-stone-csg.md",
     "docs/devlog/systems.json",
     "docs/evidence/model-triplanar-colour.png",
+    "docs/evidence/model-triplanar-late-cut.json",
     "docs/evidence/model-triplanar-metal.json",
     "docs/evidence/model-triplanar-metal.log.txt",
     "docs/evidence/model-triplanar-projected.png",
     "docs/evidence/model-triplanar-repeat.png",
     "docs/evidence/model-triplanar-stone-csg.png",
+    "docs/evidence/model-triplanar-stone-wider-cut.png",
+    "docs/evidence/model-triplanar-studio.json",
+    "docs/evidence/model-triplanar-studio.log.txt",
     "docs/features/model-triplanar.json",
     "docs/shader-graph.md",
     "engine/render/graph/TriplanarMaterial.h",
@@ -47,9 +52,12 @@
       ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Existing graph compiler, appearance authoring, native material library, Modeling GLB and Studio bindings own their normal data.",
+      "evidence": [
+        "docs/agent-handoffs/model-triplanar-authoring.md",
+        "engine/render/graph/TriplanarMaterial.h"
+      ]
     },
     "native_api": {
       "status": "pass",
@@ -67,24 +75,36 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Standalone native material_triplanar, material_set, material_apply and material_get verified on the local sample project.",
+      "evidence": [
+        "docs/agent-handoffs/model-triplanar-authoring.md",
+        "docs/evidence/model-triplanar-late-cut.json"
+      ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Native StudioSession selected textures, created the preset, saved and reopened the map.",
+      "evidence": [
+        "docs/evidence/model-triplanar-studio.json",
+        "docs/agent-handoffs/model-triplanar-authoring.md"
+      ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "MeshRenderer assignment was verified with the normal studio.setProperty path.",
+      "evidence": [
+        "docs/evidence/model-triplanar-studio.log.txt",
+        "docs/agent-handoffs/model-triplanar-authoring.md"
+      ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Studio reopened the saved override. A later CSG edit preserved the material library and rules byte for byte.",
+      "evidence": [
+        "docs/evidence/model-triplanar-studio.json",
+        "docs/evidence/model-triplanar-late-cut.json"
+      ]
     },
     "graphs": {
       "status": "pass",
@@ -96,8 +116,10 @@
     },
     "performance": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Compiler verifies the 3/6-fetch costs. Device frame-time profiling pending.",
+      "evidence": [
+        "docs/evidence/model-triplanar-metal.log.txt"
+      ]
     },
     "platforms": {
       "status": "not_run",
@@ -105,14 +127,20 @@
       "evidence": []
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Native Shader Graph operations and project-relative textures. No external shader compiler or runtime dependency added.",
+      "evidence": [
+        "docs/agent-handoffs/model-triplanar-authoring.md",
+        "engine/render/graph/TriplanarMaterial.h"
+      ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Authored the library and assigned it via standalone MCP; Modeling independently regenerated the source.",
+      "evidence": [
+        "docs/agent-handoffs/model-triplanar-authoring.md",
+        "docs/evidence/model-triplanar-late-cut.json"
+      ]
     },
     "examples": {
       "status": "not_run",
@@ -127,9 +155,12 @@
       ]
     },
     "handoff": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Staged SHA, commands, measured GPU data, authoring and remaining coverage recorded.",
+      "evidence": [
+        "docs/agent-handoffs/model-triplanar-authoring.md",
+        "docs/agent-handoffs/model-triplanar-metal.md"
+      ]
     },
     "documentation": {
       "status": "pass",
@@ -140,8 +171,11 @@
     },
     "publishing": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Real native screenshots exist. Web publication and integration remain pending.",
+      "evidence": [
+        "docs/evidence/model-triplanar-stone-wider-cut.png",
+        "docs/agent-handoffs/model-triplanar-authoring.md"
+      ]
     }
   },
   "integrations": {
@@ -164,6 +198,7 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/model-triplanar-metal.json"
+    "docs/evidence/model-triplanar-metal.json",
+    "docs/evidence/model-triplanar-studio.json"
   ]
 }
