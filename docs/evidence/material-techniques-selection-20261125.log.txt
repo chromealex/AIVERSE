@@ -1,0 +1,8 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/material-techniques-20261125
+Test project /Volumes/KINGSTON/AIVERSE-builds/material-techniques-20261125
+    Start 30: model_batching_policy
+1/1 Test #30: model_batching_policy ............   Passed    0.32 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   0.36 sec

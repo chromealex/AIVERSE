@@ -17,7 +17,9 @@
     "engine/render/Renderer3D.h",
     "engine/render/Renderer3DModels.cpp",
     "skills/visuals/aiverse-look/SKILL.md",
-    "tests/render/model_batching_policy.cpp"
+    "tests/render/model_batching_policy.cpp",
+    "docs/evidence/material-techniques-selection-20261125.json",
+    "docs/evidence/material-techniques-selection-20261125.log.txt"
   ],
   "traits": {
     "editable": true,
@@ -133,5 +135,7 @@
       "studio.ops"
     ]
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/material-techniques-selection-20261125.json"
+  ]
 }
