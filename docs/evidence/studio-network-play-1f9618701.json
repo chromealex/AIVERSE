@@ -1,0 +1,13 @@
+{
+  "sha": "1f96187015bfd96c743ff527dca80d7ca95dfc75",
+  "argv": [
+    "npm",
+    "--prefix",
+    "apps/studio-web",
+    "run",
+    "test:web"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-network-play-1f9618701.log.txt",
+  "sha256": "ad2ca2cde21680afd715f94f7637ecfe13496dea83d24eda3720d0a248b0249d"
+}
