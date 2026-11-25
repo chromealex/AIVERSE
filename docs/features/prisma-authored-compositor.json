@@ -11,6 +11,8 @@
     "docs/agent-handoffs/prisma-authored-compositor-initial.md",
     "docs/devlog/systems.json",
     "docs/en/prisma.md",
+    "docs/evidence/prisma-authored-compositor-metal-20261125.json",
+    "docs/evidence/prisma-authored-compositor-metal-20261125.log.txt",
     "docs/features/prisma-authored-compositor.json",
     "docs/handoffs/prisma-stage-authored-compositor.md",
     "docs/prisma.md",
@@ -116,14 +118,18 @@
       ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Native x86_64 Metal pixel comparison of four 96x64 frames. CPU topology/validation test separately run. Full suite and other backends pending.",
+      "evidence": [
+        "docs/evidence/prisma-authored-compositor-metal-20261125.json"
+      ]
     },
     "handoff": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Implementation SHA and verification limits recorded.",
+      "evidence": [
+        "docs/handoffs/prisma-stage-authored-compositor.md"
+      ]
     },
     "documentation": {
       "status": "pass",
@@ -153,5 +159,7 @@
       "studio.op"
     ]
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/prisma-authored-compositor-metal-20261125.json"
+  ]
 }
