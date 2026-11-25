@@ -141,3 +141,5 @@ Exercise distance-based retirement of live traffic and citizen-owned parked vehi
 ### OW-01 continuation — component references at the parking barrier
 
 Extend guarded region activation to consult references in host-defined ECS components. Admit links inside a candidate group, retain a group referenced from outside, and retry through the existing persisted queue after release.
+
+Guarded mixed-region hosts must resolve vehicle seats using the host actor mapping, refuse pending seat actions, and preserve heterogeneous vehicle, occupant and breakable components across cold save/load and repeated region changes.
