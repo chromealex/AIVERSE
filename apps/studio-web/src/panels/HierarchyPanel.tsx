@@ -139,7 +139,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     <div className="hier__toolbar">
       <label className="hier__search">
         <Search size={12} aria-hidden="true"/>
-        <input ref={searchRef} type="search" placeholder="Search  t:type owner:1 is:hidden" aria-label="Search scene objects"
+        <input ref={searchRef} type="search" placeholder="Find scene objects…" title="Search by name, t:type, owner:1 or is:hidden" aria-label="Search scene objects"
           value={search} onChange={event => setSearch(event.target.value)}
           onKeyDown={event => { if (event.key === 'Escape' && search) { event.stopPropagation(); setSearch(''); } }}/>
         {search && <button type="button" aria-label="Clear search" onClick={() => setSearch('')}><X size={11}/></button>}

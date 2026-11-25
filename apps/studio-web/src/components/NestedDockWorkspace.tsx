@@ -54,6 +54,17 @@ function DockTabs({ node, tree, setTree, renderPanel, dragging, setDragging,
                     stacks, onFloat, onAdopt, onDockBack, foreign, setForeign, beginDrag }: BranchProperties & { node: DockStack }) {
   const [hover, setHover] = useState<DockEdge | 'center' | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; panel: StudioPanel } | null>(null);
+  const stackRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const stack = stackRef.current;
+    if (!stack) return;
+    // Keep fixed menus and GPU overlays in window coordinates while docks resize.
+    const observer = new ResizeObserver(([entry]) => {
+      stack.toggleAttribute('data-narrow', entry.contentRect.width < 490);
+    });
+    observer.observe(stack);
+    return () => observer.disconnect();
+  }, []);
   // Unity-style dock menu (also on tab right-click): close, split, move to another area.
   const dockMenu = (panel: StudioPanel): StudioMenuItem[] => {
     const many = node.tabs.length > 1;
@@ -93,10 +104,28 @@ function DockTabs({ node, tree, setTree, renderPanel, dragging, setDragging,
     setHover(null);
     if (adopted) onAdopt?.(panel);
   };
+  const selectWithKeyboard = (event: ReactKeyboardEvent<HTMLElement>, panel: StudioPanel) => {
+    const index = node.tabs.indexOf(panel);
+    const count = node.tabs.length;
+    let next: number;
+    switch (event.key) {
+      case 'ArrowRight': next = (index + 1) % count; break;
+      case 'ArrowLeft': next = (index + count - 1) % count; break;
+      case 'Home': next = 0; break;
+      case 'End': next = count - 1; break;
+      case 'Enter': case ' ': next = index; break;
+      default: return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.closest('[role="tablist"]')?.querySelectorAll<HTMLElement>('[role="tab"]')[next]?.focus();
+    setTree(current => activateTab(current, node.id, node.tabs[next]));
+  };
   const showEdges = foreign || (dragging !== null && (panelStack(tree, dragging) !== node.id || node.tabs.length > 1));
-  return <section className="nested-stack" aria-label={'Dock '+node.id} data-stack={node.id}
+  return <section ref={stackRef} className="nested-stack" aria-label={'Dock '+node.id} data-stack={node.id}
     onDragOver={event => {event.preventDefault();event.dataTransfer.dropEffect='move';}}
     onDrop={event => transfer(event)}>
+    <div className="dock-tab-bar">
     <div className="nested-tabs" role="tablist" aria-label={'Tabs '+node.id}
       onWheel={event=>{if(Math.abs(event.deltaY)>Math.abs(event.deltaX))event.currentTarget.scrollLeft+=event.deltaY;}}>
       {node.tabs.map(panel => <div key={panel} className={'nested-tab'+(node.active===panel?' nested-active':'')}
@@ -112,14 +141,14 @@ function DockTabs({ node, tree, setTree, renderPanel, dragging, setDragging,
         onAuxClick={event=>{if(event.button===1)event.preventDefault();}}
         onPointerDown={event=>beginDrag(event, panel)}
         onContextMenu={event=>{event.preventDefault();setMenu({x:event.clientX,y:event.clientY,panel});}}>
-        <span role="tab" aria-selected={node.active===panel} tabIndex={0}
+        <span role="tab" aria-selected={node.active===panel} tabIndex={node.active === panel ? 0 : -1}
           onClick={()=>setTree(t=>activateTab(t,node.id,panel))}
-          onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();setTree(t=>activateTab(t,node.id,panel));}}}>{STUDIO_PANEL_TITLES[panel]}</span>
-        <button className="nested-tab-close" title={'Close '+STUDIO_PANEL_TITLES[panel]}
+          onKeyDown={event => selectWithKeyboard(event, panel)}>{STUDIO_PANEL_TITLES[panel]}</span>
+        <button className="nested-tab-close" tabIndex={node.active === panel ? 0 : -1} title={'Close '+STUDIO_PANEL_TITLES[panel]}
           aria-label={'Close '+STUDIO_PANEL_TITLES[panel]} onPointerDown={event=>event.stopPropagation()}
           onClick={()=>setTree(t=>closeTab(t,panel))}>×</button>
       </div>)}
-      <span className="nested-tabs-fill"/>
+    </div>
       {node.active && <button type="button" className="nested-stack-menu" draggable={false}
         aria-label="Dock area menu" title="Dock area menu"
         onClick={event=>{const r=event.currentTarget.getBoundingClientRect();

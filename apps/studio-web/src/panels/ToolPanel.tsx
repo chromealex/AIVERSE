@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Play, RefreshCw, Search } from 'lucide-react';
 import { invoke } from '../bridge';
 import type { StudioSnapshot } from '../types';
@@ -18,7 +18,7 @@ const BRUSHES: Partial<Record<ToolPanelId, BrushKind[]>> = {
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 
 function FieldInput({ field, value, error, onChange }: { field: ToolField; value: string; error?: string; onChange: (v: string) => void }) {
-  const id = 'tool-' + field.key;
+  const id = useId();
   let input;
   if (field.kind === 'boolean')
     input = <select id={id} className="au-input" value={value} onChange={e => onChange(e.target.value)}>
@@ -43,7 +43,6 @@ function FieldInput({ field, value, error, onChange }: { field: ToolField; value
 function OpCard({ op, prefix, initiallyOpen, onDone }: { op: ToolOpInfo; prefix: string; initiallyOpen: boolean; onDone: (changed: boolean) => void }) {
   const fields = useMemo(() => schemaFields(op.schema), [op.schema]);
   const [open, setOpen] = useState(initiallyOpen);
-  const [more, setMore] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>(() => Object.fromEntries(fields.map(f => [f.key, fieldDraft(f)])));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [running, setRunning] = useState(false);
@@ -65,10 +64,13 @@ function OpCard({ op, prefix, initiallyOpen, onDone }: { op: ToolOpInfo; prefix:
       {open ? <ChevronDown size={13}/> : <ChevronRight size={13}/>}
       <b>{opLabel(op.name, prefix)}</b>
       {op.readOnly && <span className="tool__tag">read</span>}
-      <code>{op.name}</code>
     </button>
     {open && <div className="tool__cardbody">
-      {op.description && <p className={'tool__desc' + (more ? ' is-full' : '')} onClick={() => setMore(!more)}>{op.description}</p>}
+      <details className="tool__reference">
+        <summary>Operation details</summary>
+        <code className="tool__op-name">{op.name}</code>
+        {op.description && <p className="tool__description">{op.description}</p>}
+      </details>
       {fields.length > 0 && <div className="tool__fields">
         {fields.map(f => <FieldInput key={f.key} field={f} value={drafts[f.key] ?? ''} error={errors[f.key]}
           onChange={v => setDrafts(d => ({ ...d, [f.key]: v }))}/>)}
@@ -119,19 +121,20 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
   };
   if (!projectPath) return <div className="tool__empty">Open a project to use this panel.</div>;
   const q = filter.trim().toLowerCase();
-  const shown = ops.filter(o => !spec.state.includes(o.name) && (!q || o.name.includes(q) || o.description.toLowerCase().includes(q)));
+  const shown = ops.filter(o => !spec.state.includes(o.name) && (!q || opLabel(o.name, spec.prefix).toLowerCase().includes(q) || o.name.includes(q) || o.description.toLowerCase().includes(q)));
   return <div className="tool">
     <div className="tool__head">
       <p>{spec.intro}</p>
-      <div className="tool__search"><Search size={12}/><input placeholder="Filter" value={filter} onChange={e => setFilter(e.target.value)}/></div>
+      <div className="tool__search"><Search size={12}/><input aria-label="Filter operations" placeholder="Filter operations…" value={filter} onChange={e => setFilter(e.target.value)}/></div>
       <button type="button" className="au-button au-button--icon au-button--ghost au-button--sm" title="Re-read" onClick={() => void readState(ops)}><RefreshCw size={13}/></button>
     </div>
     {error && <div className="tool__error" role="alert">{error}</div>}
     <div className="tool__scroll">
       {BRUSHES[panel] && <SceneBrushBar kinds={BRUSHES[panel]!}/>}
       {Object.entries(state).map(([name, value]) => <div key={name} className="tool__state">
-        <JsonTree value={value} name={opLabel(name, spec.prefix)} open/>
+        <JsonTree value={value} name={opLabel(name, spec.prefix)} open={false}/>
       </div>)}
+      {q && !shown.length && <p role="status" className="tool__empty">No matching operations.</p>}
       {shown.map(op => <OpCard key={op.name + projectPath} op={op} prefix={spec.prefix} initiallyOpen={spec.open.includes(op.name)} onDone={done}/>)}
     </div>
   </div>;

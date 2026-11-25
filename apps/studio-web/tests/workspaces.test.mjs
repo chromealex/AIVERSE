@@ -53,3 +53,18 @@ test('fuzzy search ranks prefix and word starts first', () => {
   assert.deepEqual(searchCommands(entries, '@bar').flatMap(g => g.items.map(i => i.id)), ['e1']);
   assert.deepEqual(searchCommands(entries, '', ['e1']).find(g => g.kind === 'entity').items[0].id, 'e1');
 });
+
+test('the Windows filter lists every panel while general search stays compact', () => {
+  const windows = Array.from({ length: 20 }, (_, i) => ({
+    id: String(i), title: 'Panel ' + i, kind: 'window', run() {},
+  }));
+  const entries = [...windows, { id: 'save', title: 'Save', kind: 'command', run() {} }];
+  assert.equal(searchCommands(entries, '/ ')[0].items.length, windows.length);
+  assert.deepEqual(searchCommands(entries, '/Panel 19')[0].items.map(item => item.id), ['19']);
+  assert.equal(searchCommands(entries, '').find(group => group.kind === 'window').items.length, 8);
+});
+
+test('an exact window name wins over a recently used partial match', () => {
+  const entries = ['Water', 'NEREID Water'].map(title => ({ id: title, title, kind: 'window', run() {} }));
+  assert.equal(searchCommands(entries, '/Water', ['NEREID Water'])[0].items[0].title, 'Water');
+});

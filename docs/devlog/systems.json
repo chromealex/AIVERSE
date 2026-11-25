@@ -2353,6 +2353,13 @@
    ],
    "roadmap": [
     {
+     "status": "done",
+     "date": "2026-11-25",
+     "target": null,
+     "title": "Навигация и компоновка окон Studio",
+     "titleEn": "Studio panel navigation and layout"
+    },
+    {
      "id": "studio-world-persistence-panel",
      "title": "Управление сохранениями мира",
      "titleEn": "World persistence panel",

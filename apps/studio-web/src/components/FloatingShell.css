@@ -4,3 +4,4 @@
 html.native-composite .floating-shell:has(.viewport-native){background:transparent!important}
 .dock-drop-hint{position:fixed;inset:44px 6px 26px 6px;z-index:60;display:grid;place-items:center;pointer-events:none;
   border:2px dashed var(--au-accent);border-radius:10px;background:#3c6ea233;color:#d9ecff;font-size:15px;font-weight:600}
+body:has(.floating-shell) { min-width: 0; }
