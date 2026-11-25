@@ -31,6 +31,10 @@
     "docs/devlog/entries/2026-11-25-render-model-triplanar.json",
     "docs/devlog/systems.json",
     "docs/evidence/model-triplanar-colour.png",
+    "docs/evidence/model-triplanar-demo-reviewed.json",
+    "docs/evidence/model-triplanar-demo-reviewed.log.txt",
+    "docs/evidence/model-triplanar-final.json",
+    "docs/evidence/model-triplanar-final.log.txt",
     "docs/evidence/model-triplanar-grid.cpp",
     "docs/evidence/model-triplanar-grid.log.txt",
     "docs/evidence/model-triplanar-integration-ready.json",
@@ -46,6 +50,9 @@
     "docs/evidence/model-triplanar-stone-wider-cut.png",
     "docs/evidence/model-triplanar-studio.json",
     "docs/evidence/model-triplanar-studio.log.txt",
+    "docs/evidence/model-triplanar-web-front.png",
+    "docs/evidence/model-triplanar-web-side.png",
+    "docs/evidence/model-triplanar-web-wide.png",
     "docs/features/model-triplanar.json",
     "docs/shader-graph.md",
     "engine/render/graph/TriplanarMaterial.h",
@@ -143,9 +150,13 @@
       ]
     },
     "platforms": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Real macOS Metal and Chromium WebGL2 rendering, including GPU-generated surface detail. Other graphics backends and physical mobile devices were not exercised.",
+      "evidence": [
+        "docs/evidence/model-triplanar-final.json",
+        "docs/agent-handoffs/model-triplanar-integration-review.md",
+        "docs/evidence/model-triplanar-web-front.png"
+      ]
     },
     "dependencies": {
       "status": "pass",
@@ -176,7 +187,8 @@
       "note": "Shader Graph and the Metal integration test passed.",
       "evidence": [
         "docs/evidence/model-triplanar-metal.json",
-        "docs/evidence/model-triplanar-reviewed.json"
+        "docs/evidence/model-triplanar-reviewed.json",
+        "docs/evidence/model-triplanar-final.json"
       ]
     },
     "handoff": {
@@ -195,11 +207,14 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Real native screenshots exist. Web publication and integration remain pending.",
+      "status": "pass",
+      "note": "Bilingual site entry, a self-contained gallery project with its two texture maps and a CSG export, and three verified in-game controls in Chromium.",
       "evidence": [
-        "docs/evidence/model-triplanar-stone-wider-cut.png",
-        "docs/agent-handoffs/model-triplanar-authoring.md"
+        "docs/devlog/entries/2026-11-25-render-model-triplanar.json",
+        "demos/model-triplanar/README.md",
+        "docs/evidence/model-triplanar-web-front.png",
+        "docs/evidence/model-triplanar-web-side.png",
+        "docs/evidence/model-triplanar-web-wide.png"
       ]
     }
   },
@@ -223,6 +238,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/model-triplanar-reviewed.json"
+    "docs/evidence/model-triplanar-final.json"
   ]
 }
