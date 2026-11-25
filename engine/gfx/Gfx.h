@@ -48,7 +48,7 @@ using ShaderHandle = Handle<struct ShaderTag>;
 using ComputeHandle = Handle<struct ComputeTag>;
 using PipelineHandle = Handle<struct PipelineTag>;
 
-enum class Backend { Metal, GLES3, GL33, Vulkan };
+enum class Backend { Metal, GLES3, GL33, Vulkan, Cpu };
 // Pending != failed: a renderer must never infer GPU fence failure
 // from normal in-flight work or elapsed frame counters.
 enum class ResourceRetirementStatus : uint8_t {
@@ -568,6 +568,8 @@ inline size_t estimateTextureFootprint(const TextureDesc& d) {
 }
 
 // Each backend picks the sources it understands. A shader may provide all of them.
+// CPU shader contract: locations 0 and 1 are float4 clip position and RGBA.
+enum class CpuShader { None, ClipColor };
 struct ShaderDesc {
     const char* glslVertex = nullptr;   // GLSL ES 3.00 body WITHOUT #version line (added by backend)
     const char* glslFragment = nullptr;
@@ -576,6 +578,7 @@ struct ShaderDesc {
     int uniformSlots = 1;               // number of uniform blocks (U0..)
     const char* label = nullptr;
     bool linearTarget = false; // internal variant: AIVERSE_HDR=1, selected for RGBA16F passes
+    CpuShader cpu = CpuShader::None;
 };
 
 // Vulkan shader resource ABI. Other backends keep their native slot contracts.
@@ -1203,5 +1206,6 @@ private:
 //   Metal: CAMetalLayer*   GL: nullptr (context must be current on the calling thread)
 std::unique_ptr<Device> createMetalDevice(void* nativeSurface);
 std::unique_ptr<Device> createGLDevice(Backend glFlavor);
+std::unique_ptr<Device> createCpuDevice(); // headless, top-down RGBA8
 
 } // namespace aiverse::gfx

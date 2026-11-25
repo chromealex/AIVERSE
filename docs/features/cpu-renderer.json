@@ -4,8 +4,16 @@
   "owner": "render",
   "changed_paths": [
     "CMakeLists.txt",
+    "apps/modelview/cpu_capture.cpp",
+    "docs/agent-handoffs/cpu-renderer-initial.md",
+    "docs/agent-handoffs/cpu-renderer-stage1.md",
+    "docs/cpu-renderer.md",
+    "docs/devlog/systems.json",
+    "docs/evidence/cpu-renderer/arch.png",
+    "docs/features/cpu-renderer.json",
     "engine/gfx/Gfx.h",
     "engine/gfx/cpu/GfxCpu.cpp",
+    "engine/render/graph/GraphGpuProfile.h",
     "tests/render/cpu_device.cpp"
   ],
   "traits": {

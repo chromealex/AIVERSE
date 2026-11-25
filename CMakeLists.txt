@@ -1912,6 +1912,19 @@ if(AIVERSE_BUILD_TOOLS)
     target_link_libraries(aiversebuild PRIVATE aiverse_modelconv)
 endif()
 
+# Self-contained headless software device. Native consumers opt in explicitly.
+add_library(aiverse_gfx_cpu STATIC engine/gfx/cpu/GfxCpu.cpp)
+target_include_directories(aiverse_gfx_cpu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+if(AIVERSE_BUILD_TOOLS AND AIVERSE_DESKTOP)
+    add_executable(aiverse_cpu_capture apps/modelview/cpu_capture.cpp)
+    target_link_libraries(aiverse_cpu_capture PRIVATE aiverse_gfx_cpu aiverse_models aiverse_zstd_dec)
+endif()
+if(AIVERSE_BUILD_TESTS AND NOT EMSCRIPTEN)
+    add_executable(aiverse_cpu_device_tests tests/render/cpu_device.cpp)
+    target_link_libraries(aiverse_cpu_device_tests PRIVATE aiverse_gfx_cpu)
+    add_test(NAME render_cpu_device COMMAND aiverse_cpu_device_tests)
+endif()
+
 # Model viewer (models agent): models, materials, clips and quality tiers as the game renders them.
 if(AIVERSE_BUILD_TOOLS AND AIVERSE_DESKTOP)
     add_executable(aiverse_modelview

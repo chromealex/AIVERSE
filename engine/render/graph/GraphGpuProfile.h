@@ -11,7 +11,7 @@
 
 namespace aiverse::graph_gpu_profile {
 inline const char* backend(gfx::Backend b){
-    switch(b){case gfx::Backend::Metal:return "Metal";case gfx::Backend::GL33:return "GL33";case gfx::Backend::GLES3:return "GLES3";case gfx::Backend::Vulkan:return "Vulkan";}
+    switch(b){case gfx::Backend::Metal:return "Metal";case gfx::Backend::GL33:return "GL33";case gfx::Backend::GLES3:return "GLES3";case gfx::Backend::Vulkan:return "Vulkan";case gfx::Backend::Cpu:return "CPU";}
     return "unknown";
 }
 class Capture {
