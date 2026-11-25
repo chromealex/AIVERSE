@@ -4,6 +4,7 @@
   "owner": "HTML5 Studio",
   "changed_paths": [
     "apps/editor/core/Workspace.cpp",
+    "apps/studio-web/src/panels/MapAreas.tsx",
     "apps/studio-web/src/panels/MapPlayers.tsx",
     "apps/studio-web/src/panels/MapInspector.tsx",
     "apps/studio-web/src/panels/InspectorPanel.tsx",
@@ -199,6 +200,7 @@
       "studio.mapProperties",
       "studio.mapPropertiesSet",
       "studio.mapPlayer",
+      "studio.mapArea",
       "studio.playerStartPick",
       "studio.gameEntities",
       "studio.hierarchyGroups",
