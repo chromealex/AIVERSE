@@ -1,0 +1,11 @@
+{
+  "sha": "35691de7c8a5c59f8ca4f9fdee408c5e61733022",
+  "argv": [
+    "bash",
+    "-ec",
+    "ctest --test-dir /Volumes/KINGSTON/AIVERSE-builds/material-techniques-20261125 -R \"^(model_batching_policy|material_technique_frame)$\" --output-on-failure && python3.12 tools/site/build.py check && python3.11 tools/mcp/audit_registry.py /Volumes/KINGSTON/AIVERSE-builds/material-techniques-20261125/aiversemcp --engine . --feature-manifest docs/features/material-techniques.json"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/material-techniques-reviewed.log.txt",
+  "sha256": "be47e89d0ef9860f7fd56df332d4c61b6a5ad2b8c6c4294557d199c1e042aed1"
+}
