@@ -1,0 +1,11 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/model-triplanar-20261125
+Test project /Volumes/KINGSTON/AIVERSE-builds/model-triplanar-20261125
+    Start 565: studio_session
+1/1 Test #565: studio_session ...................   Passed    8.03 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+EDITOR    =   8.03 sec*proc (1 test)
+
+Total Test time (real) =   8.06 sec

@@ -1,0 +1,204 @@
+{
+  "schema": 1,
+  "id": "model-triplanar",
+  "owner": "render",
+  "changed_paths": [
+    "CMakeLists.txt",
+    "apps/editor/core/MaterialOps.cpp",
+    "apps/studio-native/StudioMaterialValidation.h",
+    "apps/studio-native/StudioScene.cpp",
+    "apps/studio-native/StudioSession.cpp",
+    "apps/studio-native/tests/StudioSessionTests.cpp",
+    "apps/studio-web/src/panels/MaterialsPanel.tsx",
+    "apps/studio-web/src/panels/materialSchema.ts",
+    "apps/studio-web/src/types.ts",
+    "docs/agent-handoffs/model-triplanar-authoring.md",
+    "docs/agent-handoffs/model-triplanar-initial.md",
+    "docs/agent-handoffs/model-triplanar-metal.md",
+    "docs/agent-handoffs/model-triplanar-stone-csg.md",
+    "docs/devlog/systems.json",
+    "docs/evidence/model-triplanar-colour.png",
+    "docs/evidence/model-triplanar-late-cut.json",
+    "docs/evidence/model-triplanar-metal.json",
+    "docs/evidence/model-triplanar-metal.log.txt",
+    "docs/evidence/model-triplanar-projected.png",
+    "docs/evidence/model-triplanar-repeat.png",
+    "docs/evidence/model-triplanar-stone-csg.png",
+    "docs/evidence/model-triplanar-stone-wider-cut.png",
+    "docs/evidence/model-triplanar-studio.json",
+    "docs/evidence/model-triplanar-studio.log.txt",
+    "docs/features/model-triplanar.json",
+    "docs/shader-graph.md",
+    "engine/render/graph/TriplanarMaterial.h",
+    "skills/visuals/aiverse-shader-graph/SKILL.md",
+    "tests/render/model_triplanar_frame.cpp",
+    "tests/shader_graph/compiler.cpp"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": false,
+    "visible": true,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Metal renders an imported model with all-zero UVs and an exported Modeling subtract with three separately measured cut faces.",
+      "evidence": [
+        "docs/evidence/model-triplanar-metal.json",
+        "docs/evidence/model-triplanar-projected.png",
+        "docs/evidence/model-triplanar-colour.png",
+        "docs/evidence/model-triplanar-repeat.png"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Existing graph compiler, appearance authoring, native material library, Modeling GLB and Studio bindings own their normal data.",
+      "evidence": [
+        "docs/agent-handoffs/model-triplanar-authoring.md",
+        "engine/render/graph/TriplanarMaterial.h"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "makeTriplanarMaterial and the ordinary appearance binder rendered both sources.",
+      "evidence": [
+        "docs/evidence/model-triplanar-metal.log.txt",
+        "engine/render/graph/TriplanarMaterial.h"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "Existing shader authoring skill describes the material workflow.",
+      "evidence": [
+        "skills/visuals/aiverse-shader-graph/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "pass",
+      "note": "Standalone native material_triplanar, material_set, material_apply and material_get verified on the local sample project.",
+      "evidence": [
+        "docs/agent-handoffs/model-triplanar-authoring.md",
+        "docs/evidence/model-triplanar-late-cut.json"
+      ]
+    },
+    "studio": {
+      "status": "pass",
+      "note": "Native StudioSession selected textures, created the preset, saved and reopened the map.",
+      "evidence": [
+        "docs/evidence/model-triplanar-studio.json",
+        "docs/agent-handoffs/model-triplanar-authoring.md"
+      ]
+    },
+    "inspector": {
+      "status": "pass",
+      "note": "MeshRenderer assignment was verified with the normal studio.setProperty path.",
+      "evidence": [
+        "docs/evidence/model-triplanar-studio.log.txt",
+        "docs/agent-handoffs/model-triplanar-authoring.md"
+      ]
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "Studio reopened the saved override. A later CSG edit preserved the material library and rules byte for byte.",
+      "evidence": [
+        "docs/evidence/model-triplanar-studio.json",
+        "docs/evidence/model-triplanar-late-cut.json"
+      ]
+    },
+    "graphs": {
+      "status": "pass",
+      "note": "Shader Graph compiler verifies sample counts, texture dependencies, no mesh UV usage, native/GLSL source and persistence.",
+      "evidence": [
+        "docs/evidence/model-triplanar-metal.log.txt",
+        "tests/shader_graph/compiler.cpp"
+      ]
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "Compiler verifies the 3/6-fetch costs. Device frame-time profiling pending.",
+      "evidence": [
+        "docs/evidence/model-triplanar-metal.log.txt"
+      ]
+    },
+    "platforms": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Native Shader Graph operations and project-relative textures. No external shader compiler or runtime dependency added.",
+      "evidence": [
+        "docs/agent-handoffs/model-triplanar-authoring.md",
+        "engine/render/graph/TriplanarMaterial.h"
+      ]
+    },
+    "headless": {
+      "status": "pass",
+      "note": "Authored the library and assigned it via standalone MCP; Modeling independently regenerated the source.",
+      "evidence": [
+        "docs/agent-handoffs/model-triplanar-authoring.md",
+        "docs/evidence/model-triplanar-late-cut.json"
+      ]
+    },
+    "examples": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Shader Graph and the Metal integration test passed.",
+      "evidence": [
+        "docs/evidence/model-triplanar-metal.json"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Staged SHA, commands, measured GPU data, authoring and remaining coverage recorded.",
+      "evidence": [
+        "docs/agent-handoffs/model-triplanar-authoring.md",
+        "docs/agent-handoffs/model-triplanar-metal.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "Documented rendering space, sampler cost, texture colour space, normal convention, assignment and persistence.",
+      "evidence": [
+        "docs/shader-graph.md"
+      ]
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Real native screenshots exist. Web publication and integration remain pending.",
+      "evidence": [
+        "docs/evidence/model-triplanar-stone-wider-cut.png",
+        "docs/agent-handoffs/model-triplanar-authoring.md"
+      ]
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-shader-graph"
+    ],
+    "mcp_tools": [
+      "material_triplanar",
+      "material_set",
+      "material_apply"
+    ],
+    "studio_panels": [
+      "materials",
+      "inspector"
+    ],
+    "studio_methods": [
+      "studio.materialCreate",
+      "studio.setProperty",
+      "studio.save"
+    ]
+  },
+  "test_reports": [
+    "docs/evidence/model-triplanar-metal.json",
+    "docs/evidence/model-triplanar-studio.json"
+  ]
+}

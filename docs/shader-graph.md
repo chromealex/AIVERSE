@@ -203,3 +203,11 @@ seams/discontinuous masks still need care; this is not parallax/displacement.
 Math reference: Morten S. Mikkelsen, [Bump Mapping Unparametrized Surfaces on
 the GPU](https://mmikk.github.io/papers3d/mm_sfgrad_bump.pdf), surface-gradient
 formulation. Engine code uses the same GLSL/MSL semantics and numerical guards.
+
+## Triplanar materials on imported and modeled geometry
+
+In Studio's Material Library choose **New material**, then the **triplanar** preset. Choose a project colour texture and an optional OpenGL tangent-space normal map (+Y) from the asset picker, then enter the repeat length in metres. Save the material and assign the library name through the model's material binding. For an exported Modeling boolean mesh, assign its surface material or use the wildcard target. New cut faces use their generated geometric normals with the same projection.
+
+The colour scale is fixed in world metres, including on rotated and nonuniformly scaled rigid models. Translating an object moves it through the projected texture. Each plane uses a right-handed basis for each face sign. The fourth power of the geometric normal weights blends the three samples. Normal detail uses the same bases and a neutral tangent normal preserves the geometric shading normal. Per fragment this costs three colour samples and optionally three linear normal samples. It needs no mesh UV or tangent stream.
+
+The MCP operation `material_triplanar {colorMap, normalMap?, repeatMetres?}` returns an ordinary material with an editable Shader Graph. Persist it with `material_set`, then apply it with `material_apply`. Existing authoring tools can inspect and edit the graph, and asset dependency tools discover the normal texture and colour texture through normal sampleTexture nodes.

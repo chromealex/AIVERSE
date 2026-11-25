@@ -17,6 +17,7 @@
 #include "engine/render/ExrTexture.h"
 #include "engine/render/CameraExr.h"
 #include "engine/render/EnvironmentIbl.h"
+#include "engine/render/graph/TriplanarMaterial.h"
 #include "engine/render/TextureGen.h"
 #include "engine/render/graph/TextureGraph.h"
 #include "engine/render/graph/TextureGraphContainerSource.h"
@@ -573,6 +574,18 @@ void registerMaterialOps(Workspace& ws) {
             }
             r.set("types", types);
             return r;
+        });
+
+    add("material_triplanar", "Build a UV-free world-space material. Color and optional OpenGL tangent normal maps repeat every repeatMetres world units. Save the returned material with material_set and assign with material_apply.",
+        R"({"properties":{"colorMap":{"type":"string"},"normalMap":{"type":"string"},"repeatMetres":{"type":"number","minimum":0.001,"maximum":100000}},"required":["colorMap"]})",
+        [](const Json& p) {
+            if ((p.has("repeatMetres") && !p["repeatMetres"].isNumber()) ||
+                (p.has("normalMap") && !p["normalMap"].isString()))
+                throw std::invalid_argument("Invalid triplanar material parameters");
+            Json result = okJson();
+            result.set("material", render::graph::makeTriplanarMaterial(
+                p.getStr("colorMap"), p.getStr("normalMap"), p["repeatMetres"].toDouble(1)));
+            return result;
         });
 
     add("material_get", "One library material, flattened with its \"base\" chain.",

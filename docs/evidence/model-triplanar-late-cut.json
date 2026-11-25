@@ -1,0 +1,34 @@
+{
+  "boreBefore": 0.3,
+  "boreAfter": 0.5,
+  "revision": 2,
+  "glbBeforeSha256": "970d5e66064d2bcc87f64d76c58592711947f2b14b22b1e0f9e786329c4c6328",
+  "glbAfterSha256": "07dc31423e455f7e89f2a0be8758af18ba80c287c68e313d425026882aae68ba",
+  "reports": {
+    "bounds": {
+      "min": [
+        -0.95640004,
+        -0.72479999,
+        -0.87840003
+      ],
+      "max": [
+        1.04999995,
+        0.72480011,
+        0.92400002
+      ]
+    },
+    "degenerateTriangles": 0,
+    "localSurfaceArea": 12.767748,
+    "estimatedDraws": 1,
+    "vertices": 23208,
+    "triangles": 7736,
+    "nodes": 1,
+    "clips": 0,
+    "warnings": [],
+    "ok": true,
+    "path": "models/sculpt.glb",
+    "revision": 2
+  },
+  "materialSha256": "df4b815634708ec360d49d3ba7ea641f6e1061b919533ae91573fc4a9f6038e6",
+  "rulesSha256": "13e4ae51484f77153f176e019b4d81a6e9ea7051c119d13c7dee258fb8f1c11e"
+}
