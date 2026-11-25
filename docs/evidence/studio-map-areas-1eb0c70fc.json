@@ -1,0 +1,14 @@
+{
+  "sha": "1eb0c70fcbdbba7a2aec3412da6a95edab8323c8",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^studio_session$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-map-areas-1eb0c70fc.log.txt",
+  "sha256": "ea897bb04f2da645cf6559a47ce1bf7a4dc8e73e095337c0451340480c99bfc7"
+}
