@@ -10,13 +10,13 @@
   "summary": "Камень покрывает цилиндрический срез и внешние стороны модели без UV-развёртки.",
   "summaryEn": "Stone covers a cylindrical cut and the outside of the model without a UV layout.",
   "body": [
-    "В Studio выберите трипланарный материал и задайте цвет, карту нормалей и число повторов на метр."
+    "В Studio выберите трипланарный материал и задайте цвет, карту нормалей и длину одного повтора в метрах."
   ],
   "bodyEn": [
-    "Choose the triplanar material in Studio and set the colour map, normal map and repeats per metre."
+    "Choose the triplanar material in Studio and set the colour map, normal map and the length of one texture repeat in metres."
   ],
-  "verified": "Metal отрисовал импортированный OBJ и срез GLB. После сохранения Studio восстановила назначение материала.",
-  "verifiedEn": "Metal rendered an imported OBJ and a cut GLB. Studio restored the material assignment after saving.",
+  "verified": "Metal отрисовал импортированный OBJ и срез GLB. После сохранения Studio восстановила назначение материала. В Chromium проверены вид спереди, вид сбоку и отдаление камеры.",
+  "verifiedEn": "Metal rendered an imported OBJ and a cut GLB. Studio restored the material assignment after saving. Chromium exercised the front, side and zoomed-out views.",
   "limits": "Мировая проекция привязана к координатам сцены. Ступени на крупном срезе задаёт разрешение объёмной сетки.",
   "limitsEn": "Projection follows world coordinates. Large cuts show the resolution of the volumetric mesh.",
   "status": "in-progress",
@@ -31,6 +31,11 @@
       "src": "docs/evidence/model-triplanar-stone-wider-cut.png",
       "caption": "Расширенный срез со слоем камня",
       "captionEn": "Wider cut with the stone material"
+    },
+    {
+      "src": "docs/evidence/model-triplanar-web-front.png",
+      "caption": "Стены отверстия и внешняя поверхность в WebGL",
+      "captionEn": "The bore wall and the outer surface in WebGL"
     }
   ]
 }
