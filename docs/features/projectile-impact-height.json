@@ -18,7 +18,17 @@
     "demos/projectile-impact-height/rules.json",
     "docs/agent-handoffs/projectile-impact-height-initial.md",
     "docs/agents/feature-policy.json",
+    "docs/devlog/entries/2026-11-25-render-projectile-impact-height.json",
+    "docs/devlog/media/2026-11-25-render-projectile-impact-height/after.jpg",
+    "docs/devlog/media/2026-11-25-render-projectile-impact-height/before.jpg",
     "docs/devlog/systems.json",
+    "docs/evidence/projectile-impact-height-authoring.json",
+    "docs/evidence/projectile-impact-height-authoring.log.txt",
+    "docs/evidence/projectile-impact-height-studio.json",
+    "docs/evidence/projectile-impact-height-studio.log.txt",
+    "docs/evidence/projectile-impact-height-verified.json",
+    "docs/evidence/projectile-impact-height-verified.log.txt",
+    "docs/evidence/projectile-impact-height-web-high.png",
     "docs/features/projectile-impact-height.json",
     "docs/handoff/studio-html5/issue-197-projectile-impact-height.md",
     "docs/models.md",
@@ -40,9 +50,12 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Verified the rendered line and trail in paired native captures and switched from low to tall impact bands in WebGL2.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-render-projectile-impact-height.json",
+        "docs/evidence/projectile-impact-height-web-high.png"
+      ]
     },
     "architecture": {
       "status": "pass",
@@ -71,7 +84,7 @@
       "status": "pass",
       "note": "rules_get and rules_merge round-tripped the target height without losing the target model.",
       "evidence": [
-        "docs/evidence/projectile-impact-height-authoring.json"
+        "docs/evidence/projectile-impact-height-verified.json"
       ]
     },
     "studio": {
@@ -93,7 +106,7 @@
       "status": "pass",
       "note": "A fresh native MCP process reopened the edited target and read the authored height.",
       "evidence": [
-        "docs/evidence/projectile-impact-height-authoring.json"
+        "docs/evidence/projectile-impact-height-verified.json"
       ]
     },
     "graphs": {
@@ -112,23 +125,26 @@
       ]
     },
     "platforms": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Ran a Metal client and Emscripten WebGL2 in Chrome. Additional operating systems and graphics backends were not exercised.",
+      "evidence": [
+        "docs/agent-handoffs/projectile-impact-height-initial.md",
+        "docs/evidence/projectile-impact-height-web-high.png"
+      ]
     },
     "dependencies": {
       "status": "pass",
       "note": "Extends existing Game View, GameFx and Studio Rules. Both native simulation smoke and frontend production build ran with existing dependencies.",
       "evidence": [
         "docs/handoff/studio-html5/issue-197-projectile-impact-height.md",
-        "docs/evidence/projectile-impact-height-authoring.json"
+        "docs/evidence/projectile-impact-height-verified.json"
       ]
     },
     "headless": {
       "status": "pass",
       "note": "The demo ran ten seconds on the native headless host and fired seven times at seed 197.",
       "evidence": [
-        "docs/evidence/projectile-impact-height-authoring.json"
+        "docs/evidence/projectile-impact-height-verified.json"
       ]
     },
     "examples": {
@@ -140,9 +156,11 @@
       ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Native interpolation tests, Rules schema, actual MCP and Studio persistence, seven-attack headless range, embedded web content and devlog verification passed.",
+      "evidence": [
+        "docs/evidence/projectile-impact-height-verified.json"
+      ]
     },
     "handoff": {
       "status": "pass",
@@ -160,9 +178,12 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Matched native screenshots, bilingual entry and 19.8 MiB interactive web build verified. MAIN publishes the staged route following the site-demo skill fallback.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-render-projectile-impact-height.json",
+        "docs/agent-handoffs/projectile-impact-height-initial.md"
+      ]
     }
   },
   "integrations": {
@@ -181,6 +202,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/projectile-impact-height-authoring.json"
+    "docs/evidence/projectile-impact-height-verified.json"
   ]
 }
