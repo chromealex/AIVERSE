@@ -26,7 +26,7 @@
     "docs/devlog/media/2026-11-25-gameplay-selection-targeting/scout.jpg",
     "docs/devlog/media/2026-11-25-gameplay-selection-targeting/selected-oak.jpg",
     "docs/devlog/systems.json",
-    "docs/evidence/issues-197-202-integrated-mac.json",
+    "docs/evidence/issues-197-202-final-mac.json",
     "docs/evidence/issues-197-202-integrated-mac.log.txt",
     "docs/evidence/selection-targeting-20261125-frames/legacy-nearest.jpg",
     "docs/evidence/selection-targeting-20261125-frames/row-major.jpg",
@@ -167,7 +167,7 @@
       "note": "Two native feature filters and the overkill regression passed 22 checks in total. The report also runs the MCP scenario, Studio, frontend schema and replay. Retested on the integrated Mac tree; see issues-197-202-integrated-mac.json.",
       "evidence": [
         "docs/evidence/selection-targeting-20261125-mac.log.txt",
-        "docs/evidence/issues-197-202-integrated-mac.json"
+        "docs/evidence/issues-197-202-final-mac.json"
       ]
     },
     "handoff": {
@@ -216,6 +216,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/issues-197-202-integrated-mac.json"
+    "docs/evidence/issues-197-202-final-mac.json"
   ]
 }

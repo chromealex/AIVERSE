@@ -10,7 +10,7 @@
     "docs/agents/feature-policy.json",
     "docs/devlog/systems.json",
     "docs/encounters.md",
-    "docs/evidence/issues-197-202-integrated-mac.json",
+    "docs/evidence/issues-197-202-final-mac.json",
     "docs/evidence/issues-197-202-integrated-mac.log.txt",
     "docs/features/encounter-phase-determinism.json",
     "engine/game/Encounters.cpp",
@@ -60,7 +60,7 @@
       "status": "pass",
       "note": "The existing match and scenario execution tools use the same simulation implementation. Registry and end-to-end match execution were exercised.",
       "evidence": [
-        "docs/evidence/issues-197-202-integrated-mac.json"
+        "docs/evidence/issues-197-202-final-mac.json"
       ]
     },
     "studio": {
@@ -77,7 +77,7 @@
       "status": "pass",
       "note": "Snapshot, serialized and fresh simulation restores each matched all 80 checks starting at tick 300.",
       "evidence": [
-        "docs/evidence/issues-197-202-integrated-mac.json"
+        "docs/evidence/issues-197-202-final-mac.json"
       ]
     },
     "graphs": {
@@ -96,7 +96,7 @@
       "status": "pass",
       "note": "macOS arm64 Release and x86_64 Debug exercised the transition. Windows and Linux were not independently executed.",
       "evidence": [
-        "docs/evidence/issues-197-202-integrated-mac.json"
+        "docs/evidence/issues-197-202-final-mac.json"
       ]
     },
     "dependencies": {
@@ -110,7 +110,7 @@
       "status": "pass",
       "note": "The real headless host ran repeated seed-2 matches, three restore modes and the 96-case sample suite.",
       "evidence": [
-        "docs/evidence/issues-197-202-integrated-mac.json"
+        "docs/evidence/issues-197-202-final-mac.json"
       ]
     },
     "examples": {
@@ -124,7 +124,7 @@
       "status": "pass",
       "note": "The native spawn-tick regression, 8 identical final states, 3 restore modes and 96 template cases passed.",
       "evidence": [
-        "docs/evidence/issues-197-202-integrated-mac.json"
+        "docs/evidence/issues-197-202-final-mac.json"
       ]
     },
     "handoff": {
@@ -159,6 +159,6 @@
     "studio_methods": []
   },
   "test_reports": [
-    "docs/evidence/issues-197-202-integrated-mac.json"
+    "docs/evidence/issues-197-202-final-mac.json"
   ]
 }
