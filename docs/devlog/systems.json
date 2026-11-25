@@ -3517,7 +3517,8 @@
         },
         {
           "id": "local-order-feedback",
-          "status": "in-progress",
+          "status": "done",
+          "date": "2026-11-25",
           "title": "Маркеры приказов",
           "titleEn": "Order markers",
           "text": "События локального приказа для скриптов и оверлеев.",
@@ -3525,7 +3526,8 @@
         },
         {
           "id": "structure-upgrade-appearance",
-          "status": "in-progress",
+          "status": "done",
+          "date": "2026-11-25",
           "title": "Вид здания при улучшении",
           "titleEn": "Structure upgrade appearance",
           "text": "Модель нового типа с прогрессом улучшения.",

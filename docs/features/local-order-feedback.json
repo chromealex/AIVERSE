@@ -3,6 +3,7 @@
   "id": "local-order-feedback",
   "owner": "gameplay",
   "changed_paths": [
+    "CMakeLists.txt",
     "apps/client/GameClient.cpp",
     "apps/client/GameClient.h",
     "apps/editor/core/OverlayOps.cpp",
@@ -31,6 +32,7 @@
     "engine/view/game/GameViewScript.cpp",
     "engine/view/game/GameViewScript.h",
     "skills/gameplay/aiverse-view/SKILL.md",
+    "tests/order_upgrade_mcp.py",
     "tests/tests.cpp"
   ],
   "traits": {

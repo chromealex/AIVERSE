@@ -3,6 +3,7 @@
   "id": "structure-upgrade-appearance",
   "owner": "gameplay",
   "changed_paths": [
+    "CMakeLists.txt",
     "apps/client/ClientLoading.cpp",
     "apps/studio-native/tests/StudioSessionTests.cpp",
     "apps/studio-web/src/panels/rulesSchema.ts",
@@ -28,6 +29,7 @@
     "engine/view/game/GameView.h",
     "engine/view/game/GameViewDraw.cpp",
     "skills/gameplay/aiverse-view/SKILL.md",
+    "tests/order_upgrade_mcp.py",
     "tests/tests.cpp"
   ],
   "traits": {
