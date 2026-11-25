@@ -88,6 +88,7 @@
     "tests/shader_graph/install_material_presets.py",
     "apps/studio-native/StudioHost.cpp",
     "apps/studio-web/src/components/sceneBookmarks.ts",
+    "apps/editor/core/LegacyCameraBookmarks.h",
     "apps/studio-native/StudioScene.h",
     "apps/studio-native/StudioSession.cpp",
     "apps/studio-web/src/panels/generated/ProjectPanel.tsx"

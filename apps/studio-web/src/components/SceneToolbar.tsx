@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Bookmark, Expand, Globe2, Hand, Magnet, Maximize, Mountain, Move3d, Rotate3d, Shapes, Box } from 'lucide-react';
-import { CAMERA_SLOTS, readBookmarks, removeBookmark, saveBookmark, type CameraBookmark } from './sceneBookmarks';
+import { CAMERA_SLOTS, importBookmarks, readBookmarks, removeBookmark, saveBookmark, type CameraBookmark } from './sceneBookmarks';
 import { invoke, onNativeEvent } from '../bridge';
 import './SceneToolbar.css';
 
@@ -33,7 +33,19 @@ export default function SceneToolbar({ enabled, projectPath = '' }: { enabled: b
   const [state, setState] = useState<SceneToolState>(readSceneTools);
   const [marks, setMarks] = useState<CameraBookmark[]>(() => readBookmarks(projectPath));
   const [marksOpen, setMarksOpen] = useState(false);
-  useEffect(() => setMarks(readBookmarks(projectPath)), [projectPath]);
+  const [legacyViews, setLegacyViews] = useState<CameraBookmark[]>([]);
+  useEffect(() => {
+    let current = true;
+    setMarks(readBookmarks(projectPath));
+    setLegacyViews([]);
+    if (projectPath) void invoke('studio.legacyCameraBookmarks', { project: projectPath }).then(views => {
+      if (current) {
+        setLegacyViews(views);
+        setMarks(importBookmarks(projectPath, views));
+      }
+    }).catch(() => {});
+    return () => { current = false; };
+  }, [projectPath]);
   // Camera bookmarks: ⌥1…9 go to a slot, ⌥⇧1…9 store the current view in it.
   const storeSlot = useCallback(async (slot: number) => {
     try {
@@ -133,6 +145,12 @@ export default function SceneToolbar({ enabled, projectPath = '' }: { enabled: b
             <button type="button" role="menuitem" title={'Store the current view in ' + slot} onClick={() => void storeSlot(slot)}>Store</button>
             {m && <button type="button" role="menuitem" title="Remove" onClick={() => setMarks(removeBookmark(projectPath, slot))}>×</button>}
           </div>; })}
+        {legacyViews.length > 0 && <details>
+          <summary>Views from the previous editor</summary>
+          {legacyViews.map(view => <div key={view.slot} className="scene-toolbar__mark">
+            <button type="button" role="menuitem" onClick={() => { goSlot(view); setMarksOpen(false); }}>{view.name}</button>
+          </div>)}
+        </details>}
       </div>}
     </div>
   </div>;

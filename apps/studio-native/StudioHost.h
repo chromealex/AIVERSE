@@ -63,6 +63,7 @@ public:
     virtual NetworkExitStatus launchNetworkPlayer(const std::vector<std::string>& args) = 0;
     virtual void revealInFileManager(const std::filesystem::path& path, bool openFolder) = 0;
     // Per-user cache folder (asset thumbnails) and the last opened project (reopened on the next launch).
+    virtual std::filesystem::path legacyEditorSettingsDir() { return {}; }
     virtual std::filesystem::path cacheDir() = 0;
     virtual void rememberLastProject(const std::string& dir) = 0;
     // Window requests from the UI: studio.windowOpen / windowClose / windowTitle / windowDrag / windowZoom.

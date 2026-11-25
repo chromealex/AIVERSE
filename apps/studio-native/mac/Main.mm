@@ -312,6 +312,11 @@ public:
         if(openFolder){[[NSWorkspace sharedWorkspace] openURL:[NSURL fileURLWithPath:ns(path.string()) isDirectory:YES]];return;}
         [[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[[NSURL fileURLWithPath:ns(path.string())]]];
     }
+    std::filesystem::path legacyEditorSettingsDir() override {
+        NSString* dir = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject;
+        if (!dir) return {};
+        return std::filesystem::path(dir.fileSystemRepresentation) / "AIVERSE Editor";
+    }
     std::filesystem::path cacheDir() override {
         NSString* caches=NSSearchPathForDirectoriesInDomains(NSCachesDirectory,NSUserDomainMask,YES).firstObject ?: NSTemporaryDirectory();
         return std::filesystem::path(caches.UTF8String);

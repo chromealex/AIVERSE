@@ -8,7 +8,8 @@ const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFi
 export function readBookmarks(project: string, store: Storage | null = storage()): CameraBookmark[] {
   if (!project) return [];
   try {
-    const raw = JSON.parse(store?.getItem(key(project)) ?? '[]');
+    const saved = JSON.parse(store?.getItem(key(project)) ?? '[]');
+    const raw = Array.isArray(saved) ? saved : saved?.views;
     if (!Array.isArray(raw)) return [];
     return raw.filter(m => m && CAMERA_SLOTS.includes(m.slot) && ['x', 'y', 'z', 'distance', 'yaw', 'pitch'].every(k => finite(m[k])))
       .map(m => ({ slot: m.slot, name: String(m.name ?? 'View ' + m.slot).slice(0, 40), x: m.x, y: m.y, z: m.z,
@@ -18,8 +19,29 @@ export function readBookmarks(project: string, store: Storage | null = storage()
   } catch { return []; }
 }
 function write(project: string, list: CameraBookmark[], store: Storage | null) {
-  try { if (project) store?.setItem(key(project), JSON.stringify(list)); } catch { /* quota */ }
+  try {
+    if (project && store) {
+      let saved;
+      try { saved = JSON.parse(store.getItem(key(project)) ?? 'null'); } catch { /* replace invalid settings */ }
+      store.setItem(key(project), JSON.stringify(saved?.importedV1 ? { importedV1: true, views: list } : list));
+    }
+  } catch { /* quota */ }
   return list;
+}
+export function importBookmarks(project: string, legacy: CameraBookmark[], store: Storage | null = storage()): CameraBookmark[] {
+  const views = readBookmarks(project, store);
+  if (!project || !store || !legacy.length) return views;
+  try {
+    if (JSON.parse(store.getItem(key(project)) ?? 'null')?.importedV1) return views;
+    const occupied = new Set(views.map(view => view.slot));
+    const conflicts = legacy.filter(view => occupied.has(view.slot));
+    const imported = [...views, ...legacy.filter(view => !occupied.has(view.slot))];
+    const free = CAMERA_SLOTS.filter(slot => !imported.some(view => view.slot === slot));
+    conflicts.slice(0, free.length).forEach((view, index) => imported.push({ ...view, slot: free[index] }));
+    imported.sort((a, b) => a.slot - b.slot);
+    store.setItem(key(project), JSON.stringify({ importedV1: true, views: imported }));
+    return imported;
+  } catch { return views; }
 }
 export function saveBookmark(project: string, mark: CameraBookmark, store: Storage | null = storage()): CameraBookmark[] {
   return write(project, [...readBookmarks(project, store).filter(m => m.slot !== mark.slot), mark].sort((a, b) => a.slot - b.slot), store);

@@ -410,6 +410,10 @@ public:
         const std::wstring args = L"/select,\"" + path.wstring() + L"\"";
         ShellExecuteW(main_, L"open", L"explorer.exe", args.c_str(), nullptr, SW_SHOWNORMAL);
     }
+    fs::path legacyEditorSettingsDir() override {
+        const auto dir = knownFolder(FOLDERID_RoamingAppData);
+        return dir.empty() ? fs::path{} : dir / L"AIVERSE Editor";
+    }
     fs::path cacheDir() override {
         fs::path dir = knownFolder(FOLDERID_LocalAppData);
         return dir.empty() ? fs::temp_directory_path() : dir;

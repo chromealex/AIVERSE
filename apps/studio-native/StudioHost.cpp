@@ -1,4 +1,5 @@
 #include "StudioHierarchyGroups.h"
+#include "apps/editor/core/LegacyCameraBookmarks.h"
 #include "StudioNetworkPlay.h"
 #include "StudioGameWizard.h"
 #include "apps/editor/core/WizardOps.h"
@@ -3487,6 +3488,31 @@ bool StudioHost::handleHostMethod(const Json& req) {
         auto status=platform_.launchNetworkPlayer(studioNetworkArguments(session_->workspace(),params));
         networkPlayers_.push_back({params.getStr("project"),params.getStr("mode"),std::move(status)});
         return Json::object();
+    });
+    if (method == "studio.legacyCameraBookmarks") return answer([&] {
+        const auto& project = session_->workspace().project.dir;
+        if (project.empty() || project != params.getStr("project")) throw std::runtime_error("Project changed");
+        const auto dir = platform_.legacyEditorSettingsDir();
+        Json views = Json::array();
+        if (dir.empty()) return views;
+        const auto slots = editor::legacy_camera::read(editor::legacy_camera::bookmarkFile(dir, project));
+        for (size_t i = 0; i < slots.size(); ++i) {
+            const auto& c = slots[i];
+            if (!c.valid) continue;
+            Json view = Json::object();
+            view.set("slot", Json::number(int64_t(i + 1)));
+            view.set("name", Json::string("Imported view " + std::to_string(i + 1)));
+            view.set("x", Json::number(double(c.target.x), 9));
+            view.set("y", Json::number(double(c.target.y), 9));
+            view.set("z", Json::number(double(c.target.z), 9));
+            view.set("yaw", Json::number(double(c.yaw), 9));
+            view.set("pitch", Json::number(double(c.pitch), 9));
+            view.set("distance", Json::number(double(c.distance), 9));
+            view.set("fov", Json::number(double(c.fov), 9));
+            view.set("ortho", Json::fromBool(c.ortho));
+            views.push(std::move(view));
+        }
+        return views;
     });
     if (method == "studio.viewportInput") return answer([&] { return viewportInput(params); });
     if (method == "studio.gameSelectEntity" || method == "studio.gameEntities" || method == "studio.gameInspect" || method == "studio.gameRegions" ||
