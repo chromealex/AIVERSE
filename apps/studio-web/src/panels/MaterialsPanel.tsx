@@ -8,6 +8,7 @@ import {StudioButton} from '../ui';
 import { StudioLoader } from '../ui';
 import { editablePatch, materialFields, materialNames, materialSwatchColor, MATERIAL_PRESETS } from './materialSchema';
 import type { MaterialData, MaterialKey, MaterialLibrary, MaterialPatch, MaterialPreset } from './materialSchema';
+import { revealProjectAsset } from '../assetNavigation';
 import './MaterialsPanel.css';
 
 import SpectraDockViewport from './SpectraDockViewport';
@@ -105,15 +106,22 @@ export default function MaterialsPanel({projectPath,previewMaterial,textureOnly=
   catch(e){setError(String(e));}finally{setBusy(false);}
  };
  useEffect(()=>{
+  if(textureOnly || !projectPath)return;
+  const key='studio.materialToOpen:'+projectPath;
   const open=()=>{
-   const key='studio.materialToOpen:'+projectPath;
-   const path=sessionStorage.getItem(key);
+   const path=localStorage.getItem(key);
    const match=Object.entries(library.files??{}).find(([,file])=>file===path);
-   if(match){sessionStorage.removeItem(key);switchTo(match[0]);}
+   if(match){localStorage.removeItem(key);switchTo(match[0]);}
   };
-  open();window.addEventListener('studio:open-material',open);
-  return ()=>window.removeEventListener('studio:open-material',open);
- },[library,projectPath,changes]);
+  const onStorage=(event:StorageEvent)=>{if(event.key===key && event.newValue)open();};
+  open();
+  window.addEventListener('studio:open-material',open);
+  window.addEventListener('storage',onStorage);
+  return ()=>{
+   window.removeEventListener('studio:open-material',open);
+   window.removeEventListener('storage',onStorage);
+  };
+ },[library,projectPath,changes,textureOnly,name]);
  const preview=async()=>{
   if(busy||previewing||!connected||!projectPath||!name||changes>0)return;
   setPreviewing(true);setError('');
@@ -179,9 +187,8 @@ export default function MaterialsPanel({projectPath,previewMaterial,textureOnly=
      <><div className="materials-selected">
       <span className="materials-swatch" style={{background:materialSwatchColor(selected)}}/>
       <strong>{name}</strong>{library.files?.[name]&&<button title={library.files[name]} onClick={()=>{
+       revealProjectAsset(projectPath, library.files![name].slice('content/'.length));
        window.dispatchEvent(new CustomEvent('studio:show-panel',{detail:'assets'}));
-       const path=library.files![name].slice('content/'.length);
-       window.setTimeout(()=>window.dispatchEvent(new CustomEvent('studio:reveal-asset',{detail:{path}})),80);
       }}>Show in Assets</button>}
      </div>
      <div className="materials-modes" role="group" aria-label="Material workspace">

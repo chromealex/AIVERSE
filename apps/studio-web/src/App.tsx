@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { revealProjectAsset } from './assetNavigation';
 import { shortcutKey } from './keyboard';
 import { ChevronDown, Search, Settings2 } from 'lucide-react';
 import { invoke, nativeConnected, nativeWindowAction, nativeWindowResize, onNativeEvent } from './bridge';
@@ -522,8 +523,8 @@ export default function App() {
       hint: entity.kind + ' · select and frame (F)', run: () => { void select(entity.id).then(() => invoke('studio.viewportInput', { kind: 'focus' })).catch(console.warn); } });
     for (const asset of paletteAssets) out.push({ id: 'asset:' + asset.path, kind: 'asset', title: asset.path.split('/').pop() ?? asset.path,
       hint: asset.path, keywords: asset.path, run: () => {
+        revealProjectAsset(snapshot?.project.path ?? '', asset.path);
         showPanel('assets');
-        window.setTimeout(() => window.dispatchEvent(new CustomEvent('studio:reveal-asset', { detail: { path: asset.path } })), 0);
       } });
     return out;
     // menus are rebuilt each render from the same state listed here

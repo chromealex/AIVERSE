@@ -228,15 +228,26 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
   useEffect(()=>{setFolder('');setSelected(null);setPinnedAssetGuid(null);setSearch('');setPlan(null);setRenameTarget(null);setDeleteTarget(null);setTrashOpen(false);setMentions(null);setReferenceLoading(false);++referenceRequest.current;},[projectPath]);
   // Command palette (# assets) reveals a file: open its folder and select it.
   useEffect(()=>{
-    const reveal=(event:Event)=>{
-      const path=(event as CustomEvent<{path?:unknown}>).detail?.path;
-      if(typeof path!=='string'||!path)return;
+    if(!projectPath)return;
+    const key='studio.assetToReveal:'+projectPath;
+    const reveal=(event?:Event)=>{
+      const request=(event as CustomEvent<{project?:string;path?:unknown}> | undefined)?.detail;
+      if(request?.project && request.project!==projectPath)return;
+      const path=request?.path ?? localStorage.getItem(key);
+      if(typeof path!=='string'||!safeAssetPath(path))return;
+      if(localStorage.getItem(key)===path)localStorage.removeItem(key);
       const cut=path.lastIndexOf('/');
       setSearch('');setFolder(cut>0?path.slice(0,cut):'');setSelected(path);
     };
+    const onStorage=(event:StorageEvent)=>{if(event.key===key && event.newValue)reveal();};
+    reveal();
     window.addEventListener('studio:reveal-asset',reveal);
-    return ()=>window.removeEventListener('studio:reveal-asset',reveal);
-  },[]);
+    window.addEventListener('storage',onStorage);
+    return ()=>{
+      window.removeEventListener('studio:reveal-asset',reveal);
+      window.removeEventListener('storage',onStorage);
+    };
+  },[projectPath]);
   useEffect(()=>{
     let cancelled=false;
     setLoading(true);setError('');
@@ -396,7 +407,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     {id:'reload',label:'Reload',icon:<RefreshCw size={13}/>,onSelect:reload},
   ];
   const openMaterial=(path:string)=>{
-    sessionStorage.setItem('studio.materialToOpen:'+projectPath,'content/'+path);
+    localStorage.setItem('studio.materialToOpen:'+projectPath,'content/'+path);
     window.dispatchEvent(new CustomEvent('studio:show-panel',{detail:'materials'}));
     window.dispatchEvent(new Event('studio:open-material'));
   };

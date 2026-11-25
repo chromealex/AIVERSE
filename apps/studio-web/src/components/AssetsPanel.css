@@ -200,6 +200,7 @@
 .studio-assets-item.active{box-shadow:none;border-color:var(--au-accent);background:var(--au-active)}
 .studio-assets-items--list{gap:0}
 .studio-assets-items--list .studio-assets-item{height:20px;padding:0 6px;gap:6px;border:0;border-radius:0;background:transparent}
+.studio-assets-items .studio-assets-item.active{background:var(--au-active);box-shadow:inset 3px 0 var(--au-accent)}
 .studio-assets-items--list .studio-assets-icon{width:16px;height:16px;border:0;background:transparent}
 .studio-assets-items--list .studio-assets-icon svg{width:14px;height:14px}
 .studio-assets-empty,.studio-assets-state{min-height:80px;padding:10px;gap:4px}

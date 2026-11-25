@@ -113,6 +113,10 @@ html.studio-edge-nesw, html.studio-edge-nesw * {cursor:nesw-resize !important}
   .studio-assets-toolbar { flex-wrap: wrap; }
   .studio-assets-breadcrumb { flex-basis: 100%; }
   .studio-assets-layout { flex-direction: column; }
+  .studio-assets-layout .studio-asset-import-settings {
+    width: 100%; max-width: none; max-height: 38%; flex: 0 1 auto;
+    border-left: 0; border-top: 1px solid var(--au-line);
+  }
   .studio-assets-folders {
     width: 100% !important; max-height: 27%; flex: 0 1 auto;
     border-inline-end: 0; border-bottom: 1px solid var(--au-line);
