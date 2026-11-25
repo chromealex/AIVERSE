@@ -1,0 +1,116 @@
+{
+  "schema": 1,
+  "style": "scifi",
+  "mode": "features",
+  "function": "",
+  "seed": 482733,
+  "textureResolution": 256,
+  "width": 24,
+  "height": 12,
+  "depth": 18,
+  "physicalSockets": [
+    {
+      "id": "entrance/0/0",
+      "kind": "large-gate",
+      "featureIndex": 0,
+      "initialOpen": 0,
+      "closedBoundsMin": [6.1733, 0.24, 0],
+      "closedBoundsMax": [11.1733, 4.74, 0.36]
+    },
+    {
+      "id": "entrance/2/0",
+      "kind": "personnel-door",
+      "featureIndex": 2,
+      "initialOpen": 0,
+      "closedBoundsMin": [16.6267, 0.24, 0],
+      "closedBoundsMax": [17.8267, 2.59, 0.36]
+    },
+    {
+      "id": "entrance/1/0",
+      "kind": "small-gate",
+      "featureIndex": 1,
+      "initialOpen": 0,
+      "closedBoundsMin": [6.44, 0.24, 17.64],
+      "closedBoundsMax": [9.14, 3.14, 18]
+    },
+    {
+      "id": "entrance/1/1",
+      "kind": "small-gate",
+      "featureIndex": 1,
+      "initialOpen": 0,
+      "closedBoundsMin": [14.86, 0.24, 17.64],
+      "closedBoundsMax": [17.56, 3.14, 18]
+    },
+    {
+      "id": "roof/3",
+      "kind": "sliding-roof",
+      "featureIndex": 3,
+      "initialOpen": 0,
+      "closedBoundsMin": [9.5, 11.72, 6.5],
+      "closedBoundsMax": [14.5, 12, 11.5]
+    }
+  ],
+  "roofProfile": "flat",
+  "roofRise": 0,
+  "floors": 1,
+  "roomsX": 1,
+  "roomsZ": 1,
+  "features": [
+    {
+      "kind": "large-gate",
+      "side": "front",
+      "count": 1,
+      "width": 5,
+      "height": 4.5,
+      "depth": 0,
+      "open": 0,
+      "position": -1,
+      "positionZ": -1,
+      "spacing": 0.35,
+      "floor": 0,
+      "sill": 0.9
+    },
+    {
+      "kind": "small-gate",
+      "side": "back",
+      "count": 2,
+      "width": 2.7,
+      "height": 2.9,
+      "depth": 0,
+      "open": 0,
+      "position": -1,
+      "positionZ": -1,
+      "spacing": 0.35,
+      "floor": 0,
+      "sill": 0.9
+    },
+    {
+      "kind": "personnel-door",
+      "side": "front",
+      "count": 1,
+      "width": 1.2,
+      "height": 2.35,
+      "depth": 0,
+      "open": 0,
+      "position": -1,
+      "positionZ": -1,
+      "spacing": 0.35,
+      "floor": 0,
+      "sill": 0.9
+    },
+    {
+      "kind": "sliding-roof",
+      "side": "front",
+      "count": 1,
+      "width": 5,
+      "height": 0,
+      "depth": 5,
+      "open": 0,
+      "position": -1,
+      "positionZ": -1,
+      "spacing": 0.35,
+      "floor": 0,
+      "sill": 0.9
+    }
+  ]
+}

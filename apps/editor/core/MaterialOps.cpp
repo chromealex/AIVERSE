@@ -11,6 +11,10 @@
 
 #include "engine/render/Model.h"
 #include "engine/render/TextureGen.h"
+#include "engine/render/graph/TextureGraph.h"
+#include "engine/render/graph/TextureGraphTemplates.h"
+#include "engine/render/graph/TextureGraphCache.h"
+#include <memory>
 
 #if defined(__GNUC__)
 #pragma GCC diagnostic push
@@ -122,6 +126,7 @@ bool usesMaterial(const Json& j, const std::string& name) {
 Json patternSchema() {
     return Json::parse(R"J({
         "path": {"type": "string", "description": "PNG inside the game folder (default textures/<pattern>_<seed>.png)"},
+        "overwrite": {"type":"boolean","description":"False refuses an existing destination; legacy default true"},
         "pattern": {"type": "string", "description": "solid, noise, stripes, checker, brick, tiles, panels, metal, wood, camo, gradient, dots, hex, scales (texture_patterns explains each)"},
         "size": {"type": "integer", "description": "pixels per side, 8..2048 (default 256)"},
         "colors": {"type": "array", "items": {"type": "array", "items": {"type": "number"}}, "description": "sRGB [r,g,b] 0..1 per colour (pattern defaults otherwise)"},
@@ -202,6 +207,61 @@ void saveMaterialLibrary(Workspace& ws, const Json& lib, const std::string& what
     fs::rename(f.string() + ".tmp", f, ec);
     if (ec) throw std::runtime_error("cannot write " + f.string() + ": " + ec.message());
     ws.note({Change::Rules, 0, 0, -1, -1, -1, what});   // views rebuild with the library
+}
+
+Json publishTextureGraphImage(Workspace& ws,const std::string& name,const std::string& output,const render::Image& image){
+    needProject(ws);
+    if(!render::texture_graph::safeId(name))throw std::invalid_argument("invalid texture name");
+    (void)render::texture_graph::outputKind(output);
+    if(image.width<8||image.width>1024||image.height!=image.width||image.rgba.size()!=size_t(image.width)*image.height*4)
+        throw std::invalid_argument("invalid completed texture image");
+    const auto root=fs::canonical(ws.project.dir),dir=root/"content"/"textures";
+    if(fs::is_symlink(root/"content")||fs::is_symlink(dir))throw std::runtime_error("texture destination symlink rejected");
+    fs::create_directories(dir);
+    const std::string rel="content/textures/"+name+"_"+output+".png";
+    const auto dest=root/rel,stage=fs::path(dest.string()+".stage");
+    if(fs::exists(dest)||fs::is_symlink(dest)||!fs::create_directory(stage))throw std::runtime_error("texture already exists or staging busy");
+    struct Cleanup {fs::path dir;~Cleanup(){std::error_code ec;fs::remove_all(dir,ec);}} cleanup{stage};
+    std::string png;
+    if(!stbi_write_png_to_func([](void* ctx,void* data,int size){static_cast<std::string*>(ctx)->append(static_cast<const char*>(data),size_t(size));},&png,image.width,image.height,4,image.rgba.data(),image.width*4)||png.empty())throw std::runtime_error("PNG encode failed");
+    const auto temp=stage/"payload";
+    {std::ofstream stream(temp,std::ios::binary);stream.write(png.data(),std::streamsize(png.size()));stream.close();if(!stream)throw std::runtime_error("PNG write failed");}
+    fs::create_hard_link(temp,dest);
+    ws.note({Change::Rules,0,0,-1,-1,-1,"Texture graph bake: "+rel});
+    Json r=okJson();r.set("path",Json::string(rel));r.set("output",Json::string(output));r.set("size",Json::number(int64_t(image.width)));return r;
+}
+
+Json publishTextureGraphSet(Workspace& ws,const std::string& name,const Json& graph,const Json& overrides,const std::vector<render::Image>& images,const std::vector<std::string>& backends){
+    needProject(ws);const auto program=render::texture_graph::compile(graph,overrides);
+    if(images.size()!=program.outputs.size()||backends.size()!=images.size())throw std::invalid_argument("incomplete texture set");
+    for(size_t i=0;i<images.size();++i){
+        const auto& image=images[i];const auto& backend=backends[i];
+        if(image.width!=program.size||image.height!=program.size||image.rgba.size()!=size_t(program.size)*program.size*4||
+           (backend!="cpu"&&backend!="metal"&&backend!="vulkan"))throw std::invalid_argument("invalid completed texture set image");
+    }
+        if(!render::texture_graph::safeId(name))throw std::invalid_argument("invalid texture set name");
+        const auto root=fs::canonical(ws.project.dir),dir=root/"content"/"textures";
+        if(fs::is_symlink(root/"content")||fs::is_symlink(dir))throw std::runtime_error("texture directory symlink rejected");
+        fs::create_directories(dir);const auto dest=dir/name,stage=dir/("."+name+".stage");
+        if(fs::exists(dest)||fs::is_symlink(dest)||!fs::create_directory(stage))throw std::runtime_error("texture set exists or staging busy");
+        struct Cleanup {fs::path dir;~Cleanup(){std::error_code ec;fs::remove_all(dir,ec);}} cleanup{stage};
+        Json files=Json::array();size_t i=0;
+        for(const auto& [output,index]:program.outputs){
+            (void)index;const auto& img=images[i];const auto& backend=backends[i++];std::string png;
+            if(!stbi_write_png_to_func([](void* ctx,void* data,int size){static_cast<std::string*>(ctx)->append(static_cast<const char*>(data),size_t(size));},&png,img.width,img.height,4,img.rgba.data(),img.width*4)||png.empty())throw std::runtime_error("PNG encode failed");
+            std::ofstream stream(stage/(output+".png"),std::ios::binary);stream.write(png.data(),std::streamsize(png.size()));stream.close();if(!stream)throw std::runtime_error("PNG stage write failed");
+            Json row=Json::object();row.set("output",Json::string(output));row.set("path",Json::string("content/textures/"+name+"/"+output+".png"));
+            row.set("backend",Json::string(backend));row.set("sRGB",Json::fromBool(render::texture_graph::outputKind(output)==render::texture_graph::Kind::Color));files.push(row);
+        }
+        Json manifest=Json::object();manifest.set("version",Json::number(int64_t(1)));manifest.set("graph",graph);manifest.set("overrides",overrides);manifest.set("files",files);manifest.set("size",Json::number(int64_t(program.size)));
+        {std::ofstream stream(stage/"texture-set.json",std::ios::binary);stream<<manifest.dump(2)<<"\n";stream.close();if(!stream)throw std::runtime_error("texture set manifest write failed");}
+        // Cooperating publishers share the exclusive stage directory.
+        // No promise against an external process creating an empty destination.
+        if(fs::exists(dest)||fs::is_symlink(dest))throw std::runtime_error("destination appeared during bake");
+        fs::rename(stage,dest);
+        ws.note({Change::Rules,0,0,-1,-1,-1,"Texture graph set: "+name});
+        Json r=okJson();r.set("files",files);r.set("size",Json::number(int64_t(program.size)));r.set("manifest",Json::string("content/textures/"+name+"/texture-set.json"));return r;
+
 }
 
 void registerMaterialOps(Workspace& ws) {
@@ -382,6 +442,107 @@ void registerMaterialOps(Workspace& ws) {
         return r;
     });
 
+    // Graph source documents and baked images have independent publication.
+    // Fixed safe names, canonical parent check and exclusive staging directory.
+    auto graphPath=[w](const std::string& name){
+        needProject(*w);if(!render::texture_graph::safeId(name))throw std::invalid_argument("invalid texture graph name");
+        auto root=fs::canonical(w->project.dir);auto dir=root/"texturegraphs";
+        if(fs::is_symlink(dir))throw std::runtime_error("texturegraphs directory is a symlink");
+        return dir/(name+".json");
+    };
+    auto readGraph=[](const fs::path& file){
+        if(fs::is_symlink(file)||!fs::is_regular_file(file)||fs::file_size(file)>256*1024)throw std::runtime_error("texture graph missing or invalid");
+        return Json::parseFile(file.string());
+    };
+    auto publish=[](const fs::path& file,const std::string& bytes,bool overwrite,const Json* expected=nullptr){
+        fs::create_directories(file.parent_path());
+        if(fs::is_symlink(file)||fs::is_symlink(file.parent_path()))throw std::runtime_error("symlink destination rejected");
+        const auto staging=fs::path(file.string()+".stage");
+        if(!fs::create_directory(staging))throw std::runtime_error("publication already in progress or stale staging directory");
+        struct Cleanup {fs::path dir;~Cleanup(){std::error_code ec;fs::remove_all(dir,ec);}} cleanup{staging};
+        if(overwrite&&(!expected||!fs::is_regular_file(file)||fs::is_symlink(file)||fs::file_size(file)>256*1024||!(Json::parseFile(file.string())==*expected)))throw std::runtime_error("texture graph changed before publication");
+        auto temp=staging/"payload";
+        {std::ofstream stream(temp,std::ios::binary);stream.write(bytes.data(),std::streamsize(bytes.size()));stream.close();if(!stream)throw std::runtime_error("texture graph publication write failed");}
+        if(overwrite)fs::rename(temp,file);
+        else fs::create_hard_link(temp,file); // exclusive creation, never overwrite existing asset
+    };
+    auto textureCache=std::make_shared<render::texture_graph::EvaluationCache>();
+    const std::string graphSchema=R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"expected":{"type":"object"},"node":{"type":"string"},"output":{"type":"string"},"textureName":{"type":"string"},"overrides":{"type":"object"}}})";
+    add("texture_graph_cache","Inspect or clear this Workspace texture evaluation cache.",R"({"properties":{"clear":{"type":"boolean"}}})",[w,textureCache](const Json& p){textureCache->selectProject(w->project.dir);if(p.getBool("clear"))textureCache->clear();return textureCache->status();});
+    add("texture_graph_catalog","Native typed procedural CPU node catalog.",R"({"type":"object"})",[](const Json&){return render::texture_graph::describeCatalog();});
+    add("texture_graph_templates","Validated native PBR starter graph documents.",R"({"type":"object"})",[](const Json&){Json r=okJson();r.set("templates",render::texture_graph::templates());return r;});
+    add("texture_graph_list","List saved texture graph documents.",R"({"type":"object"})",[graphPath](const Json&){
+        auto dir=graphPath("placeholder").parent_path();std::vector<std::string> names;
+        if(fs::exists(dir))for(const auto& e:fs::directory_iterator(dir))if(!e.is_symlink()&&e.is_regular_file()&&e.path().extension()==".json"&&render::texture_graph::safeId(e.path().stem().string()))names.push_back(e.path().stem().string());
+        std::sort(names.begin(),names.end());Json r=okJson();r.set("graphs",strs(names));return r;
+    });
+    add("texture_graph_get","Read saved source graph.",graphSchema,[graphPath,readGraph](const Json& p){Json r=okJson();r.set("graph",readGraph(graphPath(p.getStr("name"))));return r;});
+    add("texture_graph_validate","Validate types, topology, parameters and work budget without evaluating or writing.",graphSchema,[](const Json& p){
+        auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object());Json r=okJson();r.set("nodes",Json::number(int64_t(program.nodes.size())));r.set("size",Json::number(int64_t(program.size)));return r;
+    });
+    add("texture_graph_set","Save validated graph; existing source requires matching expected document. No texture bake.",graphSchema,[graphPath,readGraph,publish](const Json& p){
+        render::texture_graph::compile(p["graph"]);auto file=graphPath(p.getStr("name"));
+        bool exists=fs::exists(file);
+        if(exists&&(!p["expected"].isObject()||!(readGraph(file)==p["expected"])))throw std::runtime_error("texture graph changed; reload before save");
+        publish(file,p["graph"].dump(2)+"\n",exists,&p["expected"]);
+        Json r=okJson();r.set("graph",p["graph"]);return r;
+    });
+    add("texture_graph_preview","Evaluate one node or output at up to 32x32, return actual RGBA8 hex without disk writes.",graphSchema,[w,textureCache](const Json& p){
+        auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object());size_t target=program.nodes.size();
+        if(p.has("node")){for(size_t i=0;i<program.nodes.size();++i)if(program.nodes[i].id==p.getStr("node"))target=i;}
+        else {auto it=program.outputs.find(p.getStr("output"));if(it!=program.outputs.end())target=it->second;}
+        textureCache->selectProject(w->project.dir);bool cacheHit=false;
+        auto img=textureCache->evaluate(program,{target},std::min(program.size,32),cacheHit).front();std::string hex;hex.reserve(img.rgba.size()*2);
+        for(auto v:img.rgba){hex+="0123456789abcdef"[v>>4];hex+="0123456789abcdef"[v&15];}
+        Json r=okJson();r.set("width",Json::number(int64_t(img.width)));r.set("height",Json::number(int64_t(img.height)));r.set("rgbaHex",Json::string(hex));r.set("cacheHit",Json::fromBool(cacheHit));return r;
+    });
+    add("texture_graph_bake","Evaluate one declared output at full resolution and publish new PNG under content/textures; never overwrite.",graphSchema,[w,textureCache](const Json& p){
+        needProject(*w);auto program=render::texture_graph::compile(p["graph"],p.has("overrides")?p["overrides"]:Json::object());auto output=p.getStr("output"),name=p.getStr("textureName");
+        if(!render::texture_graph::safeId(name))throw std::invalid_argument("invalid texture name");
+        auto it=program.outputs.find(output);if(it==program.outputs.end())throw std::invalid_argument("unknown output");
+        textureCache->selectProject(w->project.dir);bool cacheHit=false;
+        auto img=textureCache->evaluate(program,{it->second},0,cacheHit).front();
+        auto r=publishTextureGraphImage(*w,name,output,img);r.set("cacheHit",Json::fromBool(cacheHit));return r;
+    });
+
+    add("texture_graph_bake_set","Bake all declared outputs into a new named directory; stage all PNGs before publication, no overwrite of existing set.",graphSchema,[w,textureCache](const Json& p){
+        needProject(*w);const auto overrides=p.has("overrides")?p["overrides"]:Json::object();const auto program=render::texture_graph::compile(p["graph"],overrides);
+        std::vector<size_t> targets;for(const auto& [output,index]:program.outputs)targets.push_back(index);
+        textureCache->selectProject(w->project.dir);bool cacheHit=false;
+        auto images=textureCache->evaluate(program,targets,0,cacheHit);
+        auto r=publishTextureGraphSet(*w,p.getStr("textureName"),p["graph"],overrides,images,std::vector<std::string>(images.size(),"cpu"));
+        r.set("cacheHit",Json::fromBool(cacheHit));return r;
+    });
+
+    add("texture_graph_material_variant","Create a new inherited library material from a baked set manifest. Requires explicit new material and base names; no regeneration or overwrite.",R"({"properties":{"textureName":{"type":"string"},"materialName":{"type":"string"},"base":{"type":"string"}},"required":["textureName","materialName","base"]})",[w](const Json& p){
+        needProject(*w);
+        const auto set=p.getStr("textureName"),name=p.getStr("materialName"),base=p.getStr("base");
+        if(!render::texture_graph::safeId(set)||!render::texture_graph::safeId(name)||!render::texture_graph::safeId(base)||name==base)throw std::invalid_argument("invalid variant names");
+        const auto root=fs::canonical(w->project.dir),dir=root/"content"/"textures"/set,file=dir/"texture-set.json";
+        if(fs::is_symlink(root/"content")||fs::is_symlink(root/"content"/"textures")||fs::is_symlink(dir)||fs::is_symlink(file)||!fs::is_regular_file(file)||fs::file_size(file)>512*1024)throw std::runtime_error("invalid texture set manifest");
+        const auto manifest=Json::parseFile(file.string());
+        if(manifest.getInt("version")!=1)throw std::runtime_error("unsupported texture set manifest");
+        const auto program=render::texture_graph::compile(manifest["graph"],manifest["overrides"]);
+        if(!manifest["files"].isArray()||manifest["files"].size()!=program.outputs.size())throw std::runtime_error("incomplete texture set manifest");
+        const std::map<std::string,std::string> channels={{"color","texture"},{"normal","normalMap"},{"metallicRoughness","metallicRoughnessMap"},{"ao","occlusionMap"},{"emissive","emissiveMap"},{"mask","teamMask"}};
+        Json material=Json::object();material.set("base",Json::string(base));
+        std::set<std::string> seen;
+        for(const auto& row:manifest["files"].items()){
+            const auto output=row.getStr("output");
+            const auto path="content/textures/"+set+"/"+output+".png";
+            if(!program.outputs.count(output)||!seen.insert(output).second||row.getStr("path")!=path||fs::is_symlink(root/path)||!fs::is_regular_file(root/path))throw std::runtime_error("invalid or missing baked texture");
+            if(auto it=channels.find(output);it!=channels.end())material.set(it->second,Json::string(path));
+        }
+        if(material.size()<2)throw std::runtime_error("no material-compatible outputs");
+        const auto lib=loadMaterialLibrary(*w);
+        if(lib.has(name)||!lib[base].isObject())throw std::runtime_error("variant name exists or base material missing");
+        // Reuse the native library writer, not a separate runtime material format.
+        Json args=Json::object();args.set("name",Json::string(name));args.set("material",material);
+        auto r=w->call("material_set",args,"texture-graph");
+        if(r.getBool("ok"))r.set("note",Json::string("Baked variant; configure texture importer metadata separately. Existing material library owner concurrency applies."));
+        return r;
+    });
+
     add("texture_generate",
         "Make a tileable texture (PNG in the game folder) for a material: bricks, metal panels, wood, camouflage, scales, noise, "
         "stripes, ... Also its normal map (output: normal) or a team mask (output: mask). Use the path in material_set / "
@@ -395,6 +556,7 @@ void registerMaterialOps(Workspace& ws) {
                                    (p.getStr("output", "color") == "color" ? "" : "_" + p.getStr("output")) + ".png";
             if (fs::path(rel).extension() != ".png") throw std::runtime_error("path must end with .png");
             const fs::path f = gameFile(*w, rel);
+            if (!p.getBool("overwrite", true) && fs::exists(f)) throw std::runtime_error("texture already exists; choose another name");
             std::error_code ec;
             fs::create_directories(f.parent_path(), ec);
             std::string png;

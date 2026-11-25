@@ -29,7 +29,9 @@ Environment knobs: `AIVERSE_CONTENT` (content root), `AIVERSE_GFX=vulkan|gl` (RH
 (null: real audio thread without hardware), `AIVERSE_AUDIO_CAPTURE=mix.wav` (record what was played),
 `AIVERSE_SCREENSHOT`, `AIVERSE_EXIT_AFTER_FRAMES`, `AIVERSE_SPLASH=off|full` (loading screen; default: full splash, only the loading time with `--map`), `AIVERSE_FAST_FORWARD=seconds`
 (bots play that long before the first frame), `AIVERSE_SCRIPT_LOG=1` (client: script log lines `[script] t=<tick> ...` on stdout, as
-`aiverse_headless` prints them).
+`aiverse_headless` prints them), `AIVERSE_BACKGROUND=1` (macOS: the client runs without a Dock icon, never activates or
+takes focus, and its window renders off every screen; `AIVERSE_SCREENSHOT` works, there is no mouse / keyboard input;
+use it for agent and CI runs on a Mac someone is working at).
 
 A change is done when: it builds without warnings on gcc/clang (`-Wall -Wextra`), tests pass, the
 headless matches still finish, visual changes were checked on a screenshot, Metal code paths that

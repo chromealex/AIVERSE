@@ -172,6 +172,29 @@ public:
 
     // Advance exactly one fixed tick.
     void step();
+    // Atomically check readiness before network/replay input is injected.
+    // Callback runs exactly once only when the fixed tick can execute.
+    bool stepWithInput(const std::function<void()>& prepareInput);
+    // Shared, opt-in engine extensions register during GameModule::setup.
+    // The chosen command ID must be reserved by the project's command catalog.
+    using SharedCommandHandler=std::function<void(Simulation&,const Command&)>;
+    using StepGate=std::function<bool(Simulation&)>;
+    bool registerSharedCommandHandler(uint16_t type,SharedCommandHandler handler);
+    bool addSetupCompletedHook(SystemFn fn);
+    bool addStepGate(StepGate gate);
+    bool readyToStep();
+    bool setupComplete()const noexcept{return setupComplete_;}
+    // Non-authoritative diagnostics channels: register on setup, open on the
+    // simulation owner thread. Returned readers must use detached snapshots.
+    using DiagnosticReader=std::function<Json(uint64_t)>;
+    using DiagnosticFactory=std::function<DiagnosticReader()>;
+    bool registerDiagnosticSource(std::string name,DiagnosticFactory factory){
+        return !setupComplete_&&!name.empty()&&factory&&diagnosticSources_.emplace(std::move(name),std::move(factory)).second;
+    }
+    DiagnosticReader openDiagnosticSource(const std::string& name){
+        const auto it=diagnosticSources_.find(name);
+        return it==diagnosticSources_.end()?DiagnosticReader{}:it->second();
+    }
     // Advance by real time; returns number of ticks executed. Use alpha() for render interpolation.
     int advance(double realSeconds, int maxTicks = 8);
     double alpha() const { return accumulator_ * tickRate_; }
@@ -263,6 +286,11 @@ private:
     double accumulator_ = 0.0; // real-time only, never affects the simulation
     std::vector<System> systems_;
     std::vector<SystemFn> stateRestoredHooks_;
+    std::vector<SystemFn> setupCompletedHooks_;
+    std::vector<StepGate> stepGates_;
+    std::map<uint16_t,SharedCommandHandler> sharedCommands_;
+    std::map<std::string,DiagnosticFactory> diagnosticSources_;
+    bool setupComplete_=false;
     int64_t (*profClock_)() = nullptr;
     std::vector<int64_t> profNs_;
     uint32_t profileTarget_=0;

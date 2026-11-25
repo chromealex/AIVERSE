@@ -282,6 +282,10 @@ Json StudioGameSurface::ecologyState(const StudioWorldProcessLiveOptions& option
     out.set("plants",std::move(plants));out.set("weather",std::move(weather));
     out.set("regions",std::move(regions));return out;
 }
+std::function<Json(uint64_t)> StudioGameSurface::buildingGraphReader(){
+    auto* sim=host_&&host_->inMatch()?host_->simulation():nullptr;
+    return sim?sim->openDiagnosticSource("building.graph"):std::function<Json(uint64_t)>{};
+}
 bool StudioGameSurface::canReview(const editor::Workspace& ws) const {
     return host_->canStep()&&studioPlaySourceMatches(launch_,ws)&&host_->currentMapIndex()==launch_.map;
 }

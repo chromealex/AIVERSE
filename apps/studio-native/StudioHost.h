@@ -16,6 +16,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -74,6 +75,7 @@ public:
 struct StudioSceneMods { bool shift = false, ctrl = false, alt = false, command = false; }; // command: Cmd on macOS, Ctrl on Windows
 enum class StudioSceneKey { Other, A, D, E, F, Q, R, S, V, W, Left, Right, Up, Down, Home, Delete, Escape, BracketLeft, BracketRight };
 
+class StudioBuildingPanelPreview;
 class StudioHost {
 public:
     StudioHost(StudioHostPlatform& platform, const std::string& engineRoot, bool htmlComposite);
@@ -215,6 +217,20 @@ private:
     std::string engineRoot_;
     bool htmlComposite_ = false;
     std::unique_ptr<StudioSession> session_;
+    // Separate GPU owner. One outstanding camera request; no main Scene
+    // access and no UI-thread GPU readback during orbit.
+    struct BuildingPreviewJob {Json id;uint64_t token;float yaw,pitch,zoom,panX,panY;};
+    std::unique_ptr<StudioRenderThread> buildingPreviewThread_;
+    std::unique_ptr<StudioBuildingPanelPreview> buildingPanelPreview_;
+    std::mutex buildingPreviewMutex_;
+    std::optional<BuildingPreviewJob> buildingPreviewJob_;
+    std::optional<Json> buildingPreviewReply_;
+    uint64_t buildingPreviewToken_=0;
+    bool buildingPreviewPending_=false,buildingPreviewActive_=false;
+    void retireBuildingPanelPreview();
+    void renderBuildingPanelFrame();
+    void publishBuildingPanelFrame();
+    Json buildingPanelFrame(const BuildingPreviewJob& job);
     std::unique_ptr<StudioScene> preview_;             // created, used and destroyed on renderThread_
     std::unique_ptr<StudioScene> fxPreview_;           // separate GPU drawable + isolated camera; same owner render thread
     std::unique_ptr<StudioRenderThread> renderThread_;
@@ -256,6 +272,8 @@ private:
     uint64_t sceneFrameCount_ = 0;
     std::deque<std::pair<float, uint32_t>> frameHistory_;
     std::vector<StudioScene::OverlayShape> extShapes_;
+    uint64_t buildingGraphOverlayScene_=0;
+    uint32_t buildingGraphOverlayLayers_=1;
     Json splineCache_;
     std::string splineDrag_, lastActionCaption_, hoverId_, pendingProject_;
     // Scene-only drag scratch. Source of truth remains MapDoc; commit once

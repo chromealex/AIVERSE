@@ -21,6 +21,11 @@ namespace {
 bool finite(float x) {return std::isfinite(x);}
 bool finite(fx::float3 v) {return finite(v.x)&&finite(v.y)&&finite(v.z);}
 bool finite(fx::float4 v) {return finite(v.x)&&finite(v.y)&&finite(v.z)&&finite(v.w);}
+void unpackCheckpointVectors(const std::array<float,8>& values,
+                             render::float4& first,render::float4& second) {
+    first={values[0],values[1],values[2],values[3]};
+    second={values[4],values[5],values[6],values[7]};
+}
 gfx::BufferHandle buffer(gfx::Device& d,gfx::BufferType type,size_t size,
                          const void* data,const char* label) {
     gfx::BufferDesc desc;
@@ -2076,10 +2081,8 @@ bool ComputeParticles::restoreGpuSnapshot(const GpuCheckpoint& source) {
         for(float v:p.attributes)if(!finite(v))return false;
         states[i].positionAge=p.positionAge;states[i].velocityLife=p.velocityLife;
         states[i].tint=p.tint;states[i].size=p.size;
-        params[i].p0={p.programParams[0],p.programParams[1],p.programParams[2],p.programParams[3]};
-        params[i].p1={p.programParams[4],p.programParams[5],p.programParams[6],p.programParams[7]};
-        attrs[i].a0={p.attributes[0],p.attributes[1],p.attributes[2],p.attributes[3]};
-        attrs[i].a1={p.attributes[4],p.attributes[5],p.attributes[6],p.attributes[7]};
+        unpackCheckpointVectors(p.programParams,params[i].p0,params[i].p1);
+        unpackCheckpointVectors(p.attributes,attrs[i].a0,attrs[i].a1);
     }
     for(float v:snapshot.birthParameters)if(!finite(v))return false;
     markGpuAllocationUsed();
@@ -2149,8 +2152,8 @@ bool ComputeParticles::restoreOwnedGpuSnapshot(const GpuCheckpoint& source){
         const auto& p=snapshot.slots[i];
         if(snapshot.remainingLifetime[i]<=0.f){states[i].positionAge.w=-1.f;continue;}
         states[i]={p.positionAge,p.velocityLife,p.tint,p.size};
-        std::memcpy(&params[i],p.programParams.data(),sizeof(ProgramParams));
-        std::memcpy(&attrs[i],p.attributes.data(),sizeof(ProgramAttributes));
+        unpackCheckpointVectors(p.programParams,params[i].p0,params[i].p1);
+        unpackCheckpointVectors(p.attributes,attrs[i].a0,attrs[i].a1);
         owners[size_t(i)*2]=uint32_t(snapshot.sourceTokens[i]);
         owners[size_t(i)*2+1]=uint32_t(snapshot.sourceTokens[i]>>32);
         expiry.push_back(snapshot.remainingLifetime[i]);

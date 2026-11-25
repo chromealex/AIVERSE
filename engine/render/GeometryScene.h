@@ -115,6 +115,19 @@ public:
     // Full Device idle proof is required at final teardown. Live reload
     // instead moves old resident Models/HLOD proxies into the ordered queue.
     void shutdown(gfx::Device& dev);
+    // Nonblocking retirement for ordinary Model-only scenes. For portable
+    // STRATA owners use the explicit completed-submission fence entry point.
+    // Call only after removing this scene from all Renderer3D draw paths.
+    bool deferredShutdownEligible()const noexcept;
+    bool beginDeferredShutdown(gfx::Device& dev);
+    // Owner must detach EVERY draw/alias borrower before capturing a real
+    // submission fence covering the last possible use of this scene.
+    // A zero fence or unfinished GPU work refuses, never waits idle.
+    // Diagnostic GPU culling/metadata/readback and failed stages stay on
+    // the explicit idle recovery path.
+    bool beginDeferredShutdownAfterFence(gfx::Device& dev,uint64_t lastUseFence);
+    bool pollDeferredShutdown(gfx::Device& dev);
+
     // Discard the current static presentation scene without waiting idle:
     // used on rules/project reload, not final Device teardown.
     void clear(gfx::Device& dev) {retireResident(dev);}
@@ -131,6 +144,9 @@ public:
     // retirement queues, releasing stages only after GPU completion proof.
     bool collectRetired(gfx::Device& dev);
     void draw(Renderer3D& renderer);
+    // Exact rigid sources with a moving parent (planet body/view frame).
+    // No HLOD, STRATA, static world-cache or surface proxy substitution.
+    void drawExactPlaced(Renderer3D& renderer,const mat4& parent);
     void setRuntimeOptions(bool hlod,bool geometry,bool surfaces,bool cache) { hlod_=hlod;geometryEnabled_=geometry;surfacesEnabled_=surfaces;cacheEnabled_=cache; }
     // Opt-in staging only: prepare auxiliary CPU Strata assets at load time,
     // but keep the existing GeometryScene/Renderer3D draw path authoritative.
@@ -372,7 +388,7 @@ public:
     static void validate(const Json& json);
     size_t instanceCount() const { return instances_.size(); }
 private:
-    void retireResident(gfx::Device& dev);
+    void retireResident(gfx::Device& dev,bool completedSubmission=false);
     void loadImpl(gfx::Device& dev,const Json& json,const FileReader& reader,std::map<std::string,std::unique_ptr<Model>> models,size_t vertexBudget);
     struct Instance { Model* model=nullptr; mat4 world; GeometryPolicy policy; Model* surfaceProxy=nullptr; float proxyPixels=96; StaticModelCache cache,proxyCache; float3 min,max; uint32_t layers=1;
         // Instance "strata": 1 force STRATA, -1 force the LOD path, 0 auto (the
@@ -399,6 +415,7 @@ private:
     // Copies STRATA policy/budget settings (not resources) for staged loads.
     void copyStrataConfigFrom(const GeometryScene& other);
     NativePresentationRetirement retirement_;
+    bool deferredShutdownStarted_=false;
     // Failed transactions may still own GPU models after a refused idle.
     // Retain those retirement queues for a later safe collect/shutdown.
     std::vector<std::unique_ptr<GeometryScene>> failedStages_;

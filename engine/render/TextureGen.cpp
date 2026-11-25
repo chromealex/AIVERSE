@@ -248,12 +248,37 @@ std::vector<std::string> texturePatterns() {
     return out;
 }
 
+Json texturePatternColors(const std::string& pattern) {
+    const auto* p=findPattern(pattern);
+    if(!p)throw std::invalid_argument("unknown texture pattern");
+    auto colors=p->colors;
+    while(colors.size()<2)colors.push_back(colors.empty()?Rgb{.5f,.5f,.5f}:scale(colors[0],.5f));
+    Json out=Json::array();
+    for(auto c:colors){Json rgb=Json::array();for(float v:{c.r,c.g,c.b})rgb.push(Json::number(double(v),9));out.push(rgb);}
+    return out;
+}
 std::string texturePatternHelp() {
     std::string out;
     for (const auto& p : kPatterns) out += std::string(p.name) + ": " + p.help + "\n";
     return out;
 }
 
+float textureNoise(float u,float v,int period,int octaves,uint32_t seed) {
+    return fbm(u,v,std::clamp(period,1,256),std::clamp(octaves,1,6),seed);
+}
+float textureVoronoi(float u,float v,int period,uint32_t seed) {
+    period=std::clamp(period,1,256);
+    const float x=u*period,y=v*period;
+    const int ix=int(std::floor(x)),iy=int(std::floor(y));
+    float best=2.f;
+    for(int dy=-1;dy<=1;++dy)for(int dx=-1;dx<=1;++dx){
+        const int cx=ix+dx,cy=iy+dy;
+        const float px=float(cx)+rand01(wrap(cx,period),wrap(cy,period),seed);
+        const float py=float(cy)+rand01(wrap(cx,period),wrap(cy,period),seed+971u);
+        best=std::min(best,(px-x)*(px-x)+(py-y)*(py-y));
+    }
+    return clamp01(std::sqrt(best));
+}
 void generateTexture(const Json& j, Image& out) {
     Spec s;
     s.pattern = j.getStr("pattern", "noise");

@@ -1,0 +1,361 @@
+#pragma once
+// TerraWeave Caverns Stage40: native GameClient/Editor Play shared visual host.
+// Opt-in scene presentation ONLY until a game world provides a real Box3D,
+// SpatialWorld and nav owner. Never ACK gameplay edits from this adapter.
+// The actual client and editor-hosted Game tab both use GameClient, so this
+// adapter is owned once per match, not by FPS/RTS genre modules.
+#include "engine/world/TerraWeaveCavernsSdfSpatialIndex.h"
+#include "engine/world/TerraWeaveCavernsWorldResidency.h"
+#include "engine/world/TerraWeaveCavernsStreamJobs.h"
+#include "engine/render/TerraWeaveCavernsShardGpuHost.h"
+#include "engine/world/TerraWeaveCavernsOwnedRimGroup.h"
+#include <algorithm>
+#include <cstdint>
+#include <map>
+#include <memory>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+
+namespace aiverse::terraweave::caverns {
+class CaveClientVisualHost {
+public:
+    explicit CaveClientVisualHost(StreamSettings stream={})
+        :residency_(stream),workers_(2) {
+        geometry_.setUploadLimits({32ull*1024*1024,1,64});
+    }
+    // Configure the existing STRATA/shard owner before opening a world.
+    void setGraphicsOptions(CaveBatchSpec options){
+        if(index_)throw std::logic_error("Caverns visual policy requires unopened host");
+        graphicsOptions_=options;
+    }
+    CaveGeometrySwapOwner::MemoryStats gpuMemoryStats()const noexcept{return geometry_.memoryStats();}
+    CaveShardGpuHost::GpuPreviewStats gpuStats()const noexcept{return geometry_.stats();}
+    CaveGpuUploadStats uploadStats()const noexcept{return geometry_.uploadStats();}
+    // Initial snapshot must already be canonicalized by the map loader.
+    void open(std::shared_ptr<const CaveVolumeSnapshot> snapshot) {
+        if(!snapshot||!snapshot->sourceRevision)
+            throw std::invalid_argument("Caverns client visual world snapshot");
+        if(index_)throw std::logic_error("Caverns client world already open");
+        index_=std::make_shared<const CaveSnapshotSpatialIndex>(snapshot);
+        residency_.sourceRevision(snapshot->sourceRevision);
+    }
+    // Frame owner, OUTSIDE a render pass. One edit to the source replaces
+    // the immutable index; old async work retains its old source but its
+    // ticket generation becomes invalid and cannot enter the draw catalog.
+    void replaceSnapshot(std::shared_ptr<const CaveVolumeSnapshot> source) {
+        if(!index_)throw std::logic_error("Caverns visual world not open");
+        if(!source||!source->sourceRevision)
+            throw std::invalid_argument("Caverns client visual snapshot");
+        // Undo/Redo can restore a lower MapDoc revision. The live client
+        // uses a strictly increasing runtime epoch for worker tickets.
+        auto normalized=std::make_shared<CaveVolumeSnapshot>(*source);
+        canonicalizeCaveSnapshot(*normalized);
+        if(index_->revision()==UINT64_MAX)
+            throw std::overflow_error("Caverns client visual revision overflow");
+        normalized->sourceRevision=std::max(
+            normalized->sourceRevision,index_->revision()+1);
+        auto indexed=std::make_shared<const CaveSnapshotSpatialIndex>(
+            std::move(normalized));
+        index_=std::move(indexed);
+        residency_.sourceRevision(index_->revision());
+        cancelPendingVisualBatch();
+        ready_.clear();
+        pendingRetire_.clear();
+        if(previewRimPlan_)setPreviewRimGroup({},{});
+        if(chartDemand_)previewDemandChanging_=true;
+    }
+    // Bounded chart inspector: use existing streaming jobs without requesting
+    // any chunk outside the authored region. Set once after opening a host.
+    void setChartPreviewDemand(std::set<ChunkKey3,KeyLess> keys,int32_t capCm=0){
+        if(!index_||previewRimPlan_||geometry_.catalog().committedKeys().size())
+            throw std::logic_error("Caverns chart demand requires new visual host");
+        if(capCm<0||capCm>15000)throw std::invalid_argument("Caverns chart cap");
+        residency_.setExplicitVisualDemand(keys);
+        chartDemand_=std::move(keys);chartCapCm_=capCm;
+        chartLods_.clear();previewDemandChanging_=true;
+    }
+    // Studio only: use an exact bounded group instead of camera demand.
+    // Caller shares the very same immutable CPU terrain plan with its
+    // surface preview; no second GeometryScene or additive collar draw.
+    void setPreviewRimGroup(std::shared_ptr<const CaveSurfaceGroupPlan> plan,
+            const std::map<uint64_t,Fixed>& lowerPlanes,uint32_t resolution=16,int32_t spacingCm=100){
+        if(plan==previewRimPlan_)return;
+        if(!index_)throw std::logic_error("Caverns rim preview requires open world");
+        std::vector<CaveOwnedRimRequest> requests;
+        std::set<ChunkKey3,KeyLess> keys;
+        if(plan){
+            requests=selectOwnedRimRequests(*plan,index_->snapshot(),lowerPlanes,resolution,spacingCm);
+            if(requests.empty())throw std::invalid_argument("Caverns empty preview rim group");
+            for(const auto& r:requests){
+                if(chartDemand_&&!chartDemand_->contains(r.key))
+                    throw std::invalid_argument("Caverns rim outside bounded chart demand");
+                keys.insert(r.key);
+            }
+        }
+        cancelPendingVisualBatch();
+        residency_.setExplicitVisualDemand(chartDemand_?chartDemand_:plan?std::optional{keys}:std::nullopt);
+        chartLods_.clear();
+        ready_.clear();pendingRetire_.clear();
+        previewRimPlan_=std::move(plan);previewRimRequests_=std::move(requests);
+        previewRimKeys_=std::move(keys);previewRimCommitted_=false;previewDemandChanging_=true;
+    }
+    bool previewRimReady(const CaveSurfaceGroupPlan& plan)const noexcept{
+        if(!index_||previewRimPlan_.get()!=&plan||!previewRimCommitted_||previewDemandChanging_||
+           geometry_.catalog().size()!=(chartDemand_?chartDemand_->size():previewRimKeys_.size()))return false;
+        for(const auto& key:previewRimKeys_){
+            const auto* source=geometry_.catalog().find(key);
+            if(!source||!source->preserveExactSurface||source->sourceRevision!=index_->revision()||
+               (!chartDemand_&&!residency_.ready(key)))return false;
+        }
+        return true;
+    }
+    bool previewDemandChanging()const noexcept{return previewDemandChanging_;}
+    // CPU jobs may finish in any order. GPU publication stays owner-thread
+    // and is frame-admitted by the complete-shard geometry host.
+    void beforeRender(gfx::Device& device,PointCm focus,
+                      uint32_t resolution=16,int32_t spacingCm=100) {
+        if(!index_)return;
+        (void)geometry_.collectCompletedWithoutIdle(device);
+        const auto camera=caveStreamingChunkAt(focus,resolution,spacingCm);
+        residency_.center(camera);
+        if(chartDemand_){
+            auto lods=caveChartPreviewLods(*chartDemand_,previewRimKeys_,camera,chartLods_);
+            if(lods!=chartLods_){
+                cancelPendingVisualBatch();
+                residency_.setExplicitVisualLods(lods);
+                chartLods_=std::move(lods);ready_.clear();pendingRetire_.clear();
+                // Keep the previous complete chart during camera-only updates.
+            }
+        }
+        const auto requests=residency_.pump();
+        for(const auto& ticket:requests) {
+            if(ticket.action==CaveResidencyAction::Build){
+                if(!workers_.dispatch(ticket,index_->frozenSnapshot(),
+                                      resolution,spacingCm,index_,chartCapCm_))
+                    (void)residency_.fail(ticket);
+            }else {
+                // No visual retirement here until the full source replacement
+                // for that shard is staged. Keep the resident/intent ticket
+                // rather than dropping the old GPU geometry unsafely.
+                pendingRetire_.insert_or_assign(ticket.key,ticket);
+            }
+        }
+        for(auto& result:workers_.poll()) {
+            if(!residency_.current(result.ticket))continue;
+            if(!result.success){
+                (void)residency_.fail(result.ticket);
+                continue;
+            }
+            ready_.insert_or_assign(result.ticket.key,std::move(result));
+        }
+        // Retire one undesired source at a time using a complete new shard
+        // manifest. Never remove the visual from just the CPU catalog:
+        // the old GPU owner is retained until a real completed fence.
+        if(!visualBatch_)for(auto it=pendingRetire_.begin();it!=pendingRetire_.end();) {
+            const auto ticket=it->second;
+            if(!residency_.current(ticket)){
+                it=pendingRetire_.erase(it);continue;
+            }
+            const auto* resident=geometry_.catalog().find(ticket.key);
+            if(!resident){
+                if(!residency_.acknowledge(ticket))
+                    throw std::logic_error("Caverns visual no-source retirement ACK");
+                ready_.erase(ticket.key);
+                it=pendingRetire_.erase(it);
+                continue;
+            }
+            const auto sourceRevision=resident->revision;
+            ++visualRevision_;
+            if(!geometry_.stageVisualRetire(device,ticket.key,sourceRevision,
+                                             visualRevision_,graphicsOptions_))
+                break; // budget or pending GPU source: retry later
+            const auto shard=caveShardFor(ticket.key,geometry_.catalog().config());
+            if(!geometry_.activateVisualOnly({shard}))
+                throw std::runtime_error("Caverns client visual retirement activation");
+            if(!residency_.acknowledge(ticket))
+                throw std::logic_error("Caverns client retired source ACK mismatch");
+            ready_.erase(ticket.key);
+            it=pendingRetire_.erase(it);
+            // Keep a single whole-shard GPU publication per frame.
+            return;
+        }
+        // Stage ONE connected mixed-LOD plan across frames and publish ALL
+        // affected shards together. A single-key immediate commit here would
+        // expose cracks while neighboring authored revisions are still old.
+        if(visualBatch_){
+            bool current=true;
+            for(const auto& item:batchTickets_){
+                if(!residency_.current(item)) {current=false;break;}
+            }
+            if(!current)cancelPendingVisualBatch();
+        }
+        if(!visualBatch_ && !ready_.empty()){
+            if(chartDemand_||previewRimPlan_){
+                if(!chartDemand_&&previewRimCommitted_)return;
+                const auto& wanted=chartDemand_?*chartDemand_:previewRimKeys_;
+                for(const auto& key:wanted){const auto it=ready_.find(key);if(it==ready_.end()||!residency_.current(it->second.ticket))return;}
+                for(const auto& key:geometry_.catalog().committedKeys())if(!wanted.contains(key))return;
+            }
+            std::vector<CaveBatchChunk> candidates;
+            std::vector<CaveResidencyTicket> tickets;
+            for(const auto& [key,result]:ready_){
+                (void)key;
+                if(!residency_.current(result.ticket))continue;
+                const auto visual=caveVisualLodMeshSpec(
+                    resolution,spacingCm,result.ticket.lod);
+                CaveBatchChunk chunk;
+                chunk.mesh=result.mesh;
+                chunk.resolution=visual.resolution;
+                chunk.spacingCm=visual.spacingCm;
+                chunk.sourceRevision=result.ticket.sourceRevision;
+                chunk.generatorVersion=index_->snapshot().generatorVersion;
+                chunk.revision=visualRevision_+1;
+                candidates.push_back(std::move(chunk));
+                tickets.push_back(result.ticket);
+            }
+            if(!candidates.empty()){
+                if(previewRimPlan_){
+                    std::map<uint64_t,CaveOwnedRimGroupRequest> groups;
+                    for(const auto& r:previewRimRequests_){auto& g=groups[r.entranceId];g.entranceId=r.entranceId;g.lowerPlane=r.lowerPlane;g.keys.push_back(r.key);}
+                    for(const auto& [id,group]:groups){
+                        (void)id;std::vector<CaveCertifiedChunk> sources;
+                        for(const auto& key:group.keys){
+                            const auto it=std::find_if(candidates.begin(),candidates.end(),[&](const auto& c){return c.mesh.key==key;});
+                            if(it==candidates.end())throw std::logic_error("Caverns missing preview rim slot");
+                            sources.push_back({it->mesh,it->resolution,it->spacingCm,it->sourceRevision,it->revision});
+                        }
+                        auto owned=prepareOwnedRimGroup(sources,group,*previewRimPlan_,index_->snapshot());
+                        for(auto& slot:owned.slots){
+                            auto it=std::find_if(candidates.begin(),candidates.end(),[&](const auto& c){return c.mesh.key==slot.candidate.mesh.key;});
+                            if(it==candidates.end())throw std::logic_error("Caverns missing transformed preview slot");
+                            it->mesh=std::move(slot.candidate.mesh);it->preserveExactSurface=true;
+                        }
+                    }
+                }
+                const auto planBatch=[&](){
+                    return planCaveMixedLodShardBatch(geometry_.catalog(),
+                        groupCaveEditsByShard(candidates,geometry_.catalog().config()),visualRevision_+1);
+                };
+                CaveMixedLodShardBatch plan;
+                bool fallback=false;
+                try{plan=planBatch();}
+                catch(const std::invalid_argument&){if(!chartDemand_)throw;fallback=true;}
+                if(chartDemand_&&(fallback||!plan.ready())){
+                    // All chart slots have finest meshes from this same epoch.
+                    // Preserve exact collar slots, never fabricate a seam.
+                    for(auto& c:candidates)if(!c.preserveExactSurface){
+                        const auto& result=ready_.at(c.mesh.key);
+                        c.mesh=result.collisionMesh;c.resolution=resolution;c.spacingCm=spacingCm;
+                    }
+                    plan=planBatch();fallback=true;
+                }
+                if(!plan.ready()&&(previewRimPlan_||chartDemand_))
+                    throw std::runtime_error("Caverns chart/rim LOD certificate refused");
+                if(chartDemand_)chartFallbackPending_=fallback;
+                if(plan.ready()){
+                    ++visualRevision_;
+                    batchTickets_=std::move(tickets);
+                    visualBatch_=std::make_unique<CaveMixedLodShardBatch>(
+                        std::move(plan));
+                }
+                // If a neighbor has an incompatible old SDF border, wait
+                // for its new streamed mesh; never force-publish a crack.
+            }
+        }
+        if(visualBatch_ &&
+           batchCursor_<visualBatch_->snapshots.size()){
+            const auto& shard=visualBatch_->snapshots[batchCursor_];
+            if(geometry_.stagePlannedShard(
+                    device,shard,visualBatch_->visual,graphicsOptions_)){
+                stagedShards_.push_back(shard.shard);
+                ++batchCursor_;
+            }
+        }
+        if(visualBatch_ &&
+           batchCursor_==visualBatch_->snapshots.size()){
+            for(const auto& ticket:batchTickets_)
+                if(!residency_.current(ticket)){
+                    cancelPendingVisualBatch();return;
+                }
+            if(!geometry_.activateVisualOnly(stagedShards_))
+                throw std::runtime_error(
+                    "Caverns client multi-shard visual activation");
+            for(const auto& ticket:batchTickets_){
+                if(!residency_.acknowledge(ticket))
+                    throw std::logic_error(
+                        "Caverns client batch visual ACK mismatch");
+                ready_.erase(ticket.key);
+            }
+            visualBatch_.reset();
+            batchTickets_.clear();
+            stagedShards_.clear();
+            batchCursor_=0;
+            if(previewRimPlan_){previewRimCommitted_=true;previewDemandChanging_=false;}
+            if(chartDemand_){chartFallbackActive_=chartFallbackPending_;previewDemandChanging_=false;}
+        }
+        if(previewDemandChanging_&&!previewRimPlan_&&!chartDemand_){
+            bool exact=false;
+            for(const auto& key:geometry_.catalog().committedKeys())if(geometry_.catalog().find(key)->preserveExactSurface){exact=true;break;}
+            if(!exact)previewDemandChanging_=false;
+        }
+    }
+    void cancelPendingVisualBatch(){
+        for(const auto& shard:stagedShards_)
+            (void)geometry_.cancel(shard);
+        visualBatch_.reset();
+        batchTickets_.clear();
+        stagedShards_.clear();
+        batchCursor_=0;
+    }
+    void draw(render::Renderer3D& renderer){if(!previewDemandChanging_)geometry_.draw(renderer);}
+    bool closeAfterGpuIdle(gfx::Device& dev){
+        workers_.drain();
+        cancelPendingVisualBatch();
+        if(!geometry_.shutdownAfterGpuIdle(dev))return false;
+        index_.reset();ready_.clear();pendingRetire_.clear();chartDemand_.reset();
+        chartLods_.clear();chartCapCm_=0;chartFallbackActive_=chartFallbackPending_=false;
+        previewRimPlan_.reset();previewRimRequests_.clear();previewRimKeys_.clear();
+        previewRimCommitted_=false;previewDemandChanging_=false;
+        residency_.setExplicitVisualDemand(std::nullopt);
+        return true;
+    }
+    size_t pendingCpu()const noexcept{return workers_.inFlight();}
+    bool opened()const noexcept{return index_!=nullptr;}
+    uint64_t sourceRevision()const noexcept{return index_?index_->revision():0;}
+    int64_t suggestedFocusYcm()const noexcept{
+        if(!index_)return -1000;
+        const auto& c=index_->snapshot().settings;
+        // Follow the authored cave vertical range, not a fixed Y=-10 m
+        // assumption that would make deeper generated caves invisible.
+        if(c.maxYcm-c.minYcm<=2)return c.minYcm;
+        return std::clamp<int64_t>(c.maxYcm-800,
+                                   c.minYcm+1,c.maxYcm-1);
+    }
+    CaveResidencyStats streaming()const{return residency_.stats();}
+    size_t chartSlots()const noexcept{return chartDemand_?chartDemand_->size():0;}
+    size_t exactChartSlots()const noexcept{return chartDemand_?previewRimKeys_.size():0;}
+    bool chartLodFallback()const noexcept{return chartFallbackActive_;}
+private:
+    std::optional<std::set<ChunkKey3,KeyLess>> chartDemand_;
+    std::map<ChunkKey3,uint32_t,KeyLess> chartLods_;
+    int32_t chartCapCm_=0;
+    bool chartFallbackActive_=false,chartFallbackPending_=false;
+    std::shared_ptr<const CaveSurfaceGroupPlan> previewRimPlan_;
+    std::vector<CaveOwnedRimRequest> previewRimRequests_;
+    std::set<ChunkKey3,KeyLess> previewRimKeys_;
+    bool previewRimCommitted_=false,previewDemandChanging_=false;
+    CaveBatchSpec graphicsOptions_{};
+    CaveWorldResidency residency_;
+    CaveWorldStreamJobs workers_;
+    CaveShardGpuHost geometry_;
+    std::shared_ptr<const CaveSnapshotSpatialIndex> index_;
+    std::map<ChunkKey3,CaveStreamCpuResult,KeyLess> ready_;
+    std::map<ChunkKey3,CaveResidencyTicket,KeyLess> pendingRetire_;
+    std::unique_ptr<CaveMixedLodShardBatch> visualBatch_;
+    std::vector<CaveResidencyTicket> batchTickets_;
+    std::vector<CaveShardKey> stagedShards_;
+    size_t batchCursor_=0;
+    uint64_t visualRevision_=0;
+};
+} // namespace aiverse::terraweave::caverns

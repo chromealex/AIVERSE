@@ -20,7 +20,7 @@ export const PANEL_WINDOW_GROUP: Record<StudioPanel, WindowGroup> = {
   scene: 'scene', hierarchy: 'scene', inspector: 'scene', history: 'scene',
   terrain: 'world', water: 'world', nereid_flow: 'world', roads: 'world',
   tiles: 'world', fog: 'world', generate: 'world', fields: 'world',
-  terraweave_generator: 'world', caverns: 'world', world_explorer: 'world', world_persistence: 'world',
+  building_generator: 'world', feature_readiness: 'project', terraweave_generator: 'world', caverns: 'world', world_explorer: 'world', world_persistence: 'world',
   materials: 'render', lighting: 'render', shader_graph: 'render',
   postfx: 'render', lightbake: 'render', texture_resources: 'render',
   effects: 'fx', fx_graph: 'fx', fx_library: 'fx', fx_functions: 'fx', wind: 'fx',

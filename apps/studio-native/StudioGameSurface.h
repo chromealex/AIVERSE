@@ -22,6 +22,7 @@ public:
     void suspend();
     void event(const platform::Event& event);
     Json state() const;
+    std::function<Json(uint64_t)> buildingGraphReader();
     Json regions() const;
     Json profile(const std::string& action,uint32_t steps);
     Json entities(int offset,int limit,const std::string& query);

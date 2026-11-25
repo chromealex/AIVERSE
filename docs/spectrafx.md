@@ -424,7 +424,7 @@ project's gameplay genre. No editor GPU context is required to validate graphs.
 | `fx_graph_list` | none | All `fx/graphs/*.vfx.json`, per-file compile diagnostics |
 | `fx_graph_get` | `name` | Graph JSON, source text and validation |
 | `fx_graph_validate` | `graph` or `text` or `name`, optional `overrides` | Strict compiler errors, emitter count and textures; read-only |
-| `fx_graph_set` | `name`, `graph` or `text` | Validated file creation/update, `Change::Fx` notification |
+| `fx_graph_set` | `name`, `graph` or `text`, `expected` for update | Validated guarded atomic creation/update, `Change::Fx` notification |
 | `fx_graph_delete` | `name` | Deletes only the graph source asset |
 | `fx_graph_bake` | `name`, `effect`, optional `overrides`, `overwrite` | Compiles graph into `fx/<effect>.json` for existing `fx_preview` and legacy runtime |
 
@@ -1226,7 +1226,7 @@ Additional MCP actions:
   operations. Returns edited graph and compiler diagnostics;
   no file is written.
 - `fx_graph_draft_set`, `fx_graph_draft_get`,
-  `fx_graph_draft_list`, `fx_graph_draft_publish`:
+  `fx_graph_draft_list`, `fx_graph_draft_publish` (requires `expectedDraft`; existing published targets require `expected`):
   non-destructive authoring, validation and explicit publication.
 - Existing `fx_graph_get/set/list/validate/bake` continue
   working for both graph versions; published graphs always
@@ -3654,3 +3654,7 @@ grid. Choose the domain origin and extent to cover the route: after a source mov
 outside the grid, only the part of its injection radius overlapping the grid contributes.
 Changing the source revision recreates the field. `world` keeps the original placement;
 `follow` carries the entire field. See [the example graph](../examples/spectrafx/moving_smoke_trail.vfx.json).
+
+## GPU checkpoint restore portability (in progress)
+
+PR #190 tracks GCC compilation of the GPU-owned restore path and a Metal restore/readback check for all eight program parameters and all eight custom attributes in a live slot.

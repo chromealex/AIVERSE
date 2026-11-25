@@ -1,0 +1,198 @@
+{
+  "schema": 1,
+  "id": "feature-gate",
+  "owner": "agents",
+  "changed_paths": [
+    "AGENTS.md",
+    "tools/agents/check_feature.py",
+    "tools/agents/audit_compliance.py",
+    "tools/agents/feature_manifest.schema.json",
+    "tools/skills/catalog.py",
+    "skills/catalog.json",
+    "skills/workflow/aiverse-new-feature/SKILL.md",
+    "tests/feature_gate_test.py",
+    "tests/extra-test-suites.txt",
+    ".github/workflows/feature-gate.yml",
+    "docs/agents/feature-contract.md",
+    "docs/devlog/systems.json",
+    "tools/agents/check_integrations.py",
+    "tools/mcp/audit_registry.py",
+    "tools/agents/check_contracts.py",
+    "docs/agents/contracts/release-site.md",
+    "docs/agents/contracts/architecture-common.md",
+    "docs/agents/contracts/world-ownership.md",
+    "docs/agents/contracts/workflow-parallel.md",
+    "docs/agents/contracts/studio-contract.md",
+    "docs/agents/contracts/render-contract.md",
+    "docs/agents/contracts/build-testing.md",
+    "docs/agents/contracts/reuse-skills.md",
+    "docs/agents/contracts/mcp-contract.md",
+    "docs/agents/contracts/index.json",
+    "tools/agents/evidence.py",
+    "tools/agents/feature_registry.py",
+    "tools/agents/new_feature.py",
+    "tools/agents/legacy_inventory.py",
+    "docs/agents/legacy-integration-map.json",
+    "tools/agents/capability_inventory.py",
+    "tools/agents/graph_inventory.py",
+    "docs/agents/graph-inventory.json",
+    "tools/agents/capability_coverage.py",
+    "docs/evidence/capability-coverage.json",
+    "tools/agents/feature_policy.py",
+    "docs/agents/feature-policy.json",
+    "apps/editor/core/FeatureGateOps.h",
+    "apps/editor/core/Workspace.cpp",
+    "apps/studio-native/StudioTools.h",
+    "apps/studio-web/src/nestedDock.ts",
+    "apps/studio-web/src/panels/StudioPanelRenderer.tsx",
+    "apps/studio-web/src/panels/FeatureReadinessPanel.tsx",
+    "apps/studio-native/StudioSession.cpp",
+    "docs/handoff/studio-html5/feature-readiness-stage20-21-2026-11-24.md",
+    "tools/agents/feature_automation.py",
+    "tools/agents/feature_api.py",
+    "docs/agents/feature-automation.json",
+    "docs/handoff/studio-html5/feature-readiness-stage24-36-2026-11-24.md",
+    "tools/studio/test_design_system.py",
+    "tools/studio/test_build_config.py",
+    "tools/studio/test_content_layout.py",
+    "tools/studio/test_reference_pin_zoom.py",
+    "tools/studio/test_scene_tools.py",
+    "apps/studio-web/tests/nested-dock.mjs"
+  ],
+  "traits": {
+    "editable": false,
+    "simulation": false,
+    "visible": true,
+    "runtime": false
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "The strict audit detected missing coverage on the integrated diff; native refresh produced a versioned report with a valid SHA and paginated readback.",
+      "evidence": [
+        "docs/evidence/feature-readiness-stdio-b954cd47a.json",
+        "docs/agent-handoffs/building-caverns-integration-stage19-2026-11-25.md"
+      ]
+    },
+    "architecture": {
+      "status": "not_run",
+      "note": "Pending actual execution and integration review.",
+      "evidence": []
+    },
+    "native_api": {
+      "status": "not_run",
+      "note": "Native Workspace readiness query and fixed local report generation implemented in source; build and runtime validation pending.",
+      "evidence": []
+    },
+    "skill": {
+      "status": "pass",
+      "note": "The feature-delivery skill routes to the strict feature contract. The audit of the skill catalog, checker regressions and native readiness refresh/query ran on this integration.",
+      "evidence": [
+        "skills/workflow/aiverse-new-feature/SKILL.md",
+        "docs/evidence/integration-acceptance-d5608fb7f.json"
+      ]
+    },
+    "mcp": {
+      "status": "pass",
+      "note": "All four native readiness operations worked over stdio without a loaded project: generation, completion, snapshot readback and a bounded feature page.",
+      "evidence": [
+        "docs/evidence/feature-readiness-stdio-b954cd47a.json",
+        "docs/evidence/integration-tools-b954cd47a.json"
+      ]
+    },
+    "studio": {
+      "status": "not_run",
+      "note": "Opt-in regeneration, job status, dependency graph and assignment proposals implemented in source; typecheck, build and visual validation pending.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_applicable",
+      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_applicable",
+      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_applicable",
+      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "evidence": []
+    },
+    "platforms": {
+      "status": "not_applicable",
+      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "evidence": []
+    },
+    "dependencies": {
+      "status": "not_run",
+      "note": "Pending actual execution and integration review.",
+      "evidence": []
+    },
+    "headless": {
+      "status": "not_applicable",
+      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "evidence": []
+    },
+    "examples": {
+      "status": "not_run",
+      "note": "Pending actual execution and integration review.",
+      "evidence": []
+    },
+    "tests": {
+      "status": "pass",
+      "note": "20 feature-gate tests passed. Registry, contracts and all four readiness MCP operations were verified against the native implementation.",
+      "evidence": [
+        "docs/evidence/integration-tools-b954cd47a.json",
+        "docs/evidence/feature-readiness-stdio-b954cd47a.json"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "The integration handoffs record ownership coverage, both audit modes, native readiness execution, exact revisions and the remaining delivery and platform limits.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage27-2026-11-25.md",
+        "docs/agent-handoffs/building-caverns-integration-stage19-2026-11-25.md",
+        "docs/evidence/integrated-acceptance-3e2a609f0.json"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "The delivery contract specifies manifest shape, dependencies, partial versus strict audit, integration references and evidence freshness.",
+      "evidence": [
+        "docs/agents/feature-contract.md"
+      ]
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Read-only engine readiness report/dashboard implemented in source; native build, real MCP, Studio UI and publishing verification pending.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-new-feature"
+    ],
+    "mcp_tools": [
+      "feature_readiness_get",
+      "feature_readiness_query",
+      "feature_readiness_status_get",
+      "feature_readiness_refresh"
+    ],
+    "studio_panels": [
+      "feature_readiness"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ]
+  },
+  "test_reports": [
+    "docs/evidence/integrated-graph-2a56cbf39.json"
+  ]
+}

@@ -1,4 +1,5 @@
 #include "apps/studio-native/StudioTerrainGeometry.h"
+#include "apps/studio-native/StudioPlanetGlobe.h"
 #include "apps/studio-native/StudioSpectraFields.h"
 #include "apps/studio-native/StudioPlanetPreview.h"
 #include "apps/studio-native/StudioPlanetForestOverlays.h"
@@ -61,6 +62,106 @@ int main() {
     AIVERSE_TEST_CHECK(buildTerrainPreview(d,planet).quads==0);
     AIVERSE_TEST_CHECK(!buildStudioSpectraFields(d,1.5f,true,nullptr)->sample("terraweave","height",{0,0,0},sampledValue));
     d.bodies.clear();
+    // Capture the actual coarse body source, not a reconstructed chart mesh.
+    {
+        namespace pc=editor::planet_caves;
+        editor::MapData map;
+        auto& body=map.bodies.emplace_back();
+        body.id="test-planet";body.faceSize=64;
+        body.meta.set("kind",Json::string("planet"));
+        body.meta.set("radius",Json::number(int64_t(100)));
+        const terraweave::caverns::CavePlanetAnchor anchor{
+            body.id,0,Fixed::fromInt(32),Fixed::fromInt(32),1000};
+        auto region=pc::create(map,anchor);
+        map.extra.set(pc::key,pc::encode(map,region));
+        auto regions=pc::readRegions(map);
+        AIVERSE_TEST_CHECK(regions.active==1&&regions.next==2&&regions.regions.size()==1);
+        auto second=anchor;second.a=Fixed::fromInt(4);second.b=Fixed::fromInt(4);second.halfExtentCm=100;
+        AIVERSE_TEST_CHECK(pc::addRegion(map,regions,pc::create(map,second))==2);
+        AIVERSE_TEST_CHECK(regions.active==2&&regions.regions.size()==2);
+        bool overlap=false;
+        try{(void)pc::addRegion(map,regions,pc::create(map,anchor));}
+        catch(const std::invalid_argument&){overlap=true;}
+        AIVERSE_TEST_CHECK(overlap&&regions.next==3);
+        map.extra.set(pc::key,pc::encodeRegions(map,regions));
+        const auto restoredRegions=pc::readRegions(map);
+        AIVERSE_TEST_CHECK(restoredRegions.active==2&&restoredRegions.next==3);
+        AIVERSE_TEST_CHECK(pc::read(map).anchor.a==second.a);
+        regions.active=1;
+        map.extra.set(pc::key,pc::encodeRegions(map,regions));
+        AIVERSE_TEST_CHECK(pc::read(map).anchor.a==anchor.a);
+        const auto globe=StudioPlanetGlobe::capture(map,anchor.bodyId);
+        AIVERSE_TEST_CHECK(globe.divisions==64&&globe.triangles.size()==12u*64u*64u);
+        AIVERSE_TEST_CHECK(globe.markers.size()==2);
+        const auto dir=globe.cube.dirFromFace(anchor.face,anchor.a,anchor.b);
+        const render::float3 unit=render::normalize(render::float3{
+            float(dir.x.toDouble()),float(dir.y.toDouble()),float(dir.z.toDouble())});
+        const auto hit=globe.pick(unit*30.f,unit*(-1.f));
+        AIVERSE_TEST_CHECK(hit.has_value()&&hit->regionId=="1");
+        AIVERSE_TEST_CHECK(hit->face==anchor.face);
+        AIVERSE_TEST_CHECK(fxAbs(hit->a-anchor.a)<Fixed::fromRatio(1,8));
+        AIVERSE_TEST_CHECK(fxAbs(hit->b-anchor.b)<Fixed::fromRatio(1,8));
+        AIVERSE_TEST_CHECK(!globe.pick(unit*30.f,unit));
+        AIVERSE_TEST_CHECK(!globe.pick(unit*30.f,unit*2.f));
+        const auto frame=pc::frameForDocument(map,anchor);
+        const auto patch=pc::captureLocalSurface(map,anchor,7);
+        AIVERSE_TEST_CHECK(!patch.cells.empty());
+        AIVERSE_TEST_CHECK(patch.bodyTriangles.size()==patch.chartTriangles.size());
+        AIVERSE_TEST_CHECK(patch.cells.size()*2==patch.bodyTriangles.size());
+        const auto plan=pc::planLocalSurfaceCut(frame,patch,region.volume,9);
+        AIVERSE_TEST_CHECK(plan.surfaceRevision==7 && plan.surfaceEpoch==9 && plan.rims.empty());
+        size_t originalCount=0;
+        for(const auto& [key,slot]:plan.slots){
+            (void)key;originalCount+=slot.originalBody.size();
+        }
+        AIVERSE_TEST_CHECK(originalCount==patch.bodyTriangles.size());
+        bool emptyRefused=false;
+        try{(void)refinePlanetChartRim(plan,patch,11,8,25);}
+        catch(const std::invalid_argument&){emptyRefused=true;}
+        AIVERSE_TEST_CHECK(emptyRefused);
+        auto bad=patch;
+        bad.chartTriangles.front().a.x=bad.chartTriangles.front().a.x+Fixed::fromInt(1);
+        bool refused=false;
+        try{(void)pc::planLocalSurfaceCut(frame,bad,region.volume,10);}
+        catch(const std::invalid_argument&){refused=true;}
+        AIVERSE_TEST_CHECK(refused);
+    }
+    // Exercise grid refinement with a known exact square ring. This isolates
+    // the shared chart adapter from the real planet cutter's input policy.
+    {
+        namespace cave=terraweave::caverns;
+        const auto p=[](int x,int z){return Vec3{Fixed::fromRatio(x,2),{},Fixed::fromRatio(z,2)};};
+        const std::array<Vec3,4> outer{p(-8,-8),p(-8,8),p(8,8),p(8,-8)};
+        const std::array<Vec3,4> inner{p(-3,-3),p(-3,3),p(3,3),p(3,-3)};
+        cave::CavePlanetSurfacePatch baseline;
+        baseline.surfaceRevision=7;
+        baseline.chartTriangles={{outer[0],outer[1],outer[2]},{outer[0],outer[2],outer[3]}};
+        cave::CavePlanetCutPlan cut;
+        cut.anchor=baseline.anchor;cut.surfaceRevision=7;cut.surfaceEpoch=9;cut.authorityRevision=10;
+        cut.accepted={1};cut.rims.push_back({1,{}});
+        auto& slot=cut.slots[{0,0,0,1,0}];
+        for(size_t i=0;i<4;++i){
+            const auto j=(i+1)%4;
+            slot.chartTriangles.push_back({outer[i],outer[j],inner[j]});
+            slot.chartTriangles.push_back({outer[i],inner[j],inner[i]});
+            cut.rims.front().ring.push_back(cave::surfaceVertexKey(inner[i]));
+        }
+        const auto refined=refinePlanetChartRim(cut,baseline,11,8,25);
+        AIVERSE_TEST_CHECK(refined.authorityRevision==11 && refined.surfaceEpoch==9);
+        AIVERSE_TEST_CHECK(refined.rims.front().ring.size()==8);
+        MeshBuilder cutMesh;
+        AIVERSE_TEST_CHECK(buildPlanetChartCutPreview(refined,cutMesh)==12);
+        AIVERSE_TEST_CHECK(cutMesh.indices().size()==36);
+        bool badGrid=false;
+        try{(void)refinePlanetChartRim(cut,baseline,11,8,26);}
+        catch(const std::invalid_argument&){badGrid=true;}
+        AIVERSE_TEST_CHECK(badGrid);
+        auto corrupt=cut;corrupt.slots.begin()->second.chartTriangles.pop_back();
+        bool badBoundary=false;
+        try{(void)refinePlanetChartRim(corrupt,baseline,11,8,25);}
+        catch(const std::invalid_argument&){badBoundary=true;}
+        AIVERSE_TEST_CHECK(badBoundary);
+    }
     d.corners.clear();
     d.levels={2,2,2,2};
     d.heights={8,8,8,8};

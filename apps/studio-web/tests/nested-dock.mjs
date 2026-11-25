@@ -18,7 +18,7 @@ test('default tree has 4 nested stacks and exactly one copy of each panel',()=>{
 });
 test('move reorders within a tab stack',()=>{
   const t=moveTab(defaultDockTree(),'animation','dock-center','scene');
-  assert.deepEqual(findDockStack(t,'dock-center').tabs,['animation','scene','game','materials','facial_rig','shader_graph','rules','build','scripts','snapshot_diff']);
+  assert.deepEqual(findDockStack(t,'dock-center').tabs,['animation','scene','game','materials','facial_rig','shader_graph','rules','build','scripts','snapshot_diff','feature_readiness']);
   assert.equal(findDockStack(t,'dock-center').active,'animation');
 });
 test('dragging panels across stacks retains identity',()=>{
@@ -54,7 +54,7 @@ test('window edge dock refuses the only remaining tab',()=>{
   assert.deepEqual(splitDockRoot(only,'scene','right'),normalizeDockTree(only));
 });
 test('sole tab can still dock onto another stack',()=>{
-  const base=closeTab(closeTab(closeTab(closeTab(defaultDockTree(),'assets'),'agent'),'frame_capture'),'texture_resources');
+  const base=closeTab(closeTab(closeTab(closeTab(closeTab(defaultDockTree(),'assets'),'agent'),'frame_capture'),'texture_resources'),'simulation_profiler');
   const t=splitDockStack(base,'console','dock-center','left');
   assert.equal(panelStack(t,'console')!=='dock-bottom',true);
   assert.equal(dockStacks(t).flatMap(s=>s.tabs).filter(x=>x==='console').length,1);

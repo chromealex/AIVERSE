@@ -1,0 +1,112 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/caverns-stage59/0f4394d81d798f28bfdf6b5e43991057a9e7636b
+Test project /Volumes/KINGSTON/AIVERSE-builds/caverns-stage59/0f4394d81d798f28bfdf6b5e43991057a9e7636b
+      Start 256: terraweave_caverns_demo_portal
+      Start 336: vfx_graph_ops
+      Start 486: terraweave_caverns_editor_test
+      Start 201: terraweave_caverns_planet_authority
+ 1/47 Test #336: vfx_graph_ops ...................................   Passed    7.29 sec
+      Start 503: terraweave_caverns_snapshot_workers_test
+ 2/47 Test #503: terraweave_caverns_snapshot_workers_test ........   Passed    0.31 sec
+      Start 479: terraweave_caverns_shard_gpu_host_test
+ 3/47 Test #486: terraweave_caverns_editor_test ..................   Passed    7.65 sec
+      Start 487: terraweave_caverns_mesh_test
+ 4/47 Test #201: terraweave_caverns_planet_authority .............   Passed    8.75 sec
+      Start 501: terraweave_caverns_seam_gate_test
+ 5/47 Test #479: terraweave_caverns_shard_gpu_host_test ..........   Passed    1.17 sec
+      Start 386: terraweave_native_micro_compile
+ 6/47 Test #501: terraweave_caverns_seam_gate_test ...............   Passed    0.78 sec
+      Start 254: terraweave_caverns_planet_collision
+ 7/47 Test #487: terraweave_caverns_mesh_test ....................   Passed    3.18 sec
+      Start 473: terraweave_caverns_batch_geometry_test
+ 8/47 Test #386: terraweave_native_micro_compile .................   Passed    2.12 sec
+      Start 478: terraweave_caverns_resident_test
+ 9/47 Test #254: terraweave_caverns_planet_collision .............   Passed    1.97 sec
+      Start 495: terraweave_caverns_entrances_test
+10/47 Test #473: terraweave_caverns_batch_geometry_test ..........   Passed    1.09 sec
+      Start 469: terraweave_caverns_edit_runtime_test
+11/47 Test #478: terraweave_caverns_resident_test ................   Passed    1.26 sec
+      Start 474: terraweave_caverns_edit_presentation_test
+12/47 Test #469: terraweave_caverns_edit_runtime_test ............   Passed    0.65 sec
+      Start 475: terraweave_caverns_geometry_scene_test
+13/47 Test #495: terraweave_caverns_entrances_test ...............   Passed    1.11 sec
+      Start 485: terraweave_caverns_volume_collision_nav_test
+14/47 Test #485: terraweave_caverns_volume_collision_nav_test ....   Passed    0.46 sec
+      Start 387: terraweave_native_micro_physics_compile
+15/47 Test #474: terraweave_caverns_edit_presentation_test .......   Passed    1.11 sec
+      Start 493: terraweave_caverns_async_rebuild_test
+16/47 Test #493: terraweave_caverns_async_rebuild_test ...........   Passed    0.28 sec
+      Start 498: terraweave_caverns_lod_weld_test
+17/47 Test #475: terraweave_caverns_geometry_scene_test ..........   Passed    1.09 sec
+      Start 476: terraweave_caverns_mixed_shard_test
+18/47 Test #498: terraweave_caverns_lod_weld_test ................   Passed    0.25 sec
+      Start 502: terraweave_caverns_shard_seam_test
+19/47 Test #502: terraweave_caverns_shard_seam_test ..............   Passed    0.22 sec
+      Start 492: terraweave_caverns_test
+20/47 Test #492: terraweave_caverns_test .........................   Passed    0.34 sec
+      Start 497: terraweave_caverns_lod_transition_test
+21/47 Test #497: terraweave_caverns_lod_transition_test ..........   Passed    0.21 sec
+      Start 499: terraweave_caverns_publication_test
+22/47 Test #476: terraweave_caverns_mixed_shard_test .............   Passed    0.99 sec
+      Start 489: terraweave_caverns_owner_barrier_test
+23/47 Test #499: terraweave_caverns_publication_test .............   Passed    0.25 sec
+      Start 494: terraweave_caverns_dirty_queue_test
+24/47 Test #489: terraweave_caverns_owner_barrier_test ...........   Passed    0.20 sec
+      Start 491: terraweave_caverns_streaming_test
+25/47 Test #494: terraweave_caverns_dirty_queue_test .............   Passed    0.21 sec
+      Start 483: terraweave_caverns_empty_tile_test
+26/47 Test #491: terraweave_caverns_streaming_test ...............   Passed    0.23 sec
+      Start 490: terraweave_caverns_preview_pacer_test
+27/47 Test #387: terraweave_native_micro_physics_compile .........   Passed    2.10 sec
+      Start 500: terraweave_caverns_raycast_test
+28/47 Test #483: terraweave_caverns_empty_tile_test ..............   Passed    0.23 sec
+      Start 496: terraweave_caverns_lod_policy_test
+29/47 Test #490: terraweave_caverns_preview_pacer_test ...........   Passed    0.20 sec
+      Start 488: terraweave_caverns_swap_policy_test
+30/47 Test #500: terraweave_caverns_raycast_test .................   Passed    0.21 sec
+      Start 470: terraweave_caverns_editor_visual_preview_test
+31/47 Test #496: terraweave_caverns_lod_policy_test ..............   Passed    0.21 sec
+      Start 481: terraweave_caverns_authored_nav_stage_test
+32/47 Test #488: terraweave_caverns_swap_policy_test .............   Passed    0.20 sec
+      Start 477: terraweave_caverns_presentation_test
+33/47 Test #481: terraweave_caverns_authored_nav_stage_test ......   Passed    0.23 sec
+      Start 484: terraweave_caverns_shadow_owners_test
+34/47 Test #477: terraweave_caverns_presentation_test ............   Passed    0.19 sec
+      Start 472: terraweave_caverns_surface_cut_test
+35/47 Test #470: terraweave_caverns_editor_visual_preview_test ...   Passed    0.43 sec
+      Start 482: terraweave_caverns_box3d_test
+36/47 Test #472: terraweave_caverns_surface_cut_test .............   Passed    0.24 sec
+      Start 146: editor_lua_inspector_sandbox
+37/47 Test #484: terraweave_caverns_shadow_owners_test ...........   Passed    0.26 sec
+      Start 471: terraweave_caverns_multinav_test
+38/47 Test #482: terraweave_caverns_box3d_test ...................   Passed    0.26 sec
+      Start 480: terraweave_caverns_stage6_test
+39/47 Test #471: terraweave_caverns_multinav_test ................   Passed    0.26 sec
+40/47 Test #480: terraweave_caverns_stage6_test ..................   Passed    0.22 sec
+41/47 Test #146: editor_lua_inspector_sandbox ....................   Passed    0.49 sec
+42/47 Test #256: terraweave_caverns_demo_portal ..................   Passed   24.11 sec
+      Start 259: terraweave_caverns_demo_portal_restore
+43/47 Test #259: terraweave_caverns_demo_portal_restore ..........   Passed   13.22 sec
+      Start 260: terraweave_caverns_demo_swim_restore
+44/47 Test #260: terraweave_caverns_demo_swim_restore ............   Passed    5.10 sec
+      Start 258: terraweave_caverns_demo_moving_restore
+45/47 Test #258: terraweave_caverns_demo_moving_restore ..........   Passed    5.59 sec
+      Start 255: terraweave_caverns_demo_chamber
+46/47 Test #255: terraweave_caverns_demo_chamber .................   Passed    4.83 sec
+      Start 257: terraweave_caverns_demo_swim
+47/47 Test #257: terraweave_caverns_demo_swim ....................   Passed    4.32 sec
+
+100% tests passed, 0 tests failed out of 47
+
+Label Time Summary:
+CPU           =  25.85 sec*proc (30 tests)
+Caverns       =  94.09 sec*proc (43 tests)
+ECS           =  10.33 sec*proc (5 tests)
+EDITOR        =   7.65 sec*proc (1 test)
+MCP           =   7.65 sec*proc (1 test)
+NativeDemo    =  57.17 sec*proc (6 tests)
+PHYSICS       =  60.58 sec*proc (12 tests)
+Renderer3D    =  64.30 sec*proc (14 tests)
+SpectraFX     =   7.29 sec*proc (1 test)
+TerraWeave    =  94.09 sec*proc (43 tests)
+
+Total Test time (real) =  60.41 sec

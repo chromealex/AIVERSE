@@ -1,0 +1,5 @@
+# Stage 36C — second Mac build repair
+
+User-provided `build(7).log`: previous BuildingGen include repair verified by successful links of Building Feature, Style, Runtime and Export targets. Full build FAIL at 37%; CTest NOT RUN. Exact checkout SHA not recorded in log. Two root errors: duplicate `changes` locals in checkLedger (10 compiler diagnostics) and unresolved SpatialWorld::cell at region_ecs_bridge_test link. Manifest updated at 039a229303bf425c3041ab7c777c643effaaba89.
+
+Fix f042e62687ff5822bbd176d9a90393026bad4860 renames the first local to despawnChanges; keeps all assertions. Fix 5a3cd1bed0dc9214ca6ddc201d6e688176de8977 relocates the existing test target after engine/actor creates aiverse_world and links the canonical library; retains CTest name/labels and checks target existence. Git source readback PASS, no native post-fix test claimed. No runtime behavior change. Next: pull integration branch and rerun ./run-tests.sh --quick using existing KINGSTON build. Review complete CTest and Studio/MCP/Metal gates before main.

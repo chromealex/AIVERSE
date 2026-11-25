@@ -1,0 +1,11 @@
+{
+  "sha": "1e2ae0d479a2de0a40cf7733ec4823444156af61",
+  "argv": [
+    "bash",
+    "-ec",
+    "out=/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage24-windows-cross\nmkdir -p \"$out/tmp\"\nexport TMPDIR=\"$out/tmp\"\nx86_64-w64-mingw32-g++ --version\nx86_64-w64-mingw32-g++ -std=c++20 -O0 -I. -Ilibraries/include tools/buildings/building_style_export.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o \"$out/building-export.exe\"\nx86_64-w64-mingw32-g++ -std=c++20 -O0 -I. -Ilibraries/include tests/terraweave_caverns_test.cpp engine/core/Fixed.cpp -o \"$out/caverns.exe\"\nfile \"$out/building-export.exe\" \"$out/caverns.exe\""
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/windows-cross-building-caverns-1e2ae0d47.log.txt",
+  "sha256": "25aaa9cc668b45142fd945a5ddcf839bf9ab7f126dd09d46606107b7f0f153f1"
+}

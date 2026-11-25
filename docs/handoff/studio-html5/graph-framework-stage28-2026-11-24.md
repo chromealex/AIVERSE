@@ -1,0 +1,12 @@
+# Shared Graph Framework — stage 28 — 2026-11-24
+
+Branch: feature/aiv20261123_feature_gate; draft PR #120.
+Implementation HEAD: 86bb5c838d99c6f211b7ecc57aac56dea236242c
+
+Implemented full-resolution single-output native GPU texture bake path up to 1024x1024, within existing graph work budget. Vulkan adds checked 4-byte-aligned ranged async readback (max 64 KiB per request); Metal existing range API reused. One active request, one outstanding range, exact offset/length assembly, complete CPU-reference validation before result is labeled GPU. No large JSON bake payload or synchronous GPU wait. Explicit publish uses exact ready request ID and shared native MaterialOps PNG publisher, never overwrites destination. CPU fallback allowed unless requireGpu. One exact last completed device-local plan retained (pipelines, output/scratch buffers <=8 MiB logical buffer capacity), reuse after readback completion only, release on replacement/project change/shutdown, abandon on device loss. Studio controls queue, read progress, publish and configure sRGB via existing importer. GPU multi-output bake, general graph scheduler, direct runtime material binding and performance claims remain out of scope.
+
+Changed paths: engine/gfx/vulkan/{VkDevice.h,VkCompute.cpp}, engine/render/graph/TextureGraphGpu.h, apps/editor/core/{MaterialOps.h,MaterialOps.cpp,TextureGraphGpuPreview.h,GraphOps.h}, apps/editor/EditorPlayOps.cpp, apps/studio-native/StudioTools.h, apps/studio-web/src/graphs/TextureGraphPanel.tsx, tests/vfx_graph_ops_test.cpp, docs/features/graph-framework.json, docs/agents/graph-framework.md, skills/workflow/aiverse-graph-authoring/SKILL.md.
+
+Verification: NOT RUN. GitHub writes confirmed; Metal/Vulkan storage buffer allocation, completion callback and range API inspected. Authored fixtures for 1024x1024 two-pass source/byte budgets and headless publication refusal. No native C++/TS/MSL/GLSL build, GPU dispatch, actual range assembly, PNG publication, importer QA, CTest, CI, or Mac merged-tree gate. Full CPU parity comparison remains a CPU cost. Coordinate RHI/texture owners; main rules PR #122 reconciliation remains required. No main merge.
+
+Next: complete GPU multi-output set generation with bounded sequential jobs and shared publication/provenance; or advance Building/Caverns graph integration after owner branch review. Audit source/build and native acceptance before publication.

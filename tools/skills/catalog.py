@@ -97,6 +97,7 @@ ALIASES = {
  'aiverse-physical-interactions':'carry pickup throw push pull rope joint door lock key platform elevator breakable debris destructible переноск подня брос толка тянут верев канат двер замок ключ платформ лифт разруш обломк',
  'aiverse-roads':'road roads spline street avenue junction crossing bridge tunnel parking bay highway rural дорог сплайн улиц проспект перекрест переход мост тоннел парковк карман шоссе грунтовк',
  'aiverse-building-gen':'building house procedural interior floors stairs stairwell door window room enterable здание дом процедурн этаж лестниц дверь окно комнат интерьер',
+ 'aiverse-building-style':'building style setting sci-fi scifi facade cladding mesh look glb city стиль сеттинг сайфай фасад облицовк здани застройк город вид architecture settings medieval fantasy steampunk cyberpunk alien post-apocalypse modern ancient asian solarpunk underwater PBR procedural textures архитектура сеттинги материалы текстуры',
  'aiverse-gear-tiers':'gear armor helmet vest backpack shield tier level durability wear absorb capacity broken броня шлем жилет рюкзак щит уровень прочность износ вместимость экипировк',
  'aiverse-snapshot-delta':'snapshot delta compression baseline ack bandwidth netcode replication diff дельта снапшот сжатие трафик канал репликац',
  'aiverse-battle-royale':'battle royale last standing shrinking zone circle storm safe zone phase red zone bombardment airdrop supply drop plane jump skydive parachute knockdown knock revive placement killfeed lobby countdown королевская битва зона сужающ круг фаз красн бомбардир аирдроп сброс самолет прыжок парашют нокдаун нокнут поднять место киллфид лобби отсчет',
@@ -105,6 +106,8 @@ ALIASES = {
 
 # MCP and repository workflows (no runtime library): id, summary, source of truth.
 WORKFLOWS=[
+ ('aiverse-graph-authoring','Shared Studio graph canvas and domain adapters without duplicate graph execution','docs/agents/graph-framework.md'),
+ ('aiverse-new-feature','Plan, implement and verify feature evidence and integration readiness','docs/agents/feature-contract.md'),
  ('aiverse-mcp-coverage','Audit real MCP tools/list, GUI-only restrictions and verified capability calls','docs/agents/mcp-coverage.md'),
  ('aiverse-warcraft3-import','Import licensed Warcraft III map archives and assets using the bounded MPQ/Studio pipeline','docs/warcraft3-import.md'),
  ('aiverse-gpu-batching','Profile renderer instance/material batching, Metal GPU counters and A/B capture parity','docs/geometry-performance.md'),
@@ -158,6 +161,7 @@ WORKFLOWS=[
  ('aiverse-terrain','Terrain levels, heightfield, sub-cell detail, materials and heightmaps through MCP','docs/terrain.md'),
  ('aiverse-terra-first','TerraWeave-first world capability selection for every new game; custom only for verified gaps','skills/workflow/aiverse-terra-first/SKILL.md'),
  ('aiverse-terra-vegetation','Native Arbor trees, dense grass patches, rocks, PBR and LOD authoring','skills/world/aiverse-terra-vegetation/SKILL.md'),
+ ('aiverse-terraweave-caverns','Deterministic underground chambers, tunnels, cave meshes and planetary portals','engine/world/TerraWeaveCaverns.h'),
  ('aiverse-terraweave','Procedural world terrain, biomes, Arbor/Flora, Horizon HLOD, authored seams and native C++ scene integration','docs/terrain/TERRAWEAVE.md'),
  ('aiverse-water','Spline straits, rivers and open sea with shore types, bridges and the water window','docs/water.md'),
  ('aiverse-physis-authoring','PHYSIS map configuration through revision-checked MCP operations and Undo/Redo','apps/editor/core/PhysisOps.cpp'),
@@ -293,6 +297,25 @@ def skill_path(skill):
     if len(hits)!=1:raise ValueError('skill folder not found exactly once: '+skill)
     return hits[0].relative_to(ROOT).as_posix()
 
+# Recipes that reuse existing engine owners, not independent CMake packages.
+SHARED_RECIPES = [
+    ('aiverse-spatial','Generic integer spatial grids, hashes, BVH and trees','libraries/include/aiverselib/algorithms/Spatial.h','tools',[],[]),
+    ("aiverse-building-alien-civilization", "Alien Civilization setting: neutral building massing, architectural grammar, decorations, PBR material maps", "engine/assets/building-styles/alien-civilization.json", "presentation", ["aiverse-building-style"], ["building","architecture","alien-civilization","texture","PBR","facade","style","здание","сеттинг"]),
+    ("aiverse-building-ancient-civilizations", "Ancient Civilizations portable building grammar, authored material PBR texture patterns and facade decorations", "engine/assets/building-styles/ancient-civilizations.json", "presentation", ["aiverse-building-style"], ["building","ancient-civilizations","architecture","facade","materials","PBR","surface","texture","сеттинг","здание"]),
+    ("aiverse-building-asian-historical", "Asian Historical procedural architectural forms, 128x128 PBR surface textures, material palettes and decorations", "engine/assets/building-styles/asian-historical.json", "presentation", ["aiverse-building-style"], ["building","asian-historical","architecture","style","PBR","surface","texture","decor","здание","сеттинг"]),
+    ("aiverse-building-cyberpunk", "Cyberpunk setting: neutral building massing, architectural grammar, decorations, PBR material maps", "engine/assets/building-styles/cyberpunk.json", "presentation", ["aiverse-building-style"], ["building","architecture","cyberpunk","texture","PBR","facade","style","здание","сеттинг"]),
+    ("aiverse-building-dark-fantasy", "Dark Fantasy building architecture grammar, deterministic PBR maps, materials, decorations and neutral structural silhouettes", "engine/assets/building-styles/dark-fantasy.json", "presentation", ["aiverse-building-style"], ["buildings","architecture","dark-fantasy","procedural","materials","PBR","textures","decor","здания","архитектура"]),
+    ("aiverse-building-medieval-fantasy", "Medieval Fantasy building architecture grammar, deterministic PBR maps, materials, decorations and neutral structural silhouettes", "engine/assets/building-styles/medieval-fantasy.json", "presentation", ["aiverse-building-style"], ["buildings","architecture","medieval-fantasy","procedural","materials","PBR","textures","decor","здания","архитектура"]),
+    ("aiverse-building-modern", "Modern / Contemporary portable building grammar, authored material PBR texture patterns and facade decorations", "engine/assets/building-styles/modern.json", "presentation", ["aiverse-building-style"], ["building","modern","architecture","facade","materials","PBR","surface","texture","сеттинг","здание"]),
+    ("aiverse-building-post-apocalypse", "Post-Apocalypse portable building grammar, authored material PBR texture patterns and facade decorations", "engine/assets/building-styles/post-apocalypse.json", "presentation", ["aiverse-building-style"], ["building","post-apocalypse","architecture","facade","materials","PBR","surface","texture","сеттинг","здание"]),
+    ("aiverse-building-scifi-space", "Sci-Fi / Space setting: neutral building massing, architectural grammar, decorations, PBR material maps", "engine/assets/building-styles/scifi-space.json", "presentation", ["aiverse-building-style"], ["building","architecture","scifi-space","texture","PBR","facade","style","здание","сеттинг"]),
+    ("aiverse-building-solarpunk", "Solarpunk procedural architectural forms, 128x128 PBR surface textures, material palettes and decorations", "engine/assets/building-styles/solarpunk.json", "presentation", ["aiverse-building-style"], ["building","solarpunk","architecture","style","PBR","surface","texture","decor","здание","сеттинг"]),
+    ("aiverse-building-steampunk", "Steampunk building architecture grammar, deterministic PBR maps, materials, decorations and neutral structural silhouettes", "engine/assets/building-styles/steampunk.json", "presentation", ["aiverse-building-style"], ["buildings","architecture","steampunk","procedural","materials","PBR","textures","decor","здания","архитектура"]),
+    ("aiverse-building-underwater", "Underwater procedural architectural forms, 128x128 PBR surface textures, material palettes and decorations", "engine/assets/building-styles/underwater.json", "presentation", ["aiverse-building-style"], ["building","underwater","architecture","style","PBR","surface","texture","decor","здание","сеттинг"]),
+    ("aiverse-persistent-world", "Durable world ledger WAL, checkpoints, recovery, retention and backup forks", "engine/world/PersistentWorldSession.h", "simulation", [], ["persistence","wal","checkpoint","recovery","backup","world fork","сохранение","восстановление"]),
+    ("aiverse-region-lifecycle", "Shared deterministic region identity, atomic vehicle groups, ECS change journals, sparse undo transactions, admission and ownership diagnostics; authoritative decision LOD", "engine/world/RegionEntityLedger.h", "simulation", [], ["region","world","streaming","ledger","ecs","tombstone","journal","change tracking","undo log","dirty-only","ownership diagnostics","delta","revision","rollback","hot","cold","регион","стриминг","сущность","журнал","simulation LOD","decision cadence","hot warm cold","simulation budget","LOD симуляции"]),
+]
+
 def generate():
     entries=[]
     packages=json.loads((ROOT/'libraries/catalog.json').read_text(encoding='utf-8'))['packages']
@@ -327,13 +350,10 @@ def generate():
         summary='Immutable SharedRef and StaticRef ECS configs, prefab dedup, snapshots and multi-world scene integration',
         side='tools',runtime='none',target=None,dependencies=[],backendDependencies=[],
         source='engine/sim/SharedStaticComponents.h'))
-    for name,summary,source,side in (
-        ('aiverse-spatial','Generic integer spatial grids, hashes, BVH and trees','libraries/include/aiverselib/algorithms/Spatial.h','tools'),
-        ('aiverse-persistent-world','Durable world ledger WAL, checkpoints, recovery, retention and backup forks','engine/world/PersistentWorldSession.h','simulation'),
-        ('aiverse-region-lifecycle','Shared deterministic region identity, atomic vehicle groups, ECS change journals, sparse undo transactions, admission and ownership diagnostics; authoritative decision LOD','engine/world/RegionEntityLedger.h','simulation')):
+    for name,summary,source,side,deps,keywords in SHARED_RECIPES:
         entries.append(dict(id=name,package=None,path=skill_path(name),domain='gameplay',
-            summary=summary,side=side,runtime='none',target=None,
-            dependencies=[],backendDependencies=[],requiresOwner=None,source=source))
+            summary=summary,side=side,runtime='none',target=None,dependencies=deps,
+            backendDependencies=[],requiresOwner=None,source=source))
     # Native World Processes are opt-in ECS capabilities, not library packages.
     # Gameplay recipes have runtime=none: do NOT invent a CMake library per
     # skill or pull Box3D/PHYSIS/TerraWeave into unrelated games.
@@ -360,8 +380,9 @@ def generate():
             side='tools',runtime='none',target=None,dependencies=[],backendDependencies=[],source=source))
     # Search words of the policy packages live next to their registration script (tools/skills/policy_packages.py).
     policy_aliases=json.loads((ROOT/'tools/skills/policy_aliases.json').read_text(encoding='utf-8')) if (ROOT/'tools/skills/policy_aliases.json').is_file() else {}
+    shared_keywords={name:keywords for name,_,_,_,_,keywords in SHARED_RECIPES}
     for entry in entries:
-        entry['keywords']=(ALIASES.get(entry['id'],'')+' '+WORKFLOW_ALIASES.get(entry['id'],'')+' '+policy_aliases.get(entry['id'],'')).split()
+        entry['keywords']=shared_keywords.get(entry['id'], []) + (ALIASES.get(entry['id'],'')+' '+WORKFLOW_ALIASES.get(entry['id'],'')+' '+policy_aliases.get(entry['id'],'')).split()
         entry['contentPackages']=skill_packages(entry['path'])
     return dict(schema=1,skills=sorted(entries,key=lambda e:e['id']))
 
@@ -452,7 +473,20 @@ def main():
             validate(expected);CATALOG.write_text(json.dumps(expected,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');print('Generated skill catalog');return
         data=json.loads(CATALOG.read_text(encoding='utf-8'));entries=validate(data)
         if args.command=='check':
-            if data!=expected:raise ValueError('stale skill catalog; run generate')
+            if data!=expected:
+                actual_by_id={e['id']:e for e in data['skills']}
+                expected_by_id={e['id']:e for e in expected['skills']}
+                changed=sorted(k for k in actual_by_id.keys() & expected_by_id.keys()
+                               if actual_by_id[k]!=expected_by_id[k])
+                missing=sorted(expected_by_id.keys()-actual_by_id.keys())
+                extra=sorted(actual_by_id.keys()-expected_by_id.keys())
+                if changed or missing or extra:
+                    details=f'changed={changed[:10]}, missing={missing[:10]}, extra={extra[:10]}'
+                elif [e['id'] for e in data['skills']] != [e['id'] for e in expected['skills']]:
+                    details='skill entries are out of canonical ID order'
+                else:
+                    details='top-level catalog metadata differs'
+                raise ValueError(f'stale skill catalog ({details}); run generate')
             print(f'Validated {len(entries)} skills and isolated library mappings');return
         if args.command=='list':result=[{k:e[k] for k in ('id','summary','side','runtime','target')} for e in entries.values() if args.domain=='all' or e['domain']==args.domain]
         elif args.command=='search':result=[dict(score=score,**{k:e.get(k) for k in ('id','summary','side','path','target','contentPackages')}) for score,e in search(entries,args.query,args.domain)][:12]

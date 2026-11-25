@@ -24,6 +24,8 @@ public:
     Json dispatch(const Json& request);   // labels undo steps for the History panel, then dispatchImpl
     editor::Workspace& workspace() { return ws_; }
     const editor::Workspace& workspace() const { return ws_; }
+    void setBuildingGraphReader(std::function<Json(uint64_t)> reader){ws_.buildingGraphDiagnosticsProvider=std::move(reader);}
+    Json buildingGraphSnapshot(uint64_t scene)const{return ws_.buildingGraphDiagnosticsProvider?ws_.buildingGraphDiagnosticsProvider(scene):Json{};}
     int selectedEntityIndex() const;
     const std::string& selectedObjectId() const { return selected_; }
     // Multi-selection (primary = selectedObjectId(), always last) and editor-only
@@ -70,7 +72,7 @@ public:
         int layer=0; std::string tile, field, fieldMode="add"; double value=1;
         std::string type; int owner=0, count=1; double spread=1;
         std::string roadType; double width=6;
-        std::string caveMode="carve"; double caveY=-5; bool caveSurface=true;
+        std::string caveMode="carve",caveRegionId; double caveY=-5,caveDepth=2; bool caveSurface=true;
     };
     const SceneBrush& sceneBrush() const noexcept { return brush_; }
     // Spline editing (Roads / Water panels): "road" or "river" shows the network's handles in the Scene;
@@ -100,6 +102,8 @@ public:
                                const std::string& destination); // native picker ONLY
 private:
     Json snapshot() const;
+    Json graphDocumentScope() const;
+    uint64_t graphDocumentEpoch_=1;
     Json buildRequest(const std::string& method, const Json& params);
     Json dispatchImpl(const Json& request);
     Json dispatchImplCore(const Json& request);

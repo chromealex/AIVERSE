@@ -1,0 +1,48 @@
+#pragma once
+// One include for game-client native buildings: CPU generation, room routing,
+// existing nav::Mesh adapter, lift controller, dynamic collision owner and
+// lift CPU visual model. Dedicated servers may instead include only
+// engine/systems/RuntimeBuildingGenerator.h and
+// engine/systems/BuildingCirculationRuntime.h.
+#include <engine/systems/RuntimeBuildingGenerator.h>
+#include <engine/systems/BuildingCirculationRuntime.h>
+#include <engine/systems/BuildingRouteExecutor.h>
+#include "engine/buildings/RuntimeBuildingModel.h"
+#include "engine/buildings/BuildingCirculationHost.h"
+#include "engine/buildings/BuildingLiftColliderOwner.h"
+#include "engine/buildings/BuildingCirculationScene.h"
+#include "engine/buildings/BuildingLiftPlatformModel.h"
+#include "engine/buildings/BuildingLiftPresentation.h"
+#include "engine/buildings/BuildingLiftGameSession.h"
+#include "engine/buildings/BuildingLiftDoorOwner.h"
+#include "engine/buildings/BuildingLiftEcsBridge.h"
+#include "engine/buildings/BuildingCirculationEcsScene.h"
+#include "engine/buildings/BuildingLiftReplication.h"
+#include "engine/buildings/BuildingLiftCommands.h"
+#include "engine/buildings/BuildingActorLifecycleTick.h"
+#include "engine/buildings/BuildingStairMotor.h"
+#include "engine/buildings/BuildingNavSource.h"
+#include "engine/buildings/BuildingGraphChanges.h"
+#include "engine/buildings/BuildingGraphDiagnosticsJson.h"
+#include "engine/buildings/BuildingApertureOwner.h"
+#include "engine/buildings/BuildingDynamicNavSource.h"
+#include "engine/buildings/BuildingGraphOwnerAdapters.h"
+#include "engine/buildings/BuildingTransportZoneGraphAdapters.h"
+#include "engine/buildings/BuildingApertureFixedTick.h"
+#include "engine/buildings/BuildingAperturePresentation.h"
+#include "engine/buildings/BuildingApertureGameBridge.h"
+#include "engine/buildings/BuildingDualLeafOwner.h"
+#include "engine/buildings/BuildingApertureTextureAssets.h"
+#include "engine/buildings/BuildingMaterialAssets.h"
+#include "engine/buildings/BuildingDualLeafGameSession.h"
+#include "engine/buildings/BuildingEcsRuntime.h"
+#include "engine/buildings/BuildingEcsObstruction.h"
+#include "engine/buildings/BuildingEcsReconcile.h"
+#include "engine/buildings/BuildingRenderer3DScene.h"
+#include "engine/buildings/BuildingWorldRuntime.h"
+#include "engine/buildings/BuildingLiftCheckpointPersistence.h"
+#include "engine/buildings/BuildingLiftRenderState.h"
+#include "engine/buildings/BuildingReplicaBridge.h"
+#include "engine/buildings/BuildingReplicaRenderScene.h"
+#include "engine/buildings/BuildingAgentNavigation.h"
+#include "engine/buildings/BuildingAgentLocomotion.h"

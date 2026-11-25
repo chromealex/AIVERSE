@@ -1,0 +1,2 @@
+# Preserve the bytes used for the report SHA-256 on all worktrees.
+building-caverns-*.log.txt -text

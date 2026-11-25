@@ -1,0 +1,11 @@
+{
+  "sha": "5e541da2e03fca6dc79679609d7aff1e3b54ae54",
+  "argv": [
+    "bash",
+    "-ec",
+    "python3.12 tests/feature_gate_test.py && python3.12 tools/agents/check_contracts.py && python3.12 tools/skills/catalog.py check && python3.12 -m unittest discover -s tools/studio -p \"test_*.py\" -v"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/integration-authoring-5e541da2e.log.txt",
+  "sha256": "77deb94eabce120dba15d6fa4d2516b07154fe04325b6ee9e6ce9628c67a6e8f"
+}
