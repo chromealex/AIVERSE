@@ -1773,12 +1773,26 @@ void entityWorkflow() {
         };
         {
             const auto snapshot=call("studio.snapshot")["result"];
+            Json mapRequest=Json::object();mapRequest.set("scope",snapshot["graphDocument"]);
+            mapRequest.set("validate",Json::fromBool(true));
+            const auto old=call("studio.mapProperties",mapRequest)["result"];
+            AIVERSE_TEST_CHECK(old["issues"].isArray() && old.getInt("width")==16);
+            mapRequest.set("changes",Json::parse(R"({"name":"Harbor","size":[20,18],"roadsOnly":true,"victory":{"mode":"score"}})"));
+            const auto updated=call("studio.mapPropertiesSet",mapRequest);
+            AIVERSE_TEST_CHECK(updated["result"]["scene"].getStr("name")=="Harbor" && session.workspace().map.data.w==20);
+            AIVERSE_TEST_CHECK(call("studio.mapPropertiesSet",mapRequest).has("error"));
+            mapRequest.set("scope",updated["result"]["graphDocument"]);
+            mapRequest.set("changes",Json::parse(R"({"name":"Partial","size":[10,3.5]})"));
+            AIVERSE_TEST_CHECK(call("studio.mapPropertiesSet",mapRequest).has("error"));
+            AIVERSE_TEST_CHECK(session.workspace().map.data.name=="Harbor");
+            const auto restored=call("studio.undo");
+            AIVERSE_TEST_CHECK(session.workspace().map.data.name==old.getStr("name") && session.workspace().map.data.w==16 && !session.workspace().map.canUndo());
             AIVERSE_TEST_CHECK(snapshot["scene"]["groupings"][0].str()=="By type and origin");
             const auto unchanged=session.workspace().map.toJson();
             Json params=Json::object();
             params.set("expectedProject",snapshot["project"]["path"]);
             Json reordered=Json::object();
-            for(const char* field:{"revision","epoch","mapPath","projectPath"}) reordered.set(field,snapshot["graphDocument"][field]);
+            for(const char* field:{"revision","epoch","mapPath","projectPath"}) reordered.set(field,restored["result"]["graphDocument"][field]);
             params.set("scope",reordered);
             params.set("group",Json::number(int64_t(0)));
             Json reply;

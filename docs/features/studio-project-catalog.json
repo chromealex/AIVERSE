@@ -193,6 +193,8 @@
       "agent"
     ],
     "studio_methods": [
+      "studio.mapProperties",
+      "studio.mapPropertiesSet",
       "studio.gameEntities",
       "studio.hierarchyGroups",
       "studio.gameSelectEntity",

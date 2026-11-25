@@ -736,6 +736,57 @@ static bool sameDocumentScope(const Json& supplied,const Json& current) {
             return supplied[field.first]==field.second;
         });
 }
+Json StudioSession::mapProperties(const Json& params,bool write) {
+    auto& doc=ws_.map;
+    auto& data=doc.data;
+    if(ws_.project.dir.empty() || data.worldSpace || !sameDocumentScope(params["scope"],graphDocumentScope()))
+        throw std::runtime_error("Map changed. Reload its properties.");
+    if(write){
+        const auto& patch=params["changes"];
+        if(!patch.isObject())throw std::runtime_error("Expected map property changes");
+        for(const auto& [key,value]:patch.members()){
+            if(key=="name" && value.isString() && !value.str().empty())continue;
+            if(key=="roadsOnly" && value.type()==Json::Type::Bool)continue;
+            if(key=="victory" && (value.isNull() || value.isObject()))continue;
+            if(key=="size" && value.isArray() && value.size()==2 && !data.planet()){
+                const auto valid=[](const Json& n){return n.isNumber() && n.toDouble()>=8 && n.toDouble()<=game::kMaxMapSize && n.toDouble()==n.integer();};
+                if(valid(value[0]) && valid(value[1]))continue;
+            }
+            throw std::runtime_error("Invalid map property: "+key);
+        }
+        const bool resize=patch.has("size") && (patch["size"][0].integer()!=data.w || patch["size"][1].integer()!=data.h);
+        const bool victory=patch.has("victory") && (patch["victory"].isNull()?data.extra.has("victory"):patch["victory"]!=data.extra["victory"]);
+        if(resize || victory || (patch.has("name") && patch.getStr("name")!=data.name) ||
+           (patch.has("roadsOnly") && patch.getBool("roadsOnly")!=data.roadsOnly)){
+            if(resize)doc.resize(int(patch["size"][0].integer()),int(patch["size"][1].integer()));
+            else doc.beginEdit();
+            if(patch.has("name"))data.name=patch.getStr("name");
+            if(patch.has("roadsOnly"))data.roadsOnly=patch.getBool("roadsOnly");
+            if(victory){
+                if(patch["victory"].isNull())data.extra.erase("victory");
+                else data.extra.set("victory",patch["victory"]);
+            }
+        }
+        return snapshot();
+    }
+    Json out=Json::object();
+    out.set("scope",graphDocumentScope());out.set("name",str(data.name));
+    out.set("width",num(data.w));out.set("height",num(data.h));out.set("grid",Json::fromBool(!data.planet()));
+    out.set("maxSize",num(game::kMaxMapSize));out.set("entities",num(data.entities.size()));out.set("players",num(data.players.size()));
+    out.set("roadsOnly",Json::fromBool(data.roadsOnly));out.set("victory",data.extra["victory"]);
+    if(params.getBool("validate")){
+        Json issues=Json::array();
+        for(const auto& item:doc.validate(ws_.project.rules,ws_.project.rulesJson)){
+            Json issue=Json::object();
+            issue.set("error",Json::fromBool(item.error));issue.set("text",str(item.text));
+            if(item.entity>=0 && size_t(item.entity)<data.entities.size())
+                issue.set("entityId",str(nodeId(doc,editor::DocumentEntityRef::mapEntity(size_t(item.entity)))));
+            issues.push(std::move(issue));
+        }
+        out.set("issues",std::move(issues));
+    }
+    return out;
+}
 Json StudioSession::hierarchyGroups(const Json& params) {
     if(ws_.project.dir.empty() || params.getStr("expectedProject")!=ws_.project.dir ||
        !sameDocumentScope(params["scope"],graphDocumentScope()))throw std::runtime_error("Hierarchy document changed");
@@ -818,6 +869,7 @@ Json StudioSession::snapshot() const {
     if (!ws_.project.dir.empty()) result.set("graphDocument",graphDocumentScope());
     Json scene = Json::object();
     scene.set("name", str(ws_.map.data.name));
+    scene.set("mapProperties",Json::fromBool(!ws_.map.data.worldSpace && !ws_.project.dir.empty()));
     Json rows = Json::array();
     const auto nodes = editor::enumerateDocumentSceneNodes(ws_.map);
     for (const auto& node : nodes) {
@@ -2137,7 +2189,7 @@ std::string StudioSession::historyLabel(const std::string& method, const Json& p
         return key.empty() ? "Edit "+(comp.empty()?std::string("properties"):comp) : "Set "+key;
     }
     static const std::pair<const char*,const char*> names[]={
-        {"studio.entityCreate","Create object"},{"studio.entityDelete","Delete"},{"studio.entitiesDelete","Delete"},
+        {"studio.mapPropertiesSet","Edit map properties"},{"studio.entityCreate","Create object"},{"studio.entityDelete","Delete"},{"studio.entitiesDelete","Delete"},
         {"studio.entityDuplicate","Duplicate"},{"studio.entitiesDuplicate","Duplicate"},{"studio.entityMove","Reorder"},
         {"studio.assetPlace","Place asset"},{"studio.componentAdd","Add component"},{"studio.componentRemove","Remove component"},
         {"studio.lightAdd","Add light"},{"studio.lightUpdate","Edit light"},{"studio.lightDelete","Delete light"},
@@ -2237,7 +2289,7 @@ Json StudioSession::dispatch(const Json& request) {
     if(stroking_){
         // The stroke owns the MapDoc transaction across frames. Only explicit
         // observational requests can enter; other edits retry after release.
-        static const std::set<std::string> reads={"studio.snapshot","studio.hierarchyGroups","studio.inspect","studio.propertiesFor","studio.history","studio.projectHistory","studio.assetHistory","studio.assetTrashList","studio.stats","studio.project","studio.agentInfo","studio.agentStop","studio.componentCatalog"};
+        static const std::set<std::string> reads={"studio.snapshot","studio.mapProperties","studio.hierarchyGroups","studio.inspect","studio.propertiesFor","studio.history","studio.projectHistory","studio.assetHistory","studio.assetTrashList","studio.stats","studio.project","studio.agentInfo","studio.agentStop","studio.componentCatalog"};
         if(method=="studio.sceneBrush"&&request["params"].has("armed")&&!request["params"].getBool("armed",true))strokeCancel();
         else if(!reads.count(method)){
             Json reply=Json::object();reply.set("id",request["id"]);reply.set("error",str("Finish or cancel the active Scene stroke first"));return reply;
@@ -4002,6 +4054,8 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             ++graphDocumentEpoch_;
             clearSelection();hidden_.clear();locked_.clear();previewGraphTitle_.clear();previewGraphFactors_=Json();previewMaterialName_.clear();refreshMaterialPreview();
             reply.set("result",snapshot());
+        } else if(method=="studio.mapProperties" || method=="studio.mapPropertiesSet"){
+            reply.set("result",mapProperties(params,method=="studio.mapPropertiesSet"));
         } else if (method == "studio.hierarchyGroups") {
             reply.set("result",hierarchyGroups(params));
         } else if (method == "studio.entityCatalog") {

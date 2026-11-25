@@ -1,3 +1,4 @@
+import { MapInspector } from './MapInspector';
 import { copyText } from '../clipboard';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -152,7 +153,7 @@ function AddComponent({ entityId, busy, onPick }: { entityId: string; busy: bool
 
 /** Unity-style Inspector: entity header + its document components. */
 export default function InspectorPanel({ inspector: primary, selected, busy, inspectorPinned, toggleInspectorPin,
-  changeProperty, setBusy, commitSnapshot, showPanel, reportError, snapshot }: StudioPanelContext) {
+  select, changeProperty, setBusy, commitSnapshot, showPanel, reportError, snapshot }: StudioPanelContext) {
   // Multi-selection: read every selected object and show their common components.
   const ids = !inspectorPinned && snapshot?.selectedIds && snapshot.selectedIds.length > 1 ? snapshot.selectedIds.slice(-50) : null;
   const [others, setOthers] = useState<StudioInspector[] | null>(null);
@@ -224,8 +225,16 @@ export default function InspectorPanel({ inspector: primary, selected, busy, ins
     title={inspectorPinned ? 'Unlock Inspector' : 'Lock Inspector to current object'}
     aria-pressed={inspectorPinned} disabled={!selected && !inspectorPinned} onClick={toggleInspectorPin}
     icon={inspectorPinned ? <Lock size={12}/> : <LockOpen size={12}/>}/>;
+  const [mapView,setMapView]=useState(false);
+  useEffect(()=>setMapView(false),[selected?.id,snapshot?.graphDocument?.epoch]);
+  const mapScope=snapshot?.scene.mapProperties && snapshot.graphDocument;
+  const showMap=mapScope && (mapView || (!inspectorPinned && !selected && !inspector));
   return <div className="insp">
-    {!inspector ? <div className="insp__empty">
+    {mapScope && <nav className="insp__views" aria-label="Inspector views">
+      <button type="button" aria-pressed={!showMap} disabled={!selected && !inspector} onClick={()=>setMapView(false)}>Object</button>
+      <button type="button" aria-pressed={!!showMap} onClick={()=>setMapView(true)}>Map</button></nav>}
+    {showMap ? <MapInspector key={JSON.stringify([mapScope.projectPath,mapScope.epoch,mapScope.mapPath])} scope={mapScope} busy={busy}
+      onApply={commitSnapshot} onSelect={id=>{if(inspectorPinned)toggleInspectorPin();setMapView(false);void select(id);}}/> : !inspector ? <div className="insp__empty">
       {inspectorPinned && <div className="insp__empty-bar">{lock}</div>}
       <StudioEmptyState icon={selected ? <StudioLoader size={30}/> : undefined} title={selected ? 'Loading…' : 'Nothing selected'}
         description={selected ? 'Reading entity components.' : 'Select an entity in the Hierarchy or Scene.'}/>
