@@ -1,0 +1,221 @@
+{
+  "schema": 1,
+  "id": "material-techniques",
+  "owner": "render",
+  "changed_paths": [
+    "CMakeLists.txt",
+    "apps/editor/core/MaterialOps.cpp",
+    "apps/studio-native/StudioTools.h",
+    "apps/studio-web/src/panels/MaterialTechniquePanel.tsx",
+    "apps/studio-web/src/panels/ToolPanel.tsx",
+    "demos/material-techniques/content/crystal.gltf",
+    "demos/material-techniques/content/crystal.gltf.batching.json",
+    "demos/material-techniques/game.json",
+    "demos/material-techniques/maps/gallery.json",
+    "demos/material-techniques/rules.json",
+    "demos/material-techniques/scripts/view/distance.lua",
+    "demos/material-techniques/ui/hud/distance.rml",
+    "docs/agent-handoffs/material-techniques-authoring-20261125.md",
+    "docs/agent-handoffs/material-techniques-cost.md",
+    "docs/agent-handoffs/material-techniques-initial.md",
+    "docs/agent-handoffs/material-techniques-metal-20261125.md",
+    "docs/agent-handoffs/material-techniques-studio-20261125.md",
+    "docs/agent-handoffs/material-techniques-web-20261125.md",
+    "docs/devlog/systems.json",
+    "docs/evidence/material-techniques-far.png",
+    "docs/evidence/material-techniques-inspection.png",
+    "docs/evidence/material-techniques-inspector.png",
+    "docs/evidence/material-techniques-mcp-20261125.json",
+    "docs/evidence/material-techniques-mcp-20261125.log.txt",
+    "docs/evidence/material-techniques-near.png",
+    "docs/evidence/material-techniques-runtime-20261125.json",
+    "docs/evidence/material-techniques-runtime-20261125.log.txt",
+    "docs/evidence/material-techniques-selection-20261125.json",
+    "docs/evidence/material-techniques-selection-20261125.log.txt",
+    "docs/evidence/material-techniques-web-far.png",
+    "docs/evidence/material-techniques-web-near.png",
+    "docs/features/material-techniques.json",
+    "docs/models.md",
+    "engine/render/MaterialTechnique.h",
+    "engine/render/MaterialTechniqueData.h",
+    "engine/render/Model.cpp",
+    "engine/render/Model.h",
+    "engine/render/ModelMerge.cpp",
+    "engine/render/Renderer3D.h",
+    "engine/render/Renderer3DModels.cpp",
+    "skills/visuals/aiverse-look/SKILL.md",
+    "tests/render/material_technique_frame.cpp",
+    "tests/render/model_batching_policy.cpp"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": false,
+    "visible": true,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Real model submission resolves the authored materials on Metal.",
+      "evidence": [
+        "docs/evidence/material-techniques-runtime-20261125.log.txt"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Model owns technique rules, Renderer3D owns device and camera context. No simulation state changed.",
+      "evidence": [
+        "engine/render/MaterialTechnique.h",
+        "engine/render/Renderer3DModels.cpp"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "Renderer3D::setMaterialScheme and model submission select the inspection colour on Metal.",
+      "evidence": [
+        "docs/evidence/material-techniques-runtime-20261125.log.txt",
+        "engine/render/Renderer3D.h"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "The existing visual look skill documents the model-sidecar operations and fallback.",
+      "evidence": [
+        "skills/visuals/aiverse-look/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "pass",
+      "note": "Real tools/list and mcp_registry agree on 426 registered operations; both material operations are present.",
+      "evidence": [
+        "docs/evidence/material-techniques-mcp-20261125.json",
+        "docs/agent-handoffs/material-techniques-authoring-20261125.md"
+      ]
+    },
+    "studio": {
+      "status": "pass",
+      "note": "Studio Models mounts the inspector and uses studio.op for the native material operations. Chromium exercised the real component and a fixture transport.",
+      "evidence": [
+        "docs/agent-handoffs/material-techniques-authoring-20261125.md",
+        "docs/evidence/material-techniques-inspector.png"
+      ]
+    },
+    "inspector": {
+      "status": "pass",
+      "note": "Chromium loaded, saved, undid, redid and reopened both rules with the real native operations.",
+      "evidence": [
+        "docs/agent-handoffs/material-techniques-authoring-20261125.md",
+        "docs/evidence/material-techniques-inspector.png"
+      ]
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "New sidecar creation, conflict handling, invalid-name rejection, clear, reopen and unrelated keys were verified on disk.",
+      "evidence": [
+        "docs/agent-handoffs/material-techniques-authoring-20261125.md"
+      ]
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "Ordered model technique rows select existing material references. This feature defines no graph or graph editor.",
+      "evidence": [
+        "docs/models.md"
+      ]
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "Isolated CPU selector cost measured. Remaining large-scene GPU timing and draw-count acceptance pending.",
+      "evidence": [
+        "docs/agent-handoffs/material-techniques-cost.md"
+      ]
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "Mac Metal and WebGL2 on Chromium each selected the expected real material colours. Other devices were not run.",
+      "evidence": [
+        "docs/agent-handoffs/material-techniques-web-20261125.md",
+        "docs/evidence/material-techniques-runtime-20261125.json",
+        "docs/evidence/material-techniques-web-near.png",
+        "docs/evidence/material-techniques-web-far.png"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Reuses Model and its batching sidecar, native GPU capabilities, existing material objects and Workspace. No additional packages.",
+      "evidence": [
+        "docs/models.md",
+        "engine/render/Model.cpp"
+      ]
+    },
+    "headless": {
+      "status": "pass",
+      "note": "Verified both tools through the standalone server on a copied project.",
+      "evidence": [
+        "docs/agent-handoffs/material-techniques-authoring-20261125.md",
+        "docs/evidence/material-techniques-mcp-20261125.json"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "The packaged demo ran in Chromium with verified Near, Far and Reset actions.",
+      "evidence": [
+        "demos/material-techniques/game.json",
+        "docs/agent-handoffs/material-techniques-web-20261125.md",
+        "docs/evidence/material-techniques-web-near.png",
+        "docs/evidence/material-techniques-web-far.png"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Both model policy and actual Metal readback passed.",
+      "evidence": [
+        "docs/evidence/material-techniques-runtime-20261125.json",
+        "docs/evidence/material-techniques-runtime-20261125.log.txt"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "CPU/Metal, MCP/Studio and playable Web verification were handed off on separate commits.",
+      "evidence": [
+        "docs/agent-handoffs/material-techniques-metal-20261125.md",
+        "docs/agent-handoffs/material-techniques-authoring-20261125.md",
+        "docs/agent-handoffs/material-techniques-web-20261125.md",
+        "docs/agent-handoffs/material-techniques-cost.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "The model authoring reference documents distance units, capability names, priority, scheme and interactions with other material overrides.",
+      "evidence": [
+        "docs/models.md"
+      ]
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Real screenshots and a runnable local Web demo exist. Integration and public deployment are pending.",
+      "evidence": [
+        "docs/agent-handoffs/material-techniques-web-20261125.md"
+      ]
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-look"
+    ],
+    "mcp_tools": [
+      "material_techniques_get",
+      "material_techniques_set"
+    ],
+    "studio_panels": [
+      "models"
+    ],
+    "studio_methods": [
+      "studio.op",
+      "studio.ops"
+    ]
+  },
+  "test_reports": [
+    "docs/evidence/material-techniques-runtime-20261125.json",
+    "docs/evidence/material-techniques-mcp-20261125.json"
+  ]
+}

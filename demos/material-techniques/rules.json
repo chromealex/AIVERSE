@@ -1,0 +1,25 @@
+{
+  "fogOfWar": {
+    "mode": "none"
+  },
+  "types": {
+    "crystal": {
+      "name": "Crystal",
+      "stance": "passive",
+      "health": {
+        "max": 100
+      },
+      "view": {
+        "model": "content/crystal.gltf",
+        "height": 4
+      }
+    }
+  },
+  "viewScripts": [
+    "scripts/view/distance.lua"
+  ],
+  "victory": {
+    "mode": "survive",
+    "seconds": 86400
+  }
+}

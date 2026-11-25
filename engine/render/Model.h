@@ -16,6 +16,7 @@
 #include <vector>
 #include "../gfx/Gfx.h"
 #include "Math3D.h"
+#include "MaterialTechnique.h"
 #include "TextureCodec.h"
 #include "GpuOwnedMemory.h"
 #include "graph/ShaderGraph.h"
@@ -321,6 +322,7 @@ struct Model {
     std::map<std::string, int> imageAliases; // asset-authored names for texture and image references
     std::vector<Skin> skins;
     std::vector<AnimClip> clips;
+    MaterialTechniques materialTechniques;
     std::vector<std::string> variants; // KHR_materials_variants names
     std::vector<ModelVertex> vertices; // CPU copy, released after upload
     std::vector<uint32_t> indices;

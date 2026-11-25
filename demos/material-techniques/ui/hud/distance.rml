@@ -1,0 +1,19 @@
+<rml>
+<head>
+  <title>Material distance</title>
+  <link type="text/rcss" href="../theme.rcss"/>
+  <style>
+    body { pointer-events: none; }
+    .controls { position: absolute; left: 18dp; top: 18dp; padding: 12dp; background-color: #20252bea; color: #fff; pointer-events: auto; }
+    button { margin-right: 4dp; }
+  </style>
+</head>
+<body>
+  <div class="controls" data-model="script">
+    <p>Camera distance: {{distance}}</p>
+    <button data-event-click="event('near')">Near</button>
+    <button data-event-click="event('far')">Far</button>
+    <button data-event-click="event('reset')">Reset</button>
+  </div>
+</body>
+</rml>

@@ -1734,3 +1734,18 @@ hot-reload visual test, GPU failure injection or benchmarks.
 A status can attach a particle effect to its holder for its active lifetime. For example, set `"view": {"effect":"heal_glow","offset":[0,0.5,0]}` on the status definition. Named model nodes use socket-local offsets. Removing the status stops emission.
 
 For chain delivery, the ability ID selects an entry in `fx/fx.json` under `chainJumps`. Override it with `chainFx` on a chain effect or its delivery. `events.chainJump` supplies the fallback. For example, `"chainJumps":{"lightning":{"mode":"beam","scale":2,"lifetime":0.25,"height":1}}` draws a ribbon between each pair of hits. Set `"mode":"projectile","effect":"spark"` to move an emitter along the link during its lifetime. Beam color uses the renderer's packed RGBA integer.
+
+### Material techniques
+
+A model's `<model>.batching.json` can choose a different existing material for each source material. List rules in priority order. The first matching rule wins, with the source material as fallback. Distances are measured in world units from the camera to the transformed centre of the node's base mesh. The lower bound is inclusive and the upper bound exclusive. For example, this model contains materials named Stone, Polished and DistantStone.
+
+```json
+{
+  "materialTechniques": [
+    {"source": "Stone", "use": "Polished", "scheme": "inspection", "maxDistance": 12, "requires": ["rgba16f"]},
+    {"source": "Stone", "use": "DistantStone", "minDistance": 40}
+  ]
+}
+```
+
+A native host selects its scheme with `Renderer3D::setMaterialScheme` before submitting the model. The initial scheme is `default`; omitting `scheme` matches every scheme. `requires` accepts `compute`, `rgba16f` and `texture2dArray`, and all listed device capabilities must be present. Explicit glTF variant and per-node material selections take priority. Each draw retains the selected material for its dependent passes. The rule format targets model material names, which must be unique within the asset. Studio's Models panel and MCP expose `material_techniques_get` and `material_techniques_set`; reopen the model to reload its sidecar.
