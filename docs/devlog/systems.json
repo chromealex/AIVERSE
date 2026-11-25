@@ -3390,6 +3390,14 @@
           "text": "Вывод объектов сцены и отдельно анимированных моделей в элементы UI через внеэкранную текстуру.",
           "titleEn": "3D objects in UI",
           "textEn": "Render scene objects and independently animated models into UI elements through an offscreen texture."
+        },
+        {
+          "id": "projectile-impact-height",
+          "status": "in-progress",
+          "title": "Высота попадания снарядов",
+          "titleEn": "Projectile impact height",
+          "text": "Привязка прямого выстрела и его следа к высоте цели.",
+          "textEn": "Straight shots and trails converge to the authored height on the target."
         }
       ]
     },

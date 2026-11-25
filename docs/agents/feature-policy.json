@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "features": {
+    "projectile-impact-height": {"requires": [], "roadmap": {"system": "render", "id": "projectile-impact-height"}, "api_paths": ["engine/view/game/ProjectileAppearance.h"]},
     "terraweave-meadow-grass": {
       "requires": [],
       "roadmap": {"system": "terraweave", "id": "terraweave-meadow-grass"},
