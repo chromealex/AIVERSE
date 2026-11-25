@@ -1,0 +1,10 @@
+{
+  "sha": "fc9c6fcfb3d0fd9c6eacc18ac6b092407b5c0897",
+  "argv": [
+    "bash",
+    "/tmp/shader-frame-qa.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-shader-runtime-map-frame.log.txt",
+  "sha256": "76c34570c5a19d18dc022f64d4c7a5bab4aa5895bfc44b3482abc9dc483d0be6"
+}

@@ -17,8 +17,8 @@
   "bodyEn": [
     "Choose the map in Apply to target. Its post-effect override participates in map history."
   ],
-  "verified": "На macOS проверены Undo, Redo, сохранение и повторное открытие второй карты. Первая карта и game.json совпали с исходными побайтно.",
-  "verifiedEn": "macOS verified undo, redo, save and reopen on the second map. The first map and game.json stayed byte-identical.",
+  "verified": "На macOS проверены Undo, Redo, сохранение и повторное открытие второй карты. Первая карта и game.json совпали с исходными побайтно. В запущенной игре контрольный цвет появился только на второй карте.",
+  "verifiedEn": "macOS verified undo, redo, save and reopen on the second map. The first map and game.json stayed byte-identical. The native game rendered the test color on the second map only.",
   "limits": "Визуальная проверка Windows предстоит.",
   "limitsEn": "Windows visual verification remains pending.",
   "media": [
@@ -26,6 +26,16 @@
       "src": "docs/devlog/media/2026-11-25-studio-map-shader/map-shader.png",
       "caption": "Постэффект для harbor.json",
       "captionEn": "Post-effect override for harbor.json"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-map-shader/map-shader-runtime-before.png",
+      "caption": "Первая карта в игре",
+      "captionEn": "First map in game"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-map-shader/map-shader-runtime-after.png",
+      "caption": "Вторая карта с контрольным цветом",
+      "captionEn": "Second map with the test color"
     }
   ]
 }
