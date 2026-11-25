@@ -1,0 +1,10 @@
+{
+  "sha": "c6b7702b872809e0811a20c68b5e6a2570b1a621",
+  "argv": [
+    "bash",
+    "/tmp/shader-other-qa.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-shader-apply-postfx-particle.log.txt",
+  "sha256": "2d1a8a6df7bdbff3e298aed94f9b00b35db2bcf4fb122227f0c2cf95c6f9208f"
+}
