@@ -37,6 +37,14 @@ A change is done when: it builds without warnings on gcc/clang (`-Wall -Wextra`)
 headless matches still finish, visual changes were checked on a screenshot, Metal code paths that
 couldn't be compiled are listed in the commit message as unverified.
 
+### Targeted local builds and reuse (all agents)
+
+- Before building, identify the changed CMake targets and the tests or consumer that actually exercise them. Build those targets and their test executables first with `cmake --build <build-dir> --target <targets> --parallel <N>`, then run the corresponding CTest selection. For a Studio change, build the Studio target and verify the relevant UI; for a headless simulation change, build the affected test targets and headless runner. Include every affected integration, not just the smallest library.
+- Keep one KINGSTON build tree per source worktree, generator, configuration, architecture and toolchain. Reuse it for subsequent local edits: CMake retains object files and static libraries and rebuilds changed dependencies. Do not share a CMake cache between worktrees, switch architecture/configuration in place, delete a useful tree merely to start a new stage, or treat a stale binary as evidence for changed source. Record the exact source SHA, command and result.
+- On Apple Silicon, a separate `arm64`-only development tree can avoid the two-architecture compilation of the `macos` preset (`arm64;x86_64`). Use the required architecture matrix for platform acceptance and release checks; an `arm64` build alone does not prove `x86_64` works.
+- A compiler cache such as `ccache` may be enabled through `CMAKE_C_COMPILER_LAUNCHER` and `CMAKE_CXX_COMPILER_LAUNCHER` when installed. Put its cache on KINGSTON and verify it is actually used. It supplements the retained CMake objects; never rely on cache hits as test evidence.
+- Disable unrelated `AIVERSE_BUILD_*` options only in a dedicated focused-build tree. Keep required consumers and tests enabled for the verification being claimed. `./run-tests.sh --quick --build-dir /Volumes/KINGSTON/AIVERSE-builds/<branch>/all-tests` on the exact merged tree remains mandatory before `main`; focused builds and filtered CTest do not replace it.
+
 ### Where build output goes (all agents)
 
 **Owner instruction (2026-11-20): all builds must run on KINGSTON.**
