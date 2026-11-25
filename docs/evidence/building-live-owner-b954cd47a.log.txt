@@ -1,0 +1,1 @@
+PASS two live scenes with native navigation telemetry; absent scene unavailable

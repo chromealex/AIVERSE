@@ -1,0 +1,47 @@
+..........warning: LF will be replaced by CRLF in source.py.
+The file will have its original line endings in your working directory
+warning: LF will be replaced by CRLF in source.py.
+The file will have its original line endings in your working directory
+warning: LF will be replaced by CRLF in source.py.
+The file will have its original line endings in your working directory
+..........
+----------------------------------------------------------------------
+Ran 20 tests in 3.784s
+
+OK
+Feature gate: 1 manifest(s), 0 error(s)
+Feature gate: 1 manifest(s), 0 error(s)
+Agent contract routing: 0 error(s)
+Validated 287 skills and isolated library mappings
+registered=368, required_families=15
+PASS core: open_game, map_validate
+PASS scene: scene_entity_list, scene_component_set
+PASS camera: lens_scene_get, lens_camera_set
+PASS animation: animation_graph_list, animation_graph_set
+PASS terrain: terrain_sculpt, terrain_material
+PASS lighting: light_list, scene_light_create
+PASS physis: physis_get, physis_set
+PASS spectrafx: fx_graph_list, fx_graph_set
+PASS postfx: postfx_get
+PASS geometry: geometry_catalog, strata_capabilities
+PASS human: human_schema, human_create
+PASS building: building_graph_diagnostics
+PASS graphs: graph_catalog, graph_list, graph_get, graph_node_catalog, graph_validate, graph_edit, graph_save, graph_diagnostics, graph_dependencies, graph_property_schema, graph_asset_dependencies, graph_runtime_capabilities, graph_runtime_probe, graph_live_snapshot, graph_live_watch, graph_live_profile, graph_gpu_profile, graph_debug_session, texture_graph_catalog, texture_graph_list, texture_graph_get, texture_graph_validate, texture_graph_set, texture_graph_preview, texture_graph_bake, texture_graph_templates, texture_graph_bake_set, texture_graph_cache, texture_graph_material_variant, texture_graph_gpu_preview
+PASS mcp: mcp_registry, feature_readiness_get, feature_readiness_query, feature_readiness_status_get, feature_readiness_refresh
+PASS simulation: simulation_budget_plan
+PASS tools/list == mcp_registry (count, names, guiOnly metadata)
+FEATURE {"declared_status": "pass", "id": "building-graph-integration", "missing": [], "registration": "registered", "runtime_verification": "not_run", "tools": ["building_graph_diagnostics"]}
+FEATURE {"declared_status": "not_run", "id": "feature-gate", "missing": [], "registration": "registered", "runtime_verification": "not_run", "tools": ["feature_readiness_get", "feature_readiness_query", "feature_readiness_refresh", "feature_readiness_status_get"]}
+FEATURE {"declared_status": "not_run", "id": "graph-framework", "missing": [], "registration": "registered", "runtime_verification": "not_run", "tools": ["animation_graph_get", "animation_graph_list", "animation_graph_set", "animation_graph_validate", "fx_graph_edit", "fx_graph_get", "fx_graph_list", "fx_graph_node_catalog", "fx_graph_set", "fx_graph_validate", "graph_asset_dependencies", "graph_catalog", "graph_debug_session", "graph_dependencies", "graph_diagnostics", "graph_edit", "graph_get", "graph_gpu_profile", "graph_list", "graph_live_profile", "graph_live_snapshot", "graph_live_watch", "graph_node_catalog", "graph_property_schema", "graph_runtime_capabilities", "graph_runtime_probe", "graph_save", "graph_validate", "material_set", "modeling_edit", "modeling_get", "modeling_list", "modeling_validate", "shader_graph_catalog", "shader_graph_get", "shader_graph_set", "shader_graph_validate", "strata_capabilities", "strata_model_analyze", "terraweave_forest_get", "terraweave_forest_set", "terraweave_generate", "terraweave_preview", "texture_generate", "texture_graph_bake", "texture_graph_bake_set", "texture_graph_cache", "texture_graph_catalog", "texture_graph_get", "texture_graph_gpu_preview", "texture_graph_list", "texture_graph_material_variant", "texture_graph_preview", "texture_graph_set", "texture_graph_templates", "texture_graph_validate", "texture_patterns"]}
+FEATURE {"declared_status": "not_run", "id": "recurring-work-budget", "missing": [], "registration": "undeclared", "runtime_verification": "not_run", "tools": []}
+FEATURE {"declared_status": "not_run", "id": "studio-entity-debugger", "missing": [], "registration": "undeclared", "runtime_verification": "not_run", "tools": []}
+FEATURE {"declared_status": "not_run", "id": "studio-play-mode-review", "missing": [], "registration": "undeclared", "runtime_verification": "not_run", "tools": []}
+FEATURE {"declared_status": "not_run", "id": "studio-runtime-debugger", "missing": [], "registration": "undeclared", "runtime_verification": "not_run", "tools": []}
+FEATURE {"declared_status": "not_run", "id": "studio-simulation-profiler", "missing": [], "registration": "undeclared", "runtime_verification": "not_run", "tools": []}
+FEATURE {"declared_status": "not_run", "id": "studio-world-explorer", "missing": [], "registration": "undeclared", "runtime_verification": "not_run", "tools": []}
+FEATURE {"declared_status": "not_run", "id": "terraweave-caverns", "missing": [], "registration": "registered", "runtime_verification": "not_run", "tools": ["terraweave_caverns_paint", "terraweave_caverns_pick"]}
+NOTE: authoring and GPU validation still need dedicated per-system tests.
+simulation budget planner: stdio discovery, exact plans and invalid input refusal
+PASS valid scene ID: unavailable without live runtime owner
+PASS zero and overflowing scene IDs rejected
+Live attached-runtime diagnostics NOT RUN

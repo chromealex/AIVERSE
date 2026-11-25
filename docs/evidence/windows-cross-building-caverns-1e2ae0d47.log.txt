@@ -1,0 +1,7 @@
+x86_64-w64-mingw32-g++ (GCC) 16.2.0
+Copyright (C) 2026 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage24-windows-cross/building-export.exe: PE32+ executable (console) x86-64, for MS Windows
+/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage24-windows-cross/caverns.exe:         PE32+ executable (console) x86-64, for MS Windows

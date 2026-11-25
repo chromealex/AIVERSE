@@ -12,7 +12,9 @@ class ContentProjectLayoutTests(unittest.TestCase):
         self.assertIn('fs::create_directories(content, ec);',method)
         self.assertIn('fs::is_symlink(contentStatus)',method)
         self.assertGreater(method.index('const fs::path content = dst / "content";'),
-                           method.index("copyFileReplaceOrThrow(it->path(), to)"))
+                           method.index('if (templateId != "empty" && !isCatalogTemplate(templateId))'))
+        self.assertGreater(method.index('const fs::path content = dst / "content";'),
+                           method.index('runPackageTool(engineDir, {"create", templateId.substr(4), dst.string()})'))
         self.assertLess(method.index('fs::create_directories(content, ec);'),
                         method.index('Json m = Json::parseFile'))
 

@@ -1,0 +1,7 @@
+Runtime package checks passed
+[ OK ] traffic_population_recurring_budget_and_restore
+
+8 checks, 0 failed
+[ OK ] traffic_population_determinism_and_saves
+
+6 checks, 0 failed

@@ -5,7 +5,7 @@ import type { StudioSceneBrush } from '../types';
 
 export type BrushKind = StudioSceneBrush['kind'];
 const KIND_LABEL: Record<BrushKind, string> = {
-  terrain: 'Sculpt', paint: 'Paint', objects: 'Objects', tiles: 'Tiles', field: 'Field', road: 'Draw road', river: 'Draw river',
+  terrain: 'Sculpt', paint: 'Paint', objects: 'Objects', tiles: 'Tiles', field: 'Field', road: 'Draw road', river: 'Draw river', caverns: 'Caverns',
 };
 const OPS: Array<[StudioSceneBrush['op'], string]> = [['raise', 'Raise'], ['lower', 'Lower'], ['smooth', 'Smooth'], ['flatten', 'Flatten'], ['noise', 'Noise'], ['erode', 'Erode']];
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);

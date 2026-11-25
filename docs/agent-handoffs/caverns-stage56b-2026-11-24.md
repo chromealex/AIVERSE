@@ -1,0 +1,9 @@
+# Caverns Stage56b — shared optional native-host composition
+
+Date: 2026-11-24. Branch `integration/caverns-studio-stage54c-20261124`. Starting HEAD 6fec9e14; roadmap c290164b; implementation `52a87c76e6d7ebe3ac52c9468695f06cad9aa04c`.
+
+- `engine/world/TerraWeaveCavernsPlanetNativeHost.h`: bind existing Simulation, Scene, SpatialWorld, GameView, GI scene and actual CPU/GPU bridge, no second owner. Shared setup helper installs canonical map authority and nav before the existing unique motor. Frame/tick/motor admission, restore signal, GI overlay suppression, explicit retirement lifecycle. Fence backpressure is not a permanent recipe error; unchanged committed cohorts can still present when the real bridge permits it.
+- `engine/world/TerraWeaveCavernsPlanetRuntimeFrame.h`: query coherent committed cohorts for render admission.
+- Optional native PhysicsIntegration example includes the shared host. README and skill describe real host requirements. Existing planetary collision fixture has restore-notice and host noncopyability source checks.
+
+Evidence: committed sources only. Compile/link, CTest, live native world, actual GPU atlas, performance, visual and Mac gates NOT RUN. No new editable schema, inspector, graph, MCP operations or persistence format; existing APIs reused. Default GameClient currently integrates only visual caves, not an authoritative planetary Box3D scene or a shared GI baseline leaf publisher. No fake owner, no automatic default host migration claimed. Main unchanged. Current composition still requires real external baseline GI chunk IDs/projection/materials and coverage proof, same simulation/physics owner and existing motor; actual host adoption and moving-body GI projection still pending. Next Stage56c: coordinated GI coordinate changes, planet baseline leaf source and explicit integration into a native host with real ownership; then swim/fly and surface transitions. Full verification afterward.

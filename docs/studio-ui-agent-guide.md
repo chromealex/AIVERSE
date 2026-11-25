@@ -152,3 +152,14 @@ MyGame/
 ```
 
 Existing projects are NOT migrated: data outside content remains where it was, and the user consciously moves assets and updates references if needed. The UI reads real file names and sizes only; it does not fake thumbnails or execute file operations in JavaScript.
+
+## Building Generator panel
+
+New dock id: `building_generator` (dock-right), implemented at
+`src/panels/generated/BuildingGeneratorPanel.tsx`. Approved Studio UI kit only.
+Native bridge calls are `studio.buildingCatalog` (read-only styles),
+`studio.buildingInspect` (CPU candidate geometry stats), and
+`studio.buildingGenerate` (real GLB in project/content with GUID).
+Native ownership: `apps/studio-native/StudioBuildingGeneration.h`,
+allowlisted in `StudioSession.cpp`. No browser filesystem access.
+Full 3D native Renderer3D preview is not yet wired.

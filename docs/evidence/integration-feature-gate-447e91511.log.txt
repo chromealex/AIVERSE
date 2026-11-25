@@ -1,0 +1,13 @@
+..........warning: LF will be replaced by CRLF in source.py.
+The file will have its original line endings in your working directory
+warning: LF will be replaced by CRLF in source.py.
+The file will have its original line endings in your working directory
+warning: LF will be replaced by CRLF in source.py.
+The file will have its original line endings in your working directory
+..........
+----------------------------------------------------------------------
+Ran 20 tests in 3.544s
+
+OK
+Feature gate: 1 manifest(s), 0 error(s)
+Feature gate: 1 manifest(s), 0 error(s)

@@ -2,6 +2,8 @@
 #include "apps/studio-native/StudioSpectraPackageImport.h"
 #include "apps/studio-native/StudioHumanLookDocument.h"
 #include "apps/studio-native/StudioGameInput.h"
+#include "apps/studio-native/StudioBuildingGeneration.h"
+#include "apps/studio-native/StudioBuildingPanelPreview.h"
 #include "apps/studio-native/StudioTerrainGeometry.h"
 #include "apps/editor/core/BrandingOps.h"
 #include "apps/editor/core/BuildTool.h"
@@ -73,7 +75,7 @@ const std::set<std::string>& documentChangingMethods() {
         "studio.openMap", "studio.newMap", "studio.entityCreate", "studio.entityDelete", "studio.entityDuplicate",
         "studio.setProperty", "studio.save", "studio.undo", "studio.redo", "studio.nereidFlowSet",
         "studio.renderLightingSet", "studio.lightingSet", "studio.lightAdd", "studio.lightUpdate", "studio.lightDelete",
-        "studio.materialPatch", "studio.materialCreate", "studio.setProperties", "studio.componentAdd",
+        "studio.materialPatch", "studio.materialCreate", "studio.buildingPublishMaterial", "studio.setProperties", "studio.componentAdd",
         "studio.componentRemove", "studio.entityMove", "studio.entitiesDelete", "studio.entitiesDuplicate",
         "studio.assetPlace", "studio.entityFlags", "studio.rulesSet", "studio.entitiesAlign", "studio.historyJump"};
     return methods;
@@ -101,6 +103,7 @@ void StudioHost::cancelSpectraCapture() {
 }
 void StudioHost::shutdown() {
     *alive_ = false;
+    retireBuildingPanelPreview();
     cancelSpectraCapture();
     if(session_)session_->workspace().setSpectraPreviewHandler({});
     game_.reset(); // hosted client and its device retire before the native surface
@@ -233,10 +236,29 @@ void StudioHost::webReady() {
 // models in with a per-frame budget. requestId < 0: --project / last project.
 void StudioHost::openProject(const std::string& path, int64_t requestId) {
     if (projectLoading_) return;
+    // A temporary building Model belongs to the previous project's
+    // renderer epoch. Retire it BEFORE the Workspace changes, even
+    // when the generator panel is not mounted and cannot send Stop.
+    if(preview_){
+        std::string issue;
+        const bool retired=onScene([&]{
+            return preview_->setBuildingPreview({},&issue);
+        });
+        if(!retired){
+            if(requestId>=0)
+                sendError(Json::number(requestId),issue);
+            else platform_.log("Building preview retirement blocks project switch: "+issue);
+            return;
+        }
+    }
+    retireBuildingPanelPreview();
+    buildingGraphOverlayScene_=0;rebuildOverlay();
+    session_->setBuildingGraphReader({});
     projectLoading_ = true;
     ++packageProjectEpoch_;
     cancelSpectraCapture(); // invalidate old project callbacks before opening
     if (game_) game_->stop();
+    playReview_=Json();
     sendProjectSplash(path);
     sendLoading("project", "Opening " + fs::path(path).filename().string(), 0, 0);
     StudioSession* session = session_.get();
@@ -289,7 +311,7 @@ bool StudioHost::confirmClose() {
 
 // ---------------------------------------------------------------- tick
 Json StudioHost::gameState() {
-    if (game_) return game_->state();
+    if (game_) {auto out=game_->state();out.set("canReviewPlayChanges",Json::fromBool(game_->canReview(session_->workspace())));return out;}
     auto out = Json::parse(R"({"paused":false,"canControl":false,"canStep":false,"active":false,"loading":false,"progress":0,"inMatch":false,"tick":0,"error":""})");
     out.set("device", StudioGameDevice{}.json());
     return out;
@@ -309,10 +331,11 @@ void StudioHost::surfaceDetached(StudioSurface surface) {
 void StudioHost::tickGame() {
     const double now = platform_.now(), dt = gameFrameTime_ > 0 ? now - gameFrameTime_ : 0;
     gameFrameTime_ = now;
-    if (!game_) return;
+    if (!game_) {session_->setBuildingGraphReader({});return;}
     if (!gamePlacement_.visible || !platform_.surfaceDrawable(StudioSurface::Game)) { game_->suspend(); return; }
     game_->frame(gamePlacement_.pixelsW, gamePlacement_.pixelsH, float(gamePlacement_.width), float(gamePlacement_.height),
                  dt, platform_.gameFocused());
+    session_->setBuildingGraphReader(game_->buildingGraphReader());
 }
 void StudioHost::tickAgentScreenshot() {
     if (agentShot_) {
@@ -381,6 +404,49 @@ void StudioHost::pollAgentRequests() {
         onScene([&] { preview_->captureFacialThumbnail((out / (id + ".png")).string(), false); });
     } catch (const std::exception&) {}
 }
+Json StudioHost::buildingPanelFrame(const BuildingPreviewJob& job){
+    // Only the Building render worker accesses its device/model.
+    if(!buildingPanelPreview_)throw std::runtime_error("No active Building panel preview");
+    std::vector<uint8_t> pixels;
+    platform_.sceneThreadScope([&]{pixels=buildingPanelPreview_->frame(job.yaw,job.pitch,job.zoom,job.panX,job.panY);});
+    const auto bytes=encodeJpeg(pixels,StudioBuildingPanelPreview::Side,StudioBuildingPanelPreview::Side,90);
+    if(bytes.empty())throw std::runtime_error("Building preview JPEG encoding failed");
+    Json result=Json::object();
+    result.set("active",Json::fromBool(true));
+    result.set("token",Json::string(std::to_string(job.token)));
+    result.set("url",Json::string("data:image/jpeg;base64,"+editor::base64Encode(bytes)));
+    return result;
+}
+void StudioHost::renderBuildingPanelFrame(){
+    std::optional<BuildingPreviewJob> job;
+    {std::lock_guard<std::mutex> lock(buildingPreviewMutex_);job=std::move(buildingPreviewJob_);buildingPreviewJob_.reset();}
+    if(!job)return;
+    Json reply=Json::object();reply.set("id",job->id);
+    try{reply.set("result",buildingPanelFrame(*job));}
+    catch(const std::exception& e){reply.set("error",Json::string(e.what()));}
+    catch(...){reply.set("error",Json::string("Unknown Building preview error"));}
+    {std::lock_guard<std::mutex> lock(buildingPreviewMutex_);buildingPreviewReply_=std::move(reply);}
+}
+void StudioHost::publishBuildingPanelFrame(){
+    std::optional<Json> reply;
+    {std::lock_guard<std::mutex> lock(buildingPreviewMutex_);reply=std::move(buildingPreviewReply_);buildingPreviewReply_.reset();}
+    if(!reply)return;
+    buildingPreviewPending_=false;
+    // A delayed reply is no longer inside its initiating WebView callback.
+    // Bridge request IDs are window-scoped; broadcast the addressed reply.
+    if(*alive_)platform_.evaluateScript("window.__aiverseReceive && window.__aiverseReceive("+reply->dump(-1)+");",false);
+}
+void StudioHost::retireBuildingPanelPreview(){
+    buildingPreviewActive_=false;
+    if(buildingPreviewThread_){
+        buildingPreviewThread_->flush();
+        buildingPreviewThread_->invoke([&]{platform_.sceneThreadScope([&]{buildingPanelPreview_.reset();});});
+        buildingPreviewThread_->stop();buildingPreviewThread_.reset();
+    }
+    publishBuildingPanelFrame();
+    buildingPreviewPending_=false;
+    ++buildingPreviewToken_;
+}
 void StudioHost::tickFx() {
     if(!fxPlacement_.visible || !platform_.surfaceDrawable(StudioSurface::Fx))return;
     try {
@@ -438,6 +504,7 @@ void StudioHost::fxCameraZoom(double wheel) {
     });
 }
 void StudioHost::tick() {
+    publishBuildingPanelFrame();
     if (projectLoading_) return; // the background thread owns the session right now
     tickGame();
     // An empty Workspace owns an internal default MapDoc, NOT a loaded project.
@@ -837,16 +904,26 @@ void StudioHost::selectionAction(const std::string& method) {
     sendEvent("selection.changed", "");
 }
 // Ring under the cursor while the Scene brush is armed (radius; river: half its width; road: a dot).
+bool StudioHost::resolveBrushPoint(double x,double y,double w,double h,render::float3& at,std::string* error) {
+    if(!preview_||x<0||y<0||w<2||h<2||x>=w||y>=h)return false;
+    if(session_->sceneBrush().kind!="caverns")
+        return onScene([&]{return preview_->groundPoint(float(x),float(y),float(w),float(h),at);});
+    render::float3 origin{},direction{};
+    if(!onScene([&]{return preview_->caveScreenRay(float(x),float(y),float(w),float(h),origin,direction);}))return false;
+    double px=0,py=0,pz=0;
+    if(!session_->caveBrushPoint(origin.x,origin.y,origin.z,direction.x,direction.y,direction.z,px,py,pz,error))return false;
+    at={float(px),float(py),float(pz)};return true;
+}
 bool StudioHost::updateBrushCursor(double x, double y, double w, double h) {
     if (!preview_) return false;
     const auto& b = session_->sceneBrush();
     render::float3 at{};
-    if (!b.armed || x < 0 || y < 0 || !onScene([&] { return preview_->groundPoint(float(x), float(y), float(w), float(h), at); })) {
+    if (!b.armed || !resolveBrushPoint(x,y,w,h,at)) {
         onScene([&] { preview_->setBrushCursor(false, {}, 0); });
         return b.armed;
     }
     const float r = b.kind == "road" ? 0.6f : b.kind == "river" ? float(b.width * 0.5) : float(b.radius);
-    onScene([&] { preview_->setBrushCursor(true, at, r); });
+    onScene([&] { preview_->setBrushCursor(true, at, r,b.kind=="caverns",b.caveMode=="fill"); });
     return true;
 }
 void StudioHost::brushAdjust(double factor, bool disarm) {
@@ -863,6 +940,45 @@ bool StudioHost::brushArmed() const { return !projectLoading_ && preview_ && ses
 void StudioHost::rebuildOverlay() {
     if (!preview_) return;
     auto shapes = extShapes_;
+    if(buildingGraphOverlayScene_){
+        const auto snapshot=session_->buildingGraphSnapshot(buildingGraphOverlayScene_);
+        size_t boxes=0;
+        auto drawBounds=[&](const Json& row,uint8_t r,uint8_t g,uint8_t bl){
+            if(boxes>=128)return;
+            const auto& lo=row["min"];const auto& hi=row["max"];
+            if(!lo.isArray()||!hi.isArray()||lo.size()!=3||hi.size()!=3)return;
+            float a[3]{},b[3]{};
+            for(size_t i=0;i<3;++i){
+                const double x=lo[i].toDouble(),y=hi[i].toDouble();
+                if(!lo[i].isNumber()||!hi[i].isNumber()||!std::isfinite(x)||!std::isfinite(y)||x>y||std::abs(x)>1e7||std::abs(y)>1e7)return;
+                a[i]=float(x);b[i]=float(y);
+            }
+            ++boxes;
+            auto corner=[&](unsigned c){return render::float3{c&1?b[0]:a[0],c&2?b[1]:a[1],c&4?b[2]:a[2]};};
+            for(unsigned c=0;c<8;++c)for(unsigned bit:{1u,2u,4u})if(!(c&bit)){
+                if((a[1]==b[1])&&(bit==2u||(c&2u)))continue;
+                StudioScene::OverlayShape sh;sh.kind=1;sh.thickness=2.f;
+                sh.r=r;sh.g=g;sh.bl=bl;sh.a=corner(c);sh.b=corner(c|bit);
+                shapes.push_back(sh);
+            }
+        };
+        if(buildingGraphOverlayLayers_&1u)drawBounds(snapshot["lastChange"],255,120,40);
+        const auto& owners=snapshot["ownerTelemetry"];
+        if(owners.isObject())for(const auto& [name,report]:owners.members()){
+            (void)name;
+            const auto& rows=report["overlayBounds"];
+            if(!rows.isArray())continue;
+            size_t inspected=0;
+            for(const auto& row:rows.items()){
+                if(++inspected>128||boxes>=128)break;
+                const auto kind=row.getStr("kind",report.getStr("overlayKind"));
+                if(kind=="nav-tiles"&&(buildingGraphOverlayLayers_&2u))drawBounds(row,70,200,255);
+                if(kind=="grid-cells"&&(buildingGraphOverlayLayers_&4u))drawBounds(row,80,230,130);
+                if(kind=="hpa-clusters"&&(buildingGraphOverlayLayers_&8u))drawBounds(row,185,120,255);
+                if(kind=="owner-bounds"&&(buildingGraphOverlayLayers_&16u))drawBounds(row,255,210,70);
+            }
+        }
+    }
     for (const auto& seg : splineCache_["segments"].items()) {
         StudioScene::OverlayShape sh; sh.kind = 1; sh.thickness = 2; sh.r = 255; sh.g = 200; sh.bl = 80;
         sh.a = {float(seg[0].toDouble()), 0.15f, float(seg[1].toDouble())};
@@ -944,9 +1060,15 @@ bool StudioHost::terrainStroke(int phase, double x, double y, double w, double h
         return true;
     }
     render::float3 at{};
-    if (!onScene([&] { return preview_->groundPoint(float(x), float(y), float(w), float(h), at); })) return phase != 0;
-    updateBrushCursor(x, y, w, h);
-    const bool ok = phase == 0 ? session_->strokeBegin(at.x, at.z, &error) : session_->strokeDab(at.x, at.z, &error);
+    if (!resolveBrushPoint(x,y,w,h,at,&error)) {
+        if(!error.empty())report();
+        onScene([&]{preview_->setBrushCursor(false,{},0);});
+        return phase != 0;
+    }
+    const auto& brush=session_->sceneBrush();
+    const float radius=brush.kind=="road"?.6f:brush.kind=="river"?float(brush.width*.5):float(brush.radius);
+    onScene([&]{preview_->setBrushCursor(true,at,radius,brush.kind=="caverns",brush.caveMode=="fill");});
+    const bool ok = phase == 0 ? session_->strokeBegin(at.x, at.z, &error,at.y) : session_->strokeDab(at.x, at.z, &error,at.y);
     if (!ok && !error.empty()) report();
     return ok;
 }
@@ -1057,6 +1179,29 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
     // its isolated camera only; never pick, sculpt, paint, select, drag or
     // delete an authored entity while this native layer belongs to FX.
     auto& m = mouse_;
+    if(preview_&&onScene([&]{return preview_->caveGlobeRequested();})){
+        // Globe coordinates are never passed to flat entity/terrain tools.
+        if(button==1){if(phase==1){if(mods.alt)zoom((dx+dy)*.6);else orbit(dx,dy);}return;}
+        if(button!=0)return;
+        if(phase==0){m={};m.active=true;m.pressX=x;m.pressY=y;return;}
+        if(phase==1){
+            if(m.active&&(m.dragged||std::hypot(x-m.pressX,y-m.pressY)>=5.)){
+                m.dragged=true;orbit(dx,dy);
+            }
+            return;
+        }
+        const auto st=m;m={};
+        if(st.active&&!st.dragged&&!mods.alt&&std::hypot(x-st.pressX,y-st.pressY)<5.){
+            const auto& ws=session_->workspace();
+            auto hit=onScene([&]{return preview_->pickCaveGlobe(float(x),float(y),float(w),float(h),ws.map,ws.project.dir);});
+            if(hit.getBool("hit",false)){
+                hit.set("project",Json::string(ws.project.dir));
+                hit.set("map",Json::string(ws.map.path.empty()?"":ws.relative(ws.map.path)));
+                sendEventPayload("caverns.globePicked",hit);
+            }
+        }
+        return;
+    }
     if (button == 1) { // right: look, Alt zooms
         if (phase == 1) { if (mods.alt) zoom((dx + dy) * 0.6); else look(dx, dy); }
         return;
@@ -1068,7 +1213,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
         // Spline handles (Roads / Water "Edit nodes"): LMB on a handle drags it.
         if (!mods.alt && splineDrag(0, x, y, w, h)) { m.spline = true; return; }
         // Scene brush armed: plain LMB paints; Alt still orbits.
-        if (!mods.alt && brushArmed()) { m.stroke = terrainStroke(0, x, y, w, h); if (m.stroke) return; }
+        if (!mods.alt && brushArmed()) { m.stroke = terrainStroke(0, x, y, w, h); if (m.stroke||session_->sceneBrush().kind=="caverns") { if(!m.stroke)m.active=false;return; } }
         // Plain LMB on a handle starts a Move / Rotate / Scale drag (Unity W/E/R tools).
         m.move = !mods.alt && moveBegin(x, y, w, h);
         return;
@@ -1644,6 +1789,64 @@ bool StudioHost::handleHostMethod(const Json& req) {
         return true; // diagnostics never touch Workspace or the filesystem
     }
     if (!hasId) return false;
+    if(method=="studio.buildingGraphOverlay")return answer([&]{
+        const auto raw=params.getStr("sceneId");
+        if(raw.empty()){buildingGraphOverlayScene_=0;rebuildOverlay();}
+        else{
+            if(!preview_)throw std::runtime_error("Open the native Scene viewport");
+            if(raw.size()>19||raw[0]=='0')throw std::runtime_error("Invalid scene ID");
+            uint64_t id=0;
+            for(char c:raw){if(c<'0'||c>'9'||id>(uint64_t(INT64_MAX)-uint64_t(c-'0'))/10)throw std::runtime_error("Invalid scene ID");id=id*10+uint64_t(c-'0');}
+            const auto snap=session_->buildingGraphSnapshot(id);
+            if(!snap["lastChange"].isObject())throw std::runtime_error("No committed building invalidation snapshot");
+            const auto layers=params.getInt("layers",1);
+            if(layers<1||layers>31)throw std::runtime_error("Invalid graph overlay layers");
+            buildingGraphOverlayLayers_=uint32_t(layers);
+            buildingGraphOverlayScene_=id;rebuildOverlay();
+        }
+        Json out=Json::object();out.set("active",Json::fromBool(buildingGraphOverlayScene_!=0));return out;
+    });
+    if(method=="studio.buildingPreview")return answer([&]{
+        if(projectLoading_||buildingPreviewPending_)throw std::runtime_error("Building preview is busy");
+        const auto& project=session_->workspace().project.dir;
+        if(project.empty())throw std::runtime_error("Open a project before preview");
+        auto model=studioBuildingPreviewCpuModel(fs::path(session_->workspace().engineDir),fs::path(project),params);
+        ++buildingPreviewToken_;buildingPreviewActive_=false;
+        if(!buildingPreviewThread_)buildingPreviewThread_=std::make_unique<StudioRenderThread>([this]{renderBuildingPanelFrame();});
+        const BuildingPreviewJob job{req["id"],buildingPreviewToken_,.65f,.42f,1.f,0.f,0.f};
+        auto result=buildingPreviewThread_->invoke([&]{
+            platform_.sceneThreadScope([&]{
+                if(!buildingPanelPreview_)buildingPanelPreview_=std::make_unique<StudioBuildingPanelPreview>();
+                buildingPanelPreview_->setModel(std::move(model));
+            });
+            return buildingPanelFrame(job);
+        });
+        buildingPreviewActive_=true;return result;
+    });
+    if(method=="studio.buildingPreviewView"){
+        if(projectLoading_||!buildingPreviewActive_||!buildingPreviewThread_||
+           params.getStr("token")!=std::to_string(buildingPreviewToken_)){
+            sendError(req["id"],"Building preview is no longer current");return true;
+        }
+        if(buildingPreviewPending_){sendError(req["id"],"Building preview camera is busy");return true;}
+        for(const char* key:{"yaw","pitch","zoom","panX","panY"})if(!params[key].isNumber()){
+            sendError(req["id"],"Building preview camera values required");return true;
+        }
+        BuildingPreviewJob job{req["id"],buildingPreviewToken_,float(params["yaw"].toDouble()),float(params["pitch"].toDouble()),
+            float(params["zoom"].toDouble()),float(params["panX"].toDouble()),float(params["panY"].toDouble())};
+        if(!std::isfinite(job.yaw)||!std::isfinite(job.pitch)||!std::isfinite(job.zoom)||!std::isfinite(job.panX)||!std::isfinite(job.panY)||
+           std::abs(job.yaw)>10000.f||std::abs(job.panX)>2.f||std::abs(job.panY)>2.f||job.zoom<.55f||job.zoom>2.5f){
+            sendError(req["id"],"Invalid Building preview camera");return true;
+        }
+        buildingPreviewPending_=true;
+        {std::lock_guard<std::mutex> lock(buildingPreviewMutex_);buildingPreviewJob_=std::move(job);}
+        buildingPreviewThread_->kick();
+        return true; // reply from UI tick after worker finishes
+    }
+    if(method=="studio.buildingPreviewStop")return answer([&]{
+        if(params.getStr("token")==std::to_string(buildingPreviewToken_))retireBuildingPanelPreview();
+        Json result=Json::object();result.set("active",Json::fromBool(false));return result;
+    });
     if (method == "studio.windowOpen" || method == "studio.windowClose" || method == "studio.windowTitle")
         return answer([&] { return platform_.windowRequest(method, params); });
     if (method == "studio.windowBroadcast") return answer([&] {
@@ -1684,7 +1887,47 @@ bool StudioHost::handleHostMethod(const Json& req) {
     if (method == "studio.spectraPreview")
         return answer([&]{return runSpectraPreview(params);});
     if (method == "studio.viewportInput") return answer([&] { return viewportInput(params); });
+    if (method == "studio.gameProfile") return answer([&] {
+        const auto& project=session_->workspace().project.dir;
+        if(project.empty()||params.getStr("expectedProject")!=project)
+            throw std::runtime_error("Simulation Profiler project changed");
+        const auto action=params.getStr("action");
+        if(action!="status"&&action!="start"&&action!="stop")throw std::runtime_error("Invalid profiler action");
+        uint32_t steps=0;
+        if(action=="start"){
+            const auto n=params["steps"].toDouble();
+            if(!params["steps"].isNumber()||!(n>=1&&n<=120)||double(int(n))!=n)
+                throw std::runtime_error("Invalid profile capture size");
+            steps=uint32_t(n);
+        }
+        if(game_)return game_->profile(action,steps);
+        if(action!="status")throw std::runtime_error("No local match is running");
+        Json out=Json::object();out.set("available",Json::fromBool(false));
+        out.set("epoch",Json::string("0"));out.set("reason",Json::string("No local match is running"));return out;
+    });
+    if (method == "studio.gameRegions") return answer([&] {
+        const auto& project=session_->workspace().project.dir;
+        if(project.empty()||params.getStr("expectedProject")!=project)
+            throw std::runtime_error("World Explorer project changed; refresh the panel");
+        if(game_)return game_->regions();
+        Json out=Json::object();
+        out.set("active",Json::fromBool(false));out.set("available",Json::fromBool(false));
+        out.set("epoch",Json::string("0"));out.set("tick",Json::number(int64_t(0)));
+        out.set("reason",Json::string("No local match is running"));return out;
+    });
+    if(method=="studio.gameEdit")return answer([&] {
+        const auto& project=session_->workspace().project.dir;
+        if(project.empty()||params.getStr("expectedProject")!=project)
+            throw std::runtime_error("Runtime edit project changed");
+        if(!game_)throw std::runtime_error("No local game running");
+        // Deliberately no Workspace mutation, document.changed or generic MCP command.
+        return game_->editRuntime(params);
+    });
     if (method == "studio.gameEntities" || method == "studio.gameInspect") return answer([&] {
+        // Older clients omit expectedProject. Entity Debugger always sends it.
+        if(params.has("expectedProject")&&(session_->workspace().project.dir.empty()||
+            params.getStr("expectedProject")!=session_->workspace().project.dir))
+            throw std::runtime_error("Runtime inspection project changed");
         if (method == "studio.gameEntities") {
             if (!params["offset"].isNumber() || !params["limit"].isNumber() || !params["query"].isString() ||
                 params["offset"].toDouble() < 0 || params["offset"].toDouble() > 10000000 ||
@@ -1697,16 +1940,38 @@ bool StudioHost::handleHostMethod(const Json& req) {
         if (!game_) throw std::runtime_error("No game is running");
         return game_->inspect(params.getStr("epoch"), params.getStr("ref"));
     });
+    if(method=="studio.previewPlayChanges")return answer([&] {
+        playReview_=Json();
+        if(!game_||!game_->canReview(session_->workspace()))
+            throw std::runtime_error("Pause a local saved-map session with unchanged source before reviewing changes");
+        if(params.getStr("expectedProject")!=session_->workspace().project.dir)
+            throw std::runtime_error("Play review project changed");
+        for(const char* flag:{"positions","amounts","removeDead"})
+            if(params[flag].type()!=Json::Type::Bool)throw std::runtime_error("Invalid play review options");
+        const auto states=game_->mapEntityStates();
+        Json p=Json::object(),r=Json::object();
+        p.set("entities",states["entities"]);p.set("positions",params["positions"]);
+        p.set("amounts",params["amounts"]);p.set("removeDead",params["removeDead"]);p.set("dryRun",Json::fromBool(true));
+        r.set("id",req["id"]);r.set("method",Json::string("studio.keepPlayChanges"));r.set("params",p);
+        const auto preview=session_->dispatch(r);
+        if(preview.has("error"))throw std::runtime_error(preview.getStr("error"));
+        const auto token=std::to_string(++playReviewSerial_);
+        playReview_.set("token",Json::string(token));playReview_.set("epoch",game_->state()["epoch"]);
+        playReview_.set("states",states);p.erase("dryRun");playReview_.set("params",p);
+        auto out=preview["result"];out.set("token",Json::string(token));out.set("tick",states["tick"]);return out;
+    });
     if (method == "studio.keepPlayChanges") {
-        // The running game's map entities (positions, amounts, removed) go to the map as one History step.
+        // Only a reviewed native capture may be committed; never trust browser entity rows.
         Json reply = Json::object();
         reply.set("id", req["id"]);
         try {
-            if (!game_) throw std::runtime_error("No game is running");
-            const auto states = game_->mapEntityStates();
-            Json r = Json::object(), p = Json::object();
-            p.set("entities", states["entities"]);
-            p.set("removeDead", Json::fromBool(params.getBool("removeDead")));
+            const auto review=std::move(playReview_);playReview_=Json();
+            if(!game_||!game_->canReview(session_->workspace())||
+                params.getStr("expectedProject")!=session_->workspace().project.dir||
+                params.getStr("token").empty()||params.getStr("token")!=review.getStr("token")||
+                game_->state()["epoch"]!=review["epoch"]||game_->mapEntityStates()!=review["states"])
+                throw std::runtime_error("Play review expired; capture a new preview");
+            Json r=Json::object(),p=review["params"];
             r.set("id", req["id"]); r.set("method", Json::string("studio.keepPlayChanges")); r.set("params", p);
             reply = session_->dispatch(r);
             if (!reply.has("error")) sendEvent("document.changed", "");
@@ -1732,12 +1997,25 @@ bool StudioHost::handleHostMethod(const Json& req) {
                 plan.camera = std::array<float, 5>{cam.target.x, cam.target.z, cam.distance, float(cam.pitch * 57.29578), float(cam.yaw * 57.29578)};
             }
             ensureGame();
+            buildingGraphOverlayScene_=0;rebuildOverlay();
+            session_->setBuildingGraphReader({});
+            playReview_=Json();
             game_->start(plan, engineRoot_ + "/engine/assets");
             gameFrameTime_ = 0;
-        } else if (method == "studio.gameStop" && game_) game_->stop();
-        else if (method == "studio.gameControl") {
+        } else if (method == "studio.gameStop" && game_) {
+            buildingGraphOverlayScene_=0;session_->setBuildingGraphReader({});
+            playReview_=Json();game_->stop();rebuildOverlay();
+        } else if (method == "studio.gameControl") {
             if (!game_) throw std::runtime_error("No game is running");
-            game_->control(params.getStr("action"));
+            playReview_=Json();
+            if(params.getStr("action")=="restart"){
+                if(!game_->state().getBool("active"))throw std::runtime_error("Start a game before restarting");
+                buildingGraphOverlayScene_=0;session_->setBuildingGraphReader({});rebuildOverlay();
+                const auto old=game_->launchPlan();
+                auto plan=studioGameLaunch(session_->workspace(),old.map.has_value());
+                plan.camera=old.camera;
+                game_->start(plan,engineRoot_+"/engine/assets");gameFrameTime_=0;
+            }else game_->control(params.getStr("action"));
         }
         return gameState();
     });
@@ -1934,7 +2212,7 @@ void StudioHost::handleMessage(const std::string& json) {
     try {
         if (handleHostMethod(req)) return;
         const std::string method = req.getStr("method");
-        if (game_ && (method == "studio.openMap" || method == "studio.newMap")) game_->stop();
+        if (game_ && (method == "studio.openMap" || method == "studio.newMap")) {buildingGraphOverlayScene_=0;session_->setBuildingGraphReader({});game_->stop();rebuildOverlay();}
         if (projectLoading_ && method != "studio.viewportRect") { sendError(req["id"], "Project is loading"); return; }
         Json reply;
         if (method == "studio.assetThumbnail" && req["id"].isNumber()) {
@@ -1942,6 +2220,24 @@ void StudioHost::handleMessage(const std::string& json) {
             reply.set("id", req["id"]);
             try { reply.set("result", assetThumbnail(req["params"].getStr("path"))); }
             catch (const std::exception& e) { reply.set("error", Json::string(e.what())); }
+        } else if (method == "studio.cavernsPreview" && req["id"].isNumber()) {
+            const auto& ws=session_->workspace();const auto& params=req["params"];
+            if(ws.project.dir.empty()||params.getStr("expectedProject")!=ws.project.dir||
+               !params["expectedMap"].isString()||params.getStr("expectedMap")!=(ws.map.path.empty()?"":ws.relative(ws.map.path)))
+                throw std::runtime_error("Caverns preview project/map changed");
+            if(!preview_)throw std::runtime_error("Open the native Scene panel first");
+            reply=Json::object();reply.set("id",req["id"]);
+            if(params.has("globeBody")){
+                if(!params["globeBody"].isString())throw std::runtime_error("Caverns globe body must be text");
+                const auto body=params.getStr("globeBody");
+                if(!body.empty()){
+                    if(session_->sceneBrush().armed)throw std::runtime_error("Disarm the Scene brush before entering globe mode");
+                    editor::planet_caves::validateAnchor(ws.map.data,{body,0,{}, {},100});
+                }
+                onScene([&]{preview_->setCaveGlobe(body,ws.project.dir,ws.map.path);});
+                mouse_={};
+            }
+            reply.set("result",onScene([&]{return preview_->cavernsPreview(params);}));
         } else if (method == "studio.gpuStats" && req["id"].isNumber()) {
             // Frame Capture / Texture Resources: Scene frame history (CPU frame time, draw calls) and live GPU textures.
             reply = Json::object();

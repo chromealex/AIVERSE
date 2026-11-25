@@ -1,0 +1,189 @@
+{
+  "schema": 1,
+  "id": "recurring-work-budget",
+  "owner": "Shared WorkBudget and Traffic population",
+  "changed_paths": [
+    "CMakeLists.txt",
+    "apps/editor/core/Workspace.cpp",
+    "apps/studio-native/StudioTools.h",
+    "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md",
+    "docs/devlog/systems.json",
+    "docs/native-toolkit.md",
+    "docs/traffic.md",
+    "engine/game/Traffic.h",
+    "engine/game/TrafficPopulation.cpp",
+    "libraries/catalog.json",
+    "libraries/include/aiverselib/runtime/WorkBudget.h",
+    "skills/catalog.json",
+    "skills/core/aiverse-work-budget/SKILL.md",
+    "skills/gameplay/aiverse-city-traffic/SKILL.md",
+    "tests/libraries/runtime_tests.cpp",
+    "tests/simulation_budget_mcp_test.py",
+    "tests/tests_traffic.inc",
+    "tools/mcp/audit_registry.py"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": true,
+    "visible": true,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "architecture": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "The independent runtime library consumer called planRecurringWork and nextRecurringIndex for empty, capped, overflow and fair-cycle inputs.",
+      "evidence": [
+        "tests/libraries/runtime_tests.cpp",
+        "tests/tests_traffic.inc",
+        "docs/evidence/recurring-budget-native-b1bb89949.json"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "The catalog audit passed. The documented budget planner returned the capped and uncapped visit counts for a population of 200000 via native MCP.",
+      "evidence": [
+        "skills/core/aiverse-work-budget/SKILL.md",
+        "skills/gameplay/aiverse-city-traffic/SKILL.md",
+        "docs/evidence/integration-acceptance-d5608fb7f.json"
+      ]
+    },
+    "mcp": {
+      "status": "pass",
+      "note": "Real stdio discovered the planner, returned exact capped and uncapped revisit times for 200000 items and rejected invalid inputs.",
+      "evidence": [
+        "docs/evidence/integration-tools-b954cd47a.json",
+        "tests/simulation_budget_mcp_test.py"
+      ]
+    },
+    "studio": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "inspector": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "A Traffic simulation crossed cursor wrap, saved, restored into a fresh Simulation and retained checksum parity for 80 more ticks. The default population determinism and save fixture also passed.",
+      "evidence": [
+        "tests/libraries/runtime_tests.cpp",
+        "tests/tests_traffic.inc",
+        "docs/evidence/recurring-budget-native-b1bb89949.json"
+      ]
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "The integer visit budget and saved cursor operate on a recurring population; they have no authored node or edge representation.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "platforms": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "dependencies": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "headless": {
+      "status": "pass",
+      "note": "Both Traffic fixtures ran simulation ticks and persistence without a frontend.",
+      "evidence": [
+        "tests/libraries/runtime_tests.cpp",
+        "tests/tests_traffic.inc",
+        "docs/evidence/recurring-budget-native-b1bb89949.json"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "The standalone runtime package consumer exercised capped and uncapped plans for 200000 items, invalid periods, cursor wrap and full coverage.",
+      "evidence": [
+        "tests/libraries/runtime_tests.cpp",
+        "tests/tests_traffic.inc",
+        "docs/evidence/recurring-budget-native-b1bb89949.json"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "The native runtime package passed, both Traffic integration fixtures passed all fourteen checks, and real MCP planner acceptance passed.",
+      "evidence": [
+        "tests/libraries/runtime_tests.cpp",
+        "tests/tests_traffic.inc",
+        "docs/evidence/recurring-budget-native-b1bb89949.json"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "The owner handoff records the implementation, verification scope and follow-up work.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "The native API, Traffic adapter, planner inputs and update cadence are documented.",
+      "evidence": [
+        "docs/traffic.md",
+        "skills/core/aiverse-work-budget/SKILL.md"
+      ]
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "evidence": [
+        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+      ]
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-work-budget",
+      "aiverse-city-traffic"
+    ],
+    "mcp_tools": [
+      "simulation_budget_plan"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ],
+    "studio_panels": [
+      "roads"
+    ]
+  },
+  "test_reports": [
+    "docs/evidence/integrated-graph-2a56cbf39.json"
+  ]
+}

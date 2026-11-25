@@ -1,0 +1,16 @@
+# Caverns Stage54v2b — shared gravity-oriented navigation
+
+Date: 2026-11-24. Branch `integration/caverns-studio-stage54c-20261124`. Starting HEAD e9ee63a5. Roadmap 58f3468b; code 56bb678a; source/test/docs HEAD `0c5572c20978d402ad941269f22db4dc71e50eac`.
+
+## Implementation
+- `engine/world/TerraWeaveCavernsNavigationData.h`: optional immutable ground-up callback; deterministic rotated clearance stencil and support ray, orthonormal basis validation, projected max-step at endpoints and intermediate samples, conservative rotation-independent resident envelope. Existing non-oriented/other-mode policies unchanged. This is a sampled SDF check, not continuous motor collision.
+- `engine/world/TerraWeaveCavernsPlanetQueries.h`: PHYSIS gravityAt is the only planetary up authority, zero gravity refuses ground; chart-Y compatibility still available for native 2.5D NavMesh. `TerraWeaveCavernsPlanetMotion.h` documents consumption.
+- `engine/world/TerraWeaveCavernsNavigationAdapters.h`: native 2.5D NavMesh filters incompatible gravity samples and links. Existing 3D graph adapters and solvers use common oriented legality without copies.
+- `engine/world/TerraWeaveCavernsPathRouter.h`, `TerraWeaveCavernsNativeNavSolver.h`, `TerraWeaveCavernsNativeNavMeshCache.h`: validate resident/oriented routes including original endpoints and intermediate segments, bounded aggregate sample count; retain flat nonresident projection compatibility. Mesh cache retains immutable provider identity, not just numeric epochs.
+- `tests/terraweave_caverns_planet_authority_test.cpp`: registered fixture for frozen PHYSIS uniform fields, floor/wall/ceiling/zero gravity, rotated residency, projected step, shared graph adjacency, invalid shortcut and incompatible NavMesh rejection. `skills/world/aiverse-pathfinding/SKILL.md` updated.
+
+## Feature delivery evidence
+Implementation/native API/architecture/dependencies: source committed; no new solver, physics authority, ECS schema or genre module. Native compile NOT RUN. Skill updated; catalog checks NOT RUN. MCP/Studio/inspector: no new authored schema; existing regressions NOT RUN. Persistence: unchanged schema, save/replay NOT RUN. Graph authoring N/A (algorithm data adapter). Headless/platform/performance NOT RUN. Example: registered CPU fixture, not playable native host. Tests: `terraweave_caverns_planet_authority` extended, NOT RUN. Documentation/roadmap/handoff committed; no visible feature capture for this internal adapter. No Mac KINGSTON access; mandatory merged-tree Mac quick gate pending. Main unchanged.
+
+## Remaining
+Stage54v2c: integrate prepared and committed region leases with real shared navigation/GI hooks and the existing generic ECS repath/steering lifecycle, ensuring stale results cannot be consumed on rollback or region/environment change. Check region identity in the host's routing and persistent intent binding; numeric SDF/env revisions alone are not globally unique. Verify actual shared A*/HPA*/Flow/Hybrid calls with oriented fixtures, not merely adjacency. NavMesh is still chart-Y 2.5D; no arbitrary-gravity mesh support claimed. No continuous capsule sweep, cross-chart route planning or default GameCore motor migration. Complete native host integration and Stage55 comprehensive QA before merge.

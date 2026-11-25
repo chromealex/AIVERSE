@@ -1,12 +1,6 @@
 {
   "schema": 2,
   "baseline": "189123665c6d0f351eb52721f5db233b7b392e24",
-  "statusMeaning": {
-    "planned": "no reusable code for this area yet",
-    "partial": "reusable libraries exist and are tested, but the acceptance criterion is not fully checked",
-    "core": "the acceptance criterion is checked by the listed tests, which run in ./run-tests.sh; gameReady lists what a shipped game still needs (UI, content, integration)"
-  },
-  "audited": "2026-11-21 against libraries/catalog.json and the tests reached by ./run-tests.sh (tools/genre/check_registry.py); 2026-11-22 code audit and policy packages (codeAudit)",
   "areas": [
     {
       "id": "R1",
@@ -412,8 +406,10 @@
       "status": "partial",
       "libraries": [
         "building-gen",
+        "building-style",
         "voxel-gen"
       ],
+      "remaining": "Есть процедурные здания и стили построек, а также воксельные пещеры и копаемые подземелья. Осталось: подключение стилей к игровым картам и рендеру, сложные интерьеры, островные маршруты и проверка связности в генераторах.",
       "tests": [
         "library_building_gen"
       ],
@@ -979,6 +975,12 @@
       "profile_to_match": "Dedicated FPS: issued profile token, slot 1, acknowledged inputs, reconnect and live revocation passed; UDP/WS bound to IPv4 loopback"
     }
   },
+  "statusMeaning": {
+    "planned": "no reusable code for this area yet",
+    "partial": "reusable libraries exist and are tested, but the acceptance criterion is not fully checked",
+    "core": "the acceptance criterion is checked by the listed tests, which run in ./run-tests.sh; gameReady lists what a shipped game still needs (UI, content, integration)"
+  },
+  "audited": "2026-11-21 against libraries/catalog.json and the tests reached by ./run-tests.sh (tools/genre/check_registry.py); 2026-11-22 code audit and policy packages (codeAudit)",
   "codeAudit": {
     "date": "2026-11-22",
     "commit": "02f9337af",

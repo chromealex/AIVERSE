@@ -1,0 +1,88 @@
+"""Check PR path coverage and feature readiness against an explicit git base."""
+import argparse
+import json
+from pathlib import Path
+import subprocess
+import sys
+from check_feature import ROOT, validate
+from evidence import checkout_errors
+
+PREFIXES = ("engine/", "libraries/", "modules/", "apps/", "tools/", "skills/", "platform/", "plugins/", "demos/", "tests/", ".github/workflows/", "docs/agents/contracts/")
+EXACT = {"AGENTS.md", "CMakeLists.txt", "run-tests.sh", "docs/agents/legacy-integration-map.json", "docs/agents/graph-inventory.json", "docs/agents/feature-policy.json"}
+MANIFEST = "docs/features/"
+
+def covered_paths(changed, manifests):
+    required = {p for p in changed if p.startswith(PREFIXES) or p in EXACT}
+    claimed = set()
+    errors = []
+    for path, data in manifests.items():
+        if not isinstance(data, dict):
+            errors.append(f"{path}: invalid manifest")
+            continue
+        scope = data.get("changed_paths")
+        if not isinstance(scope, list) or not all(isinstance(p, str) for p in scope):
+            errors.append(f"{path}: invalid changed_paths")
+            continue
+        claimed.update(scope)
+        traits = data.get("traits", {})
+        if isinstance(traits, dict):
+            actual = set(scope) & changed
+            if any(p.startswith(("engine/", "libraries/", "modules/")) for p in actual) and not traits.get("runtime"):
+                errors.append(f"{path}: engine/library/module changes require runtime trait")
+            if any(p.startswith(("engine/sim/", "engine/core/")) for p in actual) and not traits.get("simulation"):
+                errors.append(f"{path}: simulation/core changes require simulation trait")
+    for path in sorted(required - claimed):
+        errors.append(f"uncovered changed path: {path}")
+    return errors
+
+def git_changed(base, head):
+    result = subprocess.run(["git", "diff", "--no-renames", "--name-only", "-z", base + "..." + head, "--"],
+                            cwd=ROOT, check=True, stdout=subprocess.PIPE)
+    return set(result.stdout.decode("utf-8").split("\0")) - {""}
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--base", required=True)
+    parser.add_argument("--head", default="HEAD")
+    parser.add_argument("--allow-partial", action="store_true")
+    parser.add_argument("--format", choices=["text", "json"], default="text")
+    args = parser.parse_args()
+    checkout = checkout_errors(ROOT, args.head, clean=not args.allow_partial)
+    if checkout:
+        parser.error("; ".join(checkout))
+    try:
+        changed = git_changed(args.base, args.head)
+    except (OSError, subprocess.CalledProcessError, UnicodeError) as exc:
+        parser.error(str(exc))
+    manifests = {}
+    errors = []
+    for path in sorted(changed):
+        if not path.startswith(MANIFEST) or not path.endswith(".json"):
+            continue
+        try:
+            data = json.loads((ROOT / path).read_text(encoding="utf-8"))
+            manifests[path] = data
+            errors.extend(f"{path}: {e}" for e in validate(data, ready=not args.allow_partial, verify_git=not args.allow_partial))
+            if isinstance(data, dict) and Path(path).stem != data.get("id"):
+                errors.append(f"{path}: filename must match id")
+        except (OSError, ValueError) as exc:
+            errors.append(f"{path}: {exc}")
+    errors.extend(covered_paths(changed, manifests))
+    if not args.allow_partial and manifests:
+        try:
+            from feature_registry import load_registry
+            from feature_policy import readiness_errors
+            errors.extend(readiness_errors(ROOT, load_registry(ROOT),
+                {Path(path).stem for path in manifests}, changed))
+        except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as exc:
+            errors.append(f"feature policy: {exc}")
+    if args.format == "json":
+        print(json.dumps({"base": args.base, "head": args.head, "strict": not args.allow_partial, "changed_paths": sorted(changed), "manifests": sorted(manifests), "errors": errors, "passed": not errors}, indent=2))
+    else:
+        for error in errors:
+            print(error, file=sys.stderr)
+        print(f"Feature compliance: {len(manifests)} manifest(s), {len(errors)} error(s)")
+    return int(bool(errors))
+
+if __name__ == "__main__":
+    sys.exit(main())
