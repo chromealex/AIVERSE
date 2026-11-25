@@ -279,10 +279,12 @@ bool VulkanDevice::dispatchInternal(uint32_t x,uint32_t y,BufferHandle indirect,
         images[slot]={VK_NULL_HANDLE,t->view,VK_IMAGE_LAYOUT_GENERAL};
         pushImage(uint32_t(slot),VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,&images[slot]);
     }
-    for(size_t slot=0;slot<computeSampled_.size();++slot) {
+    // Mixed descriptor sets reserve all eight samplers, even for buffer-only shaders.
+    // Populate unused entries with the device-owned texture, as for graphics draws.
+    const size_t sampledCount = (compute->bufferPushConstants || compute->storageUniforms) ? 0 : computeSampled_.size();
+    for(size_t slot=0;slot<sampledCount;++slot) {
         const auto handle=computeSampled_[slot];
-        if (!handle.valid())continue;
-        const VTexture* t=textures_.get(handle.id);
+        const VTexture* t=handle.valid() ? textures_.get(handle.id) : &dummy_;
         if(!t || !t->view || !t->sampler) {
             error_="Vulkan: sampled image was deleted before compute submission";
             vkDestroyDescriptorPool(device_,pool,nullptr);return false;
