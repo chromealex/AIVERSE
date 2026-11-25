@@ -1,0 +1,24 @@
+2026-11-25 10:44:38.761 AiverseStudioHTML5[66359:75522946] [studio-web] top-level navigation finished: http://127.0.0.1:4173/
+map_get passed
+studio_play_review_preview passed
+Preview counts {'moved': 0, 'amounts': 0, 'removed': 11}
+studio_play_review_apply rejected expired
+studio_play_review_apply passed
+Applied removals 11
+map_get passed
+undo passed
+map_get passed
+redo passed
+map_get passed
+Single undo restored exact source map and single redo restored exact applied map
+studio_play_review_apply rejected expired
+studio_runtime_regions passed
+studio_runtime_profile passed
+studio_runtime_entities passed
+studio_runtime_inspect passed
+studio_runtime_edit rejected session changed
+studio_runtime_edit rejected tick changed
+studio_runtime_edit rejected Field changed
+studio_runtime_edit passed
+studio_runtime_inspect passed
+PASS live native paused map review and runtime edit readback

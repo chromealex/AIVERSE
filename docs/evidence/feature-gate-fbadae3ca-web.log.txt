@@ -1,0 +1,1710 @@
+
+> @aiverse/studio-web@0.1.0 test:web
+> npm run test:dock && npm run test:shell && npm run test:fields && npm run test:lighting && npm run test:materials && npm run test:graphs && npm run test:mock && npm run test:scene && npm run test:facial && npm run test:assets && npm run test:bridge && npm run test:human
+
+
+> @aiverse/studio-web@0.1.0 test:dock
+> node --experimental-strip-types --test tests/dock-layout.mjs tests/nested-dock.mjs tests/layoutPresets.test.mjs tests/workspaceTabs.test.mjs
+
+TAP version 13
+# Subtest: defaults contain each panel once
+ok 1 - defaults contain each panel once
+  ---
+  duration_ms: 1.410916
+  type: 'test'
+  ...
+# Subtest: moving tab across zones preserves identity and updates active selection
+ok 2 - moving tab across zones preserves identity and updates active selection
+  ---
+  duration_ms: 0.187042
+  type: 'test'
+  ...
+# Subtest: reordering tabs within same area preserves other tabs
+ok 3 - reordering tabs within same area preserves other tabs
+  ---
+  duration_ms: 0.115959
+  type: 'test'
+  ...
+# Subtest: close/open and activation support empty groups
+ok 4 - close/open and activation support empty groups
+  ---
+  duration_ms: 0.171208
+  type: 'test'
+  ...
+# Subtest: invalid input ignores duplicate/unknown panel IDs and clamps dimensions
+ok 5 - invalid input ignores duplicate/unknown panel IDs and clamps dimensions
+  ---
+  duration_ms: 0.116625
+  type: 'test'
+  ...
+# Subtest: legacy v1 sidebar and tab selection migrates without game data
+ok 6 - legacy v1 sidebar and tab selection migrates without game data
+  ---
+  duration_ms: 0.072333
+  type: 'test'
+  ...
+# Subtest: unknown/missing layout returns safe defaults
+ok 7 - unknown/missing layout returns safe defaults
+  ---
+  duration_ms: 0.126958
+  type: 'test'
+  ...
+# Subtest: source layout is not mutated when dragging tabs
+ok 8 - source layout is not mutated when dragging tabs
+  ---
+  duration_ms: 0.103834
+  type: 'test'
+  ...
+# Subtest: Scene factory preset puts Assets in a full-height left column
+ok 9 - Scene factory preset puts Assets in a full-height left column
+  ---
+  duration_ms: 1.487875
+  type: 'test'
+  ...
+# Subtest: saved presets stay in this browser and can be deleted
+ok 10 - saved presets stay in this browser and can be deleted
+  ---
+  duration_ms: 0.346458
+  type: 'test'
+  ...
+# Subtest: reset puts every workspace back on its factory dock and keeps named presets
+ok 11 - reset puts every workspace back on its factory dock and keeps named presets
+  ---
+  duration_ms: 3.392
+  type: 'test'
+  ...
+# Subtest: a layout file round-trips and rejects anything else
+ok 12 - a layout file round-trips and rejects anything else
+  ---
+  duration_ms: 0.247625
+  type: 'test'
+  ...
+# Subtest: default tree has 4 nested stacks and exactly one copy of each panel
+ok 13 - default tree has 4 nested stacks and exactly one copy of each panel
+  ---
+  duration_ms: 2.898584
+  type: 'test'
+  ...
+# Subtest: move reorders within a tab stack
+ok 14 - move reorders within a tab stack
+  ---
+  duration_ms: 0.521083
+  type: 'test'
+  ...
+# Subtest: dragging panels across stacks retains identity
+ok 15 - dragging panels across stacks retains identity
+  ---
+  duration_ms: 0.112709
+  type: 'test'
+  ...
+# Subtest: closing and reopening recreates a panel only once
+ok 16 - closing and reopening recreates a panel only once
+  ---
+  duration_ms: 0.211125
+  type: 'test'
+  ...
+# Subtest: nested split adds a stack to left edge and preserves panels
+ok 17 - nested split adds a stack to left edge and preserves panels
+  ---
+  duration_ms: 0.236
+  type: 'test'
+  ...
+# Subtest: window edge dock lifts a bottom tab into a full-height column
+ok 18 - window edge dock lifts a bottom tab into a full-height column
+  ---
+  duration_ms: 0.147083
+  type: 'test'
+  ...
+# Subtest: window edge dock refuses the only remaining tab
+ok 19 - window edge dock refuses the only remaining tab
+  ---
+  duration_ms: 0.108125
+  type: 'test'
+  ...
+# Subtest: sole tab can still dock onto another stack
+ok 20 - sole tab can still dock onto another stack
+  ---
+  duration_ms: 0.194959
+  type: 'test'
+  ...
+# Subtest: cannot split away sole tab from its own stack
+ok 21 - cannot split away sole tab from its own stack
+  ---
+  duration_ms: 0.410083
+  type: 'test'
+  ...
+# Subtest: split every direction and preserve first stack
+ok 22 - split every direction and preserve first stack
+  ---
+  duration_ms: 0.459167
+  type: 'test'
+  ...
+# Subtest: resize ratio clamps and ignores nonfinite
+ok 23 - resize ratio clamps and ignores nonfinite
+  ---
+  duration_ms: 53.164542
+  type: 'test'
+  ...
+# Subtest: activate tab does not create a ghost panel
+ok 24 - activate tab does not create a ghost panel
+  ---
+  duration_ms: 20.955792
+  type: 'test'
+  ...
+# Subtest: normalization guards malformed nodes, dup tabs and invalid ratios
+ok 25 - normalization guards malformed nodes, dup tabs and invalid ratios
+  ---
+  duration_ms: 0.286833
+  type: 'test'
+  ...
+# Subtest: migration from v2 preserves tabs and active
+ok 26 - migration from v2 preserves tabs and active
+  ---
+  duration_ms: 0.1995
+  type: 'test'
+  ...
+# Subtest: AI panel registry metadata matches every registered panel
+ok 27 - AI panel registry metadata matches every registered panel
+  ---
+  duration_ms: 0.14775
+  type: 'test'
+  ...
+# Subtest: moving a last tab prunes the source split and expands its neighbor
+ok 28 - moving a last tab prunes the source split and expands its neighbor
+  ---
+  duration_ms: 0.114125
+  type: 'test'
+  ...
+# Subtest: closing last right panels removes their obsolete split
+ok 29 - closing last right panels removes their obsolete split
+  ---
+  duration_ms: 0.468625
+  type: 'test'
+  ...
+# Subtest: reopening Inspector restores pruned right-hand dock
+ok 30 - reopening Inspector restores pruned right-hand dock
+  ---
+  duration_ms: 0.436875
+  type: 'test'
+  ...
+# Subtest: reopening Assets restores pruned bottom dock
+ok 31 - reopening Assets restores pruned bottom dock
+  ---
+  duration_ms: 0.125875
+  type: 'test'
+  ...
+# Subtest: when all tabs closed a single empty center stack allows reopening
+ok 32 - when all tabs closed a single empty center stack allows reopening
+  ---
+  duration_ms: 1.342167
+  type: 'test'
+  ...
+# Subtest: old saved empty leaves are compacted upon restoration
+ok 33 - old saved empty leaves are compacted upon restoration
+  ---
+  duration_ms: 0.539125
+  type: 'test'
+  ...
+# Subtest: Add Tab drops a closed panel into the stack that was clicked
+ok 34 - Add Tab drops a closed panel into the stack that was clicked
+  ---
+  duration_ms: 0.1135
+  type: 'test'
+  ...
+# Subtest: character editor never stays over the Scene viewport
+ok 35 - character editor never stays over the Scene viewport
+  ---
+  duration_ms: 0.262792
+  type: 'test'
+  ...
+# Subtest: character studio preset: editor left, Scene stage, no bottom dock
+ok 36 - character studio preset: editor left, Scene stage, no bottom dock
+  ---
+  duration_ms: 0.085875
+  type: 'test'
+  ...
+# Subtest: every tab stays in the bar when the row is wide enough
+ok 37 - every tab stays in the bar when the row is wide enough
+  ---
+  duration_ms: 2.670333
+  type: 'test'
+  ...
+# Subtest: a narrow row keeps a prefix and leaves the rest for the menu
+ok 38 - a narrow row keeps a prefix and leaves the rest for the menu
+  ---
+  duration_ms: 0.249625
+  type: 'test'
+  ...
+# Subtest: the active tab stays visible when it would otherwise be clipped
+ok 39 - the active tab stays visible when it would otherwise be clipped
+  ---
+  duration_ms: 0.111292
+  type: 'test'
+  ...
+# Subtest: nothing is shown when there is no room at all
+ok 40 - nothing is shown when there is no room at all
+  ---
+  duration_ms: 0.10575
+  type: 'test'
+  ...
+1..40
+# tests 40
+# suites 0
+# pass 40
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 433.695625
+
+> @aiverse/studio-web@0.1.0 test:shell
+> node --experimental-strip-types --test tests/workspaces.test.mjs tests/inspectorActions.test.mjs tests/hierarchyFilter.test.mjs tests/rulesSchema.test.mjs tests/floating.test.mjs tests/buildLogic.test.mjs tests/consoleLogic.test.mjs tests/toolSchema.test.mjs
+
+TAP version 13
+# Subtest: bytes
+ok 1 - bytes
+  ---
+  duration_ms: 0.689166
+  type: 'test'
+  ...
+# Subtest: steps, errors and missing toolchains from the aiversebuild log
+ok 2 - steps, errors and missing toolchains from the aiversebuild log
+  ---
+  duration_ms: 0.966041
+  type: 'test'
+  ...
+# Subtest: run label
+ok 3 - run label
+  ---
+  duration_ms: 0.124292
+  type: 'test'
+  ...
+# Subtest: filters by level, source and text
+ok 4 - filters by level, source and text
+  ---
+  duration_ms: 1.303833
+  type: 'test'
+  ...
+# Subtest: entity ids and project files become links
+ok 5 - entity ids and project files become links
+  ---
+  duration_ms: 0.315625
+  type: 'test'
+  ...
+# Subtest: window query carries a key and known panels
+ok 6 - window query carries a key and known panels
+  ---
+  duration_ms: 3.434917
+  type: 'test'
+  ...
+# Subtest: floating list round-trips; junk, empty windows and duplicate panels are dropped
+ok 7 - floating list round-trips; junk, empty windows and duplicate panels are dropped
+  ---
+  duration_ms: 0.916834
+  type: 'test'
+  ...
+# Subtest: panels belong to exactly one floating window
+ok 8 - panels belong to exactly one floating window
+  ---
+  duration_ms: 0.511916
+  type: 'test'
+  ...
+# Subtest: a floating dock keeps its arrangement but holds exactly the given panels
+ok 9 - a floating dock keeps its arrangement but holds exactly the given panels
+  ---
+  duration_ms: 1.114958
+  type: 'test'
+  ...
+# Subtest: filters by text, type, owner and flags
+ok 10 - filters by text, type, owner and flags
+  ---
+  duration_ms: 2.31375
+  type: 'test'
+  ...
+# Subtest: shift ranges keep the clicked row last
+ok 11 - shift ranges keep the clicked row last
+  ---
+  duration_ms: 0.198916
+  type: 'test'
+  ...
+# Subtest: reset keeps position, zeroes rotation, ones scale
+ok 12 - reset keeps position, zeroes rotation, ones scale
+  ---
+  duration_ms: 1.953666
+  type: 'test'
+  ...
+# Subtest: paste only writes editable keys that differ on the same component type
+ok 13 - paste only writes editable keys that differ on the same component type
+  ---
+  duration_ms: 0.148916
+  type: 'test'
+  ...
+# Subtest: missing material option detection
+ok 14 - missing material option detection
+  ---
+  duration_ms: 1.088416
+  type: 'test'
+  ...
+# Subtest: multi-selection keeps common components and marks differing values
+ok 15 - multi-selection keeps common components and marks differing values
+  ---
+  duration_ms: 0.643458
+  type: 'test'
+  ...
+# Subtest: own vs inherited values and weapon paths
+ok 16 - own vs inherited values and weapon paths
+  ---
+  duration_ms: 0.907792
+  type: 'test'
+  ...
+# Subtest: inputs: blank inherits, numbers validated
+ok 17 - inputs: blank inherits, numbers validated
+  ---
+  duration_ms: 0.740541
+  type: 'test'
+  ...
+# Subtest: schema fields: required first, kinds from the JSON schema
+ok 18 - schema fields: required first, kinds from the JSON schema
+  ---
+  duration_ms: 2.461333
+  type: 'test'
+  ...
+# Subtest: params: empty optional fields are left out, values typed and checked
+ok 19 - params: empty optional fields are left out, values typed and checked
+  ---
+  duration_ms: 0.386459
+  type: 'test'
+  ...
+# Subtest: labels
+ok 20 - labels
+  ---
+  duration_ms: 0.131084
+  type: 'test'
+  ...
+# Subtest: state ops: read-only and runnable without parameters
+ok 21 - state ops: read-only and runnable without parameters
+  ---
+  duration_ms: 0.167917
+  type: 'test'
+  ...
+# Subtest: every tool panel is a registered dock panel
+ok 22 - every tool panel is a registered dock panel
+  ---
+  duration_ms: 0.0735
+  type: 'test'
+  ...
+# Subtest: choice fields start on their first option
+ok 23 - choice fields start on their first option
+  ---
+  duration_ms: 0.091625
+  type: 'test'
+  ...
+# Subtest: agent transcript line kinds
+ok 24 - agent transcript line kinds
+  ---
+  duration_ms: 0.266416
+  type: 'test'
+  ...
+# Subtest: json diff: paths, kinds, float tolerance, limit
+ok 25 - json diff: paths, kinds, float tolerance, limit
+  ---
+  duration_ms: 0.287125
+  type: 'test'
+  ...
+# Subtest: frame summary and byte formatting
+ok 26 - frame summary and byte formatting
+  ---
+  duration_ms: 0.328125
+  type: 'test'
+  ...
+# Subtest: attachment transforms: TRS round trip, custom matrices flagged
+ok 27 - attachment transforms: TRS round trip, custom matrices flagged
+  ---
+  duration_ms: 0.414667
+  type: 'test'
+  ...
+# Subtest: animation timeline: duration, keys, skeleton fit
+ok 28 - animation timeline: duration, keys, skeleton fit
+  ---
+  duration_ms: 0.278666
+  type: 'test'
+  ...
+# Subtest: project splash stages
+ok 29 - project splash stages
+  ---
+  duration_ms: 0.123667
+  type: 'test'
+  ...
+# Subtest: splash sky pick is stable and in range
+ok 30 - splash sky pick is stable and in range
+  ---
+  duration_ms: 0.068209
+  type: 'test'
+  ...
+# Subtest: every workspace has Inspector and a center view; panels appear once
+ok 31 - every workspace has Inspector and a center view; panels appear once
+  ---
+  duration_ms: 1.500375
+  type: 'test'
+  ...
+# Subtest: every legacy window belongs to exactly one workspace
+ok 32 - every legacy window belongs to exactly one workspace
+  ---
+  duration_ms: 0.087917
+  type: 'test'
+  ...
+# Subtest: layouts are stored per workspace; scene inherits the old layout
+ok 33 - layouts are stored per workspace; scene inherits the old layout
+  ---
+  duration_ms: 0.564917
+  type: 'test'
+  ...
+# Subtest: fuzzy search ranks prefix and word starts first
+ok 34 - fuzzy search ranks prefix and word starts first
+  ---
+  duration_ms: 1.079
+  type: 'test'
+  ...
+# Subtest: the Windows filter lists every panel while general search stays compact
+ok 35 - the Windows filter lists every panel while general search stays compact
+  ---
+  duration_ms: 7.310625
+  type: 'test'
+  ...
+# Subtest: an exact window name wins over a recently used partial match
+ok 36 - an exact window name wins over a recently used partial match
+  ---
+  duration_ms: 0.096416
+  type: 'test'
+  ...
+1..36
+# tests 36
+# suites 0
+# pass 36
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 627.883167
+
+> @aiverse/studio-web@0.1.0 test:fields
+> node --experimental-strip-types --test tests/propertyLogic.test.mjs
+
+TAP version 13
+# Subtest: empty numeric draft is never zero
+ok 1 - empty numeric draft is never zero
+  ---
+  duration_ms: 1.970291
+  type: 'test'
+  ...
+# Subtest: invalid numeric value is rejected
+ok 2 - invalid numeric value is rejected
+  ---
+  duration_ms: 0.147917
+  type: 'test'
+  ...
+# Subtest: bounds are enforced, without implicit rounding
+ok 3 - bounds are enforced, without implicit rounding
+  ---
+  duration_ms: 0.068709
+  type: 'test'
+  ...
+# Subtest: integer semantics preserve safe values
+ok 4 - integer semantics preserve safe values
+  ---
+  duration_ms: 0.060459
+  type: 'test'
+  ...
+# Subtest: readonly fields do not generate writes
+ok 5 - readonly fields do not generate writes
+  ---
+  duration_ms: 0.12775
+  type: 'test'
+  ...
+# Subtest: boolean control accepts only bool fields
+ok 6 - boolean control accepts only bool fields
+  ---
+  duration_ms: 0.047875
+  type: 'test'
+  ...
+# Subtest: numeric and textual options match values and types
+ok 7 - numeric and textual options match values and types
+  ---
+  duration_ms: 0.166375
+  type: 'test'
+  ...
+# Subtest: same-value check avoids redundant undo snapshots
+ok 8 - same-value check avoids redundant undo snapshots
+  ---
+  duration_ms: 0.048584
+  type: 'test'
+  ...
+# Subtest: drag-to-scrub moves by step per pixel, fine, snap and clamps
+ok 9 - drag-to-scrub moves by step per pixel, fine, snap and clamps
+  ---
+  duration_ms: 0.287625
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 357.254666
+
+> @aiverse/studio-web@0.1.0 test:lighting
+> node --experimental-strip-types --test tests/lightingSchema.test.mjs
+
+TAP version 13
+# Subtest: lighting schema exposes exactly the native allowlisted keys
+ok 1 - lighting schema exposes exactly the native allowlisted keys
+  ---
+  duration_ms: 2.454125
+  type: 'test'
+  ...
+# Subtest: lighting defaults are safe, bounded numeric properties
+ok 2 - lighting defaults are safe, bounded numeric properties
+  ---
+  duration_ms: 0.165792
+  type: 'test'
+  ...
+# Subtest: project lighting values override defaults without mutating source
+ok 3 - project lighting values override defaults without mutating source
+  ---
+  duration_ms: 0.091208
+  type: 'test'
+  ...
+# Subtest: light properties match the native API key allowlist
+ok 4 - light properties match the native API key allowlist
+  ---
+  duration_ms: 0.181166
+  type: 'test'
+  ...
+# Subtest: enum options reject unsupported modes
+ok 5 - enum options reject unsupported modes
+  ---
+  duration_ms: 0.095834
+  type: 'test'
+  ...
+# Subtest: numeric fields reject invalid values
+ok 6 - numeric fields reject invalid values
+  ---
+  duration_ms: 0.076833
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 373.115166
+
+> @aiverse/studio-web@0.1.0 test:materials
+> node --experimental-strip-types --test tests/materialSchema.test.mjs
+
+TAP version 13
+# Subtest: PBR field metadata exactly matches native allowlist
+ok 1 - PBR field metadata exactly matches native allowlist
+  ---
+  duration_ms: 1.643125
+  type: 'test'
+  ...
+# Subtest: draft values override material without mutating source
+ok 2 - draft values override material without mutating source
+  ---
+  duration_ms: 0.128667
+  type: 'test'
+  ...
+# Subtest: invalid library entries are excluded
+ok 3 - invalid library entries are excluded
+  ---
+  duration_ms: 7.026125
+  type: 'test'
+  ...
+# Subtest: color swatch clamps invalid channels
+ok 4 - color swatch clamps invalid channels
+  ---
+  duration_ms: 0.125708
+  type: 'test'
+  ...
+# Subtest: patch output strips unsupported fields
+ok 5 - patch output strips unsupported fields
+  ---
+  duration_ms: 0.158958
+  type: 'test'
+  ...
+# Subtest: creation preset registry stays within native whitelist
+ok 6 - creation preset registry stays within native whitelist
+  ---
+  duration_ms: 0.047042
+  type: 'test'
+  ...
+# Subtest: receiver shadow diffusion defaults to zero and survives authoring patches
+ok 7 - receiver shadow diffusion defaults to zero and survives authoring patches
+  ---
+  duration_ms: 0.157375
+  type: 'test'
+  ...
+# Subtest: subsurface controls default off and retain linear RGB
+ok 8 - subsurface controls default off and retain linear RGB
+  ---
+  duration_ms: 0.126459
+  type: 'test'
+  ...
+# Subtest: texture reference slots share typed asset picker and have string defaults
+ok 9 - texture reference slots share typed asset picker and have string defaults
+  ---
+  duration_ms: 0.437083
+  type: 'test'
+  ...
+# Subtest: thin transmission remains independent of the SSS draft
+ok 10 - thin transmission remains independent of the SSS draft
+  ---
+  duration_ms: 0.373542
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 288.739458
+
+> @aiverse/studio-web@0.1.0 test:graphs
+> node --experimental-strip-types --test tests/shaderGraphLayout.test.mjs tests/shaderGraphEdit.test.mjs tests/buildingGraphInspection.test.mjs tests/buildingCandidateCapture.test.mjs tests/buildingRoomTopology.test.mjs tests/buildingMaterialDependencies.test.mjs tests/buildingGeometryGraph.test.mjs tests/graphFramework.test.mjs tests/nativeGraphAdapters.test.mjs tests/caveGraphInspection.test.mjs tests/graphInspectionCapture.test.mjs tests/spectraDataInterfaces.test.mjs tests/spectraGraphCanvas.test.mjs tests/spectraCurveModel.test.mjs tests/spectraStarterModel.test.mjs tests/spectraViewportModel.test.mjs tests/spectraCommandQueue.test.mjs tests/spectraThumbnailCache.test.mjs
+
+TAP version 13
+# Subtest: capture clones exact JSON wire recipe before native evaluation
+ok 1 - capture clones exact JSON wire recipe before native evaluation
+  ---
+  duration_ms: 1.595292
+  type: 'test'
+  ...
+# Subtest: new batches and invalidation retire late results, even identical seeds
+ok 2 - new batches and invalidation retire late results, even identical seeds
+  ---
+  duration_ms: 0.147917
+  type: 'test'
+  ...
+# Subtest: draft identity changes on project, recipe and material changes
+ok 3 - draft identity changes on project, recipe and material changes
+  ---
+  duration_ms: 0.068125
+  type: 'test'
+  ...
+# Subtest: bounded three-seed batch rejects duplicate and unsafe seeds
+ok 4 - bounded three-seed batch rejects duplicate and unsafe seeds
+  ---
+  duration_ms: 0.154833
+  type: 'test'
+  ...
+# Subtest: native solid partition and preview counts
+ok 5 - native solid partition and preview counts
+  ---
+  duration_ms: 0.891625
+  type: 'test'
+  ...
+# Subtest: all eight domains are independent of authored preview
+ok 6 - all eight domains are independent of authored preview
+  ---
+  duration_ms: 0.226791
+  type: 'test'
+  ...
+# Subtest: native socket identity, feature provenance and counts; no fabricated room links
+ok 7 - native socket identity, feature provenance and counts; no fabricated room links
+  ---
+  duration_ms: 2.111209
+  type: 'test'
+  ...
+# Subtest: reject stale or malformed native inspection
+ok 8 - reject stale or malformed native inspection
+  ---
+  duration_ms: 0.496792
+  type: 'test'
+  ...
+# Subtest: preset does not invent structure data
+ok 9 - preset does not invent structure data
+  ---
+  duration_ms: 0.165709
+  type: 'test'
+  ...
+# Subtest: does not mutate native inputs; stable slot ordering
+ok 10 - does not mutate native inputs; stable slot ordering
+  ---
+  duration_ms: 0.360042
+  type: 'test'
+  ...
+# Subtest: optional native topology passes through owner report; legacy and preset are distinct
+ok 11 - optional native topology passes through owner report; legacy and preset are distinct
+  ---
+  duration_ms: 0.48775
+  type: 'test'
+  ...
+# Subtest: shared material and texture deduplicate, channels stay separate
+ok 12 - shared material and texture deduplicate, channels stay separate
+  ---
+  duration_ms: 12.367084
+  type: 'test'
+  ...
+# Subtest: only matching recorded provenance adds bake node
+ok 13 - only matching recorded provenance adds bake node
+  ---
+  duration_ms: 0.377791
+  type: 'test'
+  ...
+# Subtest: missing material and unsafe or non-texture asset stay unresolved
+ok 14 - missing material and unsafe or non-texture asset stay unresolved
+  ---
+  duration_ms: 0.0885
+  type: 'test'
+  ...
+# Subtest: native IDs and component groups preserved without deriving edges
+ok 15 - native IDs and component groups preserved without deriving edges
+  ---
+  duration_ms: 1.932917
+  type: 'test'
+  ...
+# Subtest: floor filter keeps real neighboring endpoints and no unrelated edges
+ok 16 - floor filter keeps real neighboring endpoints and no unrelated edges
+  ---
+  duration_ms: 65.619417
+  type: 'test'
+  ...
+# Subtest: reject stale counts, duplicate rooms and unknown connection endpoints
+ok 17 - reject stale counts, duplicate rooms and unknown connection endpoints
+  ---
+  duration_ms: 0.623792
+  type: 'test'
+  ...
+# Subtest: reject unknown kinds, missing sockets and inconsistent native groups
+ok 18 - reject unknown kinds, missing sockets and inconsistent native groups
+  ---
+  duration_ms: 0.620083
+  type: 'test'
+  ...
+# Subtest: isolated native component is reported without inventing an outside path
+ok 19 - isolated native component is reported without inventing an outside path
+  ---
+  duration_ms: 0.190375
+  type: 'test'
+  ...
+# Subtest: native route validates ordered edge IDs and reverse traversal
+ok 20 - native route validates ordered edge IDs and reverse traversal
+  ---
+  duration_ms: 1.048292
+  type: 'test'
+  ...
+# Subtest: exterior overlaps preserve multiple room endpoints without adding routing edges
+ok 21 - exterior overlaps preserve multiple room endpoints without adding routing edges
+  ---
+  duration_ms: 0.404583
+  type: 'test'
+  ...
+# Subtest: exterior nodes are per socket, ground-floor only and do not change native connectivity
+ok 22 - exterior nodes are per socket, ground-floor only and do not change native connectivity
+  ---
+  duration_ms: 0.967166
+  type: 'test'
+  ...
+# Subtest: missing exterior report differs from explicitly empty entrances
+ok 23 - missing exterior report differs from explicitly empty entrances
+  ---
+  duration_ms: 0.734167
+  type: 'test'
+  ...
+# Subtest: native reply projects exact identifiers, typed provenance and coordinates without mutation
+ok 24 - native reply projects exact identifiers, typed provenance and coordinates without mutation
+  ---
+  duration_ms: 2.731583
+  type: 'test'
+  ...
+# Subtest: reject failed replies, revision and count mismatch, unsafe identity and malformed data anywhere
+ok 25 - reject failed replies, revision and count mismatch, unsafe identity and malformed data anywhere
+  ---
+  duration_ms: 1.674958
+  type: 'test'
+  ...
+# Subtest: bounded pages cover all entries and filter deterministically
+ok 26 - bounded pages cover all entries and filter deterministically
+  ---
+  duration_ms: 0.689625
+  type: 'test'
+  ...
+# Subtest: native caps enforced even for rows outside first page
+ok 27 - native caps enforced even for rows outside first page
+  ---
+  duration_ms: 88.521792
+  type: 'test'
+  ...
+# Subtest: planet region captures preserve exact int64 identities and chart coordinates
+ok 28 - planet region captures preserve exact int64 identities and chart coordinates
+  ---
+  duration_ms: 2.217041
+  type: 'test'
+  ...
+# Subtest: graph policy allows animation loops but rejects dataflow cycles
+ok 29 - graph policy allows animation loops but rejects dataflow cycles
+  ---
+  duration_ms: 1.509417
+  type: 'test'
+  ...
+# Subtest: topology detects dangling ports and multiple single-port links
+ok 30 - topology detects dangling ports and multiple single-port links
+  ---
+  duration_ms: 0.10425
+  type: 'test'
+  ...
+# Subtest: typed compatibility is policy-owned
+ok 31 - typed compatibility is policy-owned
+  ---
+  duration_ms: 0.226
+  type: 'test'
+  ...
+# Subtest: registry rejects duplicate domains and history clears redo on edit
+ok 32 - registry rejects duplicate domains and history clears redo on edit
+  ---
+  duration_ms: 0.1825
+  type: 'test'
+  ...
+# Subtest: selection rectangle and modifiers are deterministic
+ok 33 - selection rectangle and modifiers are deterministic
+  ---
+  duration_ms: 0.148583
+  type: 'test'
+  ...
+# Subtest: group movement clamps without distorting relative spacing
+ok 34 - group movement clamps without distorting relative spacing
+  ---
+  duration_ms: 0.103166
+  type: 'test'
+  ...
+# Subtest: multiple named output ports have distinct anchors and follow preview positions
+ok 35 - multiple named output ports have distinct anchors and follow preview positions
+  ---
+  duration_ms: 0.241583
+  type: 'test'
+  ...
+# Subtest: scope uses exact uint64 decimal strings, including max revision
+ok 36 - scope uses exact uint64 decimal strings, including max revision
+  ---
+  duration_ms: 48.619333
+  type: 'test'
+  ...
+# Subtest: latest request wins; finish of a retired request cannot retire its replacement
+ok 37 - latest request wins; finish of a retired request cannot retire its replacement
+  ---
+  duration_ms: 0.112791
+  type: 'test'
+  ...
+# Subtest: response must match captured project, map, lifetime and revision exactly
+ok 38 - response must match captured project, map, lifetime and revision exactly
+  ---
+  duration_ms: 0.237125
+  type: 'test'
+  ...
+# Subtest: unavailable, unsupported and absent never synthesize a report
+ok 39 - unavailable, unsupported and absent never synthesize a report
+  ---
+  duration_ms: 0.152333
+  type: 'test'
+  ...
+# Subtest: SpectraFX separates execution and named property links
+ok 40 - SpectraFX separates execution and named property links
+  ---
+  duration_ms: 1.657166
+  type: 'test'
+  ...
+# Subtest: animation pose ordering is independent from looping state transitions
+ok 41 - animation pose ordering is independent from looping state transitions
+  ---
+  duration_ms: 0.2985
+  type: 'test'
+  ...
+# Subtest: native result parsing handles both actual graph list formats
+ok 42 - native result parsing handles both actual graph list formats
+  ---
+  duration_ms: 0.231834
+  type: 'test'
+  ...
+# Subtest: state transitions preserve priority, allow loops and reject invalid times
+ok 43 - state transitions preserve priority, allow loops and reject invalid times
+  ---
+  duration_ms: 0.171292
+  type: 'test'
+  ...
+# Subtest: model parent graph preserves geometry and rejects hierarchy cycles
+ok 44 - model parent graph preserves geometry and rejects hierarchy cycles
+  ---
+  duration_ms: 0.231542
+  type: 'test'
+  ...
+# Subtest: geometry graph distinguishes CSG operands from transform parents
+ok 45 - geometry graph distinguishes CSG operands from transform parents
+  ---
+  duration_ms: 0.279875
+  type: 'test'
+  ...
+# Subtest: typed animation conditions preserve graph parameter types and transition order
+ok 46 - typed animation conditions preserve graph parameter types and transition order
+  ---
+  duration_ms: 0.161959
+  type: 'test'
+  ...
+# Subtest: modifier presets and source material assignment retain native fields
+ok 47 - modifier presets and source material assignment retain native fields
+  ---
+  duration_ms: 0.193959
+  type: 'test'
+  ...
+# Subtest: owner recipe projections are bounded and never mutate source
+ok 48 - owner recipe projections are bounded and never mutate source
+  ---
+  duration_ms: 0.955042
+  type: 'test'
+  ...
+# Subtest: material projection preserves distinct texture channels and draft override
+ok 49 - material projection preserves distinct texture channels and draft override
+  ---
+  duration_ms: 0.402
+  type: 'test'
+  ...
+# Subtest: texture recipe is bounded and requests native no-overwrite generation
+ok 50 - texture recipe is bounded and requests native no-overwrite generation
+  ---
+  duration_ms: 0.224542
+  type: 'test'
+  ...
+# Subtest: STRATA report retains native CPU metrics and rejects incomplete results
+ok 51 - STRATA report retains native CPU metrics and rejects incomplete results
+  ---
+  duration_ms: 0.193375
+  type: 'test'
+  ...
+# Subtest: diagnostics honor separate execution and data cycle rules
+ok 52 - diagnostics honor separate execution and data cycle rules
+  ---
+  duration_ms: 0.481458
+  type: 'test'
+  ...
+# Subtest: dragging changes only the targeted node coordinate
+ok 53 - dragging changes only the targeted node coordinate
+  ---
+  duration_ms: 1.548292
+  type: 'test'
+  ...
+# Subtest: invalid drags do not change source and canvas is bounded
+ok 54 - invalid drags do not change source and canvas is bounded
+  ---
+  duration_ms: 0.095417
+  type: 'test'
+  ...
+# Subtest: native-catalog node append preserves source and uses unique IDs
+ok 55 - native-catalog node append preserves source and uses unique IDs
+  ---
+  duration_ms: 0.181541
+  type: 'test'
+  ...
+# Subtest: bounded add rejects invalid op names, counts and oversized graph
+ok 56 - bounded add rejects invalid op names, counts and oversized graph
+  ---
+  duration_ms: 0.105417
+  type: 'test'
+  ...
+# Subtest: delete is refused when graph links or output still depend on node
+ok 57 - delete is refused when graph links or output still depend on node
+  ---
+  duration_ms: 0.147708
+  type: 'test'
+  ...
+# Subtest: catalog filters native domain and search
+ok 58 - catalog filters native domain and search
+  ---
+  duration_ms: 0.078167
+  type: 'test'
+  ...
+# Subtest: connection preserves input slot and refuses a cycle
+ok 59 - connection preserves input slot and refuses a cycle
+  ---
+  duration_ms: 0.194875
+  type: 'test'
+  ...
+# Subtest: value editing and duplication preserve source
+ok 60 - value editing and duplication preserve source
+  ---
+  duration_ms: 0.206292
+  type: 'test'
+  ...
+# Subtest: paste remaps internal edges and clears external links without modifying source
+ok 61 - paste remaps internal edges and clears external links without modifying source
+  ---
+  duration_ms: 0.383208
+  type: 'test'
+  ...
+# Subtest: auto layout preserves dependencies and refuses cycles
+ok 62 - auto layout preserves dependencies and refuses cycles
+  ---
+  duration_ms: 0.451917
+  type: 'test'
+  ...
+# Subtest: template requires real catalog entries and preserves existing output bindings
+ok 63 - template requires real catalog entries and preserves existing output bindings
+  ---
+  duration_ms: 0.197333
+  type: 'test'
+  ...
+# Subtest: graph layout retains node ID and links two inputs
+ok 64 - graph layout retains node ID and links two inputs
+  ---
+  duration_ms: 0.809209
+  type: 'test'
+  ...
+# Subtest: empty graph renders finite canvas
+ok 65 - empty graph renders finite canvas
+  ---
+  duration_ms: 0.702875
+  type: 'test'
+  ...
+# Subtest: malformed edges or extreme positions are bounded
+ok 66 - malformed edges or extreme positions are bounded
+  ---
+  duration_ms: 0.210459
+  type: 'test'
+  ...
+# Subtest: all sixteen input wires terminate inside their destination card
+ok 67 - all sixteen input wires terminate inside their destination card
+  ---
+  duration_ms: 0.117584
+  type: 'test'
+  ...
+# Subtest: value cards keep empty operand slots at their authored indices
+ok 68 - value cards keep empty operand slots at their authored indices
+  ---
+  duration_ms: 0.138625
+  type: 'test'
+  ...
+# Subtest: editing a scalar uses the same broadcast as the native shader
+ok 69 - editing a scalar uses the same broadcast as the native shader
+  ---
+  duration_ms: 0.1095
+  type: 'test'
+  ...
+# Subtest: serializes mutations and coalesces duplicate idle status
+ok 70 - serializes mutations and coalesces duplicate idle status
+  ---
+  duration_ms: 87.671375
+  type: 'test'
+  ...
+# Subtest: stop rejects queued work but does not interrupt native in-flight command
+ok 71 - stop rejects queued work but does not interrupt native in-flight command
+  ---
+  duration_ms: 2.844083
+  type: 'test'
+  ...
+# Subtest: closed panel rejects undispatched work and failure does not stall queue
+ok 72 - closed panel rejects undispatched work and failure does not stall queue
+  ---
+  duration_ms: 2.088042
+  type: 'test'
+  ...
+# Subtest: Curve and Gradient keys are normalized, sorted and source stays immutable
+ok 73 - Curve and Gradient keys are normalized, sorted and source stays immutable
+  ---
+  duration_ms: 1.611041
+  type: 'test'
+  ...
+# Subtest: visual curves add at widest gap and reject invalid coordinates atomically
+ok 74 - visual curves add at widest gap and reject invalid coordinates atomically
+  ---
+  duration_ms: 0.384917
+  type: 'test'
+  ...
+# Subtest: rgba color editing retains alpha, normalizes case and blocks injection
+ok 75 - rgba color editing retains alpha, normalizes case and blocks injection
+  ---
+  duration_ms: 0.096583
+  type: 'test'
+  ...
+# Subtest: gradient key edit/add/delete and CSS preview
+ok 76 - gradient key edit/add/delete and CSS preview
+  ---
+  duration_ms: 0.359792
+  type: 'test'
+  ...
+# Subtest: invalid raw key arrays are not reinterpreted or lost
+ok 77 - invalid raw key arrays are not reinterpreted or lost
+  ---
+  duration_ms: 0.122959
+  type: 'test'
+  ...
+# Subtest: graph V2 guards reject malformed data without rewriting author metadata
+ok 78 - graph V2 guards reject malformed data without rewriting author metadata
+  ---
+  duration_ms: 1.579
+  type: 'test'
+  ...
+# Subtest: strict native-compatible names, ranges and bounded slots
+ok 79 - strict native-compatible names, ranges and bounded slots
+  ---
+  duration_ms: 0.327416
+  type: 'test'
+  ...
+# Subtest: reject invalid bindings atomically with existing valid source untouched
+ok 80 - reject invalid bindings atomically with existing valid source untouched
+  ---
+  duration_ms: 0.268375
+  type: 'test'
+  ...
+# Subtest: binding nodes do not permit removal of required data inputs
+ok 81 - binding nodes do not permit removal of required data inputs
+  ---
+  duration_ms: 0.190584
+  type: 'test'
+  ...
+# Subtest: provider search is distinct from assets and only returns bound identifiers
+ok 82 - provider search is distinct from assets and only returns bound identifiers
+  ---
+  duration_ms: 0.165125
+  type: 'test'
+  ...
+# Subtest: real Assets catalog is authoritative for SpriteOutput texture references
+ok 83 - real Assets catalog is authoritative for SpriteOutput texture references
+  ---
+  duration_ms: 0.159917
+  type: 'test'
+  ...
+# Subtest: node positions and graph scene fallback stay bounded
+ok 84 - node positions and graph scene fallback stay bounded
+  ---
+  duration_ms: 16.848375
+  type: 'test'
+  ...
+# Subtest: node dragging does not mutate original authored stage or its data
+ok 85 - node dragging does not mutate original authored stage or its data
+  ---
+  duration_ms: 0.220417
+  type: 'test'
+  ...
+# Subtest: visual links distinguish typed data from execution
+ok 86 - visual links distinguish typed data from execution
+  ---
+  duration_ms: 0.284417
+  type: 'test'
+  ...
+# Subtest: connection requests are native Workspace-only, with validation guards
+ok 87 - connection requests are native Workspace-only, with validation guards
+  ---
+  duration_ms: 0.181
+  type: 'test'
+  ...
+# Subtest: first use accepts the playable native v2 factory without client-side graph rewriting
+ok 88 - first use accepts the playable native v2 factory without client-side graph rewriting
+  ---
+  duration_ms: 1.421666
+  type: 'test'
+  ...
+# Subtest: blank variant clears authored stages but preserves native schema, metadata and original
+ok 89 - blank variant clears authored stages but preserves native schema, metadata and original
+  ---
+  duration_ms: 0.098291
+  type: 'test'
+  ...
+# Subtest: native factory not playable must not be advertised as a tested starter
+ok 90 - native factory not playable must not be advertised as a tested starter
+  ---
+  duration_ms: 0.107125
+  type: 'test'
+  ...
+# Subtest: new VFX names are safe, unique and bounded even after many drafts
+ok 91 - new VFX names are safe, unique and bounded even after many drafts
+  ---
+  duration_ms: 0.150875
+  type: 'test'
+  ...
+# Subtest: validates bounded native JPEG records
+ok 92 - validates bounded native JPEG records
+  ---
+  duration_ms: 0.89125
+  type: 'test'
+  ...
+# Subtest: eviction is stable and bounded
+ok 93 - eviction is stable and bounded
+  ---
+  duration_ms: 34.692
+  type: 'test'
+  ...
+# Subtest: FX viewport stays inside the scroll pane and respects device scale
+ok 94 - FX viewport stays inside the scroll pane and respects device scale
+  ---
+  duration_ms: 1.328
+  type: 'test'
+  ...
+# Subtest: GPU surface is hidden when scrolled outside rather than painting over controls
+ok 95 - GPU surface is hidden when scrolled outside rather than painting over controls
+  ---
+  duration_ms: 0.095166
+  type: 'test'
+  ...
+# Subtest: viewport requires visible app and clips narrow/small surfaces
+ok 96 - viewport requires visible app and clips narrow/small surfaces
+  ---
+  duration_ms: 0.104459
+  type: 'test'
+  ...
+# Subtest: invalid dimensions are rejected safely before native GPU placement
+ok 97 - invalid dimensions are rejected safely before native GPU placement
+  ---
+  duration_ms: 0.074
+  type: 'test'
+  ...
+# Subtest: Replay preset uses UTF-8 bytes at the 64 KiB boundary
+ok 98 - Replay preset uses UTF-8 bytes at the 64 KiB boundary
+  ---
+  duration_ms: 0.843916
+  type: 'test'
+  ...
+1..98
+# tests 98
+# suites 0
+# pass 98
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 486.349916
+
+> @aiverse/studio-web@0.1.0 test:mock
+> node --experimental-strip-types --test tests/mock.test.mjs
+
+TAP version 13
+# Subtest: typed mock snapshots remain valid for browser demo
+ok 1 - typed mock snapshots remain valid for browser demo
+  ---
+  duration_ms: 12.464083
+  type: 'test'
+  ...
+# Subtest: mock Shader Graph endpoints return method-specific result shapes
+ok 2 - mock Shader Graph endpoints return method-specific result shapes
+  ---
+  duration_ms: 6.64425
+  type: 'test'
+  ...
+# Subtest: mock assets, materials and lighting use separate typed envelopes
+ok 3 - mock assets, materials and lighting use separate typed envelopes
+  ---
+  duration_ms: 2.434958
+  type: 'test'
+  ...
+# Subtest: mock viewport acknowledges layout, not a synthetic GPU frame
+ok 4 - mock viewport acknowledges layout, not a synthetic GPU frame
+  ---
+  duration_ms: 0.132
+  type: 'test'
+  ...
+# Subtest: native-only editing rejects in DEMO mode
+ok 5 - native-only editing rejects in DEMO mode
+  ---
+  duration_ms: 0.13025
+  type: 'test'
+  ...
+# Subtest: entity authoring never writes through the browser demo
+ok 6 - entity authoring never writes through the browser demo
+  ---
+  duration_ms: 1.751708
+  type: 'test'
+  ...
+# Subtest: document mutation requires a native project
+ok 7 - document mutation requires a native project
+  ---
+  duration_ms: 6.530875
+  type: 'test'
+  ...
+# Subtest: browser demo never simulates native gameplay
+ok 8 - browser demo never simulates native gameplay
+  ---
+  duration_ms: 0.690958
+  type: 'test'
+  ...
+# Subtest: demo inspector groups entity fields into components and reorder keeps entities
+ok 9 - demo inspector groups entity fields into components and reorder keeps entities
+  ---
+  duration_ms: 1.254375
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 285.848584
+
+> @aiverse/studio-web@0.1.0 test:scene
+> node --experimental-strip-types --test tests/sceneState.test.mjs tests/gameViewport.test.mjs tests/sceneCamera.test.mjs tests/keyboard.test.mjs
+
+TAP version 13
+# Subtest: device screen fits landscape and portrait while preserving pointer scale
+ok 1 - device screen fits landscape and portrait while preserving pointer scale
+  ---
+  duration_ms: 1.619666
+  type: 'test'
+  ...
+# Subtest: free-size screen fills panel and hidden/invalid areas never produce a drawable
+ok 2 - free-size screen fills panel and hidden/invalid areas never produce a drawable
+  ---
+  duration_ms: 1.266333
+  type: 'test'
+  ...
+# Subtest: shortcuts use the physical key, independent of keyboard layout
+ok 3 - shortcuts use the physical key, independent of keyboard layout
+  ---
+  duration_ms: 0.775625
+  type: 'test'
+  ...
+# Subtest: camera basis matches the native eye/right convention
+ok 4 - camera basis matches the native eye/right convention
+  ---
+  duration_ms: 0.750958
+  type: 'test'
+  ...
+# Subtest: gizmo arms project world axes and draw back to front
+ok 5 - gizmo arms project world axes and draw back to front
+  ---
+  duration_ms: 0.171708
+  type: 'test'
+  ...
+# Subtest: clicking an arm puts the eye on that side and names the view
+ok 6 - clicking an arm puts the eye on that side and names the view
+  ---
+  duration_ms: 0.184792
+  type: 'test'
+  ...
+# Subtest: Unity mouse mapping: LMB selects, Alt orbits/zooms, RMB flies, MMB pans
+ok 7 - Unity mouse mapping: LMB selects, Alt orbits/zooms, RMB flies, MMB pans
+  ---
+  duration_ms: 0.073208
+  type: 'test'
+  ...
+# Subtest: fly speed steps with the wheel and stays bounded
+ok 8 - fly speed steps with the wheel and stays bounded
+  ---
+  duration_ms: 0.07125
+  type: 'test'
+  ...
+# Subtest: held fly keys accelerate, boost and clamp to the native limit
+ok 9 - held fly keys accelerate, boost and clamp to the native limit
+  ---
+  duration_ms: 0.704625
+  type: 'test'
+  ...
+# Subtest: camera events are validated before use
+ok 10 - camera events are validated before use
+  ---
+  duration_ms: 0.117916
+  type: 'test'
+  ...
+# Subtest: native startup without project displays a welcome state, not a GPU map
+ok 11 - native startup without project displays a welcome state, not a GPU map
+  ---
+  duration_ms: 0.650291
+  type: 'test'
+  ...
+# Subtest: a real native project enables the Scene renderer
+ok 12 - a real native project enables the Scene renderer
+  ---
+  duration_ms: 3.935416
+  type: 'test'
+  ...
+# Subtest: browser demo remains separate from native project UI
+ok 13 - browser demo remains separate from native project UI
+  ---
+  duration_ms: 0.123875
+  type: 'test'
+  ...
+1..13
+# tests 13
+# suites 0
+# pass 13
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 289.199542
+
+> @aiverse/studio-web@0.1.0 test:facial
+> node --experimental-strip-types --test tests/facialRigSchema.test.mjs
+
+TAP version 13
+# Subtest: ARKit template produces 52 explicit named mappings with no assumed geometry
+ok 1 - ARKit template produces 52 explicit named mappings with no assumed geometry
+  ---
+  duration_ms: 1.82575
+  type: 'test'
+  ...
+# Subtest: authoring fails closed on duplicated morph destinations and bad parameters
+ok 2 - authoring fails closed on duplicated morph destinations and bad parameters
+  ---
+  duration_ms: 13.984583
+  type: 'test'
+  ...
+# Subtest: native file names reject traversal and file extensions
+ok 3 - native file names reject traversal and file extensions
+  ---
+  duration_ms: 0.225709
+  type: 'test'
+  ...
+# Subtest: browser demo cannot claim facial model preview/real asset writes
+ok 4 - browser demo cannot claim facial model preview/real asset writes
+  ---
+  duration_ms: 2.023542
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 246.697667
+
+> @aiverse/studio-web@0.1.0 test:assets
+> node --experimental-strip-types --test tests/assetTree.test.mjs
+
+TAP version 13
+# Subtest: folder tree comes only from actual native file paths
+ok 1 - folder tree comes only from actual native file paths
+  ---
+  duration_ms: 8.592875
+  type: 'test'
+  ...
+# Subtest: folder navigation shows immediate files and children, global search is explicit
+ok 2 - folder navigation shows immediate files and children, global search is explicit
+  ---
+  duration_ms: 0.159959
+  type: 'test'
+  ...
+# Subtest: renderer receives only normalized relative paths and blocks traversal
+ok 3 - renderer receives only normalized relative paths and blocks traversal
+  ---
+  duration_ms: 0.125834
+  type: 'test'
+  ...
+# Subtest: file categories are stable and do not fake thumbnails
+ok 4 - file categories are stable and do not fake thumbnails
+  ---
+  duration_ms: 0.065625
+  type: 'test'
+  ...
+# Subtest: breadcrumbs are derived without new filesystem access
+ok 5 - breadcrumbs are derived without new filesystem access
+  ---
+  duration_ms: 0.179709
+  type: 'test'
+  ...
+# Subtest: Assets breadcrumb root represents actual lower-case content directory
+ok 6 - Assets breadcrumb root represents actual lower-case content directory
+  ---
+  duration_ms: 0.055834
+  type: 'test'
+  ...
+# Subtest: content-relative root shows top-level imported assets without a content/ prefix
+ok 7 - content-relative root shows top-level imported assets without a content/ prefix
+  ---
+  duration_ms: 0.143416
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 305.80575
+
+> @aiverse/studio-web@0.1.0 test:bridge
+> node --experimental-strip-types --test tests/bridge.test.mjs
+
+TAP version 13
+# (node:50602) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: studio.openProject waits for native interaction without an RPC timeout
+ok 1 - studio.openProject waits for native interaction without an RPC timeout
+  ---
+  duration_ms: 90.077375
+  type: 'test'
+  ...
+# Subtest: studio.openMap waits for native interaction without an RPC timeout
+ok 2 - studio.openMap waits for native interaction without an RPC timeout
+  ---
+  duration_ms: 2.328083
+  type: 'test'
+  ...
+# Subtest: studio.newMap waits for native interaction without an RPC timeout
+ok 3 - studio.newMap waits for native interaction without an RPC timeout
+  ---
+  duration_ms: 1.841625
+  type: 'test'
+  ...
+# Subtest: studio.saveAs waits for native interaction without an RPC timeout
+ok 4 - studio.saveAs waits for native interaction without an RPC timeout
+  ---
+  duration_ms: 0.901209
+  type: 'test'
+  ...
+# Subtest: studio.save waits for native interaction without an RPC timeout
+ok 5 - studio.save waits for native interaction without an RPC timeout
+  ---
+  duration_ms: 54.79675
+  type: 'test'
+  ...
+# Subtest: studio.assetImportPreview waits for native interaction without an RPC timeout
+ok 6 - studio.assetImportPreview waits for native interaction without an RPC timeout
+  ---
+  duration_ms: 2.687167
+  type: 'test'
+  ...
+# Subtest: slow native calls are logged, never failed, and late replies still resolve
+ok 7 - slow native calls are logged, never failed, and late replies still resolve
+  ---
+  duration_ms: 1.128208
+  type: 'test'
+  ...
+# Subtest: native replies clear ordinary call timers
+ok 8 - native replies clear ordinary call timers
+  ---
+  duration_ms: 2.685625
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 355.367125
+
+> @aiverse/studio-web@0.1.0 test:human
+> node --experimental-strip-types --test tests/humanLookSchema.test.mjs tests/humanCreatorSchema.test.mjs
+
+TAP version 13
+# Subtest: reads dotted DNA paths including array channels
+ok 1 - reads dotted DNA paths including array channels
+  ---
+  duration_ms: 2.094917
+  type: 'test'
+  ...
+# Subtest: numeric fields clamp to native limits and integers snap
+ok 2 - numeric fields clamp to native limits and integers snap
+  ---
+  duration_ms: 0.304583
+  type: 'test'
+  ...
+# Subtest: colours round trip through hex
+ok 3 - colours round trip through hex
+  ---
+  duration_ms: 1.85575
+  type: 'test'
+  ...
+# Subtest: wire values reject what native validation would reject
+ok 4 - wire values reject what native validation would reject
+  ---
+  duration_ms: 0.227125
+  type: 'test'
+  ...
+# Subtest: counts active expression channels
+ok 5 - counts active expression channels
+  ---
+  duration_ms: 0.299584
+  type: 'test'
+  ...
+# Subtest: face mesh guess takes every head part, never body or clothing
+ok 6 - face mesh guess takes every head part, never body or clothing
+  ---
+  duration_ms: 0.810625
+  type: 'test'
+  ...
+# Subtest: blend of two looks interpolates within schema limits
+ok 7 - blend of two looks interpolates within schema limits
+  ---
+  duration_ms: 0.530917
+  type: 'test'
+  ...
+# Subtest: face blend circle: archetype weights, regions and limits
+ok 8 - face blend circle: archetype weights, regions and limits
+  ---
+  duration_ms: 0.756292
+  type: 'test'
+  ...
+# Subtest: sculpt zones name strokes the way the artist reads the face
+ok 9 - sculpt zones name strokes the way the artist reads the face
+  ---
+  duration_ms: 0.685583
+  type: 'test'
+  ...
+# Subtest: viewport pick maps head points to face-blend parts
+ok 10 - viewport pick maps head points to face-blend parts
+  ---
+  duration_ms: 1.03
+  type: 'test'
+  ...
+# Subtest: a part with its own handle blends independently of the rest
+ok 11 - a part with its own handle blends independently of the rest
+  ---
+  duration_ms: 0.602208
+  type: 'test'
+  ...
+# Subtest: random look leaves locked parts alone and stays in believable ranges
+ok 12 - random look leaves locked parts alone and stays in believable ranges
+  ---
+  duration_ms: 0.467375
+  type: 'test'
+  ...
+# Subtest: a Russian description becomes a look draft
+ok 13 - a Russian description becomes a look draft
+  ---
+  duration_ms: 0.765125
+  type: 'test'
+  ...
+# Subtest: age control is neutral at 30 and greys and roughens with age
+ok 14 - age control is neutral at 30 and greys and roughens with age
+  ---
+  duration_ms: 0.252583
+  type: 'test'
+  ...
+# Subtest: appearance accepts bounded source mappings and optional defaults
+ok 15 - appearance accepts bounded source mappings and optional defaults
+  ---
+  duration_ms: 0.921083
+  type: 'test'
+  ...
+# Subtest: appearance import rejects values which would corrupt the editor
+ok 16 - appearance import rejects values which would corrupt the editor
+  ---
+  duration_ms: 0.195666
+  type: 'test'
+  ...
+1..16
+# tests 16
+# suites 0
+# pass 16
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 342.370791

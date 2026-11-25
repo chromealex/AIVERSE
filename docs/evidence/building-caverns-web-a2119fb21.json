@@ -1,0 +1,11 @@
+{
+  "sha": "a2119fb214a651549605b3549071ad1ba4d20b98",
+  "argv": [
+    "/bin/bash",
+    "-ec",
+    "python3.12 examples/world/building-caverns-web/build.py /Volumes/KINGSTON/AIVERSE/Building-Caverns-Web\nnode examples/world/building-caverns-web/verify.cjs /Volumes/KINGSTON/AIVERSE/Building-Caverns-Web/web"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/building-caverns-web-a2119fb21.log.txt",
+  "sha256": "7efc0a9e7c4bdf0ff8937ca03e29d023e712e4e38e25b2797054ff721e1b1466"
+}

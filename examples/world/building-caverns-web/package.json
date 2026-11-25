@@ -1,0 +1,8 @@
+{
+  "name": "aiverse-building-caverns-demo",
+  "private": true,
+  "dependencies": {
+    "esbuild": "0.25.12",
+    "three": "0.164.1"
+  }
+}

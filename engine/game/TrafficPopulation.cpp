@@ -9,7 +9,7 @@
 // their own car) is TrafficCommute.cpp.
 // Fixed maths and integers only; the citizens are created from the simulation RNG on the first tick.
 #include "Traffic.h"
-#include <aiverselib/runtime/WorkBudget.h>
+#include "engine/sim/RecurringWork.h"
 #include "engine/world/SimulationLod.h"
 #include "Systems.h"
 #include <algorithm>
@@ -274,11 +274,11 @@ void Traffic::population(Simulation& sim, TrafficStore& st, const std::vector<Ve
     // cursor. Do not apply this budget to vehicle physics, pedestrian motion,
     // collision, or service incidents, which retain their ordinary tick order.
     const auto n=uint32_t(st.citizens.size());
-    const auto plan=lib::runtime::planRecurringWork(n,
+    const auto plan=sim::planRecurringWork(n,
         pr.updatePeriodTicks?pr.updatePeriodTicks:rate*2,pr.maxUpdatesPerTick);
     if(!plan.valid)return;
     for(uint32_t k=0;k<plan.visitsPerTick;++k){
-        const size_t id=*lib::runtime::nextRecurringIndex(n,st.citizenCursor);
+        const size_t id=*sim::nextRecurringIndex(n,st.citizenCursor);
         TrafficCitizen& c = st.citizens[id];
         if (c.held) continue;   // a script / native module runs him (TrafficCitizen::held)
         if (c.state == kCitizenDead || c.state == kCitizenGang) continue;

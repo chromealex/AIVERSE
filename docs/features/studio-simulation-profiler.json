@@ -32,24 +32,29 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native profiler measures Simulation steps and individual scheduled systems. Authenticated MCP started, queried and stopped a bounded capture against the paused actor authority, and the native panel displayed a completed eight-tick capture. The native profile fixture covered scheduling changes and checksum parity.",
       "evidence": [
-        "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "tests/simulation_profile_test.cpp",
+        "docs/evidence/studio-play-ad676e70c/simulation_profiler.png"
       ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native profiler measures Simulation steps and individual scheduled systems. Authenticated MCP started, queried and stopped a bounded capture against the paused actor authority, and the native panel displayed a completed eight-tick capture. The native profile fixture covered scheduling changes and checksum parity.",
       "evidence": [
-        "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "tests/simulation_profile_test.cpp",
+        "docs/evidence/studio-play-ad676e70c/simulation_profiler.png"
       ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The production panel in a native Studio window rendered the completed eight-tick native capture with tick timings and individual system measurements.",
       "evidence": [
-        "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/simulation_profiler.png",
+        "apps/studio-native/StudioGameSurface.cpp"
       ]
     },
     "skill": {
@@ -61,31 +66,36 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Verify the typed local Studio handler, headless refusal and guarded requests over the authenticated agent link.",
+      "status": "pass",
+      "note": "The native profiler measures Simulation steps and individual scheduled systems. Authenticated MCP started, queried and stopped a bounded capture against the paused actor authority, and the native panel displayed a completed eight-tick capture. The native profile fixture covered scheduling changes and checksum parity.",
       "evidence": [
-        "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "tests/simulation_profile_test.cpp",
+        "docs/evidence/studio-play-ad676e70c/simulation_profiler.png"
       ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Verified in the production Studio web bundle inside native WKWebView, connected to the local game host. The profiler displayed the completed eight-tick capture and per-system timings.",
       "evidence": [
-        "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/simulation_profiler.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The production panel in a native Studio window rendered the completed eight-tick native capture with tick timings and individual system measurements.",
       "evidence": [
-        "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/simulation_profiler.png",
+        "apps/studio-native/StudioGameSurface.cpp"
       ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "A profiled and an unprofiled GameCore advanced from the same saved state. After two ticks both gameplay archives and checksums were identical. The two-tick native timing history was populated only for the profiled session.",
       "evidence": [
-        "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
+        "docs/agent-handoffs/studio-building-budget-archives-2026-11-25.md",
+        "tests/simulation_profile_test.cpp"
       ]
     },
     "graphs": {
@@ -128,17 +138,21 @@
       ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native profiler measures Simulation steps and individual scheduled systems. Authenticated MCP started, queried and stopped a bounded capture against the paused actor authority, and the native panel displayed a completed eight-tick capture. The native profile fixture covered scheduling changes and checksum parity.",
       "evidence": [
-        "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "tests/simulation_profile_test.cpp",
+        "docs/evidence/studio-play-ad676e70c/simulation_profiler.png"
       ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native profiler measures Simulation steps and individual scheduled systems. Authenticated MCP started, queried and stopped a bounded capture against the paused actor authority, and the native panel displayed a completed eight-tick capture. The native profile fixture covered scheduling changes and checksum parity.",
       "evidence": [
-        "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "tests/simulation_profile_test.cpp",
+        "docs/evidence/studio-play-ad676e70c/simulation_profiler.png"
       ]
     },
     "handoff": {
@@ -156,10 +170,11 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Prepared the bilingual Studio diary with real native editor captures. The site checker accepted 59 entries and the local builder generated both languages. The release-site contract documents the native editor tool exception for a separate browser demo. Public deployment follows main integration.",
       "evidence": [
-        "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
+        "docs/devlog/entries/2026-11-25-studio-local-play-inspection.json",
+        "docs/agents/contracts/release-site.md"
       ]
     }
   },
@@ -178,9 +193,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-ad5786f5a-studio-contracts.json",
-    "docs/evidence/feature-gate-ad5786f5a-web.json",
-    "docs/evidence/feature-gate-ad5786f5a-typecheck.json",
-    "docs/evidence/feature-gate-ad5786f5a-skill-audit.json"
+    "docs/evidence/feature-gate-cda38a15c-studio-contracts.json",
+    "docs/evidence/feature-gate-cda38a15c-web.json",
+    "docs/evidence/feature-gate-cda38a15c-typecheck.json",
+    "docs/evidence/feature-gate-cda38a15c-skill-audit.json"
   ]
 }

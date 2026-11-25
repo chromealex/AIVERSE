@@ -3,6 +3,7 @@
 #include "apps/editor/AuthoringComponents.h"
 #include "tests/TestCheck.h"
 #include "apps/studio-native/StudioGameLaunch.h"
+#include "engine/actor/Project.h"
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/studio-native/StudioGameDevice.h"
 #include "apps/studio-native/StudioRuntimeInspect.h"
@@ -491,6 +492,26 @@ void entityWorkflow() {
             return session.dispatch(request);
         };
         {
+            fs::create_directories(project/"shaders");
+            const auto path=project/"shaders"/"precise.json";
+            std::ofstream(path) << R"({"version":1,"domain":"material","nodes":[{"id":"c","op":"constant","value":[0.2000,0.7,1,1]}],"outputs":{"color":"c"}})";
+            auto params=Json::parse(R"({"name":"precise"})");
+            const auto reply=call("studio.shaderGraphGet",params);
+            AIVERSE_TEST_CHECK(!reply.has("error"));
+            const auto& loaded=reply["result"];
+            const auto baseline=loaded.getStr("originalJson");
+            AIVERSE_TEST_CHECK(baseline.find("0.2000")!=std::string::npos);
+            params.set("expectedProject",Json::string(session.workspace().project.dir));
+            params.set("expected",Json::string(baseline));
+            auto draft=loaded["graph"];
+            draft.member("nodes").at(0).set("value",Json::parse("[0.375,0.7,1,1]"));
+            params.set("graph",draft);
+            const auto saved=call("studio.shaderGraphSave",params);
+            AIVERSE_TEST_CHECK(!saved.has("error") && saved["result"]["originalJson"].isString());
+            AIVERSE_TEST_CHECK(call("studio.shaderGraphSave",params).has("error"));
+            AIVERSE_TEST_CHECK(Json::parseFile(path.string())==draft);
+        }
+        {
             // Every map entity exposes a full 3D Transform; the first Y/rotation/scale
             // edit of a legacy unit writes components.Transform and keeps facing in sync.
             auto params=Json::object();params.set("entityId",Json::string("entity:0"));
@@ -661,6 +682,21 @@ void entityWorkflow() {
 }
 }
 
+static void actorProjectMapSelection() {
+    using namespace aiverse;
+    const auto read=[](const std::string& file,std::string& out) {
+        if(file=="game.json") out=R"({"module":"actor","maps":[{"file":"first.json"},{"file":"second.json"}]})";
+        else if(file=="rules.json") out="{}";
+        else if(file=="first.json" || file=="second.json") out=Json::string(file).dump();
+        else return false;
+        return true;
+    };
+    AIVERSE_TEST_CHECK(actor::readProject(read).map.str()=="first.json");
+    AIVERSE_TEST_CHECK(actor::readProject(read,1).map.str()=="second.json");
+    bool invalid=false;
+    try {(void)actor::readProject(read,2);} catch(const JsonError&) {invalid=true;}
+    AIVERSE_TEST_CHECK(invalid);
+}
 static void localPlayToolContracts(aiverse::editor::Workspace& ws) {
     using namespace aiverse;
     auto call = [&](const char* name, const Json& args) { return ws.call(name, args, "editor"); };
@@ -691,6 +727,7 @@ static void localPlayToolContracts(aiverse::editor::Workspace& ws) {
 int main() {
     using namespace aiverse;
     aiverse::studio::StudioSession session(".");
+    actorProjectMapSelection();
     localPlayToolContracts(session.workspace());
     bool playRejected=false;
     try { (void)studio::studioGameLaunch(session.workspace(),false); }

@@ -1,0 +1,67 @@
+RUN /Volumes/KINGSTON/AIVERSE/Building-Caverns-Demo/work/linux-gcc13/aarch64-unknown-linux-gnu/bin/aarch64-unknown-linux-gnu-g++ --version
+aarch64-unknown-linux-gnu-g++ (GCC) 13.3.0
+Copyright (C) 2023 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+RUN /Volumes/KINGSTON/AIVERSE/Building-Caverns-Demo/work/linux-gcc13/aarch64-unknown-linux-gnu/bin/aarch64-unknown-linux-gnu-g++ -O3 -DNDEBUG -std=c++20 -Wall -Wextra -fno-fast-math -Wpedantic -Wno-misleading-indentation -Wno-dangling-reference -Wno-error=array-bounds -Wno-error=stringop-overflow -Wno-error=nonnull -Wno-error=dangling-pointer -Werror -I. -Ilibraries/include -Ithird_party/lua -c engine/game/Economy.cpp -o /Volumes/KINGSTON/AIVERSE/Building-Caverns-Demo/work/linux-gcc13/Economy-verified.o
+RUN /Volumes/KINGSTON/AIVERSE/Building-Caverns-Demo/work/linux-gcc13/aarch64-unknown-linux-gnu/bin/aarch64-unknown-linux-gnu-g++ -O3 -DNDEBUG -std=c++20 -Wall -Wextra -fno-fast-math -Wpedantic -Wno-misleading-indentation -Wno-dangling-reference -Wno-error=array-bounds -Wno-error=stringop-overflow -Wno-error=nonnull -Wno-error=dangling-pointer -Werror -I. -Ilibraries/include -Ithird_party/lua -c engine/game/GameCore.cpp -o /Volumes/KINGSTON/AIVERSE/Building-Caverns-Demo/work/linux-gcc13/GameCore-verified.o
+RUN cmake --build /Volumes/KINGSTON/AIVERSE/Building-Caverns-Demo/work/native --parallel 4 --target aiverse_ecs_snapshot_delta_test aiverse_ecs_multiworld_test aiverse_ecs_cow_snapshot_test aiverse_ecs_cow_exception_test aiverse_ecs_cow_parallel_test aiverse_ecs_cow_rollback_session_test
+Built target aiverse_engine
+Building CXX object CMakeFiles/aiverse_ecs_snapshot_delta_test.dir/tests/ecs_snapshot_delta_test.cpp.o
+Linking CXX executable aiverse_ecs_snapshot_delta_test
+Built target aiverse_ecs_snapshot_delta_test
+Built target aiverse_engine
+Building CXX object CMakeFiles/aiverse_ecs_multiworld_test.dir/tests/ecs_multiworld_test.cpp.o
+Linking CXX executable aiverse_ecs_multiworld_test
+Built target aiverse_ecs_multiworld_test
+Built target aiverse_engine
+Building CXX object CMakeFiles/aiverse_ecs_cow_snapshot_test.dir/tests/ecs_cow_snapshot_test.cpp.o
+RUN file /Volumes/KINGSTON/AIVERSE/Building-Caverns-Demo/work/linux-gcc13/Economy-verified.o
+/Volumes/KINGSTON/AIVERSE/Building-Caverns-Demo/work/linux-gcc13/Economy-verified.o: ELF 64-bit LSB relocatable, ARM aarch64, version 1 (GNU/Linux), not stripped
+Linking CXX executable aiverse_ecs_cow_snapshot_test
+Built target aiverse_ecs_cow_snapshot_test
+Built target aiverse_engine
+Built target aiverse_ecs_cow_exception_test
+Built target aiverse_engine
+Building CXX object CMakeFiles/aiverse_ecs_cow_parallel_test.dir/tests/ecs_cow_parallel_test.cpp.o
+Linking CXX executable aiverse_ecs_cow_parallel_test
+Built target aiverse_ecs_cow_parallel_test
+[  0%] Built target aiverse_engine
+[  0%] Building CXX object CMakeFiles/aiverse_net.dir/engine/net/Reliable.cpp.o
+[  0%] Building CXX object CMakeFiles/aiverse_net.dir/engine/net/Udp.cpp.o
+[  0%] Building CXX object CMakeFiles/aiverse_net.dir/engine/net/LanDiscovery.cpp.o
+[  0%] Building CXX object CMakeFiles/aiverse_net.dir/engine/net/WebSocket.cpp.o
+[  0%] Building CXX object CMakeFiles/aiverse_net.dir/engine/net/Protocol.cpp.o
+[  0%] Building CXX object CMakeFiles/aiverse_net.dir/engine/net/Rollback.cpp.o
+[  0%] Building CXX object CMakeFiles/aiverse_net.dir/engine/net/NetClient.cpp.o
+[ 50%] Building CXX object CMakeFiles/aiverse_net.dir/engine/net/MatchTicket.cpp.o
+[ 50%] Building CXX object CMakeFiles/aiverse_net.dir/engine/net/BattleProtocol.cpp.o
+[ 50%] Building CXX object CMakeFiles/aiverse_net.dir/engine/net/SecureUdp.cpp.o
+[ 50%] Building CXX object CMakeFiles/aiverse_net.dir/engine/net/BattleJoin.cpp.o
+[ 50%] Linking CXX static library libaiverse_net.a
+[ 50%] Built target aiverse_net
+[ 50%] Building CXX object CMakeFiles/aiverse_ecs_cow_rollback_session_test.dir/tests/ecs_cow_rollback_session_test.cpp.o
+[100%] Linking CXX executable aiverse_ecs_cow_rollback_session_test
+RUN file /Volumes/KINGSTON/AIVERSE/Building-Caverns-Demo/work/linux-gcc13/GameCore-verified.o
+/Volumes/KINGSTON/AIVERSE/Building-Caverns-Demo/work/linux-gcc13/GameCore-verified.o: ELF 64-bit LSB relocatable, ARM aarch64, version 1 (GNU/Linux), not stripped
+[100%] Built target aiverse_ecs_cow_rollback_session_test
+RUN ctest --test-dir /Volumes/KINGSTON/AIVERSE/Building-Caverns-Demo/work/native --no-tests=error --output-on-failure -R ^(ecs_snapshot_delta_test|ecs_multiworld_test|ecs_cow_snapshot_test|ecs_cow_exception_test|ecs_cow_parallel_test|ecs_cow_rollback_session_test)$
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE/Building-Caverns-Demo/work/native
+Test project /Volumes/KINGSTON/AIVERSE/Building-Caverns-Demo/work/native
+    Start  4: ecs_snapshot_delta_test
+1/6 Test  #4: ecs_snapshot_delta_test ..........   Passed    1.43 sec
+    Start  8: ecs_multiworld_test
+2/6 Test  #8: ecs_multiworld_test ..............   Passed    0.78 sec
+    Start 16: ecs_cow_snapshot_test
+3/6 Test #16: ecs_cow_snapshot_test ............   Passed    1.43 sec
+    Start 17: ecs_cow_exception_test
+4/6 Test #17: ecs_cow_exception_test ...........   Passed    0.10 sec
+    Start 18: ecs_cow_parallel_test
+5/6 Test #18: ecs_cow_parallel_test ............   Passed    1.21 sec
+    Start 24: ecs_cow_rollback_session_test
+6/6 Test #24: ecs_cow_rollback_session_test ....   Passed    1.67 sec
+
+100% tests passed, 0 tests failed out of 6
+
+Total Test time (real) =   6.83 sec

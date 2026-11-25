@@ -208,7 +208,9 @@
     "tests/terraweave_caverns_test.cpp",
     "tests/terraweave_caverns_volume_collision_nav_test.cpp",
     "tools/caverns-stage33-verify.sh",
-    "tools/caverns-stage59-mac.sh"
+    "tools/caverns-stage59-mac.sh",
+    "apps/studio-native/CMakeLists.txt",
+    "examples/world/building-caverns-web/cave.cpp"
   ],
   "traits": {
     "editable": true,
@@ -328,12 +330,13 @@
         "docs/agent-handoffs/building-caverns-integration-stage27-2026-11-25.md",
         "examples/world/terraweave_native/PlanetCavernsDemo.cpp",
         "tests/caverns/native_demo_smoke.py",
-        "docs/evidence/integrated-acceptance-3e2a609f0.json"
+        "docs/evidence/integrated-acceptance-3e2a609f0.json",
+        "docs/evidence/building-caverns-web-a2119fb21.json"
       ]
     },
     "tests": {
       "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification. The merged Mac build exposed a Box3D usage requirement in native Studio Scene test consumers. Rebuild the affected targets and the quick gate.",
       "evidence": [
         "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
       ]
@@ -355,9 +358,10 @@
     },
     "publishing": {
       "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "note": "An offline browser demo, two captured frames and a bilingual devlog entry are staged on PR #190. Site publication awaits main integration.",
       "evidence": [
-        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+        "docs/evidence/building-caverns-web-a2119fb21.json",
+        "docs/devlog/entries/2026-11-25-world-building-caverns-web.json"
       ]
     }
   },
@@ -377,8 +381,8 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-ad5786f5a-contracts.json",
-    "docs/evidence/feature-gate-ad5786f5a-catalog.json",
-    "docs/evidence/feature-gate-ad5786f5a-skill-audit.json"
+    "docs/evidence/feature-gate-cda38a15c-contracts.json",
+    "docs/evidence/feature-gate-cda38a15c-catalog.json",
+    "docs/evidence/feature-gate-cda38a15c-skill-audit.json"
   ]
 }

@@ -51,6 +51,16 @@ namespace aiverse::studio {
 namespace {
 Json str(const std::string& s) { return Json::string(s); }
 Json num(int64_t n) { return Json::number(n); }
+
+// Json retains number lexemes. Keep the native baseline intact across WebView number conversion.
+Json graphOriginal(const Json& expected) {
+    if (!expected.isString()) return expected;
+    const auto& source = expected.str();
+    if (source.size() > 1024 * 1024) throw std::invalid_argument("Original graph exceeds bridge limit");
+    auto graph = Json::parse(source);
+    if (!graph.isObject()) throw std::invalid_argument("Original graph object required");
+    return graph;
+}
 Json templateJson(const editor::TemplateInfo& t) {
     Json o=Json::object();
     o.set("id",str(t.id));o.set("name",str(t.name));o.set("description",str(t.description));
@@ -1746,9 +1756,10 @@ Json StudioSession::dispatchImpl(const Json& request) {
                     const std::string name=params.getStr("name");
                     if(!validStudioShaderGraphName(name))
                         throw std::runtime_error("Invalid Shader Graph filename");
-                    if(!validStudioShaderGraphDraft(params["expected"]))
+                    const Json original=graphOriginal(params["expected"]);
+                    if(!validStudioShaderGraphDraft(original))
                         throw std::runtime_error("Original Shader Graph document required; reload before saving");
-                    request.set("expected",params["expected"]);
+                    request.set("expected",original);
                     request.set("name",str(name));
                 }
                 const Json raw=ws_.call(method=="studio.shaderGraphSave"?
@@ -1756,6 +1767,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 if(raw.has("error")) throw std::runtime_error(raw.getStr("error"));
                 Json result=Json::object();
                 result.set("graph",raw["graph"]);
+                result.set("originalJson",str(raw["graph"].dump()));
                 result.set("nodes",raw["nodes"]);
                 result.set("samples",raw["samples"]);
                 // Shader source output is deliberately NOT passed to browser.
@@ -1772,6 +1784,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 if(raw.has("error")) throw std::runtime_error(raw.getStr("error"));
                 Json result=Json::object();
                 result.set("graph",raw["graph"]);
+                result.set("originalJson",str(raw["graph"].dump()));
                 result.set("nodes",raw["nodes"]);
                 result.set("samples",raw["samples"]);
                 // Do NOT serialize raw.glsl/msl/vertex* to JS.
@@ -2075,7 +2088,10 @@ Json StudioSession::dispatchImpl(const Json& request) {
             if((op=="terraweave_caverns_paint"||op=="terraweave_caverns_pick") && (params.getStr("expectedProject")!=ws_.project.dir ||
                !params["expectedMap"].isString() || params.getStr("expectedMap")!=(ws_.map.path.empty()?"":ws_.relative(ws_.map.path))))
                 throw std::runtime_error("Caverns project/map changed; refresh the panel");
-            const Json input=params["params"].isObject()?params["params"]:Json::object();
+            Json input=params["params"].isObject()?params["params"]:Json::object();
+            const bool graphWrite=op=="fx_graph_set" || op=="texture_graph_set" || op=="animation_graph_set";
+            if(graphWrite && input["expected"].isString())
+                input.set("expected",graphOriginal(input["expected"]));
             if(op=="terraweave_caverns_paint" && input.getStr("mode")!="get" &&
                (stroking_ || input.getStr("expectedMapRevision")!=std::to_string(ws_.map.revision) ||
                 !input["expectedRevision"].isString() || input.getBool("withinStroke",false)))
@@ -2083,6 +2099,9 @@ Json StudioSession::dispatchImpl(const Json& request) {
             const bool wasDirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
             const size_t depth=ws_.map.undoDepth(),entityCount=ws_.map.data.entities.size();
             Json result=ws_.call(op,input,"studio");
+            const bool graphRead=op=="fx_graph_get" || op=="texture_graph_get" || op=="animation_graph_get";
+            if((graphRead || graphWrite) && result["graph"].isObject())
+                result.set("originalJson",str(result["graph"].dump()));
             if(op=="terraweave_caverns_paint"&&!result.has("error"))result.set("mapRevisionText",str(std::to_string(ws_.map.revision)));
             if (result.has("error")) throw std::runtime_error(result.getStr("error"));
             const bool dirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;

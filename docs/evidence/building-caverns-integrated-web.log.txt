@@ -1,0 +1,2 @@
+Initial Studio recipe GLB SHA-256 abb13efee7f37696cd8ccccc50076e9d2d8d565c476e488ea8f48f2bc2fabb8f
+13 building styles exported; Carve, Fill and baseline reset verified.
