@@ -219,3 +219,5 @@ Character Creator and VIVID Appearance render on separate native surfaces. The S
 Animation Graph and Animation Rig each own a native playback session. Their HTML skeleton previews support play, pause, frame stepping, bind pose, three projections and joint selection. On macOS, picking a wrist and applying it to a rig unit persisted the bone name to the graph asset. GPU skinned mesh playback and interactive ground contacts remain open.
 
 Animation preview ground height and solver diagnostics run in the owning panel. On macOS the two-foot rig reported two stable supports at zero and none at −10 without advancing playback. Independent sessions are covered by studio_animation_preview. The live climbing readout still needs an articulated climbing fixture in the desktop app.
+
+Rig vector parameters appear as draggable targets in the skeleton view. Keep controls applies modified values to the selected graph scope as one undoable edit. On macOS a physical drag moved the solved wrist, and Save graph persisted the target while preserving its third component and the pole. Independent skinned mesh rendering remains open.

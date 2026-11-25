@@ -101,7 +101,8 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode}:{project
     <button disabled={busy||!dirty} onClick={()=>{setDraft(saved);setPast([]);setScope('');select('');setError('');}}>Discard</button>
     <button disabled={busy||!dirty} onClick={()=>void run(async()=>{const r=await op('set',{name,graph:draft,expectedRevision:revision});setDraft(r.graph);setSaved(r.graph);setRevision(r.revision);setPast([]);})}>Save graph</button>
    </div>
-   {tab==='preview'&&draft?<AnimationSkeletonPreview projectPath={projectPath} graph={draft} scope={scope} panel={rigMode?'rig':'graph'} onPick={setPickedBone}/>:tab==='nodes'?<>
+   {tab==='preview'&&draft?<AnimationSkeletonPreview projectPath={projectPath} graph={draft} scope={scope} panel={rigMode?'rig':'graph'} onPick={setPickedBone} busy={busy}
+    onKeep={controls=>{if(graph)change(inScope({...graph,parameters:{...graph.parameters,...controls}}));}}/>:tab==='nodes'?<>
     <div className="anim-canvas graph-surface"><svg width={width} height={height} viewBox={left+' '+top+' '+width+' '+height} aria-label="Pose node connections">
      {graph.nodes.flatMap(n=>ports(n).map((port,i)=>{const start=positions.get(n[port]??''),end=positions.get(n.id);
       if(!start||!end)return null;const x=start.x+144,y=start.y+26,v=end.y+18+i*18;

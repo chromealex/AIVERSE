@@ -28,3 +28,9 @@
 .motion-preview-stage line.motion-ground{stroke:var(--au-text-soft);stroke-width:1;stroke-dasharray:5 4}
 .motion-contact dl{margin:0}.motion-contact dl div{display:flex;justify-content:space-between;gap:8px}
 .motion-contact dd{margin:0;font-variant-numeric:tabular-nums}
+
+.motion-preview-stage g.motion-target{touch-action:none;cursor:grab;outline:none;user-select:none}
+.motion-preview-stage .motion-target:active{cursor:grabbing}
+.motion-target-mark{fill:var(--au-panel);stroke:var(--au-warning,#eeb866);stroke-width:2;vector-effect:non-scaling-stroke}
+.motion-target:focus-visible .motion-target-mark{stroke-width:4}
+.motion-target text{fill:var(--au-warning,#eeb866);pointer-events:none}
