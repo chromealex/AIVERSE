@@ -3012,7 +3012,11 @@ Json StudioHost::viewportInput(const Json& input) {
             const double x = set["x"].toDouble(), y = set["y"].toDouble(), z = set["z"].toDouble(), dist = set["distance"].toDouble(),
                          yaw = set["yaw"].toDouble(), pitch = set["pitch"].toDouble();
             for (double v : {x, y, z, dist, yaw, pitch}) if (!std::isfinite(v) || std::abs(v) > 1e6) throw std::runtime_error("Invalid camera");
+            const double fov = set["fov"].toDouble();
+            if (set.has("fov") && (!set["fov"].isNumber() || !std::isfinite(fov) || fov <= 0 || fov >= 3.141592653589793))
+                throw std::runtime_error("Invalid camera field of view");
             onScene([&] {
+                if (set.has("fov")) preview_->setFieldOfView(float(fov));
                 preview_->setOrthographic(set.getBool("ortho"));
                 preview_->tweenCamera({float(x), float(y), float(z)}, float(std::clamp(dist, 0.5, 100000.0)), float(yaw), float(pitch));
             });
@@ -3022,6 +3026,7 @@ Json StudioHost::viewportInput(const Json& input) {
         result.set("z", Json::number(double(cam.target.z), 3)); result.set("distance", Json::number(double(cam.distance), 3));
         result.set("yaw", Json::number(double(cam.yaw), 5)); result.set("pitch", Json::number(double(cam.pitch), 5));
         result.set("ortho", Json::fromBool(cam.ortho));
+        result.set("fov", Json::number(double(cam.fov), 9));
         return result;
     }
     if (kind == "tool") {

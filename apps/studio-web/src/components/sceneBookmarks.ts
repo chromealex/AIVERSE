@@ -1,5 +1,5 @@
 /** Scene camera bookmarks, per project (browser storage; editor state, not game data). */
-export interface CameraBookmark { slot: number; name: string; x: number; y: number; z: number; distance: number; yaw: number; pitch: number; ortho: boolean }
+export interface CameraBookmark { slot: number; name: string; x: number; y: number; z: number; distance: number; yaw: number; pitch: number; fov?: number; ortho: boolean }
 export const CAMERA_SLOTS = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 type Storage = Pick<globalThis.Storage, 'getItem' | 'setItem'>;
 const key = (project: string) => 'aiverse.studio.cameraMarks.' + project;
@@ -12,7 +12,8 @@ export function readBookmarks(project: string, store: Storage | null = storage()
     if (!Array.isArray(raw)) return [];
     return raw.filter(m => m && CAMERA_SLOTS.includes(m.slot) && ['x', 'y', 'z', 'distance', 'yaw', 'pitch'].every(k => finite(m[k])))
       .map(m => ({ slot: m.slot, name: String(m.name ?? 'View ' + m.slot).slice(0, 40), x: m.x, y: m.y, z: m.z,
-        distance: m.distance, yaw: m.yaw, pitch: m.pitch, ortho: m.ortho === true }))
+        distance: m.distance, yaw: m.yaw, pitch: m.pitch,
+        ...(finite(m.fov) && m.fov > 0 && m.fov < Math.PI ? { fov: m.fov } : {}), ortho: m.ortho === true }))
       .sort((a, b) => a.slot - b.slot);
   } catch { return []; }
 }

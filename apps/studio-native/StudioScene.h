@@ -347,8 +347,9 @@ public:
     // Persp/Iso toggle. Orientation/projection are editor camera state only.
     void setOrientation(float yaw, float pitch);
     void setOrthographic(bool ortho);
-    struct CameraState { float yaw = 0, pitch = 0, distance = 0; bool ortho = false; render::float3 target{}; };
-    CameraState cameraState() const { return {camera_.yaw, camera_.pitch, camera_.distance, camera_.ortho, camera_.target}; }
+    void setFieldOfView(float radians) { camera_.fovY = radians; }
+    struct CameraState { float yaw = 0, pitch = 0, distance = 0; bool ortho = false; render::float3 target{}; float fov = 0; };
+    CameraState cameraState() const { return {camera_.yaw, camera_.pitch, camera_.distance, camera_.ortho, camera_.target, camera_.fovY}; }
     void setPlanetOrbitCamera(const CameraState& state){
         tween_.active=false;camera_.target=state.target;camera_.distance=state.distance;
         camera_.yaw=state.yaw;camera_.pitch=state.pitch;camera_.ortho=state.ortho;autoIso_=false;cameraInitialized_=true;

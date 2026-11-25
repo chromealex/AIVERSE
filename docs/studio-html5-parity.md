@@ -177,7 +177,7 @@ Derived from actual AIVERSE_EDITOR_WINDOW registrations in apps/editor/windows. 
 | `spectrafx_graph` | `apps/editor/windows/SpectraFxGraphWindow.cpp` | Stages 5–6 Graph v2: typed Data Interface editor, project Assets texture picker, native validation/drafts/publish, node topology canvas with drag/zoom and native add/connect/disconnect; full Niagara graph editing and GPU particle preview still pending |
 | `spectrafx_graph` | `apps/editor/windows/SpectraGraphWindow.cpp` | Stages 5–6 Graph v2: typed Data Interface editor, project Assets texture picker, native validation/drafts/publish, node topology canvas with drag/zoom and native add/connect/disconnect; full Niagara graph editing and GPU particle preview still pending |
 | `stats` | `apps/editor/windows/StatsWindow.cpp` | Statistics panel: map contents, Scene fps (110) |
-| `studio_camera_bookmarks` | `apps/editor/windows/StudioCameraBookmarksWindow.cpp` | Scene toolbar bookmarks (106) |
+| `studio_camera_bookmarks` | `apps/editor/windows/StudioCameraBookmarksWindow.cpp` | Scene toolbar bookmarks (106). Restore the saved vertical field of view and verify compatibility with bookmarks without lens data. |
 | `studio_extensions` | `apps/editor/windows/StudioExtensionsWindow.cpp` | Extensions panel: editor/extensions.lua widgets, commands, Scene gizmos (111) |
 | `studio_frame_capture` | `apps/editor/windows/StudioFrameCaptureWindow.cpp` | Frame Capture panel: frame times, draw calls, capture (111) |
 | `studio_snapshot_diff` | `apps/editor/windows/StudioSnapshotDiffWindow.cpp` | Snapshot Diff panel (110) |
