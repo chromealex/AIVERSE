@@ -11,6 +11,7 @@
     "docs/agent-handoffs/direct3d-renderer-initial.md",
     "docs/agent-handoffs/direct3d-renderer-stage1.md",
     "docs/agent-handoffs/direct3d-renderer-stage2.md",
+    "docs/agent-handoffs/direct3d-window-resize.md",
     "docs/agent-handoffs/render-backends-sampled-textures.md",
     "docs/devlog/systems.json",
     "docs/direct3d.md",

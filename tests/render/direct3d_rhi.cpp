@@ -1,13 +1,26 @@
 #include "engine/gfx/Gfx.h"
 #include "engine/gfx/d3d/Direct3D.h"
+#include <windows.h>
 #include <cstdio>
 #include <cstring>
 using namespace aiverse::gfx;
 int main(int argc,char** argv) {
-    if(argc!=2 || (std::strcmp(argv[1],"11") && std::strcmp(argv[1],"9")))return 2;
+    if((argc!=2 && argc!=3) || (std::strcmp(argv[1],"11") && std::strcmp(argv[1],"9")))return 2;
     const bool modern=std::strcmp(argv[1],"11")==0;
+    const bool windowed=argc==3 && std::strcmp(argv[2],"--window")==0;
+    if(argc==3 && !windowed)return 2;
+    struct FocusWindow {
+        HWND handle{};
+        ~FocusWindow(){if(handle)DestroyWindow(handle);}
+    } window;
+    if(windowed) {
+        window.handle=CreateWindowExW(0,L"STATIC",L"AIVERSE presenter test",WS_POPUP,0,0,25,21,
+                                      nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
+        if(!window.handle)return 1;
+    }
     std::string error;
-    auto device=createDirect3DDevice(modern?Direct3DVersion::D3D11:Direct3DVersion::D3D9,17,15,nullptr,modern,error);
+    const auto factory=windowed?createDirect3DWindowDevice:createDirect3DDevice;
+    auto device=factory(modern?Direct3DVersion::D3D11:Direct3DVersion::D3D9,17,15,window.handle,modern,error);
     if(!device){std::fprintf(stderr,"%s\n",error.c_str());return 1;}
     const char* sm4=R"(
         struct Input {float4 pos:TEXCOORD0;float4 rgba:TEXCOORD1;};
@@ -42,13 +55,14 @@ int main(int argc,char** argv) {
             const uint8_t green[]={0,255,0,255};
             device->updateTexture(texture,1,0,1,1,green,4);
         }
-        device->beginFrame(17,15);
+        const int width=frame?23:17,height=frame?19:15;
+        device->beginFrame(width,height);
         PassDesc pass;pass.clearColor[0]=pass.clearColor[1]=0;pass.clearColor[2]=1;
         device->beginPass(pass);device->setPipeline(pipeline);device->setVertexBuffer(vb);
         device->setIndexBuffer(ib);device->setTexture(0,texture);device->drawIndexed(3);device->endPass();
         device->captureNextFrame([&](int w,int h,std::vector<uint8_t> rgba) {
-            size_t center=4*(7*17+8);
-            if(w==17 && h==15 && rgba.size()==17*15*4 && rgba[0]==0 && rgba[2]==255 &&
+            size_t center=4*(size_t(height/2)*width+width/2);
+            if(w==width && h==height && rgba.size()==size_t(w)*h*4 && rgba[0]==0 && rgba[2]==255 &&
                rgba[center+(frame?1:0)]==255 && rgba[center+2]==0)++captured;
         });
         device->endFrame();

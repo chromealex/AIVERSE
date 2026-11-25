@@ -23,6 +23,9 @@ bool checked(HRESULT result,const char* operation,std::string& error) {
     error=std::string(operation)+" failed ("+hex+")";
     return false;
 }
+bool validSize(int width,int height) {
+    return width>0 && height>0 && width<=8192 && height<=8192 && uint64_t(width)*height<=16777216;
+}
 bool validClear(const std::array<float,4>& clear,std::string& error) {
     if(std::all_of(clear.begin(),clear.end(),[](float c){return std::isfinite(c) && c>=0 && c<=1;}))return true;
     error="clear color must contain four finite values in [0,1]";return false;
@@ -32,8 +35,9 @@ class Target11 final : public Direct3DTarget {
     ComPtr<ID3D11DeviceContext> context;
     ComPtr<ID3D11Texture2D> color, staging;
     ComPtr<ID3D11RenderTargetView> view;
-    const int width,height;
-    bool active=false;
+    ComPtr<IDXGISwapChain> swapChain;
+    int width,height;
+    bool active=false,hasContent=false;
 public:
     Target11(int w,int h):width(w),height(h){}
     bool init(bool warp,std::string& error) {
@@ -42,14 +46,43 @@ public:
         if(!checked(D3D11CreateDevice(nullptr,warp?D3D_DRIVER_TYPE_WARP:D3D_DRIVER_TYPE_HARDWARE,
             nullptr,0,&level,1,D3D11_SDK_VERSION,device.GetAddressOf(),nullptr,context.GetAddressOf()),
             "D3D11CreateDevice",error))return false;
+        return resize(width,height,error);
+    }
+    bool resize(int w,int h,std::string& error) override {
+        if(active || !validSize(w,h)){error="invalid Direct3D 11 target resize";return false;}
+        ComPtr<ID3D11Texture2D> newColor,newStaging;
+        ComPtr<ID3D11RenderTargetView> newView;
         D3D11_TEXTURE2D_DESC desc{};
-        desc.Width=UINT(width);desc.Height=UINT(height);desc.MipLevels=1;desc.ArraySize=1;
+        desc.Width=UINT(w);desc.Height=UINT(h);desc.MipLevels=1;desc.ArraySize=1;
         desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;desc.SampleDesc.Count=1;
         desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_RENDER_TARGET;
-        if(!checked(device->CreateTexture2D(&desc,nullptr,color.GetAddressOf()),"CreateTexture2D(target)",error) ||
-           !checked(device->CreateRenderTargetView(color.Get(),nullptr,view.GetAddressOf()),"CreateRenderTargetView",error))return false;
+        if(!checked(device->CreateTexture2D(&desc,nullptr,newColor.GetAddressOf()),"CreateTexture2D(target)",error) ||
+           !checked(device->CreateRenderTargetView(newColor.Get(),nullptr,newView.GetAddressOf()),"CreateRenderTargetView",error))return false;
         desc.Usage=D3D11_USAGE_STAGING;desc.BindFlags=0;desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
-        return checked(device->CreateTexture2D(&desc,nullptr,staging.GetAddressOf()),"CreateTexture2D(readback)",error);
+        if(!checked(device->CreateTexture2D(&desc,nullptr,newStaging.GetAddressOf()),"CreateTexture2D(readback)",error))return false;
+        if(swapChain && !checked(swapChain->ResizeBuffers(0,w,h,DXGI_FORMAT_UNKNOWN,0),"ResizeBuffers",error))return false;
+        color=std::move(newColor);staging=std::move(newStaging);view=std::move(newView);
+        width=w;height=h;hasContent=false;return true;
+    }
+    bool attachWindow(void* nativeWindow,std::string& error) override {
+        HWND window=static_cast<HWND>(nativeWindow);
+        if(active || swapChain || !IsWindow(window)){error="invalid Direct3D 11 presentation window";return false;}
+        ComPtr<IDXGIDevice> dxgi;ComPtr<IDXGIAdapter> adapter;ComPtr<IDXGIFactory> factory;
+        if(!checked(device.As(&dxgi),"QueryInterface(IDXGIDevice)",error) ||
+           !checked(dxgi->GetAdapter(adapter.GetAddressOf()),"GetAdapter",error) ||
+           !checked(adapter->GetParent(IID_PPV_ARGS(factory.GetAddressOf())),"GetParent(IDXGIFactory)",error))return false;
+        DXGI_SWAP_CHAIN_DESC d{};
+        d.BufferDesc.Width=width;d.BufferDesc.Height=height;d.BufferDesc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
+        d.SampleDesc.Count=1;d.BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT;d.BufferCount=1;
+        d.Windowed=TRUE;d.OutputWindow=window;d.SwapEffect=DXGI_SWAP_EFFECT_DISCARD;
+        return checked(factory->CreateSwapChain(device.Get(),&d,swapChain.GetAddressOf()),"CreateSwapChain",error);
+    }
+    bool present(std::string& error) override {
+        if(active || !hasContent || !swapChain){error="no presentable Direct3D 11 frame";return false;}
+        ComPtr<ID3D11Texture2D> back;
+        if(!checked(swapChain->GetBuffer(0,IID_PPV_ARGS(back.GetAddressOf())),"GetBuffer(swapchain)",error))return false;
+        context->CopyResource(back.Get(),color.Get());back.Reset();
+        return checked(swapChain->Present(1,0),"Present(DXGI)",error);
     }
     ID3D11Device* device11() const override {return device.Get();}
     ID3D11DeviceContext* context11() const override {return context.Get();}
@@ -66,7 +99,10 @@ public:
         context->OMSetRenderTargets(1,&target,nullptr);
         D3D11_VIEWPORT viewport{0,0,float(width),float(height),0,1};
         context->RSSetViewports(1,&viewport);
-        active=true;error.clear();return true;
+        if(!hasContent) {
+            const float black[4]{};context->ClearRenderTargetView(view.Get(),black);
+        }
+        hasContent=true;active=true;error.clear();return true;
     }
     bool end(std::string& error) override {
         if(!active){error="no active Direct3D 11 pass";return false;}
@@ -74,6 +110,7 @@ public:
         error.clear();return true;
     }
     bool readRgba(std::vector<uint8_t>& pixels,std::string& error) override {
+        if(!hasContent){error="no rendered Direct3D content";return false;}
         if(active && !end(error))return false;
         std::vector<uint8_t> result(size_t(width)*height*4);
         context->CopyResource(staging.Get(),color.Get());
@@ -96,8 +133,16 @@ class Target9 final : public Direct3DTarget {
     ComPtr<IDirect3D9> api;
     ComPtr<IDirect3DDevice9> device;
     ComPtr<IDirect3DSurface9> target,staging;
-    const int width,height;
-    bool active=false;
+    HWND presentationWindow=nullptr;
+    ComPtr<IDirect3DSwapChain9> swapChain;
+    bool makeSwapChain(int w,int h,HWND window,ComPtr<IDirect3DSwapChain9>& result,std::string& error) {
+        D3DPRESENT_PARAMETERS pp{};pp.Windowed=TRUE;pp.BackBufferWidth=w;pp.BackBufferHeight=h;
+        pp.BackBufferFormat=D3DFMT_UNKNOWN;pp.SwapEffect=D3DSWAPEFFECT_DISCARD;pp.hDeviceWindow=window;
+        pp.PresentationInterval=D3DPRESENT_INTERVAL_ONE;
+        return checked(device->CreateAdditionalSwapChain(&pp,result.GetAddressOf()),"CreateAdditionalSwapChain",error);
+    }
+    int width,height;
+    bool active=false,hasContent=false;
 public:
     Target9(int w,int h):width(w),height(h){}
     ~Target9() override {if(active)device->EndScene();}
@@ -115,10 +160,32 @@ public:
         pp.BackBufferFormat=D3DFMT_UNKNOWN;pp.hDeviceWindow=window;
         if(!checked(api->CreateDevice(D3DADAPTER_DEFAULT,D3DDEVTYPE_HAL,window,D3DCREATE_SOFTWARE_VERTEXPROCESSING,
                         &pp,device.GetAddressOf()),"CreateDevice(D3D9 HAL)",error))return false;
-        if(!checked(device->CreateRenderTarget(width,height,D3DFMT_A8R8G8B8,D3DMULTISAMPLE_NONE,0,FALSE,
-                        target.GetAddressOf(),nullptr),"CreateRenderTarget",error))return false;
-        return checked(device->CreateOffscreenPlainSurface(width,height,D3DFMT_A8R8G8B8,D3DPOOL_SYSTEMMEM,
-                     staging.GetAddressOf(),nullptr),"CreateOffscreenPlainSurface",error);
+        return resize(width,height,error);
+    }
+    bool resize(int w,int h,std::string& error) override {
+        if(active || !validSize(w,h)){error="invalid Direct3D 9 target resize";return false;}
+        ComPtr<IDirect3DSurface9> newTarget,newStaging;
+        ComPtr<IDirect3DSwapChain9> newChain;
+        if(!checked(device->CreateRenderTarget(w,h,D3DFMT_A8R8G8B8,D3DMULTISAMPLE_NONE,0,FALSE,
+                        newTarget.GetAddressOf(),nullptr),"CreateRenderTarget",error) ||
+           !checked(device->CreateOffscreenPlainSurface(w,h,D3DFMT_A8R8G8B8,D3DPOOL_SYSTEMMEM,
+                     newStaging.GetAddressOf(),nullptr),"CreateOffscreenPlainSurface",error))return false;
+        if(presentationWindow && !makeSwapChain(w,h,presentationWindow,newChain,error))return false;
+        target=std::move(newTarget);staging=std::move(newStaging);swapChain=std::move(newChain);
+        width=w;height=h;hasContent=false;return true;
+    }
+    bool attachWindow(void* nativeWindow,std::string& error) override {
+        HWND window=static_cast<HWND>(nativeWindow);
+        if(active || swapChain || !IsWindow(window)){error="invalid Direct3D 9 presentation window";return false;}
+        if(!makeSwapChain(width,height,window,swapChain,error))return false;
+        presentationWindow=window;return true;
+    }
+    bool present(std::string& error) override {
+        if(active || !hasContent || !swapChain){error="no presentable Direct3D 9 frame";return false;}
+        ComPtr<IDirect3DSurface9> back;
+        if(!checked(swapChain->GetBackBuffer(0,D3DBACKBUFFER_TYPE_MONO,back.GetAddressOf()),"GetBackBuffer",error) ||
+           !checked(device->StretchRect(target.Get(),nullptr,back.Get(),nullptr,D3DTEXF_NONE),"StretchRect(backbuffer)",error))return false;
+        return checked(swapChain->Present(nullptr,nullptr,nullptr,nullptr,0),"Present(D3D9)",error);
     }
     IDirect3DDevice9* device9() const override {return device.Get();}
     bool begin(const std::array<float,4>& clear,std::string& error) override {
@@ -131,15 +198,20 @@ public:
     }
     bool beginLoad(std::string& error) override {
         if(active){error="Direct3D 9 pass already active";return false;}
-        if(!checked(device->SetRenderTarget(0,target.Get()),"SetRenderTarget",error) ||
+        if(!checked(device->SetDepthStencilSurface(nullptr),"UnbindDepth",error) ||
+           !checked(device->SetRenderTarget(0,target.Get()),"SetRenderTarget",error) ||
            !checked(device->BeginScene(),"BeginScene",error))return false;
-        active=true;error.clear();return true;
+        if(!hasContent && !checked(device->Clear(0,nullptr,D3DCLEAR_TARGET,0,1,0),"Clear(initial target)",error)){
+            device->EndScene();return false;
+        }
+        hasContent=true;active=true;error.clear();return true;
     }
     bool end(std::string& error) override {
         if(!active){error="no active Direct3D 9 pass";return false;}
         active=false;return checked(device->EndScene(),"EndScene",error);
     }
     bool readRgba(std::vector<uint8_t>& pixels,std::string& error) override {
+        if(!hasContent){error="no rendered Direct3D content";return false;}
         if(active && !end(error))return false;
         std::vector<uint8_t> result(size_t(width)*height*4);
         if(!checked(device->GetRenderTargetData(target.Get(),staging.Get()),"GetRenderTargetData",error))return false;
@@ -159,7 +231,7 @@ public:
 }
 std::unique_ptr<Direct3DTarget> createDirect3DTarget(Direct3DVersion version,int width,int height,
         void* nativeWindow,bool warp,std::string& error) {
-    if(width<=0 || height<=0 || width>8192 || height>8192 || uint64_t(width)*height>16777216) {
+    if(!validSize(width,height)) {
         error="invalid Direct3D target size";return {};
     }
     error.clear();

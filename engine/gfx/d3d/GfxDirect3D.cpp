@@ -65,6 +65,7 @@ class WindowsDevice final : public Device {
     std::unique_ptr<Direct3DTarget> target;
     DeviceInfo identity;
     int width,height;
+    bool windowed=false;
     std::string error;
     std::unordered_map<uint32_t,Buffer> buffers;
     std::unordered_map<uint32_t,Shader> shaders;
@@ -91,16 +92,20 @@ public:
     WindowsDevice(std::unique_ptr<Direct3DTarget> t,Direct3DVersion version,int w,int h):
         target(std::move(t)),identity{version==Direct3DVersion::D3D11?Backend::Direct3D11:Backend::Direct3D9,
         true,true,version==Direct3DVersion::D3D11?"Direct3D 11":"Direct3D 9"},width(w),height(h){}
-    bool init() {
-        if(dx9())return check(dx9()->CreateDepthStencilSurface(width,height,D3DFMT_D16,
-            D3DMULTISAMPLE_NONE,0,FALSE,screenDepth9.GetAddressOf(),nullptr),"CreateDepthStencilSurface");
+    bool init() {return resizeDepth(width,height,screenDepth9,screenDepth11);}
+    bool attach(void* window) {windowed=target->attachWindow(window,error);return windowed;}
+private:
+    bool resizeDepth(int w,int h,ComPtr<IDirect3DSurface9>& z9,ComPtr<ID3D11DepthStencilView>& z11) {
+        if(dx9())return check(dx9()->CreateDepthStencilSurface(w,h,D3DFMT_D16,
+            D3DMULTISAMPLE_NONE,0,FALSE,z9.GetAddressOf(),nullptr),"CreateDepthStencilSurface");
         D3D11_TEXTURE2D_DESC desc{};
-        desc.Width=width;desc.Height=height;desc.ArraySize=desc.MipLevels=desc.SampleDesc.Count=1;
+        desc.Width=w;desc.Height=h;desc.ArraySize=desc.MipLevels=desc.SampleDesc.Count=1;
         desc.BindFlags=D3D11_BIND_DEPTH_STENCIL;desc.Format=DXGI_FORMAT_D32_FLOAT;
         ComPtr<ID3D11Texture2D> texture;
         return check(dx11()->CreateTexture2D(&desc,nullptr,texture.GetAddressOf()),"CreateTexture2D(depth)") &&
-               check(dx11()->CreateDepthStencilView(texture.Get(),nullptr,screenDepth11.GetAddressOf()),"CreateDepthStencilView");
+               check(dx11()->CreateDepthStencilView(texture.Get(),nullptr,z11.GetAddressOf()),"CreateDepthStencilView");
     }
+public:
     const DeviceInfo& info() const override {return identity;}
     const std::string& lastError() const override {return error;}
     bool supports(PixelFormat f) const override {return f==PixelFormat::RGBA8;}
@@ -259,18 +264,30 @@ public:
     }
     void destroyPipeline(PipelineHandle h) override {pipelines.erase(h.id);}
     void beginFrame(int w,int h) override {
-        if(frame || w!=width || h!=height){error="Direct3D offscreen frame size must match target";return;}
+        if(frame || w<=0 || h<=0 || w>8192 || h>8192 || uint64_t(w)*h>16777216){error="invalid Direct3D beginFrame";return;}
+        if(w!=width || h!=height){
+            ComPtr<IDirect3DSurface9> newDepth9;ComPtr<ID3D11DepthStencilView> newDepth11;
+            if(!resizeDepth(w,h,newDepth9,newDepth11) || !target->resize(w,h,error))return;
+            screenDepth9=std::move(newDepth9);screenDepth11=std::move(newDepth11);width=w;height=h;
+        }
         fbW_=w;fbH_=h;frame=true;
     }
     void endFrame() override {
         if(!frame || pass){error="invalid Direct3D endFrame";return;}
         frame=false;
         auto fn=std::move(capture);capture={};
+        std::vector<uint8_t> rgba;
         if(fn) {
-            std::vector<uint8_t> rgba;
             std::string readError;
-            if(target->readRgba(rgba,readError))fn(width,height,std::move(rgba));
-            else {error=std::move(readError);fn(0,0,{});}
+            if(!target->readRgba(rgba,readError))error=std::move(readError);
+        }
+        if(windowed) {
+            std::string presentError;
+            if(!target->present(presentError))error=std::move(presentError);
+        }
+        if(fn) {
+            if(rgba.empty())fn(0,0,{});
+            else fn(width,height,std::move(rgba));
         }
     }
     void captureNextFrame(CaptureFn cb) override {capture=std::move(cb);}
@@ -444,11 +461,20 @@ private:
     }
 };
 }
-std::unique_ptr<Device> createDirect3DDevice(Direct3DVersion version,int width,int height,void* nativeWindow,bool warp,std::string& error) {
-    auto target=createDirect3DTarget(version,width,height,nativeWindow,warp,error);
+namespace {
+std::unique_ptr<Device> makeDevice(Direct3DVersion version,int width,int height,void* window,bool warp,
+                                   bool present,std::string& error) {
+    auto target=createDirect3DTarget(version,width,height,window,warp,error);
     if(!target)return {};
     auto device=std::make_unique<WindowsDevice>(std::move(target),version,width,height);
-    if(!device->init()){error=device->lastError();return {};}
+    if(!device->init() || (present && !device->attach(window))){error=device->lastError();return {};}
     return device;
+}
+}
+std::unique_ptr<Device> createDirect3DDevice(Direct3DVersion version,int width,int height,void* window,bool warp,std::string& error) {
+    return makeDevice(version,width,height,window,warp,false,error);
+}
+std::unique_ptr<Device> createDirect3DWindowDevice(Direct3DVersion version,int width,int height,void* window,bool warp,std::string& error) {
+    return makeDevice(version,width,height,window,warp,true,error);
 }
 }
