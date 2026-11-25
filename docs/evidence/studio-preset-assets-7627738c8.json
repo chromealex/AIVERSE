@@ -1,0 +1,11 @@
+{
+  "sha": "7627738c80b428cb1d69eec23f38386685b1b247",
+  "argv": [
+    "python3.12",
+    "-B",
+    "tests/shader_graph/install_material_presets.py"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-preset-assets-7627738c8.log.txt",
+  "sha256": "0e32cf5bb96fa1036cae2e27776843246962a6c3d05aa93be58a951c1c934bc2"
+}
