@@ -36,9 +36,10 @@
 .rules__matrix th,.rules__matrix td{padding:5px 9px;border:1px solid var(--au-line);text-align:right}
 .rules-container{container-type:inline-size;height:100%;min-width:0;min-height:0}
 @container (max-width:420px){
-  .rules{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
-  .rules__list{max-height:145px;border-right:0;border-bottom:1px solid var(--au-line)}
+  .rules{grid-template-columns:minmax(0,1fr);grid-template-rows:fit-content(44%) minmax(0,1fr)}
+  .rules__list{overflow:auto;overscroll-behavior:contain;border-right:0;border-bottom:1px solid var(--au-line)}
   .rules__section{grid-template-columns:auto minmax(0,1fr);align-items:center}
-  .rules__types{min-height:28px}
+  .rules__list>*{flex:none}
+  .rules__types{overflow:visible}
   .rules__rawbox textarea{min-height:140px}
 }
