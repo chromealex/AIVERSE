@@ -7,7 +7,7 @@ import {emptyShaderHistory,shaderHistory} from './shaderGraphHistory';
 import './graphSurface.css';
 import './ShaderGraphPanel.css';
 
-export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
+export default function ShaderGraphPanel({projectPath,previewTitle}:{projectPath:string;previewTitle?:string|null}) {
  const [names,setNames]=useState<string[]>([]);
  const [operations,setOperations]=useState<StudioShaderGraphOp[]>([]);
  const [selectedOp,setSelectedOp]=useState('');
@@ -103,6 +103,15 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
   if(next===draft){setError('This connection would create a cycle.');return;}
   setDraft(next);setSelectedNode(target);setWireSource('');setMessage('');setError('');
  };
+ const previewDraft=async(stop:boolean)=>{
+  if(!draft||busy)return;
+  setBusy(true);setError('');
+  try{
+   if(stop)await invoke('studio.materialPreview',{name:''});
+   else await invoke('studio.shaderGraphPreview',{name:selected,graph:draft,projectPath});
+   setMessage(stop?'Returned to the map.':'Material draft sent to the Scene GPU preview.');
+  }catch(e){setError(String(e));}finally{setBusy(false);}
+ };
  const createGraph=async()=>{
   if(busy||dirty)return;
   setBusy(true);setError('');
@@ -183,6 +192,8 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
          value={chosenOp?.id??''} onChange={event=>setSelectedOp(event.target.value)}>
          {compatibleOps.map(op=><option key={op.id} value={op.id}>{op.id}</option>)}
        </select>
+       {draft?.domain==='material'&&<button disabled={busy} onClick={()=>void previewDraft(false)}>Preview draft in Scene</button>}
+       {previewTitle?.startsWith('Shader Graph / ')&&<button disabled={busy} onClick={()=>void previewDraft(true)}>Return to map</button>}
        <button disabled={!draft||busy||!chosenOp} onClick={createNode}>+ Node</button>
        <button disabled={!inspected||busy} onClick={deleteNode}>Delete node</button>
        <button disabled={!history.past.length||busy} onClick={()=>{dispatch({type:'undo'});setWireSource('');setError('');setMessage('');}}>Undo edit</button>

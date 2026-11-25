@@ -422,6 +422,7 @@ private:
     bool facialMode_=false,facialReady_=false;
     std::string facialError_;
     uint64_t materialRevision_ = std::numeric_limits<uint64_t>::max();
+    std::string graphPreviewError_;
     bool materialMode_ = false;
     uint64_t terrainRevision_ = std::numeric_limits<uint64_t>::max();
     float terrainLevelHeight_ = 1.5f;

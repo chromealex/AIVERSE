@@ -4,6 +4,7 @@
 #include "apps/studio-native/StudioLightingPreview.h"
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iostream>
 #include <thread>
 #include <chrono>
@@ -92,6 +93,26 @@ int aiverseMain(int argc,char** argv) { @autoreleasepool {
         // A center-screen hit proves that the camera follows the negative scene.
         if(scene.pick(80,80,160,160,doc,true).empty())
             throw std::runtime_error("FPS camera misses authored scene");
+        for(int channel=0;channel<2;++channel){
+            Json graph=Json::parse(R"({"version":1,"domain":"material","nodes":[{"op":"constant","id":"swatch","value":[1,0,0,1]}],"outputs":{"color":"swatch","emission":"swatch"}})");
+            if(channel==1)graph.find("nodes")->at(0).set("value",Json::parse("[0,1,0,1]"));
+            Json factors=Json::object();factors.set("studioGraphDraft",graph);
+            auto draw=[&]{scene.frame(160,160,doc,true,"","Shader Graph / test",factors,channel+10);};
+            for(int i=0;i<15;++i)draw();
+            auto sample=std::make_shared<std::promise<std::vector<uint8_t>>>();
+            auto result=sample->get_future();
+            scene.captureNextFrame([sample](int,int,std::vector<uint8_t> rgba){sample->set_value(std::move(rgba));});
+            for(int i=0;i<50&&result.wait_for(std::chrono::milliseconds(4))!=std::future_status::ready;++i)draw();
+            if(result.wait_for(std::chrono::seconds(2))!=std::future_status::ready)throw std::runtime_error("graph swatch capture timeout");
+            const auto pixels=result.get();
+            if(pixels.size()!=160*160*4)throw std::runtime_error("graph swatch capture size");
+            int red=0,green=0;
+            for(int y=72;y<88;++y)for(int x=72;x<88;++x){
+                const auto i=(y*160+x)*4;red+=pixels[i];green+=pixels[i+1];
+            }
+            if((channel==0?red-green:green-red)<256*8)
+                throw std::runtime_error("material graph swatch did not change on GPU: "+scene.lightingStatus()+" red="+std::to_string(red)+" green="+std::to_string(green));
+        }
         scene.frame(160,160,doc,true,"","Material",Json::object(),1);
         if(scene.lightingStatus().find("Material preview · GI: off")==std::string::npos)
             throw std::runtime_error("material preview reports stale GI");

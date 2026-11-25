@@ -1922,6 +1922,7 @@ void StudioHost::afterSessionReply(const Json& req, const Json& reply) {
         onScene([&] { preview_->resetCamera(); });
         mapSnapshot_.reset(); rulesSnapshot_.reset();
     }
+    if (method=="studio.shaderGraphPreview") sendEvent("material.preview",reply["result"].getStr("name"));
     if (method == "studio.materialPreview") sendEvent("material.preview", req["params"].getStr("name"));
     if (documentChangingMethods().count(method) || (method == "studio.op" && reply["result"].getBool("changed")))
         sendEvent("document.changed", "");

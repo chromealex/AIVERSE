@@ -181,6 +181,14 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(call("studio.op",create).has("error"));
        auto graph=call("studio.shaderGraphGet",R"({"name":"studio_tint"})");
        AIVERSE_TEST_CHECK(graph["result"]["graph"].getStr("domain")=="material");
+       auto preview=Json::object();preview.set("projectPath",Json::string(session.workspace().project.dir));
+       preview.set("name",Json::string("studio_tint"));preview.set("graph",graph["result"]["graph"]);
+       AIVERSE_TEST_CHECK(!call("studio.shaderGraphPreview",preview.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(session.previewMaterialFactors()["studioGraphDraft"]==graph["result"]["graph"]);
+       preview.set("graph",Json::object());
+       AIVERSE_TEST_CHECK(call("studio.shaderGraphPreview",preview.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(!call("studio.materialPreview",R"({"name":""})").has("error"));
+       AIVERSE_TEST_CHECK(session.previewMaterialName().empty());
        AIVERSE_TEST_CHECK(!call("studio.op",R"({"op":"shader_graph_apply","params":{"name":"studio_tint","target":"studio_brass"}})").has("error"));
        AIVERSE_TEST_CHECK(call("studio.op",R"({"op":"shader_graph_create","params":{"name":"bad_domain","domain":"invalid"}})").has("error"));
    }

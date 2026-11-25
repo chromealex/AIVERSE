@@ -1,3 +1,4 @@
+#include "engine/view/AppearanceAuthoringService.h"
 #include "apps/editor/AuthoringWater.h"
 #include "apps/studio-native/StudioScene.h"
 #include "apps/studio-native/StudioFont6x11.h"
@@ -228,25 +229,29 @@ std::vector<std::string> StudioScene::takeFinishedThumbnails() {
     std::lock_guard<std::mutex> lock(thumbShared_->mutex);
     return std::exchange(thumbShared_->done,{});
 }
-std::unique_ptr<render::Model> StudioScene::loadContentModel(const std::string& projectPath,const std::string& asset) {
+static bool readPreviewAsset(const std::filesystem::path& root,const std::string& name,std::string& out) {
     namespace fs=std::filesystem;
-    if(asset.rfind("content/",0)!=0 || asset.size()>512 || projectPath.empty())return nullptr;
-    const fs::path root=fs::path(projectPath)/"content";
-    // Same containment as the Scene's model loader: no "..", no symlinks, content/ only.
-    auto read=[root](const std::string& name,std::string& out)->bool {
-        if(name.rfind("content/",0)!=0 || name.size()>512)return false;
-        const fs::path rel(name.substr(8));
-        if(rel.empty()||rel.is_absolute())return false;
-        fs::path file=root;
-        for(const auto& part:rel){ if(part.empty()||part=="."||part=="..")return false; file/=part;
-            std::error_code ec;const auto st=fs::symlink_status(file,ec);if(ec||fs::is_symlink(st))return false; }
+    const fs::path rel(name);
+    if(name.empty()||name.size()>512||rel.is_absolute()||rel.has_root_name())return false;
+    fs::path file=root;
+    for(const auto& part:rel){
+        if(part.empty()||part=="."||part=="..")return false;
+        file/=part;
         std::error_code ec;
-        if(!fs::is_regular_file(file,ec))return false;
-        const auto bytes=fs::file_size(file,ec);
-        if(ec||bytes>256ull*1024ull*1024ull)return false;
-        std::ifstream input(file,std::ios::binary);if(!input)return false;
-        out.assign(std::istreambuf_iterator<char>(input),std::istreambuf_iterator<char>());
-        return bool(input)||input.eof();
+        if(fs::is_symlink(fs::symlink_status(file,ec))||ec)return false;
+    }
+    std::error_code ec;
+    if(!fs::is_regular_file(file,ec))return false;
+    const auto size=fs::file_size(file,ec);
+    if(ec||size>256ull*1024ull*1024ull)return false;
+    std::ifstream input(file,std::ios::binary);if(!input)return false;
+    out.resize(size_t(size));
+    return bool(input.read(out.data(),std::streamsize(size)));
+}
+std::unique_ptr<render::Model> StudioScene::loadContentModel(const std::string& projectPath,const std::string& asset) {
+    if(asset.rfind("content/",0)!=0 || asset.size()>512 || projectPath.empty())return nullptr;
+    auto read=[&projectPath](const std::string& name,std::string& out){
+        return name.rfind("content/",0)==0&&readPreviewAsset(projectPath,name,out);
     };
     try {
         auto model=render::loadModel(asset,read);
@@ -1591,24 +1596,45 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     if (materialRevision_ != previewRevision) {
         materialRevision_ = previewRevision;
+        graphPreviewError_.clear();
         if (materialRequested) {
-            if (!materialSphere_) {
-                // Same primitive->Model->GPU path used by AIVERSE's HDR material gallery.
+            const bool graphDraft=previewFactors.has("studioGraphDraft")&&previewName.rfind("Shader Graph / ",0)==0;
+            if (!materialSphere_ || graphDraft || materialSphere_->materials.at(0).shaderGraph) {
                 render::MeshBuilder sphere;
                 sphere.color(render::rgba(255,255,255));
                 sphere.sphere({0,0,0},1.0f,32,48);
-                render::Material base;
-                base.vertexColors=false;
-                materialSphere_ = render::modelFromParts("studio/pbr-preview",
-                    {{"PBR sphere",&sphere,base,render::mat4{}}});
-                if (!materialSphere_) throw std::runtime_error("Material preview geometry missing");
-                materialSphere_->batching.autoLod=false;
-                render::prepareModelUpload(*materialSphere_);
-                if (!render::uploadModel(*device_,*materialSphere_))
-                    throw std::runtime_error("Material preview GPU upload failed");
+                render::Material base=studioPbrPreviewMaterial(previewFactors,previewName);
+                auto next=render::modelFromParts("studio/pbr-preview",{{"PBR sphere",&sphere,base,render::mat4{}}});
+                try {
+                    if(!next)throw std::runtime_error("Material preview geometry missing");
+                    if(graphDraft){
+                        Json ref=Json::object();ref.set("shaderGraph",previewFactors["studioGraphDraft"]);
+                        view::AppearanceAuthoringService::applyMaterial(next->materials.at(0),Json::object(),ref,
+                            [&](const std::string& path){
+                                std::string bytes;
+                                render::Image image;image.name=path;
+                                if(!readPreviewAsset(projectRoot,path,bytes)||!render::decodeImage(bytes,image))
+                                    throw std::runtime_error("Cannot load graph texture "+path);
+                                next->images.push_back(std::move(image));
+                                return int(next->images.size()-1);
+                            },[](const std::string& message){throw std::runtime_error(message);});
+                    }
+                    next->batching.autoLod=false;
+                    render::prepareModelUpload(*next);
+                    if(!render::uploadModel(*device_,*next))throw std::runtime_error("Material preview GPU upload failed");
+                    if(materialSphere_){
+                        if(!device_->waitForResourceIdle())throw std::runtime_error("Material preview GPU busy");
+                        releasePreviewModel(*materialSphere_);
+                    }
+                    materialSphere_=std::move(next);
+                } catch(const std::exception& e){
+                    if(next)releasePreviewModel(*next);
+                    graphPreviewError_=e.what();
+                }
+            }else{
+                materialSphere_->materials.at(0)=studioPbrPreviewMaterial(previewFactors,previewName);
+                materialSphere_->markMaterialChanged();
             }
-            materialSphere_->materials.at(0)=studioPbrPreviewMaterial(previewFactors,previewName);
-            materialSphere_->markMaterialChanged(); // invalidate renderer-owned material signature
         }
     }
     if (materialMode_ != materialRequested) {
@@ -1617,7 +1643,9 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         cameraInitialized_=false;
     }
     if (materialMode_) {
-        lightingStatus_="Material preview · GI: off · Direct: standard";
+        lightingStatus_=graphPreviewError_.empty()
+            ? (previewFactors.has("studioGraphDraft")?previewName+" · GPU material preview":"Material preview · GI: off · Direct: standard")
+            : graphPreviewError_;
         if (!cameraInitialized_) {
             camera_.target={0,0,0};
             camera_.distance=4.3f;
@@ -1637,7 +1665,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         renderer_.lighting.groundColor={.27f,.27f,.31f};
         renderer_.lighting.fogDensity=0;
         renderer_.lights.add({1.5f,2.4f,1.6f},6,{1,.9f,.78f},2.5f);
-        if (materialSphere_) {
+        if (materialSphere_ && graphPreviewError_.empty()) {
             render::ModelDraw sample;
             sample.model=materialSphere_.get();
             renderer_.drawModel(sample);

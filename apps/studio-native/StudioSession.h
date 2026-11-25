@@ -30,7 +30,7 @@ public:
     std::vector<std::string> selectedObjectIds() const;
     const std::set<std::string>& hiddenIds() const { return hidden_; }
     const std::set<std::string>& lockedIds() const { return locked_; }
-    const std::string& previewMaterialName() const { return previewMaterialName_; }
+    const std::string& previewMaterialName() const { return previewGraphTitle_.empty()?previewMaterialName_:previewGraphTitle_; }
     const Json& previewMaterialFactors() const { return previewMaterialFactors_; }
     uint64_t previewMaterialRevision() const { return previewMaterialRevision_; }
     // «Ветер» panel: preview wind + rig debug view (session only, not saved).
@@ -124,6 +124,7 @@ private:
     std::future<Json> metaHumanJob_;std::string metaHumanKey_;Json metaHumanResult_;
     Json humanBuildResult_=Json::object();
     std::string humanBuildProject_;
+    std::string previewGraphTitle_;
     std::string previewMaterialName_;
     Json previewMaterialFactors_;
     uint64_t previewMaterialRevision_ = 0;

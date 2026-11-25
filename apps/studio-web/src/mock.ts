@@ -80,6 +80,7 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
   }
   if (method === 'studio.shaderGraphCatalog') return {nodes:[]};
   if (method === 'studio.shaderGraphs') return {graphs:[]};
+  if(method==='studio.shaderGraphPreview')throw new Error('Open the native Studio for GPU preview');
   if (method === 'studio.shaderGraphGet' || method === 'studio.shaderGraphValidate' ||
       method === 'studio.shaderGraphSave')
     throw Error('Shader Graph documents require a native project');

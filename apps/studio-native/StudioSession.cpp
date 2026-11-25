@@ -540,10 +540,11 @@ Json StudioSession::snapshot() const {
     history.set("canRedo", Json::fromBool(ws_.map.canRedo()));
     result.set("history", std::move(history));
     result.set("mode", str("edit"));
-    result.set("previewMaterial", previewMaterialName_.empty() ? Json() : str(previewMaterialName_));
+    result.set("previewMaterial", previewMaterialName().empty() ? Json() : str(previewMaterialName()));
     return result;
 }
 void StudioSession::refreshMaterialPreview() {
+    previewGraphTitle_.clear();
     if (previewMaterialName_.empty()) {
         previewMaterialFactors_ = Json();
         ++previewMaterialRevision_;
@@ -1639,6 +1640,20 @@ Json StudioSession::dispatchImpl(const Json& request) {
                 // Do NOT serialize raw.glsl/msl/vertex* to JS.
                 reply.set("result",std::move(result));
             }
+        } else if (method=="studio.shaderGraphPreview") {
+            const auto name=params.getStr("name");
+            const auto& graph=params["graph"];
+            if(ws_.project.dir.empty()||params.getStr("projectPath")!=ws_.project.dir)
+                throw std::runtime_error("The preview project changed");
+            if(!validStudioShaderGraphName(name)||!validStudioShaderGraphDraft(graph)||graph.getStr("domain")!="material")
+                throw std::runtime_error("Expected a material Shader Graph draft");
+            Json request=Json::object();request.set("graph",graph);
+            const auto validated=ws_.call("shader_graph_validate",request,"studio");
+            if(validated.has("error"))throw std::runtime_error(validated.getStr("error"));
+            previewMaterialName_.clear();previewGraphTitle_="Shader Graph / "+name;
+            previewMaterialFactors_=Json::object();previewMaterialFactors_.set("studioGraphDraft",graph);
+            ++previewMaterialRevision_;
+            Json out=Json::object();out.set("name",str(previewGraphTitle_));reply.set("result",std::move(out));
         } else if (method == "studio.materialPreview") {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
             const std::string name=params.getStr("name");
