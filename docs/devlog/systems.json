@@ -3525,19 +3525,21 @@
         },
         {
           "id": "unit-selection-eligibility",
-          "status": "in-progress",
+          "status": "done",
           "title": "Выбор объектов по типу юнита",
           "titleEn": "Selection eligibility for unit types",
-          "text": "Выбор объектов по типу юнита",
-          "textEn": "Selection eligibility for unit types"
+          "text": "Щелчок, наведение и рамка пропускают юниты, у которых отключён выбор.",
+          "textEn": "Click, hover and box selection skip units whose type disables selection.",
+          "date": "2026-11-25"
         },
         {
           "id": "automatic-target-acquisition-order",
-          "status": "in-progress",
+          "status": "done",
           "title": "Порядок автоматического выбора цели",
           "titleEn": "Configurable automatic target order",
-          "text": "Порядок автоматического выбора цели",
-          "textEn": "Configurable automatic target order"
+          "text": "В правилах можно выбрать поиск ближайшей цели или обход ячеек по строкам.",
+          "textEn": "Choose distance-based targeting or a row-by-row map-cell scan in the rules.",
+          "date": "2026-11-25"
         }
       ]
     }
