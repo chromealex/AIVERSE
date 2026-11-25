@@ -16,6 +16,7 @@
     "demos/material-techniques/scripts/view/distance.lua",
     "demos/material-techniques/ui/hud/distance.rml",
     "docs/agent-handoffs/material-techniques-authoring-20261125.md",
+    "docs/agent-handoffs/material-techniques-cost.md",
     "docs/agent-handoffs/material-techniques-initial.md",
     "docs/agent-handoffs/material-techniques-metal-20261125.md",
     "docs/agent-handoffs/material-techniques-studio-20261125.md",
@@ -61,9 +62,12 @@
       ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Model owns technique rules, Renderer3D owns device and camera context. No simulation state changed.",
+      "evidence": [
+        "engine/render/MaterialTechnique.h",
+        "engine/render/Renderer3DModels.cpp"
+      ]
     },
     "native_api": {
       "status": "pass",
@@ -112,14 +116,18 @@
       ]
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "Ordered model technique rows select existing material references. This feature defines no graph or graph editor.",
+      "evidence": [
+        "docs/models.md"
+      ]
     },
     "performance": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Isolated CPU selector cost measured. Remaining large-scene GPU timing and draw-count acceptance pending.",
+      "evidence": [
+        "docs/agent-handoffs/material-techniques-cost.md"
+      ]
     },
     "platforms": {
       "status": "pass",
@@ -132,9 +140,12 @@
       ]
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Reuses Model and its batching sidecar, native GPU capabilities, existing material objects and Workspace. No additional packages.",
+      "evidence": [
+        "docs/models.md",
+        "engine/render/Model.cpp"
+      ]
     },
     "headless": {
       "status": "pass",
@@ -163,9 +174,14 @@
       ]
     },
     "handoff": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "CPU/Metal, MCP/Studio and playable Web verification were handed off on separate commits.",
+      "evidence": [
+        "docs/agent-handoffs/material-techniques-metal-20261125.md",
+        "docs/agent-handoffs/material-techniques-authoring-20261125.md",
+        "docs/agent-handoffs/material-techniques-web-20261125.md",
+        "docs/agent-handoffs/material-techniques-cost.md"
+      ]
     },
     "documentation": {
       "status": "pass",
@@ -176,8 +192,10 @@
     },
     "publishing": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Real screenshots and a runnable local Web demo exist. Integration and public deployment are pending.",
+      "evidence": [
+        "docs/agent-handoffs/material-techniques-web-20261125.md"
+      ]
     }
   },
   "integrations": {
