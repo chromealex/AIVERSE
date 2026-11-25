@@ -1,0 +1,13 @@
+{
+  "sha": "ed8f28147e945f2da07978d1e993b48daffa2538",
+  "argv": [
+    "npm",
+    "--prefix",
+    "apps/studio-web",
+    "run",
+    "test:web"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-hierarchy-groups-ed8f28147.log.txt",
+  "sha256": "a70711728576aa32e319a0c152f893f0de6edfb83678de8f6871b9e941c6f12b"
+}
