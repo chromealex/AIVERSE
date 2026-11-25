@@ -615,7 +615,7 @@ if(AIVERSE_OBJ)
 else()
     target_compile_definitions(aiverse_models PRIVATE AIVERSE_NO_OBJ=1)
 endif()
-option(AIVERSE_LEGACY_MODELS "Runtime VOX/VXL, PLY/STL, 3DS, DAE, MDX/MDL, 3DO and W3D import" ON)
+option(AIVERSE_LEGACY_MODELS "Runtime BSP, VOX/VXL, PLY/STL, 3DS, DAE, MDX/MDL, 3DO and W3D import" ON)
 if(AIVERSE_LEGACY_MODELS)
     target_sources(aiverse_models PRIVATE
         engine/render/ModelVox.cpp engine/render/ModelPly.cpp engine/render/ModelBsp.cpp
@@ -1933,7 +1933,7 @@ if(AIVERSE_BUILD_CATALOGVIEW AND (AIVERSE_DESKTOP OR EMSCRIPTEN))
         target_link_options(aiverse_catalogview PRIVATE
             "--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/apps/catalogview/shell.html"
             "-sFORCE_FILESYSTEM=1"
-            "-sEXPORTED_FUNCTIONS=['_main','_cv_select','_cv_shape','_cv_lod','_cv_wire','_cv_clusters','_cv_zoom']"
+            "-sEXPORTED_FUNCTIONS=['_main','_cv_select','_cv_shape','_cv_lod','_cv_wire','_cv_clusters','_cv_zoom','_cv_bsp_layers']"
             "-sEXPORTED_RUNTIME_METHODS=['FS','ccall','UTF8ToString']")
         set_property(TARGET aiverse_catalogview APPEND PROPERTY LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/apps/catalogview/shell.html")
     endif()

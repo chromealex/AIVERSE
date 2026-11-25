@@ -3173,7 +3173,8 @@
           "textEn": "Render scene objects and independently animated models into UI elements through an offscreen texture."
         },
         {
-          "status": "in-progress",
+          "status": "done",
+          "date": "2026-11-25",
           "id": "quake3-bsp",
           "title": "Уровни Quake III BSP с видимостью по кластерам, текстурами и запечённым светом",
           "titleEn": "Load Quake III BSP levels with cluster visibility, textures and baked lightmaps"

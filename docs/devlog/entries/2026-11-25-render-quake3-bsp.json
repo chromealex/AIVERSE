@@ -1,0 +1,49 @@
+{
+  "id": "2026-11-25-render-quake3-bsp",
+  "date": "2026-11-25",
+  "system": "render",
+  "status": "done",
+  "branch": "codex/render-capabilities-20261125",
+  "commit": "d45befebc",
+  "author": "render",
+  "title": "Уровни Quake III с текстурами и запечённым светом",
+  "titleEn": "Quake III levels with textures and baked lighting",
+  "summary": "AIVERSE открыл оригинальный уровень Egyptian Trouble из OpenArena. Материалы используют свою текстуру, а каждая освещённая поверхность получает свою страницу запечённого света.",
+  "summaryEn": "AIVERSE opened the original Egyptian Trouble level from OpenArena. Materials use their diffuse images and each lightmapped surface receives its own baked page.",
+  "body": [
+    "Камера расположена в точке наблюдения, указанной авторами карты. Из 3073 поверхностей её кластер допускает 1408. Криволинейные фрагменты сохраняют обе развёртки после тесселяции.",
+    "Карту создали Akom74 и Neon_Knight. Египетские текстуры создал Simon «sock» O’Callaghan. Карта и текстуры распространяются по GPL-2.0-or-later.",
+    "В веб-примере штатный CatalogView читает оригинальный BSP через WebAssembly. В сцене можно вращать камеру, приближать изображение и отдельно отключать текстуры и освещение."
+  ],
+  "bodyEn": [
+    "The camera uses the viewpoint authored in the map. Its visibility cluster admits 1,408 of the 3,073 surfaces. Curved patches preserve both UV sets through tessellation.",
+    "Akom74 and Neon_Knight created the map. Simon “sock” O’Callaghan created the Egyptian textures. The map and textures are distributed under GPL-2.0-or-later.",
+    "In the web sample the native CatalogView reads the original BSP through WebAssembly. Orbit, zoom and switch the diffuse or lightmap layer independently."
+  ],
+  "verified": "Два теста на Mac прошли. В кадре Metal 800×500 отключение diffuse изменило 400000 пикселей, отключение lightmaps — 396284. В Chromium WebGL2 переключение текстур изменило 191422 из 210000 пикселей контрольной области, освещения — 207126, поворот камеры — 174849.",
+  "verifiedEn": "Two Mac tests passed. In the 800×500 Metal frame, disabling diffuse textures changed 400,000 pixels and disabling lightmaps changed 396,284. In Chromium WebGL2, toggling diffuse changed 191,422 of 210,000 sampled pixels, toggling irradiance changed 207,126, and orbiting changed 174,849.",
+  "limits": "Поддерживаются статические стадии материалов. Анимированные стадии, порталы неба, коллизия и логика Quake остаются за границами импорта моделей. Минимальному клиенту сцен недоступен legacy-import.",
+  "limitsEn": "The importer translates static material stages. It omits animated stages, sky portals, Quake collision and game logic. The minimal scene client omits legacy model import.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-render-quake3-bsp/egyptian-trouble.jpg",
+      "caption": "Egyptian Trouble. Камера авторов карты, кадр AIVERSE Metal.",
+      "captionEn": "Egyptian Trouble. The authors’ intermission camera, captured in AIVERSE Metal."
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-render-quake3-bsp/webgl.jpg",
+      "caption": "Тот же уровень в интерактивном CatalogView на WebGL2.",
+      "captionEn": "The same level in interactive AIVERSE CatalogView using WebGL2."
+    }
+  ],
+  "links": [
+    {
+      "title": "IBSP v46",
+      "href": "docs/models.md"
+    },
+    {
+      "title": "WebGL2 · Egyptian Trouble",
+      "href": "demos/quake3-bsp/README.md"
+    }
+  ]
+}
