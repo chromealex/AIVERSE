@@ -3690,6 +3690,41 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
 
     } // external/Terra surface suppresses the default plane and grid
 
+    if (!map.worldSpace && !map.planet() && !cavernsPreview_.isolate()) {
+        for (const auto& [a,b] : map.roads) {
+            if (a < 0 || b < 0 || size_t(a) >= map.entities.size() || size_t(b) >= map.entities.size()) continue;
+            const auto aId = studioDocumentId(doc, editor::DocumentEntityRef::mapEntity(size_t(a)));
+            const auto bId = studioDocumentId(doc, editor::DocumentEntityRef::mapEntity(size_t(b)));
+            if (hidden_.count(aId) || hidden_.count(bId)) continue;
+            auto endpoint = [&](int index, const std::string& id) {
+                const auto& entity = map.entities[size_t(index)];
+                float3 point{float(entity.x), 0, float(entity.z)};
+                if (id == drag_.id && drag_.tool == TransformTool::Move) point = point + drag_.moveOffset;
+                point.y = 0;
+                return point;
+            };
+            const auto from = endpoint(a, aId), to = endpoint(b, bId);
+            const auto delta = to - from;
+            const float distance = length(delta);
+            if (!std::isfinite(distance) || distance < 0.001f) continue;
+            const float3 side = float3{-delta.z, 0, delta.x} * (0.16f / distance);
+            const int segments = int(std::ceil(std::min(distance * 2, float(2 * std::max(map.w,map.h) + 1))));
+            auto surface = [&](float3 point) {
+                point.y = (showTerrain ? terrainPreviewHeight(map,point.x,point.z,levelHeight) : 0.f) + 0.055f;
+                return point;
+            };
+            const uint32_t color = (selectedId == aId || selectedId == bId) ? rgba(255,201,91) : rgba(212,170,104);
+            auto left = surface(from - side), right = surface(from + side);
+            for (int i = 1; i <= segments; ++i) {
+                const auto center = lerp(from, to, float(i) / float(segments));
+                const auto nextLeft = surface(center - side), nextRight = surface(center + side);
+                renderer_.triangle(left, nextLeft, nextRight, color);
+                renderer_.triangle(left, nextRight, right, color);
+                left = nextLeft;
+                right = nextRight;
+            }
+        }
+    }
     selectedId_=selectedId;
     selectedPivotValid_=false;
     selectedBoxValid_=false;
