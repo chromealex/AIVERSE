@@ -5,18 +5,18 @@
   "title": "Ветви упавшего дерева в Studio",
   "summary": "После естественного падения дерева Studio показывает его ствол и ветви в положении, рассчитанном физикой.",
   "body": [
-    "В примере Planet and Moon включите физику леса и задайте виду дерева рецепт fromArbor. В панели Rules откройте Planet forest и включите Show live forest in Scene. Голубой контур показывает капсулу столкновения. По нему можно проверить, как ствол лежит на поверхности планеты."
+    "В примере Planet and Moon включите физику леса и задайте виду дерева рецепт fromArbor. В панели Rules откройте Planet forest и включите Show live forest in Scene. Цветной контур показывает капсулу столкновения. По нему можно проверить, как ствол лежит на поверхности планеты."
   ],
   "status": "in-progress",
-  "verified": "Кадр получен в нативной Studio на macOS с Metal. На Terra дерево с ключом 7 упало и остановилось. На тике 780 инспектор показал спящее физическое тело.",
+  "verified": "Кадр получен на тике 831 в нативной Studio на macOS с Metal. На Terra инспектор показал одно упавшее дерево с физической капсулой. Центр ствола и его оси взяты из того же тика.",
   "limits": "Ветви используют позу общей капсулы ствола. Физика рассчитывает столкновение целого дерева. Просмотр этой сцены доступен в нативном редакторе Studio.",
   "branch": "integrate/pr124-current-main-20261125",
   "commit": "cbca316c2",
   "media": [
     {
       "src": "docs/devlog/media/2026-11-25-terraweave-fallen-arbor/01.png",
-      "caption": "Ствол и ветви лежат на поверхности Terra. Голубая линия показывает границу физической капсулы.",
-      "captionEn": "The trunk and branches rest on Terra. The blue line marks the collision capsule."
+      "caption": "Ствол и ветви лежат на поверхности Terra. Оранжевая линия показывает границу физической капсулы.",
+      "captionEn": "The trunk and branches rest on Terra. The orange line marks the collision capsule."
     }
   ],
   "links": [],
@@ -24,8 +24,8 @@
   "titleEn": "Fallen tree branches in Studio",
   "summaryEn": "After a tree falls naturally, Studio shows its trunk and branches in the pose reported by physics.",
   "bodyEn": [
-    "In the Planet and Moon example, enable forest physics and give the species a fromArbor recipe. In Rules, open Planet forest and select Show live forest in Scene. The blue outline shows the collision capsule so you can check how the trunk rests on the surface."
+    "In the Planet and Moon example, enable forest physics and give the species a fromArbor recipe. In Rules, open Planet forest and select Show live forest in Scene. The coloured outline shows the collision capsule so you can check how the trunk rests on the surface."
   ],
-  "verifiedEn": "Captured in native Studio on macOS with Metal. Tree 7 fell and settled on Terra. At tick 780 the inspector reported a sleeping body.",
+  "verifiedEn": "Captured at tick 831 in native Studio on macOS with Metal. The live inspector reported one fallen tree with a physical capsule on Terra. The trunk centre and axes come from that same tick.",
   "limitsEn": "Branches follow the trunk capsule. Physics resolves contact for the tree as a single body. This Scene view is available in the native Studio editor."
 }

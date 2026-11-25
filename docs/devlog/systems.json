@@ -187,7 +187,8 @@
           "title": "Планетарный лес: объёмная Live-визуализация",
           "titleEn": "Planetary forest: live mesh visualization",
           "text": "Рост и отмирание из ECS, обнажённые корни и ветви упавших деревьев ARBOR в положении физического ствола.",
-          "textEn": "ECS growth and mortality, exposed roots and fallen ARBOR branches aligned with the physical trunk pose."
+          "textEn": "ECS growth and mortality, exposed roots and fallen ARBOR branches aligned with the physical trunk pose.",
+          "id": "planet-forest-authoring"
         },
         {
           "status": "in-progress",
@@ -1903,6 +1904,16 @@
         "Assemble mechanics from ready systems instead of writing them per game.",
         "Give every player and the replay the same match outcome.",
         "Save and load a match at any moment."
+      ],
+      "roadmap": [
+        {
+          "id": "fixed-spatial-algorithms",
+          "status": "in-progress",
+          "text": "Математика с фиксированной точкой, пространственные запросы и пакетный шум для систем симуляции.",
+          "textEn": "Fixed-point math, spatial queries and batched noise for simulation systems.",
+          "title": "Математика симуляции",
+          "titleEn": "Simulation math"
+        }
       ]
     },
     {

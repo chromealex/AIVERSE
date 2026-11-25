@@ -85,7 +85,9 @@
     "docs/agent-handoffs/world-processes-pr124-current-main-2026-11-25.md",
     "docs/agent-handoffs/world-processes-stage161d5d-2026-11-24.md",
     "docs/agents/contracts/world-ownership.md",
+    "docs/agents/feature-policy.json",
     "docs/devlog/entries/2026-11-25-terraweave-fallen-arbor.json",
+    "docs/devlog/systems.json",
     "engine/core/Archive.h",
     "engine/game/GameCore.cpp",
     "engine/game/GameCore.h",
@@ -348,7 +350,7 @@
     },
     "performance": {
       "status": "not_run",
-      "note": "The renderer caps visible plant selection. A measured before/after CPU and GPU comparison of the fallen mesh is outstanding.",
+      "note": "On a one-plant Terra map, 50 authenticated live requests after five warmups took 17.07 ms median and 23.27 ms p95 end-to-end. Studio RSS grew by 16 KiB over the sample. GPU execution time and multi-plant stress remain unmeasured.",
       "evidence": [
         "docs/agent-handoffs/world-processes-pr124-current-main-2026-11-25.md"
       ]
@@ -383,7 +385,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "The nine focused physics cases passed on the predecessor. Final merged-tree tests are being recorded separately.",
+      "note": "The current physics-enabled Mac candidate passed all 11 selected World Processes, Box3D and Studio tests. Await the commit-bound acceptance report.",
       "evidence": [
         "docs/agent-handoffs/world-processes-pr124-current-main-2026-11-25.md"
       ]
