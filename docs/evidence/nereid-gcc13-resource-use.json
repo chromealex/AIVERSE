@@ -1,0 +1,11 @@
+{
+  "sha": "dddcf1d9166c366009c309d53f350e095752eb26",
+  "argv": [
+    "/usr/bin/time",
+    "-l",
+    "/Volumes/KINGSTON/AIVERSE-builds/nereid-gcc13-main-gate/mac/aiverse_ecs_nereid_review_fixes_test"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/nereid-gcc13-resource-use.log.txt",
+  "sha256": "4a96ca1daf2749f0554346eb89d21c237d08811f2df0a21e8941b3918304c50d"
+}
