@@ -1193,6 +1193,16 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && map.data.entities.size()==before);
    }
    {
+       const auto branding=call("studio.op",R"({"op":"branding_get","params":{}})");
+       AIVERSE_TEST_CHECK(branding["result"]["result"]["iconsVersion"].isString());
+       const auto conflict=call("studio.op",R"({"op":"branding_set","params":{"expectedIconsVersion":"outdated","icons":{}}})");
+       AIVERSE_TEST_CHECK(conflict.getStr("error").find("Icon settings changed")!=std::string::npos);
+       const auto android=call("studio.op",R"({"op":"icons_preview","params":{"platform":"Android"}})");
+       AIVERSE_TEST_CHECK(!android.has("error") && !android["result"].getBool("changed"));
+       const auto& variants=android["result"]["result"]["variants"].items();
+       AIVERSE_TEST_CHECK(std::any_of(variants.begin(),variants.end(),[](const Json& icon){
+           return icon.getStr("label")=="ADAPT CIRCLE" && icon.getInt("size")>0 && icon.getStr("png").starts_with("iVBOR");
+       }));
        const auto animation=call("studio.op",R"({"op":"animation_graph_edit","params":{"action":"new"}})");
        AIVERSE_TEST_CHECK(!animation.has("error")&&!animation["result"].getBool("changed"));
        AIVERSE_TEST_CHECK(animation["result"]["result"]["graph"].getStr("output")=="bind");

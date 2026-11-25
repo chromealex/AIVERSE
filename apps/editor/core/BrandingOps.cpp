@@ -95,6 +95,7 @@ void registerBrandingOps(Workspace& ws) {
             needProject(*w);
             Json r = check(w->project.manifest, w->project.dir);
             r.set("icons", w->project.manifest["icons"]);
+            r.set("iconsVersion", Json::string(w->project.manifest["icons"].dump()));
             if (w->project.manifest.has("icon")) r.set("icon", w->project.manifest["icon"]);
             r.set("splash", w->project.manifest["splash"]);
             return r;
@@ -103,11 +104,13 @@ void registerBrandingOps(Workspace& ws) {
         "Set game.json 'icons' and/or 'splash' (validated before saving; images are project-relative paths). Pass null to remove a block; "
         "merge=true merges objects into the existing blocks (null values remove keys). Check the result with icons_preview / splash_preview.",
         R"({"properties": {"icons": {"description": "icons block (object) or null"}, "splash": {"description": "splash block (object) or null"},
-            "merge": {"type": "boolean"}}})",
+            "merge": {"type": "boolean"}, "expectedIconsVersion": {"type":"string","description":"Optional iconsVersion from branding_get for conflict detection"}}})",
         [w](const Json& p) {
             needProject(*w);
             if (!p.has("icons") && !p.has("splash")) throw std::runtime_error("nothing to set: pass 'icons' and/or 'splash'");
             Json m = w->project.manifest;
+            if (p.has("expectedIconsVersion") && p.getStr("expectedIconsVersion") != m["icons"].dump())
+                throw std::runtime_error("Icon settings changed. Reload before saving.");
             const bool merge = p.getBool("merge");
             for (const char* key : {"icons", "splash"}) {
                 if (!p.has(key)) continue;
@@ -117,9 +120,13 @@ void registerBrandingOps(Workspace& ws) {
                 else m.set(key, merge ? merged(m[key], v) : v);
             }
             Json r = check(m, w->project.dir);   // throws on format errors: nothing saved
-            w->project.manifest = m;
+            Json previous = std::move(w->project.manifest);
+            w->project.manifest = std::move(m);
             std::string err;
-            if (!w->project.saveManifest(&err)) throw std::runtime_error(err);
+            if (!w->project.saveManifest(&err, "Edit project branding")) {
+                w->project.manifest = std::move(previous);
+                throw std::runtime_error(err);
+            }
             w->note({Change::Project, 0, 0, -1, -1, -1, "иконки и заставка"});
             r.set("ok", Json::fromBool(true));
             r.set("summary", Json::string("game.json: icons / splash updated"));
@@ -127,13 +134,31 @@ void registerBrandingOps(Workspace& ws) {
         });
     add("icons_preview",
         "Render every icon the build generates (iOS, macOS, Android legacy/round/adaptive with circle and squircle masks, Windows .ico sizes, "
-        "web favicon/apple-touch/PWA/maskable, Linux hicolor) at real pixel size into one PNG contact sheet you can look at.",
-        "{}", [w](const Json&) {
+        "web favicon/apple-touch/PWA/maskable, Linux hicolor) at real pixel size into one PNG contact sheet. "
+        "Pass platform to receive that platform's labeled PNG variants instead.",
+        R"({"properties":{"platform":{"type":"string","enum":["iOS","macOS","Android","Windows","Web","Linux"]}}})", [w](const Json& p) {
             needProject(*w);
             std::vector<std::string> warnings;
             branding::IconSpec s = branding::parseIcons(w->project.manifest);
             if (s.master.empty() && fs::exists(fs::path(w->project.dir) / "icon.png")) s.master = "icon.png";
             for (auto& x : branding::validateIcons(s, w->project.dir)) warnings.push_back(x);
+            const std::string platform = p.getStr("platform");
+            if (!platform.empty()) {
+                Json variants = Json::array();
+                for (const auto& icon : branding::previewIcons(s, w->project.dir, &warnings)) {
+                    if (icon.platform != platform) continue;
+                    Json variant = Json::object();
+                    variant.set("label", Json::string(icon.label));
+                    variant.set("size", Json::number(int64_t(icon.size)));
+                    variant.set("png", Json::string(base64Encode(branding::encodePng(icon.image))));
+                    variants.push(variant);
+                }
+                if (variants.items().empty()) throw std::runtime_error("Unknown icon platform: " + platform);
+                Json result = Json::object();
+                result.set("variants", variants);
+                result.set("warnings", strings(warnings));
+                return result;
+            }
             branding::Image sheet = branding::iconsContactSheet(s, w->project.dir, &warnings);
             Json r = Json::object();
             r.set("width", Json::number(int64_t(sheet.width)));
