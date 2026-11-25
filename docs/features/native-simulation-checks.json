@@ -3,12 +3,20 @@
   "id": "native-simulation-checks",
   "owner": "agents",
   "changed_paths": [
+    "CMakeLists.txt",
     "apps/editor/core/BalanceOps.cpp",
     "apps/editor/core/NativeBuildOps.cpp",
     "apps/editor/core/NativeBuildOps.h",
     "apps/editor/core/ScenarioOps.cpp",
     "apps/editor/core/ScriptOps.cpp",
-    "apps/editor/core/Workspace.cpp"
+    "apps/editor/core/Workspace.cpp",
+    "docs/agent-handoffs/native-simulation-checks-initial.md",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/systems.json",
+    "docs/features/native-simulation-checks.json",
+    "docs/native-modules.md",
+    "skills/core/aiverse-native-scaffold/SKILL.md",
+    "tests/native_simulation_checks_mcp.py"
   ],
   "traits": {
     "editable": false,
@@ -109,8 +117,17 @@
     }
   },
   "integrations": {
-    "skills": [],
-    "mcp_tools": [],
+    "skills": [
+      "aiverse-native-scaffold"
+    ],
+    "mcp_tools": [
+      "script_check",
+      "match_run",
+      "scenario_run",
+      "balance_batch",
+      "balance_duel",
+      "balance_matrix"
+    ],
     "studio_panels": [],
     "studio_methods": []
   },

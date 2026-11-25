@@ -147,6 +147,27 @@ Json nativeStatus(Workspace& ws, const std::string& engineExe) {
     return r;
 }
 
+void registerNativeSimulationCheck(Workspace& ws, Workspace::Op op) {
+    op.schema.member("properties").set("reportMissingNativeModules", Json::parse(R"({
+        "type":"boolean",
+        "description":"When the host lacks project modules, return status missing_native_modules and their IDs without running the simulation. Otherwise run the normal check."
+    })"));
+    op.fn = [&ws, run = std::move(op.fn)](const Json& params) {
+        if (params.getBool("reportMissingNativeModules") && !ws.project.dir.empty()) {
+            const auto missing = missingNativeModules(ws.project.rulesJson, compiledNativeIds());
+            if (!missing.empty()) {
+                Json result = Json::object();
+                result.set("status", Json::string("missing_native_modules"));
+                result.set("simulationRan", Json::fromBool(false));
+                result.set("missing", strings(missing));
+                return result;
+            }
+        }
+        return run(params);
+    };
+    ws.registerOp(std::move(op));
+}
+
 void registerNativeBuildOps(Workspace& ws, const std::string& engineExe) {
     Workspace* w = &ws;
     ws.registerOp({"native_status",

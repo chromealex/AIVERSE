@@ -26,6 +26,9 @@ bool nativeBuildReady(const Workspace& ws, const NativeBuilt& b, const std::stri
 // {required, compiled, missing, buildDir, editor, headless, client, built, upToDate, ready, why, building}
 Json nativeStatus(Workspace& ws, const std::string& engineExe);
 
+// Register a simulation operation with an opt-in report when its host lacks project modules.
+void registerNativeSimulationCheck(Workspace& ws, Workspace::Op op);
+
 // engineExe: the binary whose mtime marks the engine version for the up-to-date check ("" = aiversebuild).
 void registerNativeBuildOps(Workspace& ws, const std::string& engineExe = "");
 
