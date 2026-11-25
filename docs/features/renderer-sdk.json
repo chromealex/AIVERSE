@@ -3,7 +3,25 @@
   "id": "renderer-sdk",
   "owner": "render",
   "changed_paths": [
-    "sdk/render/aiverse_render.h"
+    "CMakeLists.txt",
+    "apps/modelview/HeadlessModelCapture.cpp",
+    "docs/agent-handoffs/renderer-sdk-initial.md",
+    "docs/devlog/systems.json",
+    "docs/features/renderer-sdk.json",
+    "engine/render/HeadlessModelFrame.cpp",
+    "engine/render/HeadlessModelFrame.h",
+    "sdk/render/CMakeLists.txt",
+    "sdk/render/README.md",
+    "sdk/render/aiverse_render.cpp",
+    "sdk/render/aiverse_render.h",
+    "sdk/render/csharp/RenderModel.cs",
+    "sdk/render/java/Jni.cpp",
+    "sdk/render/java/org/aiverse/render/RenderModel.java",
+    "sdk/render/python/aiverse_render.py",
+    "tests/render_sdk/RenderFrame.cs",
+    "tests/render_sdk/RenderFrame.csproj",
+    "tests/render_sdk/RenderFrame.java",
+    "tests/render_sdk/languages.py"
   ],
   "traits": {
     "editable": false,
