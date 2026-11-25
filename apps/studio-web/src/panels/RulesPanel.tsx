@@ -13,10 +13,11 @@ export default function RulesPanel({ projectPath, onChanged }: { projectPath: st
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [section,setSection]=useState<'types'|'triggers'|'damageTable'>('types');
   const [raw, setRaw] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
-    setRules(null); setError('');
+    setRules(null); setError(''); setRaw(null); setSection('types');
     if (!projectPath) return;
     void invoke('studio.rules', {}).then(r => { if (live) { setRules(r); setTypeId(id => id && id in r.types ? id : Object.keys(r.types)[0] ?? ''); } })
       .catch(e => { if (live) setError(e instanceof Error ? e.message : String(e)); });
@@ -30,15 +31,15 @@ export default function RulesPanel({ projectPath, onChanged }: { projectPath: st
   }, [rules, query]);
   // Inspector → "Edit type in Rules" selects that type.
   useEffect(() => {
-    const pick = (e: Event) => { const id = String((e as CustomEvent<unknown>).detail ?? ''); if (id) { setTypeId(id); setQuery(''); setRaw(null); } };
+    const pick = (e: Event) => { const id = String((e as CustomEvent<unknown>).detail ?? ''); if (id) { setSection('types'); setTypeId(id); setQuery(''); setRaw(null); } };
     window.addEventListener('studio:rules-type', pick);
     return () => window.removeEventListener('studio:rules-type', pick);
   }, []);
   const values = useMemo(() => rules && typeId ? typeValues(typeId, rules.types[typeId], rules.resolved[typeId], rules.resources) : [], [rules, typeId]);
   const write = async (path: string, value: unknown) => {
     setBusy(true); setError('');
-    try { setRules(await invoke('studio.rulesSet', { path, value })); onChanged(); }
-    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    try { setRules(await invoke('studio.rulesSet', { path, value })); onChanged(); return true; }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); return false; }
     finally { setBusy(false); }
   };
   const commit = (v: RuleValue, input: string | boolean) => {
@@ -52,6 +53,15 @@ export default function RulesPanel({ projectPath, onChanged }: { projectPath: st
   const extendsBase = typeId && rules ? (rules.types[typeId] as { extends?: unknown })?.extends : undefined;
   return <div className="rules">
     <aside className="rules__list">
+      <label className="rules__section">Rule section
+        <select value={section} disabled={busy||(section!=='types'&&raw!==null)} onChange={event=>{
+          setSection(event.target.value as typeof section); setRaw(null);setError('');
+        }}>
+          <option value="types">Unit types</option><option value="triggers">Triggers</option>
+          <option value="damageTable">Damage matrix</option>
+        </select>
+      </label>
+      {section==='types'&&<>
       <label className="rules__search"><Search size={12} aria-hidden="true"/>
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search types" aria-label="Search unit types"/></label>
       <div role="listbox" aria-label="Unit types" className="rules__types">
@@ -63,10 +73,29 @@ export default function RulesPanel({ projectPath, onChanged }: { projectPath: st
             <b>{name}</b>{name !== id && <small>{id}</small>}</button>; })}
         {rules && !ids.length && <p className="rules__empty">No types.</p>}
       </div>
+      </>}
     </aside>
-    <section className="rules__form" aria-label={'Type ' + typeId}>
+    <section className="rules__form" aria-label={section==='types'?'Type '+typeId:section}>
       {error && <div className="rules__error" role="alert">{error}<button type="button" aria-label="Dismiss" onClick={() => setError('')}>×</button></div>}
-      {!rules ? <p className="rules__empty">Loading rules…</p> : !typeId ? <p className="rules__empty">rules.json has no types.</p> : <>
+      {!rules ? <p className="rules__empty">Loading rules…</p> : section!=='types' ? <>
+        <h3>{section==='triggers'?'Triggers':'Damage matrix'}</h3>
+        {section==='damageTable'&&!!rules.armorTypes?.length&&<div className="rules__matrix"><table>
+          <thead><tr><th>Attack / armor</th>{rules.armorTypes.map(armor=><th key={armor}>{armor}</th>)}</tr></thead>
+          <tbody>{Object.entries(rules.damageTable??{}).map(([attack,row])=><tr key={attack}>
+            <th scope="row">{attack}</th>{rules.armorTypes!.map(armor=><td key={armor}>{typeof row?.[armor]==='number'?row[armor]:1}</td>)}
+          </tr>)}</tbody>
+        </table></div>}
+        <div className="rules__rawbox">
+          <textarea disabled={busy} aria-label={section==='triggers'?'Trigger definitions':'Damage multipliers'} spellCheck={false}
+            value={raw??JSON.stringify(rules[section]??(section==='triggers'?[]:{}),null,2)}
+            onChange={event=>setRaw(event.target.value)}/>
+          <button disabled={busy||raw===null} onClick={()=>{
+            try{const value=JSON.parse(raw!);void write(section,value).then(saved=>{if(saved)setRaw(null);});}
+            catch(e){setError(String(e));}
+          }}>Validate &amp; save</button>
+          {raw!==null&&<button disabled={busy} onClick={()=>{setRaw(null);setError('');}}>Discard changes</button>}
+        </div>
+      </> : !typeId ? <p className="rules__empty">rules.json has no types.</p> : <>
         <div className="rules__head">
           <h3>{typeId}</h3>
           {typeof extendsBase === 'string' && <span className="rules__extends">extends {extendsBase}</span>}

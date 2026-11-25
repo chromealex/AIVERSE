@@ -183,6 +183,13 @@ void authoredEntityWorkflow() {
        rules=call("studio.rules");
        AIVERSE_TEST_CHECK(rules["result"]["resolved"]["tree"]["health"]["max"].integer()==150);
        AIVERSE_TEST_CHECK(call("studio.rulesSet",R"({"path":"resources.gold","value":1})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.rulesSet",R"({"path":"triggers","value":{}})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.rulesSet",R"({"path":"damageTable","value":[]})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.rulesSet",R"({"path":"damageTable","value":{"strike":{"plate":"bad"}}})").has("error"));
+       AIVERSE_TEST_CHECK(!call("studio.rulesSet",R"({"path":"damageTable","value":{"strike":{"plate":0.75}}})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.rules")["result"]["damageTable"]["strike"]["plate"].toDouble()==0.75);
+       AIVERSE_TEST_CHECK(!call("studio.rulesSet",R"({"path":"triggers","value":[]})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.rules")["result"]["triggers"].isArray());
        AIVERSE_TEST_CHECK(!call("studio.rulesSet",R"({"path":"types.tree.health.max","value":null})").has("error"));
        AIVERSE_TEST_CHECK(!call("studio.rules")["result"]["types"]["tree"]["health"].has("max"));
    }

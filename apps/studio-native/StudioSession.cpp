@@ -2408,7 +2408,17 @@ Json StudioSession::dispatchImpl(const Json& request) {
             if (method == "studio.rulesSet") {
                 const std::string path=params.getStr("path");
                 static const std::regex allowed(R"(^types\.[A-Za-z0-9_\-]+((\.[A-Za-z0-9_]+)|(\[[0-9]{1,4}\])){0,6}$)");
-                if (path.size()>200 || !std::regex_match(path,allowed)) throw std::runtime_error("Only unit type fields can be edited here");
+                const bool triggers=path=="triggers", damage=path=="damageTable";
+                if (triggers || damage) {
+                    if (triggers ? !params["value"].isArray() : !params["value"].isObject())
+                        throw std::runtime_error(triggers?"Expected a trigger array":"Expected a damage table object");
+                    if (damage) for (const auto& attack:params["value"].members()) {
+                        if (!attack.second.isObject()) throw std::runtime_error("Expected a row for "+attack.first);
+                        for (const auto& armor:attack.second.members())
+                            if (!armor.second.isNumber()) throw std::runtime_error("Expected a damage multiplier for "+attack.first+" / "+armor.first);
+                    }
+                } else if (path.size()>200 || !std::regex_match(path,allowed))
+                    throw std::runtime_error("Unsupported rule field");
                 Json args=Json::object();args.set("path",str(path));
                 const bool erase=params["value"].isNull();
                 if (!erase) args.set("value",params["value"]);
@@ -2423,6 +2433,10 @@ Json StudioSession::dispatchImpl(const Json& request) {
             Json out=Json::object();
             out.set("types",types["value"]);out.set("resolved",resolved["value"]);
             out.set("resources",list["resources"]);out.set("summary",list["types"]);
+            const auto& authored=ws_.project.rulesJson;
+            out.set("triggers",authored["triggers"].isNull()?Json::array():authored["triggers"]);
+            out.set("armorTypes",authored["armorTypes"].isNull()?Json::array():authored["armorTypes"]);
+            out.set("damageTable",authored["damageTable"].isNull()?Json::object():authored["damageTable"]);
             out.set("dirty",Json::fromBool(ws_.project.rulesDirty));
             reply.set("result",std::move(out));
         } else if (method == "studio.stats") {
