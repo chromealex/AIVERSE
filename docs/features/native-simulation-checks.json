@@ -10,9 +10,13 @@
     "apps/editor/core/ScenarioOps.cpp",
     "apps/editor/core/ScriptOps.cpp",
     "apps/editor/core/Workspace.cpp",
+    "docs/agent-handoffs/native-simulation-checks-acceptance.md",
+    "docs/agent-handoffs/native-simulation-checks-implementation.md",
     "docs/agent-handoffs/native-simulation-checks-initial.md",
     "docs/agents/feature-policy.json",
     "docs/devlog/systems.json",
+    "docs/evidence/native-simulation-checks-macos.json",
+    "docs/evidence/native-simulation-checks-macos.log.txt",
     "docs/features/native-simulation-checks.json",
     "docs/native-modules.md",
     "skills/core/aiverse-native-scaffold/SKILL.md",
@@ -26,93 +30,117 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Six standalone MCP simulation operations return a structured diagnostic for missing modules.",
+      "evidence": [
+        "docs/evidence/native-simulation-checks-macos.json"
+      ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Operation registration reuses the project inventory and wraps the original simulation handler.",
+      "evidence": [
+        "apps/editor/core/NativeBuildOps.cpp"
+      ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "C++ editor tools use registerNativeSimulationCheck to register the schema and normal operation together.",
+      "evidence": [
+        "apps/editor/core/NativeBuildOps.h"
+      ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Native module verification recipe covers reportMissingNativeModules and skipped checks.",
+      "evidence": [
+        "skills/core/aiverse-native-scaffold/SKILL.md"
+      ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Standalone stdio test exercised each tool and discovered its argument in tools/list.",
+      "evidence": [
+        "docs/evidence/native-simulation-checks-macos.json"
+      ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "The request targets headless operation arguments. It adds no editor panel or authored property.",
       "evidence": []
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "This is a read-only simulation command option with no inspectable object.",
       "evidence": []
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "Diagnostics return request-scoped JSON and write no project or simulation state.",
       "evidence": []
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "The option does not operate on graph assets, nodes or expressions.",
       "evidence": []
     },
     "performance": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "The module inventory runs once for an opted-in check, outside the simulation tick. No hot loop changes.",
       "evidence": []
     },
     "platforms": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Executed Mac standalone MCP on the host architecture. Other operating systems have no separate implementation and were not exercised.",
+      "evidence": [
+        "docs/evidence/native-simulation-checks-macos.json"
+      ]
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Uses the existing compiledNativeIds and missingNativeModules in the editor core. The built server exercised the combined path.",
+      "evidence": [
+        "apps/editor/core/NativeBuildOps.cpp"
+      ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Both the diagnostic and a deterministic one-second match were exercised without the editor GUI.",
+      "evidence": [
+        "docs/evidence/native-simulation-checks-macos.json"
+      ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Developer guide shows a diagnostic response, option and subsequent build lookup.",
+      "evidence": [
+        "docs/native-modules.md"
+      ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Real stdio test covers all six tools, two absent modules, default failure, static stats, file integrity and checksum parity.",
+      "evidence": [
+        "docs/evidence/native-simulation-checks-macos.json"
+      ]
     },
     "handoff": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Implementation and final runtime evidence are linked in the acceptance handoff.",
+      "evidence": [
+        "docs/agent-handoffs/native-simulation-checks-acceptance.md"
+      ]
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The native modules reference documents the option, status and host requirement.",
+      "evidence": [
+        "docs/native-modules.md"
+      ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "The change exposes a headless diagnostic with no rendered or interactive surface.",
       "evidence": []
     }
   },
@@ -131,5 +159,7 @@
     "studio_panels": [],
     "studio_methods": []
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/native-simulation-checks-macos.json"
+  ]
 }
