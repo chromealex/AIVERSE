@@ -44,6 +44,10 @@ jobs:
       CXX: ${{ matrix.compiler == 'clang' && 'clang++' || 'g++' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Install Linux window and graphics development headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libegl-dev libgles-dev
       - name: Configure isolated TerraWeave targets
         run: |
           cmake -S . -B build/terraweave-ci -G Ninja \

@@ -76,7 +76,7 @@ jobs:
       - name: Install Vulkan SDK prerequisites and software ICD
         run: |
           sudo apt-get update
-          sudo apt-get install -y libvulkan-dev mesa-vulkan-drivers vulkan-tools glslang-tools
+          sudo apt-get install -y libvulkan-dev mesa-vulkan-drivers vulkan-tools glslang-tools libx11-dev libegl-dev libgles-dev
           find /usr/share/vulkan/icd.d -maxdepth 1 -name '*lvp*.json' -print
       - name: Configure full Vulkan backend and STRATA
         run: |

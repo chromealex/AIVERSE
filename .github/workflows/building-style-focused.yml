@@ -88,8 +88,9 @@ jobs:
         run: |
           python3 tools/buildings/qa_batch_20.py --root . \
             --exporter /tmp/aiverse_building_export \
-            --out build/building-preview/batch-20 --allow-failures
+            --out build/building-preview/batch-20
       - name: Preserve 20-building meshes and structured QA reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: aiverse-building-batch-20
@@ -101,6 +102,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
       - name: Preserve raw GLB models for review and actual screenshots
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: aiverse-sci-fi-building-glb
