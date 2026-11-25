@@ -1,0 +1,10 @@
+{
+  "sha": "f384bae3525220b8d21e99289cbac6a17eaab8ac",
+  "argv": [
+    "python3.12",
+    "tests/feature_gate_test.py"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/feature-gate-f384bae35-native-host.log.txt",
+  "sha256": "c84341e5c10efbdf63993abed35a529dbd6bf9f8dee967892bc1684020f56f0e"
+}

@@ -167,9 +167,9 @@
     },
     "tests": {
       "status": "pass",
-      "note": "Mac v10 source be64591b, reused v7 binaries 59558502 (only site and evidence/manifest/handoff changes): 22/22 Python and 9/9 focused CTest PASS. Historical v7 full suite 487 PASS / 0 FAIL / 1 opt-in skip; full merged-tree CTest NOT RUN in v10. Scoped automated verification only. Mac v13 at 74099694: full quick CTest rerun on synced checkout using unchanged-source v7 binaries, 487 PASS / 0 FAIL / 1 opt-in skip, 977.56 seconds; evidence integrity 10/10 and partial compliance PASS. Full log retained in original archive; repository summary excerpt recorded separately.",
+      "note": "At f384bae35 the Python 3.12 suite passed 22/22, including linked native executable checks for empty and populated modules. Historical Mac v10 source be64591b, reused v7 binaries 59558502 (only site and evidence/manifest/handoff changes): 22/22 Python and 9/9 focused CTest PASS. Historical v7 full suite 487 PASS / 0 FAIL / 1 opt-in skip; full merged-tree CTest NOT RUN in v10. Scoped automated verification only. Mac v13 at 74099694: full quick CTest rerun on synced checkout using unchanged-source v7 binaries, 487 PASS / 0 FAIL / 1 opt-in skip, 977.56 seconds; evidence integrity 10/10 and partial compliance PASS. Full log retained in original archive; repository summary excerpt recorded separately.",
       "evidence": [
-        "docs/evidence/feature-gate-mac-v10-be64591b1087-feature-gate.log.txt",
+        "docs/evidence/feature-gate-f384bae35-native-host.log.txt",
         "docs/evidence/feature-gate-mac-v10-be64591b1087-ctest-focused.log.txt",
         "docs/evidence/feature-gate-mac-v7-summary.log.txt",
         "docs/agent-handoffs/feature-gate-stage45-mac-qa-2026-11-24.md",
@@ -218,7 +218,7 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-mac-v10-be64591b1087-feature-gate.json",
+    "docs/evidence/feature-gate-f384bae35-native-host.json",
     "docs/evidence/feature-gate-mac-v10-be64591b1087-ctest-focused.json",
     "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-refresh.json",
     "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-registry.json",
