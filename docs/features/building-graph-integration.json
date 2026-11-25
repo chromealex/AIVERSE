@@ -265,7 +265,8 @@
     "examples/world/building-caverns-web/CMakeLists.txt",
     "examples/world/building-caverns-web/package.json",
     "examples/world/building-caverns-web/package-lock.json",
-    "examples/world/building-caverns-web/README.md"
+    "examples/world/building-caverns-web/README.md",
+    "examples/world/building-caverns-web/verify.cjs"
   ],
   "traits": {
     "editable": true,
