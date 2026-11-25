@@ -34,3 +34,14 @@ test('owner and type groups retain membership and display order after collapse a
   const filtered=groupedHierarchy(rows.slice(2),'type',new Set());
   assert.deepEqual(filtered[0].members,['c']);
 });
+
+test('project grouping uses native paths for filtered stable ids', async () => {
+  const {groupedHierarchy}=await import('../src/hierarchyFilter.ts');
+  const rows=['entity:@a','entity:@b','spawn:0'].map(id=>({node:e(id,id,'Object'),depth:0}));
+  const paths={'entity:@a':['West','Scouts'],'entity:@b':['West','Scouts']};
+  const view=groupedHierarchy(rows.slice(1),'project:0',new Set(),paths);
+  assert.deepEqual(view[0].members,['entity:@b']);
+  assert.equal(view[1].label,'Scouts');
+  assert.equal(view[3].label,'Unassigned');
+  assert.equal(groupedHierarchy(rows,'project:0',new Set([view[0].key]),paths)[1].label,'Unassigned');
+});

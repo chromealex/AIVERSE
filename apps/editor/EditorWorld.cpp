@@ -1,3 +1,4 @@
+#include "core/DocumentWorldPreview.h"
 // World tree of the editor (docs/editor-world-tree.md): the rows of every object of the game world for the
 // Hierarchy / Inspector, the multi-selection, Scene picking of world objects, and the world_* MCP operations.
 //   Edit mode: the open map set up once in a throwaway simulation (WorldPreview), rebuilt after map / rules /
@@ -397,17 +398,7 @@ void Editor::updateWorld() {
         previewKey_ = key;
         // this thread only copies the inputs; the map / rules JSON, the scripts and the setup are made on the worker
         auto bs = prof.scope(EditorProfile::PreviewBuild);
-        auto data = std::make_shared<MapData>(doc().data);
-        preview_.start([data, path = doc().path, dir = ws_.project.dir, rules = ws_.project.rulesJson](Json& simRules, Json& simMap) {
-            MapDoc md;
-            md.data = std::move(*data);
-            md.path = path;
-            simMap = mapForSim(md.toJson(), dir);
-            Project p;
-            p.dir = dir;
-            p.rulesJson = rules;
-            simRules = p.simRules(simMap);
-        }, doc().data, worldCfg_);
+        startDocumentWorldPreview(preview_,doc(),ws_.project,worldCfg_);
     }
     // runtime objects of the preview that vanished on a rebuild leave the selection
     std::vector<Selection> keep;

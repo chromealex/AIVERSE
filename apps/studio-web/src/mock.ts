@@ -73,6 +73,7 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
   if (method === 'studio.project') return {maps: [], currentMap: '', canCreateMap: false, maxMapSize: 0};
   if (method === 'studio.newMap' || method === 'studio.openMap' || method === 'studio.saveAs')
     throw Error('Document operations require a native project');
+  if (method === 'studio.hierarchyGroups') return {pending:false,paths:{}};
   if (method === 'studio.entityCatalog') return {types: [], mapEntities: false};
   if (method === 'studio.entityCreate' || method === 'studio.entityDelete' || method === 'studio.entityDuplicate')
     throw Error('Entity authoring requires a native project');

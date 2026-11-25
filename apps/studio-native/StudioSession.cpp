@@ -49,6 +49,7 @@
 #include "engine/character/vivid/MetaHumanAdapter.h"
 #include <algorithm>
 #include "apps/editor/core/MaterialOps.h"
+#include "apps/editor/core/DocumentWorldPreview.h"
 #include "libraries/include/aiverselib/mechanics/SpectraSourceDocument.h"
 #include <cctype>
 #include <cmath>
@@ -726,6 +727,46 @@ Json StudioSession::graphDocumentScope() const {
     scope.set("revision",str(std::to_string(ws_.map.revision)));
     return scope;
 }
+// WebKit and WebView2 may reorder object members in bridge requests.
+static bool sameDocumentScope(const Json& supplied,const Json& current) {
+    return supplied.isObject() && supplied.size()==current.size() &&
+        std::all_of(current.members().begin(),current.members().end(),[&](const auto& field){
+            return supplied[field.first]==field.second;
+        });
+}
+Json StudioSession::hierarchyGroups(const Json& params) {
+    if(ws_.project.dir.empty() || params.getStr("expectedProject")!=ws_.project.dir ||
+       !sameDocumentScope(params["scope"],graphDocumentScope()))throw std::runtime_error("Hierarchy document changed");
+    const auto config=editor::parseWorldConfig(ws_.project.manifest);
+    const auto index=params.getInt("group",-1);
+    if(index<0 || size_t(index)>=config.groupings.size())throw std::runtime_error("Unknown Hierarchy grouping");
+    const auto version=graphDocumentScope().dump(-1)+"|"+ws_.project.historyVersion();
+    if(version!=hierarchyPreviewVersion_ || params.getBool("refresh")){
+        editor::startDocumentWorldPreview(hierarchyPreview_,ws_.map,ws_.project,config);
+        hierarchyPreviewVersion_=version;
+    }
+    hierarchyPreview_.poll();
+    Json result=Json::object();
+    result.set("pending",Json::fromBool(hierarchyPreview_.busy()));
+    if(hierarchyPreview_.busy())return result;
+    auto* sim=hierarchyPreview_.sim();
+    auto* module=hierarchyPreview_.module();
+    if(!sim || !module || !hierarchyPreview_.error().empty())throw std::runtime_error("Hierarchy preview: "+hierarchyPreview_.error());
+    editor::WorldModel world;
+    editor::readWorld(*sim,*module,config,hierarchyPreview_.links(),hierarchyPreview_.setupRefs(),&ws_.map.data,world);
+    Json paths=Json::object();
+    for(const auto& node:editor::enumerateDocumentSceneNodes(ws_.map)){
+        if(node.ref.source!=editor::DocumentEntityRef::Source::MapEntity)continue;
+        const auto* row=world.findDoc(int(node.ref.index));
+        if(!row)continue;
+        Json path=Json::array();
+        for(const auto& key:config.groupings[size_t(index)].by)
+            path.push(str(editor::worldGroupValue(world,module->rules(),*row,key)));
+        paths.set(nodeId(ws_.map,node.ref),std::move(path));
+    }
+    result.set("paths",std::move(paths));
+    return result;
+}
 Json StudioSession::snapshot() const {
     Json result = Json::object();
     Json project = Json::object();
@@ -753,6 +794,12 @@ Json StudioSession::snapshot() const {
         if(node.ref.source==editor::DocumentEntityRef::Source::MapEntity && node.ref.index<ws_.map.data.entities.size())
             row.set("owner",num(int64_t(ws_.map.data.entities[node.ref.index].owner)));
         rows.push(std::move(row));
+    }
+    const auto hierarchy=editor::parseWorldConfig(ws_.project.manifest);
+    if(!ws_.map.data.worldSpace && !hierarchy.groupings.empty()){
+        Json groups=Json::array();
+        for(const auto& group:hierarchy.groupings)groups.push(str(group.title));
+        scene.set("groupings",std::move(groups));
     }
     scene.set("entities", std::move(rows));
     result.set("scene", std::move(scene));
@@ -2151,7 +2198,7 @@ Json StudioSession::dispatch(const Json& request) {
     if(stroking_){
         // The stroke owns the MapDoc transaction across frames. Only explicit
         // observational requests can enter; other edits retry after release.
-        static const std::set<std::string> reads={"studio.snapshot","studio.inspect","studio.propertiesFor","studio.history","studio.projectHistory","studio.assetHistory","studio.assetTrashList","studio.stats","studio.project","studio.agentInfo","studio.agentStop","studio.componentCatalog"};
+        static const std::set<std::string> reads={"studio.snapshot","studio.hierarchyGroups","studio.inspect","studio.propertiesFor","studio.history","studio.projectHistory","studio.assetHistory","studio.assetTrashList","studio.stats","studio.project","studio.agentInfo","studio.agentStop","studio.componentCatalog"};
         if(method=="studio.sceneBrush"&&request["params"].has("armed")&&!request["params"].getBool("armed",true))strokeCancel();
         else if(!reads.count(method)){
             Json reply=Json::object();reply.set("id",request["id"]);reply.set("error",str("Finish or cancel the active Scene stroke first"));return reply;
@@ -3199,12 +3246,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
             const Json scope=graphDocumentScope();
             const Json& supplied=params["scope"];
-            // The native web bridge can serialize object members in a different order.
-            if (!params.isObject() || params.size()!=1 || !supplied.isObject() ||
-                supplied.size()!=scope.size() ||
-                !std::all_of(scope.members().begin(),scope.members().end(),[&](const auto& field){
-                    return supplied[field.first]==field.second;
-                }))
+            if (!params.isObject() || params.size()!=1 || !sameDocumentScope(supplied,scope))
                 throw std::runtime_error("Caverns inspection document changed; refresh Studio");
             Json out=Json::object();
             out.set("scope",scope);
@@ -3921,6 +3963,8 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             ++graphDocumentEpoch_;
             clearSelection();hidden_.clear();locked_.clear();previewGraphTitle_.clear();previewGraphFactors_=Json();previewMaterialName_.clear();refreshMaterialPreview();
             reply.set("result",snapshot());
+        } else if (method == "studio.hierarchyGroups") {
+            reply.set("result",hierarchyGroups(params));
         } else if (method == "studio.entityCatalog") {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
             Json catalog=Json::object(), types=Json::array();

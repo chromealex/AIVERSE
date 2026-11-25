@@ -13,6 +13,7 @@
 #include "apps/studio-native/StudioFacialPreviewBinding.h"
 #include "engine/character/vivid/HumanCreatorWorkbench.h"
 #include "apps/editor/core/Workspace.h"
+#include "apps/editor/core/WorldInspect.h"
 #include "apps/studio-native/StudioWindPreview.h"
 #include "apps/editor/core/Net.h"
 #include "apps/editor/core/WizardAgent.h"
@@ -117,6 +118,9 @@ public:
 private:
     Json snapshot() const;
     Json graphDocumentScope() const;
+    Json hierarchyGroups(const Json& params);
+    editor::WorldPreview hierarchyPreview_;
+    std::string hierarchyPreviewVersion_;
     uint64_t graphDocumentEpoch_=1;
     Json buildRequest(const std::string& method, const Json& params);
     Json dispatchImpl(const Json& request);

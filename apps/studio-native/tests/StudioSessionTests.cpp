@@ -1751,7 +1751,7 @@ void entityWorkflow() {
     const auto root=fs::canonical(fs::temp_directory_path())/("studio-entities-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     const auto project=root/"templates"/"fixture";
     fs::create_directories(project/"maps");
-    std::ofstream(project/"game.json") << R"({"name":"Studio fixture","module":"game","rules":"rules.json","maps":[{"file":"maps/scene.json"}]})";
+    std::ofstream(project/"game.json") << R"({"name":"Studio fixture","module":"game","editor":{"hierarchy":{"groupings":[{"title":"By type and origin","by":["type","origin"]}]}},"rules":"rules.json","maps":[{"file":"maps/scene.json"}]})";
     std::ofstream(project/"rules.json") << R"({"types":{"unit":{"health":{"max":100}}}})";
     editor::MapDoc map;
     map.reset(16,16);
@@ -1769,6 +1769,29 @@ void entityWorkflow() {
             request.set("method",Json::string(method));request.set("params",std::move(params));
             return session.dispatch(request);
         };
+        {
+            const auto snapshot=call("studio.snapshot")["result"];
+            AIVERSE_TEST_CHECK(snapshot["scene"]["groupings"][0].str()=="By type and origin");
+            const auto unchanged=session.workspace().map.toJson();
+            Json params=Json::object();
+            params.set("expectedProject",snapshot["project"]["path"]);
+            Json reordered=Json::object();
+            for(const char* field:{"revision","epoch","mapPath","projectPath"}) reordered.set(field,snapshot["graphDocument"][field]);
+            params.set("scope",reordered);
+            params.set("group",Json::number(int64_t(0)));
+            Json reply;
+            const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(10);
+            do {
+                reply=call("studio.hierarchyGroups",params);
+                if(!reply["result"].getBool("pending"))break;
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }while(std::chrono::steady_clock::now()<deadline);
+            const auto& path=reply["result"]["paths"][snapshot["scene"]["entities"][0].getStr("id")];
+            AIVERSE_TEST_CHECK(path.size()==2 && !path[0].str().empty() && path[1].str()==editor::worldOriginTitle(editor::WorldOrigin::Map));
+            AIVERSE_TEST_CHECK(session.workspace().map.toJson()==unchanged);
+            params.member("scope").set("revision",Json::string("stale"));
+            AIVERSE_TEST_CHECK(call("studio.hierarchyGroups",params).has("error"));
+        }
         {
             fs::create_directories(project/"shaders");
             const auto path=project/"shaders"/"precise.json";

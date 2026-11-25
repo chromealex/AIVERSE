@@ -3,6 +3,9 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/editor/core/DocumentWorldPreview.h",
+    "apps/editor/EditorWorld.cpp",
+    "apps/studio-native/StudioSession.h",
     "apps/studio-native/StudioGameSurface.cpp",
     "apps/studio-native/StudioGameSurface.h",
     "apps/studio-native/StudioRuntimeInspect.h",
@@ -184,6 +187,7 @@
       "agent"
     ],
     "studio_methods": [
+      "studio.hierarchyGroups",
       "studio.gameSelectEntity",
       "studio.project",
       "studio.openMap",

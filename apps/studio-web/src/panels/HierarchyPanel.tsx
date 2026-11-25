@@ -16,6 +16,9 @@ const kindIcon = (node: StudioEntity) => node.kind === 'Light' ? Lightbulb
 export default function HierarchyPanel({ snapshot, busy, connected, search, setSearch,
   rows, select, selectIds, hoverId, updateSnapshot, setBusy }: StudioPanelContext) {
   const [grouping, setGrouping] = useState<HierarchyGrouping>('scene');
+  const [paths,setPaths]=useState<Record<string,string[]>>();
+  const [refresh,refreshGroups]=useState(0);
+  const refreshSeen=useRef(0);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const anchor = useRef<string | null>(null);
   const [catalog, setCatalog] = useState<StudioEntityCatalog | null>(null);
@@ -29,7 +32,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
   const project = snapshot?.project.path;
   useEffect(() => {
     let active = true;
-    setCollapsed(new Set()); anchor.current = null;
+    setGrouping('scene'); setCollapsed(new Set()); anchor.current = null;
     setCatalog(null); setCreating(false); setError('');
     if (connected && project) void invoke('studio.entityCatalog', {}).then(result => {
       if (active) { setCatalog(result); setType(result.types[0]?.id ?? ''); }
@@ -46,7 +49,26 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     const filter = parseHierarchyFilter(search);
     return rows.filter(({node}) => matchesHierarchy(node, filter, selectedSet));
   }, [rows, search, selectedSet]);
-  const display = useMemo(() => groupedHierarchy(matches, grouping, collapsed), [matches, grouping, collapsed]);
+  const scope=snapshot?.graphDocument;
+  const group=grouping.startsWith('project:')?Number(grouping.slice(8)):-1;
+  useEffect(()=>{
+    setPaths(undefined);
+    if(group<0 || !project || !scope)return;
+    let active=true,timer:number|undefined;
+    const load=async(force:boolean)=>{
+      try{
+        const result=await invoke('studio.hierarchyGroups',{expectedProject:project,scope,group,refresh:force});
+        if(!active)return;
+        if(result.pending)timer=window.setTimeout(()=>void load(false),120);
+        else {setPaths(result.paths??{});setError('');}
+      }catch(e){if(active)setError(String(e));}
+    };
+    const force=refreshSeen.current!==refresh;
+    refreshSeen.current=refresh;
+    void load(force);
+    return ()=>{active=false;window.clearTimeout(timer);};
+  },[project,scope?.mapPath,scope?.epoch,scope?.revision,snapshot?.project.historyVersion,group,refresh]);
+  const display = useMemo(() => group>=0 && !paths ? [] : groupedHierarchy(matches, grouping, collapsed,paths), [matches, grouping, collapsed,paths,group]);
   const visible = useMemo(() => display.flatMap(row => 'node' in row ? [row] : []), [display]);
   const canReorder = grouping === 'scene' && !search && !busy;
   // Selection targets for row actions: the whole selection when the row is part of it.
@@ -167,8 +189,13 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
         setGrouping(event.target.value as HierarchyGrouping); setCollapsed(new Set()); anchor.current = null; setDrop(null);
       }}>
         <option value="scene">Scene order</option><option value="type">Type</option><option value="owner-type">Owner → type</option>
+        {snapshot?.scene.groupings?.map((title,i)=><option key={i} value={'project:'+i}>{title}</option>)}
       </StudioSelect>
     </label>}
+    {group>=0 && <div className="hier__create">
+      <StudioButton size="sm" onClick={()=>refreshGroups(v=>v+1)}>Refresh groups</StudioButton>
+      {!paths&&!error&&<span role="status">Reading preview…</span>}
+    </div>}
     {creating && <form className="hier__create" onSubmit={event => { event.preventDefault(); create(); }}>
       <StudioSelect aria-label="Entity type" value={type} disabled={busy} onChange={event => setType(event.target.value)}>
         {catalog?.types.map(item => <option key={item.id} value={item.id}>{item.name || item.id}</option>)}
