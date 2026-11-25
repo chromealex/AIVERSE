@@ -1,0 +1,10 @@
+{
+  "sha": "195725b257fb5fd629b0c67d7e893faadb332306",
+  "argv": [
+    "bash",
+    "/tmp/shader-apply-qa.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-shader-draft-apply.log.txt",
+  "sha256": "e32af967938228e73ab4a994f2f09586716f8549d6ca72e35bc4aec9358fe537"
+}
