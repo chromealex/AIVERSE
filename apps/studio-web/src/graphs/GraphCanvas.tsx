@@ -123,7 +123,7 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
     const height=node.height;
     return <g key={node.id} className="au-graph-node"
     transform={`translate(${node.x} ${node.y})`} tabIndex={disabled?-1:0}
-    role="group" aria-label={node.id+' '+node.label}
+    role="group" aria-label={node.id+' '+node.label} aria-description={node.outputChannels?.length?'Shader outputs: '+node.outputChannels.join(', '):undefined}
     onKeyDown={event=>key(event,node)}
     onContextMenu={()=>{if(!ids.includes(node.id))updateSelection([node.id]);}}
     onPointerDown={event=>{
@@ -149,6 +149,13 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
       {node.values.length>0&&<text className="graph-node-value" x={node.values.length>=3?17:0} y="61">
        {node.values.map(v=>Number(v.toPrecision(3))).join('  ')}
       </text>}
+      {!!node.outputChannels?.length&&<g>
+       <title>{'Shader outputs: '+node.outputChannels.join(', ')}</title>
+       <path d={`M0 ${height-20} H108`} stroke="var(--au-line)"/>
+       <text y={height-6} fill="var(--au-accent-ink)" fontSize="10">
+        {'→ '+node.outputChannels[0]+(node.outputChannels.length>1?'  +'+(node.outputChannels.length-1):'')}
+       </text>
+      </g>}
      </svg>
     </> : <>
     <text x="10" y="15" fill="var(--au-text)" fontSize="11">{node.id}</text>
