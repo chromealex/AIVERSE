@@ -856,6 +856,34 @@ void authoredEntityWorkflow() {
    }
    AIVERSE_TEST_CHECK(!call("studio.undo").has("error"));
    AIVERSE_TEST_CHECK(!session.workspace().map.data.entities[size_t(session.workspace().map.findEntity("second"))].extra["components"]["StaticModel"].has("materials"));
+   // The same Material Library preset and Mesh Renderer edit that Studio dispatches.
+   {
+       std::ofstream(project/"content/stone-color.png")<<"catalog fixture";
+       std::ofstream(project/"content/stone-normal.png")<<"catalog fixture";
+       studio::StudioAssetCatalog assets(project);assets.rebuild();
+       const auto color=assets.byPath("stone-color.png"), normal=assets.byPath("stone-normal.png");
+       AIVERSE_TEST_CHECK(color && normal);
+       Json create=Json::parse(R"({"name":"cliff","preset":"triplanar","repeatMetres":0.75})");
+       create.set("colorGuid",Json::string(color->guid));
+       create.set("normalGuid",Json::string(normal->guid));
+       AIVERSE_TEST_CHECK(!call("studio.materialCreate",create.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(call("studio.materialCreate",create.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(!call("studio.setProperty",R"({"entityId":"entity:@second","componentId":"MeshRenderer","key":"material:*","value":"cliff"})").has("error"));
+       AIVERSE_TEST_CHECK(!call("studio.save").has("error"));
+       const auto graph=Json::parseFile((project/"materials.json").string())["materials"]["cliff"]["shaderGraph"];
+       AIVERSE_TEST_CHECK(graph["outputs"].has("normal"));
+       bool colorBound=false,normalBound=false;
+       for (const auto& node:graph["nodes"].items()) {
+           colorBound|=node.getStr("texture")=="content/stone-color.png";
+           normalBound|=node.getStr("texture")=="content/stone-normal.png";
+       }
+       AIVERSE_TEST_CHECK(colorBound && normalBound);
+       editor::MapDoc saved;std::string loadError;
+       AIVERSE_TEST_CHECK(saved.load((project/"maps/scene.json").string(),&loadError));
+       const auto& entity=saved.data.entities[size_t(saved.findEntity("second"))];
+       AIVERSE_TEST_CHECK(entity.extra["components"]["StaticModel"]["materials"].getStr("*")=="cliff");
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error"));
+   }
    // Built-in primitives: builtin:sphere is stored, builtin:cube clears to the default cube.
    AIVERSE_TEST_CHECK(!call("studio.setProperty",R"({"entityId":"entity:@second","componentId":"MeshRenderer","key":"asset","value":"builtin:sphere"})").has("error"));
    AIVERSE_TEST_CHECK(session.workspace().map.data.entities[size_t(session.workspace().map.findEntity("second"))].extra["components"]["StaticModel"].getStr("asset")=="builtin:sphere");

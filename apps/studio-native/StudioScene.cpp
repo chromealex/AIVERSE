@@ -421,6 +421,30 @@ void StudioScene::syncDocumentModels(
             instanceMaterials_.clear();
         }
     }
+    // Model loaders may request .bin, textures, MTL beside the model.
+    // Resolve each request with the same root/symlink checks.
+    auto read=[root](const std::string& name,std::string& out)->bool {
+        if (name.rfind("content/",0)!=0 || name.size()>512) return false;
+        const fs::path rel(name.substr(8));
+        if (rel.empty() || rel.is_absolute()) return false;
+        fs::path file=root;
+        for(const auto& part:rel) {
+            if(part.empty()||part=="."||part=="..") return false;
+            file/=part;
+            std::error_code ec;
+            const auto st=fs::symlink_status(file,ec);
+            if(ec || fs::is_symlink(st)) return false;
+        }
+        if (!fs::is_regular_file(file)) return false;
+        std::error_code sizeError;
+        const auto bytes=fs::file_size(file,sizeError);
+        if (sizeError || bytes>256ull*1024ull*1024ull) return false;
+        std::ifstream input(file,std::ios::binary);
+        if (!input) return false;
+        out.assign(std::istreambuf_iterator<char>(input),
+                   std::istreambuf_iterator<char>());
+        return bool(input) || input.eof();
+    };
     std::set<std::string> overridden;
     // One filesystem check per unique model path per sync: hundreds of entities
     // share one file and the project may live on a slow external disk.
@@ -521,30 +545,6 @@ void StudioScene::syncDocumentModels(
             if (documentModels_.size()>=512) continue;
             if (loadedThisFrame>0 && std::chrono::steady_clock::now()-loadStart>std::chrono::milliseconds(30)) { pending=true; continue; }
             ++loadedThisFrame;lastLoaded=path;
-            // Model loaders may request .bin, textures, MTL beside the model.
-            // Resolve each request with the same root/symlink checks.
-            auto read=[root](const std::string& name,std::string& out)->bool {
-                if (name.rfind("content/",0)!=0 || name.size()>512) return false;
-                const fs::path rel(name.substr(8));
-                if (rel.empty() || rel.is_absolute()) return false;
-                fs::path file=root;
-                for(const auto& part:rel) {
-                    if(part.empty()||part=="."||part=="..") return false;
-                    file/=part;
-                    std::error_code ec;
-                    const auto st=fs::symlink_status(file,ec);
-                    if(ec || fs::is_symlink(st)) return false;
-                }
-                if (!fs::is_regular_file(file)) return false;
-                std::error_code sizeError;
-                const auto bytes=fs::file_size(file,sizeError);
-                if (sizeError || bytes>256ull*1024ull*1024ull) return false;
-                std::ifstream input(file,std::ios::binary);
-                if (!input) return false;
-                out.assign(std::istreambuf_iterator<char>(input),
-                           std::istreambuf_iterator<char>());
-                return bool(input) || input.eof();
-            };
             try {
                 auto model=render::loadModel(path,read);
                 if (!model || model->skinned() || model->vertices.empty() ||
@@ -597,9 +597,19 @@ void StudioScene::syncDocumentModels(
                 cached.materials=found->second->materials;
                 Json authored=Json::object();authored.set("materials",overrides);
                 const auto plan=view::AppearanceChoiceAuthoring::resolve(*found->second,authored);
+                auto loadTexture=[&](const std::string& name) {
+                    auto& model=*found->second;
+                    for(size_t i=0;i<model.images.size();++i)
+                        if(model.images[i].name==name) return int(i);
+                    render::Image image;
+                    std::string bytes;
+                    if(!read(name,bytes) || !render::decodeImage(bytes,image)) return -1;
+                    image.name=name;
+                    return render::addImage(*device_,model,std::move(image));
+                };
                 for(size_t i=0;i<plan.materialLayers.size() && i<cached.materials.size();++i)
                     for(const auto& layer:plan.materialLayers[i])
-                        view::AppearanceAuthoringService::applyMaterial(cached.materials[i],materialLibrary_,layer);
+                        view::AppearanceAuthoringService::applyMaterial(cached.materials[i],materialLibrary_,layer,loadTexture);
             }
             overridden.insert(proxy.id);
         }

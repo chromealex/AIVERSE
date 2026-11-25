@@ -3,8 +3,23 @@
   "id": "model-triplanar",
   "owner": "render",
   "changed_paths": [
+    "CMakeLists.txt",
+    "apps/editor/core/MaterialOps.cpp",
+    "apps/studio-native/StudioMaterialValidation.h",
+    "apps/studio-native/StudioScene.cpp",
+    "apps/studio-native/StudioSession.cpp",
+    "apps/studio-native/tests/StudioSessionTests.cpp",
+    "apps/studio-web/src/panels/MaterialsPanel.tsx",
+    "apps/studio-web/src/panels/materialSchema.ts",
+    "apps/studio-web/src/types.ts",
+    "docs/agent-handoffs/model-triplanar-initial.md",
+    "docs/devlog/systems.json",
+    "docs/features/model-triplanar.json",
     "docs/shader-graph.md",
-    "engine/render/graph/ShaderGraph.cpp"
+    "engine/render/graph/TriplanarMaterial.h",
+    "skills/visuals/aiverse-shader-graph/SKILL.md",
+    "tests/render/model_triplanar_frame.cpp",
+    "tests/shader_graph/compiler.cpp"
   ],
   "traits": {
     "editable": true,
@@ -105,10 +120,23 @@
     }
   },
   "integrations": {
-    "skills": [],
-    "mcp_tools": [],
-    "studio_panels": [],
-    "studio_methods": []
+    "skills": [
+      "aiverse-shader-graph"
+    ],
+    "mcp_tools": [
+      "material_triplanar",
+      "material_set",
+      "material_apply"
+    ],
+    "studio_panels": [
+      "materials",
+      "inspector"
+    ],
+    "studio_methods": [
+      "studio.materialCreate",
+      "studio.setProperty",
+      "studio.save"
+    ]
   },
   "test_reports": []
 }

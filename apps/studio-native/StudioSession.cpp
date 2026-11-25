@@ -2883,6 +2883,17 @@ Json StudioSession::dispatchImplCore(const Json& request) {
         } else if (method == "studio.materials" || method == "studio.materialPatch" ||
                    method == "studio.materialCreate") {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
+            auto texturePath = [&](const Json& value) {
+                if (!value.isString()) throw std::runtime_error("Texture reference must be an asset GUID");
+                if (value.str().empty()) return str("");
+                if (!studioValidGuid(value.str())) throw std::runtime_error("Texture reference requires a valid asset GUID");
+                StudioAssetCatalog catalog(ws_.project.dir);
+                catalog.rebuild();
+                const auto asset=catalog.byGuid(value.str());
+                if (!asset || asset->directory || asset->importer!="texture")
+                    throw std::runtime_error("Texture GUID not found or is not a texture");
+                return str("content/"+asset->path);
+            };
             if (method == "studio.materialCreate") {
                 const std::string name=params.getStr("name");
                 const std::string preset=params.getStr("preset");
@@ -2904,6 +2915,15 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 material.set("roughness",Json::number(preset=="metal" ? .32 : preset=="glass" ? .08 : .85,3));
                 material.set("alpha",str(preset=="glass" ? "blend" : "opaque"));
                 if (preset=="glass") material.set("doubleSided",Json::fromBool(true));
+                if (preset=="triplanar") {
+                    Json definition=Json::object();
+                    definition.set("colorMap",texturePath(params["colorGuid"]));
+                    if (params.has("normalGuid")) definition.set("normalMap",texturePath(params["normalGuid"]));
+                    if (params.has("repeatMetres")) definition.set("repeatMetres",params["repeatMetres"]);
+                    const Json recipe=ws_.call("material_triplanar",definition,"studio");
+                    if (recipe.has("error")) throw std::runtime_error(recipe.getStr("error"));
+                    material=recipe["material"];
+                }
                 Json request=Json::object();
                 request.set("name",str(name));
                 request.set("material",std::move(material));
@@ -2946,20 +2966,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                         continue;
                     }
                     if (studioMaterialTextureKey(key)) {
-                        if (!value.isString())
-                            throw std::runtime_error("Texture reference must be an asset GUID");
-                        if (value.str().empty()) {
-                            validatedPatch.set(key, str(""));
-                            continue;
-                        }
-                        if (!studioValidGuid(value.str()))
-                            throw std::runtime_error("Texture reference requires a valid asset GUID");
-                        StudioAssetCatalog catalog(ws_.project.dir);
-                        catalog.rebuild();
-                        const auto asset = catalog.byGuid(value.str());
-                        if (!asset || asset->directory || asset->importer != "texture")
-                            throw std::runtime_error("Texture GUID not found or is not a texture");
-                        validatedPatch.set(key, str("content/" + asset->path));
+                        validatedPatch.set(key,texturePath(value));
                         continue;
                     }
                     validatedPatch.set(key, value);

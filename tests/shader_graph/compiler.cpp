@@ -1,4 +1,5 @@
 #include "engine/render/graph/ShaderGraph.h"
+#include "engine/render/graph/TriplanarMaterial.h"
 #include "engine/render/PostFxData.h"
 #include "engine/fx/FxEffect.h"
 #include <iostream>
@@ -9,6 +10,18 @@ void require(bool value,const char* message){if(!value)throw std::runtime_error(
 void rejects(const Json& g){try {render::graph::compile(g);}catch(const std::exception&){return;}throw std::runtime_error("invalid graph accepted");}
 int main(){try {
     using namespace render::graph;
+    for (const bool mapped : {false,true}) {
+        auto material=makeTriplanarMaterial("stone-color.png", mapped?"stone-normal.png":"", 0.75);
+        auto projection=compile(material["shaderGraph"],"material");
+        require(projection.samples==(mapped?6:3),"wrong triplanar sample cost");
+        require(projection.textures.size()==(mapped?2:1),"wrong triplanar texture dependencies");
+        require(projection.outputs.count("normal")==size_t(mapped),"wrong triplanar normal output");
+        require(projection.glsl.find("sg_uv")==std::string::npos && projection.msl.find("sg_uv")==std::string::npos,
+                "projection requires mesh UV");
+        require(projection.glsl.find("sg_world")!=std::string::npos && projection.msl.find("sg_world")!=std::string::npos,
+                "world-space projection missing");
+        require(Json::parse(material.dump())==material,"triplanar material round-trip");
+    }
     for(auto domain:{"material","postfx","particle"}) {
         auto g=makeDefault(domain);auto p=compile(g,domain);require(p.outputs.at("color")=="sg_n0","identity output");
         for(const auto& op:catalog()) {
