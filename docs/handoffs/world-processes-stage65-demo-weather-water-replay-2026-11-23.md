@@ -1,0 +1,4 @@
+# Stage65 — demo weather, water and rollback replay
+Branch: feature/world-processes-stage31-bidirectional-handles; main unchanged.
+167da811 adds PHYSIS grid initialization and tick before EVOLVE hydration, three climate links and NEREID native pipeline/lake to EvolveForestDemo.cpp. 9d617e22 adds optional --replay CLI using Simulation::saveState/loadState and checksum comparison. Invocation after build: aiverse_evolve_forest_demo examples/native/world_processes/evolve-forest-demo.json 1024 --replay.
+No build or execution performed. Disk persistence remains pending: verify PHYSIS registration and complete save/load manifest before enabling disk CLI. Replay coverage and checksum inclusion of weather must be verified; no successful replay claimed. Next: inspect PHYSIS persistence owner, add disk CLI and report plant state, then integrated QA when authorized.

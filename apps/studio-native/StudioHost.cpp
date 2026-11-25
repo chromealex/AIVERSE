@@ -1,7 +1,11 @@
 #include "apps/studio-native/StudioHost.h"
 #include "apps/studio-native/StudioSpectraPackageImport.h"
+#include "apps/studio-native/StudioWorldProcessesGizmos.h"
+#include "apps/studio-native/StudioWorldProcessesEditing.h"
 #include "apps/studio-native/StudioHumanLookDocument.h"
 #include "apps/studio-native/StudioGameInput.h"
+#include "apps/studio-native/StudioBuildingGeneration.h"
+#include "apps/studio-native/StudioBuildingPanelPreview.h"
 #include "apps/studio-native/StudioTerrainGeometry.h"
 #include "apps/editor/core/BrandingOps.h"
 #include "apps/editor/core/BuildTool.h"
@@ -72,10 +76,11 @@ const std::set<std::string>& documentChangingMethods() {
     static const std::set<std::string> methods = {
         "studio.openMap", "studio.newMap", "studio.entityCreate", "studio.entityDelete", "studio.entityDuplicate",
         "studio.setProperty", "studio.save", "studio.undo", "studio.redo", "studio.nereidFlowSet",
-        "studio.renderLightingSet", "studio.lightingSet", "studio.lightAdd", "studio.lightUpdate", "studio.lightDelete",
-        "studio.materialPatch", "studio.materialCreate", "studio.setProperties", "studio.componentAdd",
+        "studio.planetForestPlant", "studio.planetForestMove", "studio.planetForestSet", "studio.renderLightingSet", "studio.lightingSet", "studio.lightAdd", "studio.lightUpdate", "studio.lightDelete",
+        "studio.materialPatch", "studio.materialCreate", "studio.buildingPublishMaterial", "studio.setProperties", "studio.componentAdd",
         "studio.componentRemove", "studio.entityMove", "studio.entitiesDelete", "studio.entitiesDuplicate",
-        "studio.assetPlace", "studio.entityFlags", "studio.rulesSet", "studio.rulesDocumentSave", "studio.entitiesAlign", "studio.historyJump"};
+        "studio.assetPlace", "studio.worldProcessAreaSet", "studio.worldProcessAreaBatchMove", "studio.worldProcessAreaBatchResize", "studio.entityFlags", "studio.rulesSet", "studio.rulesDocumentSave", "studio.entitiesAlign", "studio.historyJump",
+        "studio.projectHistoryStep", "studio.assetMetaPatch", "studio.assetHistoryStep", "studio.assetTransferCommit", "studio.assetDelete", "studio.assetFolderCreate", "studio.assetTrashApply", "studio.assetHistoryResetApply", "studio.agentHistoryStep", "studio.agentUndoAll", "studio.agentBatchApply"};
     return methods;
 }
 } // namespace
@@ -84,6 +89,7 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
     : platform_(platform), engineRoot_(engineRoot), htmlComposite_(htmlComposite) {
     // The project opens asynchronously after the UI loads (splash and progress).
     session_ = std::make_unique<StudioSession>(engineRoot, std::string());
+    session_->setPlanetViewAgentProvider([this](const std::string& name,const Json& args){return planetViewAgentRequest(name,args);});
     session_->setMaterialSlotProvider([this](const std::string& asset) {
         return preview_ ? onScene([&] { return preview_->modelMaterialSlots(asset); }) : std::vector<std::string>{};
     });
@@ -101,8 +107,17 @@ void StudioHost::cancelSpectraCapture() {
 }
 void StudioHost::shutdown() {
     *alive_ = false;
+    retireBuildingPanelPreview();
     cancelSpectraCapture();
     if(session_)session_->workspace().setSpectraPreviewHandler({});
+    // Release editor-only EVOLVE scratch even if the webview never sends pagehide.
+    wpNumericPreview_=Json();
+    wpPreviewOwner_.clear();
+    wpPreviewSelection_.clear();
+    wpPreviewRevision_=-1;
+    wpPivotSelection_.clear();
+    wpCustomPivot_=false;
+    wpDrag_={};
     game_.reset(); // hosted client and its device retire before the native surface
     if (renderThread_) {
         // The Scene and its GPU resources are released on their owner thread, then the thread stops.
@@ -233,10 +248,32 @@ void StudioHost::webReady() {
 // models in with a per-frame budget. requestId < 0: --project / last project.
 void StudioHost::openProject(const std::string& path, int64_t requestId) {
     if (projectLoading_) return;
+    session_->strokeCancel();mouse_={};
+    // A temporary building Model belongs to the previous project's
+    // renderer epoch. Retire it BEFORE the Workspace changes, even
+    // when the generator panel is not mounted and cannot send Stop.
+    if(preview_){
+        std::string issue;
+        const bool retired=onScene([&]{
+            return preview_->setBuildingPreview({},&issue);
+        });
+        if(!retired){
+            if(requestId>=0)
+                sendError(Json::number(requestId),issue);
+            else platform_.log("Building preview retirement blocks project switch: "+issue);
+            return;
+        }
+    }
+    retireBuildingPanelPreview();
+    buildingGraphOverlayScene_=0;rebuildOverlay();
+    session_->setBuildingGraphReader({});
     projectLoading_ = true;
     ++packageProjectEpoch_;
     cancelSpectraCapture(); // invalidate old project callbacks before opening
     if (game_) game_->stop();
+    wpLiveSnapshot_=Json();wpLivePlanetProject_.clear();wpLivePlanetMapPath_.clear();wpLivePlanetRevision_=0;wpLiveRefresh_=0;
+    rebuildOverlay();
+    playReview_=Json();
     sendProjectSplash(path);
     sendLoading("project", "Opening " + fs::path(path).filename().string(), 0, 0);
     StudioSession* session = session_.get();
@@ -289,7 +326,7 @@ bool StudioHost::confirmClose() {
 
 // ---------------------------------------------------------------- tick
 Json StudioHost::gameState() {
-    if (game_) return game_->state();
+    if (game_) {auto out=game_->state();out.set("canReviewPlayChanges",Json::fromBool(game_->canReview(session_->workspace())));return out;}
     auto out = Json::parse(R"({"paused":false,"canControl":false,"canStep":false,"active":false,"loading":false,"progress":0,"inMatch":false,"tick":0,"error":""})");
     out.set("device", StudioGameDevice{}.json());
     return out;
@@ -298,7 +335,7 @@ void StudioHost::gameEvent(const platform::Event& event) {
     if (game_ && platform_.surfaceDrawable(StudioSurface::Game)) game_->event(event);
 }
 void StudioHost::surfaceDetached(StudioSurface surface) {
-    if (surface == StudioSurface::Scene) { placement_ = {}; readyEmitted_ = false; }
+    if (surface == StudioSurface::Scene) { if(!projectLoading_&&session_->strokeCancel())sendEvent("document.changed", "");mouse_={};placement_ = {}; readyEmitted_ = false; }
     else if(surface>=StudioSurface::Material) {
         auto& asset=assetSurface(surface);
         asset.placement={};
@@ -314,10 +351,25 @@ void StudioHost::surfaceDetached(StudioSurface surface) {
 void StudioHost::tickGame() {
     const double now = platform_.now(), dt = gameFrameTime_ > 0 ? now - gameFrameTime_ : 0;
     gameFrameTime_ = now;
-    if (!game_) return;
+    if (!game_) {session_->setBuildingGraphReader({});return;}
+    const auto invalidate=[&]{
+        if(!wpLiveSnapshot_.getBool("active"))return;
+        const bool planet=wpLiveSnapshot_.getStr("topology")=="planet";
+        if(planet?(!game_->planetSnapshotCurrent(wpLiveSnapshot_)||!worldProcessPlanetMapCurrent()):!game_->state().getBool("inMatch")){
+            wpLiveSnapshot_=Json();wpLiveRefresh_=0;rebuildOverlay();
+        }
+    };
+    invalidate();
     if (!gamePlacement_.visible || !platform_.surfaceDrawable(StudioSurface::Game)) { game_->suspend(); return; }
     game_->frame(gamePlacement_.pixelsW, gamePlacement_.pixelsH, float(gamePlacement_.width), float(gamePlacement_.height),
                  dt, platform_.gameFocused());
+    invalidate();
+    if(wpLiveOptions_.live && now-wpLiveRefresh_>=.25){
+        wpLiveRefresh_=now;
+        wpLiveSnapshot_=sampleWorldProcessLive();
+        rebuildOverlay();
+    }
+    session_->setBuildingGraphReader(game_->buildingGraphReader());
 }
 void StudioHost::tickAgentScreenshot() {
     if (agentShot_) {
@@ -455,6 +507,49 @@ void StudioHost::tickAssetPreview(StudioSurface surface) {
         sendEvent("shader.previewError",error);
     }
 }
+Json StudioHost::buildingPanelFrame(const BuildingPreviewJob& job){
+    // Only the Building render worker accesses its device/model.
+    if(!buildingPanelPreview_)throw std::runtime_error("No active Building panel preview");
+    std::vector<uint8_t> pixels;
+    platform_.sceneThreadScope([&]{pixels=buildingPanelPreview_->frame(job.yaw,job.pitch,job.zoom,job.panX,job.panY);});
+    const auto bytes=encodeJpeg(pixels,StudioBuildingPanelPreview::Side,StudioBuildingPanelPreview::Side,90);
+    if(bytes.empty())throw std::runtime_error("Building preview JPEG encoding failed");
+    Json result=Json::object();
+    result.set("active",Json::fromBool(true));
+    result.set("token",Json::string(std::to_string(job.token)));
+    result.set("url",Json::string("data:image/jpeg;base64,"+editor::base64Encode(bytes)));
+    return result;
+}
+void StudioHost::renderBuildingPanelFrame(){
+    std::optional<BuildingPreviewJob> job;
+    {std::lock_guard<std::mutex> lock(buildingPreviewMutex_);job=std::move(buildingPreviewJob_);buildingPreviewJob_.reset();}
+    if(!job)return;
+    Json reply=Json::object();reply.set("id",job->id);
+    try{reply.set("result",buildingPanelFrame(*job));}
+    catch(const std::exception& e){reply.set("error",Json::string(e.what()));}
+    catch(...){reply.set("error",Json::string("Unknown Building preview error"));}
+    {std::lock_guard<std::mutex> lock(buildingPreviewMutex_);buildingPreviewReply_=std::move(reply);}
+}
+void StudioHost::publishBuildingPanelFrame(){
+    std::optional<Json> reply;
+    {std::lock_guard<std::mutex> lock(buildingPreviewMutex_);reply=std::move(buildingPreviewReply_);buildingPreviewReply_.reset();}
+    if(!reply)return;
+    buildingPreviewPending_=false;
+    // A delayed reply is no longer inside its initiating WebView callback.
+    // Bridge request IDs are window-scoped; broadcast the addressed reply.
+    if(*alive_)platform_.evaluateScript("window.__aiverseReceive && window.__aiverseReceive("+reply->dump(-1)+");",false);
+}
+void StudioHost::retireBuildingPanelPreview(){
+    buildingPreviewActive_=false;
+    if(buildingPreviewThread_){
+        buildingPreviewThread_->flush();
+        buildingPreviewThread_->invoke([&]{platform_.sceneThreadScope([&]{buildingPanelPreview_.reset();});});
+        buildingPreviewThread_->stop();buildingPreviewThread_.reset();
+    }
+    publishBuildingPanelFrame();
+    buildingPreviewPending_=false;
+    ++buildingPreviewToken_;
+}
 void StudioHost::tickFx() {
     if(!fxPlacement_.visible || !platform_.surfaceDrawable(StudioSurface::Fx))return;
     try {
@@ -512,6 +607,7 @@ void StudioHost::fxCameraZoom(double wheel) {
     });
 }
 void StudioHost::tick() {
+    publishBuildingPanelFrame();
     if (projectLoading_) return; // the background thread owns the session right now
     tickGame();
     // An empty Workspace owns an internal default MapDoc, NOT a loaded project.
@@ -519,6 +615,7 @@ void StudioHost::tick() {
     if (session_->workspace().project.dir.empty()) return;
     // Agent panel: tool calls from aiversemcp run here, on the main thread, between frames.
     if (session_->pollAgentLink()) {
+        sendEvent("assets.changed", "");
         sendEvent("document.changed", "");
         sendEvent("agent.changed", "");
     }
@@ -712,6 +809,7 @@ void StudioHost::failScene(const std::string& message) {
     sendEvent("viewport.error", message);
     readyEmitted_ = false;
     placement_.visible = false;
+    if(!projectLoading_&&session_->strokeCancel())sendEvent("document.changed", "");mouse_={};
     {
         ViewportRect hidden;
         NativeViewportPlacement none;
@@ -789,6 +887,21 @@ void StudioHost::moveEnd() {
     const auto commit = onScene([&] { return preview_->endTransformDrag(); });
     lastActionCaption_.clear();
     sendEvent("viewport.action", "");
+    if(commit&&commit->expectedRevision&&
+       (*commit->expectedRevision!=session_->workspace().map.revision||
+        session_->lockedIds().contains(commit->id)||session_->hiddenIds().contains(commit->id))){
+        onScene([&]{preview_->clearTransformPreview();});return;
+    }
+    if(commit&&commit->surfacePlacement.isObject()){
+        Json params=Json::object();params.set("entityId",Json::string(commit->id));
+        params.set("componentId",Json::string("SurfacePlacement"));
+        params.set("key",Json::string("placement"));params.set("value",commit->surfacePlacement);
+        if(commit->expectedRevision)params.set("expectedRevision",Json::number(int64_t(*commit->expectedRevision)));
+        const auto outcome=request("studio.setProperty",params);
+        if(outcome.has("error"))platform_.log("AIVERSE planet move: "+outcome.getStr("error"));
+        else sendEvent("document.changed","");
+        return;
+    }
     using Tool = StudioScene::TransformTool;
     const bool unchanged = !commit ||
         (commit->tool == Tool::Move && std::abs(commit->move.x) + std::abs(commit->move.y) + std::abs(commit->move.z) < 1e-4f) ||
@@ -834,6 +947,7 @@ void StudioHost::moveEnd() {
         set.set("entityId", Json::string(commit->id));
         set.set("componentId", Json::string("Transform"));
         set.set("values", values);
+        if(commit->expectedRevision)set.set("expectedRevision",Json::number(int64_t(*commit->expectedRevision)));
         const auto outcome = request("studio.setProperties", set);
         if (outcome.has("error")) platform_.log("AIVERSE transform: " + outcome.getStr("error"));
     }
@@ -879,19 +993,31 @@ void StudioHost::selectionAction(const std::string& method) {
     sendEvent("selection.changed", "");
 }
 // Ring under the cursor while the Scene brush is armed (radius; river: half its width; road: a dot).
+bool StudioHost::resolveBrushPoint(double x,double y,double w,double h,render::float3& at,std::string* error) {
+    if(!preview_||x<0||y<0||w<2||h<2||x>=w||y>=h)return false;
+    if(session_->sceneBrush().kind!="caverns")
+        return onScene([&]{return preview_->groundPoint(float(x),float(y),float(w),float(h),at);});
+    render::float3 origin{},direction{};
+    if(!onScene([&]{return preview_->caveScreenRay(float(x),float(y),float(w),float(h),origin,direction);}))return false;
+    double px=0,py=0,pz=0;
+    if(!session_->caveBrushPoint(origin.x,origin.y,origin.z,direction.x,direction.y,direction.z,px,py,pz,error))return false;
+    at={float(px),float(py),float(pz)};return true;
+}
 bool StudioHost::updateBrushCursor(double x, double y, double w, double h) {
     if (!preview_) return false;
     const auto& b = session_->sceneBrush();
     render::float3 at{};
-    if (!b.armed || x < 0 || y < 0 || !onScene([&] { return preview_->groundPoint(float(x), float(y), float(w), float(h), at); })) {
+    if (!b.armed || !resolveBrushPoint(x,y,w,h,at)) {
         onScene([&] { preview_->setBrushCursor(false, {}, 0); });
         return b.armed;
     }
     const float r = b.kind == "road" ? 0.6f : b.kind == "river" ? float(b.width * 0.5) : float(b.radius);
-    onScene([&] { preview_->setBrushCursor(true, at, r); });
+    onScene([&] { preview_->setBrushCursor(true, at, r,b.kind=="caverns",b.caveMode=="fill"); });
     return true;
 }
 void StudioHost::brushAdjust(double factor, bool disarm) {
+    if(projectLoading_)return;
+    if(disarm&&session_->strokeCancel()){mouse_={};sendEvent("document.changed", "");}
     const auto& b = session_->sceneBrush();
     Json params = Json::object();
     if (disarm) params.set("armed", Json::fromBool(false));
@@ -902,9 +1028,431 @@ void StudioHost::brushAdjust(double factor, bool disarm) {
 }
 bool StudioHost::brushArmed() const { return !projectLoading_ && preview_ && session_->sceneBrush().armed; }
 // Scene overlay: extension gizmos + spline handles (Roads / Water "Edit nodes").
+std::string StudioHost::worldProcessSceneBody(){
+    if(projectLoading_||!session_||!preview_)return {};
+    const auto& ws=session_->workspace();
+    if(!ws.map.data.planet())return {};
+    return onScene([&]{return preview_->planetSceneBody(ws.project.dir,ws.map.path,ws.map.revision);});
+}
+std::optional<StudioForestCameraFocus> StudioHost::worldProcessForestCamera(){
+    if(projectLoading_||!session_||!preview_||!placement_.visible)return {};
+    const auto& ws=session_->workspace();
+    if(!ws.map.data.planet())return {};
+    return onScene([&]{return preview_->planetForestCamera(ws.project.dir,ws.map.path,ws.map.revision,placement_.pixelsW,placement_.pixelsH);});
+}
+Json StudioHost::sampleWorldProcessLive(){
+    if(!game_||!wpLiveOptions_.live||(game_->planetMatch()&&!worldProcessPlanetMapCurrent())){wpForestRenderSnapshot_=Json{};return {};}
+    if(!wpLiveOptions_.forest){wpForestRenderSnapshot_=Json{};return game_->ecologyState(wpLiveOptions_);}
+    const auto camera=worldProcessForestCamera();
+    const auto body=camera?camera->body:worldProcessSceneBody();
+    return game_->ecologyState(wpLiveOptions_,body,camera,&wpForestRenderSnapshot_);
+}
+Json StudioHost::planetSceneBodyRequest(const Json& params){
+        if(projectLoading_||!session_||!preview_)throw std::runtime_error("Scene unavailable");
+        const auto& ws=session_->workspace();
+        if(!ws.map.data.planet())throw std::runtime_error("Planetary map required");
+        if(params.has("body")){
+            if(!params["body"].isString()||params.getStr("mapPath")!=ws.map.path||params.getStr("expectedRevision")!=std::to_string(ws.map.revision))
+                throw std::runtime_error("Reload the current planetary map");
+            if(session_->strokeActive()||brushArmed()||wpDrag_.active||mouse_.active||onScene([&]{return preview_->transformDragActive();}))throw std::runtime_error("Finish the active Scene gesture first");
+            const auto body=params.getStr("body");const int bi=ws.map.data.findBody(body);
+            if(!body.empty()&&(bi<0||!ws.map.data.bodies[size_t(bi)].surface()))throw std::runtime_error("Unknown surface body");
+            const bool armed=forestPlantArm_.isObject();forestPlantArm_=Json{};
+            onScene([&]{preview_->setPlanetSceneBody(ws.project.dir,ws.map.path,body);});
+            if(armed){Json payload=Json::object();payload.set("cancelled",Json::fromBool(true));sendEventPayload("planetForest.planted",payload);}
+            wpLiveSnapshot_=Json{};wpLiveRefresh_=0;rebuildOverlay();
+            Json event=Json::object();event.set("override",Json::string(body));event.set("mapPath",Json::string(ws.map.path));event.set("revision",Json::string(std::to_string(ws.map.revision)));
+            sendEventPayload("planetScene.bodyChanged",event);
+        }
+        Json out=Json::object();out.set("override",Json::string(onScene([&]{return preview_->planetSceneBodyOverride(ws.project.dir,ws.map.path);})));out.set("activeBody",Json::string(worldProcessSceneBody()));
+        return out;
+}
+Json StudioHost::planetForestLiveRequest(){
+        if(game_&&worldProcessPlanetMapCurrent()){
+            const auto body=worldProcessSceneBody();
+            if(wpLiveOptions_.live&&wpLiveOptions_.forest&&game_->planetSnapshotCurrent(wpLiveSnapshot_)&&
+               wpLiveSnapshot_["forest"].getBool("active")&&wpLiveSnapshot_["forest"].getStr("focusBody")==body)
+                return wpLiveSnapshot_["forest"];
+            const auto camera=worldProcessForestCamera();
+            return game_->planetForestState(camera?camera->body:body,camera);
+        }
+        Json out=Json::object();out.set("active",Json::fromBool(false));return out;
+}
+Json StudioHost::planetViewAgentRequest(const std::string& name,const Json& params){
+    if(projectLoading_||!session_||!preview_)throw std::runtime_error("Native Scene unavailable");
+    const auto& ws=session_->workspace();
+    if(!ws.map.data.planet()||!params["expectedProject"].isString()||params.getStr("expectedProject")!=ws.project.dir||
+       !params["mapPath"].isString()||params.getStr("mapPath")!=ws.map.path||
+       !params["expectedRevision"].isString()||params.getStr("expectedRevision")!=std::to_string(ws.map.revision))
+        throw std::runtime_error("Planetary project/map changed; read current identity before retry");
+    if(name=="studio_planet_forest_live"){
+        if(!worldProcessPlanetMapCurrent())throw std::runtime_error("Start local Play on the current saved map");
+        const auto out=planetForestLiveRequest();
+        if(!out.getBool("active"))throw std::runtime_error("Completed local forest snapshot unavailable");
+        return out;
+    }
+    if(name=="studio_planet_scene_body_set"){
+        if(!params["body"].isString())throw std::runtime_error("Body string required");
+        return planetSceneBodyRequest(params);
+    }
+    if(name!="studio_planet_scene_get"&&name!="studio_planet_scene_camera_set")throw std::runtime_error("Unknown planetary view operation");
+    if(name=="studio_planet_scene_camera_set"){
+        if(session_->strokeActive()||brushArmed()||wpDrag_.active||mouse_.active||forestPlantArm_.isObject())
+            throw std::runtime_error("Finish the active Scene gesture first");
+        const auto body=worldProcessSceneBody();
+        if(body.empty()||params.getStr("body")!=body)throw std::runtime_error("Wait for the requested rendered body");
+        if(!params["target"].isArray()||params["target"].size()!=3||params["ortho"].type()!=Json::Type::Bool)
+            throw std::runtime_error("Camera target and orthographic flag required");
+        const auto bounded=[](const Json& j,double lo,double hi){
+            if(!j.isNumber())throw std::runtime_error("Numeric camera field required");
+            const double v=j.toDouble();
+            if(!std::isfinite(v)||v<lo||v>hi)throw std::runtime_error("Camera field out of range");
+            return float(v);
+        };
+        StudioScene::CameraState camera;
+        camera.target={bounded(params["target"][0],-8192,8192),bounded(params["target"][1],-8192,8192),bounded(params["target"][2],-8192,8192)};
+        camera.distance=bounded(params["distance"],2,8192);
+        camera.yaw=std::remainder(bounded(params["yaw"],-1000,1000),6.28318530718f);
+        camera.pitch=bounded(params["pitch"],-1.5707963,1.5707963);camera.ortho=params.getBool("ortho");
+        onScene([&]{
+            if(preview_->planetSceneBody(ws.project.dir,ws.map.path,ws.map.revision)!=body||preview_->transformDragActive())
+                throw std::runtime_error("Scene changed or transform gesture active");
+            preview_->setPlanetOrbitCamera(camera);
+        });
+        wpLiveRefresh_=0;
+        cameraSent_=false;publishCamera(camera);
+    }
+    Json out=planetSceneBodyRequest(Json::object());
+    out.set("project",Json::string(ws.project.dir));out.set("mapPath",Json::string(ws.map.path));
+    out.set("revision",Json::string(std::to_string(ws.map.revision)));
+    if(!out.getStr("activeBody").empty()){
+        const auto camera=onScene([&]{return preview_->cameraState();});
+        Json view=Json::object(),target=Json::array();
+        for(float value:{camera.target.x,camera.target.y,camera.target.z})target.push(Json::number(double(value),4));
+        view.set("target",std::move(target));view.set("distance",Json::number(double(camera.distance),4));
+        view.set("yaw",Json::number(double(camera.yaw),6));view.set("pitch",Json::number(double(camera.pitch),6));
+        view.set("ortho",Json::fromBool(camera.ortho));out.set("camera",std::move(view));
+    }
+    return out;
+}
+bool StudioHost::worldProcessPlanetMapCurrent() const {
+    if(projectLoading_||!session_||!game_||!game_->launchedMapCurrent()||wpLivePlanetMapPath_.empty())return false;
+    const auto& ws=session_->workspace();
+    return ws.project.dir==wpLivePlanetProject_&&ws.map.path==wpLivePlanetMapPath_&&
+        ws.map.revision==wpLivePlanetRevision_&&!ws.map.dirty;
+}
 void StudioHost::rebuildOverlay() {
     if (!preview_) return;
     auto shapes = extShapes_;
+    // World-process authoring overlays use the existing native Scene
+    // OverlayShape renderer. This is a read-only projection of MapDoc,
+    // never a second ECS simulation or a new viewport.
+    if(session_ && !session_->workspace().project.dir.empty()) {
+        auto worldShapes=worldprocess_gizmos::collect(session_->workspace().map,{},wpLiveOptions_.layer);
+        shapes.reserve(shapes.size()+worldShapes.size());
+        for(auto& shape:worldShapes)shapes.push_back(std::move(shape));
+        if(wpLiveOptions_.live&&wpLiveSnapshot_.getBool("active")){
+            for(const auto& r:wpLiveSnapshot_["regions"].items()){
+                if(shapes.size()+5>=1390)break;
+                const float x0=float(r.getInt("minXcm",0))/100.f,z0=float(r.getInt("minZcm",0))/100.f;
+                const float x1=float(r.getInt("maxXcm",0))/100.f,z1=float(r.getInt("maxZcm",0))/100.f;
+                const auto u=[&](const char* key){return std::clamp(float(r.getInt(key,0))/1e9f,0.f,1.f);};
+                float red=u("pollution"),green=u("fertility"),blue=.35f;
+                if(wpLiveOptions_.layer=="fertility")red=.15f;
+                if(wpLiveOptions_.layer=="pollution")green=.15f;
+                if(wpLiveOptions_.layer=="succession"){red=.15f;green=u("succession");blue=.85f;}
+                if(wpLiveOptions_.layer=="durability"){green=u("durability");red=1-green;}
+                if(wpLiveOptions_.layer=="off")continue;
+                const auto rr=uint8_t(red*255),gg=uint8_t(green*255),bb=uint8_t(blue*255);
+                render::float3 center{(x0+x1)*.5f,.9f,(z0+z1)*.5f};
+                worldprocess_gizmos::rectangle(shapes,center,x1-x0,z1-z0,rr,gg,bb);
+                shapes.push_back(worldprocess_gizmos::makeLabel(
+                    {center.x,1.3f,center.z},"LIVE F:"+std::to_string(int(u("fertility")*100))+
+                    "% P:"+std::to_string(int(u("pollution")*100))+"%",rr,gg,bb));
+            }
+        }
+        if(wpLiveOptions_.live&&wpLiveSnapshot_.getBool("active")){
+            for(const auto& p:wpLiveSnapshot_["plants"].items()){
+                if(shapes.size()>=1250)break;
+                const bool fallen=p.getBool("fallen"),dead=p.getBool("dead");
+                const bool juvenile=p.has("mature")&&!p.getBool("mature");
+                shapes.push_back(worldprocess_gizmos::makePoint(
+                    float(p.getInt("x",0))/100.f,1.f,float(p.getInt("z",0))/100.f,
+                    dead?160:fallen?240:100,dead?95:fallen?150:230,juvenile?240:80,juvenile?3.f:5.f));
+            }
+            for(const auto& c:wpLiveSnapshot_["weather"].items()){
+                if(shapes.size()+4>=1300)break;
+                const float size=float(c.getInt("size",0))/100.f;
+                if(size<=0)continue;
+                const float wet=std::clamp(float(c["wetness"].toDouble(0)),0.f,1.f);
+                if(wet<.05f)continue;
+                worldprocess_gizmos::rectangle(shapes,
+                    {float(c.getInt("x",0))/100.f+size*.5f,1.1f,
+                     float(c.getInt("z",0))/100.f+size*.5f},
+                    size,size,60,uint8_t(80+wet*120),240);
+            }
+        }
+        const auto selected=session_->selectedObjectId();
+        const auto pivotSelection=session_->selectedObjectIds();
+        std::string currentPreviewSelection;
+        for(const auto& id:pivotSelection){
+            currentPreviewSelection+=id;
+            currentPreviewSelection.push_back('|');
+        }
+        if(wpNumericPreview_.isObject()&&pivotSelection.size()>1&&
+           currentPreviewSelection==wpPreviewSelection_){
+            render::float3 center{};
+            if(worldprocess_edit::groupCentroid(session_->workspace().map,
+                                                pivotSelection,center)){
+                std::int64_t pivotX=std::llround(double(center.x)*100.);
+                std::int64_t pivotZ=std::llround(double(center.z)*100.);
+                if(wpNumericPreview_.getStr("pivot")=="custom"){
+                    pivotX=wpNumericPreview_["pivotXcm"].integer();
+                    pivotZ=wpNumericPreview_["pivotZcm"].integer();
+                }
+                std::vector<worldprocess_edit::AreaPreview> numeric;
+                if(worldprocess_edit::previewGroupScale2D(
+                       session_->workspace().map,pivotSelection,
+                       wpNumericPreview_["scaleNumerator"].integer(),100,
+                       wpNumericPreview_["scaleNumeratorZ"].integer(),100,
+                       pivotX,pivotZ,numeric,
+                       wpNumericPreview_.getStr("pivot")=="individual") &&
+                   shapes.size()+numeric.size()*4+2<1390){
+                    for(const auto& region:numeric)
+                        worldprocess_gizmos::rectangle(shapes,
+                            {float(region.centerX),.62f,float(region.centerZ)},
+                            float(region.halfWidth*2.),
+                            float(region.halfDepth*2.),90,210,255);
+                    shapes.push_back(worldprocess_gizmos::makePoint(
+                        float(pivotX)/100.f,.8f,float(pivotZ)/100.f,
+                        90,210,255,11.f));
+                }
+            }
+        }
+
+        if(pivotSelection!=wpPivotSelection_){
+            wpPivotSelection_=pivotSelection;
+            wpCustomPivot_=false;
+            // Never retain an old numeric overlay across a new selection.
+            wpNumericPreview_=Json();
+            wpPreviewOwner_.clear();
+            wpPreviewSelection_.clear();
+        }
+        render::float3 centroid{};
+        if(worldprocess_edit::groupCentroid(session_->workspace().map,
+                                            pivotSelection,centroid)){
+            const auto pivot=wpCustomPivot_?wpGroupPivot_:centroid;
+            if(shapes.size()+3<1390){
+                shapes.push_back(worldprocess_gizmos::makePoint(
+                    pivot.x,pivot.y,pivot.z,100,195,255,12.f));
+                shapes.push_back(worldprocess_gizmos::makeLabel(
+                    {pivot.x,pivot.y+.6f,pivot.z},
+                    "Group pivot X "+std::to_string(std::llround(double(pivot.x)*100.))+
+                    " Z "+std::to_string(std::llround(double(pivot.z)*100.))+" cm",
+                    100,195,255));
+            }
+        }
+        if(selected.rfind("entity:@",0)==0){
+            auto handles=worldprocess_edit::handles(
+                session_->workspace().map,selected);
+            for(const auto& handle:handles){
+                if(shapes.size()>=1400)break;
+                auto marker=worldprocess_gizmos::makePoint(
+                    handle.position.x,handle.position.y,handle.position.z,
+                    (wpDrag_.active&&wpDrag_.owner==handle.owner&&
+                     wpDrag_.component==handle.component&&wpDrag_.key==handle.key)?100:245,
+                    (wpDrag_.active&&wpDrag_.owner==handle.owner&&
+                     wpDrag_.component==handle.component&&wpDrag_.key==handle.key)?255:245,
+                    (wpDrag_.active&&wpDrag_.owner==handle.owner&&
+                     wpDrag_.component==handle.component&&wpDrag_.key==handle.key)?160:245,
+                    8.f);
+                shapes.push_back(std::move(marker));
+            }
+            if(wpDrag_.active && wpDrag_.valid && shapes.size()<1398){
+                const auto index=session_->workspace().map.findEntity(wpDrag_.owner);
+                if(index>=0){
+                    const auto origin=worldprocess_edit::point(
+                        session_->workspace().map.data.entities[std::size_t(index)]);
+                    if(wpDrag_.neighborSnap && shapes.size()+2<1398){
+                        shapes.push_back(worldprocess_gizmos::makeLine(
+                            wpDrag_.snapGuideA,wpDrag_.snapGuideB,255,205,90,4.f));
+                        shapes.push_back(worldprocess_gizmos::makeLabel(
+                            wpDrag_.snapGuideA,
+                            "Snap: "+wpDrag_.snapTarget,255,205,90));
+                    }
+                    // Read-only candidate gameplay rectangle during drag.
+                    const auto& owner=session_->workspace().map.data.entities[std::size_t(index)];
+                    worldprocess_edit::AreaPreview areaPreview;
+                    if(wpDrag_.component=="EvolveArea" &&
+                       worldprocess_edit::previewArea(owner,
+                           static_cast<worldprocess_edit::Handle::Mode>(wpDrag_.mode),
+                           double(wpDrag_.value),wpDrag_.symmetric,areaPreview) &&
+                       shapes.size()+4<1398){
+                        worldprocess_gizmos::rectangle(shapes,
+                            {float(areaPreview.centerX),.38f,float(areaPreview.centerZ)},
+                            float(areaPreview.halfWidth*2.),
+                            float(areaPreview.halfDepth*2.),100,255,160);
+                    }
+                    if(wpDrag_.component=="EvolveArea" &&
+                       wpDrag_.key=="cornerXZ"){
+                        const auto selected=session_->selectedObjectIds();
+                        const auto& authored=owner.extra["components"]["EvolveArea"];
+                        const auto oldX=authored.getInt("halfWidthCm",0);
+                        const auto oldZ=authored.getInt("halfDepthCm",0);
+                        const auto newX=std::llround(std::abs(
+                            double(wpDrag_.value)-authored.getInt("offsetXcm",0)));
+                        const auto newZ=std::llround(std::abs(
+                            double(wpDrag_.valueZ)-authored.getInt("offsetZcm",0)));
+                        render::float3 centroid{};
+                        if(selected.size()>1 && oldX>=50 && oldZ>=50 &&
+                           newX>=50 && newZ>=50 &&
+                           worldprocess_edit::groupCentroid(
+                               session_->workspace().map,selected,centroid)){
+                            const auto pivot=wpCustomPivot_&&!wpDrag_.symmetric?
+                                wpGroupPivot_:centroid;
+                            std::vector<worldprocess_edit::AreaPreview> group;
+                            if(worldprocess_edit::previewGroupScale2D(
+                                session_->workspace().map,selected,
+                                newX,oldX,newZ,oldZ,
+                                std::llround(double(pivot.x)*100.),
+                                std::llround(double(pivot.z)*100.),group,
+                                wpDrag_.symmetric) &&
+                               shapes.size()+group.size()*4+2<1390){
+                                for(const auto& region:group)
+                                    worldprocess_gizmos::rectangle(shapes,
+                                        {float(region.centerX),.5f,float(region.centerZ)},
+                                        float(region.halfWidth*2.),
+                                        float(region.halfDepth*2.),255,195,90);
+                                shapes.push_back(worldprocess_gizmos::makePoint(
+                                    pivot.x,pivot.y,pivot.z,255,195,90,11.f));
+                                shapes.push_back(worldprocess_gizmos::makeLabel(
+                                    {pivot.x,pivot.y+.6f,pivot.z},
+                                    "Scale X "+std::to_string(newX*100/oldX)+
+                                    "% Z "+std::to_string(newZ*100/oldZ)+"%",
+                                    255,195,90));
+                            }
+                        }
+                    }
+                    // One group preview: individual, shared centroid or
+                    // explicit custom pivot. Never draw conflicting overlays.
+                    if(wpDrag_.component=="EvolveArea" &&
+                       (wpDrag_.key=="halfWidthCm"||wpDrag_.key=="halfDepthCm")){
+                        const auto selected=session_->selectedObjectIds();
+                        if(selected.size()>1){
+                            std::vector<worldprocess_edit::AreaPreview> group;
+                            render::float3 pivot{};
+                            bool valid=false;
+                            const auto mode=static_cast<worldprocess_edit::Handle::Mode>(wpDrag_.mode);
+                            if(wpDrag_.symmetric||!wpCustomPivot_){
+                                valid=worldprocess_edit::previewGroupResize(
+                                    session_->workspace().map,selected,wpDrag_.owner,
+                                    mode,double(wpDrag_.value),wpDrag_.symmetric,
+                                    group,pivot);
+                            }else{
+                                worldprocess_edit::AreaPreview active;
+                                const auto& authored=owner.extra["components"]["EvolveArea"];
+                                if(worldprocess_edit::previewArea(
+                                       owner,mode,double(wpDrag_.value),false,active)){
+                                    const bool x=wpDrag_.key=="halfWidthCm";
+                                    const auto oldHalf=authored.getInt(wpDrag_.key.c_str(),0);
+                                    const auto newHalf=std::llround(
+                                        (x?active.halfWidth:active.halfDepth)*100.);
+                                    if(oldHalf>0){
+                                        pivot=wpGroupPivot_;
+                                        valid=worldprocess_edit::previewGroupScale2D(
+                                            session_->workspace().map,selected,
+                                            x?newHalf:1,x?oldHalf:1,
+                                            x?1:newHalf,x?1:oldHalf,
+                                            std::llround(double(pivot.x)*100.),
+                                            std::llround(double(pivot.z)*100.),group);
+                                    }
+                                }
+                            }
+                            if(valid && shapes.size()+group.size()*4+2<1390){
+                                for(const auto& region:group)
+                                    worldprocess_gizmos::rectangle(shapes,
+                                        {float(region.centerX),.47f,float(region.centerZ)},
+                                        float(region.halfWidth*2.),
+                                        float(region.halfDepth*2.),255,195,90);
+                                shapes.push_back(worldprocess_gizmos::makePoint(
+                                    pivot.x,pivot.y,pivot.z,255,195,90,11.f));
+                                shapes.push_back(worldprocess_gizmos::makeLabel(
+                                    {pivot.x,pivot.y+.6f,pivot.z},
+                                    wpDrag_.symmetric?"Individual centers":
+                                    (wpCustomPivot_?"Custom group pivot":"Group centroid"),
+                                    255,195,90));
+                            }
+                        }
+                    }
+                    shapes.push_back(worldprocess_gizmos::makeLine(
+                        origin,wpDrag_.previewPoint,245,245,245,3.f));
+                    shapes.push_back(worldprocess_gizmos::makePoint(
+                        wpDrag_.previewPoint.x,wpDrag_.previewPoint.y,
+                        wpDrag_.previewPoint.z,100,255,160,10.f));
+                    if(wpDrag_.component=="EvolveArea" &&
+                       worldprocess_edit::previewArea(owner,
+                           static_cast<worldprocess_edit::Handle::Mode>(wpDrag_.mode),
+                           double(wpDrag_.value),wpDrag_.symmetric,areaPreview) &&
+                       shapes.size()<1395){
+                        shapes.push_back(worldprocess_gizmos::makeLabel(
+                            {float(areaPreview.centerX),.95f,float(areaPreview.centerZ)},
+                            "W "+std::to_string(int(std::lround(areaPreview.halfWidth*2.*100.)))+
+                            "cm / D "+std::to_string(int(std::lround(areaPreview.halfDepth*2.*100.)))+
+                            "cm",100,255,160));
+                    }
+                    if(shapes.size()<1399)
+                        shapes.push_back(worldprocess_gizmos::makeLabel(
+                            {wpDrag_.previewPoint.x,
+                             wpDrag_.previewPoint.y+0.8f,
+                             wpDrag_.previewPoint.z},
+                            wpDrag_.label+(wpDrag_.component=="EvolveArea" &&
+                               (wpDrag_.key=="halfWidthCm"||wpDrag_.key=="halfDepthCm")?
+                               (wpDrag_.symmetric?" [symmetric]":" [opposite fixed]"):"")+
+                             (wpDrag_.snap?" [1m snap]":""),
+                             245,245,245));
+                }
+            }
+        }
+    }
+    if(buildingGraphOverlayScene_){
+        const auto snapshot=session_->buildingGraphSnapshot(buildingGraphOverlayScene_);
+        size_t boxes=0;
+        auto drawBounds=[&](const Json& row,uint8_t r,uint8_t g,uint8_t bl){
+            if(boxes>=128)return;
+            const auto& lo=row["min"];const auto& hi=row["max"];
+            if(!lo.isArray()||!hi.isArray()||lo.size()!=3||hi.size()!=3)return;
+            float a[3]{},b[3]{};
+            for(size_t i=0;i<3;++i){
+                const double x=lo[i].toDouble(),y=hi[i].toDouble();
+                if(!lo[i].isNumber()||!hi[i].isNumber()||!std::isfinite(x)||!std::isfinite(y)||x>y||std::abs(x)>1e7||std::abs(y)>1e7)return;
+                a[i]=float(x);b[i]=float(y);
+            }
+            ++boxes;
+            auto corner=[&](unsigned c){return render::float3{c&1?b[0]:a[0],c&2?b[1]:a[1],c&4?b[2]:a[2]};};
+            for(unsigned c=0;c<8;++c)for(unsigned bit:{1u,2u,4u})if(!(c&bit)){
+                if((a[1]==b[1])&&(bit==2u||(c&2u)))continue;
+                StudioScene::OverlayShape sh;sh.kind=1;sh.thickness=2.f;
+                sh.r=r;sh.g=g;sh.bl=bl;sh.a=corner(c);sh.b=corner(c|bit);
+                shapes.push_back(sh);
+            }
+        };
+        if(buildingGraphOverlayLayers_&1u)drawBounds(snapshot["lastChange"],255,120,40);
+        const auto& owners=snapshot["ownerTelemetry"];
+        if(owners.isObject())for(const auto& [name,report]:owners.members()){
+            (void)name;
+            const auto& rows=report["overlayBounds"];
+            if(!rows.isArray())continue;
+            size_t inspected=0;
+            for(const auto& row:rows.items()){
+                if(++inspected>128||boxes>=128)break;
+                const auto kind=row.getStr("kind",report.getStr("overlayKind"));
+                if(kind=="nav-tiles"&&(buildingGraphOverlayLayers_&2u))drawBounds(row,70,200,255);
+                if(kind=="grid-cells"&&(buildingGraphOverlayLayers_&4u))drawBounds(row,80,230,130);
+                if(kind=="hpa-clusters"&&(buildingGraphOverlayLayers_&8u))drawBounds(row,185,120,255);
+                if(kind=="owner-bounds"&&(buildingGraphOverlayLayers_&16u))drawBounds(row,255,210,70);
+            }
+        }
+    }
     for (const auto& seg : splineCache_["segments"].items()) {
         StudioScene::OverlayShape sh; sh.kind = 1; sh.thickness = 2; sh.r = 255; sh.g = 200; sh.bl = 80;
         sh.a = {float(seg[0].toDouble()), 0.15f, float(seg[1].toDouble())};
@@ -918,8 +1466,427 @@ void StudioHost::rebuildOverlay() {
         sh.a = {float(hd["x"].toDouble()), 0.2f, float(hd["z"].toDouble())};
         shapes.push_back(sh);
     }
-    onScene([&] { preview_->setOverlayShapes(std::move(shapes)); });
+    onScene([&] {
+        preview_->setOverlayShapes(std::move(shapes));
+        Json sceneSnapshot=wpLiveOptions_.live&&wpLiveOptions_.anyPlanetLayer()&&worldProcessPlanetMapCurrent()&&
+            wpLiveSnapshot_.getBool("active")&&wpLiveSnapshot_.getStr("topology")=="planet"
+            ?wpLiveSnapshot_:Json{};
+        if(sceneSnapshot.getBool("active")&&wpLiveOptions_.forest&&wpForestRenderSnapshot_.getBool("active")&&
+           wpForestRenderSnapshot_.getInt("tick",-2)+1==sceneSnapshot.getInt("tick",-1)){
+            sceneSnapshot.set("forest",wpForestRenderSnapshot_);
+            const auto& terrain=wpForestRenderSnapshot_["nativeTerrain"];
+            if(terrain.getBool("active")&&terrain.getInt("tick",-1)==wpForestRenderSnapshot_.getInt("tick",-2))
+                sceneSnapshot.set("forestTerrain",terrain);
+        }
+        preview_->setPlanetLiveSnapshot(std::move(sceneSnapshot),wpLivePlanetProject_,wpLivePlanetMapPath_,wpLivePlanetRevision_,wpLiveOptions_.layer,wpLiveOptions_.aetherLayer);
+    });
 }
+// World Processes: drag authored stable-ID references or area handles.
+// Hit-testing and hover preview read ONLY the MapDoc. Commit is a single
+// validated StudioSession operation at mouse-up; never edit ECS/physics here.
+bool StudioHost::worldProcessDrag(int phase,double x,double y,
+                                  double w,double h,bool symmetric,bool snap){
+    if(projectLoading_||!preview_||!session_||
+       session_->workspace().project.dir.empty())return false;
+    const auto& map=session_->workspace().map;
+    if(map.data.planet()){
+        if(phase==0){
+            wpDrag_={};
+            if(session_->selectedObjectIds().size()>1)return false;
+            const auto id=session_->selectedObjectId();
+            if(id.empty()&&session_->selectedObjectIds().empty()){
+                if(!onScene([&]{return preview_->beginPlanetGravityDrag(map,float(x),float(y),float(w),float(h));}))return false;
+                wpDrag_.active=true;wpDrag_.component="PlanetGravity";return true;
+            }
+            if(session_->lockedIds().contains(id)||session_->hiddenIds().contains(id))return false;
+            if(!onScene([&]{return preview_->beginPlanetRegionDrag(map,id,float(x),float(y),float(w),float(h));}))return false;
+            wpDrag_.active=true;wpDrag_.component="PlanetEvolveArea";return true;
+        }
+        if(wpDrag_.active&&wpDrag_.component=="PlanetGravity"){
+            auto params=onScene([&]{return preview_->updatePlanetGravityDrag(map,float(x),float(y),float(w),float(h),snap,phase==2);});
+            if(phase==2){
+                wpDrag_={};
+                if(params){
+                    const auto reply=request("studio.op",std::move(*params));
+                    if(reply.has("error"))platform_.log("AIVERSE planet gravity: "+reply.getStr("error"));
+                    else sendEvent("document.changed","");
+                }
+            }
+            return true;
+        }
+        if(!wpDrag_.active||wpDrag_.component!="PlanetEvolveArea")return false;
+        auto params=onScene([&]{return preview_->updatePlanetRegionDrag(map,
+            float(x),float(y),float(w),float(h),symmetric,snap,phase==2);});
+        if(phase==2){
+            wpDrag_={};
+            if(params){
+                const auto reply=request("studio.worldProcessAreaSet",std::move(*params));
+                if(reply.has("error"))platform_.log("AIVERSE planet region: "+reply.getStr("error"));
+                else sendEvent("document.changed","");
+            }
+        }
+        return true;
+    }
+    if(phase==0){
+        wpDrag_={};
+        const auto& selected=session_->selectedObjectId();
+        if(selected.rfind("entity:@",0)!=0)return false;
+        if(session_->lockedIds().contains(selected)||
+           session_->hiddenIds().contains(selected))return false;
+        auto handles=worldprocess_edit::handles(map,selected);
+        const auto selection=session_->selectedObjectIds();
+        if(selection!=wpPivotSelection_){
+            wpPivotSelection_=selection;
+            wpCustomPivot_=false;
+        }
+        render::float3 centroid{};
+        if(worldprocess_edit::groupCentroid(map,selection,centroid)){
+            const auto pivot=wpCustomPivot_?wpGroupPivot_:centroid;
+            handles.push_back({worldprocess_edit::Handle::Mode::GroupPivotX,
+                               selected.substr(8),"EvolveGroupPivot","pivotXcm",
+                               {},pivot,0});
+            handles.push_back({worldprocess_edit::Handle::Mode::GroupPivotZ,
+                               selected.substr(8),"EvolveGroupPivot","pivotZcm",
+                               {},{pivot.x,pivot.y+.25f,pivot.z},0});
+        }
+        if(selection.size()>1){
+            const int ownerIndex=map.findEntity(selected.substr(8));
+            if(ownerIndex>=0){
+                const auto& entity=map.data.entities[std::size_t(ownerIndex)];
+                const auto& area=entity.extra["components"]["EvolveArea"];
+                if(area.isObject()&&
+                   worldprocess_edit::groupCentroid(map,selection,centroid)){
+                    const float cx=entity.x+float(area.getInt("offsetXcm",0))/100.f;
+                    const float cz=entity.z+float(area.getInt("offsetZcm",0))/100.f;
+                    handles.push_back({worldprocess_edit::Handle::Mode::GroupCornerXZ,
+                        entity.id,"EvolveArea","cornerXZ",{},
+                        {cx+float(area.getInt("halfWidthCm",0))/100.f,.35f,
+                         cz+float(area.getInt("halfDepthCm",0))/100.f},0});
+                }
+            }
+        }
+        if(handles.empty())return false;
+        const auto candidates=onScene([&]{
+            return worldprocess_edit::hitCandidates(
+                handles,*preview_,x,y,w,h);
+        });
+        if(candidates.empty())return false;
+        // Repeated presses at one screen location cycle deterministic
+        // overlapping endpoints, even when multiple links point to
+        // precisely the same world object.
+        if(wpHitOwner_==selected&&std::hypot(x-wpHitX_,y-wpHitY_)<=9.)
+            ++wpHitOrdinal_;
+        else wpHitOrdinal_=0;
+        wpHitOwner_=selected;
+        wpHitX_=x;wpHitY_=y;
+        const int index=candidates[wpHitOrdinal_%candidates.size()];
+        const auto& hit=handles[std::size_t(index)];
+        wpDrag_.active=true;
+        wpDrag_.mode=static_cast<std::uint8_t>(hit.mode);
+        wpDrag_.owner=hit.owner;
+        wpDrag_.component=hit.component;
+        wpDrag_.key=hit.key;
+        wpDrag_.targetType=hit.targetType;
+        wpDrag_.label=hit.component+"."+hit.key+
+            (candidates.size()>1?
+                 " ("+std::to_string(wpHitOrdinal_%candidates.size()+1)+
+                 "/"+std::to_string(candidates.size())+")":"");
+        wpDrag_.baseline=hit.baseline;
+        wpDrag_.previewPoint=hit.position;
+        wpDrag_.valid=false;
+        rebuildOverlay();
+        return true;
+    }
+    if(!wpDrag_.active)return false;
+    wpDrag_.symmetric=symmetric;
+    wpDrag_.snap=snap;
+    if(phase==1||phase==2){
+        if(wpDrag_.mode==static_cast<std::uint8_t>(
+                worldprocess_edit::Handle::Mode::Reference)){
+            // A dropped endpoint must be an actual stable authored map
+            // entity with the required compatible component.
+            worldprocess_edit::Handle handle;
+            handle.targetType=wpDrag_.targetType;
+            const auto* candidate=onScene([&]{
+                return worldprocess_edit::nearestTarget(
+                    map,handle,*preview_,x,y,w,h);
+            });
+            wpDrag_.previewTarget=candidate?candidate->id:std::string{};
+            wpDrag_.valid=candidate!=nullptr;
+            if(candidate)wpDrag_.previewPoint=
+                worldprocess_edit::point(*candidate);
+        }else{
+            const int ownerIndex=map.findEntity(wpDrag_.owner);
+            render::float3 ground{};
+            const bool groundOK=ownerIndex>=0&&onScene([&]{
+                return preview_->groundPoint(
+                    float(x),float(y),float(w),float(h),ground);
+            });
+            if(!groundOK)wpDrag_.valid=false;
+            else{
+                worldprocess_edit::Handle handle;
+                handle.mode=static_cast<worldprocess_edit::Handle::Mode>(
+                    wpDrag_.mode);
+                handle.baseline=wpDrag_.baseline;
+                float value=0;
+                if(wpDrag_.component=="EvolveGroupPivot"){
+                    wpDrag_.valid=std::isfinite(ground.x)&&std::isfinite(ground.z);
+                    value=wpDrag_.key=="pivotXcm"?
+                        float(std::llround(double(ground.x)*100.)):
+                        float(std::llround(double(ground.z)*100.));
+                }else wpDrag_.valid=worldprocess_edit::extent(
+                    map.data.entities[std::size_t(ownerIndex)],handle,
+                    ground,value);
+                if(wpDrag_.valid){
+                    wpDrag_.neighborSnap=false;
+                    wpDrag_.snapTarget.clear();
+                    if(wpDrag_.component=="EvolveArea"&&wpDrag_.snap){
+                        // Snap only to overlapping neighboring edge segments.
+                        const auto snap=worldprocess_edit::snapNeighborEdge(
+                            map,map.data.entities[std::size_t(ownerIndex)],
+                            handle.mode,value,100.f);
+                        if(snap.found){
+                            value=snap.valueCm;
+                            wpDrag_.neighborSnap=true;
+                            wpDrag_.snapTarget=snap.targetId;
+                            const auto& owner=map.data.entities[std::size_t(ownerIndex)];
+                            const bool x=handle.mode==worldprocess_edit::Handle::Mode::AreaWidth||
+                                handle.mode==worldprocess_edit::Handle::Mode::AreaWidthNegative;
+                            const float edge=(x?owner.x:owner.z)+value/100.f;
+                            wpDrag_.snapGuideA=x?
+                                render::float3{edge,.42f,snap.guideStart}:
+                                render::float3{snap.guideStart,.42f,edge};
+                            wpDrag_.snapGuideB=x?
+                                render::float3{edge,.42f,snap.guideEnd}:
+                                render::float3{snap.guideEnd,.42f,edge};
+                        }else value=std::round(value/100.f)*100.f;
+                    }
+                    wpDrag_.value=value;
+                    if(handle.mode==worldprocess_edit::Handle::Mode::GroupCornerXZ){
+                        const auto& entity=map.data.entities[std::size_t(ownerIndex)];
+                        wpDrag_.valueZ=float(std::round((double(ground.z)-entity.z)*100.));
+                        if(wpDrag_.snap)
+                            wpDrag_.valueZ=std::round(wpDrag_.valueZ/100.f)*100.f;
+                    }
+                    wpDrag_.previewPoint=ground;
+                }
+            }
+        }
+    }
+    if(phase==1){
+        rebuildOverlay();
+        return true;
+    }
+    // Pointer release: the preview is still the current drag result.
+    const auto current=wpDrag_;
+    wpDrag_={};
+    rebuildOverlay();
+    if(!current.valid)return true;
+    if(current.component=="EvolveGroupPivot"){
+        render::float3 centroid{};
+        if(!worldprocess_edit::groupCentroid(map,session_->selectedObjectIds(),centroid))
+            return true;
+        if(!wpCustomPivot_)wpGroupPivot_=centroid;
+        const float metres=current.value/100.f;
+        if(current.key=="pivotXcm")wpGroupPivot_.x=metres;
+        else wpGroupPivot_.z=metres;
+        wpCustomPivot_=true;
+        Json payload=Json::object();
+        payload.set("pivotXcm",Json::number(
+            std::int64_t(std::llround(double(wpGroupPivot_.x)*100.))));
+        payload.set("pivotZcm",Json::number(
+            std::int64_t(std::llround(double(wpGroupPivot_.z)*100.))));
+        sendEventPayload("worldProcess.pivotChanged",payload);
+        rebuildOverlay();
+        return true; // editor-only pivot; never write an ECS or MapDoc component
+    }
+    Json params=Json::object();
+    params.set("entityId",Json::string("entity:@"+current.owner));
+    params.set("componentId",Json::string(current.component));
+    params.set("key",Json::string(current.key));
+    if(current.mode==static_cast<std::uint8_t>(
+           worldprocess_edit::Handle::Mode::Reference)){
+        if(current.previewTarget.empty())return true;
+        params.set("value",Json::string(current.previewTarget));
+    }else{
+        if(current.mode==static_cast<std::uint8_t>(
+               worldprocess_edit::Handle::Mode::Radius))
+            params.set("value",Json::number(double(current.value),3));
+        else
+            params.set("value",Json::number(int64_t(std::lround(current.value))));
+    }
+    // Explicit edge operation: existing numeric extent RPC remains backward
+    // compatible for inspectors and automation clients.
+    const auto mode=static_cast<worldprocess_edit::Handle::Mode>(current.mode);
+    if(!current.symmetric && (mode==worldprocess_edit::Handle::Mode::AreaWidth||
+       mode==worldprocess_edit::Handle::Mode::AreaDepth||
+       mode==worldprocess_edit::Handle::Mode::AreaWidthNegative||
+       mode==worldprocess_edit::Handle::Mode::AreaDepthNegative)){
+        params.set("edgeSide",Json::string(
+            (mode==worldprocess_edit::Handle::Mode::AreaWidthNegative||
+             mode==worldprocess_edit::Handle::Mode::AreaDepthNegative)?"negative":"positive"));
+    }
+    if(current.symmetric && current.component=="EvolveArea" &&
+       (current.key=="halfWidthCm"||current.key=="halfDepthCm")){
+        const int index=map.findEntity(current.owner);
+        if(index<0)return true;
+        worldprocess_edit::AreaPreview areaPreview;
+        if(!worldprocess_edit::previewArea(
+               map.data.entities[std::size_t(index)],mode,
+               double(current.value),true,areaPreview))return true;
+        const double half=current.key=="halfWidthCm"?
+            areaPreview.halfWidth:areaPreview.halfDepth;
+        params.set("value",Json::number(int64_t(std::lround(half*100.))));
+    }
+    if(current.component=="EvolveArea" &&
+       mode==worldprocess_edit::Handle::Mode::GroupCornerXZ){
+        const auto selected=session_->selectedObjectIds();
+        if(selected.size()<2)return true;
+        const int index=map.findEntity(current.owner);
+        if(index<0)return true;
+        const auto& owner=map.data.entities[std::size_t(index)];
+        const auto& area=owner.extra["components"]["EvolveArea"];
+        const auto oldX=area.getInt("halfWidthCm",0);
+        const auto oldZ=area.getInt("halfDepthCm",0);
+        const auto centerX=area.getInt("offsetXcm",0);
+        const auto centerZ=area.getInt("offsetZcm",0);
+        if(oldX<50||oldZ<50)return true;
+        const auto newX=std::llround(std::abs(double(current.value)-centerX));
+        const auto newZ=std::llround(std::abs(double(current.valueZ)-centerZ));
+        if(newX<50||newZ<50)return true;
+        Json ids=Json::array();
+        for(const auto& id:selected)ids.push(Json::string(id));
+        Json batch=Json::object();
+        batch.set("entityIds",std::move(ids));
+        batch.set("axis",Json::string("both"));
+        const bool custom=wpCustomPivot_&&!current.symmetric;
+        batch.set("pivot",Json::string(current.symmetric?"individual":
+                                      (custom?"custom":"shared")));
+        if(custom){
+            batch.set("pivotXcm",Json::number(
+                std::int64_t(std::llround(double(wpGroupPivot_.x)*100.))));
+            batch.set("pivotZcm",Json::number(
+                std::int64_t(std::llround(double(wpGroupPivot_.z)*100.))));
+        }
+        batch.set("scaleNumerator",Json::number(newX));
+        batch.set("scaleDenominator",Json::number(oldX));
+        batch.set("scaleNumeratorZ",Json::number(newZ));
+        batch.set("scaleDenominatorZ",Json::number(oldZ));
+        const auto response=request("studio.worldProcessAreaBatchResize",std::move(batch));
+        if(response.has("error")){
+            Json error=Json::object();
+            error.set("message",Json::string(
+                "EVOLVE corner resize: "+response.getStr("error")));
+            sendEventPayload("assets.importError",error);
+        }else{
+            sendEvent("document.changed","");
+            sendEvent("selection.changed","");
+            rebuildOverlay();
+        }
+        return true;
+    }
+    // Group edge scaling is one atomic MapDoc operation. Shift selects
+    // individual pivots; default group scaling uses the shared centroid.
+    if(current.component=="EvolveArea" &&
+       (mode==worldprocess_edit::Handle::Mode::AreaWidth||
+        mode==worldprocess_edit::Handle::Mode::AreaWidthNegative||
+        mode==worldprocess_edit::Handle::Mode::AreaDepth||
+        mode==worldprocess_edit::Handle::Mode::AreaDepthNegative)){
+        const auto selected=session_->selectedObjectIds();
+        if(selected.size()>1){
+            const int index=map.findEntity(current.owner);
+            if(index<0)return true;
+            const auto& owner=map.data.entities[std::size_t(index)];
+            const auto& area=owner.extra["components"]["EvolveArea"];
+            worldprocess_edit::AreaPreview candidate;
+            if(!worldprocess_edit::previewArea(owner,mode,
+                    double(current.value),current.symmetric,candidate))return true;
+            const bool x=current.key=="halfWidthCm";
+            const auto oldHalf=area.getInt(current.key.c_str(),0);
+            const auto newHalf=std::int64_t(std::llround(
+                (x?candidate.halfWidth:candidate.halfDepth)*100.));
+            if(oldHalf<50||newHalf<50)return true;
+            Json ids=Json::array();
+            for(const auto& id:selected)ids.push(Json::string(id));
+            Json batch=Json::object();
+            batch.set("entityIds",std::move(ids));
+            batch.set("axis",Json::string(x?"x":"z"));
+            const bool custom=wpCustomPivot_&&!current.symmetric;
+            batch.set("pivot",Json::string(current.symmetric?"individual":
+                                          (custom?"custom":"shared")));
+            if(custom){
+                batch.set("pivotXcm",Json::number(
+                    std::int64_t(std::llround(double(wpGroupPivot_.x)*100.))));
+                batch.set("pivotZcm",Json::number(
+                    std::int64_t(std::llround(double(wpGroupPivot_.z)*100.))));
+            }
+            batch.set("scaleNumerator",Json::number(newHalf));
+            batch.set("scaleDenominator",Json::number(oldHalf));
+            const auto response=request("studio.worldProcessAreaBatchResize",std::move(batch));
+            if(response.has("error")){
+                Json error=Json::object();
+                error.set("message",Json::string(
+                    "EVOLVE group resize: "+response.getStr("error")));
+                sendEventPayload("assets.importError",error);
+            }else{
+                sendEvent("document.changed","");
+                sendEvent("selection.changed","");
+                rebuildOverlay();
+            }
+            return true;
+        }
+    }
+    // Multi-selected EVOLVE areas translate by the same center delta.
+    // A dedicated RPC validates all candidates before one MapDoc Undo entry.
+    if(current.component=="EvolveArea" &&
+       (mode==worldprocess_edit::Handle::Mode::AreaCenterX||
+        mode==worldprocess_edit::Handle::Mode::AreaCenterZ)){
+        const auto selected=session_->selectedObjectIds();
+        if(selected.size()>1){
+            const int index=map.findEntity(current.owner);
+            if(index<0)return true;
+            const auto& area=map.data.entities[std::size_t(index)]
+                                .extra["components"]["EvolveArea"];
+            const auto old=area.getInt(current.key.c_str(),0);
+            const auto delta=std::int64_t(std::lround(current.value))-old;
+            Json ids=Json::array();
+            for(const auto& id:selected)ids.push(Json::string(id));
+            Json batch=Json::object();
+            batch.set("entityIds",std::move(ids));
+            batch.set("axis",Json::string(
+                mode==worldprocess_edit::Handle::Mode::AreaCenterX?"x":"z"));
+            batch.set("deltaCm",Json::number(delta));
+            const auto reply=request("studio.worldProcessAreaBatchMove",std::move(batch));
+            if(reply.has("error")){
+                Json error=Json::object();
+                error.set("message",Json::string(
+                    "EVOLVE group move: "+reply.getStr("error")));
+                sendEventPayload("assets.importError",error);
+            }else{
+                sendEvent("document.changed","");
+                sendEvent("selection.changed","");
+                rebuildOverlay();
+            }
+            return true;
+        }
+    }
+    const char* method=current.mode==static_cast<std::uint8_t>(
+        worldprocess_edit::Handle::Mode::Reference)?
+        "studio.setProperty":"studio.worldProcessAreaSet";
+    const auto reply=request(method,std::move(params));
+    if(reply.has("error")){
+        Json error=Json::object();
+        error.set("message",Json::string(
+            "World Processes gizmo: "+reply.getStr("error")));
+        sendEventPayload("assets.importError",error);
+    }else{
+        sendEvent("document.changed","");
+        sendEvent("selection.changed","");
+        rebuildOverlay();
+    }
+    return true;
+}
+
 // phase 0 press (true when a handle was hit), 1 drag, 2 release (commits the move).
 bool StudioHost::splineDrag(int phase, double x, double y, double w, double h) {
     if (projectLoading_ || !preview_ || session_->splineEdit().empty()) return false;
@@ -986,10 +1953,17 @@ bool StudioHost::terrainStroke(int phase, double x, double y, double w, double h
         return true;
     }
     render::float3 at{};
-    if (!onScene([&] { return preview_->groundPoint(float(x), float(y), float(w), float(h), at); })) return phase != 0;
-    updateBrushCursor(x, y, w, h);
-    const bool ok = phase == 0 ? session_->strokeBegin(at.x, at.z, &error) : session_->strokeDab(at.x, at.z, &error);
-    if (!ok && !error.empty()) report();
+    if (!resolveBrushPoint(x,y,w,h,at,&error)) {
+        if(!error.empty())report();
+        onScene([&]{preview_->setBrushCursor(false,{},0);});
+        return phase != 0;
+    }
+    const auto& brush=session_->sceneBrush();
+    const float radius=brush.kind=="road"?.6f:brush.kind=="river"?float(brush.width*.5):float(brush.radius);
+    onScene([&]{preview_->setBrushCursor(true,at,radius,brush.kind=="caverns",brush.caveMode=="fill");});
+    const bool ok = phase == 0 ? session_->strokeBegin(at.x, at.z, &error,at.y) : session_->strokeDab(at.x, at.z, &error,at.y);
+    if (phase==0&&ok)sendEvent("document.changed", ""); // History controls observe stroke ownership immediately.
+    if (!ok && !error.empty()) {report();if(!session_->strokeActive())sendEvent("document.changed", "");}
     return ok;
 }
 bool StudioHost::placeAsset(const std::string& asset, double x, double y, double w, double h) {
@@ -1074,6 +2048,45 @@ bool StudioHost::humanPick(StudioSurface surface,double x,double y,double w,doub
     return true;
 }
 void StudioHost::select(double x, double y, double w, double h, const std::string& mode) {
+    if(forestPlantArm_.isObject()&&mode=="replace"){
+        const auto arm=forestPlantArm_;forestPlantArm_=Json{};
+        if(preview_)onScene([&]{preview_->setForestDragPreview(Json{});});
+        Json payload=Json::object();
+        try{
+            if(projectLoading_||!preview_||!session_||session_->strokeActive())
+                throw std::runtime_error("Scene planting unavailable");
+            const auto& ws=session_->workspace();
+            if(arm.getStr("project")!=ws.project.dir||arm.getStr("mapPath")!=ws.map.path||
+               arm.getStr("expectedRevision")!=std::to_string(ws.map.revision))
+                throw std::runtime_error("Forest planting cancelled: document changed");
+            if(arm.getStr("sceneBody")!=worldProcessSceneBody())throw std::runtime_error("Forest action cancelled: Scene body changed");
+            if(wpLiveOptions_.live&&wpLiveOptions_.forest)throw std::runtime_error("Disable live forest before authoring");
+            const auto action=arm.getStr("action","plant");
+            if(action=="pick"){
+                const auto hit=onScene([&]{return preview_->forestPick(float(x),float(y),float(w),float(h),ws.project.dir,ws.map.path,ws.map.revision);});
+                if(!hit)throw std::runtime_error("No visible authored plant hit; enable Scene gizmos and disable live forest");
+                Json selected=*hit;selected.set("project",Json::string(ws.project.dir));selected.set("mapPath",Json::string(ws.map.path));
+                selected.set("expectedRevision",Json::string(std::to_string(ws.map.revision)));
+                onScene([&]{preview_->setForestSelection(selected);});
+                payload.set("selected",*hit);sendEventPayload("planetForest.planted",payload);return;
+            }
+            const auto at=onScene([&]{return preview_->forestGroundPlacement(float(x),float(y),float(w),float(h),ws.map.path,ws.map.revision);});
+            if(!at)throw std::runtime_error("No current planetary surface hit");
+            Json params=arm;params.set("at",*at);
+            const auto outcome=request(action=="move"?"studio.planetForestMove":"studio.planetForestPlant",params);
+            if(outcome.has("error"))throw std::runtime_error(outcome.getStr("error"));
+            if(action=="move"){
+                Json selected=arm;selected.set("expectedRevision",outcome["result"]["revision"]);
+                onScene([&]{preview_->setForestSelection(selected);});
+                Json hit=Json::object();hit.set("species",arm["species"]);hit.set("key",arm["key"]);hit.set("direct",Json::fromBool(true));hit.set("body",(*at)["body"]);
+                payload.set("selected",std::move(hit));
+            }
+            payload.set("document",outcome["result"]);
+        }catch(const std::exception& e){payload.set("error",Json::string(e.what()));}
+        sendEventPayload("planetForest.planted",payload);
+        if(payload.has("document"))sendEvent("document.changed","");
+        return;
+    }
     if (projectLoading_ || !preview_) return;
     const std::string objectId = onScene([&] { return preview_->pick(float(x), float(y), float(w), float(h),
         session_->workspace().map, session_->workspace().map.data.worldSpace); });
@@ -1109,18 +2122,47 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
     // its isolated camera only; never pick, sculpt, paint, select, drag or
     // delete an authored entity while this native layer belongs to FX.
     auto& m = mouse_;
+    if(preview_&&onScene([&]{return preview_->caveGlobeRequested();})){
+        // Globe coordinates are never passed to flat entity/terrain tools.
+        if(button==1){if(phase==1){if(mods.alt)zoom((dx+dy)*.6);else orbit(dx,dy);}return;}
+        if(button!=0)return;
+        if(phase==0){m={};m.active=true;m.pressX=x;m.pressY=y;return;}
+        if(phase==1){
+            if(m.active&&(m.dragged||std::hypot(x-m.pressX,y-m.pressY)>=5.)){
+                m.dragged=true;orbit(dx,dy);
+            }
+            return;
+        }
+        const auto st=m;m={};
+        if(st.active&&!st.dragged&&!mods.alt&&std::hypot(x-st.pressX,y-st.pressY)<5.){
+            const auto& ws=session_->workspace();
+            auto hit=onScene([&]{return preview_->pickCaveGlobe(float(x),float(y),float(w),float(h),ws.map,ws.project.dir);});
+            if(hit.getBool("hit",false)){
+                hit.set("project",Json::string(ws.project.dir));
+                hit.set("map",Json::string(ws.map.path.empty()?"":ws.relative(ws.map.path)));
+                sendEventPayload("caverns.globePicked",hit);
+            }
+        }
+        return;
+    }
     if (button == 1) { // right: look, Alt zooms
         if (phase == 1) { if (mods.alt) zoom((dx + dy) * 0.6); else look(dx, dy); }
         return;
     }
     if (button == 2) { if (phase == 1) pan(dx, dy); return; }
     if (phase == 0) {
+        if(!projectLoading_&&session_->strokeCancel())sendEvent("document.changed", "");
         m = {};
         m.active = true; m.pressX = x; m.pressY = y;
+        if(forestPlantArm_.isObject()&&!mods.alt&&!mods.command&&!mods.ctrl&&!mods.shift){m.forest=true;return;}
+        // Explicit authored World Processes handles have priority only when
+        // the clicked point is within their small screen-space hit radius.
+        if(!mods.alt && !mods.command && !mods.ctrl && !mods.shift &&
+           worldProcessDrag(0,x,y,w,h)){m.worldProcess=true;return;}
         // Spline handles (Roads / Water "Edit nodes"): LMB on a handle drags it.
         if (!mods.alt && splineDrag(0, x, y, w, h)) { m.spline = true; return; }
         // Scene brush armed: plain LMB paints; Alt still orbits.
-        if (!mods.alt && brushArmed()) { m.stroke = terrainStroke(0, x, y, w, h); if (m.stroke) return; }
+        if (!mods.alt && brushArmed()) { m.stroke = terrainStroke(0, x, y, w, h); if (m.stroke||session_->sceneBrush().kind=="caverns") { if(!m.stroke)m.active=false;return; } }
         // Plain LMB on a handle starts a Move / Rotate / Scale drag (Unity W/E/R tools).
         m.move = !mods.alt && moveBegin(x, y, w, h);
         return;
@@ -1131,6 +2173,21 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
             if (now - lastHoverTime_ >= 0.05) { lastHoverTime_ = now; hover(x, y, w, h); }
             return;
         }
+        if(m.forest){
+            if(std::hypot(x-m.pressX,y-m.pressY)>=5.0)m.dragged=true;
+            if(forestPlantArm_.getStr("action")=="move"&&session_&&preview_&&!projectLoading_){
+                const auto& ws=session_->workspace();Json ghost;
+                if(forestPlantArm_.getStr("project")==ws.project.dir&&forestPlantArm_.getStr("mapPath")==ws.map.path&&
+                   forestPlantArm_.getStr("expectedRevision")==std::to_string(ws.map.revision)&&forestPlantArm_.getStr("sceneBody")==worldProcessSceneBody()&&
+                   !(wpLiveOptions_.live&&wpLiveOptions_.forest)&&!mods.alt&&!mods.command&&!mods.ctrl&&!mods.shift){
+                    const auto at=onScene([&]{return preview_->forestGroundPlacement(float(x),float(y),float(w),float(h),ws.map.path,ws.map.revision);});
+                    if(at){ghost=forestPlantArm_;ghost.set("at",*at);}
+                }
+                onScene([&]{preview_->setForestDragPreview(std::move(ghost));});
+            }
+            return;
+        }
+        if(m.worldProcess){worldProcessDrag(1,x,y,w,h,mods.shift,mods.ctrl||mods.command);return;}
         if (m.spline) { splineDrag(1, x, y, w, h); return; }
         if (m.stroke) { terrainStroke(1, x, y, w, h); return; }
         if (m.move) { m.dragged = true; moveUpdate(x, y, w, h, mods.ctrl || mods.command); return; }
@@ -1150,6 +2207,14 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
     const auto st = m;
     m = {};
     if (!st.active) return;
+    if(st.forest){
+        const bool move=forestPlantArm_.getStr("action")=="move";
+        if(preview_)onScene([&]{preview_->setForestDragPreview(Json{});});
+        if(forestPlantArm_.isObject()&&(move||(!st.dragged&&std::hypot(x-st.pressX,y-st.pressY)<5.0))&&
+           !mods.alt&&!mods.command&&!mods.ctrl&&!mods.shift)select(x,y,w,h,"replace");
+        return;
+    }
+    if(st.worldProcess){worldProcessDrag(2,x,y,w,h,mods.shift,mods.ctrl||mods.command);return;}
     if (st.spline) { splineDrag(2, 0, 0, w, h); return; }
     if (st.stroke) { terrainStroke(2, 0, 0, w, h); return; }
     if (st.move) { moveEnd(); return; }
@@ -1157,7 +2222,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
     const std::string mode = mods.command ? "toggle" : mods.shift ? "add" : "replace";
     if (st.marquee) { marqueeEnd(st.pressX, st.pressY, x, y, w, h, mode); return; }
     if (st.dragged || std::hypot(x - st.pressX, y - st.pressY) >= 5.0) return;
-    if (gizmoAt(x, y, w, h)) return;
+    if (!forestPlantArm_.isObject()&&gizmoAt(x, y, w, h)) return;
     select(x, y, w, h, mode);
 }
 void StudioHost::sceneWheel(double amount) { zoom(amount); }
@@ -1166,6 +2231,14 @@ bool StudioHost::sceneKey(StudioSceneKey key, bool down, StudioSceneMods mods, b
     if (!down) {
         if (key == K::V) { setPivotSnap(false); return true; }
         return false;
+    }
+    if(key==K::Escape&&forestPlantArm_.isObject()){
+        forestPlantArm_=Json{};mouse_={};if(preview_)onScene([&]{preview_->setForestDragPreview(Json{});});Json out=Json::object();out.set("cancelled",Json::fromBool(true));sendEventPayload("planetForest.planted",out);return true;
+    }
+    if(key==K::Escape&&wpDrag_.active){
+        if(preview_)onScene([&]{preview_->cancelPlanetRegionDrag();preview_->cancelPlanetGravityDrag();});
+        wpDrag_={};mouse_={};rebuildOverlay();
+        return true; // cancel with no authored MapDoc edit
     }
     const double scale = mods.shift ? 3.0 : 1.0;
     const bool plain = !mods.ctrl && !mods.alt && !mods.command;
@@ -1575,7 +2648,7 @@ void StudioHost::applyViewport(const Json& params) {
     NativeViewportPlacement placed;
     if (!platform_.placeSurface(StudioSurface::Scene, rect, placed)) return;
     placement_ = placed;
-    if (!placement_.visible) readyEmitted_ = false;
+    if (!placement_.visible) {readyEmitted_ = false;if(!projectLoading_&&session_->strokeCancel())sendEvent("document.changed", "");mouse_={};}
 }
 Json StudioHost::viewportInput(const Json& input) {
     const std::string kind = input.getStr("kind");
@@ -1720,7 +2793,212 @@ bool StudioHost::handleHostMethod(const Json& req) {
         if (note.size() <= 1200) platform_.log("[studio-web] JS: " + note);
         return true; // diagnostics never touch Workspace or the filesystem
     }
+    if(method=="studio.worldProcessGroupPivot")return answer([&]{
+        Json result=Json::object();
+        const auto selection=session_->selectedObjectIds();
+        render::float3 centroid{};
+        if(!worldprocess_edit::groupCentroid(session_->workspace().map,
+                                             selection,centroid))
+            throw std::runtime_error("Select at least two EVOLVE regions");
+        if(selection!=wpPivotSelection_){
+            wpPivotSelection_=selection;
+            wpCustomPivot_=false;
+        }
+        const auto pivot=wpCustomPivot_?wpGroupPivot_:centroid;
+        result.set("pivotXcm",Json::number(
+            std::int64_t(std::llround(double(pivot.x)*100.))));
+        result.set("pivotZcm",Json::number(
+            std::int64_t(std::llround(double(pivot.z)*100.))));
+        result.set("custom",Json::fromBool(wpCustomPivot_));
+        return result;
+    });
+    if(method=="studio.worldProcessDiagnostics")return answer([&]{
+        const auto cap=params.has("budget")?params["budget"].integer(-1):64;
+        if(cap<0||cap>512||(params.has("budget")&&(!params["budget"].isNumber()||
+            params["budget"].fx()!=Fixed::fromInt(cap))))
+            throw std::invalid_argument("Diagnostic budget must be an integer 0..512");
+        if(params.has("focus")&&params["focus"].type()!=Json::Type::String)
+            throw std::invalid_argument("Diagnostic focus must be an entity reference string");
+        if(game_)return game_->worldProcessDiagnostics(int(cap),params.getStr("focus"));
+        Json out=Json::object();out.set("active",Json::fromBool(false));return out;
+    });
+    if(method=="studio.planetSceneBody")return answer([&]{return planetSceneBodyRequest(params);});
+    if(method=="studio.planetForestArm")return answer([&]{
+        Json out=Json::object();forestPlantArm_=Json{};
+        if(preview_)onScene([&]{preview_->setForestDragPreview(Json{});});
+        if(!params.getBool("armed",false)&&preview_)onScene([&]{preview_->setForestSelection(Json{});});
+        if(params.getBool("armed",false)){
+            if(projectLoading_||!session_||!preview_||session_->strokeActive()||brushArmed())
+                throw std::runtime_error("Finish the active Scene tool first");
+            const auto& ws=session_->workspace();
+            if(!ws.map.data.planet()||params.getStr("mapPath")!=ws.map.path||
+               params.getStr("expectedRevision")!=std::to_string(ws.map.revision))
+                throw std::runtime_error("Reload the current forest document");
+            const auto action=params.getStr("action","plant");
+            if(action!="plant"&&action!="pick"&&action!="move")throw std::runtime_error("Invalid forest Scene action");
+            if(action!="pick"&&(!params["species"].isNumber()||params["species"].integer()<1||params["species"].integer()>1000000||
+               params["species"].fx()!=Fixed::fromInt(params["species"].integer())))throw std::runtime_error("Invalid forest species");
+            if(action=="plant"&&params.getStr("habit")!="tree"&&params.getStr("habit")!="shrub")
+                throw std::runtime_error("Invalid planting habit");
+            if(action=="move"&&(!params["key"].isNumber()||params["key"].integer()<1||params["key"].integer()>1000000000||
+               params["key"].fx()!=Fixed::fromInt(params["key"].integer())))throw std::runtime_error("Invalid plant key");
+            if(wpLiveOptions_.live&&wpLiveOptions_.forest)throw std::runtime_error("Disable live forest before authoring");
+            if(mouse_.active||wpDrag_.active)throw std::runtime_error("Finish the active Scene gesture first");
+            const auto sceneBody=worldProcessSceneBody();if(sceneBody.empty())throw std::runtime_error("Wait for a current planetary Scene");
+            forestPlantArm_=params;forestPlantArm_.set("project",Json::string(ws.project.dir));forestPlantArm_.set("sceneBody",Json::string(sceneBody));
+        }
+        out.set("armed",Json::fromBool(forestPlantArm_.isObject()));return out;
+    });
+    if(method=="studio.planetForestLive")return answer([&]{return planetForestLiveRequest();});
+    if(method=="studio.evolveState")return answer([&]{
+        // Browser polling can reuse the same completed-tick geometry sampled
+        // for the native Scene. No duplicate heavy GRANULAR query.
+        if(wpLiveOptions_.live&&game_&&worldProcessPlanetMapCurrent()&&game_->planetSnapshotCurrent(wpLiveSnapshot_))return wpLiveSnapshot_;
+        if(wpLiveOptions_.live&&game_&&game_->planetMatch()&&!worldProcessPlanetMapCurrent()){
+            Json out=Json::object();out.set("active",Json::fromBool(false));out.set("regions",Json::array());return out;
+        }
+        if(game_)return game_->ecologyState();
+        Json out=Json::object();out.set("active",Json::fromBool(false));
+        out.set("regions",Json::array());return out;
+    });
+    if(method=="studio.evolveLayer")return answer([&]{
+        const auto next=wpLiveOptions_.patched(params);
+        if(next.live&&next.forest&&forestPlantArm_.isObject()){
+            forestPlantArm_=Json{};mouse_={};if(preview_)onScene([&]{preview_->setForestDragPreview(Json{});});
+            Json cancelled=Json::object();cancelled.set("cancelled",Json::fromBool(true));sendEventPayload("planetForest.planted",cancelled);
+        }
+        if(next!=wpLiveOptions_){
+            wpLiveOptions_=next;
+            wpLiveSnapshot_=sampleWorldProcessLive();
+            wpLiveRefresh_=platform_.now();
+            rebuildOverlay();
+        }
+        return wpLiveOptions_.json();
+    });
+    if(method=="studio.worldProcessAreaPreview")return answer([&]{
+        const auto selected=session_->selectedObjectIds();
+        std::string selectionKey;
+        for(const auto& id:selected){selectionKey+=id;selectionKey.push_back('|');}
+        const auto revision=params["revision"].integer(-1);
+        const auto owner=params.getStr("owner");
+        if(owner.empty()||owner.size()>128)
+            throw std::runtime_error("Invalid EVOLVE preview owner");
+        if(revision<0)throw std::runtime_error("Missing EVOLVE preview revision");
+        // A release is allowed even after the selection changed, but
+        // cannot release another window's active preview.
+        if(params.getStr("selectionKey")!=selectionKey && !params.getBool("clear"))
+            throw std::runtime_error("EVOLVE preview selection changed");
+        if(owner!=wpPreviewOwner_ && params.getBool("clear")){
+            Json ignored=Json::object();
+            ignored.set("stale",Json::fromBool(true));
+            return ignored;
+        }
+        if(owner==wpPreviewOwner_ && revision<wpPreviewRevision_){
+            Json ignored=Json::object();
+            ignored.set("stale",Json::fromBool(true));
+            return ignored;
+        }
+        wpPreviewOwner_=owner;
+        wpPreviewRevision_=revision;
+        wpPreviewSelection_=selectionKey;
+        if(params.getBool("clear")||selected.size()<2){
+            wpNumericPreview_=Json();
+            wpPreviewOwner_.clear();
+            wpPreviewSelection_.clear();
+        }else{
+            const auto& sx=params["scaleNumerator"];
+            const auto& sz=params["scaleNumeratorZ"];
+            const auto pivot=params.getStr("pivot");
+            if(!sx.isNumber()||!sz.isNumber()||
+               sx.integer()<1||sx.integer()>1000000||
+               sz.integer()<1||sz.integer()>1000000||
+               (pivot!="shared"&&pivot!="individual"&&pivot!="custom")||
+               (pivot=="custom"&&(!params["pivotXcm"].isNumber()||
+                                   !params["pivotZcm"].isNumber())))
+                throw std::runtime_error("Invalid numeric EVOLVE preview");
+            for(const auto& id:selected)
+                if(session_->lockedIds().contains(id)||session_->hiddenIds().contains(id))
+                    throw std::runtime_error("EVOLVE preview requires editable regions");
+            if(pivot=="custom"){
+                const auto px=params["pivotXcm"].integer();
+                const auto pz=params["pivotZcm"].integer();
+                if(px < -evolve::kAreaCoordinateCm || px > evolve::kAreaCoordinateCm ||
+                   pz < -evolve::kAreaCoordinateCm || pz > evolve::kAreaCoordinateCm ||
+                   params["pivotXcm"].numberLiteral()!=std::to_string(px) ||
+                   params["pivotZcm"].numberLiteral()!=std::to_string(pz))
+                    throw std::runtime_error("Invalid custom EVOLVE preview pivot");
+                wpGroupPivot_={
+                    float(params["pivotXcm"].integer())/100.f,.65f,
+                    float(params["pivotZcm"].integer())/100.f};
+                wpCustomPivot_=true;
+                wpPivotSelection_=selected;
+            }
+            wpNumericPreview_=params;
+        }
+        rebuildOverlay();
+        Json result=Json::object();
+        result.set("ok",Json::fromBool(true));
+        return result;
+    });
     if (!hasId) return false;
+    if(method=="studio.buildingGraphOverlay")return answer([&]{
+        const auto raw=params.getStr("sceneId");
+        if(raw.empty()){buildingGraphOverlayScene_=0;rebuildOverlay();}
+        else{
+            if(!preview_)throw std::runtime_error("Open the native Scene viewport");
+            if(raw.size()>19||raw[0]=='0')throw std::runtime_error("Invalid scene ID");
+            uint64_t id=0;
+            for(char c:raw){if(c<'0'||c>'9'||id>(uint64_t(INT64_MAX)-uint64_t(c-'0'))/10)throw std::runtime_error("Invalid scene ID");id=id*10+uint64_t(c-'0');}
+            const auto snap=session_->buildingGraphSnapshot(id);
+            if(!snap["lastChange"].isObject())throw std::runtime_error("No committed building invalidation snapshot");
+            const auto layers=params.getInt("layers",1);
+            if(layers<1||layers>31)throw std::runtime_error("Invalid graph overlay layers");
+            buildingGraphOverlayLayers_=uint32_t(layers);
+            buildingGraphOverlayScene_=id;rebuildOverlay();
+        }
+        Json out=Json::object();out.set("active",Json::fromBool(buildingGraphOverlayScene_!=0));return out;
+    });
+    if(method=="studio.buildingPreview")return answer([&]{
+        if(projectLoading_||buildingPreviewPending_)throw std::runtime_error("Building preview is busy");
+        const auto& project=session_->workspace().project.dir;
+        if(project.empty())throw std::runtime_error("Open a project before preview");
+        auto model=studioBuildingPreviewCpuModel(fs::path(session_->workspace().engineDir),fs::path(project),params);
+        ++buildingPreviewToken_;buildingPreviewActive_=false;
+        if(!buildingPreviewThread_)buildingPreviewThread_=std::make_unique<StudioRenderThread>([this]{renderBuildingPanelFrame();});
+        const BuildingPreviewJob job{req["id"],buildingPreviewToken_,.65f,.42f,1.f,0.f,0.f};
+        auto result=buildingPreviewThread_->invoke([&]{
+            platform_.sceneThreadScope([&]{
+                if(!buildingPanelPreview_)buildingPanelPreview_=std::make_unique<StudioBuildingPanelPreview>();
+                buildingPanelPreview_->setModel(std::move(model));
+            });
+            return buildingPanelFrame(job);
+        });
+        buildingPreviewActive_=true;return result;
+    });
+    if(method=="studio.buildingPreviewView"){
+        if(projectLoading_||!buildingPreviewActive_||!buildingPreviewThread_||
+           params.getStr("token")!=std::to_string(buildingPreviewToken_)){
+            sendError(req["id"],"Building preview is no longer current");return true;
+        }
+        if(buildingPreviewPending_){sendError(req["id"],"Building preview camera is busy");return true;}
+        for(const char* key:{"yaw","pitch","zoom","panX","panY"})if(!params[key].isNumber()){
+            sendError(req["id"],"Building preview camera values required");return true;
+        }
+        BuildingPreviewJob job{req["id"],buildingPreviewToken_,float(params["yaw"].toDouble()),float(params["pitch"].toDouble()),
+            float(params["zoom"].toDouble()),float(params["panX"].toDouble()),float(params["panY"].toDouble())};
+        if(!std::isfinite(job.yaw)||!std::isfinite(job.pitch)||!std::isfinite(job.zoom)||!std::isfinite(job.panX)||!std::isfinite(job.panY)||
+           std::abs(job.yaw)>10000.f||std::abs(job.panX)>2.f||std::abs(job.panY)>2.f||job.zoom<.55f||job.zoom>2.5f){
+            sendError(req["id"],"Invalid Building preview camera");return true;
+        }
+        buildingPreviewPending_=true;
+        {std::lock_guard<std::mutex> lock(buildingPreviewMutex_);buildingPreviewJob_=std::move(job);}
+        buildingPreviewThread_->kick();
+        return true; // reply from UI tick after worker finishes
+    }
+    if(method=="studio.buildingPreviewStop")return answer([&]{
+        if(params.getStr("token")==std::to_string(buildingPreviewToken_))retireBuildingPanelPreview();
+        Json result=Json::object();result.set("active",Json::fromBool(false));return result;
+    });
     if (method == "studio.windowOpen" || method == "studio.windowClose" || method == "studio.windowTitle")
         return answer([&] { return platform_.windowRequest(method, params); });
     if (method == "studio.windowBroadcast") return answer([&] {
@@ -1761,7 +3039,47 @@ bool StudioHost::handleHostMethod(const Json& req) {
     if (method == "studio.spectraPreview")
         return answer([&]{return runSpectraPreview(params);});
     if (method == "studio.viewportInput") return answer([&] { return viewportInput(params); });
+    if (method == "studio.gameProfile") return answer([&] {
+        const auto& project=session_->workspace().project.dir;
+        if(project.empty()||params.getStr("expectedProject")!=project)
+            throw std::runtime_error("Simulation Profiler project changed");
+        const auto action=params.getStr("action");
+        if(action!="status"&&action!="start"&&action!="stop")throw std::runtime_error("Invalid profiler action");
+        uint32_t steps=0;
+        if(action=="start"){
+            const auto n=params["steps"].toDouble();
+            if(!params["steps"].isNumber()||!(n>=1&&n<=120)||double(int(n))!=n)
+                throw std::runtime_error("Invalid profile capture size");
+            steps=uint32_t(n);
+        }
+        if(game_)return game_->profile(action,steps);
+        if(action!="status")throw std::runtime_error("No local match is running");
+        Json out=Json::object();out.set("available",Json::fromBool(false));
+        out.set("epoch",Json::string("0"));out.set("reason",Json::string("No local match is running"));return out;
+    });
+    if (method == "studio.gameRegions") return answer([&] {
+        const auto& project=session_->workspace().project.dir;
+        if(project.empty()||params.getStr("expectedProject")!=project)
+            throw std::runtime_error("World Explorer project changed; refresh the panel");
+        if(game_)return game_->regions();
+        Json out=Json::object();
+        out.set("active",Json::fromBool(false));out.set("available",Json::fromBool(false));
+        out.set("epoch",Json::string("0"));out.set("tick",Json::number(int64_t(0)));
+        out.set("reason",Json::string("No local match is running"));return out;
+    });
+    if(method=="studio.gameEdit")return answer([&] {
+        const auto& project=session_->workspace().project.dir;
+        if(project.empty()||params.getStr("expectedProject")!=project)
+            throw std::runtime_error("Runtime edit project changed");
+        if(!game_)throw std::runtime_error("No local game running");
+        // Deliberately no Workspace mutation, document.changed or generic MCP command.
+        return game_->editRuntime(params);
+    });
     if (method == "studio.gameEntities" || method == "studio.gameInspect") return answer([&] {
+        // Older clients omit expectedProject. Entity Debugger always sends it.
+        if(params.has("expectedProject")&&(session_->workspace().project.dir.empty()||
+            params.getStr("expectedProject")!=session_->workspace().project.dir))
+            throw std::runtime_error("Runtime inspection project changed");
         if (method == "studio.gameEntities") {
             if (!params["offset"].isNumber() || !params["limit"].isNumber() || !params["query"].isString() ||
                 params["offset"].toDouble() < 0 || params["offset"].toDouble() > 10000000 ||
@@ -1774,16 +3092,38 @@ bool StudioHost::handleHostMethod(const Json& req) {
         if (!game_) throw std::runtime_error("No game is running");
         return game_->inspect(params.getStr("epoch"), params.getStr("ref"));
     });
+    if(method=="studio.previewPlayChanges")return answer([&] {
+        playReview_=Json();
+        if(!game_||!game_->canReview(session_->workspace()))
+            throw std::runtime_error("Pause a local saved-map session with unchanged source before reviewing changes");
+        if(params.getStr("expectedProject")!=session_->workspace().project.dir)
+            throw std::runtime_error("Play review project changed");
+        for(const char* flag:{"positions","amounts","removeDead"})
+            if(params[flag].type()!=Json::Type::Bool)throw std::runtime_error("Invalid play review options");
+        const auto states=game_->mapEntityStates();
+        Json p=Json::object(),r=Json::object();
+        p.set("entities",states["entities"]);p.set("positions",params["positions"]);
+        p.set("amounts",params["amounts"]);p.set("removeDead",params["removeDead"]);p.set("dryRun",Json::fromBool(true));
+        r.set("id",req["id"]);r.set("method",Json::string("studio.keepPlayChanges"));r.set("params",p);
+        const auto preview=session_->dispatch(r);
+        if(preview.has("error"))throw std::runtime_error(preview.getStr("error"));
+        const auto token=std::to_string(++playReviewSerial_);
+        playReview_.set("token",Json::string(token));playReview_.set("epoch",game_->state()["epoch"]);
+        playReview_.set("states",states);p.erase("dryRun");playReview_.set("params",p);
+        auto out=preview["result"];out.set("token",Json::string(token));out.set("tick",states["tick"]);return out;
+    });
     if (method == "studio.keepPlayChanges") {
-        // The running game's map entities (positions, amounts, removed) go to the map as one History step.
+        // Only a reviewed native capture may be committed; never trust browser entity rows.
         Json reply = Json::object();
         reply.set("id", req["id"]);
         try {
-            if (!game_) throw std::runtime_error("No game is running");
-            const auto states = game_->mapEntityStates();
-            Json r = Json::object(), p = Json::object();
-            p.set("entities", states["entities"]);
-            p.set("removeDead", Json::fromBool(params.getBool("removeDead")));
+            const auto review=std::move(playReview_);playReview_=Json();
+            if(!game_||!game_->canReview(session_->workspace())||
+                params.getStr("expectedProject")!=session_->workspace().project.dir||
+                params.getStr("token").empty()||params.getStr("token")!=review.getStr("token")||
+                game_->state()["epoch"]!=review["epoch"]||game_->mapEntityStates()!=review["states"])
+                throw std::runtime_error("Play review expired; capture a new preview");
+            Json r=Json::object(),p=review["params"];
             r.set("id", req["id"]); r.set("method", Json::string("studio.keepPlayChanges")); r.set("params", p);
             reply = session_->dispatch(r);
             if (!reply.has("error")) sendEvent("document.changed", "");
@@ -1809,12 +3149,39 @@ bool StudioHost::handleHostMethod(const Json& req) {
                 plan.camera = std::array<float, 5>{cam.target.x, cam.target.z, cam.distance, float(cam.pitch * 57.29578), float(cam.yaw * 57.29578)};
             }
             ensureGame();
+            wpLiveSnapshot_=Json();wpLivePlanetProject_.clear();wpLivePlanetMapPath_.clear();wpLivePlanetRevision_=0;wpLiveRefresh_=0;
+            buildingGraphOverlayScene_=0;rebuildOverlay();
+            session_->setBuildingGraphReader({});
+            playReview_=Json();
             game_->start(plan, engineRoot_ + "/engine/assets");
+            if(plan.map){
+                wpLivePlanetProject_=plan.project;
+                wpLivePlanetMapPath_=session_->workspace().map.path;
+                wpLivePlanetRevision_=session_->workspace().map.revision;
+            }
+            rebuildOverlay();
             gameFrameTime_ = 0;
-        } else if (method == "studio.gameStop" && game_) game_->stop();
-        else if (method == "studio.gameControl") {
+        } else if (method == "studio.gameStop" && game_) {
+            buildingGraphOverlayScene_=0;session_->setBuildingGraphReader({});
+            playReview_=Json();game_->stop();wpLiveSnapshot_=Json();wpLivePlanetMapPath_.clear();rebuildOverlay();
+        } else if (method == "studio.gameControl") {
             if (!game_) throw std::runtime_error("No game is running");
-            game_->control(params.getStr("action"));
+            playReview_=Json();
+            const auto action=params.getStr("action");
+            if(action=="restart"){
+                if(!game_->state().getBool("active"))throw std::runtime_error("Start a game before restarting");
+                buildingGraphOverlayScene_=0;session_->setBuildingGraphReader({});rebuildOverlay();
+                const auto old=game_->launchPlan();
+                auto plan=studioGameLaunch(session_->workspace(),old.map.has_value());
+                plan.camera=old.camera;
+                game_->start(plan,engineRoot_+"/engine/assets");gameFrameTime_=0;
+                wpLivePlanetProject_=plan.project;
+                wpLivePlanetMapPath_=plan.map?session_->workspace().map.path:std::string{};
+                wpLivePlanetRevision_=plan.map?session_->workspace().map.revision:0;
+            }else game_->control(action);
+            if(action=="restart"||action=="checkpointRestore"){
+                wpLiveSnapshot_=Json();wpLiveRefresh_=0;rebuildOverlay();
+            }
         }
         return gameState();
     });
@@ -1994,6 +3361,11 @@ bool StudioHost::handleHostMethod(const Json& req) {
 void StudioHost::afterSessionReply(const Json& req, const Json& reply) {
     if (reply.has("error")) return;
     const std::string method = req.getStr("method");
+    if(method=="studio.openProject"||method=="studio.openMap"||method=="studio.newMap"||method=="studio.hubOpen"||method=="studio.hubCreate"){
+        const bool armed=forestPlantArm_.isObject();forestPlantArm_=Json{};
+        if(preview_)onScene([&]{preview_->setPlanetSceneBody("","","");});
+        if(armed){Json out=Json::object();out.set("cancelled",Json::fromBool(true));sendEventPayload("planetForest.planted",out);}
+    }
     if (method == "studio.select" && platform_.hasFloatingWindows()) sendEvent("selection.changed", ""); // floats follow it
     if (preview_ && (method == "studio.openMap" || method == "studio.newMap")) {
         onScene([&] { preview_->resetCamera(); });
@@ -2002,6 +3374,7 @@ void StudioHost::afterSessionReply(const Json& req, const Json& reply) {
     if(method=="studio.materialCreate"||method=="studio.materialsToFiles"||method=="studio.materialPatch"||
        (method=="studio.op"&&req["params"].getStr("op")=="shader_graph_apply"))sendEvent("assets.changed","");
     if (method == "studio.materialPreview") sendEvent("material.preview", req["params"].getStr("name"));
+    if(method=="studio.assetMetaPatch"||method=="studio.assetHistoryStep"||method=="studio.assetTransferCommit"||method=="studio.assetDelete"||method=="studio.assetFolderCreate"||method=="studio.assetTrashApply"||method=="studio.assetHistoryResetApply"||method=="studio.agentBatchApply"||(method=="studio.agentHistoryStep"&&req["params"].getStr("scope")=="assets"))sendEvent("assets.changed", "");
     if (documentChangingMethods().count(method) || (method == "studio.op" && reply["result"].getBool("changed")))
         sendEvent("document.changed", "");
 }
@@ -2013,7 +3386,9 @@ void StudioHost::handleMessage(const std::string& json) {
     try {
         if (handleHostMethod(req)) return;
         const std::string method = req.getStr("method");
-        if (game_ && (method == "studio.openMap" || method == "studio.newMap")) game_->stop();
+        if (game_ && (method == "studio.openMap" || method == "studio.newMap")){
+            buildingGraphOverlayScene_=0;session_->setBuildingGraphReader({});game_->stop();wpLiveSnapshot_=Json();wpLivePlanetMapPath_.clear();rebuildOverlay();
+        }
         if (projectLoading_ && method != "studio.viewportRect") { sendError(req["id"], "Project is loading"); return; }
         Json reply;
         if (method == "studio.assetThumbnail" && req["id"].isNumber()) {
@@ -2021,6 +3396,24 @@ void StudioHost::handleMessage(const std::string& json) {
             reply.set("id", req["id"]);
             try { reply.set("result", assetThumbnail(req["params"].getStr("path"))); }
             catch (const std::exception& e) { reply.set("error", Json::string(e.what())); }
+        } else if (method == "studio.cavernsPreview" && req["id"].isNumber()) {
+            const auto& ws=session_->workspace();const auto& params=req["params"];
+            if(ws.project.dir.empty()||params.getStr("expectedProject")!=ws.project.dir||
+               !params["expectedMap"].isString()||params.getStr("expectedMap")!=(ws.map.path.empty()?"":ws.relative(ws.map.path)))
+                throw std::runtime_error("Caverns preview project/map changed");
+            if(!preview_)throw std::runtime_error("Open the native Scene panel first");
+            reply=Json::object();reply.set("id",req["id"]);
+            if(params.has("globeBody")){
+                if(!params["globeBody"].isString())throw std::runtime_error("Caverns globe body must be text");
+                const auto body=params.getStr("globeBody");
+                if(!body.empty()){
+                    if(session_->sceneBrush().armed)throw std::runtime_error("Disarm the Scene brush before entering globe mode");
+                    editor::planet_caves::validateAnchor(ws.map.data,{body,0,{}, {},100});
+                }
+                onScene([&]{preview_->setCaveGlobe(body,ws.project.dir,ws.map.path);});
+                mouse_={};
+            }
+            reply.set("result",onScene([&]{return preview_->cavernsPreview(params);}));
         } else if (method == "studio.gpuStats" && req["id"].isNumber()) {
             // Frame Capture / Texture Resources: Scene frame history (CPU frame time, draw calls) and live GPU textures.
             reply = Json::object();

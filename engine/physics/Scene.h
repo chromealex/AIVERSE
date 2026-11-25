@@ -139,6 +139,7 @@ public:
     // Pass its handle as `self` to stepCharacter. moveCharacter follows the state over the next step.
     BodyHandle createCharacter(const CharacterParams& params, b3Vec3 feet, uint32_t userData = 0);
     bool moveCharacter(BodyHandle h, const CharacterState& state, bool teleport = false);
+    bool moveCharacterOriented(BodyHandle h,const CharacterState& state,b3Quat localToWorld,bool teleport=false);
     // Applies pushes reported by stepCharacter: impulse along the push direction that brings the body
     // to the character's speed at that point, clamped to the push's maxImpulse.
     void applyPushes(const std::vector<Push>& pushes);

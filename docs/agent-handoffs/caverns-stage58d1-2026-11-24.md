@@ -1,0 +1,11 @@
+# Caverns Stage58d1 — portal roundtrip and swim demo scenarios
+
+Date: 2026-11-24. Branch `integration/caverns-studio-stage54c-20261124`. Start cdc77bafacde612adf9b9705e772db3502197df2; roadmap 00f6c317c10e24c840060d9b73239c8c99cff3bb; implementation f35d9226821a11583e93acebe2c742abd35e24fc.
+
+- `PlanetCavernsDemo.cpp`: optional `--portal` authored shaft plus chamber, exterior start, actual native crossing request, existing A* explore/return routes and exit. Movement goes through the existing dispatch, oriented Box3D sweep and multi-tick travel receipts. Crossing coverage checks current committed region, bounded volume chart and every selected finest surface leaf in the expanded movement envelope. Completion requires actual travel state, not an animation/timer/teleport. Invalid native geometry or coverage refuses.
+- Optional `--swim`: sealed submerged chamber, real NEREID sphere water, PHYSIS support frame, existing swimming locomotion state and SDF provider. Explicit separate scenario, not an automatic mixed-mode water transition. Demo buoyancy configured to zero to isolate horizontal route. All scenarios share a single Scene/tick/dispatch and actual GI owner.
+- Demo position component schema v2 stores journey stage; demo swim state has its own explicit schema using existing locomotion serialization. CLI accepts `--frames N` with either scenario. README, registered skill and area docs updated.
+
+Evidence: source commits only; no build/link, CTest, actual certified mouth meshing, real entry/exit, swim route, save/restore, CPU GI render, screenshot, GPU, headless, Studio/MCP, performance or Mac acceptance run. No mounted KINGSTON Mac tree. The authored shaft is a candidate until existing certification passes; do not claim passage is proven. Scripted controls and one bounded patch, not whole-planet streaming. Demo-specific schema changes; old demo save migration not provided. No new core editor/graph/MCP schema. Default client unchanged. Main unchanged.
+
+Next Stage58d2: coordinated moving render frame/rebase and actual synchronized native snapshot restoration; explicitly preserve or rebuild real proxy, derived GI/geometry leases and traversal receipt. Afterward build/run all scenarios and fix discovered issues before declaring completion.

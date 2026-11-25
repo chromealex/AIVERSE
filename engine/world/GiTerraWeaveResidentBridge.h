@@ -51,10 +51,16 @@ public:
             !(resident.cell()==patch.cell))
             return out; // never publish a pre-commit worker patch into GI
 
+        uint64_t epoch=0;
+        if constexpr(requires{patch.surfaceEpoch;resident.surfaceEpoch();}){
+            epoch=patch.surfaceEpoch;
+            if(resident.surfaceEpoch()!=epoch)return out;
+        }
+        const Revision revision{patch.sourceRevision,epoch};
         const auto id=GiWorldGeometryBridge::stableChunkId(
             patch.cell.x,patch.cell.z,GiGeometrySource::TerraWeavePatch);
         auto it=committed_.find(id);
-        if (it!=committed_.end() && it->second==patch.sourceRevision &&
+        if (it!=committed_.end() && it->second==revision &&
             !staged_.contains(id)) {
             out.alreadyCurrent=true;
             return out;
@@ -69,9 +75,9 @@ public:
         // A retry is allowed even if another consumer already cleared
         // notifications after the GI geometry was staged.
         if (!out.hasNotification && !staged_.contains(id)) return out;
-        if (!staged_.contains(id) || staged_.at(id)!=std::optional<uint64_t>{patch.sourceRevision}) {
+        if (!staged_.contains(id) || staged_.at(id)!=std::optional<Revision>{revision}) {
             GiWorldGeometryBridge::replaceTerraWeavePatch(scene,patch,albedo);
-            staged_[id]=patch.sourceRevision;
+            staged_[id]=revision;
             out.staged=true;
         }
         return attemptPublish(scene,gpu,out);
@@ -131,7 +137,7 @@ private:
         out.blocked=!stats.published && scene.hasPendingChanges();
         out.giRevision=stats.revision;
         out.changedRegions=stats.changedRegions;
-        if(stats.published) {
+        if(stats.published||!scene.hasPendingChanges()) { // includes an already-absent empty tile
             for(const auto& [id,revision]:staged_) {
                 if(revision)committed_[id]=*revision;
                 else committed_.erase(id);
@@ -140,8 +146,9 @@ private:
         }
         return out;
     }
-    std::map<uint64_t,uint64_t> committed_;  // last GPU-accepted source revisions
-    std::map<uint64_t,std::optional<uint64_t>> staged_; // pending revisions/unloads
+    using Revision=std::pair<uint64_t,uint64_t>; // soil, topology
+    std::map<uint64_t,Revision> committed_;  // last GPU-accepted source revisions
+    std::map<uint64_t,std::optional<Revision>> staged_; // pending revisions/unloads
     size_t listenerErrors_=0;
 };
 

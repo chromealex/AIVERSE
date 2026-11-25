@@ -1,5 +1,9 @@
 #include "SpatialWorld.h"
 #include <algorithm>
+#include <atomic>
+#include <limits>
+#include <stdexcept>
+#include <utility>
 
 namespace aiverse::world {
 namespace {
@@ -36,11 +40,30 @@ std::vector<Cell> SpatialWorld::cells(Bounds b) const {
         result.push_back({int32_t(x),int32_t(y),int32_t(z)});
     return result;
 }
+uint64_t SpatialWorld::nextMutationVersion() {
+    static std::atomic<uint64_t> sequence{0};
+    auto value=sequence.load(std::memory_order_relaxed);
+    do {
+        if(value==std::numeric_limits<uint64_t>::max())
+            throw std::overflow_error("SpatialWorld mutation identity exhausted");
+    } while(!sequence.compare_exchange_weak(value,value+1,std::memory_order_relaxed));
+    return value+1;
+}
+bool SpatialWorld::publishCopyIfCurrent(SpatialWorld&& candidate,uint64_t expectedVersion) {
+    if(this==&candidate||mutationVersion_!=expectedVersion||
+       cellSize_!=candidate.cellSize_)return false;
+    const auto version=nextMutationVersion();
+    *this=std::move(candidate);
+    mutationVersion_=version;
+    return true;
+}
 bool SpatialWorld::add(Collider c) {
     constexpr auto limit=Fixed::fromInt(1000000);
     for(auto p:{c.bounds.min,c.bounds.max})if(fxAbs(p.x)>limit||fxAbs(p.y)>limit||fxAbs(p.z)>limit)return false;
     if(c.id==0||c.bounds.min.x>=c.bounds.max.x||c.bounds.min.y>=c.bounds.max.y||c.bounds.min.z>=c.bounds.max.z)return false;
-    remove(c.id);colliders_.emplace(c.id,c);
+    remove(c.id);
+    c.generation=nextMutationVersion();mutationVersion_=c.generation;
+    colliders_.emplace(c.id,c);
     auto occupied=cells(c.bounds);
     if(occupied.empty())oversized_.insert(c.id);
     else for(auto cell:occupied)index_[cell].insert(c.id);
@@ -48,10 +71,11 @@ bool SpatialWorld::add(Collider c) {
 }
 void SpatialWorld::remove(uint32_t id) {
     auto it=colliders_.find(id);if(it==colliders_.end())return;
+    mutationVersion_=nextMutationVersion();
     for(auto cell:cells(it->second.bounds)) { auto bucket=index_.find(cell);if(bucket!=index_.end()){bucket->second.erase(id);if(bucket->second.empty())index_.erase(bucket);} }
     oversized_.erase(id);triangles_.erase(id);colliders_.erase(it);
 }
-void SpatialWorld::clear(){colliders_.clear();index_.clear();oversized_.clear();triangles_.clear();}
+void SpatialWorld::clear(){mutationVersion_=nextMutationVersion();colliders_.clear();index_.clear();oversized_.clear();triangles_.clear();}
 std::vector<uint32_t> SpatialWorld::query(Bounds b) const {
     auto occupied=cells(b);std::set<uint32_t> candidates=oversized_;
     if(occupied.empty())for(const auto& [id,c]:colliders_) { (void)c;candidates.insert(id); }

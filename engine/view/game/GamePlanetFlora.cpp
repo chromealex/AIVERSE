@@ -5,9 +5,18 @@
 #include "engine/render/TerraWeaveRockModel.h"
 #include "engine/world/TerraWeaveSphere.h"
 #include "engine/world/TerraWeaveTreePresets.h"
+#include "engine/world/TerraWeaveForestSpeciesManifest.h"
+#include "engine/world/WorldAssets.h"
+#include "engine/world/TerraWeaveDeadwoodPresentation.h"
+#include "aiverselib/world/EvolvePlanetDeadwood.h"
+#include "aiverselib/world/PlanetConsequenceOwner.h"
+#include "engine/world/TerraWeaveForestHarvestEcs.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <map>
+#include <set>
+#include <tuple>
 
 namespace aiverse::game {
 using render::float3;
@@ -38,6 +47,236 @@ std::vector<tw::FoliageSpecies> floraSpecies() {
             sp(7, desert | alpine, 2, 3000, 600, 1400)};                   // slab
 }
 } // namespace
+
+bool collectPlanetForestVisuals(const World& world,const Surface& surface,
+                              PlanetForestVisualSnapshot& output,
+                              const std::vector<uint8_t>* visibility){
+    namespace ev=aiverse::evolve;
+    namespace wp=aiverse::lib::worldprocess;
+    const auto* roots=world.resourceConst<tw::TerraWeaveAuthorityResource>();
+    const auto* delivery=world.resourceConst<ev::PlanetRootDeliveryResource>();
+    PlanetForestVisualSnapshot next;
+    if(!roots||!delivery){output=std::move(next);return true;}
+    if(!surface.tab||roots->rooted.size()!=delivery->bindings.size()||
+       roots->rooted.size()>ev::kMaxPlanetRootBindings)return false;
+    // In restricted views, the opt-in owner suppresses cosmetic tree scatter
+    // on every body, even with zero roots. Dynamic binding counts must not
+    // toggle static scenery on a visible part of an otherwise unseen body.
+    next.managedBodies.resize(surface.bodies.size(),visibility?1:0);
+    const bool validVision=!visibility||(surface.W>0&&surface.H>0&&
+        visibility->size()==size_t(surface.W)*size_t(surface.H));
+    if(!validVision){output=std::move(next);return true;}
+    const auto visible=[&](Vec3 p){
+        if(!visibility)return true;
+        if(!Surface::onSphere(p))return false;
+        const int cell=surface.cellAt(p);
+        return cell>=0&&size_t(cell)<visibility->size()&&(*visibility)[size_t(cell)]==2;
+    };
+    std::map<tw::AnchoredPlantId,const ev::PlanetRootBinding*> bindings;
+    for(const auto& b:delivery->bindings){
+        const auto frame=wp::surfaceFrame(&surface,b.plantedPosition);
+        if(!frame||surface.bodies[size_t(frame->body)].id!=b.bodyId||
+           !bindings.emplace(b.id,&b).second)return false;
+        next.managedBodies[size_t(frame->body)]=1;
+    }
+    std::set<tw::AnchoredPlantId> dead;
+    if(const auto* ecology=world.resourceConst<tw::ForestEcologyResource>())
+        for(const auto& item:ecology->plants)if(item.dead)dead.insert(item.id);
+    const auto* wood=world.resourceConst<ev::PlanetDeadwoodResource>();
+    const auto* harvest=world.resourceConst<tw::ForestHarvestResource>();
+    std::map<tw::AnchoredPlantId,const ev::PlanetPlantFallRecord*> falls;
+    if(delivery->events.size()>ev::kMaxPlanetPlantFallEvents)return false;
+    for(const auto& event:delivery->events){
+        const auto binding=bindings.find(event.fall.event.id);
+        if(binding==bindings.end()||event.fall.bodyId!=binding->second->bodyId||
+           event.fall.plantedPosition!=binding->second->plantedPosition)continue;
+        auto [it,inserted]=falls.emplace(event.fall.event.id,&event);
+        if(!inserted&&ev::planetFallKey(it->second->fall)<ev::planetFallKey(event.fall))it->second=&event;
+    }
+    std::map<wp::ConsequenceKey,const wp::ConsequenceBody*> physical;
+    if(const auto* consequences=world.resourceConst<wp::PlanetConsequenceResource>())
+        for(const auto& item:consequences->bodies)
+            if(item.key.kind==wp::ConsequenceKind::Plant)
+                if(!physical.emplace(item.key,&item).second)return false;
+    const auto asFloat=[](Vec3 p){return float3{float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())};};
+    std::set<tw::AnchoredPlantId> seen;
+    for(const auto& plant:roots->rooted){
+        const tw::AnchoredPlantId id{plant.anchor.speciesId,plant.anchor.plantKey};
+        if(!id.speciesId||!id.key||!seen.insert(id).second||!bindings.contains(id))return false;
+        if(harvest&&tw::isForestHarvested(*harvest,id))continue;
+        const auto& binding=*bindings.at(id);
+        const auto frame=wp::surfaceFrame(&surface,binding.plantedPosition);
+        if(!frame)return false;
+        const auto body=frame->body;
+        const auto anchor=Surface::anchor(body);
+        const auto appearance=tw::plantAppearance(plant.environment);
+        Vec3 visibilityPosition=binding.plantedPosition;
+        PlanetForestVisual visual;
+        visual.species=id.speciesId;visual.key=id.key;visual.body=body;
+        // Explicit built-in fallback palette, not species asset authoring.
+        visual.proto=int((id.speciesId-1)%kTreeProtos);
+        visual.size=float(appearance.sizePermille)*.001f;
+        if(plant.anchor.roots.habit==tw::PlantHabit::Shrub)visual.size*=.25f;
+        visual.foliage=float(appearance.foliagePermille)*.001f;
+        visual.local=asFloat(binding.plantedPosition-anchor);
+        visual.up=asFloat(frame->up);visual.forward=asFloat(frame->south);
+        visual.fallen=plant.fallen;
+        if(plant.fallen||dead.contains(id)){
+            visual.foliage=0;
+            if(wood){
+                const auto state=tw::deadwoodVisualState(wood->ledger,id);
+                if(state.tier==tw::DeadwoodVisualTier::Gone)continue;
+                visual.tint={state.tintRPermille*.001f,state.tintGPermille*.001f,state.tintBPermille*.001f};
+                // At constant length, transverse area tracks remaining organic mass.
+                visual.thickness=std::sqrt(float(state.remainingPermille)*.001f);
+            }
+        }
+        if(plant.fallen){
+            const auto receipt=falls.find(id);
+            const auto motion=receipt!=falls.end()&&receipt->second->acknowledged
+                ?physical.find(wp::consequenceKey(receipt->second->fall)):physical.end();
+            if(motion!=physical.end()){
+                const auto& record=*motion->second;
+                if(record.body!=binding.bodyId)return false;
+                const auto basis=fxQuaternionBasis(record.motion.rotation);
+                if(!basis)return false;
+                visibilityPosition=record.motion.position;
+                visual.local=asFloat(record.motion.position-anchor);
+                visual.up=asFloat(basis->up);visual.forward=asFloat(basis->forward);
+                visual.physical=true;
+                if(record.shape==wp::ConsequenceShape::Capsule)
+                    visual.physicalRootOffset=float((record.dimensions.x+record.dimensions.y).toDouble());
+                visual.motion=PlanetForestMotionSample{record.key.tick,record.lastMotionTick,
+                    record.key.revision,record.motion.position,record.motion.rotation};
+            }else{
+                // Acknowledged and retired physical source stays hidden.
+                if(receipt!=falls.end()&&receipt->second->acknowledged)continue;
+                const auto direction=receipt==falls.end()?frame->east:receipt->second->fall.tangentDirection;
+                visual.up=asFloat(direction.lengthSq().raw>0?fxNormalize(direction):frame->east);
+                visual.forward=asFloat(frame->up);
+                visual.local=asFloat(surface.project(binding.plantedPosition)-anchor);
+            }
+        }
+        if(visible(visibilityPosition))next.plants.push_back(visual);
+    }
+    std::sort(next.plants.begin(),next.plants.end(),[](const auto& a,const auto& b){
+        return std::tuple{a.body,a.species,a.key}<std::tuple{b.body,b.species,b.key};
+    });
+    output=std::move(next);return true;
+}
+
+void PlanetForestMotionHistory::interpolate(PlanetForestVisualSnapshot& snapshot,const Surface& surface,
+        const void* source,uint64_t restoreSerial,uint32_t tick,uint8_t viewer,float alpha,
+        const std::vector<uint8_t>* visibility){
+    const bool sameSource=source&&source_==source&&restoreSerial_==restoreSerial&&
+        viewer_==viewer&&surface.tab&&topology_.lock()==surface.tab;
+    const bool sameTick=sameSource&&tick_==tick;
+    const bool consecutive=sameSource&&tick_!=UINT32_MAX&&tick==tick_+1;
+    if(!sameTick&&!consecutive)clear();
+    source_=source;restoreSerial_=restoreSerial;tick_=tick;viewer_=viewer;topology_=surface.tab;
+    std::map<Key,Track> next;
+    const auto samePose=[](const auto& a,const auto& b){
+        return a.motionTick==b.motionTick&&a.position==b.position&&
+            a.rotation.x==b.rotation.x&&a.rotation.y==b.rotation.y&&
+            a.rotation.z==b.rotation.z&&a.rotation.w==b.rotation.w;
+    };
+    const auto toFloat=[](Vec3 p){return float3{float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())};};
+    const auto fraction=Fixed::fromRaw(int64_t(std::clamp(std::isfinite(alpha)?alpha:1.f,0.f,1.f)*float(Fixed::kOne)));
+    for(auto& plant:snapshot.plants){
+        if(!plant.physical||!plant.motion||plant.body<0||size_t(plant.body)>=surface.bodies.size())continue;
+        const auto& sample=*plant.motion;
+        if(sample.motionTick==UINT32_MAX||sample.motionTick>tick||!surface.tab)continue;
+        const Key key{plant.body,plant.species,plant.key,sample.fallTick,sample.revision};
+        Track track{sample,{}};
+        const auto old=tracks_.find(key);
+        if(old!=tracks_.end()){
+            if(sameTick&&samePose(old->second.current,sample))track.previous=old->second.previous;
+            else if(consecutive&&old->second.current.motionTick!=UINT32_MAX&&
+                    sample.motionTick==old->second.current.motionTick+1)
+                track.previous=old->second.current;
+        }
+        if(track.previous){
+            const auto& prev=*track.previous;
+            // Both endpoints must be on the same body. In player fog,
+            // only interpolate within one currently visible canonical cell;
+            // crossing cells snaps rather than exposing a hidden trajectory.
+            bool permitted=Surface::onSphere(prev.position)&&Surface::onSphere(sample.position)&&
+                surface.bodyAt(prev.position)==plant.body&&surface.bodyAt(sample.position)==plant.body;
+            if(permitted&&viewer){
+                const int a=surface.cellAt(prev.position),b=surface.cellAt(sample.position);
+                permitted=visibility&&surface.W>0&&surface.H>0&&
+                    visibility->size()==size_t(surface.W)*size_t(surface.H)&&a>=0&&a==b&&
+                    size_t(a)<visibility->size()&&(*visibility)[size_t(a)]==2;
+            }
+            if(permitted){
+                const auto pos=fxLerpBounded(prev.position,sample.position,fraction);
+                const auto rotation=fxQuaternionSlerp(prev.rotation,sample.rotation,fraction);
+                const auto basis=rotation?fxQuaternionBasis(*rotation):std::nullopt;
+                if(pos&&basis&&Surface::onSphere(*pos)&&surface.bodyAt(*pos)==plant.body&&
+                   (!viewer||surface.cellAt(*pos)==surface.cellAt(sample.position))){
+                    plant.local=toFloat(*pos-Surface::anchor(plant.body));
+                    plant.up=toFloat(basis->up);plant.forward=toFloat(basis->forward);
+                }else track.previous.reset();
+            }else track.previous.reset();
+        }
+        next.emplace(key,std::move(track));
+    }
+    // Missing, hidden, harvested or retired plants are forgotten immediately.
+    tracks_.swap(next);
+}
+
+PlanetForestModels buildPlanetForestSpecies(const Json& manifest,const render::FileReader& reader){
+    PlanetForestModels models;
+    if(manifest.type()==Json::Type::Null)return models;
+    if(!manifest.isObject()||!manifest["species"].isArray()||
+       manifest["species"].size()==0||manifest["species"].size()>64)
+        throw JsonError("world.terraweaveForest.species: expected 1..64 entries");
+    if(manifest.has("botanicalTextures")&&!manifest["botanicalTextures"].isString())
+        throw JsonError("world.terraweaveForest.botanicalTextures: expected string");
+    const auto dir=manifest.getStr("botanicalTextures","");
+    if(!dir.empty()&&(!reader||!world::safeAssetPath(dir)))
+        throw JsonError("world.terraweaveForest.botanicalTextures: invalid content directory or reader");
+    for(const auto& def:manifest["species"].items()){
+        const auto recipe=world::parseForestSpeciesRecipe(def);
+        const auto id=recipe.profile.speciesId;
+        if(models.contains(id))throw JsonError("world.terraweaveForest.species: duplicate id");
+        auto model=tw::makeArborModel(recipe.profile,recipe.seed,recipe.mesh);
+        if(recipe.preset&&!dir.empty()){
+            tw::applyBotanicalTexture(*model,0,dir,std::string(recipe.preset->barkMaterial),reader);
+            tw::applyBotanicalTexture(*model,1,dir,std::string(recipe.preset->leafMaterial),reader);
+        }
+        models.emplace(id,std::move(model));
+    }
+    return models;
+}
+
+namespace {
+void releasePlanetForestModels(gfx::Device& dev,PlanetForestModels& models){
+    for(auto& [id,model]:models){(void)id;render::releaseModel(dev,*model);}
+    models.clear();
+}
+}
+void PlanetFlora::setAuthoredSpecies(gfx::Device& dev,const Json& manifest,const render::FileReader& reader){
+    auto next=buildPlanetForestSpecies(manifest,reader);
+    if(next.empty()&&authored_.empty()&&pendingAuthored_.empty())return;
+    // Map switch/reload only. Never retire a model used by an earlier frame
+    // until the owner has proved device idle.
+    if(!dev.waitForResourceIdle())throw std::runtime_error("planet forest: GPU idle barrier failed");
+    releasePlanetForestModels(dev,pendingAuthored_);
+    pendingAuthored_=std::move(next);
+    try{
+        for(auto& [id,model]:pendingAuthored_){
+            (void)id;render::prepareModelUpload(*model);
+            if(!render::uploadModel(dev,*model,false,false))
+                throw std::runtime_error("planet forest: authored model upload failed");
+        }
+    }catch(...){
+        if(dev.waitForResourceIdle())releasePlanetForestModels(dev,pendingAuthored_);
+        throw;
+    }
+    releasePlanetForestModels(dev,authored_);
+    authored_.swap(pendingAuthored_);
+}
 
 bool PlanetFlora::makePrototypes(gfx::Device& dev) {
     if (!protos_.empty()) return true;
@@ -70,6 +309,8 @@ bool PlanetFlora::makePrototypes(gfx::Device& dev) {
 void PlanetFlora::shutdown(gfx::Device& dev) {
     for (auto& m : protos_) render::releaseModel(dev, *m);
     protos_.clear();
+    releasePlanetForestModels(dev,authored_);
+    releasePlanetForestModels(dev,pendingAuthored_);
     instances_.clear();
 }
 

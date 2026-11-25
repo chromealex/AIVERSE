@@ -194,8 +194,8 @@ public:
     bool dispatchGpuIndirect(BufferHandle,size_t=0) override;
     bool dispatchInternal(uint32_t,uint32_t,BufferHandle,size_t);
     bool readBuffer(BufferHandle,void*,size_t) override;
-    bool readBufferRangeAsync(BufferHandle,size_t,size_t,BufferReadFn) override;
     bool readBufferAsync(BufferHandle,size_t,BufferReadFn) override;
+    bool readBufferRangeAsync(BufferHandle,size_t,size_t,BufferReadFn) override;
     void endCompute() override;
     bool supportsTextureViews() const override { return true; }
     bool supportsTextureDimension(TextureDimension d) const override {

@@ -1,0 +1,153 @@
+{
+  "schema": 1,
+  "id": "nereid-gcc13-arm64-build",
+  "owner": "NEREID cascade and shared GCC 13 build compatibility",
+  "changed_paths": [
+    "apps/fps/client.cpp",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/systems.json",
+    "engine/gfx/vulkan/VkCompute.cpp",
+    "engine/gfx/vulkan/VkDevice.h",
+    "engine/game/Economy.cpp",
+    "engine/game/Effects.cpp",
+    "engine/game/GameCore.cpp",
+    "engine/world/NereidCascadeScene.h",
+    "tests/ecs_nereid_review_fixes_test.cpp",
+    "tests/libraries/policy_mechanics_batch2.inc",
+    "tests/libraries/policy_mechanics_batch3.inc",
+    "tests/libraries/policy_mechanics_tests.cpp"
+  ],
+  "traits": {
+    "editable": false,
+    "simulation": false,
+    "visible": false,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Direct map-slot construction and named camera JSON lifetime remove the original GCC warning without changing accepted values; later diagnostics are addressed in the same branch.",
+      "evidence": [
+        "engine/world/NereidCascadeScene.h",
+        "apps/fps/client.cpp",
+        "docs/agent-handoffs/nereid-gcc13-arm64-2026-11-24.md"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Existing NEREID, game ECS and policy-test owners are reused; the repair adds no solver or game-specific engine layer.",
+      "evidence": [
+        "engine/world/NereidCascadeScene.h",
+        "engine/game/GameCore.cpp",
+        "docs/agent-handoffs/nereid-gcc13-arm64-2026-11-24.md"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "Existing native cascade and Combat APIs retain their signatures; focused NEREID and game regression tests exercise them.",
+      "evidence": [
+        "engine/world/NereidCascadeScene.h",
+        "tests/ecs_nereid_review_fixes_test.cpp",
+        "engine/game/GameCore.cpp"
+      ]
+    },
+    "skill": {
+      "status": "not_applicable",
+      "note": "Compiler compatibility repair introduces no authoring operation or user-facing skill surface.",
+      "evidence": []
+    },
+    "mcp": {
+      "status": "not_applicable",
+      "note": "No new editor or MCP operation is introduced by the compiler repair.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_applicable",
+      "note": "No new Studio control or behavior is introduced.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_applicable",
+      "note": "No inspected data shape or UI is changed.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_applicable",
+      "note": "Cascade and Combat serialization formats remain unchanged.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "No graph nodes, assets or execution semantics are changed.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "pass",
+      "note": "The Mac NEREID review fixture exercises cascade insertion, replacement and duplicate rejection. The complete fixture used 0.25 s user CPU and 8,511,488 bytes peak RSS in one run.",
+      "evidence": [
+        "docs/agent-handoffs/nereid-gcc13-arm64-2026-11-24.md"
+      ]
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "Verified the affected Combat and Vulkan translation units with GCC 13.5 on Linux arm64 and the NEREID and policy fixtures on macOS. Full hosted Linux CI was cancelled.",
+      "evidence": [
+        "docs/agent-handoffs/nereid-gcc13-arm64-2026-11-24.md",
+        "docs/evidence/nereid-gcc13-current.json"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "No dependency, package or build configuration was added.",
+      "evidence": [
+        "docs/agent-handoffs/nereid-gcc13-arm64-2026-11-24.md"
+      ]
+    },
+    "headless": {
+      "status": "not_applicable",
+      "note": "This change does not add a simulation operation; existing native headless tests remain in the Mac quick gate.",
+      "evidence": []
+    },
+    "examples": {
+      "status": "not_applicable",
+      "note": "No new API or data format requires an example.",
+      "evidence": []
+    },
+    "tests": {
+      "status": "pass",
+      "note": "The two focused Mac tests passed for cascade ownership and policy fixtures.",
+      "evidence": [
+        "docs/evidence/nereid-gcc13-current.json"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Per-stage commits, SHAs, failures and next actions are recorded in the owner handoff.",
+      "evidence": [
+        "docs/agent-handoffs/nereid-gcc13-arm64-2026-11-24.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "The NEREID roadmap item and repair handoff describe the bounded compiler fix and verification state.",
+      "evidence": [
+        "docs/devlog/systems.json",
+        "docs/agent-handoffs/nereid-gcc13-arm64-2026-11-24.md"
+      ]
+    },
+    "publishing": {
+      "status": "not_applicable",
+      "note": "The repair has no new visible output or web demo; the prior camera feature retains its published evidence.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [],
+    "mcp_tools": [],
+    "studio_panels": [],
+    "studio_methods": []
+  },
+  "test_reports": [
+    "docs/evidence/nereid-gcc13-current.json"
+  ]
+}

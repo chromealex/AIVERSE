@@ -1,0 +1,14 @@
+# Shared Graph Framework — stage 34C — 2026-11-24
+
+Branch: feature/aiv20261123_feature_gate; draft PR #120.
+Previous: 6047304be266e722b2dd67b96d174ce2657a9225.
+Planning: 3e1492faac4013e1b89a414bc1186f57b955771b.
+Implementation: 6187078b857269ec545fb9cc5a32973c2f3e5bd5.
+
+Added typed materialized compute source generation for Metal and Vulkan TextureResources layout: output slot 0/binding 12 and up to three ordered inputs at slots 1–3/bindings 13–15. Scalar float32, other graph values padded float4, final output uint RGBA8. Shared pointwise expression and common helper generation extracted from fused compiler; per-node normal kernel reads wrapped scalar neighbors. compileMaterializedDag generates reachable node sources, ordered target pack sources, and includes a reusable RGBA8 result buffer in the 32 MiB logical budget. MCP/Studio plan inspection reports source counts and result/intermediate bytes; executed=false remains explicit. No native materialized pipeline creation or dispatch, actual shader compilation, direct texture binding or performance claim.
+
+Changed paths: engine/render/graph/TextureGraphKernelSource.h, TextureGraphGpu.h; tests/render/texture_graph_kernel_source.cpp; CMakeLists.txt; apps/editor/core/GraphOps.h; apps/studio-web/src/graphs/TextureGraphPanel.tsx; tests/vfx_graph_ops_test.cpp; docs/agents/graph-framework.md; skills/workflow/aiverse-graph-authoring/SKILL.md; docs/devlog/systems.json; docs/features/graph-framework.json.
+
+Verification: PASS isolated Linux C++20 source/ABI fixture with GCC 14.2.0 and Clang 17.0.0, commands c++ -std=c++20 -Wall -Wextra -Werror -I. tests/render/texture_graph_kernel_source.cpp -o kernel_test && ./kernel_test; clang++ -std=c++20 -Wall -Wextra -Werror -I. tests/render/texture_graph_kernel_source.cpp -o kernel_clang_test && ./kernel_clang_test. Both output PASS: typed Metal/Vulkan ABI, three inputs, scalar/vector packing, bounds. Exact local git hash-object values and fetched implementation blobs match header e4de81c9d0987c2f3527a63fce0cdc4fa7f16919, fixture 9a09d81d67f6df426d8faa6b96345235167a83d0. These tests check generated text and input validation, not shader-language compilation. Integrated graph compiler/source fixture authored, NOT RUN. No glslangValidator/glslc in current environment. Full CMake/CTest, actual MSL/GLSL compilation, Metal/Vulkan GPU execution/readback, Studio typecheck/build, MCP registry audit and Mac merged-tree gate NOT RUN. No main merge.
+
+Next 34D: wire materialized sources into existing native owner, use bounded buffers, multi-input bindings and explicit backend synchronization, keep pinned output slots until packing/readback completes, run CPU parity for each output and preserve cancellation/fence retirement. Keep fused path default until actual hardware validation. Runtime host publication and GPU-to-GPU transfer remain open.

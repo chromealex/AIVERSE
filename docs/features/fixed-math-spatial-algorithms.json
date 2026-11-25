@@ -1,0 +1,202 @@
+{
+  "schema": 1,
+  "id": "fixed-math-spatial-algorithms",
+  "owner": "Core deterministic math and shared algorithm libraries",
+  "changed_paths": [
+    "docs/handoffs/algorithms-stage50-noise-benchmark.md",
+    "engine/core/FixedCurves.h",
+    "engine/core/FixedInterpolation.h",
+    "engine/core/FixedLinear.h",
+    "engine/core/FixedMatrix.h",
+    "engine/core/FixedNumerical.h",
+    "engine/core/FixedQR.h",
+    "engine/core/FixedQuaternion.h",
+    "engine/core/GraphAnalysis.h",
+    "engine/core/GraphFlow.h",
+    "engine/core/GraphPowerAllocation.h",
+    "engine/core/GraphSupportCache.h",
+    "engine/core/Graphs.h",
+    "libraries/include/aiverselib/Grid.h",
+    "libraries/include/aiverselib/algorithms/BlueNoise.h",
+    "libraries/include/aiverselib/algorithms/Bvh.h",
+    "libraries/include/aiverselib/algorithms/Geometry2D.h",
+    "libraries/include/aiverselib/algorithms/Geometry3D.h",
+    "libraries/include/aiverselib/algorithms/GeometryClip.h",
+    "libraries/include/aiverselib/algorithms/GeometryContactCache.h",
+    "libraries/include/aiverselib/algorithms/GeometryConvex.h",
+    "libraries/include/aiverselib/algorithms/GeometryDistance.h",
+    "libraries/include/aiverselib/algorithms/GeometryEPA.h",
+    "libraries/include/aiverselib/algorithms/GeometryManifold.h",
+    "libraries/include/aiverselib/algorithms/GeometrySweep.h",
+    "libraries/include/aiverselib/algorithms/GridFields.h",
+    "libraries/include/aiverselib/algorithms/GridVolume.h",
+    "libraries/include/aiverselib/algorithms/GridWatershed.h",
+    "libraries/include/aiverselib/algorithms/Noise.h",
+    "libraries/include/aiverselib/algorithms/NoiseBatch.h",
+    "libraries/include/aiverselib/algorithms/NoiseSimd.h",
+    "libraries/include/aiverselib/algorithms/Random.h",
+    "libraries/include/aiverselib/algorithms/RandomSampling.h",
+    "libraries/include/aiverselib/algorithms/RandomSequences.h",
+    "libraries/include/aiverselib/algorithms/Spatial.h",
+    "libraries/include/aiverselib/algorithms/SpatialSampling.h",
+    "libraries/include/aiverselib/algorithms/SpatialTree.h",
+    "libraries/include/aiverselib/algorithms/Voronoi.h",
+    "skills/catalog.json",
+    "skills/core/aiverse-geometry-algorithms/SKILL.md",
+    "skills/core/aiverse-graphs/SKILL.md",
+    "skills/core/aiverse-grid/SKILL.md",
+    "skills/core/aiverse-math/SKILL.md",
+    "skills/core/aiverse-noise/SKILL.md",
+    "skills/core/aiverse-random/SKILL.md",
+    "skills/core/aiverse-spatial/SKILL.md",
+    "tests/libraries/CMakeLists.txt",
+    "tests/libraries/noise_benchmark.cpp",
+    "tests/libraries/noise_simd_tests.inc",
+    "tests/libraries/noise_tests.cpp",
+    "tools/skills/catalog.py"
+  ],
+  "traits": {
+    "editable": false,
+    "simulation": true,
+    "visible": false,
+    "runtime": true
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-math",
+      "aiverse-geometry-algorithms",
+      "aiverse-noise",
+      "aiverse-graphs"
+    ],
+    "mcp_tools": [],
+    "studio_methods": [],
+    "studio_panels": []
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Fixed-point numerics, geometry, spatial queries, graph primitives and batched noise are shared core or library APIs.",
+      "evidence": [
+        "docs/handoffs/algorithms-stage50-noise-benchmark.md",
+        "skills/core/aiverse-math/SKILL.md"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Deterministic scalar reference and platform-specific noise paths expose the same library output.",
+      "evidence": [
+        "docs/handoffs/algorithms-stage50-noise-benchmark.md",
+        "docs/evidence/pr124-shared-algorithms-13c013c7.log.txt"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "The deterministic APIs are provided in the core and public algorithm headers.",
+      "evidence": [
+        "engine/core/FixedQuaternion.h",
+        "libraries/include/aiverselib/algorithms/NoiseBatch.h"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "Core math, noise, spatial and graph recipes register the existing public APIs.",
+      "evidence": [
+        "skills/core/aiverse-math/SKILL.md",
+        "skills/core/aiverse-noise/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "not_applicable",
+      "note": "These are native mathematical functions without a separate editable document or visible output.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_applicable",
+      "note": "These are native mathematical functions without a separate editable document or visible output.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_applicable",
+      "note": "These are native mathematical functions without a separate editable document or visible output.",
+      "evidence": []
+    },
+    "publishing": {
+      "status": "not_applicable",
+      "note": "These are native mathematical functions without a separate editable document or visible output.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "The algorithms produce values for their callers. No mutable simulation resource or new archive schema is introduced.",
+      "evidence": [
+        "engine/core/FixedQuaternion.h",
+        "libraries/include/aiverselib/algorithms/NoiseBatch.h"
+      ]
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "Graph algorithms consume application topology. They do not define a user-authored graph asset or node editor.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "pass",
+      "note": "The native arm64 release benchmark reports scalar and NEON batch timings, repeats and deterministic result checksums over size, dimension and error-policy combinations.",
+      "evidence": [
+        "docs/evidence/pr124-shared-algorithms-13c013c7.log.txt"
+      ]
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "Native Apple Silicon exercised scalar and NEON. SSE2 and AVX2 are explicitly reported as unavailable by this executable.",
+      "evidence": [
+        "docs/evidence/pr124-shared-algorithms-13c013c7.log.txt"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "The noise benchmark links directly to library headers without an engine runtime.",
+      "evidence": [
+        "docs/handoffs/algorithms-stage50-noise-benchmark.md"
+      ]
+    },
+    "headless": {
+      "status": "pass",
+      "note": "The CTest noise fixture and the compiled benchmark run without a renderer or GUI.",
+      "evidence": [
+        "docs/evidence/pr124-shared-algorithms-13c013c7.log.txt"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "The benchmark provides a standalone public API consumer and reproducible native invocation.",
+      "evidence": [
+        "docs/handoffs/algorithms-stage50-noise-benchmark.md"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "A native CTest run and the compiled release benchmark are captured with exit code and digest.",
+      "evidence": [
+        "docs/evidence/pr124-shared-algorithms-13c013c7.log.txt"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "The stage record documents benchmark scope, build invocation and coverage boundaries.",
+      "evidence": [
+        "docs/handoffs/algorithms-stage50-noise-benchmark.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "The algorithm and noise skills document interfaces, scalar semantics and backend dispatch.",
+      "evidence": [
+        "skills/core/aiverse-noise/SKILL.md",
+        "skills/core/aiverse-math/SKILL.md"
+      ]
+    }
+  },
+  "test_reports": [
+    "docs/evidence/pr124-world-processes-48352ee2.json"
+  ]
+}

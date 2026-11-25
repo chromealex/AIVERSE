@@ -1,4 +1,5 @@
 #include "ShaderGraphOps.h"
+#include "GraphAssetTransaction.h"
 #include "engine/render/graph/ShaderGraph.h"
 #include <filesystem>
 #include <fstream>
@@ -19,9 +20,12 @@ fs::path graphPath(const Workspace& ws, const std::string& name) {
     if(name.empty() || name.size()>64 || name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")!=std::string::npos)
         throw std::runtime_error("graph name: use 1..64 letters, digits, _ or -");
     const fs::path root=fs::weakly_canonical(ws.project.dir);
-    const fs::path path=fs::weakly_canonical(root/"shaders"/(name+".json"));
-    const auto relative=path.lexically_relative(root);
-    if(relative.empty() || *relative.begin()=="..") throw std::runtime_error("graph path escapes project");
+    const fs::path path=root/"shaders"/(name+".json");
+    // Preserve the requested leaf for Transaction's symlink check. Resolving
+    // it first would turn an in-project alias into an apparently regular file.
+    if(fs::is_symlink(fs::symlink_status(path))) throw std::runtime_error("graph path is a symlink");
+    const auto relative=fs::weakly_canonical(path).lexically_relative(root);
+    if(relative.empty() || relative=="." || *relative.begin()=="..") throw std::runtime_error("graph path escapes project");
     return path;
 }
 void writeGraph(const fs::path& file,const Json& graph,bool createOnly) {
@@ -66,7 +70,7 @@ Json result(const Json& g) {
 }
 }
 void registerShaderGraphOps(Workspace& ws) {
-    const auto schema=Json::parse(R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"target":{"type":"string"},"emitter":{"type":"integer"},"scope":{"type":"string"}}})");
+    const auto schema=Json::parse(R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"expected":{"type":["object","null"]},"target":{"type":"string"},"emitter":{"type":"integer"},"scope":{"type":"string"}}})");
     ws.registerOp({"shader_graph_catalog","Supported operations and domains; all ports are RGBA vectors, scalar constants splat.",Json::object(),[](const Json&){
         Json r=Json::object(),ops=Json::array();for(auto& op:render::graph::catalog()) {Json n=Json::object();n.set("id",Json::string(op.id));n.set("inputs",Json::number(int64_t(op.inputs)));n.set("vertex",Json::fromBool(op.vertex));Json domains=Json::array();for(auto d:{"material","postfx","particle"})if(render::graph::supports(op,d))domains.push(Json::string(d));n.set("domains",domains);ops.push(n);}r.set("nodes",ops);r.set("domains",Json::parse(R"(["material","postfx","particle"] )"));return r;
     }});
@@ -85,9 +89,12 @@ void registerShaderGraphOps(Workspace& ws) {
             writeGraph(file,render::graph::makeDefault(p.getStr("domain")),true);
             Json out=Json::object();out.set("name",Json::string(name));return out;
         }});
-    ws.registerOp({"shader_graph_set","Validate and atomically save shaders/<name>.json. Applying is a separate operation.",schema,[&ws](const Json& p){
+    ws.registerOp({"shader_graph_set","Validate and atomically save shaders/<name>.json. Existing assets require expected original graph; missing expected means create-only. Applying is separate.",schema,[&ws](const Json& p){
         const auto r=result(p["graph"]);const auto path=graphPath(ws,p.getStr("name"));
-        writeGraph(path,p["graph"],false);return r;
+        const auto text=p["graph"].dump(2)+"\n";if(text.size()>256*1024)throw std::runtime_error("graph exceeds 256 KiB");
+        graph_asset::Transaction tx(path,ws.project.dir);
+        tx.checkExpected(p,[&]{return load(ws,p.getStr("name"));});
+        tx.replace(text,256*1024);return r;
     }});
     ws.registerOp({"shader_graph_apply","Apply a saved graph snapshot: target=material library name or existing particle effect name, emitter=0 by default; postfx scope=game|map. Reapply after edits.",schema,[&ws](const Json& p){
         const auto g=load(ws,p.getStr("name"));const auto program=render::graph::compile(g);Json q=Json::object();

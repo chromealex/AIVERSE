@@ -12,7 +12,7 @@ const clamp=(n:number)=>Number.isFinite(n)?Math.max(0,Math.min(2000,n)):0;
 export function layoutShaderGraph(source:GraphSource):{nodes:PositionedNode[];edges:GraphEdge[];width:number;height:number}{
  const nodes=(source.nodes??[]).slice(0,128).map((node,index)=>{
   const p=node.position;
-  const inputs=Array.isArray(node.inputs)?node.inputs.slice(0,16).filter(x=>typeof x==='string'):[];
+  const inputs=Array.isArray(node.inputs)?node.inputs.slice(0,16).map(x=>typeof x==='string'?x:''):[];
   const value=effectiveShaderValue(source,node);
   const raw=Array.isArray(value)?value:[value];
   const values=raw.slice(0,4).filter((v):v is number=>typeof v==='number'&&Number.isFinite(v));
@@ -123,4 +123,122 @@ export function setShaderDomain(graph:GraphSource,domain:string):GraphSource {
   next.outputs=Object.fromEntries(Object.entries(graph.outputs??{}).filter(([key])=>key==='color'));
  }
  return next;
+}
+
+/** Authoring edits only. Native compiler remains authoritative. */
+export interface ShaderNodeOperation { id:string; inputs:number; domains:readonly string[] }
+export function shaderNodeCatalog(ops:readonly ShaderNodeOperation[],domain:string,query=''):ShaderNodeOperation[] {
+ const q=query.trim().toLowerCase();
+ return ops.filter(op=>op.domains.includes(domain)&&op.id.toLowerCase().includes(q)&&Number.isSafeInteger(op.inputs)&&op.inputs>=0&&op.inputs<=16)
+  .slice().sort((a,b)=>a.id.localeCompare(b.id));
+}
+export function connectShaderInput(source:GraphSource,ops:readonly ShaderNodeOperation[],from:string,to:string,index:number):GraphSource {
+ const nodes=source.nodes??[];
+ const target=nodes.find(n=>n.id===to);
+ const op=ops.find(o=>o.id===target?.op&&o.domains.includes(source.domain??'material'));
+ if(!target||!op||!nodes.some(n=>n.id===from)||!Number.isSafeInteger(index)||index<0||index>=op.inputs||op.inputs>16)return source;
+ // The new source may not depend on the destination. Other pre-existing invalid branches
+ // remain editable; the native compiler validates the complete graph before save.
+ const byId=new Map(nodes.map(n=>[n.id,n]));
+ const pending=[from],seen=new Set<string>();
+ while(pending.length){
+  const id=pending.pop()!;
+  if(id===to)return source;
+  if(seen.has(id))continue;
+  seen.add(id);
+  pending.push(...(byId.get(id)?.inputs??[]));
+ }
+ const inputs=Array.from({length:op.inputs},(_,i)=>target.inputs?.[i]??'');
+ if(inputs[index]===from)return source;
+ inputs[index]=from;
+ return {...source,nodes:nodes.map(n=>n.id===to?{...n,inputs}:n)};
+}
+export function disconnectShaderInput(source:GraphSource,to:string,index:number):GraphSource {
+ const node=source.nodes?.find(n=>n.id===to);
+ if(!node?.inputs||!Number.isSafeInteger(index)||index<0||index>=node.inputs.length||!node.inputs[index])return source;
+ const inputs=node.inputs.slice();inputs[index]='';
+ return {...source,nodes:source.nodes!.map(n=>n.id===to?{...n,inputs}:n)};
+}
+export function shaderValueComponents(value:GraphNode['value']):number[] {
+ if(typeof value==='number')return [value,value,value,value];
+ return value??[];
+}
+export function setShaderValue(source:GraphSource,id:string,value:readonly number[]):GraphSource {
+ const node=source.nodes?.find(n=>n.id===id);
+ if(!node||!['constant','parameter'].includes(node.op)||value.length!==4||!value.every(Number.isFinite))return source;
+ const previous=shaderValueComponents(node.value);
+ if(previous.length===4&&previous.every((v,i)=>v===value[i]))return source;
+ return {...source,nodes:source.nodes!.map(n=>n.id===id?{...n,value:[...value]}:n)};
+}
+export function duplicateShaderNode(source:GraphSource,id:string):GraphSource {
+ const nodes=source.nodes??[],node=nodes.find(n=>n.id===id);
+ if(!node||nodes.length>=128)return source;
+ const ids=new Set(nodes.map(n=>n.id));
+ let copyId='';for(let i=1;i<=999;i++){copyId='node'+i;if(!ids.has(copyId))break;}
+ if(ids.has(copyId))return source;
+ const copy={...structuredClone(node),id:copyId,position:[clamp((node.position?.[0]??0)+25),clamp((node.position?.[1]??0)+25)]};
+ return {...source,nodes:[...nodes,copy]};
+}
+
+export interface ShaderClipboard {domain:string;nodes:GraphNode[]}
+export function copyShaderNodes(source:GraphSource,ids:readonly string[]):ShaderClipboard {
+ const selected=new Set(ids);
+ return {domain:source.domain??'material',nodes:structuredClone((source.nodes??[]).filter(n=>selected.has(n.id)))};
+}
+export function pasteShaderNodes(source:GraphSource,clip:ShaderClipboard,ops:readonly ShaderNodeOperation[]):{graph:GraphSource;ids:string[]} {
+ const nodes=source.nodes??[];
+ if(!clip.nodes.length||nodes.length+clip.nodes.length>128||clip.domain!==(source.domain??'material'))return {graph:source,ids:[]};
+ if(clip.nodes.some(n=>!ops.some(o=>o.id===n.op&&o.domains.includes(clip.domain))))return {graph:source,ids:[]};
+ const remap=new Map<string,string>(),used=new Set(nodes.map(n=>n.id));
+ let serial=1;
+ for(const n of clip.nodes){
+  if(remap.has(n.id))return {graph:source,ids:[]};
+  while(used.has('node'+serial))serial++;
+  const id='node'+serial++;used.add(id);remap.set(n.id,id);
+ }
+ const copies=clip.nodes.map(n=>({...structuredClone(n),id:remap.get(n.id)!,
+  inputs:n.inputs?.map(input=>remap.get(input)??''),
+  position:[clamp((n.position?.[0]??0)+32),clamp((n.position?.[1]??0)+32)]}));
+ return {graph:{...source,nodes:[...nodes,...copies]},ids:copies.map(n=>n.id)};
+}
+export function moveShaderNodes(source:GraphSource,positions:readonly {id:string;x:number;y:number}[]):GraphSource {
+ if(!positions.length||positions.some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)))return source;
+ const map=new Map(positions.map(p=>[p.id,p]));
+ return {...source,nodes:(source.nodes??[]).map(n=>{
+  const p=map.get(n.id);return p?{...n,position:[clamp(p.x),clamp(p.y)]}:n;
+ })};
+}
+/** Layout acyclic dependencies in columns; refuse cyclic or oversized layouts without mutation. */
+export function arrangeShaderNodes(source:GraphSource):GraphSource {
+ const nodes=source.nodes??[];
+ if(!nodes.length||nodes.length>128)return source;
+ const byId=new Map(nodes.map(n=>[n.id,n])),depth=new Map<string,number>(),visiting=new Set<string>();
+ if(byId.size!==nodes.length)return source;
+ const visit=(id:string):number=>{
+  if(depth.has(id))return depth.get(id)!;
+  if(visiting.has(id))throw new Error('Cycle');
+  visiting.add(id);let d=0;
+  for(const input of byId.get(id)?.inputs??[])if(byId.has(input))d=Math.max(d,visit(input)+1);
+  visiting.delete(id);depth.set(id,d);return d;
+ };
+ try{for(const n of nodes)visit(n.id);}catch{return source;}
+ const rows=new Map<number,number>(),positions=[];
+ for(const n of nodes){
+  const d=depth.get(n.id)!,r=rows.get(d)??0;rows.set(d,r+1);
+  const x=24+d*180,y=24+r*190;
+  if(x>2000||y>2000)return source;
+  positions.push({id:n.id,x,y});
+ }
+ return moveShaderNodes(source,positions);
+}
+
+/** Small reusable node-group templates; insertion never changes existing graph outputs. */
+export function shaderTintTemplate(domain:string,ops:readonly ShaderNodeOperation[]):ShaderClipboard|null {
+ const required=[['input',0],['constant',0],['multiply',2]] as const;
+ if(required.some(([id,inputs])=>!ops.some(o=>o.id===id&&o.inputs===inputs&&o.domains.includes(domain))))return null;
+ return {domain,nodes:[
+  {id:'source',op:'input',position:[20,20]},
+  {id:'tint',op:'constant',value:[1,1,1,1],position:[20,120]},
+  {id:'result',op:'multiply',inputs:['source','tint'],position:[220,40]}
+ ]};
 }

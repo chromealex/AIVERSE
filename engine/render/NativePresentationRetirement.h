@@ -147,6 +147,33 @@ public:
         }
     }
 
+    // Stage38: nonblocking variant for immutable full-scene replacement.
+    // Never invoke the queue's idle fallback on resource pressure: retain
+    // the old owner until its exact backend retirement tokens complete.
+    // This must run at the render owner frame boundary, not inside a pass.
+    bool collectWithoutIdle(gfx::Device& device) {
+        if(!bind(device))return false;
+        if(!queue_ || queue_->empty())return true;
+        try {
+            return queue_->collect(
+                [&]{return device.beginResourceRetirement();},
+                [&](uint64_t token){return device.resourceRetirementComplete(token);},
+                [&](uint64_t token) {
+                    if(device.resourceRetirementStatus(token)==
+                       gfx::ResourceRetirementStatus::Complete)
+                        device.endResourceRetirement(token);
+                    else
+                        device.abandonRetirementTokenAfterIdle(token);
+                },
+                []{return false;}, // never call waitForResourceIdle()
+                [&](Resource& resource){release(device,resource);},
+                [&](uint64_t token) {
+                    return device.resourceRetirementStatus(token)==
+                           gfx::ResourceRetirementStatus::Failed;
+                });
+        }catch(...) {return false;}
+    }
+
     // Explicit shutdown barrier, also covering STILL-ACTIVE models, kit
     // images and any SpriteBatch/TextureCache handles owned by the host.
     // The host must destroy those objects only AFTER this returns true.

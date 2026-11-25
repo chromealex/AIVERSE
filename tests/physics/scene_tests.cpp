@@ -685,6 +685,36 @@ int main(int argc, char** argv) {
         require(ok.position.y == 0, "invalid params / dt ignored");
     });
 
+    test("oriented character wall ground, jump and zero gravity", []{
+        Scene s;
+        const auto wall=s.create(box({-.5f,0,0},{1,30,30},Motion::Static));
+        require(wall!=kNoBody,"wall");
+        CharacterParams p;
+        CharacterState st;st.position={0,0,0};
+        const auto q=b3MakeQuatFromAxisAngle({0,0,1},-1.57079632679f); // local +Y -> +X
+        const auto proxy=s.createCharacter(p,st.position);
+        require(proxy!=kNoBody&&s.moveCharacterOriented(proxy,st,q,true),"oriented proxy");
+        for(int i=0;i<5;++i){
+            require(stepCharacterOriented(s.world(),p,st,{},s.dt(),q,true,nullptr,proxy),"wall step");
+            require(s.moveCharacterOriented(proxy,st,q),"proxy target");s.step();
+        }
+        require(st.grounded&&st.ground==wall,"wall is ground under -X gravity");
+        CharacterInput in;in.jump=true;
+        require(stepCharacterOriented(s.world(),p,st,in,s.dt(),q,true,nullptr,proxy),"wall jump");
+        require(st.velocity.x>0&&st.position.x>0,"jump away from wall");
+        p.gravity=0;st.position={0,0,0};st.velocity={};
+        require(stepCharacterOriented(s.world(),p,st,in,s.dt(),q,false,nullptr,proxy),"zero-g contact");
+        require(!st.grounded&&st.ground==kNoBody&&std::abs(st.velocity.x)<.001f,"no zero-g ground jump");
+        require(!stepCharacterOriented(s.world(),p,st,{},s.dt(),{0,0,0,0},true),"invalid rotation rejected");
+    });
+    test("oriented identity preserves legacy step", []{
+        Scene s;ground(s);CharacterParams p;CharacterState a,b;
+        CharacterInput in;in.moveZ=1;
+        stepCharacter(s.world(),p,a,in,s.dt());
+        require(stepCharacterOriented(s.world(),p,b,in,s.dt(),b3Quat_identity,true),"identity step");
+        require(dist(a.position,b.position)<1e-6f&&dist(a.velocity,b.velocity)<1e-6f&&a.grounded==b.grounded,"legacy parity");
+    });
+
     if (bench) {
         Scene s({.workers = 1, .maxBodies = 2048});
         ground(s, 400);

@@ -1,0 +1,2 @@
+# Stage 161D4b — delivery scope
+Reuse completed local ECS forest snapshot and shared ARBOR model cache for standing trees, including recruited plants. Use native plant appearance and root exposure, shared exposed-root generator, and physical log cylinder from actual capsule pose/dimensions (not a new physics model). No authored/live duplicates. Bounded caches, no ECS mutation. Wind/season and full terrain/runtime parity follow separately; Mac verification deferred.

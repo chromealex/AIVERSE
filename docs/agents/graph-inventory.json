@@ -1,0 +1,238 @@
+{
+  "schema": 1,
+  "note": "Known graph-related capabilities, not exhaustive; candidates are not verified. Internal/algorithm graph does not imply visual authoring requirement. Building generator and behavior policies need graph-specific investigation.",
+  "graphs": [
+    {
+      "id": "shader-material",
+      "title": "Material shader graph",
+      "owner": "shadergraph",
+      "kind": "authoring",
+      "source": "docs/shader-graph.md",
+      "skill": "aiverse-shader-graph",
+      "mcp_candidates": [
+        "shader_graph_catalog",
+        "shader_graph_set",
+        "shader_graph_apply"
+      ],
+      "studio_candidates": [
+        "shader_graph"
+      ],
+      "domain": "material"
+    },
+    {
+      "id": "shader-postfx",
+      "title": "Post-processing shader graph",
+      "owner": "prisma",
+      "kind": "authoring",
+      "source": "docs/shader-graph.md",
+      "skill": "aiverse-shader-graph",
+      "mcp_candidates": [
+        "shader_graph_catalog",
+        "shader_graph_set",
+        "shader_graph_apply"
+      ],
+      "studio_candidates": [
+        "shader_graph"
+      ],
+      "domain": "postfx"
+    },
+    {
+      "id": "shader-particle",
+      "title": "Particle shader graph",
+      "owner": "spectrafx",
+      "kind": "authoring",
+      "source": "docs/shader-graph.md",
+      "skill": "aiverse-shader-graph",
+      "mcp_candidates": [
+        "shader_graph_catalog",
+        "shader_graph_set",
+        "shader_graph_apply"
+      ],
+      "studio_candidates": [
+        "shader_graph"
+      ],
+      "domain": "particle"
+    },
+    {
+      "id": "vfx",
+      "title": "SpectraFX effect graph",
+      "owner": "spectrafx",
+      "kind": "authoring",
+      "source": "docs/spectrafx.md",
+      "skill": "aiverse-spectrafx",
+      "mcp_candidates": [
+        "fx_graph_list",
+        "fx_graph_set"
+      ],
+      "studio_candidates": [
+        "fx_graph"
+      ]
+    },
+    {
+      "id": "vfx-functions",
+      "title": "SpectraFX GPU functions",
+      "owner": "spectrafx",
+      "kind": "authoring",
+      "source": "docs/spectrafx.md",
+      "skill": "aiverse-spectrafx",
+      "mcp_candidates": [
+        "fx_function_list",
+        "fx_function_get"
+      ],
+      "studio_candidates": [
+        "fx_functions"
+      ]
+    },
+    {
+      "id": "animation",
+      "title": "MotionWeave animation state and blend graph",
+      "owner": "motionweave",
+      "kind": "authoring",
+      "source": "engine/animation/MotionWeave.h",
+      "skill": "aiverse-motionweave",
+      "mcp_candidates": [
+        "animation_graph_list",
+        "animation_graph_get",
+        "animation_graph_validate",
+        "animation_graph_set",
+        "animation_graph_apply"
+      ],
+      "studio_candidates": [
+        "anim_graph"
+      ]
+    },
+    {
+      "id": "modeling",
+      "title": "Procedural modeling graph",
+      "owner": "render",
+      "kind": "authoring",
+      "source": "docs/modeling.md",
+      "skill": "aiverse-modeling",
+      "mcp_candidates": [
+        "modeling_graph_set",
+        "modeling_graph_publish",
+        "modeling_graph_import"
+      ],
+      "studio_candidates": [
+        "modeling"
+      ]
+    },
+    {
+      "id": "behavior",
+      "title": "Behavior policies / transitions",
+      "owner": "gameplay",
+      "kind": "algorithm",
+      "source": "libraries/include/aiverselib/Behavior.h",
+      "skill": "aiverse-behavior",
+      "mcp_candidates": [],
+      "studio_candidates": []
+    },
+    {
+      "id": "navigation",
+      "title": "Navigation polygon connectivity",
+      "owner": "navigation",
+      "kind": "algorithm",
+      "source": "engine/bots/NavMesh.h",
+      "skill": "aiverse-navmesh",
+      "mcp_candidates": [],
+      "studio_candidates": []
+    },
+    {
+      "id": "story",
+      "title": "Narrative choice graph",
+      "owner": "gameplay",
+      "kind": "data",
+      "source": "engine/mechanics/Narrative.h",
+      "skill": "aiverse-narrative-graphs",
+      "mcp_candidates": [],
+      "studio_candidates": []
+    },
+    {
+      "id": "run",
+      "title": "Run progression graph",
+      "owner": "gameplay",
+      "kind": "data",
+      "source": "libraries/include/aiverselib/strategy/RunGraph.h",
+      "skill": "aiverse-run-graph",
+      "mcp_candidates": [],
+      "studio_candidates": []
+    },
+    {
+      "id": "zone",
+      "title": "Zone connectivity and softlock proof",
+      "owner": "gameplay",
+      "kind": "data",
+      "source": "libraries/include/aiverselib/strategy/ZoneGraph.h",
+      "skill": "aiverse-zone-graph",
+      "mcp_candidates": [],
+      "studio_candidates": []
+    },
+    {
+      "id": "road",
+      "title": "Spline road network",
+      "owner": "world",
+      "kind": "data",
+      "source": "engine/roads/RoadNet.cpp",
+      "skill": "aiverse-roads",
+      "mcp_candidates": [
+        "road_network",
+        "road_add",
+        "road_node_set",
+        "road_edge_set"
+      ],
+      "studio_candidates": [
+        "roads"
+      ]
+    },
+    {
+      "id": "prisma-render",
+      "title": "PRISMA internal render graph",
+      "owner": "prisma",
+      "kind": "internal",
+      "source": "engine/render/Prisma.h",
+      "skill": "aiverse-prisma",
+      "mcp_candidates": [],
+      "studio_candidates": []
+    },
+    {
+      "id": "graph-algorithms",
+      "title": "Shared graph algorithms",
+      "owner": "ecs",
+      "kind": "algorithm",
+      "source": "engine/core/Graphs.h",
+      "skill": "aiverse-graphs",
+      "mcp_candidates": [],
+      "studio_candidates": []
+    },
+    {
+      "id": "production-network",
+      "title": "Production networks",
+      "owner": "gameplay",
+      "kind": "data",
+      "source": "libraries/include/aiverselib/strategy/Production.h",
+      "skill": "aiverse-production-networks",
+      "mcp_candidates": [],
+      "studio_candidates": []
+    },
+    {
+      "id": "utility-network",
+      "title": "Utility networks",
+      "owner": "gameplay",
+      "kind": "data",
+      "source": "libraries/include/aiverselib/mechanics/UtilityNetworks.h",
+      "skill": "aiverse-utility-networks",
+      "mcp_candidates": [],
+      "studio_candidates": []
+    },
+    {
+      "id": "building-generator",
+      "title": "Procedural building generator — graph support not established",
+      "owner": "world",
+      "kind": "investigate",
+      "source": "engine/systems/BuildingGen.h",
+      "skill": "aiverse-building-gen",
+      "mcp_candidates": [],
+      "studio_candidates": []
+    }
+  ]
+}

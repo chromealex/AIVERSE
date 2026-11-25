@@ -68,8 +68,8 @@ static void checkLedger() {
     AIVERSE_TEST_CHECK(!first.transfer(102,b,c));
     AIVERSE_TEST_CHECK(first.find(102) && !first.find(102)->live);
     AIVERSE_TEST_CHECK(first.activeIn(b)==std::vector<uint64_t>({101,103}));
-    const auto recentChanges=first.since(revision);
-    AIVERSE_TEST_CHECK(recentChanges.size()==1 && recentChanges[0].first==102 && !recentChanges[0].second.live);
+    const auto despawnChanges=first.since(revision);
+    AIVERSE_TEST_CHECK(despawnChanges.size()==1 && despawnChanges[0].first==102 && !despawnChanges[0].second.live);
 
     const auto encoded=encode(first);
     RegionEntityLedger recovered;

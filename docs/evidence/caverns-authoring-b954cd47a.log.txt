@@ -1,0 +1,1 @@
+PASS real native MCP carve/fill, undo and redo, map save, fresh process reopen and full snapshot equality

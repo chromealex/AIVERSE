@@ -18,8 +18,7 @@ inline physics::BodyDesc makeTerrainBox3DBody(
         const TerrainPatch& patch,uint32_t userData=0) {
     if(patch.resolution<2 || patch.resolution>129 ||
        patch.cellSizeMetres<16 || patch.cellSizeMetres>4096 ||
-       patch.collision.size()!=size_t(patch.resolution-1u)*
-                               size_t(patch.resolution-1u)*2u)
+       !validTerrainPatchTopology(patch)||patch.presentationOnly||patch.collision.empty())
         throw std::invalid_argument("TerraWeave Box3D terrain topology");
     physics::BodyDesc body;
     body.motion=physics::Motion::Static;
@@ -87,23 +86,31 @@ public:
             throw std::length_error("TerraWeave Box3D resident tile budget");
         if(const auto current=bodies_.find(patch.cell);
            current!=bodies_.end() &&
-           patch.sourceRevision<current->second.revision)
+           (patch.surfaceEpoch<current->second.surfaceEpoch||
+            (patch.surfaceEpoch==current->second.surfaceEpoch&&patch.sourceRevision<current->second.revision)))
             return false; // stale bake: keep the newer resident collider
-        const auto description=makeTerrainBox3DBody(patch,userData);
-        const auto created=scene.create(description);
-        if(created==physics::kNoBody)return false;
+        if(!validTerrainPatchTopology(patch)||patch.presentationOnly)return false;
+        auto created=physics::kNoBody;
+        if(!patch.collision.empty()){
+            const auto description=makeTerrainBox3DBody(patch,userData);
+            created=scene.create(description);
+            if(created==physics::kNoBody)return false;
+        }
         // Keep the old collider alive until the new one exists and the
         // registry slot can be allocated without throwing.
         try {
             auto [it,inserted]=bodies_.try_emplace(
-                patch.cell,Entry{created,patch.sourceRevision});
+                patch.cell,Entry{created,patch.sourceRevision,patch.surfaceEpoch});
             if(!inserted){
                 const auto old=it->second.body;
-                it->second={created,patch.sourceRevision};
-                if(scene.valid(old))scene.destroy(old);
+                if(old!=physics::kNoBody&&(!scene.valid(old)||!scene.destroy(old))){
+                    if(created!=physics::kNoBody)scene.destroy(created);
+                    return false;
+                }
+                it->second={created,patch.sourceRevision,patch.surfaceEpoch};
             }
         }catch(...){
-            scene.destroy(created);
+            if(created!=physics::kNoBody)scene.destroy(created);
             throw;
         }
         return true;
@@ -141,7 +148,7 @@ private:
     uint64_t rejected_=0,errors_=0;
     struct Entry {
         physics::BodyHandle body=physics::kNoBody;
-        uint64_t revision=0;
+        uint64_t revision=0,surfaceEpoch=0;
     };
     std::map<world::Cell,Entry> bodies_;
 };

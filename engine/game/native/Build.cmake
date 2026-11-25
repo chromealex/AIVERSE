@@ -112,7 +112,10 @@ target_include_directories(aiverse_native_modules INTERFACE "${AIVERSE_NATIVE_EN
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL aiverse_native_link_hosts "${CMAKE_SOURCE_DIR}")
 endmacro()
 
-set(AIVERSE_NATIVE_HOSTS aiverse_game aiverse_runtime aiverse_client_runtime aiverse_authority aiverse_editor_core aiverse_hosted_client
+# Presentation/platform runtimes are not game hosts: standalone rendering,
+# camera and GPU tests must not receive project objects or NativeRegistrar.
+# game_view, unlike runtime, links the canonical aiverse_game implementation.
+set(AIVERSE_NATIVE_HOSTS aiverse_game aiverse_game_view aiverse_authority aiverse_editor_core aiverse_hosted_client
     CACHE INTERNAL "Targets whose direct users are project hosts (they receive AIVERSE::native_modules)")
 function(aiverse_native_link_hosts dir)
     get_property(targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)

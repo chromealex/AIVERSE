@@ -40,6 +40,10 @@ on:
       - '.github/workflows/ecs-experiments.yml'
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   ecs-experiments:
     name: ECS checks (${{ matrix.os }}, ${{ matrix.mode }})

@@ -1,0 +1,11 @@
+{
+  "sha": "1e2ae0d479a2de0a40cf7733ec4823444156af61",
+  "argv": [
+    "python3.12",
+    "-c",
+    "import copy,json,os,shutil,subprocess,tempfile\nfrom pathlib import Path\nbinary='/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/aiversemcp'\nwith tempfile.TemporaryDirectory() as space:\n    project=Path(space)/'probe'\n    shutil.copytree('examples/projectiles',project)\n    graph={'version':1,'domain':'material','nodes':[{'id':'input','op':'input'}],'outputs':{'color':'input'}}\n    updated=copy.deepcopy(graph)\n    updated['nodes'].append({'id':'tint','op':'constant','value':[1,1,1,1]})\n    updated['outputs']['color']='tint'\n    name='studio_merge_probe'\n    requests=[('open_game',{'game':str(project)}),('shader_graph_set',dict(name=name,graph=graph)),('shader_graph_set',dict(name=name,graph=updated)),('shader_graph_set',dict(name=name,graph=updated,expected=dict(reversed(list(graph.items()))))),('shader_graph_set',dict(name=name,graph=graph,expected=graph)),('shader_graph_get',dict(name=name))]\n    rows=[dict(jsonrpc='2.0',id=0,method='initialize',params={})]+[dict(jsonrpc='2.0',id=i+1,method='tools/call',params=dict(name=k,arguments=v)) for i,(k,v) in enumerate(requests)]\n    out=subprocess.run([binary,'--no-editor','--port','0','--engine',os.getcwd()],input=''.join(json.dumps(r)+'\\n' for r in rows),text=True,capture_output=True,timeout=45,check=True)\n    replies={r['id']:r for r in map(json.loads,out.stdout.splitlines()) if 'id' in r}\n    for i in (1,2,4,6):\n        assert not replies[i].get('error') and not replies[i]['result'].get('isError'),replies[i]\n    for i in (3,5):\n        assert replies[i].get('error') or replies[i]['result'].get('isError'),replies[i]\n    loaded=json.loads(replies[6]['result']['content'][0]['text'])\n    assert loaded['graph']==updated,loaded.keys()\n    print('PASS Shader Graph native create, blind-write rejection, reordered expected graph, stale-write rejection and final readback')"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/shader-merged-1e2ae0d47.log.txt",
+  "sha256": "2050a810523feda00e4dfb6342453f7ee4de9f3da5916db08ce82be602b1565f"
+}

@@ -1,5 +1,5 @@
 /** Persistable nested docking geometry; no React, renderer or genre dependencies. */
-export const STUDIO_PANELS = ['hierarchy','assets','scene','game','materials','animation','facial_rig','inspector','console','lighting','shader_graph','project','runtime','nereid_flow','rules','human_appearance','build','human_creator','wind','history','terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','scripts','input','overlays','branding','asset_audit','agent','fields','physis','actor','raid','balance','fx_graph','fx_library','fx_functions','modeling','anim_assets','anim_graph','anim_rig','model_anim','project_import','stats','snapshot_diff','frame_capture','texture_resources','extensions','attachments','terraweave_generator','catalog','world_persistence','static_geometry'] as const;
+export const STUDIO_PANELS = ['hierarchy','assets','scene','game','materials','animation','facial_rig','inspector','console','lighting','shader_graph','project','runtime','nereid_flow','rules','human_appearance','build','human_creator','wind','history','terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','scripts','input','overlays','branding','asset_audit','agent','fields','physis','actor','raid','balance','fx_graph','fx_library','fx_functions','modeling','anim_assets','anim_graph','anim_rig','model_anim','project_import','stats','snapshot_diff','frame_capture','texture_resources','extensions','attachments','terraweave_generator','building_generator','catalog','feature_readiness','caverns','world_persistence','static_geometry','world_explorer','simulation_profiler'] as const;
 export type StudioPanel = typeof STUDIO_PANELS[number];
 /** Single metadata source for the UI shell and AI-authored panel integrations. */
 export const STUDIO_PANEL_TITLES: Record<StudioPanel,string> = {
@@ -10,7 +10,7 @@ export const STUDIO_PANEL_TITLES: Record<StudioPanel,string> = {
   rules: "Rules",
   human_appearance: "VIVID Appearance",
   build: "Build",
-  wind: "Ветер",
+  wind: "Wind",
   history: "History",
   terrain: "Terrain",
   water: "Water",
@@ -50,9 +50,14 @@ export const STUDIO_PANEL_TITLES: Record<StudioPanel,string> = {
   project_import: "Import Project",
   human_creator: "Character Creator",
   static_geometry: "Static Geometry",
+  world_explorer: "World Explorer",
+  simulation_profiler: "Simulation Profiler",
   world_persistence: "World Persistence",
   terraweave_generator: "TerraWeave Generator",
-  catalog: "Catalog"
+  building_generator: "Building Generator",
+  catalog: "Catalog",
+  feature_readiness: "Feature Readiness",
+  caverns: "Caverns",
 };
 export const STUDIO_PANEL_HOME: Record<StudioPanel,string> = {
   hierarchy: 'dock-left', assets: 'dock-bottom', scene: 'dock-center', game: 'dock-center',
@@ -102,9 +107,14 @@ export const STUDIO_PANEL_HOME: Record<StudioPanel,string> = {
   project_import: "dock-right",
   human_creator: "dock-center",
   static_geometry: "dock-right",
+  world_explorer: "dock-right",
+  simulation_profiler: "dock-bottom",
   world_persistence: "dock-right",
   terraweave_generator: "dock-right",
-  catalog: "dock-right"
+  building_generator: "dock-right",
+  catalog: "dock-right",
+  feature_readiness: "dock-center",
+  caverns: "dock-right",
 };
 
 export type DockAxis = 'horizontal' | 'vertical';
@@ -137,9 +147,9 @@ export function defaultDockTree(): DockTree {
     split('split-body-left','horizontal',.19,
       stack('dock-left',['hierarchy','project'],'hierarchy'),
       split('split-body-right','horizontal',.72,
-        stack('dock-center',['scene','game','materials','animation','facial_rig','shader_graph','anim_graph','anim_rig','human_creator','human_appearance','rules','build','scripts','snapshot_diff'],'scene'),
-        stack('dock-right',['inspector','lighting','runtime','nereid_flow','wind','history','terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','input','overlays','branding','asset_audit','fields','physis','actor','raid','balance','fx_graph','fx_library','fx_functions','modeling','anim_assets','model_anim','project_import','stats','extensions','attachments','terraweave_generator','catalog','world_persistence','static_geometry'],'inspector'))),
-    stack('dock-bottom',['assets','console','agent','frame_capture','texture_resources'],'assets')) };
+        stack('dock-center',['scene','game','materials','animation','facial_rig','shader_graph','anim_graph','anim_rig','human_creator','human_appearance','rules','build','scripts','snapshot_diff','feature_readiness'],'scene'),
+        stack('dock-right',['inspector','lighting','runtime','nereid_flow','wind','history','terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','input','overlays','branding','asset_audit','fields','physis','actor','raid','balance','fx_graph','fx_library','fx_functions','modeling','anim_assets','model_anim','project_import','stats','extensions','attachments','terraweave_generator','catalog','world_persistence','static_geometry','building_generator','caverns','world_explorer'],'inspector'))),
+    stack('dock-bottom',['assets','console','agent','frame_capture','texture_resources','simulation_profiler'],'assets')) };
 }
 function traverse(node: DockNode, visitor: (n: DockNode)=>void): void {
   visitor(node);

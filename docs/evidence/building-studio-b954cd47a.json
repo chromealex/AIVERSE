@@ -1,0 +1,17 @@
+{
+  "sha": "b954cd47aceffd107f0dcc52f544d39bdb862b29",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build",
+    "--config",
+    "Debug",
+    "--no-tests=error",
+    "--output-on-failure",
+    "-R",
+    "^(studio_building_topology|studio_session|studio_bridge|studio_material_schema|library_building_style|library_building_features|library_building_runtime|library_building_surface_patterns|studio_building_preview)$"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/building-studio-b954cd47a.log.txt",
+  "sha256": "c110b8053bd89b486a3686bc4f113e948c2303a1b136c0cf9ee7b988d748d066"
+}

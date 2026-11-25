@@ -50,3 +50,14 @@ test('native replies clear ordinary call timers', async () => {
   assert.equal((await result).mode, 'edit');
   assert.equal(b.timers.size, 0);
 });
+
+test('project navigation carries the exact opaque version and reports native conflict', async () => {
+  const b = bridge();
+  const result = b.invoke('studio.projectHistoryStep', {direction:'undo',expectedVersion:'/game|project|17'});
+  assert.equal(b.sent[0].method,'studio.projectHistoryStep');
+  assert.equal(b.sent[0].params.direction,'undo');
+  assert.equal(b.sent[0].params.expectedVersion,'/game|project|17');
+  b.window.__aiverseReceive({id:b.sent[0].id,error:'Project document changed'});
+  await assert.rejects(result,/Project document changed/);
+  assert.equal(b.timers.size,0);
+});

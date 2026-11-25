@@ -1,0 +1,15 @@
+
+added 3 packages in 2s
+emcmake: cmake -S /private/tmp/aiverse-caverns-manifest-reconciliation/examples/world/building-caverns-web -B /Volumes/KINGSTON/AIVERSE/Building-Caverns-Web -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=/Volumes/KINGSTON/AIVERSE/Building-Caverns-Demo/work/sdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake -DCMAKE_CROSSCOMPILING_EMULATOR=/Volumes/KINGSTON/AIVERSE/Building-Caverns-Demo/work/sdk/node/24.19.0_64bit/bin/node in directory /private/tmp/aiverse-caverns-manifest-reconciliation
+-- Configuring done (4.0s)
+-- Generating done (0.1s)
+-- Build files have been written to: /Volumes/KINGSTON/AIVERSE/Building-Caverns-Web
+[ 18%] Built target caverns
+[100%] Built target buildings
+
+  ..../../Volumes/KINGSTON/AIVERSE/Building-Caverns-Web/web/viewer.js  565.6kb
+
+⚡ Done in 52ms
+/Volumes/KINGSTON/AIVERSE/Building-Caverns-Web/web/index.html
+Initial Studio recipe GLB SHA-256 abb13efee7f37696cd8ccccc50076e9d2d8d565c476e488ea8f48f2bc2fabb8f
+13 building styles exported; Carve, Fill and baseline reset verified.

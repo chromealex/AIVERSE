@@ -8,6 +8,8 @@
 #include "../core/FixedMath.h"
 #include "gen/MapGen.h"
 #include "engine/world/nereid/NereidSphereInteractions.h"
+#include "PlanetSeaGrid.h"
+#include "engine/world/TerraWeaveCavernsPlanetRegionSet.h"
 #include <algorithm>
 #include <cstdlib>
 #include <stdexcept>
@@ -42,6 +44,10 @@ void GameCore::setup(Simulation& sim, const Json& rulesIn, const Json& map) {
     aiConfig_ = aiKind_ && aiKind_->load ? aiKind_->load(rulesJson["ai"], mapIn, rules_) : nullptr;   // rules ai.<controller> + map "ai"
     matchMap_ = mapIn;
     setupMap(sim, mapIn);
+    // The actual generated spherical Surface is already built by setupMap.
+    // Planetary regions are opt-in native ECS state, not Studio preview data.
+    terraweave::caverns::registerPlanetCaveMap(sim,
+        mapIn[terraweave::caverns::kPlanetCaveMapKey],state(sim).surface);
     loadTriggers(rules_, rulesJson, mapIn, triggers_);
     mechSetup(sim, mapIn);   // agent-mech
     raid_ = std::make_unique<Raid>();   // extraction raids (rules "raid"); nothing without them
@@ -601,7 +607,8 @@ Entity GameCore::spawn(Simulation& sim, uint16_t type, uint8_t owner, Vec3 pos, 
         w.add<Footprint>(e, Footprint{x0, y0, t.footprintW, t.footprintH});
         gs.grid.block(x0, y0, t.footprintW, t.footprintH, +1);
     }
-    if (S) pos = (t.layer & kLayerOrbit) ? S->toShell(pos, S->bodies[size_t(S->bodyAt(pos))].shellRadius()) : S->project(pos);
+    if (S) pos = (t.layer & kLayerOrbit) ? S->toShell(pos, S->bodies[size_t(S->bodyAt(pos))].shellRadius()) :
+        ((t.layer&kLayerNaval)&&!(t.layer&kLayerAir)&&gs.grid.liveSeaRadius(S->bodyAt(pos))>Fixed{}?placePlanetNaval(*S,gs.grid,pos):S->project(pos));
     else if (gs.grid.hf) pos.y = gs.grid.surfaceHeight(pos.x, pos.z);
     w.add<Transform>(e, Transform{pos, pos, Fixed{}});
     // NEREID sphere seas (map body "nereid"): naval units get a probe and splash / wake events
@@ -615,7 +622,7 @@ Entity GameCore::spawn(Simulation& sim, uint16_t type, uint8_t owner, Vec3 pos, 
     u.energy = t.startEnergy;
     w.add<Unit>(e, u);
     if (t.speed.raw > 0) { w.add<Mobile>(e); w.add<Orders>(e); }
-    if (!t.weapons.empty()) w.add<Combat>(e);
+    if (!t.weapons.empty()) w.add<Combat>(e, Combat{});
     if (!t.produces.empty() || !t.researches.empty() || t.members > 1) {
         Production p;
         p.charges = t.chargesMax;
