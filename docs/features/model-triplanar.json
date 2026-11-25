@@ -19,6 +19,7 @@
     "demos/model-triplanar/game.json",
     "demos/model-triplanar/maps/gallery.json",
     "demos/model-triplanar/materials.json",
+    "demos/model-triplanar/content/materials/stone.material.json",
     "demos/model-triplanar/models/sculpt.glb",
     "demos/model-triplanar/rules.json",
     "demos/model-triplanar/scripts/view/gallery.lua",

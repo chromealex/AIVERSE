@@ -4,7 +4,7 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
 import {
-  FileAudio, Box, FileCode2, FileImage, FileText, Folder, FolderOpen,
+  FileAudio, SwatchBook, Box, FileCode2, FileImage, FileText, Folder, FolderOpen,
   Grid2X2, List, RefreshCw, Search, ChevronRight, Library, Upload, FolderPlus, X, Link2, Unlink, Trash2
 } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
@@ -37,6 +37,7 @@ function formatBytes(bytes:number):string{
 }
 function AssetIcon({kind,size=27}:{kind:AssetKind;size?:number}){
   switch(kind){
+    case 'material':return <SwatchBook size={size}/>;
     case 'image':return <FileImage size={size}/>;
     case 'model':return <Box size={size}/>;
     case 'audio':return <FileAudio size={size}/>;
@@ -558,7 +559,9 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
                   <span className="studio-assets-icon">{mode==='grid' && (kind==='model'||kind==='image')
                     ? <AssetThumb path={'content/'+asset.path} fallback={<AssetIcon kind={kind} size={24}/>}/>
                     : <AssetIcon kind={kind} size={mode==='grid'?24:14}/>}</span>
-                  <span className="studio-assets-name">{assetFileName(asset.path)}</span>
+                  <span className="studio-assets-name">{kind==='material' && mode==='grid'
+                    ? assetFileName(asset.path).slice(0,-'.material.json'.length) : assetFileName(asset.path)}</span>
+                  {kind==='material' && mode==='grid' && <small className="studio-assets-type">Material</small>}
                   <span className="studio-assets-meta">{formatBytes(asset.bytes)}</span>
                 </button>;
               })}

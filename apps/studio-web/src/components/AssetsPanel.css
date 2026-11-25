@@ -234,3 +234,8 @@
 .studio-assets-dependency-tabs button,.studio-assets-dependency-body li button{background:var(--au-panel);color:var(--au-text);border:1px solid var(--au-line);border-radius:4px;padding:3px 7px;cursor:pointer;overflow-wrap:anywhere;text-align:left;min-width:0}
 .studio-assets-dependency-tabs button[aria-pressed=true]{background:var(--au-active)}
 .studio-assets-dependency-tabs button:disabled{opacity:.45;cursor:default}
+
+.studio-assets-items--grid:has([data-kind="material"]){grid-template-columns:repeat(auto-fill,minmax(min(100%,112px),1fr))}
+.studio-assets-item[data-kind="material"] .studio-assets-icon{color:var(--au-accent-secondary)}
+.studio-assets-items--grid .studio-assets-item[data-kind="material"] .studio-assets-name{white-space:normal;overflow-wrap:anywhere}
+.studio-assets-type{font-size:var(--au-font-xs);color:var(--au-text-muted)}

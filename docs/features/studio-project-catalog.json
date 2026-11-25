@@ -12,6 +12,10 @@
     "apps/studio-native/StudioWizardDictation.h",
     "apps/editor/core/GameWizardContent.cpp",
     "tools/wizard/fetch_art.py",
+    "tools/renderbench/install_material_library.py",
+    "apps/studio-web/src/components/AssetsPanel.tsx",
+    "apps/studio-web/src/assetTree.ts",
+    "tests/shader_graph/install_material_presets.py",
     "apps/studio-native/StudioHost.cpp",
     "apps/studio-native/StudioSession.cpp",
     "apps/studio-web/src/panels/generated/ProjectPanel.tsx"

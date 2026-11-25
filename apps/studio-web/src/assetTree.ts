@@ -3,7 +3,7 @@
 // arbitrary paths, invents thumbnails or modifies project assets.
 import type { StudioAsset } from './types';
 
-export type AssetKind = 'image' | 'model' | 'audio' | 'code' | 'document';
+export type AssetKind = 'image' | 'model' | 'audio' | 'material' | 'code' | 'document';
 export interface AssetFolder { path: string; name: string; count: number; depth: number }
 
 const IMAGE = new Set(['png','jpg','jpeg','webp','tga','dds','ktx','ktx2','bmp','hdr','exr']);
@@ -21,6 +21,7 @@ export function safeAssetPath(path: string): string | null {
   return parts.join('/');
 }
 export function assetKind(path: string): AssetKind {
+  if(path.endsWith('.material.json'))return 'material';
   const ext=path.split('.').pop()?.toLowerCase()??'';
   if(IMAGE.has(ext))return 'image';
   if(MODEL.has(ext))return 'model';
