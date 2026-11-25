@@ -28,7 +28,7 @@ function TemplateCard({ t, on, pick }: { t: StudioTemplate; on: boolean; pick: (
  *  Templates: the official ones of the package catalog (AIVERSE-PACKAGES) first; "More templates" searches
  *  every template package of the catalog. */
 export default function ProjectHub({ onOpened, openOther, compact }: {
-  onOpened: (s: StudioSnapshot, openAgent?: boolean) => void; openOther: () => void; compact?: boolean;
+  onOpened: (s: StudioSnapshot, openAgent?: boolean, warning?: string) => void; openOther: () => void; compact?: boolean;
 }) {
   const [hub, setHub] = useState<StudioHub | null>(null);
   const [error, setError] = useState('');

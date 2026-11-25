@@ -57,3 +57,21 @@
 .agent__client-field{display:inline-flex;align-items:center;gap:7px;min-width:0;max-width:100%}
 .agent__client-field .agent__client{width:auto;max-width:100%;min-width:0;font:inherit}
 .agent__client-field .agent__client:disabled{opacity:1;color:var(--au-text)}
+
+.agent__report[open]{display:flex;flex-direction:column;width:min(650px,92vw);max-height:84vh;margin:auto;padding:0;border:1px solid var(--au-line-strong);border-radius:8px;background:var(--au-panel);color:var(--au-text)}
+.agent__report[open]::backdrop{background:rgb(4 10 20 / 55%)}
+.agent__report header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--au-line)}
+.agent__report article{overflow:auto;padding:0 18px 14px}
+.agent__report section{margin-block:16px}
+.agent__report h2,.agent__report h3{margin:0 0 6px}
+.agent__report p{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55;margin:0}
+
+.agent__report article{line-height:1.55;overflow-wrap:anywhere}
+.agent__report header strong{margin-inline-end:auto}
+.agent__report :is(ul,ol){padding-inline-start:1.5em;margin-block:6px}
+.agent__report li+li{margin-block-start:3px}
+.agent__report blockquote{margin:8px 0;padding-inline-start:12px;border-inline-start:2px solid var(--au-line-strong)}
+.agent__report code{font-size:.94em;color:var(--au-accent)}
+.agent__report-table{overflow-x:auto}
+.agent__report table{border-collapse:collapse}
+.agent__report :is(th,td){text-align:start;padding:4px 8px;border-bottom:1px solid var(--au-line)}

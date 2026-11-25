@@ -1450,6 +1450,23 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"Fixture co
        const std::string args{std::istreambuf_iterator<char>(argvFile),{}},input{std::istreambuf_iterator<char>(inputFile),{}};
        AIVERSE_TEST_CHECK(args.find("mcp_servers.aiverse.args=")!=std::string::npos &&
            args.find(std::to_string(completed["port"].integer()))!=std::string::npos && input.find("Review fixture economy")!=std::string::npos);
+       request.set("useWizardBrief",Json::fromBool(true));
+       AIVERSE_TEST_CHECK(start().has("error"));
+       const std::string wizardTask="Write the final report to WIZARD.md. "+std::string(20500,'w');
+       std::ofstream(project/"WIZARD_TASK.md")<<wizardTask;
+       AIVERSE_TEST_CHECK(!start().has("error"));
+       finish();
+       std::ifstream taskFile(project/"fixture-input");
+       const std::string sent{std::istreambuf_iterator<char>(taskFile),{}};
+       AIVERSE_TEST_CHECK(sent.find(wizardTask)!=std::string::npos);
+       fs::remove(project/"WIZARD_TASK.md");
+       const std::string report="# Fixture\n\n## Agent\nFinished.";
+       std::ofstream(project/"WIZARD.md")<<report;
+       Json read=Json::object();read.set("reportForProject",Json::string(session.workspace().project.dir));
+       AIVERSE_TEST_CHECK(call("studio.agentInfo",read.dump().c_str())["result"].getStr("wizardReport")==report);
+       read.set("reportForProject",Json::string("/other"));
+       AIVERSE_TEST_CHECK(call("studio.agentInfo",read.dump().c_str()).has("error"));
+       request.set("useWizardBrief",Json::fromBool(false));
        std::ofstream(project/"fixture-wait")<<"wait";
        AIVERSE_TEST_CHECK(!start().has("error"));
        for(int i=0;i<150 && !fs::exists(project/"fixture-ready");++i)std::this_thread::sleep_for(std::chrono::milliseconds(30));

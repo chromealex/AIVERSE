@@ -235,7 +235,7 @@ export interface StudioHub { recent: Array<{ dir: string; name: string; lastOpen
 export interface StudioAgentChange { op: string; args: string; ok: boolean; undoable: boolean; position: number; error?: string;
   scope?:'map'|'project'|'assets'|'untracked'; historyId?:string; historyVersion?:string; applied?:boolean; canUndo?:boolean; canRedo?:boolean }
 export interface StudioAgentBatch {direction:'undo'|'redo';available:boolean;reason?:string;token?:string;steps?:Array<{scope:'map'|'project'|'assets';historyId:string}>}
-export interface StudioAgentInfo { hasWizardBrief?: boolean; wizardBrief?: string; lines: string[]; total: number; running: boolean; port: number; clients: number; changes: StudioAgentChange[];
+export interface StudioAgentInfo { hasWizardBrief?: boolean; wizardBrief?: string; hasWizardReport?: boolean; wizardReport?: string; lines: string[]; total: number; running: boolean; port: number; clients: number; changes: StudioAgentChange[];
   startPosition: number; historyVersion?:string; batchUndo?:StudioAgentBatch; batchRedo?:StudioAgentBatch; cli: string; codexCli?: string; runClient?: string; mcp: boolean; conversation: boolean; result?: string }
 // World maintenance uses decimal strings for uint64 values, never JS numbers.
 export interface StudioWorldRegion {cell:[number,number,number];live:number;materialized:number}
@@ -595,7 +595,7 @@ export interface StudioParams {
   'studio.inputSet': { asset: StudioInputAsset };
   'studio.assetAudit': Record<string,never>;
   /** Agent panel: transcript lines from `from`, change list, link status. */
-  'studio.agentInfo': { from?: number; briefForProject?: string };
+  'studio.agentInfo': { from?: number; briefForProject?: string; reportForProject?: string };
   'studio.worldProcessDiagnostics': {budget:number;focus?:string};
   'studio.evolveState': Record<string, never>;
   'studio.evolveLayer': {layer?: EvolveLayer;live?:boolean;granularCellCm?:number;liveGravity?:boolean;aetherLayer?:AetherLayer;liveFracture?:boolean;liveMorph?:boolean;liveEcho?:boolean;liveCrowd?:boolean;liveCircuit?:boolean;liveSociety?:boolean;liveForest?:boolean};
@@ -628,7 +628,7 @@ export interface StudioParams {
   'studio.attachmentsPreview': {project:string;close?:boolean;status?:boolean;document?:StudioAttachmentDoc;playing?:boolean;time?:number;yaw?:number;pitch?:number};
   'studio.attachmentsGet': { path?: string; project?:string };
   'studio.attachmentsSet': { path?: string; project?:string; expected?:StudioAttachmentDoc|null; document: StudioAttachmentDoc };
-  'studio.agentStart': { prompt: string; from?: number; client?: 'claude-code'|'codex'; expectedProject?: string };
+  'studio.agentStart': { useWizardBrief?: boolean; prompt?: string; from?: number; client?: 'claude-code'|'codex'; expectedProject?: string };
   'studio.agentStop': { from?: number };
   'studio.agentReset': { from?: number };
   'studio.buildToolchain': { target: string };
@@ -841,7 +841,7 @@ export interface StudioResult {
   'studio.wizardFetchArt': { dir: string };
   'studio.wizardArt': { dir: string };
   'studio.wizardCreate': { snapshot?: StudioSnapshot; cancelled?: boolean };
-  'studio.wizardOptions': { templates: { id: string; name: string }[]; features: { id: string; description: string }[]; tutorialModes: string[]; mapPresets: string[]; mapSizes: string[]; languages: string[]; platforms: string[]; stores: string[]; defaults: WizardPlanInput };
+  'studio.wizardOptions': { agentClients?: ('codex'|'claude-code')[]; templates: { id: string; name: string }[]; features: { id: string; description: string }[]; tutorialModes: string[]; mapPresets: string[]; mapSizes: string[]; languages: string[]; platforms: string[]; stores: string[]; defaults: WizardPlanInput };
   'studio.wizardPlan': { template: string; templateName: string; reason: string; levelPreset: string; orientation: string; tutorialArchetype: string; levels: number; meta: string[] };
   'studio.hubForget': Record<string, never>;
   'studio.hubOpen': { snapshot?: StudioSnapshot | null; cancelled?: boolean };

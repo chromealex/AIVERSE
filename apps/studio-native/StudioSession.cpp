@@ -1834,6 +1834,23 @@ Json StudioSession::agentHistoryLink(Json c) const{
     c.set("position",num(position));c.set("historyVersion",str(version));
     return c;
 }
+static std::string readWizardDocument(const std::string& project, const std::string& expected, const char* name) {
+    namespace fs = std::filesystem;
+    if (project.empty() || expected != project) throw std::runtime_error("The active project changed");
+    const auto path = fs::path(project) / name;
+    if (!fs::is_regular_file(fs::symlink_status(path))) throw std::runtime_error(std::string(name)+" unavailable");
+    constexpr size_t limit = 1024 * 1024;
+    if (fs::file_size(path) > limit) throw std::runtime_error(std::string(name)+" exceeds 1 MiB");
+    std::ifstream input(path, std::ios::binary);
+    if (!input) throw std::runtime_error(std::string("Cannot open ")+name);
+    std::string text(limit + 1, '\0');
+    input.read(text.data(), text.size());
+    if (!input.eof() || input.bad()) throw std::runtime_error(std::string("Cannot read ")+name);
+    text.resize(size_t(input.gcount()));
+    if (text.empty()) throw std::runtime_error(std::string(name)+" is empty");
+    return text;
+}
+
 Json StudioSession::agentRequest(const std::string& method, const Json& params) {
     namespace fs=std::filesystem;
     if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
@@ -1850,13 +1867,14 @@ Json StudioSession::agentRequest(const std::string& method, const Json& params) 
         if(client!="claude-code" && client!="codex")throw std::runtime_error("Unknown agent client");
         if(params.has("expectedProject") && params.getStr("expectedProject")!=ws_.project.dir)
             throw std::runtime_error("The active project changed");
-        const std::string prompt=params.getStr("prompt");
-        if(prompt.empty()||prompt.size()>20000)throw std::runtime_error("Write a request for the agent (up to 20000 characters)");
+        const bool wizard=params.getBool("useWizardBrief");
+        const std::string prompt=wizard ? readWizardDocument(ws_.project.dir,params.getStr("expectedProject"),"WIZARD_TASK.md") : params.getStr("prompt");
+        if(prompt.empty()||(!wizard && prompt.size()>20000))throw std::runtime_error("Write a request for the agent (up to 20000 characters)");
         if(agentRun_.running())throw std::runtime_error("The agent is still working");
         if(mcpTool_.empty()||!fs::exists(mcpTool_))throw std::runtime_error("aiversemcp was not found next to Studio (build the aiversemcp target)");
         if(editor::agentCliPath(client).empty())throw std::runtime_error("Selected agent CLI unavailable");
         agentSession_.clear();
-        if(client=="claude-code" && agentRun_.client()==client && agentRunStart_>=0 && agentHistoryProject_==ws_.project.dir)
+        if(!wizard && client=="claude-code" && agentRun_.client()==client && agentRunStart_>=0 && agentHistoryProject_==ws_.project.dir)
             agentSession_=agentRun_.sessionId();
         syncHistoryLabels();
         if(agentSession_.empty()||agentRunStart_<0){
@@ -1876,7 +1894,8 @@ Json StudioSession::agentRequest(const std::string& method, const Json& params) 
         {std::ofstream(configFile)<<config.dump(2);}
         {
             std::ofstream task(taskFile);
-            if(agentSession_.empty())
+            if(wizard) task<<"Use the aiverse MCP tools connected to this Studio project. Follow its generated game brief and report instructions.\n";
+            else if(agentSession_.empty())
                 task<<"You are the agent inside AIVERSE Studio. The user is looking at the open project and map.\n"
                       "Project: "<<ws_.project.dir<<"\nMap: "<<(ws_.map.path.empty()?std::string("(unsaved)"):ws_.map.path)<<"\n"
                       "Change the game only through the aiverse MCP tools (mcp__aiverse__*): they act on this Studio session, "
@@ -1917,25 +1936,14 @@ Json StudioSession::agentRequest(const std::string& method, const Json& params) 
     const int64_t from=std::max<int64_t>(0,params["from"].integer(0));
     for(size_t i=size_t(std::min<int64_t>(from,int64_t(agentLines_.size())));i<agentLines_.size();++i)lines.push(str(agentLines_[i]));
     out.set("lines",lines);out.set("total",num(int64_t(agentLines_.size())));
-    const fs::path briefPath = fs::path(ws_.project.dir) / "WIZARD_TASK.md";
-    std::error_code briefError;
-    const bool hasBrief = fs::is_regular_file(fs::symlink_status(briefPath, briefError));
-    out.set("hasWizardBrief", Json::fromBool(hasBrief));
-    if (method == "studio.agentInfo" && params.has("briefForProject")) {
-        if (params.getStr("briefForProject") != ws_.project.dir)
-            throw std::runtime_error("The active project changed");
-        if (!hasBrief) throw std::runtime_error("Wizard brief unavailable");
-        constexpr size_t limit = 1024 * 1024;
-        if (fs::file_size(briefPath) > limit) throw std::runtime_error("Open WIZARD_TASK.md in a text editor (over 1 MiB)");
-        std::ifstream input(briefPath, std::ios::binary);
-        if (!input) throw std::runtime_error("Cannot open WIZARD_TASK.md");
-        std::string brief(limit + 1, '\0');
-        input.read(brief.data(), brief.size());
-        if (!input.eof() || input.bad()) throw std::runtime_error("Cannot read the complete wizard brief");
-        brief.resize(size_t(input.gcount()));
-        if (brief.empty()) throw std::runtime_error("WIZARD_TASK.md is empty");
-        out.set("wizardBrief", str(brief));
-    }
+    const fs::path project = ws_.project.dir;
+    std::error_code fileError;
+    out.set("hasWizardBrief", Json::fromBool(fs::is_regular_file(fs::symlink_status(project/"WIZARD_TASK.md",fileError))));
+    out.set("hasWizardReport", Json::fromBool(fs::is_regular_file(fs::symlink_status(project/"WIZARD.md",fileError))));
+    if (method == "studio.agentInfo" && params.has("briefForProject"))
+        out.set("wizardBrief", str(readWizardDocument(ws_.project.dir, params.getStr("briefForProject"), "WIZARD_TASK.md")));
+    if (method == "studio.agentInfo" && params.has("reportForProject"))
+        out.set("wizardReport", str(readWizardDocument(ws_.project.dir, params.getStr("reportForProject"), "WIZARD.md")));
     out.set("running",Json::fromBool(agentRun_.running()));
     out.set("port",num(int64_t(agentServer_.port())));
     out.set("clients",num(int64_t(agentServer_.clients())));
@@ -2402,7 +2410,14 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             return reply;
         }
         if (method == "studio.wizardOptions") {
-            reply.set("result", editor::wizardCatalog(ws_.engineDir));
+            Json options=editor::wizardCatalog(ws_.engineDir), clients=Json::array();
+#if !defined(_WIN32)
+            if(!mcpTool_.empty() && std::filesystem::is_regular_file(mcpTool_))
+                for(const auto* client:{"claude-code","codex"})
+                    if(editor::agentClientCanRun(client))clients.push(str(client));
+#endif
+            options.set("agentClients",std::move(clients));
+            reply.set("result",std::move(options));
             return reply;
         }
         if (method == "studio.wizardPlan") {

@@ -161,7 +161,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
             </span>
           </div>
           {sceneMode === 'welcome' ?
-            <ProjectHub onOpened={(next, openAgent) => { ctx.commitSnapshot(next); if (openAgent) ctx.showPanel('agent'); }} openOther={() => void openProject()}/> :
+            <ProjectHub onOpened={(next, openAgent, warning) => { ctx.commitSnapshot(next); if (openAgent) ctx.showPanel('agent'); if (warning) ctx.reportError(warning); }} openOther={() => void openProject()}/> :
             <ViewportPlaceholder title="Scene viewport" active/>}
         </>;
       case 'console':

@@ -6,13 +6,13 @@ import { StudioLoader } from '../ui';
 import WizardDictation from './WizardDictation';
 import { GameWizardSettings, wizardPages, type WizardPage } from './GameWizardSettings';
 
-export default function GameWizard({ visible, onOpened, onBusy }: { visible: boolean; onOpened: (snapshot: StudioSnapshot, openAgent?: boolean) => void; onBusy: (busy: boolean) => void }) {
+export default function GameWizard({ visible, onOpened, onBusy }: { visible: boolean; onOpened: (snapshot: StudioSnapshot, openAgent?: boolean, warning?: string) => void; onBusy: (busy: boolean) => void }) {
   const [dictating, setDictating] = useState(false);
   const [page, setPage] = useState<WizardPage>('Concept');
   const [artUrl, setArtUrl] = useState('');
   const [artName, setArtName] = useState('');
   const [fetching, setFetching] = useState(false);
-  const [openAgent, setOpenAgent] = useState(false);
+  const [afterCreate, setAfterCreate] = useState<'open'|'review'|'claude-code'|'codex'>('open');
   const [creating, setCreating] = useState(false);
   const [options, setOptions] = useState<StudioResult['studio.wizardOptions']>();
   const [draft, setDraft] = useState<WizardPlanInput>();
@@ -76,7 +76,14 @@ export default function GameWizard({ visible, onOpened, onBusy }: { visible: boo
     setCreating(true); onBusy(true); setError('');
     try {
       const result = await invoke('studio.wizardCreate', draft);
-      if (result.snapshot) onOpened(result.snapshot, openAgent);
+      if (!result.snapshot) return;
+      let warning: string | undefined;
+      if (afterCreate === 'codex' || afterCreate === 'claude-code') {
+        try {
+          await invoke('studio.agentStart', { client: afterCreate, useWizardBrief: true, expectedProject: result.snapshot.project.path });
+        } catch (e) { warning = 'Game created. Agent could not start. ' + (e instanceof Error ? e.message : String(e)); }
+      }
+      onOpened(result.snapshot, afterCreate !== 'open', warning);
     } catch (e) { setError(String(e)); }
     finally { setCreating(false); onBusy(false); }
   }
@@ -129,8 +136,13 @@ export default function GameWizard({ visible, onOpened, onBusy }: { visible: boo
       </dl>
       <label className="wizard__verify"><input type="checkbox" checked={draft.verifyLevels} disabled={creating}
         onChange={e => setDraft({ ...draft, verifyLevels: e.target.checked })}/>Verify levels with bots</label>
-      <label className="wizard__verify"><input type="checkbox" checked={openAgent} disabled={creating}
-        onChange={e => setOpenAgent(e.target.checked)}/>Open Agent to review the game brief</label>
+      <label>After creation<select className="au-input" value={afterCreate} disabled={creating}
+        onChange={e => setAfterCreate(e.target.value as typeof afterCreate)}>
+        <option value="open">Open the game</option>
+        <option value="review">Review the brief in Agent</option>
+        {options.agentClients?.map(client => <option key={client} value={client}>
+          Send brief to {client === 'codex' ? 'Codex CLI' : 'Claude Code'}</option>)}
+      </select></label>
       <button type="button" disabled={dictating || creating || fetching} className="au-button au-button--primary" onClick={() => void create()}>
         {creating && <StudioLoader size={14}/>}Create game in folder…</button></> : <p>Preview the plan to see the matching template, tutorial and levels.</p>}
     </aside>

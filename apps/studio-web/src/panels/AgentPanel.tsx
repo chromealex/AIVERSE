@@ -5,6 +5,7 @@ import type { StudioAgentInfo, StudioAgentChange, StudioAgentBatch, StudioSnapsh
 import { StudioIconButton, StudioButton, StudioAlert } from '../ui';
 import { copyText } from '../clipboard';
 import { emptyDraft, readAgentDraft, type AgentDraft } from './agentDraft';
+import WizardReport from './WizardReport';
 import { agentLineKind } from './agentLogic';
 import './AgentPanel.css';
 import { StudioLoader } from '../ui';
@@ -19,7 +20,7 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
   const projectPath = snapshot?.project.path ?? '';
   const [info, setInfo] = useState<StudioAgentInfo | null>(null);
   const [preferredClient, setPreferredClient] = useState<'' | 'claude-code' | 'codex'>('');
-  const client = info?.running && info.runClient ? info.runClient : preferredClient || (!info?.cli && info?.codexCli ? 'codex' : 'claude-code');
+  const client = info?.running && info.runClient ? info.runClient : preferredClient || (info?.codexCli && (info.runClient==='codex' || !info.cli) ? 'codex' : 'claude-code');
   const cli = client === 'codex' ? info?.codexCli : info?.cli;
   const [lines, setLines] = useState<string[]>([]);
   const draftKey = 'studio.agentDraft:' + projectPath;
@@ -47,6 +48,8 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
     return () => window.removeEventListener('storage', sync);
   }, [draftKey]);
   const [error, setError] = useState('');
+  const [report, setReport] = useState<string | null>(null);
+  const [readingReport, setReadingReport] = useState(false);
   const [busy, setBusy] = useState(false);
   const [navigating,setNavigating]=useState(false);
   const [batchReview,setBatchReview]=useState<StudioAgentBatch|null>(null);
@@ -92,6 +95,15 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
       });
     } catch (e) { setError(message(e)); }
     finally { setBusy(false); }
+  };
+  const openReport = async () => {
+    setReadingReport(true);
+    try {
+      const result = await invoke('studio.agentInfo', { from: total.current, reportForProject: projectPath });
+      if (!result.wizardReport) throw new Error('Wizard report unavailable');
+      setReport(result.wizardReport);
+    } catch (e) { setError(message(e)); }
+    finally { setReadingReport(false); }
   };
   const copyBrief = async () => {
     const success = await copyText(prompt);
@@ -168,6 +180,7 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
       </select></label>
       {!!info?.port && <span className="agent__meta" title="Local agent link (aiversemcp connects here)">port {info.port}{info.clients ? ` · ${info.clients} linked` : ''}</span>}
       <span className="agent__fill"/>
+      {info?.hasWizardReport && <StudioButton size="sm" variant="ghost" disabled={readingReport} onClick={() => void openReport()}>View report</StudioButton>}
       {(edits.length>0 || info?.batchUndo?.available || info?.batchRedo?.available) && <>
       <StudioButton size="sm" variant="ghost" disabled={navigating||!info?.batchUndo?.available} title={info?.batchUndo?.reason||'Review all tracked edits'} onClick={()=>void reviewBatch('undo')}><Undo2 size={13}/>Undo batch</StudioButton>
       <StudioButton size="sm" variant="ghost" disabled={navigating||!info?.batchRedo?.available} title={info?.batchRedo?.reason||'Review all tracked edits'} onClick={()=>void reviewBatch('redo')}><Redo2 size={13}/>Redo batch</StudioButton>
@@ -177,6 +190,7 @@ export default function AgentPanel({ snapshot, commitSnapshot }: { snapshot: Stu
       <button type="button" className="au-button au-button--sm au-button--ghost" disabled={!!info?.running} onClick={() => void reset()} title="Start a new conversation">
         <MessageSquarePlus size={13}/>New</button>
     </div>
+    {report !== null && <WizardReport text={report} close={() => setReport(null)}/>}
     {batchReview&&<div className="agent__batch-review">
       <StudioAlert tone="warning" title={batchReview.direction==='undo'?'Review batch undo':'Review batch redo'}>
         {batchReview.steps?.length??0} tracked steps. The file transaction covers saved documents and supported asset relocations. Overlapping paths or changed references are refused; map changes remain unsaved until you save the map.
