@@ -15,6 +15,8 @@
     "docs/devlog/systems.json",
     "docs/evidence/cpu-renderer-stage2-pixels.json",
     "docs/evidence/cpu-renderer-stage2-pixels.log.txt",
+    "docs/evidence/cpu-renderer-stage3-textures.json",
+    "docs/evidence/cpu-renderer-stage3-textures.log.txt",
     "docs/evidence/cpu-renderer/arch.png",
     "docs/features/cpu-renderer.json",
     "engine/gfx/Gfx.h",
@@ -109,9 +111,9 @@
     },
     "tests": {
       "status": "pass",
-      "note": "Focused CPU pixel CTest covers clip, index, depth, scissor and screen/texture captures.",
+      "note": "Both Mac CTests passed: clipped/depth/indexed geometry plus sampled RGBA8 and a textured OBJ-to-PNG capture through the command-line tool.",
       "evidence": [
-        "docs/evidence/cpu-renderer-stage2-pixels.json"
+        "docs/evidence/cpu-renderer-stage3-textures.json"
       ]
     },
     "handoff": {
@@ -137,6 +139,6 @@
     "studio_methods": []
   },
   "test_reports": [
-    "docs/evidence/cpu-renderer-stage2-pixels.json"
+    "docs/evidence/cpu-renderer-stage3-textures.json"
   ]
 }

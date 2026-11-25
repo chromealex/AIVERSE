@@ -1,0 +1,33 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/cpu-d3d-render-20261125/mac
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/cpu-d3d-render-20261125/mac/DartConfiguration.tcl
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/cpu-d3d-render-20261125/mac/DartConfiguration.tcl
+Test project /Volumes/KINGSTON/AIVERSE-builds/cpu-d3d-render-20261125/mac
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 116
+    Start 116: render_cpu_device
+
+116: Test command: /Volumes/KINGSTON/AIVERSE-builds/cpu-d3d-render-20261125/mac/aiverse_cpu_device_tests
+116: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/cpu-d3d-render-20261125/mac
+116: Test timeout computed to be: 10000000
+1/2 Test #116: render_cpu_device ................   Passed    0.03 sec
+test 117
+    Start 117: render_cpu_textured_model
+
+117: Test command: /Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12 "/Volumes/KINGSTON/aiverse-worktrees/cpu-d3d-render-20261125/tests/render/headless_model_capture.py" "/Volumes/KINGSTON/AIVERSE-builds/cpu-d3d-render-20261125/mac/aiverse_cpu_capture"
+117: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/cpu-d3d-render-20261125/mac
+117: Test timeout computed to be: 10000000
+117: Textured OBJ headless capture: 26667 red and 38770 green pixels
+2/2 Test #117: render_cpu_textured_model ........   Passed    0.37 sec
+
+The following tests passed:
+	render_cpu_device
+	render_cpu_textured_model
+
+100% tests passed, 0 tests failed out of 2
+
+Total Test time (real) =   0.43 sec
