@@ -370,6 +370,7 @@
           "status": "in-progress",
           "date": "2026-11-24",
           "title": "Сборка каскадов GCC 13 arm64",
+          "id": "nereid-gcc13-arm64-build",
           "text": "Устранить предупреждение maybe-uninitialized при обновлении каскадов и подтвердить регрессию.",
           "titleEn": "GCC 13 arm64 cascade build",
           "textEn": "Resolve the maybe-uninitialized diagnostic while updating cascades and verify the regression."
