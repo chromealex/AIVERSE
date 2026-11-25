@@ -1,0 +1,2 @@
+2026-11-25 22:40:32.308 AiverseStudioHTML5[79396:81360942] [studio-web] JS: CROSS main READY_FOR_CAPTURE
+Saved collider and every original map field match.

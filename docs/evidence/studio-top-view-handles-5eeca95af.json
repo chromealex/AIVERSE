@@ -1,0 +1,10 @@
+{
+  "sha": "5eeca95af5429900dab494b881160bf27a764e25",
+  "argv": [
+    "bash",
+    "/tmp/top-view-handle.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-top-view-handles-5eeca95af.log.txt",
+  "sha256": "254510d981fd94cc5ef696d5c26b4cd8a6515230062ce6572c3be0c1ff5ce050"
+}
