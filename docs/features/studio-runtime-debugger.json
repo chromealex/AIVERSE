@@ -14,7 +14,13 @@
     "engine/game/ScriptApi.cpp",
     "engine/game/UnitVitals.h",
     "skills/editor/studio-ui/SKILL.md",
-    "tests/runtime_vitals_test.cpp"
+    "tests/runtime_vitals_test.cpp",
+    "apps/editor/core/StudioPlayTools.h",
+    "apps/editor/core/Workspace.cpp",
+    "apps/studio-native/StudioHost.h",
+    "apps/studio-native/StudioSession.cpp",
+    "apps/studio-native/tests/StudioSessionTests.cpp",
+    "apps/editor/core/StudioPlayTools.cpp"
   ],
   "traits": {
     "editable": true,
@@ -54,7 +60,7 @@
     },
     "mcp": {
       "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "note": "Verify the typed local Studio handler, headless refusal and guarded requests over the authenticated agent link.",
       "evidence": [
         "docs/handoff/studio-html5/s4-runtime-debugger-2026-11-24.md"
       ]
@@ -155,7 +161,10 @@
     "skills": [
       "studio-ui"
     ],
-    "mcp_tools": [],
+    "mcp_tools": [
+      "studio_runtime_inspect",
+      "studio_runtime_edit"
+    ],
     "studio_methods": [
       "studio.gameEdit"
     ],

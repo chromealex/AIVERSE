@@ -205,6 +205,8 @@ private:
     Json dispatchSpectraPreview(const Json& params);
     uint64_t spectraDispatchSequence_=0,spectraDispatchFailed_=0;
     uint64_t packageProjectEpoch_=0;
+    Json localPlayOperation(const std::string& method, const Json& params, Json& reviewSlot);
+    void clearPlayReviews();
     Json runSpectraPreview(const Json& params); // shared HTML5 / authenticated MCP bridge
     void cancelSpectraCapture(); // invalidate callback state before dropping ownership
     Json captureSpectraFrame(const Json& params); // bounded asynchronous native GPU readback
@@ -250,7 +252,7 @@ private:
     double nextMapSnapshot_ = 0, nextRulesCheck_ = 0;
     std::unique_ptr<StudioGameSurface> game_;
     Json playReview_;
-    uint64_t playReviewSerial_=0;
+    Json agentPlayReview_;
     NativeViewportPlacement placement_{}, gamePlacement_{}, fxPlacement_{};
     // Independent native FX drawable/swapchain: no Scene surface reparent,
     // no camera hijack. Both run on the existing native render owner thread.

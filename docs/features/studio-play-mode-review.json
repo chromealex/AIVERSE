@@ -18,7 +18,12 @@
     "apps/studio-web/src/panels/GamePanel.css",
     "apps/studio-web/src/panels/GamePanel.tsx",
     "apps/studio-web/src/types.ts",
-    "skills/editor/studio-ui/SKILL.md"
+    "skills/editor/studio-ui/SKILL.md",
+    "apps/editor/core/StudioPlayTools.h",
+    "apps/editor/core/Workspace.cpp",
+    "docs/editor-native-ecs-inspector.md",
+    "CMakeLists.txt",
+    "apps/editor/core/StudioPlayTools.cpp"
   ],
   "traits": {
     "editable": true,
@@ -58,7 +63,7 @@
     },
     "mcp": {
       "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "note": "Verify the typed local Studio handler, headless refusal and guarded requests over the authenticated agent link.",
       "evidence": [
         "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
       ]
@@ -159,7 +164,10 @@
     "skills": [
       "studio-ui"
     ],
-    "mcp_tools": [],
+    "mcp_tools": [
+      "studio_play_review_preview",
+      "studio_play_review_apply"
+    ],
     "studio_methods": [
       "studio.previewPlayChanges",
       "studio.keepPlayChanges"

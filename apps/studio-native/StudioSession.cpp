@@ -684,13 +684,14 @@ bool StudioSession::pollAgentLink() {
         const bool failed=result.has("error");
         const bool undoable=ws_.map.undoDepth()>before;
         if(undoable){
+            undoLabels_.resize(before); // A nested native Studio operation may have already labelled this edit.
             for(size_t i=before;i<ws_.map.undoDepth();++i)undoLabels_.push_back("Agent · "+studioToolLabel(name));
             redoLabels_.clear();
         }
         syncHistoryLabels();
         if(ws_.map.data.entities.size()!=entities){clearSelection();dropOrdinalFlags();}
         const bool dirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
-        const bool readOnly=studioToolReadOnly(name)||(name=="terraweave_caverns_paint"&&args.getStr("mode")=="get");
+        const bool readOnly=name.starts_with("studio_runtime_") || name=="studio_play_review_preview" || studioToolReadOnly(name)||(name=="terraweave_caverns_paint"&&args.getStr("mode")=="get");
         const bool edit=!failed&&(undoable||dirty!=wasDirty||!readOnly);
         if(edit)changed=true;
         if(edit||failed){
