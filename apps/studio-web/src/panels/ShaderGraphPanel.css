@@ -27,3 +27,9 @@
 .graph-pending{display:flex;align-items:center;gap:8px;padding:7px 12px;background:#463425;color:#f5d39d;font-size:11px;flex-wrap:wrap}
 .graph-pending span{margin-right:auto}
 .graph-pending button{background:#5b4632;border:1px solid #927451;color:#f4dfa9;padding:5px 8px;border-radius:4px;font-size:11px}
+.graph-bindings{max-height:38%;overflow:auto;padding:8px 12px;border-top:1px solid #314259;font-size:12px}
+.graph-bindings fieldset{display:flex;flex-wrap:wrap;gap:8px 14px;padding:6px 0;border:0;margin:0}
+.graph-bindings legend,.graph-bindings summary{color:#cbe1f9;font-weight:600}
+.graph-bindings summary{cursor:pointer}
+.graph-bindings label{display:grid;gap:4px;color:#a6b9d2}
+.graph-bindings select{max-width:17em;background:#192c40;color:#e1efff;border:1px solid #496588;border-radius:4px;padding:4px}

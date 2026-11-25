@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {moveShaderGraphNode,addShaderGraphNode,removeShaderGraphNode} from '../src/panels/shaderGraphLayout.ts';
+import {moveShaderGraphNode,addShaderGraphNode,removeShaderGraphNode,setShaderInput,setShaderOutput} from '../src/panels/shaderGraphLayout.ts';
 test('dragging changes only the targeted node coordinate',()=>{
  const source={domain:'material',nodes:[{id:'a',op:'input',position:[30,40]},{id:'b',op:'constant',position:[200,70]}],outputs:{color:'b'}};
  const next=moveShaderGraphNode(source,'a',90,110);
@@ -37,4 +37,22 @@ test('delete is refused when graph links or output still depend on node',()=>{
  const out=removeShaderGraphNode(changed,'mix');
  assert.equal(out.nodes.length,1);
  assert.equal(changed.nodes.length,2);
+});
+
+test('rewiring preserves slot order and rejects cycles and missing sources',()=>{
+ const graph={nodes:[{id:'a'},{id:'b'},{id:'c',inputs:['a','a']},{id:'d',inputs:['c']}]};
+ assert.deepEqual(setShaderInput(graph,'c',1,'b').nodes[2].inputs,['a','b']);
+ assert.deepEqual(graph.nodes[2].inputs,['a','a']);
+ for(const id of ['c','d','unknown'])assert.equal(setShaderInput(graph,'c',0,id),graph);
+ assert.equal(setShaderInput(graph,'c',2,'a'),graph);
+});
+test('output bindings preserve the required color and respect graph domain',()=>{
+ const graph={domain:'material',nodes:[{id:'a'}],outputs:{color:'a'}};
+ const next=setShaderOutput(graph,'normal','a');
+ assert.deepEqual(next.outputs,{normal:'a',color:'a'});
+ assert.deepEqual(setShaderOutput(next,'normal','').outputs,graph.outputs);
+ assert.equal(setShaderOutput(graph,'color',''),graph);
+ assert.equal(setShaderOutput(graph,'color','unknown'),graph);
+ const particle={...graph,domain:'particle'};
+ assert.equal(setShaderOutput(particle,'normal','a'),particle);
 });

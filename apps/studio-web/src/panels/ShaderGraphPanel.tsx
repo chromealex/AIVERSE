@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { GitBranch, RefreshCw, Save, Search, RotateCcw, CheckCircle2 } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import type { StudioShaderGraphDocument, StudioShaderGraphOp } from '../types';
-import { layoutShaderGraph, moveShaderGraphNode, addShaderGraphNode, removeShaderGraphNode } from './shaderGraphLayout';
+import { layoutShaderGraph, moveShaderGraphNode, addShaderGraphNode, removeShaderGraphNode, setShaderInput, setShaderOutput, shaderOutputNames } from './shaderGraphLayout';
 import './graphSurface.css';
 import './ShaderGraphPanel.css';
 
@@ -49,6 +49,8 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
   return ()=>{closed=true};
  },[selected]);
  const diagram=useMemo(()=>layoutShaderGraph(draft??document?.graph??{}),[draft,document]);
+ const inspected=draft?.nodes?.find(node=>node.id===selectedNode);
+ const sourceOptions=draft?.nodes?.map(node=><option key={node.id} value={node.id}>{node.id} · {node.op}</option>);
  const dirty=!!document&&!!draft&&JSON.stringify(draft)!==JSON.stringify(document.graph);
  const compatibleOps=operations.filter(op=>op.domains.includes(draft?.domain??'material'));
  const chosenOp=compatibleOps.find(op=>op.id===selectedOp)??compatibleOps[0];
@@ -102,8 +104,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
    <button className="icon-button" aria-label="Reload Shader Graphs"
     disabled={busy} onClick={()=>setNonce(n=>n+1)}><RefreshCw size={15}/></button>
   </header>
-  <p className="graph-readonly">Drag nodes to arrange the graph. Validate before explicit Save.
-    Wiring, shaders and GPU graph preview still require the legacy editor.</p>
+  <p className="graph-readonly">Select a node to edit its inputs. Drag nodes to arrange the graph.</p>
   {error&&<p className="graph-error" role="alert">{error}</p>}
   {pendingName&&<div className="graph-pending">
     <span>Discard unsaved changes and open {pendingName}?</span>
@@ -193,8 +194,24 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
         </g>)}
        </svg>
       </div>
-      <div className="graph-outputs">Outputs: {Object.entries(document.graph.outputs??{}).map(
-       ([k,v])=>k+' ← '+v).join(' · ')||'none'}</div>
+      {draft&&<div className="graph-bindings">
+       {inspected&&<fieldset><legend>{inspected.id} · {inspected.op}</legend>
+        {!inspected.inputs?.length&&<span>No inputs</span>}
+        {inspected.inputs?.map((id,slot)=><label key={slot}>Input {slot+1}
+         <select value={id} onChange={event=>{
+          const next=setShaderInput(draft,inspected.id,slot,event.target.value);
+          if(next===draft){setError('This connection would create a cycle.');return;}
+          setDraft(next);setMessage('');setError('');
+         }}>{sourceOptions}</select></label>)}
+       </fieldset>}
+       <details><summary>Graph outputs</summary><fieldset>
+        {shaderOutputNames(draft.domain).map(channel=><label key={channel}>{channel}
+         <select value={draft.outputs?.[channel]??''} onChange={event=>{
+          setDraft(setShaderOutput(draft,channel,event.target.value));setMessage('');setError('');
+         }}><option value="" disabled={channel==='color'}>Unassigned</option>{sourceOptions}</select>
+        </label>)}
+       </fieldset></details>
+      </div>}
      </> : <div className="graph-empty">No graph loaded.</div>}
    </main>
   </div>

@@ -61,3 +61,36 @@ export function removeShaderGraphNode(source:GraphSource,id:string):GraphSource 
     Object.values(source.outputs??{}).includes(id))return source;
  return {...source,nodes:source.nodes.filter(n=>n.id!==id)};
 }
+
+export function shaderOutputNames(domain?:string):string[] {
+ return domain==='material'
+  ? ['color','roughness','metallic','emission','normal','vertexOffset','vertexNormal']
+  : ['color'];
+}
+
+export function setShaderOutput(graph:GraphSource,channel:string,id:string):GraphSource {
+ if(!shaderOutputNames(graph.domain).includes(channel))return graph;
+ if(id ? !graph.nodes?.some(n=>n.id===id) : channel==='color')return graph;
+ const outputs={...graph.outputs};
+ if(id)outputs[channel]=id;
+ else delete outputs[channel];
+ return {...graph,outputs};
+}
+
+export function setShaderInput(graph:GraphSource,target:string,slot:number,id:string):GraphSource {
+ const nodes=graph.nodes;
+ const inputs=nodes?.find(node=>node.id===target)?.inputs;
+ if(!nodes||!inputs||!Number.isInteger(slot)||slot<0||slot>=inputs.length)return graph;
+ const byId=new Map(nodes.map(node=>[node.id,node]));
+ if(!byId.has(id))return graph;
+ const pending=[id], visited=new Set<string>();
+ while(pending.length){
+  const source=pending.pop()!;
+  if(source===target)return graph;
+  if(visited.has(source))continue;
+  visited.add(source);
+  pending.push(...(byId.get(source)?.inputs??[]));
+ }
+ return {...graph,nodes:nodes.map(node=>node.id===target
+  ? {...node,inputs:inputs.map((old,index)=>index===slot?id:old)} : node)};
+}
