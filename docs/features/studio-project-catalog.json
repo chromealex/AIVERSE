@@ -3,6 +3,8 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/panels/LightBakePanel.tsx",
+    "apps/editor/core/LightBakeOps.cpp",
     "apps/studio-web/src/panels/LightingPanel.tsx",
     "apps/studio-native/tests/StudioFpsLightingDocumentTests.cpp",
     "apps/studio-web/src/panels/LightingWeatherPreview.tsx",

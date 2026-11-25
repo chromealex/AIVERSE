@@ -8,8 +8,10 @@ namespace aiverse::editor {
 namespace fs = std::filesystem;
 
 std::string lightBakeMapRel(const Workspace& ws) {
-    if (ws.map.path.empty()) return {};
-    return "maps/" + fs::path(ws.map.path).filename().string();
+    if (ws.map.path.empty() || ws.project.dir.empty()) return {};
+    const fs::path relative=ws.relative(ws.map.path);
+    if(relative.empty() || relative.is_absolute() || *relative.begin()=="..")return {};
+    return relative.generic_string();
 }
 
 bake::BakeSettings lightBakeSettings(const Workspace& ws) {

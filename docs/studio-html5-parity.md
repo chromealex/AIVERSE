@@ -262,3 +262,5 @@ Local light color and halo transfer: verify legacy defaults, range checks, nativ
 Lighting weather preview: dedicated GPU drawable, time/cloud/storm controls, one undoable map override and independent Scene camera.
 
 Lighting placement: add lights at the Scene orbit target on a half-unit grid; retain explicit map-center placement and document-scoped Undo.
+
+Light Bake transfer: map-scoped settings, quality presets and generated output inspection in a dedicated HTML panel. Resolve bake folders alongside the actual map for nested and root map paths. Background baking and renderer consumption require separate native parity verification.

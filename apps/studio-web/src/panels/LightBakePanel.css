@@ -1,0 +1,5 @@
+.bake-range{display:grid;grid-template-columns:minmax(0,1fr) 4ch;align-items:center;gap:12px}
+.bake-range output{text-align:right;font-variant-numeric:tabular-nums}
+.light-bake details summary{cursor:pointer;padding:8px 0}
+.light-bake dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(68px,1fr));gap:8px}
+.light-bake dd{margin:4px 0;font-weight:650}

@@ -18,6 +18,7 @@ import SceneToolbar from '../components/SceneToolbar';
 import RulesPanel from './RulesPanel';
 import AssetsPanel from '../components/AssetsPanel';
 import LightingPanel from './LightingPanel';
+import LightBakePanel from './LightBakePanel';
 import MaterialsPanel from './MaterialsPanel';
 import ShaderGraphPanel from './ShaderGraphPanel';
 import AnimationGraphPanel from './AnimationGraphPanel';
@@ -119,8 +120,9 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'inspector':
         return ctx.playing ? <PlayInspector ctx={ctx}/> : <InspectorPanel {...ctx}/>;
       case 'postfx': return <PostFxPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
+      case 'lightbake': return <LightBakePanel key={snapshot?.graphDocument?.epoch} scope={snapshot?.graphDocument}/>;
       case 'terrain': case 'water': case 'roads': case 'tiles': case 'generate':
-      case 'effects': case 'lightbake': case 'models': case 'overlays':
+      case 'effects': case 'models': case 'overlays':
       case 'fields': case 'physis': case 'raid': case 'balance': case 'fx_functions': case 'modeling':
       case 'model_anim': case 'project_import':
         return <ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;

@@ -9,7 +9,7 @@
 namespace aiverse::editor {
 
 void registerLightBakeOps(Workspace& ws);
-// "maps/<file>.json" of the open map (empty when the map was never saved).
+// Project-relative path of the saved map; empty for a map outside the project.
 std::string lightBakeMapRel(const Workspace& ws);
 // Settings of the open map: its "bake" block over the defaults.
 bake::BakeSettings lightBakeSettings(const Workspace& ws);
