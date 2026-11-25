@@ -1193,6 +1193,8 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && map.data.entities.size()==before);
    }
    {
+       const auto invalidTrack=call("studio.op",R"({"op":"animation_root_motion_generate","params":{"model":"missing.gltf","id":4294967297}})");
+       AIVERSE_TEST_CHECK(invalidTrack.getStr("error").find("Invalid root motion track ID")!=std::string::npos);
        const auto avatars=project/"animations"/"avatar";
        fs::create_directories(avatars);
        std::ofstream(avatars/"saved_profile.json")<<R"({"format":"aiverse-humanoid-v1","model":"content/avatar.gltf","bones":{}})";

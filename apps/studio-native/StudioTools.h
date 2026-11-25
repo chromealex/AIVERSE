@@ -53,7 +53,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
         {"modeling", {"modeling_catalog", "modeling_volume_texture_import", "modeling_list", "modeling_get", "modeling_create", "modeling_edit", "modeling_validate", "strata_capabilities", "strata_model_analyze", "modeling_apply", "modeling_build",
                       "modeling_duplicate", "modeling_lod", "modeling_export", "modeling_graph_set", "modeling_graph_import", "modeling_graph_publish",
                       "texture_patterns", "texture_generate", "texture_graph_catalog", "texture_graph_image_asset", "texture_graph_list", "texture_graph_get", "texture_graph_validate", "texture_graph_set", "texture_graph_preview", "texture_graph_bake", "texture_graph_templates", "texture_graph_bake_set", "texture_graph_cache", "texture_graph_material_variant", "texture_graph_gpu_preview"}},
-        {"anim_assets", {"animation_ragdoll_generate", "animation_asset_list", "animation_avatar_suggest", "animation_avatar_validate", "modeling_list", "animation_get", "animation_asset_get", "animation_asset_save", "animation_generate", "animation_bake", "animation_sample"}},
+        {"anim_assets", {"animation_model_info", "animation_root_motion_generate", "animation_ragdoll_generate", "animation_asset_list", "animation_avatar_suggest", "animation_avatar_validate", "modeling_list", "animation_get", "animation_asset_get", "animation_asset_save", "animation_generate", "animation_bake", "animation_sample"}},
         {"anim_graph", {"graph_catalog", "graph_list", "graph_get", "graph_node_catalog", "graph_validate", "graph_diagnostics", "graph_dependencies", "graph_property_schema", "graph_asset_dependencies", "graph_runtime_capabilities", "graph_runtime_probe", "graph_live_snapshot", "graph_live_watch", "graph_live_profile", "graph_gpu_profile", "graph_debug_session", "animation_graph_preview", "animation_graph_edit", "animation_graph_list", "animation_graph_get", "animation_graph_validate", "animation_graph_set", "animation_graph_apply",
                         "animation_montage_validate"}},
         {"anim_rig", {"animation_avatar_suggest", "animation_avatar_validate", "rig_auto_weights", "rig_edit", "animation_ragdoll_generate",
@@ -88,7 +88,7 @@ inline bool studioToolAllowed(const std::string& op) {
 // Ops that never change the project or the map: the panel runs them without an undo step or a
 // document refresh.
 inline bool studioToolReadOnly(const std::string& op) {
-    if(op=="animation_graph_edit"||op=="animation_graph_preview"||op=="animation_ragdoll_generate")return true;
+    if(op=="animation_graph_edit"||op=="animation_graph_preview"||op=="animation_ragdoll_generate"||op=="animation_root_motion_generate")return true;
     if(op=="building_graph_diagnostics")return true;
     if (op == "feature_readiness_query" || op == "feature_readiness_refresh") return true; // engine report only, no project mutation
     if (op == "texture_graph_preview" || op == "texture_graph_image_asset" || op == "texture_graph_catalog" || op == "texture_graph_templates" || op == "texture_graph_cache") return true;

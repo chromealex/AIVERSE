@@ -26,6 +26,12 @@ std::string graphRevision(const Json& graph){
     const auto digest=pack::sha256(bytes.data(),bytes.size());
     return pack::toHex(digest.data(),digest.size());
 }
+Json animationNodePaths(const render::Model& model){
+    Json paths=Json::array();
+    for(size_t i=0;i<model.nodes.size();++i)
+        paths.push(Json::string(motionweave::bonePath(model,int(i))));
+    return paths;
+}
 Json result(Json graph){Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("graph",std::move(graph));return r;}
 Json savedResult(const Json& graph){
     auto response=result(graph);
@@ -172,11 +178,7 @@ void registerAnimationOps(Workspace& ws){auto schema=Json::parse(R"({"type":"obj
             auto profile=motionweave::humanoidProfileJson(
                 file,motionweave::suggestHumanoidRoles(*model));
             Json r=Json::object();r.set("document",profile);
-            if(p.getBool("includeNodes")){
-                Json nodes=Json::array();
-                for(size_t i=0;i<model->nodes.size();++i)nodes.push(Json::string(motionweave::bonePath(*model,int(i))));
-                r.set("nodes",nodes);
-            }
+            if(p.getBool("includeNodes"))r.set("nodes",animationNodePaths(*model));
             return r;
         }});
     ws.registerOp({"animation_avatar_validate",
@@ -213,9 +215,22 @@ void registerAnimationOps(Workspace& ws){auto schema=Json::parse(R"({"type":"obj
             r.set("bodyCount",Json::number(int64_t(rag.bindings().size())));
             return r;
         }});
+    ws.registerOp({"animation_model_info","Inspect clips and bone paths on a project-relative animation model.",
+        Json::parse(R"({"properties":{"model":{"type":"string"}},"required":["model"]})"),[&ws](const Json& p){
+            const auto model=loadAnimationModel(ws,p.getStr("model"));
+            Json result=Json::object(),clips=Json::array();
+            for(const auto& clip:model->clips){
+                Json entry=Json::object();entry.set("name",Json::string(clip.name));
+                entry.set("duration",Json::number(double(clip.duration)));clips.push(entry);
+            }
+            result.set("clips",clips);result.set("nodes",animationNodePaths(*model));return result;
+        }});
     ws.registerOp({"animation_root_motion_generate",
         "Offline-bake root motion from authored clips to deterministic fixed frames.",
-        Json::object(),[&ws](const Json& p){
+        Json::parse(R"({"properties":{"model":{"type":"string"},"clip":{"type":"string"},"root":{"type":"string"},"id":{"type":"integer","minimum":1,"maximum":4294967295},"rate":{"type":"integer","minimum":10,"maximum":240},"loop":{"type":"boolean"}},"required":["model","clip","root"]})"),[&ws](const Json& p){
+            const auto id=p.getInt("id",1),rate=p.getInt("rate",60);
+            if(id<1 || id>UINT32_MAX || rate<10 || rate>240)
+                throw std::invalid_argument("Invalid root motion track ID or tick rate");
             auto model=loadAnimationModel(ws,p.getStr("model"));
             const int clip=model->findClip(p.getStr("clip"));
             const int root=render::findNodePath(*model,p.getStr("root"));
@@ -223,7 +238,7 @@ void registerAnimationOps(Workspace& ws){auto schema=Json::parse(R"({"type":"obj
             motionweave::RootMotionTracksResource library;
             library.clips.push_back(motionweave::bakeRootMotion(
                 *model,model->clips[size_t(clip)],root,
-                uint32_t(p.getInt("id",1)),uint32_t(p.getInt("rate",60)),
+                uint32_t(id),uint32_t(rate),
                 p.getBool("loop")));
             Json r=Json::object();
             r.set("document",motionweave::encodeRootMotionTracks(library));
