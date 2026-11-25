@@ -255,7 +255,20 @@
     "tests/libraries/CMakeLists.txt",
     "tests/render/runtime_building_model_compile.cpp",
     "tools/buildings/qa_batch_20.py",
-    "tools/buildings/verify_setting_glb.py"
+    "tools/buildings/verify_setting_glb.py",
+    "examples/world/building-caverns-web/building.cpp",
+    "examples/world/building-caverns-web/building.recipe.json",
+    "examples/world/building-caverns-web/layouts.json",
+    "examples/world/building-caverns-web/viewer.js",
+    "examples/world/building-caverns-web/index.html",
+    "examples/world/building-caverns-web/build.py",
+    "examples/world/building-caverns-web/CMakeLists.txt",
+    "examples/world/building-caverns-web/package.json",
+    "examples/world/building-caverns-web/package-lock.json",
+    "examples/world/building-caverns-web/README.md",
+    "examples/world/building-caverns-web/verify.cjs",
+    "engine/core/ECS.h",
+    "tests/ecs_cow_exception_test.cpp"
   ],
   "traits": {
     "editable": true,
@@ -337,9 +350,10 @@
     },
     "platforms": {
       "status": "not_run",
-      "note": "Stage 35D planned; integration verification pending. Linux ARM64 native focused tests passed on ad5786f5a. Windows execution remains open.",
+      "note": "Stage 35D planned; integration verification pending. Linux ARM64 native focused tests passed on ad5786f5a. Windows execution remains open. GCC 13.3 Release compiles the two previously failing Linux AArch64 game objects; six Mac pool and rollback CTests passed on the corrected source.",
       "evidence": [
-        "docs/evidence/integration-ad5786f5a-linux.log.txt"
+        "docs/evidence/integration-ad5786f5a-linux.log.txt",
+        "docs/evidence/ecs-pool-release-5d6e08f39.json"
       ]
     },
     "dependencies": {
@@ -360,7 +374,8 @@
       "note": "The C++ exporter generated all 20 sized models. All 12 setting-specific GLB files passed embedded PBR channel and PNG validation.",
       "evidence": [
         "docs/evidence/building-material-export-b954cd47a.json",
-        "docs/evidence/building-export-1894e6dd8.json"
+        "docs/evidence/building-export-1894e6dd8.json",
+        "docs/evidence/building-caverns-web-a2119fb21.json"
       ]
     },
     "tests": {
@@ -390,8 +405,11 @@
     },
     "publishing": {
       "status": "not_run",
-      "note": "Stage 35D planned; integration verification pending.",
-      "evidence": []
+      "note": "An offline browser demo, two captured frames and a bilingual devlog entry are staged on PR #190. Site publication awaits main integration.",
+      "evidence": [
+        "docs/evidence/building-caverns-web-a2119fb21.json",
+        "docs/devlog/entries/2026-11-25-world-building-caverns-web.json"
+      ]
     }
   },
   "integrations": {
