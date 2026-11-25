@@ -2,6 +2,7 @@
 #include "ModelInterchange.h"
 #include <array>
 #include "BspVisibility.h"
+#include "BspShaderImages.h"
 #include "LightmapUv.h"
 
 namespace aiverse::render {
@@ -85,7 +86,7 @@ float finiteFloat(interchange::ByteReader& reader) {
 }
 
 std::unique_ptr<Model> loadBsp(const std::string& path, const std::string& bytes,
-                               const FileReader&, std::vector<std::string>* warnings) {
+                               const FileReader& read, std::vector<std::string>* warnings) {
     interchange::ByteReader reader(path, bytes);
     if (bytes.compare(0, 4, "IBSP") != 0) reader.fail("expected Quake III IBSP");
     reader.skip(4);
@@ -106,10 +107,50 @@ std::unique_ptr<Model> loadBsp(const std::string& path, const std::string& bytes
     const size_t surfaces = records(13, 104, 0x20000);
     const size_t shaders = records(1, 72, 0x400);
     auto model = std::make_unique<Model>();
+    // Shader image names are relative to the game root (maps/level.bsp -> textures/...).
+    auto directory=interchange::dirOf(path);
+    auto base=directory;
+    if (base.size()>=5 && interchange::lowerStr(base.substr(base.size()-5))=="maps/")
+        base.resize(base.size()-5);
+    std::map<std::string,int> textureIndices;
+    auto diffuse=[&](const std::string& name) {
+        if (auto it=textureIndices.find(name);it!=textureIndices.end())return it->second;
+        int& result=textureIndices[name]; result=-1;
+        if (!bspAssetName(name))return result;
+        const auto ext=interchange::baseName(name).find_last_of('.');
+        const std::string stem=ext==name.npos?name:name.substr(0,name.find_last_of('.'));
+        for (const auto* suffix : {"",".tga",".jpg",".png",".jpeg"}) {
+            if (!*suffix && ext==name.npos)continue;
+            const auto candidate=(*suffix?stem+suffix:name);
+            Image image;image.name=candidate;
+            if (!readModelImage(base+candidate,read,image))continue;
+            result=int(model->images.size()); model->images.push_back(std::move(image)); break;
+        }
+        return result;
+    };
+    BspShaderImages scripts(read,base);
     for (size_t i = 0; i < shaders; ++i) {
         const char* name = bytes.data() + lumps[1].offset + i * 72;
-        model->materials.emplace_back().name.assign(name, std::find(name, name + 64, '\0'));
+        auto& material=model->materials.emplace_back();
+        material.name.assign(name,std::find(name,name+64,'\0'));
+        material.baseTex=diffuse(scripts.baseImage(material.name));
+        if(material.baseTex<0)material.baseTex=diffuse(material.name);
     }
+    constexpr size_t pixels=128*128;
+    const size_t pageCount=records(14,pixels*3,256);
+    const int firstPage=int(model->images.size());
+    for (size_t page=0;page<pageCount;++page) {
+        auto& image=model->images.emplace_back();
+        image.name=path+"#lightmap/"+std::to_string(page);
+        image.width=image.height=128; image.repeat=false;
+        image.rgba.resize(pixels*4);
+        const auto* src=reinterpret_cast<const uint8_t*>(bytes.data()+lumps[14].offset+page*pixels*3);
+        for(size_t p=0;p<pixels;++p) {
+            std::copy_n(src+3*p,3,image.rgba.data()+4*p);
+            image.rgba[4*p+3]=255;
+        }
+    }
+    auto vis=std::make_shared<BspVisibility>();
     reader.seek(lumps[10].offset);
     model->vertices.reserve(vertices);
     for (size_t i = 0; i < vertices; ++i) {
@@ -121,6 +162,7 @@ std::unique_ptr<Model> loadBsp(const std::string& path, const std::string& bytes
         vertex.color = reader.u32();
     }
     auto& mesh = model->meshes.emplace_back();
+    std::map<uint32_t,int> bakedMaterials;
     std::vector<int32_t> surfacePrimitive(surfaces, -1);
     size_t skipped = 0;
     for (size_t i = 0; i < surfaces; ++i) {
@@ -145,7 +187,19 @@ std::unique_ptr<Model> loadBsp(const std::string& path, const std::string& bytes
         prim.indexCount = indexCount;
         reader.seek(lumps[13].offset + i * 104 + 28);
         const auto lightmapIndex = reader.le<int32_t>();
-        prim.lightmapUv = lightmapIndex >= 0 && size_t(lightmapIndex) < lumps[14].length / (128*128*3);
+        if(lightmapIndex>=0 && size_t(lightmapIndex)>=pageCount)reader.fail("invalid BSP lightmap index");
+        prim.lightmapUv=lightmapIndex>=0;
+        if (prim.lightmapUv) {
+            // Lightmapped BSP surfaces use baked irradiance instead of vertex lighting.
+            auto [it,inserted]=bakedMaterials.try_emplace(shader,int(model->materials.size()));
+            if (inserted) {
+                auto material=model->materials[shader];
+                material.vertexColors=false;
+                model->materials.push_back(std::move(material));
+            }
+            prim.material=it->second;
+        }
+        vis->lightmapImages.push_back(prim.lightmapUv?firstPage+lightmapIndex:-1);
         if (kind == 2) {
             reader.seek(lumps[13].offset + i * 104 + 96);
             const auto width = reader.u32(), height = reader.u32();
@@ -161,6 +215,14 @@ std::unique_ptr<Model> loadBsp(const std::string& path, const std::string& bytes
         }
     }
     if (skipped && warnings) warnings->push_back(path + ": skipped " + std::to_string(skipped) + " non-triangle surfaces");
+    if (warnings) {
+        std::set<std::string> missing;
+        for (const auto& prim:mesh.primitives) {
+            const auto& mat=model->materials[size_t(prim.material)];
+            if(mat.baseTex<0)missing.insert(mat.name);
+        }
+        for (const auto& name:missing)warnings->push_back(path+": BSP diffuse image unavailable: "+name);
+    }
     if (mesh.primitives.empty()) reader.fail("no supported BSP surfaces");
     auto& node = model->nodes.emplace_back();
     node.name = interchange::baseName(path);
@@ -170,7 +232,7 @@ std::unique_ptr<Model> loadBsp(const std::string& path, const std::string& bytes
         const auto branchCount = records(3, 36, 0x20000);
         const auto leafCount = records(4, 48, 0x20000);
         const auto referenceCount = records(5, 4, 0x20000);
-        auto vis = std::make_shared<BspVisibility>();
+
         reader.seek(lumps[16].offset);
         if (lumps[16].length < 8 || lumps[16].length > 0x200008)
             reader.fail("invalid BSP visibility size");
@@ -219,8 +281,8 @@ std::unique_ptr<Model> loadBsp(const std::string& path, const std::string& bytes
                     vis->primitiveClusters[size_t(primitive)].push_back(uint32_t(cluster));
             }
         }
-        model->bspVisibility = std::move(vis);
     }
+    model->bspVisibility = std::move(vis);
     model->finalize();
     return model;
 }

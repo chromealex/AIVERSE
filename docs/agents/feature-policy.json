@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "features": {
+    "quake3-bsp": {"requires": [], "roadmap": {"system": "render", "id": "quake3-bsp"}, "api_paths": ["engine/render/BspVisibility.h", "engine/render/Model.h"]},
     "modeling-volume-csg": {"requires": [], "roadmap": {"system": "studio", "id": "modeling-volume-csg"}, "api_paths": ["tools/modeling/Modeling.h"]},
     "prisma-authored-compositor": {"requires": [], "roadmap": {"system": "prisma", "id": "prisma-authored-compositor"}, "api_paths": ["engine/render/PrismaCompositor.h"]},
     "terraweave-meadow-grass": {

@@ -16,3 +16,5 @@ References: `docs/models.md`, `docs/spine.md`, `docs/unity-animation.md`, `docs/
 7. Check: `view_focus` + `view_screenshot` close and at gameplay zoom, idle and in combat (clips play, team colour visible, no T-pose or missing textures); `build_estimate` for size impact.
 
 Runtime library: none. Workflow over the engine MCP asset tools.
+
+For Quake III IBSP v46, keep the BSP under maps/ and its named diffuse images under the sibling textures/ directory. Import scripts/shaderlist.txt and its static .shader definitions when materials use image aliases. model_info resolves the same assets as the renderer. Face lightmaps are embedded in the BSP. See docs/models.md for the OpenArena example and the limits of static material translation.

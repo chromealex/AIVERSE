@@ -138,7 +138,7 @@ inline StudioAuditResult studioAssetAudit(const std::filesystem::path& project, 
     std::error_code ec;
     const fs::path root = fs::weakly_canonical(project, ec);
     if (ec) return out;
-    static const std::set<std::string> known = {".png", ".jpg", ".jpeg", ".webp", ".gltf", ".glb", ".obj", ".fbx", ".lua", ".rml",
+    static const std::set<std::string> known = {".png", ".jpg", ".jpeg", ".webp", ".bsp", ".gltf", ".glb", ".obj", ".fbx", ".lua", ".rml",
                                                 ".rcss", ".wav", ".ogg", ".mp3", ".json", ".rtex", ".ktx2"};
     static const std::set<std::string> inspected = {".json", ".lua", ".rml", ".rcss"};
     const std::regex quoted(R"RE(["']([^"'\r\n]{3,240})["'])RE");

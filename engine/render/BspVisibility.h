@@ -13,6 +13,8 @@ struct BspVisibility {
     std::vector<int32_t> leafClusters;
     std::vector<std::vector<uint32_t>> primitiveClusters;
     std::vector<uint8_t> rows;
+    // Model image index for the irradiance page of each original surface (-1 = vertex-lit).
+    std::vector<int> lightmapImages;
     uint32_t rowBytes = 0;
 
     int cameraCluster(float3 eye) const {
