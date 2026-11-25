@@ -126,7 +126,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'build':
         return <BuildPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'rules':
-        return <RulesPanel projectPath={snapshot?.project.path ?? ''} onChanged={() => void invoke('studio.snapshot', {}).then(ctx.commitSnapshot).catch(() => {})}/>;
+        return <RulesPanel key={snapshot?.project.path} projectPath={snapshot?.project.path ?? ''} onChanged={() => void invoke('studio.snapshot', {}).then(ctx.commitSnapshot).catch(() => {})}/>;
       case 'scene':
         return <>
           <div className="viewport-toolbar">

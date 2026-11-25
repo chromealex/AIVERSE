@@ -13,7 +13,7 @@ export default function RulesPanel({ projectPath, onChanged }: { projectPath: st
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [section,setSection]=useState<'types'|'triggers'|'damageTable'>('types');
+  const [section,setSection]=useState<'types'|'triggers'|'damageTable'|'global'|'document'>('types');
   const [raw, setRaw] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
@@ -58,7 +58,8 @@ export default function RulesPanel({ projectPath, onChanged }: { projectPath: st
           setSection(event.target.value as typeof section); setRaw(null);setError('');
         }}>
           <option value="types">Unit types</option><option value="triggers">Triggers</option>
-          <option value="damageTable">Damage matrix</option>
+          <option value="damageTable">Damage matrix</option><option value="global">Global settings</option>
+          <option value="document">Complete rules.json</option>
         </select>
       </label>
       {section==='types'&&<>
@@ -77,7 +78,10 @@ export default function RulesPanel({ projectPath, onChanged }: { projectPath: st
     </aside>
     <section className="rules__form" aria-label={section==='types'?'Type '+typeId:section}>
       {error && <div className="rules__error" role="alert">{error}<button type="button" aria-label="Dismiss" onClick={() => setError('')}>×</button></div>}
-      {!rules ? <p className="rules__empty">Loading rules…</p> : section!=='types' ? <>
+      {!rules ? <p className="rules__empty">Loading rules…</p> : section==='global'||section==='document' ? <RulesDocumentEditor key={projectPath+section}
+        section={section} projectPath={projectPath} raw={raw} setRaw={setRaw} onChanged={async()=>{
+          setRules(await invoke('studio.rules',{})); onChanged();
+        }}/> : section!=='types' ? <>
         <h3>{section==='triggers'?'Triggers':'Damage matrix'}</h3>
         {section==='damageTable'&&!!rules.armorTypes?.length&&<div className="rules__matrix"><table>
           <thead><tr><th>Attack / armor</th>{rules.armorTypes.map(armor=><th key={armor}>{armor}</th>)}</tr></thead>
@@ -117,6 +121,38 @@ export default function RulesPanel({ projectPath, onChanged }: { projectPath: st
       </>}
     </section>
   </div></div>;
+}
+
+function RulesDocumentEditor({section,projectPath,raw,setRaw,onChanged}:{
+ section:'global'|'document';projectPath:string;raw:string|null;setRaw:(v:string|null)=>void;onChanged:()=>Promise<void>;
+}){
+ const [original,setOriginal]=useState<string|null>(null);
+ const [busy,setBusy]=useState(false);
+ const [error,setError]=useState('');
+ const [revision,reload]=useState(0);
+ useEffect(()=>{
+  let live=true;
+  setOriginal(null);setError('');
+  invoke('studio.rulesDocument',{section}).then(r=>{if(live)setOriginal(r.text);})
+   .catch(e=>{if(live)setError(String(e));});
+  return ()=>{live=false;};
+ },[section,revision]);
+ async function save(){
+  if(original===null||raw===null||busy)return;
+  setBusy(true);setError('');
+  try{
+   const result=await invoke('studio.rulesDocumentSave',{section,projectPath,original,value:JSON.parse(raw)});
+   setOriginal(result.text);setRaw(null);await onChanged();
+  }catch(e){setError(String(e));}finally{setBusy(false);}
+ }
+ const title=section==='global'?'Global settings':'Complete rules.json';
+ return <div className="rules__rawbox"><h3>{title}</h3>
+  {error&&<div role="alert" className="rules__error">{error}</div>}
+  {original!==null&&<textarea value={raw??original} aria-label={title} spellCheck={false}
+   disabled={busy} onChange={e=>setRaw(e.target.value===original?null:e.target.value)}/>}
+  <button disabled={busy||raw===null} onClick={()=>void save()}>Validate &amp; save</button>
+  <button disabled={busy} onClick={()=>{setRaw(null);reload(v=>v+1);}}>{raw===null?'Reload':'Discard & reload'}</button>
+ </div>;
 }
 
 function RuleRow({ value: v, busy, onCommit, onReset }: { value: RuleValue; busy: boolean; onCommit: (input: string | boolean) => void; onReset: () => void }) {

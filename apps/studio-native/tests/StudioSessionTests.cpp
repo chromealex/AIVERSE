@@ -192,6 +192,20 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(call("studio.rules")["result"]["triggers"].isArray());
        AIVERSE_TEST_CHECK(!call("studio.rulesSet",R"({"path":"types.tree.health.max","value":null})").has("error"));
        AIVERSE_TEST_CHECK(!call("studio.rules")["result"]["types"]["tree"]["health"].has("max"));
+       auto query=Json::object();query.set("section",Json::string("global"));
+       const std::string before=call("studio.rulesDocument",query.dump().c_str())["result"].getStr("text");
+       auto globals=Json::parse(before);
+       AIVERSE_TEST_CHECK(!globals.has("types")&&!globals.has("triggers"));
+       globals.set("supplyCap",Json::number(int64_t(123)));
+       query.set("projectPath",Json::string(session.workspace().project.dir));
+       query.set("original",Json::string(before));query.set("value",globals);
+       AIVERSE_TEST_CHECK(!call("studio.rulesDocumentSave",query.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(call("studio.rulesDocumentSave",query.dump().c_str()).has("error"));
+       query.set("section",Json::string("document"));
+       auto full=Json::parse(call("studio.rulesDocument",query.dump().c_str())["result"].getStr("text"));
+       AIVERSE_TEST_CHECK(full["types"].has("tree")&&full.getInt("supplyCap")==123);
+       query.set("original",Json::string(full.dump()));query.set("value",full);
+       AIVERSE_TEST_CHECK(!call("studio.rulesDocumentSave",query.dump().c_str()).has("error"));
    }
    // Build panel: targets and identity; unknown targets/configs rejected; a project with unsaved
    // changes is never built (no implicit save); no estimate yet is an error, not an empty report.

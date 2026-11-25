@@ -2402,6 +2402,39 @@ Json StudioSession::dispatchImpl(const Json& request) {
             reply.set("result", propertiesFor(params.getStr("entityId")));
         } else if (method == "studio.inspect") {
             reply.set("result", inspectorFor(params.getStr("entityId")));
+        } else if (method=="studio.rulesDocument" || method=="studio.rulesDocumentSave") {
+            if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
+            const auto section=params.getStr("section");
+            if(section!="global"&&section!="document") throw std::runtime_error("Unknown rules section");
+            const auto separate=[](const std::string& key){
+                return key=="types"||key=="resources"||key=="techs"||key=="factions"||key=="triggers";
+            };
+            const auto readSection=[&](){
+                if(section=="document")return ws_.project.rulesJson;
+                Json global=Json::object();
+                for(const auto& [key,value]:ws_.project.rulesJson.members())
+                    if(!separate(key))global.set(key,value);
+                return global;
+            };
+            Json current=readSection();
+            if(method=="studio.rulesDocumentSave"){
+                if(params.getStr("projectPath")!=ws_.project.dir || params.getStr("original")!=current.dump())
+                    throw std::runtime_error("The project or rules changed. Reload this section before saving.");
+                const auto& edited=params["value"];
+                if(!edited.isObject())throw std::runtime_error("Expected a rules object");
+                Json candidate=edited;
+                if(section=="global"){
+                    for(const auto& [key,value]:edited.members())
+                        if(separate(key))throw std::runtime_error("Edit "+key+" in the complete rules document");
+                    for(const auto& [key,value]:ws_.project.rulesJson.members())
+                        if(separate(key))candidate.set(key,value);
+                }
+                Json args=Json::object();args.set("path",str(""));args.set("value",std::move(candidate));
+                const auto changed=ws_.call("rules_set",args,"studio");
+                if(changed.has("error"))throw std::runtime_error(changed.getStr("error"));
+                current=readSection();
+            }
+            Json out=Json::object();out.set("text",str(current.dump()));reply.set("result",std::move(out));
         } else if (method == "studio.rules" || method == "studio.rulesSet") {
             // Rules form: unit types as written (own fields) and resolved (with "extends").
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");

@@ -128,7 +128,7 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
   if (method === 'studio.rules') return { types: { soldier: { name: 'Soldier', health: { max: 60 }, move: { speed: 2.5 }, sight: 7, cost: { gold: 50, time: 10 }, weapons: [{ id: 'sword', damage: 6, range: 1, cooldown: 1 }] } },
     resolved: { soldier: { name: 'Soldier', health: { max: 60 }, move: { speed: 2.5, radius: 0.4 }, sight: 7, cost: { gold: 50, time: 10 }, weapons: [{ id: 'sword', damage: 6, range: 1, cooldown: 1 }] } },
     resources: ['gold'], summary: [], dirty: false } as StudioResult['studio.rules'];
-  if (method === 'studio.rulesSet') throw new Error('Open the native Studio to edit rules');
+  if (method === 'studio.rulesDocument' || method === 'studio.rulesDocumentSave' || method === 'studio.rulesSet') throw new Error('Open the native Studio to edit rules');
   // The browser preview has a single window: panels stay docked.
   if (method === 'studio.windowOpen') return { opened: false } as StudioResult['studio.windowOpen'];
   if (method === 'studio.windowClose') return { closed: false } as StudioResult['studio.windowClose'];
