@@ -1981,6 +1981,21 @@ std::optional<Json> StudioScene::forestGroundPlacement(float x,float y,float w,f
     float3 o,d;if(!viewCamera().screenRay(x,y,w,h,o,d))return {};
     return planetPreview_->groundPlacement(o,d,visiblePlanetTerrain());
 }
+std::optional<Json> StudioScene::playerStartPlacement(float x,float y,float w,float h,const editor::MapDoc& doc)const{
+    if(!cameraInitialized_||x<0||y<0||w<2||h<2||x>=w||y>=h||doc.data.worldSpace)return {};
+    if(doc.data.planet())return forestGroundPlacement(x,y,w,h,doc.path,doc.revision);
+    if(planetMode_||terrainRevision_!=doc.revision)return {};
+    float3 origin,direction,at;
+    if(!viewCamera().screenRay(x,y,w,h,origin,direction))return {};
+    const float t=studioRayMesh(origin,direction,terrainCpu_);
+    if(std::isfinite(t))at=origin+direction*t;
+    else if(!groundPoint(x,y,w,h,at))return {};
+    if(at.x<0||at.z<0||at.x>=doc.data.w||at.z>=doc.data.h)return {};
+    Json start=Json::array();
+    start.push(Json::number(std::min(double(doc.data.w)-.5,std::round(double(at.x)*2)/2)));
+    start.push(Json::number(std::min(double(doc.data.h)-.5,std::round(double(at.z)*2)/2)));
+    return start;
+}
 bool StudioScene::groundPoint(float x,float y,float width,float height,float3& out) const {
     float3 o,d;
     if(planetMode_||!cameraInitialized_||!viewCamera().screenRay(x,y,width,height,o,d)||std::fabs(d.y)<1e-5f)return false;

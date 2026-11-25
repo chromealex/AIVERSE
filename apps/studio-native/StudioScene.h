@@ -401,6 +401,7 @@ public:
                                        const editor::MapDoc& map, bool fpsProject) const;
     // Ray through (x, y) onto the ground plane y = 0 (asset drops).
     bool caveScreenRay(float x,float y,float width,float height,render::float3& origin,render::float3& direction)const;
+    std::optional<Json> playerStartPlacement(float x,float y,float w,float h,const editor::MapDoc& doc) const;
     bool groundPoint(float x, float y, float width, float height, render::float3& out) const;
     std::optional<Json> forestPick(float x,float y,float w,float h,const std::string& project,const std::string& path,uint64_t revision) const;
     void setForestSelection(Json selection){forestSelection_=std::move(selection);}

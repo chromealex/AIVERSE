@@ -132,22 +132,7 @@ struct StudioPlanetPreview {
     }
     // Ray intersects the exact preview mesh triangles, including occlusion.
     float terrainHit(render::float3 origin,render::float3 direction,const render::MeshBuilder* renderedTerrain=nullptr)const{
-        float nearest=std::numeric_limits<float>::infinity();
-        const auto& geometry=renderedTerrain?*renderedTerrain:mesh;
-        const auto& v=geometry.vertices();const auto& idx=geometry.indices();
-        for(size_t i=0;i+2<idx.size();i+=3){
-            const auto a=v[idx[i]].pos,b=v[idx[i+1]].pos,c=v[idx[i+2]].pos;
-            const auto e=b-a,f=c-a,h=render::cross(direction,f);
-            const float det=render::dot(e,h);
-            if(std::abs(det)<1e-7f)continue;
-            const auto s=origin-a;const float u=render::dot(s,h)/det;
-            if(u<0||u>1)continue;
-            const auto q=render::cross(s,e);const float w=render::dot(direction,q)/det;
-            if(w<0||u+w>1)continue;
-            const float t=render::dot(f,q)/det;
-            if(t>=0&&t<nearest)nearest=t;
-        }
-        return nearest;
+        return studioRayMesh(origin,direction,renderedTerrain?*renderedTerrain:mesh);
     }
     std::optional<Json> groundPlacement(render::float3 origin,render::float3 direction,const render::MeshBuilder* renderedTerrain=nullptr)const{
         const float t=terrainHit(origin,direction,renderedTerrain);

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Users } from 'lucide-react';
-import { invoke } from '../bridge';
+import { invoke, onNativeEvent } from '../bridge';
 import { StudioButton, StudioInput } from '../ui';
 import type { PlayerStartPosition, PlayerChanges, StudioMapProperties, StudioSnapshot } from '../types';
 
@@ -67,7 +67,7 @@ export function MapPlayers({data, revision, busy, onApply}:{
         {player.faction && !base.factions.some(f=>f.id===player.faction) && <option>{player.faction}</option>}
         {base.factions.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select></label></div>
       <label className="insp-map__toggle"><input name="waves" type="checkbox" defaultChecked={player.waves}/>Scripted waves</label>
-      <PlayerStart initial={player.start} data={base}/>
+      <PlayerStart initial={player.start} data={base} disabled={busy||pending||removing||stale} onEdit={()=>setDraft(base)}/>
       {base.resources.length>0 && <details><summary>Starting resources</summary>{base.resources.map(r=>
         <label key={r.id}>{r.name}<StudioInput name={'resource:'+r.id} type="number" step="any" required
           min={Math.min(0,player.resources[r.id]??r.initial)} max={Math.max(1e6,player.resources[r.id]??r.initial)} defaultValue={player.resources[r.id]??r.initial}/></label>)}</details>}
@@ -84,7 +84,46 @@ export function MapPlayers({data, revision, busy, onApply}:{
     </div></section>;
 }
 
-function PlayerStart({initial,data}:{initial?:PlayerStartPosition;data:StudioMapProperties}){
+function PlayerStart({initial,data,disabled,onEdit}:{initial?:PlayerStartPosition;data:StudioMapProperties;disabled:boolean;onEdit:()=>void}){
+  const [token,setToken]=useState('');
+  const [picked,setPicked]=useState<{position:PlayerStartPosition;token:string}>();
+  const [error,setError]=useState('');
+  const editRef=useRef(onEdit);
+  editRef.current=onEdit;
+  useEffect(()=>{
+    if(!token)return;
+    if(disabled){setToken('');return;}
+    let active=true;
+    const off=onNativeEvent((event,payload)=>{
+      if(event!=='playerStart.picked')return;
+      const result=payload as {token:string;start?:PlayerStartPosition;error?:string};
+      if(result.token!==token)return;
+      setToken('');
+      if(result.error)setError(result.error);
+      if(result.start){
+        setPicked({position:result.start,token});
+        editRef.current();
+      }
+    });
+    const keydown=(e:KeyboardEvent)=>{if(e.key==='Escape'){e.preventDefault();setToken('');}};
+    window.addEventListener('keydown',keydown);
+    void invoke('studio.playerStartPick',{token,armed:true}).catch(e=>{
+      if(active){setError(e instanceof Error?e.message:String(e));setToken('');}
+    });
+    return ()=>{
+      active=false;off();window.removeEventListener('keydown',keydown);
+      void invoke('studio.playerStartPick',{token,armed:false}).catch(()=>{});
+    };
+  },[token,disabled]);
+  return <><StartFields key={picked?.token??'original'} initial={picked?.position??initial} data={data}/>
+    <div className="insp-map__actions"><StudioButton onClick={()=>{
+      setError('');setToken(token?'':Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-'));
+    }}>{token?'Cancel pick':'Pick start in Scene'}</StudioButton>
+      {token && <small role="status">Click the map surface in Scene.</small>}</div>
+    {error && <p role="alert">{error}</p>}</>;
+}
+
+function StartFields({initial,data}:{initial?:PlayerStartPosition;data:StudioMapProperties}){
   const planet=Array.isArray(initial)?undefined:initial;
   const xy=Array.isArray(initial)?initial:[planet?.x,planet?.y];
   const [body,setBody]=useState(planet?.body??data.surfaces[0]?.id??'');

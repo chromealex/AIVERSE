@@ -1069,7 +1069,7 @@ bool StudioHost::gizmoAt(double x, double y, double w, double h) {
     return true;
 }
 bool StudioHost::moveBegin(double x, double y, double w, double h) {
-    if (projectLoading_) return false;
+    if (projectLoading_ || !playerStartToken_.empty()) return false;
     return preview_ && onScene([&] { return preview_->beginTransformDrag(float(x), float(y), float(w), float(h)); });
 }
 void StudioHost::moveUpdate(double x, double y, double w, double h, bool invertSnap) {
@@ -2246,7 +2246,25 @@ bool StudioHost::humanPick(StudioSurface surface,double x,double y,double w,doub
     sendEventPayload(region ? "human.facePick" : "human.sculpt", payload);
     return true;
 }
+void StudioHost::finishPlayerStartPick(Json result){
+    if(playerStartToken_.empty())return;
+    result.set("token",Json::string(playerStartToken_));
+    playerStartToken_.clear();
+    sendEventPayload("playerStart.picked",result);
+}
 void StudioHost::select(double x, double y, double w, double h, const std::string& mode) {
+    if(!playerStartToken_.empty() && mode=="replace"){
+        Json result=Json::object(),start;
+        if(!projectLoading_ && session_ && preview_ && placement_.visible && w>=2 && h>=2 && x>=0 && y>=0 && x<w && y<h){
+            const auto& map=session_->workspace().map;
+            const auto at=onScene([&]{return preview_->playerStartPlacement(float(x),float(y),float(w),float(h),map);});
+            if(at)start=*at;
+        }
+        if(start.isNull())result.set("error",Json::string("No map surface at this point. Pick a point inside the map."));
+        else result.set("start",std::move(start));
+        finishPlayerStartPick(std::move(result));
+        return;
+    }
     if(forestPlantArm_.isObject()&&mode=="replace"){
         const auto arm=forestPlantArm_;forestPlantArm_=Json{};
         if(preview_)onScene([&]{preview_->setForestDragPreview(Json{});});
@@ -2353,6 +2371,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
         if(!projectLoading_&&session_->strokeCancel())sendEvent("document.changed", "");
         m = {};
         m.active = true; m.pressX = x; m.pressY = y;
+        if(!playerStartToken_.empty()&&!mods.alt&&!mods.command&&!mods.ctrl&&!mods.shift){m.playerStart=true;return;}
         if(forestPlantArm_.isObject()&&!mods.alt&&!mods.command&&!mods.ctrl&&!mods.shift){m.forest=true;return;}
         // Explicit authored World Processes handles have priority only when
         // the clicked point is within their small screen-space hit radius.
@@ -2372,6 +2391,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
             if (now - lastHoverTime_ >= 0.05) { lastHoverTime_ = now; hover(x, y, w, h); }
             return;
         }
+        if(m.playerStart){if(std::hypot(x-m.pressX,y-m.pressY)>=5.0)m.dragged=true;return;}
         if(m.forest){
             if(std::hypot(x-m.pressX,y-m.pressY)>=5.0)m.dragged=true;
             if(forestPlantArm_.getStr("action")=="move"&&session_&&preview_&&!projectLoading_){
@@ -2406,6 +2426,11 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
     const auto st = m;
     m = {};
     if (!st.active) return;
+    if(st.playerStart){
+        if(!playerStartToken_.empty()&&!st.dragged&&std::hypot(x-st.pressX,y-st.pressY)<5.0&&
+           !mods.alt&&!mods.command&&!mods.ctrl&&!mods.shift)select(x,y,w,h,"replace");
+        return;
+    }
     if(st.forest){
         const bool move=forestPlantArm_.getStr("action")=="move";
         if(preview_)onScene([&]{preview_->setForestDragPreview(Json{});});
@@ -2431,6 +2456,7 @@ bool StudioHost::sceneKey(StudioSceneKey key, bool down, StudioSceneMods mods, b
         if (key == K::V) { setPivotSnap(false); return true; }
         return false;
     }
+    if(key==K::Escape&&!playerStartToken_.empty()){finishPlayerStartPick(Json::object());mouse_={};return true;}
     if(key==K::Escape&&forestPlantArm_.isObject()){
         forestPlantArm_=Json{};mouse_={};if(preview_)onScene([&]{preview_->setForestDragPreview(Json{});});Json out=Json::object();out.set("cancelled",Json::fromBool(true));sendEventPayload("planetForest.planted",out);return true;
     }
@@ -2847,7 +2873,7 @@ void StudioHost::applyViewport(const Json& params) {
     NativeViewportPlacement placed;
     if (!platform_.placeSurface(StudioSurface::Scene, rect, placed)) return;
     placement_ = placed;
-    if (!placement_.visible) {readyEmitted_ = false;if(!projectLoading_&&session_->strokeCancel())sendEvent("document.changed", "");mouse_={};}
+    if (!placement_.visible) {finishPlayerStartPick(Json::object());readyEmitted_ = false;if(!projectLoading_&&session_->strokeCancel())sendEvent("document.changed", "");mouse_={};}
 }
 Json StudioHost::viewportInput(const Json& input) {
     const std::string kind = input.getStr("kind");
@@ -3151,6 +3177,19 @@ bool StudioHost::handleHostMethod(const Json& req) {
         Json out=Json::object();out.set("active",Json::fromBool(false));return out;
     });
     if(method=="studio.planetSceneBody")return answer([&]{return planetSceneBodyRequest(params);});
+    if(method=="studio.playerStartPick")return answer([&]{
+        const auto token=params.getStr("token");
+        if(token.empty()||token.size()>128)throw std::runtime_error("Invalid player picker token");
+        if(params.getBool("armed")){
+            if(projectLoading_||!session_||!preview_||!placement_.visible||!platform_.surfaceDrawable(StudioSurface::Scene))
+                throw std::runtime_error("Open the Scene view to place a start.");
+            if(brushArmed()||session_->strokeActive()||mouse_.active||wpDrag_.active||forestPlantArm_.isObject()||
+               onScene([&]{return preview_->caveGlobeRequested();}))throw std::runtime_error("Finish the active Scene tool first.");
+            finishPlayerStartPick(Json::object());
+            playerStartToken_=token;
+        }else if(playerStartToken_==token)finishPlayerStartPick(Json::object());
+        return Json::object();
+    });
     if(method=="studio.planetForestArm")return answer([&]{
         Json out=Json::object();forestPlantArm_=Json{};
         if(preview_)onScene([&]{preview_->setForestDragPreview(Json{});});
@@ -3173,6 +3212,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
             if(wpLiveOptions_.live&&wpLiveOptions_.forest)throw std::runtime_error("Disable live forest before authoring");
             if(mouse_.active||wpDrag_.active)throw std::runtime_error("Finish the active Scene gesture first");
             const auto sceneBody=worldProcessSceneBody();if(sceneBody.empty())throw std::runtime_error("Wait for a current planetary Scene");
+            finishPlayerStartPick(Json::object());
             forestPlantArm_=params;forestPlantArm_.set("project",Json::string(ws.project.dir));forestPlantArm_.set("sceneBody",Json::string(sceneBody));
         }
         out.set("armed",Json::fromBool(forestPlantArm_.isObject()));return out;

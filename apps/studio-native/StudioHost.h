@@ -335,6 +335,8 @@ private:
     double wpHitX_=0,wpHitY_=0;
     std::size_t wpHitOrdinal_=0;
     Json wpNumericPreview_;
+    void finishPlayerStartPick(Json result);
+    std::string playerStartToken_;
     Json forestPlantArm_; // one-shot, bound to project/map/revision
     StudioWorldProcessLiveOptions wpLiveOptions_;
     double wpLiveRefresh_=0;
@@ -360,7 +362,7 @@ private:
     double lastCameraYaw_ = 0, lastCameraPitch_ = 0, lastCameraDistance_ = 0;
     bool lastCameraOrtho_ = false, cameraSent_ = false;
     // sceneMouse state (shells that use the neutral mapping)
-    struct { double pressX = 0, pressY = 0; bool dragged = false, move = false, stroke = false, spline = false, worldProcess = false, forest = false, marquee = false, active = false; } mouse_;
+    struct { double pressX = 0, pressY = 0; bool dragged = false, move = false, stroke = false, spline = false, worldProcess = false, forest = false, playerStart = false, marquee = false, active = false; } mouse_;
     double lastHoverTime_ = 0;
 };
 
