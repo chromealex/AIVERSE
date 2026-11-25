@@ -535,3 +535,5 @@ Shared path tracer job 5f44969e4. engine/bake/CapturedBake.h and .cpp now own th
 Light Bake output inspection: display individual baked irradiance and shadow-mask atlas pages inside the HTML panel. Verify native decoding, page switching and isolation from Scene.
 
 Atlas preview implementation 9ec5f8040: LightBakeOps, LightmapData, StudioHost and LightBakeAtlas. Typecheck passed; fixture generator produced two real lightmap and mask pages. Async native completions broadcast to all web views. Inspection found detached URLs use window= while the bridge derived ID ranges from panel=. Isolate each web view load before the native pixel comparison.
+
+41691e09a separates WebView request ranges per load and keeps IDs within the native fixed-point reader. Focused transport test delivered an atlas reply to two waiting WebViews and verified only the requester settled. Full web suite passed 299 tests. Add output refresh for bakes written outside Studio and verify the detached window against the engine-generated files.
