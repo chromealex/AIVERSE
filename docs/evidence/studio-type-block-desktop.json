@@ -1,0 +1,10 @@
+{
+  "sha": "a7c3bafe051f7a87142ca2ed8163d2f14bcbc49a",
+  "argv": [
+    "bash",
+    "/tmp/type-block-proof.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-type-block-desktop.log.txt",
+  "sha256": "de5f720b137f40fbcce85d721bbe436a081efd4f3b5b44aa0d2ce3de21328da3"
+}
