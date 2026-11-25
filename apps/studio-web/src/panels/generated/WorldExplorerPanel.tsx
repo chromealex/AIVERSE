@@ -71,7 +71,7 @@ function LiveExplorer({projectPath}:{projectPath:string}){
     footer={<StudioBadge>{pending?'Reading…':data?.available?'Snapshot tick '+data.tick:'No snapshot'}</StudioBadge>}>
     <div className="au-stack world-explorer">
       {!projectPath?<StudioEmptyState title="Open a project"/>:!connected?<StudioEmptyState title="Native Studio required"/>:
-        <StudioAlert>Start a local match, then refresh. This is a point-in-time ownership snapshot, not a streaming or disk-save report. Refresh explicitly after play state changes.</StudioAlert>}
+        <StudioAlert>{data?.active ? 'Refresh after play state changes to capture the current region ownership.' : 'Start a local match, then refresh to capture region ownership.'}</StudioAlert>}
       {pending&&<StudioBadge>Reading actual ECS ledger…</StudioBadge>}
       {error&&<StudioAlert tone="danger">{error}</StudioAlert>}
       {data&&!data.available&&<StudioEmptyState title={data.reason}/>}

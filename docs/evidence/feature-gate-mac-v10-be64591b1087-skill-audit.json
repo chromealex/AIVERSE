@@ -1,0 +1,11 @@
+{
+  "sha": "be64591b1087b94fa52311bc1b3065feec6c8545",
+  "argv": [
+    "/opt/homebrew/opt/python@3.10/libexec/bin/python3",
+    "tools/skills/audit.py",
+    "--strict"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/feature-gate-mac-v10-be64591b1087-skill-audit.log.txt",
+  "sha256": "d7208f9f009f437d4af48bfdc29c67bbc0cf9663f9cea8c5ad46655a054e44e8"
+}

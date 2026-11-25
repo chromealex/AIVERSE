@@ -37,7 +37,7 @@
     "apps/studio-web/src/graphs/strataAnalysis.ts",
     "apps/studio-web/src/graphs/StrataAnalysisPanel.tsx",
     "apps/studio-web/src/graphs/graphDiagnostics.ts",
-    "apps/studio-web/src/graphs/GraphDiagnosticsPanel.tsx",
+    "apps/studio-web/src/graphs/GraphDiagnostics.tsx",
     "apps/editor/core/GraphOps.h",
     "apps/editor/core/Workspace.cpp",
     "tools/mcp/audit_registry.py",
@@ -100,6 +100,36 @@
     "tests/render/texture_graph_kernel_source.cpp",
     "engine/render/graph/TextureGraphMaterializedDispatch.h",
     "tests/render/texture_graph_materialized_dispatch.cpp",
+    "apps/studio-web/src/graphs/buildingGraphInspection.ts",
+    "apps/studio-web/src/graphs/BuildingStructureGraphView.tsx",
+    "apps/studio-web/tests/buildingGraphInspection.test.mjs",
+    "apps/studio-web/src/graphs/caveGraphInspection.ts",
+    "apps/studio-web/src/graphs/CaveStructureGraphView.tsx",
+    "apps/studio-web/tests/caveGraphInspection.test.mjs",
+    "apps/studio-native/StudioSession.cpp",
+    "apps/studio-native/StudioSession.h",
+    "apps/studio-native/tests/StudioSessionTests.cpp",
+    "apps/studio-web/src/types.ts",
+    "apps/studio-web/src/mock.ts",
+    "apps/studio-web/src/graphs/graphInspectionCapture.ts",
+    "apps/studio-web/tests/graphInspectionCapture.test.mjs",
+    "apps/studio-web/src/graphs/buildingCandidateCapture.ts",
+    "apps/studio-web/tests/buildingCandidateCapture.test.mjs",
+    "apps/studio-web/src/graphs/buildingRoomTopology.ts",
+    "apps/studio-web/src/graphs/BuildingRoomTopologyView.tsx",
+    "apps/studio-web/tests/buildingRoomTopology.test.mjs",
+    "apps/studio-web/src/graphs/GraphDiagnosticsPanel.tsx",
+    "apps/editor/core/GraphAssetTransaction.h",
+    "apps/editor/core/SpectraGraphOps.cpp",
+    "apps/editor/core/ShaderGraphOps.cpp",
+    "apps/editor/windows/ShaderGraphWindow.cpp",
+    "apps/editor/windows/SpectraGraphWindow.cpp",
+    "skills/visuals/aiverse-spectrafx/SKILL.md",
+    "apps/studio-web/src/panels/graphSurface.css",
+    "apps/studio-web/tests/shaderGraphLayout.test.mjs",
+    "apps/studio-web/src/graphs/BuildingGeometryGraphView.tsx",
+    "apps/studio-web/src/graphs/buildingGeometryGraph.ts",
+    "apps/studio-web/tests/buildingGeometryGraph.test.mjs",
     "engine/render/graph/TextureGraphGpuResourceCache.h",
     "tests/render/texture_graph_gpu_resource_cache.cpp",
     "engine/render/graph/TextureGraphFusion.h",
@@ -193,7 +223,6 @@
     "apps/studio-web/src/graphs/TextureGraphPanel.css",
     "apps/studio-native/StudioScene.h",
     "apps/studio-native/StudioScene.cpp",
-    "apps/studio-native/StudioSession.h",
     "apps/studio-native/StudioHost.h",
     "apps/studio-native/StudioHost.cpp",
     "apps/studio-web/src/graphs/textureGraphAuthoring.ts",
@@ -202,33 +231,7 @@
     "engine/render/ModelShaders.h",
     "tests/render/hdr_texture.cpp",
     "engine/render/graph/TextureGraphCustomCompute.h",
-    "skills/visuals/aiverse-texture-rhi/SKILL.md",
-    "apps/studio-web/src/graphs/buildingGraphInspection.ts",
-    "apps/studio-web/src/graphs/BuildingStructureGraphView.tsx",
-    "apps/studio-web/tests/buildingGraphInspection.test.mjs",
-    "apps/studio-web/src/graphs/caveGraphInspection.ts",
-    "apps/studio-web/src/graphs/CaveStructureGraphView.tsx",
-    "apps/studio-web/tests/caveGraphInspection.test.mjs",
-    "apps/studio-native/StudioSession.cpp",
-    "apps/studio-native/tests/StudioSessionTests.cpp",
-    "apps/studio-web/src/types.ts",
-    "apps/studio-web/src/mock.ts",
-    "apps/studio-web/src/graphs/graphInspectionCapture.ts",
-    "apps/studio-web/tests/graphInspectionCapture.test.mjs",
-    "apps/studio-web/src/graphs/buildingCandidateCapture.ts",
-    "apps/studio-web/tests/buildingCandidateCapture.test.mjs",
-    "apps/studio-web/src/graphs/buildingRoomTopology.ts",
-    "apps/studio-web/src/graphs/BuildingRoomTopologyView.tsx",
-    "apps/studio-web/tests/buildingRoomTopology.test.mjs",
-    "apps/studio-web/src/graphs/GraphDiagnosticsPanel.tsx",
-    "apps/editor/core/GraphAssetTransaction.h",
-    "apps/editor/core/SpectraGraphOps.cpp",
-    "apps/editor/core/ShaderGraphOps.cpp",
-    "apps/editor/windows/ShaderGraphWindow.cpp",
-    "apps/editor/windows/SpectraGraphWindow.cpp",
-    "skills/visuals/aiverse-spectrafx/SKILL.md",
-    "apps/studio-web/src/panels/graphSurface.css",
-    "apps/studio-web/tests/shaderGraphLayout.test.mjs"
+    "skills/visuals/aiverse-texture-rhi/SKILL.md"
   ],
   "traits": {
     "editable": true,
@@ -239,53 +242,86 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Building owner and Stage 53-54 guarded graph writes plus planetary inspection are present in the integration staging tree. Full Caverns owner reconciliation and merged-tree acceptance remain pending.",
+      "note": "Building owner and Stage 53-54 guarded graph writes plus planetary inspection are present in the integration staging tree. Building and Caverns owners are reconciled. A native Shader Graph panel save rejected the unchanged material_tint original after WebView converted its decimal numbers. Carry native originals through Studio and retest guarded edits.",
       "evidence": []
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Studio retains drafts and selections. Native owners validate, compare guarded originals and persist assets. Building and Caverns graph views inspect scoped owner projections. Native graph probes distinguish headless, attached and GPU availability. The four-domain Studio roundtrip exercised the ownership boundary.",
+      "evidence": [
+        "docs/agent-handoffs/studio-guarded-graph-roundtrip-2026-11-25.md",
+        "docs/agent-handoffs/feature-gate-stage50-graph-integration-review-2026-11-24.md",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt"
+      ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The native graph facade enumerated all five domains over stdio. The three-node graph validated, exposed two dependencies, refused a blind write and read back a guarded save. Typed Shader, animation and modeling drafts and the bounded runtime probe and debugger were exercised. Four native domain save paths separately rejected stale edits in Studio.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-operator-acceptance-2026-11-25.md",
+        "docs/agent-handoffs/studio-guarded-graph-roundtrip-2026-11-25.md",
+        "tests/vfx_graph_ops_test.cpp"
+      ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The registered aiverse-graph-authoring recipe describes the native editing, persistence and diagnostics workflows. On 460ce965c the catalog and strict skill audit both passed.",
+      "evidence": [
+        "skills/workflow/aiverse-graph-authoring/SKILL.md",
+        "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md",
+        "docs/evidence/feature-gate-e0b95cf24-catalog.log.txt",
+        "docs/evidence/feature-gate-e0b95cf24-skill-audit.log.txt",
+        "skills/workflow/aiverse-graph-authoring/SKILL.md"
+      ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification.",
+      "status": "pass",
+      "note": "The native graph facade enumerated all five domains over stdio. The three-node graph validated, exposed two dependencies, refused a blind write and read back a guarded save. Typed Shader, animation and modeling drafts and the bounded runtime probe and debugger were exercised. Four native domain save paths separately rejected stale edits in Studio.",
       "evidence": [
+        "docs/agent-handoffs/feature-gate-operator-acceptance-2026-11-25.md",
+        "docs/agent-handoffs/studio-guarded-graph-roundtrip-2026-11-25.md",
+        "tests/vfx_graph_ops_test.cpp",
         "docs/agent-handoffs/texture-graph-133-owner-integration-2026-11-25.md"
       ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification. Native Studio on Mac generated a building GLB and displayed its independent preview and authored room graph. The Caverns inspector was verified after a document identity fix.",
+      "status": "pass",
+      "note": "The native Shader Graph inspector saved a draft and retained it after a real external version change. Studio graph owner calls also completed verified saves, conflicts and readbacks on SpectraFX, texture and animation. Building and Caverns use their own scope-aware inspectors.",
       "evidence": [
+        "docs/agent-handoffs/studio-guarded-graph-roundtrip-2026-11-25.md",
+        "docs/evidence/studio-graph-647255066/stale-edit.png",
+        "docs/evidence/studio-play-ad676e70c/caverns.png",
         "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md",
         "docs/agent-handoffs/texture-graph-133-owner-integration-2026-11-25.md"
       ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The Shader Graph inspector selected the tint node, changed its R component and saved the same three-node graph. The native Building and Caverns inspectors show scoped owner projections.",
+      "evidence": [
+        "docs/agent-handoffs/studio-guarded-graph-roundtrip-2026-11-25.md",
+        "docs/evidence/studio-graph-647255066/stale-edit.png",
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md",
+        "docs/evidence/studio-play-ad676e70c/caverns.png"
+      ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Studio saved and reloaded four native graph domains. Shader Graph preserved external writer changes through an actual WKWebView inspector. SpectraFX, texture and animation also refused a stale save and returned the winner on readback. Building and Caverns retain their native asset/scene owners.",
+      "evidence": [
+        "docs/agent-handoffs/studio-guarded-graph-roundtrip-2026-11-25.md",
+        "docs/evidence/studio-graph-647255066/stale-edit.png",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt"
+      ]
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The native graph facade enumerated all five domains over stdio. The three-node graph validated, exposed two dependencies, refused a blind write and read back a guarded save. Typed Shader, animation and modeling drafts and the bounded runtime probe and debugger were exercised. Four native domain save paths separately rejected stale edits in Studio.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-operator-acceptance-2026-11-25.md",
+        "docs/agent-handoffs/studio-guarded-graph-roundtrip-2026-11-25.md",
+        "tests/vfx_graph_ops_test.cpp"
+      ]
     },
     "performance": {
       "status": "not_run",
@@ -294,16 +330,21 @@
     },
     "platforms": {
       "status": "not_run",
-      "note": "Pending implementation or actual verification. SpectraFX GPU checkpoint restore compiled with GCC 13.3 for GNU/Linux AArch64 and round-tripped distinct parameter and attribute lanes on Metal. Full platform acceptance is still open.",
+      "note": "Pending implementation or actual verification. SpectraFX GPU checkpoint restore compiled with GCC 13.3 for GNU/Linux AArch64 and round-tripped distinct parameter and attribute lanes on Metal. Full platform acceptance is still open. Linux ARM64 with GNU ld exposed an undeclared decoder dependency during the VFX graph test link. Repeat the native link and runtime cases after repair. After the fix, GNU ld linked both binaries and eight Linux ARM64 native cases passed. Windows Studio CI on main failed at a duplicated Vulkan range readback declaration and definition. Preserve the bounded implementation and verify the owner compilation. Windows x64 cross-compilation passed. Linux Lavapipe crashed on the mixed compute layout. Reuse the device-owned fallback sampler and retest on the same device.",
       "evidence": [
         "docs/evidence/spectrafx-gcc-checkpoint-b730fc08d.json",
+        "docs/evidence/integration-ad5786f5a-linux-link.log.txt",
+        "docs/evidence/integration-ad5786f5a-linux.log.txt",
         "docs/agent-handoffs/texture-graph-133-owner-integration-2026-11-25.md"
       ]
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The declared feature policy lists no prerequisite manifests. The integrated report resolved the dependency order and roadmap without policy errors.",
+      "evidence": [
+        "docs/agents/feature-policy.json",
+        "docs/evidence/integration-1209eaa44-policy.log.txt"
+      ]
     },
     "headless": {
       "status": "pass",
@@ -315,15 +356,25 @@
       ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The material_tint project opened in the production Shader Graph panel with three saved nodes. The native SpectraFX fixture validated, saved, read back and executed its bounded probe.",
+      "evidence": [
+        "docs/evidence/studio-play-ad676e70c/shader-graph.png",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt",
+        "docs/agent-handoffs/feature-gate-stage49-acceptance-2026-11-24.md"
+      ]
     },
     "tests": {
       "status": "not_run",
-      "note": "Historical isolated graph tests passed on prior source trees. This merged tree has not yet passed native, Studio, MCP, visual or Mac acceptance. Mac integration at a9773f75c passed 47/47 Caverns, editor and graph checks plus 9/9 Studio and Building CTests. Full merged-main acceptance remains pending.",
+      "note": "Historical isolated graph tests passed on prior source trees. This merged tree has not yet passed native, Studio, MCP, visual or Mac acceptance. Mac integration at a9773f75c passed 47/47 Caverns, editor and graph checks plus 9/9 Studio and Building CTests. Full merged-main acceptance remains pending. Previous Feature Gate branch evidence: Mac v10 source be64591b, reused v7 binaries 59558502 (only site and evidence/manifest/handoff changes): 22/22 Python and 9/9 focused CTest PASS. Historical v7 full suite 487 PASS / 0 FAIL / 1 opt-in skip; full merged-tree CTest NOT RUN in v10. Scoped automated verification only. Mac v13 at 74099694: full quick CTest rerun on synced checkout using unchanged-source v7 binaries, 487 PASS / 0 FAIL / 1 opt-in skip, 977.56 seconds; evidence integrity 10/10 and partial compliance PASS. Full log retained in original archive; repository summary excerpt recorded separately.",
       "evidence": [
         "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md",
+        "docs/evidence/feature-gate-mac-v10-be64591b1087-feature-gate.log.txt",
+        "docs/evidence/feature-gate-mac-v10-be64591b1087-ctest-focused.log.txt",
+        "docs/evidence/feature-gate-mac-v7-summary.log.txt",
+        "docs/agent-handoffs/feature-gate-stage45-mac-qa-2026-11-24.md",
+        "docs/evidence/feature-gate-mac-v13-74099694a317-ctest-summary.log.txt",
+        "docs/agent-handoffs/feature-gate-stage48-mac-qa-2026-11-24.md",
         "docs/agent-handoffs/texture-graph-133-owner-integration-2026-11-25.md"
       ]
     },
@@ -337,14 +388,21 @@
       ]
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The graph authoring skill and native Workspace example describe guarded edits and owner capabilities. The integrated handoff documents the four actual Studio save paths and the supported headless probes.",
+      "evidence": [
+        "docs/agent-handoffs/studio-guarded-graph-roundtrip-2026-11-25.md",
+        "skills/workflow/aiverse-graph-authoring/SKILL.md",
+        "docs/agent-handoffs/feature-gate-stage49-acceptance-2026-11-24.md"
+      ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification.",
+      "status": "pass",
+      "note": "The bilingual Studio diary shows the guarded graph workflow and the additional Shader Graph and SpectraFX visual entry shows node and connection editing. The native editor tool publishing exception is documented in the release-site contract.",
       "evidence": [
+        "docs/devlog/entries/2026-11-25-studio-local-play-inspection.json",
+        "docs/devlog/entries/2026-11-25-studio-graph-visuals.json",
+        "docs/agents/contracts/release-site.md",
         "docs/agent-handoffs/texture-graph-133-owner-integration-2026-11-25.md",
         "docs/devlog/entries/2026-11-25-texture-graph-gpu.json"
       ]
@@ -438,7 +496,13 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integrated-graph-2a56cbf39.json",
-    "docs/evidence/spectrafx-gcc-checkpoint-b730fc08d.json"
+    "docs/evidence/feature-gate-e0b95cf24-contracts.json",
+    "docs/evidence/feature-gate-e0b95cf24-catalog.json",
+    "docs/evidence/feature-gate-e0b95cf24-skill-audit.json",
+    "docs/evidence/feature-gate-e0b95cf24-feature-suite.json",
+    "docs/evidence/feature-gate-e0b95cf24-native-project.json",
+    "docs/evidence/feature-gate-e0b95cf24-web.json",
+    "docs/evidence/feature-gate-e0b95cf24-studio-contracts.json",
+    "docs/evidence/feature-gate-e0b95cf24-typecheck.json"
   ]
 }

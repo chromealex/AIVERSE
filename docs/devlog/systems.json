@@ -123,8 +123,8 @@
           "status": "in-progress",
           "title": "Подземные полости TerraWeave",
           "titleEn": "TerraWeave Caverns",
-          "text": "Проверка подземной геометрии, навигации, входов и восстановления на объединённой ветке.",
-          "textEn": "Verify underground geometry, navigation, entrances and restore on the integrated branch."
+          "text": "Проверка подземной геометрии, навигации, входов, восстановления и предпросмотра в Studio на объединённой ветке.",
+          "textEn": "Verify underground geometry, navigation, entrances, restore and Studio preview consumers on the integrated branch."
         },
         {
           "status": "in-progress",
@@ -2358,8 +2358,8 @@
           "id": "world-recurring-simulation-budget",
           "title": "Бюджет фоновой симуляции",
           "titleEn": "Recurring simulation budget",
-          "text": "Детерминированные порции обновлений и настройка бюджета дискретных решений населения.",
-          "textEn": "Deterministic recurring work slices and configurable population decision budget.",
+          "text": "Детерминированные порции обновлений и настройка бюджета дискретных решений населения. Общий планировщик доступен движку и библиотеке без обратной зависимости.",
+          "textEn": "Deterministic recurring work slices and configurable population decision budget. Share the scheduler between engine and library without an upward dependency.",
           "status": "in-progress"
         },
         {
@@ -3010,16 +3010,16 @@
           "id": "studio-play-review",
           "title": "Безопасный перенос изменений из Play",
           "titleEn": "Play Mode change review",
-          "text": "Изолированная игровая сессия, проверка исходной карты и выборочный предварительный просмотр переноса изменений.",
-          "textEn": "Isolated local session, source map revision guard and selective preview of play-to-scene changes.",
+          "text": "Изолированная игровая сессия, проверка исходной карты и выборочный предварительный просмотр переноса изменений. Добавляются локальные MCP-команды предпросмотра и однократного применения к той же сохранённой карте. При массовом удалении проверить перенос индексов дорог за один проход.",
+          "textEn": "Isolated local session, source map revision guard and selective preview of play-to-scene changes. Add typed local MCP preview and one-shot apply for the same saved map. Verify single-pass road index remapping for bulk removals.",
           "status": "in-progress"
         },
         {
           "id": "studio-runtime-debugger",
           "title": "Редактирование состояния локальной игры",
           "titleEn": "Runtime Debugger",
-          "text": "Явное редактирование разрешённых полей ECS при остановленном тике локальной игры с проверкой сессии и исходного значения.",
-          "textEn": "Explicit owner-validated ECS field edits at a paused local tick with session and expected-value checks.",
+          "text": "Явное редактирование разрешённых полей ECS при остановленном тике локальной игры с проверкой сессии и исходного значения. Добавляются типизированные локальные MCP-команды с теми же проверками.",
+          "textEn": "Explicit owner-validated ECS field edits at a paused local tick with session and expected-value checks. Add typed local MCP inspection and edits using the same guards.",
           "status": "in-progress"
         },
         {
@@ -3042,8 +3042,8 @@
           "id": "studio-world-explorer-live",
           "title": "Обзор регионов живого мира",
           "titleEn": "Live World Explorer",
-          "text": "Снимок реального игрового ECS: карта регионов по высоте, выбор ячейки и счётчики частоты решений без имитации стриминга.",
-          "textEn": "Real hosted-game ECS snapshot: height-sliced region map, cell selection and decision cadence counters without fabricated streaming metrics.",
+          "text": "Снимок реального игрового ECS: карта регионов по высоте, выбор ячейки и счётчики частоты решений без имитации стриминга. Запуск локального actor-session клиента в Studio и чтение его авторитетного реестра регионов.",
+          "textEn": "Real hosted-game ECS snapshot: height-sliced region map, cell selection and decision cadence counters without fabricated streaming metrics. Host the local actor-session client in Studio and inspect its authoritative region ledger.",
           "status": "in-progress"
         },
         {
@@ -3160,8 +3160,8 @@
           "id": "feature-gate",
           "title": "Единый контракт готовности фич",
           "titleEn": "Unified feature readiness contract",
-          "text": "Манифесты, проверка доказательств и интеграция с каталогом скиллов.",
-          "textEn": "Manifests, evidence checks and skill catalog integration.",
+          "text": "Манифесты, проверка доказательств и интеграция с каталогом скиллов. Проверить линковку инструментов графа на Linux ARM64.",
+          "textEn": "Manifests, evidence checks and skill catalog integration. Verify that graph tools link on Linux ARM64.",
           "status": "in-progress"
         }
       ]

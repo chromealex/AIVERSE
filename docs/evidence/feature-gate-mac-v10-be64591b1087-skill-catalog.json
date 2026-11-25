@@ -1,0 +1,11 @@
+{
+  "sha": "be64591b1087b94fa52311bc1b3065feec6c8545",
+  "argv": [
+    "/opt/homebrew/opt/python@3.10/libexec/bin/python3",
+    "tools/skills/catalog.py",
+    "check"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/feature-gate-mac-v10-be64591b1087-skill-catalog.log.txt",
+  "sha256": "0a34103e76359a19209856da5139fe1007be11c1ccf081c428ac7725504e0abf"
+}

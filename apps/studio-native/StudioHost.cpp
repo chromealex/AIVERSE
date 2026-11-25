@@ -1,3 +1,4 @@
+#include "apps/editor/core/StudioPlayTools.h"
 #include "apps/studio-native/StudioHost.h"
 #include "apps/studio-native/StudioSpectraPackageImport.h"
 #include "apps/studio-native/StudioWorldProcessesGizmos.h"
@@ -97,6 +98,9 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
     // Workspace::toolList is the common aiversemcp discovery surface.
     // Authenticated agent calls and HTML5 buttons use the same runtime
     // commands, compiled graph validation and render-thread ownership.
+    editor::registerStudioPlayTools(session_->workspace(), [this](const std::string& method, const Json& params) {
+        return localPlayOperation(method, params, agentPlayReview_);
+    });
     session_->workspace().setSpectraPreviewHandler([this](const Json& p) {
         return runSpectraPreview(p);
     });
@@ -110,7 +114,10 @@ void StudioHost::shutdown() {
     *alive_ = false;
     retireBuildingPanelPreview();
     cancelSpectraCapture();
-    if(session_)session_->workspace().setSpectraPreviewHandler({});
+    if(session_) {
+        session_->workspace().setSpectraPreviewHandler({});
+        editor::registerStudioPlayTools(session_->workspace());
+    }
     // Release editor-only EVOLVE scratch even if the webview never sends pagehide.
     wpNumericPreview_=Json();
     wpPreviewOwner_.clear();
@@ -278,7 +285,7 @@ void StudioHost::openProject(const std::string& path, int64_t requestId) {
     if (game_) game_->stop();
     wpLiveSnapshot_=Json();wpLivePlanetProject_.clear();wpLivePlanetMapPath_.clear();wpLivePlanetRevision_=0;wpLiveRefresh_=0;
     rebuildOverlay();
-    playReview_=Json();
+    clearPlayReviews();
     sendProjectSplash(path);
     sendLoading("project", "Opening " + fs::path(path).filename().string(), 0, 0);
     StudioSession* session = session_.get();
@@ -2740,6 +2747,106 @@ Json StudioHost::viewportInput(const Json& input) {
     }
     throw std::runtime_error("Unsupported viewport input");
 }
+void StudioHost::clearPlayReviews() {
+    playReview_ = Json();
+    agentPlayReview_ = Json();
+}
+
+Json StudioHost::localPlayOperation(const std::string& method, const Json& params, Json& reviewSlot) {
+    if (method == "studio.gameProfile") {
+        const auto& project=session_->workspace().project.dir;
+        if(project.empty()||params.getStr("expectedProject")!=project)
+            throw std::runtime_error("Simulation Profiler project changed");
+        const auto action=params.getStr("action");
+        if(action!="status"&&action!="start"&&action!="stop")throw std::runtime_error("Invalid profiler action");
+        uint32_t steps=0;
+        if(action=="start"){
+            const auto n=params["steps"].toDouble();
+            if(!params["steps"].isNumber()||!(n>=1&&n<=120)||double(int(n))!=n)
+                throw std::runtime_error("Invalid profile capture size");
+            steps=uint32_t(n);
+        }
+        if(game_)return game_->profile(action,steps);
+        if(action!="status")throw std::runtime_error("No local match is running");
+        Json out=Json::object();out.set("available",Json::fromBool(false));
+        out.set("epoch",Json::string("0"));out.set("reason",Json::string("No local match is running"));return out;
+    }
+    if (method == "studio.gameRegions") {
+        const auto& project=session_->workspace().project.dir;
+        if(project.empty()||params.getStr("expectedProject")!=project)
+            throw std::runtime_error("World Explorer project changed; refresh the panel");
+        if(game_)return game_->regions();
+        Json out=Json::object();
+        out.set("active",Json::fromBool(false));out.set("available",Json::fromBool(false));
+        out.set("epoch",Json::string("0"));out.set("tick",Json::number(int64_t(0)));
+        out.set("reason",Json::string("No local match is running"));return out;
+    }
+    if(method=="studio.gameEdit"){
+        const auto& project=session_->workspace().project.dir;
+        if(project.empty()||params.getStr("expectedProject")!=project)
+            throw std::runtime_error("Runtime edit project changed");
+        if(!game_)throw std::runtime_error("No local game running");
+        return game_->editRuntime(params);
+    }
+    if (method == "studio.gameEntities" || method == "studio.gameInspect") {
+        // Older clients omit expectedProject. Entity Debugger always sends it.
+        if(params.has("expectedProject")&&(session_->workspace().project.dir.empty()||
+            params.getStr("expectedProject")!=session_->workspace().project.dir))
+            throw std::runtime_error("Runtime inspection project changed");
+        if (method == "studio.gameEntities") {
+            if (!params["offset"].isNumber() || !params["limit"].isNumber() || !params["query"].isString() ||
+                params["offset"].toDouble() < 0 || params["offset"].toDouble() > 10000000 ||
+                params["limit"].toDouble() < 1 || params["limit"].toDouble() > 100) throw std::runtime_error("Invalid runtime page");
+            const auto offset = int(params["offset"].integer()), limit = int(params["limit"].integer());
+            if (game_) return game_->entities(offset, limit, params.getStr("query"));
+            StudioRuntimeInspect empty;
+            return empty.entities(nullptr, "0", offset, limit, params.getStr("query"));
+        }
+        if (!game_) throw std::runtime_error("No game is running");
+        return game_->inspect(params.getStr("epoch"), params.getStr("ref"));
+    }
+    if(method=="studio.previewPlayChanges"){
+        reviewSlot=Json();
+        if(!game_||!game_->canReview(session_->workspace()))
+            throw std::runtime_error("Pause a local saved-map session with unchanged source before reviewing changes");
+        if(params.getStr("expectedProject")!=session_->workspace().project.dir)
+            throw std::runtime_error("Play review project changed");
+        for(const char* flag:{"positions","amounts","removeDead"})
+            if(params[flag].type()!=Json::Type::Bool)throw std::runtime_error("Invalid play review options");
+        const auto states=game_->mapEntityStates();
+        Json p=Json::object(),r=Json::object();
+        p.set("entities",states["entities"]);p.set("positions",params["positions"]);
+        p.set("amounts",params["amounts"]);p.set("removeDead",params["removeDead"]);p.set("dryRun",Json::fromBool(true));
+        r.set("id",Json::number(int64_t(0)));
+        r.set("method",Json::string("studio.keepPlayChanges"));r.set("params",p);
+        const auto preview=session_->dispatch(r);
+        if(preview.has("error"))throw std::runtime_error(preview.getStr("error"));
+        const auto token=editor::net::randomToken();
+        reviewSlot.set("token",Json::string(token));reviewSlot.set("epoch",game_->state()["epoch"]);
+        reviewSlot.set("states",states);p.erase("dryRun");reviewSlot.set("params",p);
+        auto out=preview["result"];out.set("token",Json::string(token));out.set("tick",states["tick"]);return out;
+    }
+    if (method == "studio.keepPlayChanges") {
+        if (params.getStr("token").empty() || params.getStr("token") != reviewSlot.getStr("token"))
+            throw std::runtime_error("Play review expired; capture a new preview");
+        const auto review = std::move(reviewSlot);
+        reviewSlot = Json();
+        if (!game_ || !game_->canReview(session_->workspace()) ||
+            params.getStr("expectedProject") != session_->workspace().project.dir ||
+            game_->state()["epoch"] != review["epoch"] || game_->mapEntityStates() != review["states"])
+            throw std::runtime_error("Play review expired; capture a new preview");
+        Json request = Json::object();
+        request.set("id", Json::number(int64_t(0)));
+        request.set("method", Json::string("studio.keepPlayChanges"));
+        request.set("params", review["params"]);
+        const auto reply = session_->dispatch(request);
+        if (reply.has("error")) throw std::runtime_error(reply.getStr("error"));
+        clearPlayReviews();
+        return reply["result"];
+    }
+    throw std::invalid_argument("Unknown local Studio play operation");
+}
+
 // Methods the host answers itself (windows, native views, game, dialogs). False: StudioSession's.
 bool StudioHost::handleHostMethod(const Json& req) {
     const std::string method = req.getStr("method");
@@ -3009,97 +3116,14 @@ bool StudioHost::handleHostMethod(const Json& req) {
     if (method == "studio.spectraPreview")
         return answer([&]{return runSpectraPreview(params);});
     if (method == "studio.viewportInput") return answer([&] { return viewportInput(params); });
-    if (method == "studio.gameProfile") return answer([&] {
-        const auto& project=session_->workspace().project.dir;
-        if(project.empty()||params.getStr("expectedProject")!=project)
-            throw std::runtime_error("Simulation Profiler project changed");
-        const auto action=params.getStr("action");
-        if(action!="status"&&action!="start"&&action!="stop")throw std::runtime_error("Invalid profiler action");
-        uint32_t steps=0;
-        if(action=="start"){
-            const auto n=params["steps"].toDouble();
-            if(!params["steps"].isNumber()||!(n>=1&&n<=120)||double(int(n))!=n)
-                throw std::runtime_error("Invalid profile capture size");
-            steps=uint32_t(n);
-        }
-        if(game_)return game_->profile(action,steps);
-        if(action!="status")throw std::runtime_error("No local match is running");
-        Json out=Json::object();out.set("available",Json::fromBool(false));
-        out.set("epoch",Json::string("0"));out.set("reason",Json::string("No local match is running"));return out;
-    });
-    if (method == "studio.gameRegions") return answer([&] {
-        const auto& project=session_->workspace().project.dir;
-        if(project.empty()||params.getStr("expectedProject")!=project)
-            throw std::runtime_error("World Explorer project changed; refresh the panel");
-        if(game_)return game_->regions();
-        Json out=Json::object();
-        out.set("active",Json::fromBool(false));out.set("available",Json::fromBool(false));
-        out.set("epoch",Json::string("0"));out.set("tick",Json::number(int64_t(0)));
-        out.set("reason",Json::string("No local match is running"));return out;
-    });
-    if(method=="studio.gameEdit")return answer([&] {
-        const auto& project=session_->workspace().project.dir;
-        if(project.empty()||params.getStr("expectedProject")!=project)
-            throw std::runtime_error("Runtime edit project changed");
-        if(!game_)throw std::runtime_error("No local game running");
-        // Deliberately no Workspace mutation, document.changed or generic MCP command.
-        return game_->editRuntime(params);
-    });
-    if (method == "studio.gameEntities" || method == "studio.gameInspect") return answer([&] {
-        // Older clients omit expectedProject. Entity Debugger always sends it.
-        if(params.has("expectedProject")&&(session_->workspace().project.dir.empty()||
-            params.getStr("expectedProject")!=session_->workspace().project.dir))
-            throw std::runtime_error("Runtime inspection project changed");
-        if (method == "studio.gameEntities") {
-            if (!params["offset"].isNumber() || !params["limit"].isNumber() || !params["query"].isString() ||
-                params["offset"].toDouble() < 0 || params["offset"].toDouble() > 10000000 ||
-                params["limit"].toDouble() < 1 || params["limit"].toDouble() > 100) throw std::runtime_error("Invalid runtime page");
-            const auto offset = int(params["offset"].integer()), limit = int(params["limit"].integer());
-            if (game_) return game_->entities(offset, limit, params.getStr("query"));
-            StudioRuntimeInspect empty;
-            return empty.entities(nullptr, "0", offset, limit, params.getStr("query"));
-        }
-        if (!game_) throw std::runtime_error("No game is running");
-        return game_->inspect(params.getStr("epoch"), params.getStr("ref"));
-    });
-    if(method=="studio.previewPlayChanges")return answer([&] {
-        playReview_=Json();
-        if(!game_||!game_->canReview(session_->workspace()))
-            throw std::runtime_error("Pause a local saved-map session with unchanged source before reviewing changes");
-        if(params.getStr("expectedProject")!=session_->workspace().project.dir)
-            throw std::runtime_error("Play review project changed");
-        for(const char* flag:{"positions","amounts","removeDead"})
-            if(params[flag].type()!=Json::Type::Bool)throw std::runtime_error("Invalid play review options");
-        const auto states=game_->mapEntityStates();
-        Json p=Json::object(),r=Json::object();
-        p.set("entities",states["entities"]);p.set("positions",params["positions"]);
-        p.set("amounts",params["amounts"]);p.set("removeDead",params["removeDead"]);p.set("dryRun",Json::fromBool(true));
-        r.set("id",req["id"]);r.set("method",Json::string("studio.keepPlayChanges"));r.set("params",p);
-        const auto preview=session_->dispatch(r);
-        if(preview.has("error"))throw std::runtime_error(preview.getStr("error"));
-        const auto token=std::to_string(++playReviewSerial_);
-        playReview_.set("token",Json::string(token));playReview_.set("epoch",game_->state()["epoch"]);
-        playReview_.set("states",states);p.erase("dryRun");playReview_.set("params",p);
-        auto out=preview["result"];out.set("token",Json::string(token));out.set("tick",states["tick"]);return out;
-    });
-    if (method == "studio.keepPlayChanges") {
-        // Only a reviewed native capture may be committed; never trust browser entity rows.
-        Json reply = Json::object();
-        reply.set("id", req["id"]);
-        try {
-            const auto review=std::move(playReview_);playReview_=Json();
-            if(!game_||!game_->canReview(session_->workspace())||
-                params.getStr("expectedProject")!=session_->workspace().project.dir||
-                params.getStr("token").empty()||params.getStr("token")!=review.getStr("token")||
-                game_->state()["epoch"]!=review["epoch"]||game_->mapEntityStates()!=review["states"])
-                throw std::runtime_error("Play review expired; capture a new preview");
-            Json r=Json::object(),p=review["params"];
-            r.set("id", req["id"]); r.set("method", Json::string("studio.keepPlayChanges")); r.set("params", p);
-            reply = session_->dispatch(r);
-            if (!reply.has("error")) sendEvent("document.changed", "");
-        } catch (const std::exception& e) { reply.set("error", Json::string(e.what())); }
-        sendReply(reply);
-        return true;
+    if (method == "studio.gameEntities" || method == "studio.gameInspect" || method == "studio.gameRegions" ||
+        method == "studio.gameProfile" || method == "studio.gameEdit" ||
+        method == "studio.previewPlayChanges" || method == "studio.keepPlayChanges") {
+        return answer([&] {
+            auto result = localPlayOperation(method, params, playReview_);
+            if (method == "studio.keepPlayChanges") sendEvent("document.changed", "");
+            return result;
+        });
     }
     if (method == "studio.gameDevices") return answer([&] { return studioGameDevices(); });
     if (method == "studio.gameStart" || method == "studio.gameStop" || method == "studio.gameState" ||
@@ -3122,7 +3146,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
             wpLiveSnapshot_=Json();wpLivePlanetProject_.clear();wpLivePlanetMapPath_.clear();wpLivePlanetRevision_=0;wpLiveRefresh_=0;
             buildingGraphOverlayScene_=0;rebuildOverlay();
             session_->setBuildingGraphReader({});
-            playReview_=Json();
+            clearPlayReviews();
             game_->start(plan, engineRoot_ + "/engine/assets");
             if(plan.map){
                 wpLivePlanetProject_=plan.project;
@@ -3133,10 +3157,10 @@ bool StudioHost::handleHostMethod(const Json& req) {
             gameFrameTime_ = 0;
         } else if (method == "studio.gameStop" && game_) {
             buildingGraphOverlayScene_=0;session_->setBuildingGraphReader({});
-            playReview_=Json();game_->stop();wpLiveSnapshot_=Json();wpLivePlanetMapPath_.clear();rebuildOverlay();
+            clearPlayReviews();game_->stop();wpLiveSnapshot_=Json();wpLivePlanetMapPath_.clear();rebuildOverlay();
         } else if (method == "studio.gameControl") {
             if (!game_) throw std::runtime_error("No game is running");
-            playReview_=Json();
+            clearPlayReviews();
             const auto action=params.getStr("action");
             if(action=="restart"){
                 if(!game_->state().getBool("active"))throw std::runtime_error("Start a game before restarting");

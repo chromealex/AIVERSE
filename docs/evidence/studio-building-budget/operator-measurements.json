@@ -1,0 +1,55 @@
+{
+  "source": "96e08157a33f6fbd2def4e4184ed8a3c359f68f4",
+  "studio": {
+    "host": "macOS native Studio, paused projectiles map",
+    "entities": 6,
+    "hostResidentKiB": 256540,
+    "timerResolutionMs": 1,
+    "operations": {
+      "entityPage": {
+        "samples": 25,
+        "medianMs": 0,
+        "p95Ms": 3,
+        "maxBytes": 1259
+      },
+      "inspect": {
+        "samples": 25,
+        "medianMs": 0,
+        "p95Ms": 1,
+        "maxBytes": 903
+      },
+      "profileStatus": {
+        "samples": 25,
+        "medianMs": 0,
+        "p95Ms": 1.000000000001819,
+        "maxBytes": 162
+      },
+      "changePreview": {
+        "samples": 25,
+        "medianMs": 0,
+        "p95Ms": 1,
+        "maxBytes": 134
+      },
+      "editVital": {
+        "samples": 25,
+        "medianMs": 0,
+        "p95Ms": 1.000000000001819,
+        "maxBytes": 116
+      }
+    }
+  },
+  "ledger": {
+    "entities": 20000,
+    "regions": 1000,
+    "returnedRegions": 256,
+    "serializedBytes": 14768,
+    "samplesMs": [
+      11.36,
+      10.47,
+      10.48,
+      10.5,
+      10.4
+    ],
+    "peakProcessResidentBytes": 13041664
+  }
+}

@@ -652,7 +652,7 @@ export interface StudioParams {
   'studio.facialPreviewControls': { revision: number; values: Record<string,number>; vectors?: Record<string,[number,number,number]> };
   'studio.facialPreviewInfo': Record<string,never>;
   'studio.shaderGraphValidate': { graph: StudioShaderGraphDocument['graph'] };
-  'studio.shaderGraphSave': { name: string; graph: StudioShaderGraphDocument['graph']; expected?: StudioShaderGraphDocument['graph']; expectedProject?: string };
+  'studio.shaderGraphSave': { name: string; graph: StudioShaderGraphDocument['graph']; expected?: string | StudioShaderGraphDocument['graph']; expectedProject?: string };
   'studio.renderLighting': Record<string, never>;
   'studio.renderLightingSet': { patch: Partial<RenderLightingSettings> };
   'studio.lighting': Record<string, never>;

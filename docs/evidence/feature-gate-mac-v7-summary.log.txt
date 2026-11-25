@@ -1,0 +1,49 @@
+HEAD=59558502c86b151b412d939559b91571021ca3bc
+BASE=71aa5c93afa5993c4e45ba39f1bf5454343389ea
+BRANCH=feature/aiv20261123_feature_gate
+WORKTREE=/Volumes/KINGSTON/AIVERSE-builds/feature-gate-qa/3929953e2bc9-20261124T074254Z-5856/source
+PASS fetch
+PASS checkout
+VERIFIED_HEAD=59558502c86b151b412d939559b91571021ca3bc
+PASS contracts
+PASS feature-gate
+PASS registry
+PASS compliance-partial
+FAIL compliance-strict-before-build (exit 1)
+PASS policy
+PASS npm-install
+PASS studio-typecheck
+PASS studio-web-dock
+PASS studio-web-shell
+PASS studio-web-fields
+PASS studio-web-lighting
+PASS studio-web-materials
+PASS studio-web-graphs
+PASS studio-web-mock
+PASS studio-web-scene
+PASS studio-web-facial
+PASS studio-web-assets
+PASS studio-web-bridge
+PASS studio-web-human
+PASS studio-web-build
+PASS studio-contracts
+PASS configure
+PASS mcp-build
+PASS studio-native-build
+PASS mcp-audit
+PASS mcp-readiness-smoke
+PASS camera-adapter-build
+PASS camera-adapter-test
+PASS link-aiverse_vivid_renderer_preview
+PASS link-aiverse_geometry_preview
+PASS link-aiverse_surface_proxy_preview
+PASS link-aiverse_vivid_creator
+PASS vfx-ops-build
+PASS vfx-ops-test
+PASS focused-native-tests
+PASS all-native-tests
+FAIL compliance-strict-after-build (exit 1)
+Strict compliance may be blocked by not_run declarations; review its log separately.
+Final HEAD: 59558502c86b151b412d939559b91571021ca3bc
+Manual Studio screenshot and refresh QA: NOT RUN (requires operator).
+Nonpassing automated stages: 2

@@ -1,0 +1,48 @@
+[0/2] Re-checking globbed directories...
+[1/2] Re-running CMake...
+-- AIVERSE platform: linux
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /out/build
+[0/2] Re-checking globbed directories...
+[1/2] Linking CXX executable aiversemcp
+[2/2] Linking CXX executable aiverse_vfx_ops_tests
+Internal ctest changing into directory: /out/build
+Test project /out/build
+    Start 223: library_building_features
+1/8 Test #223: library_building_features ..............   Passed    0.27 sec
+    Start 225: library_building_structure_graph
+2/8 Test #225: library_building_structure_graph .......   Passed    0.01 sec
+    Start 228: library_building_style
+3/8 Test #228: library_building_style .................   Passed    4.66 sec
+    Start 322: vfx_graph_ops
+4/8 Test #322: vfx_graph_ops ..........................Subprocess aborted***Exception:   0.90 sec
+terminate called after throwing an instance of 'std::filesystem::__cxx11::filesystem_error'
+  what():  filesystem error: cannot copy file: Permission denied [/tmp/aiverse-spectrafx-ops-30441501100180/content/relocated.png] [/tmp/aiverse-spectrafx-ops-30441501100180/portable-target/content/target.png]
+
+    Start 394: simulation_budget_mcp
+5/8 Test #394: simulation_budget_mcp ..................   Passed    0.19 sec
+    Start 432: simulation_profile_test
+6/8 Test #432: simulation_profile_test ................   Passed    0.01 sec
+    Start 434: runtime_vitals_test
+7/8 Test #434: runtime_vitals_test ....................   Passed    0.10 sec
+    Start 452: terraweave_caverns_edit_runtime_test
+8/8 Test #452: terraweave_caverns_edit_runtime_test ...   Passed    0.07 sec
+
+88% tests passed, 1 tests failed out of 8
+
+Label Time Summary:
+CPU           =   0.07 sec*proc (1 test)
+Caverns       =   0.07 sec*proc (1 test)
+ECS           =   0.18 sec*proc (3 tests)
+EDITOR        =   0.11 sec*proc (2 tests)
+MCP           =   0.19 sec*proc (1 test)
+SpectraFX     =   0.90 sec*proc (1 test)
+TerraWeave    =   0.07 sec*proc (1 test)
+World         =   0.19 sec*proc (1 test)
+
+Total Test time (real) =   6.30 sec
+
+The following tests FAILED:
+	322 - vfx_graph_ops (Subprocess aborted)
+Errors while running CTest

@@ -1,0 +1,26 @@
+# Stage 49 — acceptance review and verified examples
+
+Reviewed source at 83ad1691ddd9160286c9eeb2f1afdc8deba5f21e. No source, test, build or gate policy changes in this stage. Reopened original Mac v10 and v13 archives. Their SHA-256 values are respectively 48b6157ba56caaa55da5bc7e9ca6484415b6d12de6c3dc9f310b3dcd639c5752 and e2d313f91ad34c0b1f6cf67ee8dbc1c4bf1f1876d677b59bce639e87dabca06f. v13 strict-compliance.log contains 44 pending-only diagnostics; partial and integrity exit 0; full CTest exit 0. No new execution claimed. All observed tests refer to the earlier recorded SHAs.
+
+## Verified usage example: Feature Gate
+From the tested v10 workflow, on a clean engine checkout with origin/main fetched, use the fixed report generator:
+```sh
+python3 tools/agents/feature_policy.py --base origin/main --output logs/feature-readiness.json
+```
+Use an MCP session connected to the same engine root. Call feature_readiness_refresh with {}, then poll feature_readiness_status_get with {} until busy is false and runCount has advanced. Require label feature-readiness and exitCode 0. Call feature_readiness_get with {} to read the snapshot, and feature_readiness_query with {"section":"dependencies","feature":"feature-gate","limit":1} to get one feature dependency row. Compare returned sha with the checked-out commit. A blocked release can still be a valid report; never mistake snapshotOnly for current independently verified readiness.
+
+The actual v10 logs/mcp-refresh.py in the user archive executes the sequence twice in one MCP process, checks report mtime advancement, result schema, SHA, snapshotOnly and dependency row ID. Both iterations passed at be64591b1087b94fa52311bc1b3065feec6c8545 (runCount 1 and 2). See docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-refresh.log.txt and corresponding JSON report. This is a working workflow example, not a GUI or performance test.
+
+## Verified usage example: Graph Framework native Workspace
+In an isolated disposable project, the actual tests/vfx_graph_ops_test.cpp fixture calls Workspace::call with domain spectrafx and name generic_spark. Example graph:
+```json
+{"version":1,"parameters":{"size":0.35},"nodes":[{"id":"spawn","type":"Spawn","properties":{"burst":9}},{"id":"init","type":"Initialize","properties":{"life":1,"speed":0,"size":{"$param":"size"}}},{"id":"out","type":"SpriteOutput","properties":{"texture":"builtin:smoke"}}],"links":[{"from":"spawn","to":"init"},{"from":"init","to":"out"}],"outputs":["out"]}
+```
+Pass domain, name and graph to graph_validate and graph_dependencies (two edges expected). graph_save rejects unversioned writes until allowUnversionedWrite=true is explicitly provided; use only a disposable project. Read back with graph_get and compare returned graph; remove the fixture using fx_graph_delete. To run an isolated CPU probe, call graph_runtime_probe with domain spectrafx, graph above and steps=6, not a live-world or GPU operation. Expect six frames, final particles >0, liveAttached=false, gpuMeasured=false; steps=61 is rejected. The fixture also verifies headless live snapshot/watch/profile/GPU preview do not fabricate native editor ownership or execution. Run the existing registered CTest vfx_graph_ops to reproduce; no new fixture is introduced.
+
+Direct observed v13 line: 189/488 Test #315: vfx_graph_ops ..................................   Passed    3.26 sec. The same fixture passed in v10 focused run. This example is verified through the native Workspace path; do not claim each RPC endpoint was executed over an MCP transport, each graph domain has a complete sample, or any visual web demo was published. The shared graph facade's headless capability and truthful GUI/GPU unavailability contract are covered. Other owner-specific runtime workflows are not certified.
+
+## Remaining review boundaries
+Feature Gate: architecture audit output from v10 refresh-2.json had zero lexical findings and five exact legacy GameView notes; the rule explicitly says it is not ECS semantic verification. Implementation/architecture require integrator review of trusted gate and shared native build wiring; Studio requires manual refresh/timer/filter/selection evidence; performance needs a representative workload and measured resources; platforms need supported desktop hosts checked; publishing requires actual captures and applicable site/demo workflow. Do not use a passing parser test as whole-engine architecture proof.
+
+Graph Framework: native facade tests demonstrate concrete save/readback, typed draft and bounded probe behavior but do not prove all owner implementations, live Studio interactions, Inspector/persistence parity, GPU runtime performance, platform support or Building/Caverns live bridge integration. The v10 dependency declaration has no cycle or unknown manifest prerequisites; owner integration still pending, so dependencies dimension stays pending. Visual/owner acceptance is separate from the verified Workspace example. CI at reviewed HEAD queued/pending, no green result assumed. No main merge.

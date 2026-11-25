@@ -12,7 +12,20 @@
     "apps/studio-web/src/panels/generated/WorldExplorerPanel.tsx",
     "apps/studio-web/src/types.ts",
     "skills/editor/studio-ui/SKILL.md",
-    "tools/studio/test_world_explorer.py"
+    "tools/studio/test_world_explorer.py",
+    "apps/editor/core/StudioPlayTools.h",
+    "apps/editor/core/Workspace.cpp",
+    "apps/studio-native/StudioHost.h",
+    "apps/studio-native/StudioSession.cpp",
+    "apps/studio-native/tests/StudioSessionTests.cpp",
+    "docs/editor-native-ecs-inspector.md",
+    "CMakeLists.txt",
+    "apps/editor/core/StudioPlayTools.cpp",
+    "apps/fps/client.cpp",
+    "apps/fps/HostedActorClient.h",
+    "engine/actor/Project.h",
+    "apps/studio-native/StudioGameLaunch.h",
+    "apps/studio-native/CMakeLists.txt"
   ],
   "traits": {
     "editable": false,
@@ -22,24 +35,33 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Studio host used the desktop actor client and its loopback server as the sole ledger owner. After stop, restart, stable pause and exact single step, authenticated MCP and native Studio returned epoch, tick, two occupied cells and two materialized entities. The standalone endpoint refused local-only calls.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "docs/evidence/studio-actor-g1/world-explorer-final.png",
+        "apps/fps/HostedActorClient.h",
+        "docs/evidence/integration-ad5786f5a-headless.log.txt"
       ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Studio host used the desktop actor client and its loopback server as the sole ledger owner. After stop, restart, stable pause and exact single step, authenticated MCP and native Studio returned epoch, tick, two occupied cells and two materialized entities. The standalone endpoint refused local-only calls.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "docs/evidence/studio-actor-g1/world-explorer-final.png",
+        "apps/fps/HostedActorClient.h",
+        "docs/evidence/integration-ad5786f5a-headless.log.txt"
       ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Studio host used the desktop actor client and its loopback server as the sole ledger owner. After stop, restart, stable pause and exact single step, authenticated MCP and native Studio returned epoch, tick, two occupied cells and two materialized entities. The standalone endpoint refused local-only calls.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "docs/evidence/studio-actor-g1/world-explorer-final.png",
+        "apps/fps/HostedActorClient.h",
+        "docs/evidence/integration-ad5786f5a-headless.log.txt"
       ]
     },
     "skill": {
@@ -51,24 +73,29 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Studio host used the desktop actor client and its loopback server as the sole ledger owner. After stop, restart, stable pause and exact single step, authenticated MCP and native Studio returned epoch, tick, two occupied cells and two materialized entities. The standalone endpoint refused local-only calls.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "docs/evidence/studio-actor-g1/world-explorer-final.png",
+        "apps/fps/HostedActorClient.h",
+        "docs/evidence/integration-ad5786f5a-headless.log.txt"
       ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native World Explorer displayed the authority epoch, tick, ledger revision and two distinct materialized cells for a streamed actor project with region ownership enabled.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/world-explorer.png",
+        "docs/evidence/studio-actor-g1/native-session.log.txt"
       ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native World Explorer displayed the authority epoch, tick, ledger revision and two distinct materialized cells for a streamed actor project with region ownership enabled.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/world-explorer.png",
+        "docs/evidence/studio-actor-g1/native-session.log.txt"
       ]
     },
     "persistence": {
@@ -82,10 +109,12 @@
       "evidence": []
     },
     "performance": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Measured the on-demand native projection and JSON serialization on 20000 materialized entities in 1000 regions. Five runs took 10.40–11.36 ms and returned 256 rows in 14768 bytes. Peak process RSS was 13041664 bytes. The panel refresh is explicit.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "docs/agent-handoffs/feature-gate-operator-acceptance-2026-11-25.md",
+        "docs/evidence/studio-building-budget/operator-measurements.json",
+        "engine/world/WorldPersistenceDiagnostics.h"
       ]
     },
     "platforms": {
@@ -96,31 +125,38 @@
       ]
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The declared feature policy lists no prerequisite manifests. The integrated report resolved the dependency order and roadmap without policy errors.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "docs/agents/feature-policy.json",
+        "docs/evidence/integration-1209eaa44-policy.log.txt"
       ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The standalone MCP registry advertised the typed schema and rejected calls requiring a connected local Studio. Both native registries listed the feature tools.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "docs/evidence/integration-ad5786f5a-headless.log.txt",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt",
+        "docs/evidence/integration-ad5786f5a-linux.log.txt"
       ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Started a disposable copy of examples/world/streamed with the documented regionOwnership opt-in, captured the live ledger and compared against the authenticated MCP response.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/native-session.log.txt",
+        "skills/editor/studio-ui/SKILL.md"
       ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Studio host used the desktop actor client and its loopback server as the sole ledger owner. After stop, restart, stable pause and exact single step, authenticated MCP and native Studio returned epoch, tick, two occupied cells and two materialized entities. The standalone endpoint refused local-only calls.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "docs/evidence/studio-actor-g1/world-explorer-final.png",
+        "apps/fps/HostedActorClient.h",
+        "docs/evidence/integration-ad5786f5a-headless.log.txt"
       ]
     },
     "handoff": {
@@ -138,10 +174,11 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Prepared the bilingual Studio diary with real native editor captures. The site checker accepted 59 entries and the local builder generated both languages. The release-site contract documents the native editor tool exception for a separate browser demo. Public deployment follows main integration.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "docs/devlog/entries/2026-11-25-studio-local-play-inspection.json",
+        "docs/agents/contracts/release-site.md"
       ]
     }
   },
@@ -149,7 +186,9 @@
     "skills": [
       "studio-ui"
     ],
-    "mcp_tools": [],
+    "mcp_tools": [
+      "studio_runtime_regions"
+    ],
     "studio_methods": [
       "studio.gameRegions"
     ],
@@ -158,6 +197,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integrated-graph-2a56cbf39.json"
+    "docs/evidence/feature-gate-e0b95cf24-studio-contracts.json",
+    "docs/evidence/feature-gate-e0b95cf24-web.json",
+    "docs/evidence/feature-gate-e0b95cf24-typecheck.json",
+    "docs/evidence/feature-gate-e0b95cf24-skill-audit.json"
   ]
 }

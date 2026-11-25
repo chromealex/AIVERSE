@@ -10,7 +10,15 @@
     "apps/studio-web/src/panels/generated/RuntimePanel.tsx",
     "apps/studio-web/src/types.ts",
     "skills/editor/studio-ui/SKILL.md",
-    "tools/studio/test_entity_debugger.py"
+    "tools/studio/test_entity_debugger.py",
+    "apps/editor/core/StudioPlayTools.h",
+    "apps/editor/core/Workspace.cpp",
+    "apps/studio-native/StudioHost.h",
+    "apps/studio-native/StudioSession.cpp",
+    "apps/studio-native/tests/StudioSessionTests.cpp",
+    "docs/editor-native-ecs-inspector.md",
+    "CMakeLists.txt",
+    "apps/editor/core/StudioPlayTools.cpp"
   ],
   "traits": {
     "editable": false,
@@ -20,24 +28,30 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Runtime enumeration and inspection resolved a reference within its live epoch in a paused local map. The native inspector and runtime edit readback agreed. The web suite includes the Entity Debugger panel tests.",
       "evidence": [
-        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/runtime.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
+        "docs/evidence/feature-gate-e0b95cf24-web.json"
       ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The inspector operates on references in the active native simulation. Select and inspect use the current session epoch. Reading after a guarded change returned the new value from the same entity.",
       "evidence": [
-        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "apps/studio-native/StudioGameSurface.cpp",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Runtime enumeration and inspection resolved a reference within its live epoch in a paused local map. The native inspector and runtime edit readback agreed. The web suite includes the Entity Debugger panel tests.",
       "evidence": [
-        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/runtime.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
+        "docs/evidence/feature-gate-e0b95cf24-web.json"
       ]
     },
     "skill": {
@@ -49,24 +63,27 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Runtime panel listed real entities and inspected an emitter at its actual epoch and tick. The same real match returned its paged entities and detail over authenticated MCP.",
       "evidence": [
-        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/runtime.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Runtime panel listed real entities and inspected an emitter at its actual epoch and tick. The same real match returned its paged entities and detail over authenticated MCP.",
       "evidence": [
-        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/runtime.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Runtime panel listed real entities and inspected an emitter at its actual epoch and tick. The same real match returned its paged entities and detail over authenticated MCP.",
       "evidence": [
-        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/runtime.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "persistence": {
@@ -80,10 +97,11 @@
       "evidence": []
     },
     "performance": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "A 100-row request against six live entities took 3 ms p95, and inspecting a chosen entity took 1 ms p95. These are explicit operator requests. Measurements include the real WKWebView bridge at 1 ms clock resolution; the whole Studio host used 256540 KiB resident after sampling.",
       "evidence": [
-        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+        "docs/agent-handoffs/feature-gate-operator-acceptance-2026-11-25.md",
+        "docs/evidence/studio-building-budget/operator-measurements.json"
       ]
     },
     "platforms": {
@@ -94,31 +112,37 @@
       ]
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The declared feature policy lists no prerequisite manifests. The integrated report resolved the dependency order and roadmap without policy errors.",
       "evidence": [
-        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+        "docs/agents/feature-policy.json",
+        "docs/evidence/integration-1209eaa44-policy.log.txt"
       ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The standalone MCP registry advertised the typed schema and rejected calls requiring a connected local Studio. Both native registries listed the feature tools.",
       "evidence": [
-        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+        "docs/evidence/integration-ad5786f5a-headless.log.txt",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt",
+        "docs/evidence/integration-ad5786f5a-linux.log.txt"
       ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Runtime panel listed real entities and inspected an emitter at its actual epoch and tick. The same real match returned its paged entities and detail over authenticated MCP.",
       "evidence": [
-        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/runtime.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Runtime enumeration and inspection resolved a reference within its live epoch in a paused local map. The native inspector and runtime edit readback agreed. The web suite includes the Entity Debugger panel tests.",
       "evidence": [
-        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/runtime.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
+        "docs/evidence/feature-gate-e0b95cf24-web.json"
       ]
     },
     "handoff": {
@@ -136,10 +160,11 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Prepared the bilingual Studio diary with real native editor captures. The site checker accepted 59 entries and the local builder generated both languages. The release-site contract documents the native editor tool exception for a separate browser demo. Public deployment follows main integration.",
       "evidence": [
-        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+        "docs/devlog/entries/2026-11-25-studio-local-play-inspection.json",
+        "docs/agents/contracts/release-site.md"
       ]
     }
   },
@@ -147,7 +172,10 @@
     "skills": [
       "studio-ui"
     ],
-    "mcp_tools": [],
+    "mcp_tools": [
+      "studio_runtime_entities",
+      "studio_runtime_inspect"
+    ],
     "studio_methods": [
       "studio.gameEntities",
       "studio.gameInspect"
@@ -157,6 +185,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integrated-graph-2a56cbf39.json"
+    "docs/evidence/feature-gate-e0b95cf24-studio-contracts.json",
+    "docs/evidence/feature-gate-e0b95cf24-web.json",
+    "docs/evidence/feature-gate-e0b95cf24-typecheck.json",
+    "docs/evidence/feature-gate-e0b95cf24-skill-audit.json"
   ]
 }

@@ -305,7 +305,6 @@ add_library(aiverse_game STATIC
 target_link_libraries(aiverse_game PUBLIC aiverse_fps aiverse_voxelgame)   # actor / voxel systems: engine/actor, engine/voxel CMakeLists
 target_link_libraries(aiverse_game PUBLIC aiverse_engine)
 # Shared recurring work policy for data-driven population decisions.
-target_link_libraries(aiverse_game PRIVATE AIVERSE::lib_work_budget)
 # The one vehicle system of every host (docs/driving.md, AGENTS.md "no genre split"): components, the per-tick step,
 # the race adapter. The grid-map host (engine/game/Driving.cpp) and the metre-map host (engine/actor/ActorVehicles.cpp)
 # only implement its world queries.
@@ -431,6 +430,7 @@ elseif(AIVERSE_PLATFORM STREQUAL "web")
 elseif(UNIX AND NOT ANDROID)
     target_link_libraries(aiverse_pack PUBLIC ${CMAKE_DL_LIBS})
 endif()
+target_link_libraries(aiverse_pack PRIVATE aiverse_zstd_dec)
 target_include_directories(aiverse_pack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 if(AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
     add_library(aiverse_pack_writer STATIC engine/pack/PackWriter.cpp engine/pack/Unpacker.cpp)
@@ -640,9 +640,8 @@ if(AIVERSE_FBX)
 else()
     target_compile_definitions(aiverse_models PRIVATE AIVERSE_NO_FBX=1)
 endif()
-# KTX2 zstd supercompression: the decoder comes with aiverse_runtime (aiverse_zstd_dec) or, in host tools,
-# with aiverse_pack_writer (full zstd); linking aiverse_zstd_dec here would pull both into tests and tools.
-target_link_libraries(aiverse_models PUBLIC aiverse_engine)
+# TextureCodec reads KTX2 with the same decoder target used by resource packs.
+target_link_libraries(aiverse_models PUBLIC aiverse_engine PRIVATE aiverse_zstd_dec)
 
 # Programmable presentation animation graphs reuse the existing model sampler and IK.
 target_sources(aiverse_models PRIVATE engine/render/SurfaceLocomotion.cpp engine/render/AnimationContacts.cpp engine/render/FullBodyIK.cpp engine/render/AnimationGraph.cpp engine/render/AnimationRig.cpp engine/render/AnimationMotion.cpp)
@@ -1528,6 +1527,8 @@ add_library(aiverse_game_view STATIC engine/view/game/GameView.cpp engine/view/g
 add_library(aiverse_terrain_detail STATIC engine/view/game/GameTerrainDetail.cpp engine/view/game/GamePlanet.cpp engine/view/game/GamePlanetDetail.cpp)
 target_link_libraries(aiverse_terrain_detail PUBLIC aiverse_game)
 target_link_libraries(aiverse_game_view PUBLIC aiverse_game aiverse_models aiverse_imgui aiverse_roads_view)
+# Public Caverns visual host headers expose the Box3D geometry types.
+target_include_directories(aiverse_game_view INTERFACE "${PROJECT_SOURCE_DIR}/third_party/box3d/include")
 target_link_libraries(aiverse_game_view PUBLIC aiverse_terrain_detail)
 target_link_libraries(aiverse_game_view PUBLIC aiverse_view_visibility)
 # Transitional host adapter consumes the engine View. The dependency points
@@ -1770,7 +1771,7 @@ endif()
 
 if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS)
     # Editor core: project/map documents and the operation registry shared by the editor and aiversemcp.
-    add_library(aiverse_editor_core STATIC apps/editor/core/MapDoc.cpp apps/editor/core/MapDocPlanet.cpp apps/editor/core/Workspace.cpp apps/editor/core/Net.cpp apps/editor/core/McpInstall.cpp apps/editor/core/Projects.cpp
+    add_library(aiverse_editor_core STATIC apps/editor/core/MapDoc.cpp apps/editor/core/MapDocPlanet.cpp apps/editor/core/Workspace.cpp apps/editor/core/StudioPlayTools.cpp apps/editor/core/Net.cpp apps/editor/core/McpInstall.cpp apps/editor/core/Projects.cpp
     apps/editor/core/DataOps.cpp apps/editor/core/BalanceOps.cpp
     apps/editor/core/SimTools.cpp apps/editor/core/ScenarioOps.cpp apps/editor/core/SchemaOps.cpp apps/editor/core/PruneOps.cpp apps/editor/core/CampaignOps.cpp apps/editor/core/StrategicOps.cpp
     apps/editor/core/ToolchainOps.cpp apps/editor/core/WorldInspect.cpp)   # scenario_run, rules_lint, rules_schema keys
@@ -2583,9 +2584,6 @@ if(TARGET aiverse_editor OR AIVERSE_BUILD_STUDIO_HTML5)
         target_link_libraries(aiverse_hosted_client PRIVATE aiverse_net_server)
     endif()
     target_include_directories(aiverse_hosted_client PUBLIC "${PROJECT_SOURCE_DIR}")
-    # Caverns visual payloads expose Box3D value types even when the optional
-    # authoritative physics runtime is disabled.
-    target_include_directories(aiverse_hosted_client PUBLIC "${PROJECT_SOURCE_DIR}/third_party/box3d/include")
     target_link_libraries(aiverse_hosted_client PUBLIC aiverse_runtime aiverse_game_view
         aiverse_net_city aiverse_splash aiverse_net aiverse_game_audio aiverse_atlas
         aiverse_ui aiverse_game_fx aiverse_i18n aiverse_content_reader AIVERSE::InputFlow)

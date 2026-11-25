@@ -381,7 +381,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
    if(action==='save'){
     const r=await op('texture_graph_set',{name,graph,...(original?.name===name?{expected:original.graph}:{})});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||!object(r.graph))throw new Error('Native save rejected');
-    setOriginal({name,graph:r.graph});setNames(old=>[...new Set([...old,name])].sort());setStatus('Graph saved');return;
+    setOriginal({name,graph:typeof r.originalJson==='string'?r.originalJson:r.graph});setNames(old=>[...new Set([...old,name])].sort());setStatus('Graph saved');return;
    }
    if(action==='validate'){
     const r=await op('texture_graph_validate',{graph,overrides});if(token!==epoch.current)return;if(!object(r)||r.ok!==true)throw new Error('Native validation failed');setStatus('Native topology and work budget valid');return;

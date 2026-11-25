@@ -9,6 +9,7 @@ inline bool studioPlanetViewAgentOperation(const std::string& op){
 }
 inline const char* studioAgentHistoryPolicy(const std::string& op){
     static const std::set<std::string> reads={
+        "studio_runtime_entities","studio_runtime_inspect","studio_runtime_regions","studio_play_review_preview",
         "mcp_registry","simulation_budget_plan","game_info","rules_get","rules_list",
         "map_list","map_info","map_ascii","map_get","map_validate","entity_list","planet_forest_get",
         "studio_planet_forest_live","studio_planet_scene_get",
@@ -26,6 +27,8 @@ inline const char* studioAgentHistoryPolicy(const std::string& op){
     };
     static const std::set<std::string> project={"rules_set","rules_merge","rules_delete","set_manifest"};
     static const std::set<std::string> assets={"studio_asset_meta_patch","studio_asset_folder_create","studio_asset_move_commit","studio_asset_delete"};
+    if(op=="studio_play_review_apply")return "map";
+    if(op=="studio_runtime_edit"||op=="studio_runtime_profile")return "runtime";
     if(reads.count(op))return "read";
     if(studioPlanetViewAgentOperation(op))return "view";
     if(map.count(op))return "map";

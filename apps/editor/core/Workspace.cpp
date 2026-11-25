@@ -1,5 +1,6 @@
 #include "ModelingOps.h"
 #include "Workspace.h"
+#include "StudioPlayTools.h"
 #include <aiverselib/runtime/WorkBudget.h>
 #include "ShaderGraphOps.h"
 #include "GraphOps.h"
@@ -727,6 +728,7 @@ bool Workspace::openGame(const std::string& idOrDir, std::string* err) {
 // ================================================================= operations
 
 void Workspace::registerCoreOps() {
+    registerStudioPlayTools(*this);
     auto add = [this](const char* name, const char* desc, const char* sch, OpFn fn) {
         registerOp({name, desc, schema(sch), std::move(fn)});
     };

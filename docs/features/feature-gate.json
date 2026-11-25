@@ -3,6 +3,7 @@
   "id": "feature-gate",
   "owner": "agents",
   "changed_paths": [
+    "engine/platform/EnhancedInputConfig.h",
     "AGENTS.md",
     "tools/agents/check_feature.py",
     "tools/agents/audit_compliance.py",
@@ -56,14 +57,29 @@
     "tools/studio/test_build_config.py",
     "tools/studio/test_content_layout.py",
     "tools/studio/test_reference_pin_zoom.py",
+    "tools/studio/verify_headless.sh",
     "tools/studio/test_scene_tools.py",
-    "apps/studio-web/tests/nested-dock.mjs"
+    "apps/studio-web/tests/nested-dock.mjs",
+    "CMakeLists.txt",
+    "engine/game/native/Build.cmake",
+    "docs/native-modules.md",
+    "engine/game/GameCore.h",
+    "tests/fps/tests.cpp",
+    "tests/fps/vehicles.inc",
+    "tests/native_project_build.py",
+    "tests/libraries/gameplay_tests.cpp",
+    "tools/skills/audit.py",
+    "apps/editor/PhysisAuthoring.h",
+    "apps/studio-native/StudioGameLaunch.h",
+    "apps/editor/windows/AttachmentAuthoringWindow.cpp",
+    "apps/editor/windows/LuaCustomInspector.h",
+    "tests/editor/lua_inspector_sandbox_tests.cpp"
   ],
   "traits": {
     "editable": false,
     "simulation": false,
     "visible": true,
-    "runtime": false
+    "runtime": true
   },
   "checks": {
     "implementation": {
@@ -80,16 +96,21 @@
       "evidence": []
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Native Workspace readiness query and fixed local report generation implemented in source; build and runtime validation pending.",
-      "evidence": []
+      "status": "pass",
+      "note": "The compiled Workspace implementation regenerated the report in a persistent native process, returned job completion and served a bounded query for the current source revision.",
+      "evidence": [
+        "docs/agents/feature-contract.md",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt"
+      ]
     },
     "skill": {
       "status": "pass",
       "note": "The feature-delivery skill routes to the strict feature contract. The audit of the skill catalog, checker regressions and native readiness refresh/query ran on this integration.",
       "evidence": [
         "skills/workflow/aiverse-new-feature/SKILL.md",
-        "docs/evidence/integration-acceptance-d5608fb7f.json"
+        "docs/evidence/integration-acceptance-d5608fb7f.json",
+        "docs/evidence/feature-gate-e0b95cf24-catalog.log.txt",
+        "docs/evidence/feature-gate-e0b95cf24-skill-audit.log.txt"
       ]
     },
     "mcp": {
@@ -97,13 +118,17 @@
       "note": "All four native readiness operations worked over stdio without a loaded project: generation, completion, snapshot readback and a bounded feature page.",
       "evidence": [
         "docs/evidence/feature-readiness-stdio-b954cd47a.json",
-        "docs/evidence/integration-tools-b954cd47a.json"
+        "docs/evidence/integration-tools-b954cd47a.json",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt"
       ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Opt-in regeneration, job status, dependency graph and assignment proposals implemented in source; typecheck, build and visual validation pending.",
-      "evidence": []
+      "status": "pass",
+      "note": "Verified in the production Studio web bundle inside native WKWebView, connected to the local game host. The dashboard displayed the report revision and blockers and exposed native regeneration.",
+      "evidence": [
+        "docs/evidence/studio-play-ad676e70c/feature_readiness.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
+      ]
     },
     "inspector": {
       "status": "not_applicable",
@@ -121,19 +146,26 @@
       "evidence": []
     },
     "performance": {
-      "status": "not_applicable",
-      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
-      "evidence": []
+      "status": "pass",
+      "note": "Measured full policy reporting for ten features (2.02 s, peak RSS 66666496 bytes), the native project selection/cache regression (8.34 s, peak RSS 39813120 bytes), and ten filter/restore cycles in the production native Studio readiness panel (6–15 ms per pair). Report rendering uses bounded pages.",
+      "evidence": [
+        "docs/agent-handoffs/feature-gate-planet-readiness-workloads-2026-11-25.md",
+        "docs/evidence/integration-1209eaa44-policy.log.txt",
+        "docs/evidence/studio-building-budget/readiness-dependencies.png"
+      ]
     },
     "platforms": {
-      "status": "not_applicable",
-      "note": "Repository-only Python policy tooling; no game runtime or editable scene capability.",
+      "status": "not_run",
+      "note": "Shared native-module host build wiring changes; cross-platform and runtime acceptance pending.",
       "evidence": []
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending actual execution and integration review.",
-      "evidence": []
+      "status": "pass",
+      "note": "The declared feature policy lists no prerequisite manifests. The integrated report resolved the dependency order and roadmap without policy errors.",
+      "evidence": [
+        "docs/agents/feature-policy.json",
+        "docs/evidence/integration-1209eaa44-policy.log.txt"
+      ]
     },
     "headless": {
       "status": "not_applicable",
@@ -141,16 +173,22 @@
       "evidence": []
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending actual execution and integration review.",
-      "evidence": []
+      "status": "pass",
+      "note": "Executed the documented refresh, status, snapshot and paginated feature-list workflow through native MCP. The snapshot matched the current revision.",
+      "evidence": [
+        "docs/agents/feature-contract.md",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt"
+      ]
     },
     "tests": {
       "status": "pass",
-      "note": "20 feature-gate tests passed. Registry, contracts and all four readiness MCP operations were verified against the native implementation.",
+      "note": "20 feature-gate tests passed. Registry, contracts and all four readiness MCP operations were verified against the native implementation. The integrated source 460ce965c passed all 22 Feature Gate tests and the separate reused-cache native-project fixture.",
       "evidence": [
         "docs/evidence/integration-tools-b954cd47a.json",
-        "docs/evidence/feature-readiness-stdio-b954cd47a.json"
+        "docs/evidence/feature-readiness-stdio-b954cd47a.json",
+        "docs/evidence/feature-gate-e0b95cf24-feature-suite.log.txt",
+        "docs/evidence/feature-gate-e0b95cf24-native-project.log.txt",
+        "docs/evidence/feature-gate-e0b95cf24-contracts.log.txt"
       ]
     },
     "handoff": {
@@ -170,9 +208,12 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Read-only engine readiness report/dashboard implemented in source; native build, real MCP, Studio UI and publishing verification pending.",
-      "evidence": []
+      "status": "pass",
+      "note": "Prepared the bilingual Studio diary with real native editor captures. The site checker accepted 59 entries and the local builder generated both languages. The release-site contract documents the native editor tool exception for a separate browser demo. Public deployment follows main integration.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-studio-local-play-inspection.json",
+        "docs/agents/contracts/release-site.md"
+      ]
     }
   },
   "integrations": {
@@ -193,6 +234,13 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integrated-graph-2a56cbf39.json"
+    "docs/evidence/feature-gate-e0b95cf24-contracts.json",
+    "docs/evidence/feature-gate-e0b95cf24-catalog.json",
+    "docs/evidence/feature-gate-e0b95cf24-skill-audit.json",
+    "docs/evidence/feature-gate-e0b95cf24-feature-suite.json",
+    "docs/evidence/feature-gate-e0b95cf24-native-project.json",
+    "docs/evidence/feature-gate-e0b95cf24-web.json",
+    "docs/evidence/feature-gate-e0b95cf24-studio-contracts.json",
+    "docs/evidence/feature-gate-e0b95cf24-typecheck.json"
   ]
 }

@@ -18,7 +18,13 @@
     "apps/studio-web/src/panels/GamePanel.css",
     "apps/studio-web/src/panels/GamePanel.tsx",
     "apps/studio-web/src/types.ts",
-    "skills/editor/studio-ui/SKILL.md"
+    "skills/editor/studio-ui/SKILL.md",
+    "apps/editor/core/StudioPlayTools.h",
+    "apps/editor/core/Workspace.cpp",
+    "docs/editor-native-ecs-inspector.md",
+    "CMakeLists.txt",
+    "apps/editor/core/StudioPlayTools.cpp",
+    "apps/studio-native/StudioAgentHistoryPolicy.h"
   ],
   "traits": {
     "editable": true,
@@ -28,24 +34,27 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The local paused map preview reported eleven removals. The native handler checked the token and applied once. The exact original map and edited map were recovered by one undo and one redo. The Studio suite exercised the panel contract.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
+        "docs/evidence/feature-gate-e0b95cf24-web.json"
       ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native host validates and consumes a single-use preview, then writes through the existing map document history. The live test applied once, rejected replay and verified exact maps after one undo and one redo.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "apps/studio-native/StudioHost.cpp"
       ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The local paused map preview reported eleven removals. The native handler checked the token and applied once. The exact original map and edited map were recovered by one undo and one redo. The Studio suite exercised the panel contract.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
+        "docs/evidence/feature-gate-e0b95cf24-web.json"
       ]
     },
     "skill": {
@@ -57,45 +66,51 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "On a paused saved map the native Game panel previewed changes. Authenticated MCP removed 11 destroyed objects, refused a consumed token and restored the exact map with one undo and one redo.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/game.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "On a paused saved map the native Game panel previewed changes. Authenticated MCP removed 11 destroyed objects, refused a consumed token and restored the exact map with one undo and one redo.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/game.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "On a paused saved map the native Game panel previewed changes. Authenticated MCP removed 11 destroyed objects, refused a consumed token and restored the exact map with one undo and one redo.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/game.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "One undo restored the complete source map after applying 11 removals. One redo restored the exact reviewed map. The changes entered the native map history.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/game.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "not_applicable",
+      "note": "This panel operates on the current hosted simulation. It does not own or edit a graph document.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/agent-handoffs/feature-gate-native-integration-2026-11-25.md",
+        "apps/studio-native/StudioHost.cpp"
       ]
     },
     "performance": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The 2000-entity native fixture measured preview/apply, exercised 200 removals among 1999 roads and verified one-step undo. Bulk compaction uses a linear ordinal table and a bounded number of traversals.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/agent-handoffs/studio-play-review-bulk-2026-11-25.md",
+        "apps/studio-native/tests/StudioSessionTests.cpp"
       ]
     },
     "platforms": {
@@ -106,31 +121,36 @@
       ]
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The declared feature policy lists no prerequisite manifests. The integrated report resolved the dependency order and roadmap without policy errors.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/agents/feature-policy.json",
+        "docs/evidence/integration-1209eaa44-policy.log.txt"
       ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The standalone MCP registry advertised the typed schema and rejected calls requiring a connected local Studio. Both native registries listed the feature tools.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/evidence/integration-ad5786f5a-headless.log.txt",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt",
+        "docs/evidence/integration-ad5786f5a-linux.log.txt"
       ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "On a paused saved map the native Game panel previewed changes. Authenticated MCP removed 11 destroyed objects, refused a consumed token and restored the exact map with one undo and one redo.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/game.png",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The local paused map preview reported eleven removals. The native handler checked the token and applied once. The exact original map and edited map were recovered by one undo and one redo. The Studio suite exercised the panel contract.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
+        "docs/evidence/feature-gate-e0b95cf24-web.json"
       ]
     },
     "handoff": {
@@ -148,10 +168,11 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Prepared the bilingual Studio diary with real native editor captures. The site checker accepted 59 entries and the local builder generated both languages. The release-site contract documents the native editor tool exception for a separate browser demo. Public deployment follows main integration.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/devlog/entries/2026-11-25-studio-local-play-inspection.json",
+        "docs/agents/contracts/release-site.md"
       ]
     }
   },
@@ -159,7 +180,10 @@
     "skills": [
       "studio-ui"
     ],
-    "mcp_tools": [],
+    "mcp_tools": [
+      "studio_play_review_preview",
+      "studio_play_review_apply"
+    ],
     "studio_methods": [
       "studio.previewPlayChanges",
       "studio.keepPlayChanges"
@@ -169,6 +193,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integrated-graph-2a56cbf39.json"
+    "docs/evidence/feature-gate-e0b95cf24-studio-contracts.json",
+    "docs/evidence/feature-gate-e0b95cf24-web.json",
+    "docs/evidence/feature-gate-e0b95cf24-typecheck.json",
+    "docs/evidence/feature-gate-e0b95cf24-skill-audit.json"
   ]
 }

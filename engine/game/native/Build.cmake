@@ -87,17 +87,25 @@ if(EXISTS "${_native_dir}/CMakeLists.txt")
 endif()
 get_property(_decls GLOBAL PROPERTY AIVERSE_NATIVE_DECLS)
 get_property(_defs GLOBAL PROPERTY AIVERSE_NATIVE_DEFS)
-file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/gen/NativeRegistry.cpp" CONTENT
-"#include \"engine/game/Native.h\"\n${_decls}
-namespace {
-// Explicit references prevent dead stripping of the module objects.
-const aiverse::game::NativeRegistrar aiverseNativeRegistrar({
-${_defs}});
-}
-")
-# The generated registry is also injected into render-only executables. Its
-# implementation must not pull in the gameplay host or duplicate registry state.
+# The gameplay implementation owns the registrar regardless of project modules.
 target_sources(aiverse_game PRIVATE "${AIVERSE_NATIVE_ENGINE_ROOT}/engine/game/Native.cpp")
+# An empty project needs no translation unit or static initializer. In particular,
+# a render-only program must never acquire an empty registrar dependency.
+if(_defs)
+    file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/gen/NativeRegistry.cpp" CONTENT
+    "#include \"engine/game/Native.h\"\n${_decls}
+    namespace {
+    // Explicit references prevent dead stripping of the module objects.
+    const aiverse::game::NativeRegistrar aiverseNativeRegistrar({
+    ${_defs}});
+    }
+    ")
+    target_sources(aiverse_native_modules INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/gen/NativeRegistry.cpp")
+    target_include_directories(aiverse_native_modules INTERFACE "${AIVERSE_NATIVE_ENGINE_ROOT}")
+else()
+    # Reconfiguring a reused cache for an empty project must discard the old generated registry.
+    file(REMOVE "${CMAKE_CURRENT_BINARY_DIR}/gen/NativeRegistry.cpp")
+endif()
 if(AIVERSE_BUILD_TESTS)
     add_executable(aiverse_native_registry_link_test
         "${AIVERSE_NATIVE_ENGINE_ROOT}/tests/native_registry_link.cpp")
@@ -105,17 +113,15 @@ if(AIVERSE_BUILD_TESTS)
     add_test(NAME native_registry_link COMMAND aiverse_native_registry_link_test)
     set_tests_properties(native_registry_link PROPERTIES LABELS "Architecture")
 endif()
-target_sources(aiverse_native_modules INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/gen/NativeRegistry.cpp")
-target_include_directories(aiverse_native_modules INTERFACE "${AIVERSE_NATIVE_ENGINE_ROOT}")
 # Every executable of this build that links a game host gets the project's modules (deferred to the end of the
 # top-level CMakeLists, so executables declared later are included too).
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL aiverse_native_link_hosts "${CMAKE_SOURCE_DIR}")
 endmacro()
 
-# Presentation/platform runtimes are not game hosts: standalone rendering,
-# camera and GPU tests must not receive project objects or NativeRegistrar.
-# game_view, unlike runtime, links the canonical aiverse_game implementation.
-set(AIVERSE_NATIVE_HOSTS aiverse_game aiverse_game_view aiverse_authority aiverse_editor_core aiverse_hosted_client
+# Only actual gameplay-host targets (all link aiverse_game, directly or transitively).
+# aiverse_runtime / aiverse_client_runtime are shared renderer/platform libraries:
+# geometry previews, VIVID tools and scene-only clients must not register game modules.
+set(AIVERSE_NATIVE_HOSTS aiverse_game aiverse_game_view aiverse_net_game aiverse_authority aiverse_editor_core aiverse_hosted_client
     CACHE INTERNAL "Targets whose direct users are project hosts (they receive AIVERSE::native_modules)")
 function(aiverse_native_link_hosts dir)
     get_property(targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)

@@ -1,0 +1,16 @@
+{
+  "sha": "e0b95cf24446fea4b3bd3d0cd1980eb46807b140",
+  "argv": [
+    "python3.12",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tools/studio",
+    "-p",
+    "test_*.py"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/feature-gate-e0b95cf24-studio-contracts.log.txt",
+  "sha256": "06357b72145234f7670e84325fc932ee642715184fb72fbb2047443adfe995f6"
+}

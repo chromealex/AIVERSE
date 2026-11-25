@@ -1,0 +1,7 @@
+studio_runtime_entities {"error": "This operation requires a connected local Studio"}
+studio_runtime_inspect {"error": "This operation requires a connected local Studio"}
+studio_runtime_regions {"error": "This operation requires a connected local Studio"}
+studio_runtime_profile {"error": "This operation requires a connected local Studio"}
+studio_runtime_edit {"error": "This operation requires a connected local Studio"}
+studio_play_review_preview {"error": "This operation requires a connected local Studio"}
+studio_play_review_apply {"error": "This operation requires a connected local Studio"}
