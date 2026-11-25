@@ -17,5 +17,9 @@
   },
   "viewScripts": [
     "scripts/view/distance.lua"
-  ]
+  ],
+  "victory": {
+    "mode": "survive",
+    "seconds": 86400
+  }
 }
