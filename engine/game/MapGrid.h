@@ -408,9 +408,9 @@ struct SpatialHash {
     void insert(Entity e, Vec3 p);
     template <class Fn> void query(Vec3 p, Fixed radius, Fn&& fn) const {
         if (surf) {
-            thread_local std::vector<int32_t> near;
-            surf->bucketsAround(p, radius, near);
-            for (int32_t b : near) for (Entity e : buckets[size_t(b)]) fn(e);
+            thread_local std::vector<int32_t> nearBuckets;
+            surf->bucketsAround(p, radius, nearBuckets);
+            for (int32_t b : nearBuckets) for (Entity e : buckets[size_t(b)]) fn(e);
             return;
         }
         int r = int((radius.raw >> Fixed::kFracBits) / cell) + 1;
