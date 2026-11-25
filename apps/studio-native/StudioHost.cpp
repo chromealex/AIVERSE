@@ -83,7 +83,7 @@ bool finite(std::initializer_list<double> values) {
 const std::set<std::string>& documentChangingMethods() {
     static const std::set<std::string> methods = {
         "studio.openMap", "studio.newMap", "studio.entityCreate", "studio.entityDelete", "studio.entityDuplicate",
-        "studio.mapRegionName", "studio.setProperty", "studio.save", "studio.undo", "studio.redo", "studio.nereidFlowSet",
+        "studio.mapPropertiesSet", "studio.mapPlayer", "studio.mapArea", "studio.mapRegionName", "studio.setProperty", "studio.save", "studio.undo", "studio.redo", "studio.nereidFlowSet",
         "studio.planetForestPlant", "studio.planetForestMove", "studio.planetForestSet", "studio.renderLightingSet", "studio.lightingSet", "studio.lightAdd", "studio.lightUpdate", "studio.lightDelete",
         "studio.materialPatch", "studio.materialCreate", "studio.buildingPublishMaterial", "studio.setProperties", "studio.componentAdd",
         "studio.componentRemove", "studio.entityMove", "studio.entitiesDelete", "studio.entitiesDuplicate",

@@ -2285,7 +2285,7 @@ static void worldSceneInspectorProperties() {
     const auto project=root/"fixture";
     fs::create_directories(project);
     std::ofstream(project/"game.json")<<R"({"module":"actor","rules":"rules.json","maps":[{"file":"map.json"}]})";
-    std::ofstream(project/"rules.json")<<"{}";
+    std::ofstream(project/"rules.json")<<R"({"actor":{}})";
     const Json original=Json::parse(R"({"colliders":[{"min":[0,0,0],"max":[1,1,1]}],"spawns":[[0,0,0],[4,0,4]],"custom":{"marker":7}})");
     std::ofstream(project/"map.json")<<original.dump();
     {
@@ -2312,6 +2312,10 @@ static void worldSceneInspectorProperties() {
         AIVERSE_TEST_CHECK(!call("studio.redo").has("error")&&!call("studio.save").has("error"));
         editor::MapDoc disk;std::string error;Json expected=original;expected.set("name",Json::string("Harbor terminal"));
         AIVERSE_TEST_CHECK(disk.load((project/"map.json").string(),&error)&&disk.toJson()==expected);
+        disk.undo();AIVERSE_TEST_CHECK(disk.toJson()==original);
+        bool rejected=false;
+        try{(void)session.saveMapAs((project/"other.json").string());}catch(const std::exception&){rejected=true;}
+        AIVERSE_TEST_CHECK(rejected&&!fs::exists(project/"other.json"));
     }
     fs::remove_all(root);
 }

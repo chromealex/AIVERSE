@@ -433,9 +433,11 @@ std::vector<ProjectFileEdit> MapDoc::stageSave(const std::filesystem::path& proj
     const auto root=fs::canonical(project);
     const auto targetMap=fs::absolute(file).lexically_normal();
     const auto mapRelative=targetMap.lexically_relative(root);
-    if(mapRelative.empty()||*mapRelative.begin()!="maps"||targetMap.extension()!=".json")
-        throw std::runtime_error("Choose a map within the project maps directory");
     const bool newIdentity=path.empty()||fs::absolute(path).lexically_normal()!=targetMap;
+    // Streamed world projects also ship an existing world-space map at project/map.json.
+    const bool rootMap=!newIdentity && data.worldSpace && mapRelative=="map.json";
+    if(mapRelative.empty()||(!rootMap && *mapRelative.begin()!="maps")||targetMap.extension()!=".json")
+        throw std::runtime_error("Choose a map within the project maps directory");
     if(!newIdentity&&!savedFileBaselineValid_)throw std::runtime_error("Map baseline unavailable; reopen the saved map before coordinated save");
     if(newIdentity){
         if(!allowCreation||fs::exists(fs::symlink_status(targetMap)))
@@ -455,7 +457,7 @@ std::vector<ProjectFileEdit> MapDoc::stageSave(const std::filesystem::path& proj
         const auto status=fs::symlink_status(target);
         const bool exists=fs::exists(status);
         const auto ext=target.extension().string();
-        if(rel.empty()||rel.is_absolute()||*rel.begin()!="maps"||
+        if(rel.empty()||rel.is_absolute()||(*rel.begin()!="maps" && !(rootMap && target==targetMap && exists))||
            (ext!=".json"&&ext!=".r16"&&ext!=".splat")||
            !fs::is_directory(fs::symlink_status(target.parent_path()))||
            fs::canonical(target.parent_path())!=target.parent_path()||
