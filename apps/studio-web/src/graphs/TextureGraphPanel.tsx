@@ -42,7 +42,7 @@ function projection(graph:Obj,catalog:Obj[]):GraphView{
 }
 export default function TextureGraphPanel({projectPath,disabled,onEdit,active=true}:{projectPath:string;disabled:boolean;active?:boolean;onEdit:(key:MaterialKey,value:FieldValue)=>void}){
  const [reuseName,setReuseName]=useState('');
- const [functionAssetName,setFunctionAssetName]=useState(''),[functionAssetRecord,setFunctionAssetRecord]=useState<{name:string;graph:Obj|string}|null>(null);
+ const [functionAssetName,setFunctionAssetName]=useState(''),[functionAssetRecord,setFunctionAssetRecord]=useState<{name:string;graph:Obj;originalJson?:string}|null>(null);
  const [functionName,setFunctionName]=useState(''),[functionChoice,setFunctionChoice]=useState(''),[functionOutput,setFunctionOutput]=useState('');
  const [selection,setSelection]=useState<string[]>([]),[groupTitle,setGroupTitle]=useState(''),[snippet,setSnippet]=useState<Obj[]>([]);
  const [text,setText]=useState(JSON.stringify(template,null,2)),[name,setName]=useState(''),[original,setOriginal]=useState<{name:string;graph:Obj|string}|null>(null);
@@ -168,7 +168,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
     if(!functionAssetName)throw new Error('Choose a saved function asset');
     const r=await op('texture_graph_get',{name:functionAssetName});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||!object(r.graph)||!object(r.graph.functionAsset)||r.graph.functionAsset.version!==1)throw new Error('Not a standalone function asset');
-    setFunctionAssetRecord({name:functionAssetName,graph:r.graph});setStatus('Loaded function asset revision '+functionAssetName);return;
+    setFunctionAssetRecord({name:functionAssetName,graph:r.graph,originalJson:typeof r.originalJson==='string'?r.originalJson:undefined});setStatus('Loaded function asset revision '+functionAssetName);return;
    }
    if(action==='publishFunctionAsset'||action==='reviseFunctionAsset'){
     if(!graph||!functionChoice||!/^[A-Za-z0-9_-]{1,64}$/.test(functionAssetName))throw new Error('Choose a definition and valid asset name');
@@ -181,9 +181,9 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
      if(!object(oldMarker)||!object(newMarker)||oldMarker.definition!==newMarker.definition)throw new Error('Revision must retain the published definition name');
     }
     for(const probe of probes){const v=await op('texture_graph_validate',{graph:probe});if(token!==epoch.current)return;if(!object(v)||v.ok!==true)throw new Error('Native function validation failed');}
-    const r=await op('texture_graph_set',{name:functionAssetName,graph:probes[0],...(revise&&functionAssetRecord?{expected:functionAssetRecord.graph}:{})});if(token!==epoch.current)return;
+    const r=await op('texture_graph_set',{name:functionAssetName,graph:probes[0],...(revise&&functionAssetRecord?{expected:functionAssetRecord.originalJson??functionAssetRecord.graph}:{})});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||!object(r.graph))throw new Error('Function asset publication failed');
-    setFunctionAssetRecord({name:functionAssetName,graph:r.graph});setNames(old=>[...new Set([...old,functionAssetName])].sort());setStatus('Published function asset '+functionAssetName+'; linked graphs refresh explicitly.');return;
+    setFunctionAssetRecord({name:functionAssetName,graph:r.graph,originalJson:typeof r.originalJson==='string'?r.originalJson:undefined});setNames(old=>[...new Set([...old,functionAssetName])].sort());setStatus('Published function asset '+functionAssetName+'; linked graphs refresh explicitly.');return;
    }
    if(action==='linkFunctionAsset'||action==='refreshFunctionAsset'){
     if(!graph)throw new Error('Open a texture graph');
@@ -205,7 +205,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit,active=tr
      linkedBaselines.current.set(next.alias,textureLinkedSnapshot(next.graph,next.alias));
      edit(next.graph);setFunctionChoice(next.alias);const def=textureFunctionLibrary(next.graph)[next.alias];setFunctionOutput(object(def)&&object(def.outputs)?Object.keys(def.outputs)[0]??'':'');setStatus('Linked '+source+' using an offline-safe snapshot.');
     }
-    setClipboard(null);setSnippet([]);setFunctionAssetRecord({name:source,graph:r.graph});return;
+    setClipboard(null);setSnippet([]);setFunctionAssetRecord({name:source,graph:r.graph,originalJson:typeof r.originalJson==='string'?r.originalJson:undefined});return;
    }
    if(action==='insertSavedGraph'){
     if(!graph||!reuseName)throw new Error('Select a saved reusable graph');
