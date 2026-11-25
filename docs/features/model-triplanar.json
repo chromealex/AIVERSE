@@ -3,6 +3,7 @@
   "id": "model-triplanar",
   "owner": "render",
   "changed_paths": [
+    "apps/studio-web/tests/materialSchema.test.mjs",
     "CMakeLists.txt",
     "apps/editor/core/MaterialOps.cpp",
     "apps/studio-native/StudioMaterialValidation.h",
