@@ -1773,7 +1773,7 @@ if(AIVERSE_BUILD_EDITOR OR AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS OR AIVERSE
         target_compile_options(aiverse_xatlas PRIVATE -w)
     endif()
     add_library(aiverse_bake STATIC engine/bake/Bvh.cpp engine/bake/Baker.cpp engine/bake/BakerProbes.cpp
-        engine/bake/BakeScene.cpp engine/bake/LightmapUnwrap.cpp engine/bake/LightmapWrite.cpp engine/bake/Denoise.cpp)
+        engine/bake/BakeScene.cpp engine/bake/CapturedBake.cpp engine/bake/LightmapUnwrap.cpp engine/bake/LightmapWrite.cpp engine/bake/Denoise.cpp)
     target_link_libraries(aiverse_bake PUBLIC aiverse_models aiverse_xatlas Threads::Threads)
     target_include_directories(aiverse_bake PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
