@@ -107,8 +107,10 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Native lens_ops and studio_session passed at the recorded SHA. Desktop Mac also exercised independent preview and PNG capture. Full merged-tree gate pending.",
+      "evidence": [
+        "docs/evidence/studio-lens-native-1c0544842.json"
+      ]
     },
     "handoff": {
       "status": "pass",
@@ -150,5 +152,7 @@
       "studio.lensPreview"
     ]
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/studio-lens-native-1c0544842.json"
+  ]
 }
