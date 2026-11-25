@@ -4329,12 +4329,20 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             const bool simulation=section=="actorSimulation";
             const bool movement=section=="actorMovement";
             const bool actorSettings=simulation || movement;
-            if(actorSettings && !ws_.project.actorSession())throw std::runtime_error("Open an actor project to edit simulation settings.");
-            if(!actorSettings && section!="global"&&section!="document") throw std::runtime_error("Unknown rules section");
+            const bool loadout=section=="actorLoadout";
+            if((actorSettings || loadout) && !ws_.project.actorSession())throw std::runtime_error("Open an actor project to edit actor settings.");
+            if(!actorSettings && !loadout && section!="global"&&section!="document") throw std::runtime_error("Unknown rules section");
             const auto separate=[](const std::string& key){
                 return key=="types"||key=="resources"||key=="techs"||key=="factions"||key=="triggers";
             };
+            const bool weaponList=ws_.project.rulesJson["actor"]["weapons"].isArray();
             const auto readSection=[&](){
+                if(loadout){
+                    Json result=Json::object();
+                    const char* field=weaponList?"weapons":"weapon";
+                    result.set(field,ws_.project.rulesJson["actor"][field]);
+                    return result;
+                }
                 if(actorSettings){
                     const auto config=actor::readConfig(ws_.project.rulesJson);
                     Json result=Json::object();
@@ -4375,9 +4383,32 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                         throw std::runtime_error("Player limit is below the number of players in the open scene.");
                     candidate=std::move(patch);
                 }
-                Json args=Json::object();args.set("path",str(movement?"actor.motor":simulation?"actor":""));args.set("value",candidate);
-                const auto changed=actorSettings && !candidate.size()?Json::object():ws_.call(actorSettings?"rules_merge":"rules_set",args,"studio");
-                if(changed.has("error"))throw std::runtime_error(changed.getStr("error"));
+                if(loadout){
+                    const char* field=weaponList?"weapons":"weapon";
+                    Json updated=current[field];
+                    const size_t count=weaponList?updated.size():1;
+                    const auto& slots=edited["slots"];
+                    if(!slots.isArray() || slots.size()!=count)throw std::runtime_error("Loadout slot count changed.");
+                    for(size_t i=0;i<count;++i){
+                        if(!slots[i].isObject())throw std::runtime_error("Expected loadout slot edits.");
+                        auto& slot=weaponList?updated.at(i):updated;
+                        for(const auto& [key,value]:slots[i].members()){
+                            if((key!="damage" && key!="magazine") || !value.isNumber() || value.toDouble()!=value.integer())
+                                throw std::runtime_error("Invalid loadout setting: "+key);
+                            if(slot.isNull())slot=Json::object();
+                            slot.set(key,value);
+                        }
+                    }
+                    if(updated!=current[field]){
+                        Json args=Json::object();args.set("path",str(weaponList?"actor.weapons":"actor.weapon"));args.set("value",updated);
+                        const auto changed=ws_.call("rules_set",args,"studio");
+                        if(changed.has("error"))throw std::runtime_error(changed.getStr("error"));
+                    }
+                }else{
+                    Json args=Json::object();args.set("path",str(movement?"actor.motor":simulation?"actor":""));args.set("value",candidate);
+                    const auto changed=actorSettings && !candidate.size()?Json::object():ws_.call(actorSettings?"rules_merge":"rules_set",args,"studio");
+                    if(changed.has("error"))throw std::runtime_error(changed.getStr("error"));
+                }
                 current=readSection();
             }
             Json out=Json::object();out.set("text",str(current.dump()));reply.set("result",std::move(out));

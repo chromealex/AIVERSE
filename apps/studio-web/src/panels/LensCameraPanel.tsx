@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import { Camera, Plus, Save, Trash2 } from 'lucide-react';
 import { invoke, onNativeEvent } from '../bridge';
 import SpectraDockViewport from './SpectraDockViewport';
+import { ActorLoadout } from './ActorLoadout';
 import { ActorSimulation } from './ActorSimulation';
 import './LensCameraPanel.css';
 
@@ -122,8 +123,8 @@ export default function LensCameraPanel({project, operations,openScene,actorSess
   const outputField=(patch:CameraRecord['output'])=>update({output:{...camera?.output,...patch}});
   if(!project)return <div className="tool__empty">Open a project to edit cameras.</div>;
   return <div className="lens-page">
-    <nav aria-label="Actors and cameras">{(actorSession?['Cameras','Simulation','Movement','Operations']:['Cameras','Operations']).map(name=><button key={name} className="au-button au-button--sm" aria-pressed={tab===name} onClick={()=>setTab(name)}>{name}</button>)}</nav>
-    {(tab==='Simulation'||tab==='Movement') && actorSession?<ActorSimulation key={tab} project={project} page={tab}/>:tab==='Operations'?operations:<>
+    <nav aria-label="Actors and cameras">{(actorSession?['Cameras','Simulation','Movement','Loadout','Operations']:['Cameras','Operations']).map(name=><button key={name} className="au-button au-button--sm" aria-pressed={tab===name} onClick={()=>setTab(name)}>{name}</button>)}</nav>
+    {tab==='Loadout' && actorSession?<ActorLoadout key={project} project={project}/>: (tab==='Simulation'||tab==='Movement') && actorSession?<ActorSimulation key={tab} project={project} page={tab}/>:tab==='Operations'?operations:<>
       <div className="lens-actions"><strong>Project cameras</strong>
         <button className="au-button au-button--sm" disabled={busy||!scene} onClick={()=>void create(false)}><Plus size={14}/>New camera</button>
         <button className="au-button au-button--sm" disabled={busy||!scene} onClick={()=>void create(true)}>New from Scene</button>
