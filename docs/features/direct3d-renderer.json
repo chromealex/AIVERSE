@@ -41,8 +41,10 @@
     },
     "native_api": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "D3D11 and D3D9 RHI and both native render targets cross-built. Native Windows execution pending.",
+      "evidence": [
+        "docs/agent-handoffs/direct3d-renderer-stage2.md"
+      ]
     },
     "skill": {
       "status": "not_run",
