@@ -208,7 +208,8 @@
     "tests/terraweave_caverns_test.cpp",
     "tests/terraweave_caverns_volume_collision_nav_test.cpp",
     "tools/caverns-stage33-verify.sh",
-    "tools/caverns-stage59-mac.sh"
+    "tools/caverns-stage59-mac.sh",
+    "examples/world/building-caverns-web/cave.cpp"
   ],
   "traits": {
     "editable": true,
