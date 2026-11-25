@@ -43,6 +43,7 @@ do
 done
 echo "==== C++20 contract: owner history and agent policy ===="
 c++ -std=c++20 -Wall -Wextra -Werror -pedantic -I . \
-  apps/studio-native/tests/StudioOwnerHistoryTests.cpp -o "$TEMP_DIR/StudioOwnerHistoryTests"
+  apps/studio-native/tests/StudioOwnerHistoryTests.cpp engine/data/Json.cpp engine/core/Fixed.cpp engine/pack/Sha256.cpp \
+  -o "$TEMP_DIR/StudioOwnerHistoryTests"
 "$TEMP_DIR/StudioOwnerHistoryTests"
 echo "Headless contracts PASS. macOS Metal / React Vite still require separate builds."

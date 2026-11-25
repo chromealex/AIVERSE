@@ -57,6 +57,7 @@
     "tools/studio/test_build_config.py",
     "tools/studio/test_content_layout.py",
     "tools/studio/test_reference_pin_zoom.py",
+    "tools/studio/verify_headless.sh",
     "tools/studio/test_scene_tools.py",
     "apps/studio-web/tests/nested-dock.mjs",
     "CMakeLists.txt",
