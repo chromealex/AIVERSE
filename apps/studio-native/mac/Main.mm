@@ -695,10 +695,12 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
 @implementation StudioShell
 - (instancetype)initWithProject:(const std::string&)project dev:(BOOL)dev composite:(BOOL)composite {
     if ((self=[super init])) {
-        htmlComposite_=composite;
+        // The Metal-under-HTML path requires WebKit to leave its page canvas unpainted.
+        htmlComposite_=composite && [WKWebView instancesRespondToSelector:NSSelectorFromString(@"_setDrawsBackground:")];
+        if(composite && !htmlComposite_) NSLog(@"[studio-web] Transparent page canvas unavailable; using native Scene input");
         const std::string root=AIVERSE_STUDIO_SOURCE_DIR;
         platform_=std::make_unique<MacPlatform>(self);
-        core_=std::make_unique<studio::StudioHost>(*platform_,root,composite);
+        core_=std::make_unique<studio::StudioHost>(*platform_,root,htmlComposite_);
         const std::string exeDir=[[[NSBundle mainBundle] executablePath] stringByDeletingLastPathComponent].UTF8String;
 #ifdef AIVERSE_STUDIO_BUILD_TOOL
         core_->session().setBuildTool(AIVERSE_STUDIO_BUILD_TOOL);
@@ -844,6 +846,7 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
     WKWebView* web=nil;
     if (htmlComposite_) {
         web=[[StudioTransparentWebView alloc] initWithFrame:frame configuration:cfg];
+        [web setValue:@NO forKey:@"drawsBackground"];
         if (@available(macOS 12.0, *)) web.underPageBackgroundColor=[NSColor clearColor];
     } else web=[[StudioFileDropWebView alloc] initWithFrame:frame configuration:cfg];
     ((StudioFileDropWebView*)web).shell=self;
