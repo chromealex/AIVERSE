@@ -14,6 +14,7 @@
     "demos/order-upgrade/scripts/courtyard.lua",
     "demos/order-upgrade/scripts/view/orders.lua",
     "demos/order-upgrade/ui/hud/courtyard.rml",
+    "docs/agent-handoffs/issue-demos-publication.md",
     "docs/agent-handoffs/local-order-feedback-initial.md",
     "docs/agent-handoffs/order-upgrade-implementation.md",
     "docs/agents/feature-policy.json",
@@ -30,8 +31,11 @@
     "engine/view/game/GameOverlays.h",
     "engine/view/game/GameViewScript.cpp",
     "engine/view/game/GameViewScript.h",
+    "site/manifest.json",
     "skills/gameplay/aiverse-view/SKILL.md",
-    "tests/tests.cpp"
+    "skills/workflow/aiverse-site-publish/SKILL.md",
+    "tests/tests.cpp",
+    "tools/site/build.py"
   ],
   "traits": {
     "runtime": true,
