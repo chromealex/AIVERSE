@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "features": {
+    "model-triplanar": {"requires": [], "roadmap": {"system": "render", "id": "model-triplanar"}, "api_paths": ["engine/render/graph/TriplanarMaterial.h"]},
     "direct3d-renderer": {"requires": [], "roadmap": {"system": "render", "id": "direct3d-renderer"}, "api_paths": ["engine/gfx/d3d/Direct3D.h", "engine/gfx/Gfx.h"]},
     "cpu-renderer": {"requires": [], "roadmap": {"system": "render", "id": "cpu-renderer"}, "api_paths": ["engine/gfx/Gfx.h"]},
     "renderer-sdk": {"requires": ["cpu-renderer", "direct3d-renderer"], "roadmap": {"system": "render", "id": "renderer-sdk"}, "api_paths": ["sdk/render/aiverse_render.h"]},

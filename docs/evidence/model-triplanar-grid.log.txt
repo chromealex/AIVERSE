@@ -1,0 +1,4 @@
+off instances=400 warmup=30 samples=60 draws=2 cpu_median_ms=0.305084 cpu_p95_ms=0.314375 gpu_median_ms=0.150875 gpu_p95_ms=0.197333 renderer_texture_bytes=526480 renderer_buffer_bytes=2441264 cxx_new_median=8 cxx_new_p95=8
+
+on instances=400 warmup=30 samples=60 draws=2 cpu_median_ms=0.319417 cpu_p95_ms=0.326083 gpu_median_ms=0.163375 gpu_p95_ms=0.202959 renderer_texture_bytes=526480 renderer_buffer_bytes=2441264 cxx_new_median=8 cxx_new_p95=8
+

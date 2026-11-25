@@ -3408,6 +3408,7 @@
       "roadmap": [
         {
           "status": "in-progress",
+          "id": "model-triplanar",
           "title": "Трипланарные материалы моделей и срезов CSG без UV",
           "titleEn": "Triplanar materials on models and UV-free CSG cut surfaces"
         },
