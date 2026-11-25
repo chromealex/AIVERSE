@@ -15,12 +15,16 @@
     "demos/material-techniques/rules.json",
     "demos/material-techniques/scripts/view/distance.lua",
     "demos/material-techniques/ui/hud/distance.rml",
+    "docs/agent-handoffs/material-techniques-authoring-20261125.md",
     "docs/agent-handoffs/material-techniques-initial.md",
     "docs/agent-handoffs/material-techniques-metal-20261125.md",
     "docs/agent-handoffs/material-techniques-studio-20261125.md",
     "docs/devlog/systems.json",
     "docs/evidence/material-techniques-far.png",
     "docs/evidence/material-techniques-inspection.png",
+    "docs/evidence/material-techniques-inspector.png",
+    "docs/evidence/material-techniques-mcp-20261125.json",
+    "docs/evidence/material-techniques-mcp-20261125.log.txt",
     "docs/evidence/material-techniques-near.png",
     "docs/evidence/material-techniques-runtime-20261125.json",
     "docs/evidence/material-techniques-runtime-20261125.log.txt",
@@ -74,24 +78,35 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Real tools/list and mcp_registry agree on 426 registered operations; both material operations are present.",
+      "evidence": [
+        "docs/evidence/material-techniques-mcp-20261125.json",
+        "docs/agent-handoffs/material-techniques-authoring-20261125.md"
+      ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Studio Models mounts the inspector and uses studio.op for the native material operations. Chromium exercised the real component and a fixture transport.",
+      "evidence": [
+        "docs/agent-handoffs/material-techniques-authoring-20261125.md",
+        "docs/evidence/material-techniques-inspector.png"
+      ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Chromium loaded, saved, undid, redid and reopened both rules with the real native operations.",
+      "evidence": [
+        "docs/agent-handoffs/material-techniques-authoring-20261125.md",
+        "docs/evidence/material-techniques-inspector.png"
+      ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "New sidecar creation, conflict handling, invalid-name rejection, clear, reopen and unrelated keys were verified on disk.",
+      "evidence": [
+        "docs/agent-handoffs/material-techniques-authoring-20261125.md"
+      ]
     },
     "graphs": {
       "status": "not_run",
@@ -114,9 +129,12 @@
       "evidence": []
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Verified both tools through the standalone server on a copied project.",
+      "evidence": [
+        "docs/agent-handoffs/material-techniques-authoring-20261125.md",
+        "docs/evidence/material-techniques-mcp-20261125.json"
+      ]
     },
     "examples": {
       "status": "not_run",
@@ -166,6 +184,7 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/material-techniques-runtime-20261125.json"
+    "docs/evidence/material-techniques-runtime-20261125.json",
+    "docs/evidence/material-techniques-mcp-20261125.json"
   ]
 }

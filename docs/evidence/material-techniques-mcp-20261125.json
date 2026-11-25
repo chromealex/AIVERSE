@@ -1,0 +1,15 @@
+{
+  "sha": "1d9f7d0359d7793f697ba8bf15597f5066bfdde3",
+  "argv": [
+    "python3.11",
+    "tools/mcp/audit_registry.py",
+    "/Volumes/KINGSTON/AIVERSE-builds/material-techniques-20261125/aiversemcp",
+    "--engine",
+    ".",
+    "--feature-manifest",
+    "docs/features/material-techniques.json"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/material-techniques-mcp-20261125.log.txt",
+  "sha256": "e7478125ce2878a10b92c4e201d625125753ee97ea281a4bb5fa5d5194918da2"
+}
