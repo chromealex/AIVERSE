@@ -7,6 +7,7 @@
     "apps/client/GameClient.cpp",
     "apps/client/GameClient.h",
     "apps/editor/core/OverlayOps.cpp",
+    "apps/studio-native/tests/StudioRenderLightingTests.cpp",
     "apps/studio-native/tests/StudioSessionTests.cpp",
     "demos/order-upgrade/README.md",
     "demos/order-upgrade/game.json",

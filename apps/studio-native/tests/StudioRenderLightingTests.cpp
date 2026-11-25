@@ -13,10 +13,10 @@ int main(int argc,char** argv) {
     const std::filesystem::path root=argv[1];
     for(const char* genre:{"game","actor"}) {
         const auto dir=root/"templates"/genre;
-        std::filesystem::create_directories(dir);
-        std::ofstream(dir/"game.json")<<"{\"name\":\"Lighting fixture\",\"module\":\""<<genre<<"\",\"maps\":[{\"file\":\"map.json\"}]}";
+        std::filesystem::create_directories(dir/"maps");
+        std::ofstream(dir/"game.json")<<"{\"name\":\"Lighting fixture\",\"module\":\""<<genre<<"\",\"maps\":[{\"file\":\"maps/map.json\"}]}";
         std::ofstream(dir/"rules.json")<<R"({"actor":{},"types":{"unit":{"health":{"max":100}}}})";
-        std::ofstream(dir/"map.json")<<(std::string(genre)=="actor"?R"({"name":"Fixture","colliders":[],"spawns":[[0,1,0]],"players":[{"name":"P1","team":1}]})":R"({"name":"Fixture","size":[8,8]})");
+        std::ofstream(dir/"maps"/"map.json")<<(std::string(genre)=="actor"?R"({"name":"Fixture","colliders":[],"spawns":[[0,1,0]],"players":[{"name":"P1","team":1}]})":R"({"name":"Fixture","size":[8,8]})");
         studio::StudioSession session(root.string(),dir.string());
         auto call=[&](const char* method,Json params=Json::object()){
             Json req=Json::object();req.set("id",Json::number(int64_t(1)));req.set("method",Json::string(method));req.set("params",params);
@@ -34,11 +34,11 @@ int main(int argc,char** argv) {
         }
         check(!call("studio.undo").has("error") && get()==before,"undo");
         check(!call("studio.redo").has("error") && get()==after,"redo");
-        check(!call("studio.save").has("error"),"save");
+        const auto saved=call("studio.save");if(saved.has("error"))throw std::runtime_error(saved.dump());
         studio::StudioSession reopened(root.string(),dir.string());
         Json req=Json::parse(R"({"id":1,"method":"studio.renderLighting","params":{}})");
         check(reopened.dispatch(req)["result"]==after,"reopen");
-        check(Json::parseFile((dir/"map.json").string())["renderLighting"]==after,"disk serialization");
+        check(Json::parseFile((dir/"maps"/"map.json").string())["renderLighting"]==after,"disk serialization");
         // One canonical light payload, stable entity identity across index shifts.
         check(!call("studio.lightAdd").has("error"),"add first light");
         const auto added=call("studio.lightAdd");check(!added.has("error"),"add second light");
