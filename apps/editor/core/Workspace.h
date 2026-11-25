@@ -40,7 +40,7 @@ struct Project {
     bool rulesDirty = false, manifestDirty = false;
 
     bool load(const std::string& dir, std::string* err);
-    bool saveRules(std::string* err,const std::string& historyLabel={});
+    bool saveRules(std::string* err,const std::string& historyLabel={},const ProjectFileEdit* newFile=nullptr);
     bool saveManifest(std::string* err,const std::string& historyLabel={});
     // Detached owner: prepare both dirty documents and the history checkpoint.
     // The caller publishes the returned existing-file plan before swapping owners.

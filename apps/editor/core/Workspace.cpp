@@ -272,7 +272,7 @@ std::vector<ProjectFileEdit> Project::stageDirtySave(){
     rulesDirty=false;manifestDirty=false;
     return edits;
 }
-bool Project::saveRules(std::string* err,const std::string& historyLabel) {
+bool Project::saveRules(std::string* err,const std::string& historyLabel,const ProjectFileEdit* newFile) {
     try {
         if(!savedManifestText||rulesOrigin.files.empty())
             throw std::runtime_error("Project documents must be loaded before saving rules");
@@ -292,6 +292,10 @@ bool Project::saveRules(std::string* err,const std::string& historyLabel) {
         const std::string noHistory;
         auto history=documentHistory;
         history.record(std::vector<ProjectFileEdit>(edits),historyRequiresReload?noHistory:historyLabel);
+        if (newFile) {
+            if (!newFile->createOnly) throw std::runtime_error("Expected a new project file");
+            edits.push_back(*newFile);
+        }
         applyHistoryTransaction(edits,std::move(history));
         savedRulesText=std::move(nextRaw);rulesOrigin.text=std::move(nextNormalized);
         rulesDirty=false;

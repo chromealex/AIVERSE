@@ -121,3 +121,7 @@ tr.diff__added td:first-child{color:#8ee6a0}tr.diff__removed td:first-child{colo
 .scripts-page__restart{display:inline-flex;align-items:center;gap:5px;margin-inline-start:auto;padding:5px 0;color:var(--au-text-muted);font-size:var(--au-font-xs)}
 
 .scripts-page__source{display:inline-block;color:var(--au-text-muted);font:inherit;font-size:.9em;margin-inline-end:1ch}
+
+.scripts-page .ptp__new{display:flex;flex-wrap:wrap;gap:6px}
+.scripts-page .ptp__new label{width:100%;color:var(--au-text-muted)}
+.scripts-page .ptp__new small{flex-basis:100%;color:var(--au-text-muted)}

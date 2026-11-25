@@ -234,6 +234,20 @@ void projectOwnerSaveContract(){
     std::ofstream(manifest)<<manifestBytes<<"\n";
     AIVERSE_TEST_CHECK(ws.call("set_manifest",Json::parse(R"({"path":"name","value":"New name"})")).has("error"));
     AIVERSE_TEST_CHECK(ws.project.manifest.getStr("name")=="Fixture"&&readProjectFileBytes(manifest)==manifestBytes+"\n");
+    auto script=Json::parse(R"({"path":"scripts/main.lua","text":"function on_start() end","register":true,"createOnly":true})");
+    const auto existingRules=ws.project.rulesJson;
+    AIVERSE_TEST_CHECK(ws.call("script_write",script).has("error"));
+    AIVERSE_TEST_CHECK(!fs::exists(root/"scripts/main.lua") && ws.project.rulesJson==existingRules);
+    std::ofstream(manifest)<<manifestBytes;
+    AIVERSE_TEST_CHECK(!ws.call("script_write",script).has("error"));
+    AIVERSE_TEST_CHECK(readProjectFileBytes(root/"scripts/main.lua")==script.getStr("text"));
+    AIVERSE_TEST_CHECK(ws.project.rulesJson["scripts"][0].str()=="scripts/main.lua");
+    script.set("text",Json::string("-- different"));
+    AIVERSE_TEST_CHECK(ws.call("script_write",script).has("error"));
+    AIVERSE_TEST_CHECK(readProjectFileBytes(root/"scripts/main.lua")=="function on_start() end");
+    script.set("path",Json::string("scripts/view/hud.lua"));
+    AIVERSE_TEST_CHECK(!ws.call("script_write",script).has("error"));
+    AIVERSE_TEST_CHECK(ws.project.rulesJson["viewScripts"][0].str()=="scripts/view/hud.lua");
     fs::remove_all(root);
 }
 void projectHistoryContract(){

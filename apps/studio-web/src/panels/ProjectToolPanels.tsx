@@ -183,10 +183,12 @@ export function ScriptsPanel(ctx: Ctx & {location:{path:string;line:number}|null
     ctx.consumeLocation();
     void open(file,line);
   }, [ctx.location]);
-  const save = async (p = current, body = text, register = false) => {
+  const save = async (p = current, body = text, createFile = false) => {
     if (!p) return;
     setBusy(true);
-    try { await op('script_write', { path: p, text: body, ...(register ? { register: true } : {}) }); setSaved(body); setCurrent(p); setStatus({ ok: true, text: 'Saved ' + p }); await list(); refreshSnapshot(ctx); }
+    try { await op('script_write', { path: p, text: body, ...(createFile ? { register:true, createOnly:true } : {}) });
+      if (createFile) {setText(body);setView('source');setNewPath(null);}
+      setSaved(body); setCurrent(p); setStatus({ ok: true, text: 'Saved ' + p }); await list(); refreshSnapshot(ctx); }
     catch (e) { setStatus({ ok: false, text: message(e) }); }
     finally { setBusy(false); }
   };
@@ -201,9 +203,13 @@ export function ScriptsPanel(ctx: Ctx & {location:{path:string;line:number}|null
     if (!p) return;
     if (!p.startsWith('scripts/')) p = 'scripts/' + p;
     if (!p.endsWith('.lua')) p += '.lua';
-    setNewPath(null);
-    await save(p, '-- ' + p + '\n', true);
-    setText('-- ' + p + '\n');
+    if (busy) return;
+    if (dirty && !window.confirm('Discard unsaved changes to ' + current + '?')) return;
+    setView('source');
+    const body = p.startsWith('scripts/view/')
+      ? 'view.on_frame(function(dt)\n  -- Update the presentation here.\nend)\n'
+      : 'function on_start()\n  game.message(0, "Game started")\nend\n\non("unit_died", function(event)\n  -- Handle the unit event here.\nend)\n';
+    await save(p,body,true);
   };
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); void save(); return; }
@@ -220,11 +226,14 @@ export function ScriptsPanel(ctx: Ctx & {location:{path:string;line:number}|null
   return <div className="ptp ptp--split scripts-page">
     <aside className="ptp__files">
       <div className="ptp__fileshead"><b>Scripts</b>
-        <button type="button" className="au-button au-button--icon au-button--ghost au-button--sm" title="New script" onClick={() => setNewPath('')}><FilePlus2 size={13}/></button>
+        <button type="button" className="au-button au-button--icon au-button--ghost au-button--sm" title="New script" disabled={busy} aria-label="New script" onClick={() => setNewPath(files.length ? '' : 'main.lua')}><FilePlus2 size={13}/></button>
         <button type="button" className="au-button au-button--icon au-button--ghost au-button--sm" title="Refresh" onClick={() => void list()}><RefreshCw size={13}/></button></div>
       {newPath !== null && <form className="ptp__new" onSubmit={e => { e.preventDefault(); void create(); }}>
-        <input autoFocus className="au-input" placeholder="scripts/name.lua" value={newPath} onChange={e => setNewPath(e.target.value)}
-          onKeyDown={e => e.key === 'Escape' && setNewPath(null)}/></form>}
+        <label>Script path<input aria-label="Script path" autoFocus className="au-input" placeholder="scripts/name.lua" value={newPath} onChange={e => setNewPath(e.target.value)}
+          onKeyDown={e => e.key === 'Escape' && setNewPath(null)}/></label>
+        <small>Use view/ for a presentation script.</small>
+        <button type="submit" className="au-button au-button--sm au-button--primary" disabled={busy || !newPath.trim()}>Create script</button>
+        <button type="button" className="au-button au-button--sm" disabled={busy} onClick={()=>setNewPath(null)}>Cancel</button></form>}
       {files.map(f => <button key={f.path} type="button" className={'ptp__file' + (f.path === current ? ' is-on' : '')} onClick={() => void open(f.path)} title={f.role}>
         <span>{f.path.replace(/^scripts\//, '')}</span><small>{f.role.startsWith('module') ? 'module' : f.role}</small></button>)}
       {missing.map(m => <div key={m} className="ptp__file is-missing" title="Listed in rules or the map, file not found"><AlertTriangle size={11}/><span>{m}</span></div>)}

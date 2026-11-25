@@ -139,6 +139,7 @@ inline fs::path safeTarget(const fs::path& root,const std::string& relative,bool
     if(allowCreation){
         const auto ext=rel.extension().string();
         if(relative!=".aiverse-cache/asset-history.json"&&
+           !(relative.starts_with("scripts/")&&ext==".lua")&&
            (!relative.starts_with("maps/")||(ext!=".json"&&ext!=".r16"&&ext!=".splat")))
             throw std::runtime_error("Unsupported new save output");
     }

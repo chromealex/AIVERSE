@@ -11,7 +11,11 @@
     "apps/studio-web/src/components/StudioStatusBar.tsx",
     "apps/studio-web/src/panels/ProjectToolPanels.tsx",
     "apps/client/HostedClient.cpp",
-    "apps/client/GameClient.h"
+    "apps/client/GameClient.h",
+    "apps/editor/core/ScriptOps.cpp",
+    "apps/editor/core/ProjectDocumentJournal.h",
+    "apps/editor/core/Workspace.h",
+    "apps/studio-native/tests/StudioSessionTests.cpp"
   ],
   "traits": {
     "editable": false,

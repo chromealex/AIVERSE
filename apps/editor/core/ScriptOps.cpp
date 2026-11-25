@@ -97,7 +97,7 @@ void registerScriptOps(Workspace& ws) {
         "(the error is returned with file:line). Simulation scripts must not use float literals (use fx(\"1.5\"), fx(3, 2) or "
         "integers). register=true adds it to rules.json \"scripts\" (or \"viewScripts\" for scripts/view/...). "
         "A running play-test restarts with the new scripts.",
-        Json::parse(R"({"properties": {"path": {"type": "string"}, "text": {"type": "string"}, "register": {"type": "boolean"}},
+        Json::parse(R"({"properties": {"path": {"type": "string"}, "text": {"type": "string"}, "register": {"type": "boolean"}, "createOnly": {"type": "boolean"}},
             "required": ["path", "text"]})"),
         [&ws](const Json& p) {
             const std::string rel = fs::path(p.getStr("path")).lexically_normal().generic_string();
@@ -109,8 +109,13 @@ void registerScriptOps(Workspace& ws) {
             if (!err.empty()) throw std::runtime_error("not saved: " + err);
             std::error_code ec;
             fs::create_directories(f.parent_path(), ec);
+            if (ec) throw std::runtime_error("Cannot create script directory: "+ec.message());
             const bool existed = fs::exists(f);
-            {
+            const bool create = p.getBool("createOnly");
+            if (create && existed) throw std::runtime_error("Script already exists: "+rel);
+            ProjectFileEdit newFile{f,{},text};
+            newFile.createOnly=true;
+            if (!create) {
                 std::ofstream o(f, std::ios::binary);
                 if (!o) throw std::runtime_error("cannot write " + rel);
                 o << text;
@@ -118,7 +123,10 @@ void registerScriptOps(Workspace& ws) {
             Json r = Json::object();
             r.set("ok", Json::fromBool(true));
             r.set("summary", str((existed ? "Изменён " : "Создан ") + rel));
+            bool published = false;
             if (p.getBool("register", false)) {
+                const Json previousRules = ws.project.rulesJson;
+                const bool previousDirty = ws.project.rulesDirty;
                 const char* key = view ? "viewScripts" : "scripts";
                 Json& list = ws.project.rulesJson.member(key);
                 if (!list.isArray()) list = Json::array();
@@ -128,12 +136,18 @@ void registerScriptOps(Workspace& ws) {
                     list.push(str(rel));
                     std::string serr;
                     ws.project.rulesDirty = true;
-                    if (!ws.project.saveRules(&serr)) throw std::runtime_error("saved the script but not rules.json: " + serr);
+                    if (!ws.project.saveRules(&serr,{},create ? &newFile : nullptr)) {
+                        ws.project.rulesJson=previousRules;
+                        ws.project.rulesDirty=previousDirty;
+                        throw std::runtime_error((create ? "Cannot create registered script: " : "Saved script but not rules: ")+serr);
+                    }
+                    published=create;
                     ws.project.reloadRules();
                     ws.note({Change::Rules, 0, 0, -1, -1, -1, std::string("rules.json: ") + key + " += " + rel});
                     r.set("registered", Json::fromBool(true));
                 }
             }
+            if (create && !published) applyProjectFileEdits(ws.project.dir,{newFile});
             ws.note({Change::Project, 0, 0, -1, -1, -1, (existed ? "Изменён скрипт " : "Создан скрипт ") + rel});
             return r;
         }});
