@@ -15,7 +15,14 @@
     "engine/sim/Simulation.cpp",
     "engine/sim/Simulation.h",
     "skills/editor/studio-ui/SKILL.md",
-    "tests/simulation_profile_test.cpp"
+    "tests/simulation_profile_test.cpp",
+    "apps/editor/core/StudioPlayTools.h",
+    "apps/editor/core/Workspace.cpp",
+    "apps/studio-native/StudioHost.h",
+    "apps/studio-native/StudioSession.cpp",
+    "apps/studio-native/tests/StudioSessionTests.cpp",
+    "docs/editor-native-ecs-inspector.md",
+    "apps/editor/core/StudioPlayTools.cpp"
   ],
   "traits": {
     "editable": false,
@@ -55,7 +62,7 @@
     },
     "mcp": {
       "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "note": "Verify the typed local Studio handler, headless refusal and guarded requests over the authenticated agent link.",
       "evidence": [
         "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
       ]
@@ -156,7 +163,9 @@
     "skills": [
       "studio-ui"
     ],
-    "mcp_tools": [],
+    "mcp_tools": [
+      "studio_runtime_profile"
+    ],
     "studio_methods": [
       "studio.gameProfile"
     ],

@@ -181,3 +181,12 @@ its native run is pending).
 ## Local paused runtime debugging (S4)
 
 Studio Runtime has a separate temporary debug path for owner-approved Unit HP and finite configured Energy. It reuses the gameplay UnitVitals setters also used by Lua and is not the persisted Inspector writeback API. The host checks the paused local session, expected project/epoch/tick and exact previous fixed-point value. The adapter refuses unsupported, dead, dormant or off-map entities and values outside current bounds. No generic native component writes are inferred from inspector schemas. Debug edits are outside the deterministic command log, mark the local session as modified and are discarded when the session stops/restarts; do not use a command-only replay to reproduce a modified session. Native module runtime mutation adapters require a separate opt-in contract. No network or remote MCP write route is added.
+
+## Local Studio play tools
+
+Connect aiversemcp to the authenticated loopback agent link of the Studio running the project. All seven tools require the absolute path of the open project in `expectedProject`. A headless server advertises their schemas and reports that a connected Studio is required.
+
+- `studio_runtime_entities` pages a query by offset and limit. Call `studio_runtime_inspect` with the returned epoch and exact string reference to read the current entity and editable fields.
+- `studio_runtime_edit` accepts the inspected epoch, ref, expectedTick, field, expectedRaw and decimal value. The native owner permits positive HP and configured Energy for a live entity in a paused controllable local match. Read the entity again after editing.
+- `studio_runtime_regions` reads the region snapshot. `studio_runtime_profile` supports status, start with 1–120 steps, and stop.
+- `studio_play_review_preview` accepts boolean positions, amounts and removeDead options. Read the returned counts before passing its token to `studio_play_review_apply`. Studio takes the entity rows from the native session. Apply consumes the token and checks the project, saved map, revision, epoch and current simulation snapshot. The UI and agent keep separate pending reviews. Applying creates one undo step for changes to the authored map.

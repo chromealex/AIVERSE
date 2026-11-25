@@ -1,3 +1,4 @@
+#include "apps/editor/core/StudioPlayTools.h"
 #include "apps/studio-native/StudioSession.h"
 #include "apps/editor/AuthoringComponents.h"
 #include "tests/TestCheck.h"
@@ -660,9 +661,37 @@ void entityWorkflow() {
 }
 }
 
+static void localPlayToolContracts(aiverse::editor::Workspace& ws) {
+    using namespace aiverse;
+    auto call = [&](const char* name, const Json& args) { return ws.call(name, args, "editor"); };
+    const auto edit = Json::parse(R"({"expectedProject":"/fixture","epoch":"2","ref":"8","expectedTick":42,"field":"hp","expectedRaw":"65536","value":"2"})");
+    AIVERSE_TEST_CHECK(call("studio_runtime_edit",edit).getStr("error").find("connected local Studio")!=std::string::npos);
+    std::string route;
+    editor::registerStudioPlayTools(ws,[&](const std::string& method,const Json& args){route=method;return args;});
+    AIVERSE_TEST_CHECK(call("studio_runtime_edit",edit)==edit && route=="studio.gameEdit");
+    route.clear();
+    Json invalid=edit;
+    invalid.set("field",Json::string("owner"));
+    AIVERSE_TEST_CHECK(call("studio_runtime_edit",invalid).has("error") && route.empty());
+    invalid=edit;
+    invalid.erase("expectedTick");
+    AIVERSE_TEST_CHECK(call("studio_runtime_edit",invalid).has("error") && route.empty());
+    invalid=edit;
+    invalid.set("expectedTick",Json::number(0.5));
+    AIVERSE_TEST_CHECK(call("studio_runtime_edit",invalid).has("error") && route.empty());
+    auto apply=Json::parse(R"({"expectedProject":"/fixture","token":"t"})");
+    apply.set("entities",Json::array());
+    AIVERSE_TEST_CHECK(call("studio_play_review_apply",apply).has("error") && route.empty());
+    apply.erase("entities");
+    AIVERSE_TEST_CHECK(call("studio_play_review_apply",apply)==apply && route=="studio.keepPlayChanges");
+    editor::registerStudioPlayTools(ws);
+    AIVERSE_TEST_CHECK(call("studio_play_review_apply",apply).has("error"));
+}
+
 int main() {
     using namespace aiverse;
     aiverse::studio::StudioSession session(".");
+    localPlayToolContracts(session.workspace());
     bool playRejected=false;
     try { (void)studio::studioGameLaunch(session.workspace(),false); }
     catch(const std::exception&) {playRejected=true;}
