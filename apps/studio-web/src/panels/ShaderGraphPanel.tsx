@@ -109,7 +109,7 @@ export default function ShaderGraphPanel({projectPath,previewTitle}:{projectPath
   try{
    if(stop)await invoke('studio.materialPreview',{name:''});
    else await invoke('studio.shaderGraphPreview',{name:selected,graph:draft,projectPath});
-   setMessage(stop?'Returned to the map.':'Material draft sent to the Scene GPU preview.');
+   setMessage(stop?'Returned to the map.':'Draft sent to the Scene GPU preview.');
   }catch(e){setError(String(e));}finally{setBusy(false);}
  };
  const createGraph=async()=>{
@@ -192,7 +192,7 @@ export default function ShaderGraphPanel({projectPath,previewTitle}:{projectPath
          value={chosenOp?.id??''} onChange={event=>setSelectedOp(event.target.value)}>
          {compatibleOps.map(op=><option key={op.id} value={op.id}>{op.id}</option>)}
        </select>
-       {draft?.domain==='material'&&<button disabled={busy} onClick={()=>void previewDraft(false)}>Preview draft in Scene</button>}
+       {(draft?.domain==='material'||draft?.domain==='postfx')&&<button disabled={busy} onClick={()=>void previewDraft(false)}>Preview draft in Scene</button>}
        {previewTitle?.startsWith('Shader Graph / ')&&<button disabled={busy} onClick={()=>void previewDraft(true)}>Return to map</button>}
        <button disabled={!draft||busy||!chosenOp} onClick={createNode}>+ Node</button>
        <button disabled={!inspected||busy} onClick={deleteNode}>Delete node</button>

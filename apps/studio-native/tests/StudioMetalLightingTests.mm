@@ -93,11 +93,13 @@ int aiverseMain(int argc,char** argv) { @autoreleasepool {
         // A center-screen hit proves that the camera follows the negative scene.
         if(scene.pick(80,80,160,160,doc,true).empty())
             throw std::runtime_error("FPS camera misses authored scene");
-        for(int channel=0;channel<2;++channel){
+        for(const std::string domain:{"material","postfx"})for(int channel=0;channel<2;++channel){
             Json graph=Json::parse(R"({"version":1,"domain":"material","nodes":[{"op":"constant","id":"swatch","value":[1,0,0,1]}],"outputs":{"color":"swatch","emission":"swatch"}})");
+            graph.set("domain",Json::string(domain));
+            if(domain=="postfx")graph.find("outputs")->erase("emission");
             if(channel==1)graph.find("nodes")->at(0).set("value",Json::parse("[0,1,0,1]"));
             Json factors=Json::object();factors.set("studioGraphDraft",graph);
-            auto draw=[&]{scene.frame(160,160,doc,true,"","Shader Graph / test",factors,channel+10);};
+            auto draw=[&]{scene.frame(160,160,doc,true,"","Shader Graph / test",factors,(domain=="postfx"?20:10)+channel);};
             for(int i=0;i<15;++i)draw();
             auto sample=std::make_shared<std::promise<std::vector<uint8_t>>>();
             auto result=sample->get_future();

@@ -1,4 +1,5 @@
 #include "engine/view/AppearanceAuthoringService.h"
+#include "engine/render/TextureCache.h"
 #include "apps/editor/AuthoringWater.h"
 #include "apps/studio-native/StudioScene.h"
 #include "apps/studio-native/StudioFont6x11.h"
@@ -589,6 +590,7 @@ StudioScene::~StudioScene() {
             renderer_.invalidateModelCachesFor(lightingModel_.get());
             releaseModel(*device_,*lightingModel_);lightingModel_.reset();
         }
+        if(graphPreviewPost_)graphPreviewPost_->shutdown();
         post_.shutdown();
         (void)facialGpu_.clear(*device_,renderer_);
         if(studioCyclorama_.vb.valid())device_->destroyBuffer(studioCyclorama_.vb);
@@ -1597,9 +1599,30 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     if (materialRevision_ != previewRevision) {
         materialRevision_ = previewRevision;
         graphPreviewError_.clear();
-        if (materialRequested) {
+        if(graphPreviewPost_){
+            if(device_->waitForResourceIdle()){graphPreviewPost_->shutdown();graphPreviewPost_.reset();}
+            else graphPreviewError_="Cannot retire previous post effect preview";
+        }
+        if (materialRequested && graphPreviewError_.empty()) {
             const bool graphDraft=previewFactors.has("studioGraphDraft")&&previewName.rfind("Shader Graph / ",0)==0;
-            if (!materialSphere_ || graphDraft || materialSphere_->materials.at(0).shaderGraph) {
+            const Json& previewGraph=previewFactors["studioGraphDraft"];
+            if(graphDraft&&previewGraph.getStr("domain")=="postfx"){
+                auto chain=std::make_unique<render::Prisma>();
+                try{
+                    if(!chain->init(*device_))throw std::runtime_error("Cannot initialize the post effect GPU preview");
+                    chain->setQuality(render::PrismaQuality::High);
+                    chain->setImageLoader([root=projectRoot](const std::string& path,int& w,int& h,std::vector<uint8_t>& rgba){
+                        std::string bytes;return readPreviewAsset(root,path,bytes)&&render::decodeImage(bytes,w,h,rgba);
+                    });
+                    Json effect=Json::object();effect.set("type",Json::string("shaderGraph"));effect.set("graph",previewGraph);
+                    Json effects=Json::array();effects.push(std::move(effect));
+                    Json settings=Json::object();settings.set("effects",std::move(effects));
+                    chain->configure(settings,Json::object());
+                    graphPreviewPost_=std::move(chain);
+                }catch(const std::exception& e){chain->shutdown();graphPreviewError_=e.what();}
+            }
+            const bool materialGraph=graphDraft&&previewGraph.getStr("domain")=="material";
+            if (!materialSphere_ || materialGraph || materialSphere_->materials.at(0).shaderGraph) {
                 render::MeshBuilder sphere;
                 sphere.color(render::rgba(255,255,255));
                 sphere.sphere({0,0,0},1.0f,32,48);
@@ -1607,7 +1630,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                 auto next=render::modelFromParts("studio/pbr-preview",{{"PBR sphere",&sphere,base,render::mat4{}}});
                 try {
                     if(!next)throw std::runtime_error("Material preview geometry missing");
-                    if(graphDraft){
+                    if(materialGraph){
                         Json ref=Json::object();ref.set("shaderGraph",previewFactors["studioGraphDraft"]);
                         view::AppearanceAuthoringService::applyMaterial(next->materials.at(0),Json::object(),ref,
                             [&](const std::string& path){
@@ -1644,7 +1667,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     if (materialMode_) {
         lightingStatus_=graphPreviewError_.empty()
-            ? (previewFactors.has("studioGraphDraft")?previewName+" · GPU material preview":"Material preview · GI: off · Direct: standard")
+            ? (previewFactors.has("studioGraphDraft")?previewName+" · GPU "+previewFactors["studioGraphDraft"].getStr("domain")+" preview":"Material preview · GI: off · Direct: standard")
             : graphPreviewError_;
         if (!cameraInitialized_) {
             camera_.target={0,0,0};
@@ -1676,8 +1699,10 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         previewPass.clearColor[0]=.07f;
         previewPass.clearColor[1]=.09f;
         previewPass.clearColor[2]=.135f;
-        renderer_.render(previewPass,&antialiasing_);
+        render::PostProcess* previewPost=graphPreviewPost_?static_cast<render::PostProcess*>(graphPreviewPost_.get()):&antialiasing_;
+        renderer_.render(previewPass,previewPost);
         renderer_.resolvePostFx();
+        if(graphPreviewPost_&&!graphPreviewPost_->lastError().empty())lightingStatus_=graphPreviewPost_->lastError();
 
         return;
     }

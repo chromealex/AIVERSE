@@ -1645,8 +1645,8 @@ Json StudioSession::dispatchImpl(const Json& request) {
             const auto& graph=params["graph"];
             if(ws_.project.dir.empty()||params.getStr("projectPath")!=ws_.project.dir)
                 throw std::runtime_error("The preview project changed");
-            if(!validStudioShaderGraphName(name)||!validStudioShaderGraphDraft(graph)||graph.getStr("domain")!="material")
-                throw std::runtime_error("Expected a material Shader Graph draft");
+            if(!validStudioShaderGraphName(name)||!validStudioShaderGraphDraft(graph)||(graph.getStr("domain")!="material"&&graph.getStr("domain")!="postfx"))
+                throw std::runtime_error("Expected a material or postfx Shader Graph draft");
             Json request=Json::object();request.set("graph",graph);
             const auto validated=ws_.call("shader_graph_validate",request,"studio");
             if(validated.has("error"))throw std::runtime_error(validated.getStr("error"));

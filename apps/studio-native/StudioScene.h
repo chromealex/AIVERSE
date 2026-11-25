@@ -379,6 +379,7 @@ private:
     world::NereidManifestHost nereid_;
     double underwaterFrameTime_=0;
     render::Prisma post_;
+    std::unique_ptr<render::Prisma> graphPreviewPost_;
     render::RenderLightingRuntime lightingRuntime_;
     std::unique_ptr<render::Model> lightingModel_;
     uint64_t lightingRevision_ = std::numeric_limits<uint64_t>::max();
