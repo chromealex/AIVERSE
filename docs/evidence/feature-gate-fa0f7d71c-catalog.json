@@ -1,0 +1,11 @@
+{
+  "sha": "fa0f7d71c0b6ead7fbc7aff1f1ef5ac7143c015f",
+  "argv": [
+    "python3.12",
+    "tools/skills/catalog.py",
+    "check"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/feature-gate-fa0f7d71c-catalog.log.txt",
+  "sha256": "9e5d7671a938a47af9f2b88f2ff0cc2928b82331551eb24b9c9f435f50d9c8a8"
+}

@@ -2906,8 +2906,8 @@
           "id": "feature-gate",
           "title": "Единый контракт готовности фич",
           "titleEn": "Unified feature readiness contract",
-          "text": "Манифесты, проверка доказательств и интеграция с каталогом скиллов.",
-          "textEn": "Manifests, evidence checks and skill catalog integration.",
+          "text": "Манифесты, проверка доказательств и интеграция с каталогом скиллов. Проверить линковку инструментов графа на Linux ARM64.",
+          "textEn": "Manifests, evidence checks and skill catalog integration. Verify that graph tools link on Linux ARM64.",
           "status": "in-progress"
         }
       ]

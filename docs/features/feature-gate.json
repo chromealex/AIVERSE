@@ -94,11 +94,11 @@
       "evidence": []
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Native Workspace readiness query and fixed local report generation implemented in source; build and runtime validation pending. Previous Feature Gate branch evidence: On Mac v10 actual built Workspace/MCP readiness refresh, status, get and dependency query exercised twice in one persistent process; successful completion and matching snapshot SHA verified. Other platforms and GUI timer not covered.",
+      "status": "pass",
+      "note": "The compiled Workspace implementation regenerated the report in a persistent native process, returned job completion and served a bounded query for the current source revision.",
       "evidence": [
-        "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-refresh.log.txt",
-        "docs/agent-handoffs/feature-gate-stage45-mac-qa-2026-11-24.md"
+        "docs/agents/feature-contract.md",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt"
       ]
     },
     "skill": {
@@ -107,8 +107,8 @@
       "evidence": [
         "skills/workflow/aiverse-new-feature/SKILL.md",
         "docs/evidence/integration-acceptance-d5608fb7f.json",
-        "docs/evidence/feature-gate-460ce965c-catalog.log.txt",
-        "docs/evidence/feature-gate-460ce965c-skill-audit.log.txt"
+        "docs/evidence/feature-gate-ad5786f5a-catalog.log.txt",
+        "docs/evidence/feature-gate-ad5786f5a-skill-audit.log.txt"
       ]
     },
     "mcp": {
@@ -116,16 +116,17 @@
       "note": "All four native readiness operations worked over stdio without a loaded project: generation, completion, snapshot readback and a bounded feature page.",
       "evidence": [
         "docs/evidence/feature-readiness-stdio-b954cd47a.json",
-        "docs/evidence/integration-tools-b954cd47a.json"
+        "docs/evidence/integration-tools-b954cd47a.json",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt"
       ]
     },
     "studio": {
       "status": "not_run",
       "note": "Opt-in regeneration, job status, dependency graph and assignment proposals implemented in source; typecheck, build and visual validation pending. At 460ce965c the Studio TypeScript check, 256 web cases and 55 Python contract cases (one skipped) passed. Live native acceptance is tracked separately.",
       "evidence": [
-        "docs/evidence/feature-gate-460ce965c-typecheck.log.txt",
-        "docs/evidence/feature-gate-460ce965c-studio-contracts.log.txt",
-        "docs/evidence/feature-gate-460ce965c-web.log.txt"
+        "docs/evidence/feature-gate-ad5786f5a-typecheck.log.txt",
+        "docs/evidence/feature-gate-ad5786f5a-studio-contracts.log.txt",
+        "docs/evidence/feature-gate-ad5786f5a-web.log.txt"
       ]
     },
     "inspector": {
@@ -145,8 +146,10 @@
     },
     "performance": {
       "status": "not_run",
-      "note": "Shared native-module host build wiring changes; cross-platform and runtime acceptance pending.",
-      "evidence": []
+      "note": "Shared native-module host build wiring changes; cross-platform and runtime acceptance pending. The 10-manifest workload generated a 314959-byte report in 2.02 seconds with 66666496 bytes peak RSS on Mac. GUI rendering and host build performance remain open.",
+      "evidence": [
+        "docs/evidence/integration-1209eaa44-policy.log.txt"
+      ]
     },
     "platforms": {
       "status": "not_run",
@@ -154,11 +157,11 @@
       "evidence": []
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending actual execution and integration review. Previous Feature Gate branch evidence: Mac v7 policy dependency report: both registered features have empty requires and no dependency declaration errors; partial compliance and native-host build fixture passed. This is declared dependency scope, not release readiness.",
+      "status": "pass",
+      "note": "The declared feature policy lists no prerequisite manifests. The integrated report resolved the dependency order and roadmap without policy errors.",
       "evidence": [
-        "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md",
-        "docs/evidence/feature-gate-mac-v7-summary.log.txt"
+        "docs/agents/feature-policy.json",
+        "docs/evidence/integration-1209eaa44-policy.log.txt"
       ]
     },
     "headless": {
@@ -167,11 +170,11 @@
       "evidence": []
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending actual execution and integration review. Previous Feature Gate branch evidence: Documented working report-generation and persistent MCP refresh/status/get/dependency query example, actually executed twice in Mac v10. No visual or publishing claim.",
+      "status": "pass",
+      "note": "Executed the documented refresh, status, snapshot and paginated feature-list workflow through native MCP. The snapshot matched the current revision.",
       "evidence": [
-        "docs/agent-handoffs/feature-gate-stage49-acceptance-2026-11-24.md",
-        "docs/evidence/feature-gate-mac-v10-be64591b1087-mcp-refresh.log.txt"
+        "docs/agents/feature-contract.md",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt"
       ]
     },
     "tests": {
@@ -180,9 +183,9 @@
       "evidence": [
         "docs/evidence/integration-tools-b954cd47a.json",
         "docs/evidence/feature-readiness-stdio-b954cd47a.json",
-        "docs/evidence/feature-gate-460ce965c-feature-suite.log.txt",
-        "docs/evidence/feature-gate-460ce965c-native-project.log.txt",
-        "docs/evidence/feature-gate-460ce965c-contracts.log.txt"
+        "docs/evidence/feature-gate-ad5786f5a-feature-suite.log.txt",
+        "docs/evidence/feature-gate-ad5786f5a-native-project.log.txt",
+        "docs/evidence/feature-gate-ad5786f5a-contracts.log.txt"
       ]
     },
     "handoff": {
@@ -225,14 +228,13 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integrated-graph-2a56cbf39.json",
-    "docs/evidence/feature-gate-460ce965c-feature-suite.json",
-    "docs/evidence/feature-gate-460ce965c-native-project.json",
-    "docs/evidence/feature-gate-460ce965c-contracts.json",
-    "docs/evidence/feature-gate-460ce965c-catalog.json",
-    "docs/evidence/feature-gate-460ce965c-skill-audit.json",
-    "docs/evidence/feature-gate-460ce965c-typecheck.json",
-    "docs/evidence/feature-gate-460ce965c-studio-contracts.json",
-    "docs/evidence/feature-gate-460ce965c-web.json"
+    "docs/evidence/feature-gate-ad5786f5a-contracts.json",
+    "docs/evidence/feature-gate-ad5786f5a-catalog.json",
+    "docs/evidence/feature-gate-ad5786f5a-skill-audit.json",
+    "docs/evidence/feature-gate-ad5786f5a-feature-suite.json",
+    "docs/evidence/feature-gate-ad5786f5a-native-project.json",
+    "docs/evidence/feature-gate-ad5786f5a-web.json",
+    "docs/evidence/feature-gate-ad5786f5a-studio-contracts.json",
+    "docs/evidence/feature-gate-ad5786f5a-typecheck.json"
   ]
 }

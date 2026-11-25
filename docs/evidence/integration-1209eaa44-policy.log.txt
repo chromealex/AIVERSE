@@ -1,0 +1,225 @@
+{
+  "sha": "1209eaa449db361870ab14d60973f5600a071380",
+  "argv": [
+    "python3.12",
+    "tools/agents/feature_policy.py",
+    "--base",
+    "origin/main"
+  ],
+  "elapsed_and_memory": [
+    "        2.02 real         1.07 user         0.24 sys",
+    "            66666496  maximum resident set size"
+  ],
+  "output_bytes": 314959,
+  "counts": {
+    "manifests": 10,
+    "capabilities": 163,
+    "graphs": 18,
+    "tasks": 191
+  },
+  "errors": [],
+  "dependencies": {
+    "graph-framework": {
+      "state": "pending",
+      "requires": [],
+      "blocked_by": [],
+      "pending": [
+        "implementation",
+        "architecture",
+        "native_api",
+        "mcp",
+        "studio",
+        "inspector",
+        "persistence",
+        "graphs",
+        "performance",
+        "platforms",
+        "dependencies",
+        "examples",
+        "tests",
+        "documentation",
+        "publishing"
+      ],
+      "errors": []
+    },
+    "building-graph-integration": {
+      "state": "blocked",
+      "requires": [
+        "graph-framework"
+      ],
+      "blocked_by": [
+        "graph-framework"
+      ],
+      "pending": [
+        "implementation",
+        "architecture",
+        "studio",
+        "performance",
+        "platforms",
+        "dependencies",
+        "tests",
+        "publishing"
+      ],
+      "errors": []
+    },
+    "feature-gate": {
+      "state": "pending",
+      "requires": [],
+      "blocked_by": [],
+      "pending": [
+        "architecture",
+        "native_api",
+        "studio",
+        "performance",
+        "platforms",
+        "dependencies",
+        "examples",
+        "publishing"
+      ],
+      "errors": []
+    },
+    "recurring-work-budget": {
+      "state": "pending",
+      "requires": [],
+      "blocked_by": [],
+      "pending": [
+        "implementation",
+        "architecture",
+        "studio",
+        "inspector",
+        "performance",
+        "platforms",
+        "dependencies",
+        "publishing"
+      ],
+      "errors": []
+    },
+    "studio-entity-debugger": {
+      "state": "pending",
+      "requires": [],
+      "blocked_by": [],
+      "pending": [
+        "implementation",
+        "architecture",
+        "native_api",
+        "mcp",
+        "studio",
+        "inspector",
+        "performance",
+        "platforms",
+        "dependencies",
+        "examples",
+        "tests",
+        "publishing"
+      ],
+      "errors": []
+    },
+    "studio-play-mode-review": {
+      "state": "pending",
+      "requires": [],
+      "blocked_by": [],
+      "pending": [
+        "implementation",
+        "architecture",
+        "native_api",
+        "mcp",
+        "studio",
+        "inspector",
+        "persistence",
+        "performance",
+        "platforms",
+        "dependencies",
+        "examples",
+        "tests",
+        "publishing"
+      ],
+      "errors": []
+    },
+    "studio-runtime-debugger": {
+      "state": "blocked",
+      "requires": [
+        "studio-entity-debugger"
+      ],
+      "blocked_by": [
+        "studio-entity-debugger"
+      ],
+      "pending": [
+        "implementation",
+        "architecture",
+        "native_api",
+        "mcp",
+        "studio",
+        "inspector",
+        "persistence",
+        "performance",
+        "platforms",
+        "dependencies",
+        "examples",
+        "tests",
+        "publishing"
+      ],
+      "errors": []
+    },
+    "studio-simulation-profiler": {
+      "state": "pending",
+      "requires": [],
+      "blocked_by": [],
+      "pending": [
+        "implementation",
+        "architecture",
+        "native_api",
+        "mcp",
+        "studio",
+        "inspector",
+        "persistence",
+        "performance",
+        "platforms",
+        "dependencies",
+        "examples",
+        "tests",
+        "publishing"
+      ],
+      "errors": []
+    },
+    "studio-world-explorer": {
+      "state": "pending",
+      "requires": [],
+      "blocked_by": [],
+      "pending": [
+        "implementation",
+        "architecture",
+        "native_api",
+        "mcp",
+        "studio",
+        "inspector",
+        "performance",
+        "platforms",
+        "dependencies",
+        "examples",
+        "tests",
+        "publishing"
+      ],
+      "errors": []
+    },
+    "terraweave-caverns": {
+      "state": "blocked",
+      "requires": [
+        "graph-framework"
+      ],
+      "blocked_by": [
+        "graph-framework"
+      ],
+      "pending": [
+        "implementation",
+        "architecture",
+        "studio",
+        "performance",
+        "platforms",
+        "dependencies",
+        "tests",
+        "publishing"
+      ],
+      "errors": []
+    }
+  }
+}

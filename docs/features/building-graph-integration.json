@@ -295,7 +295,8 @@
       "note": "Real MCP stdio and the Studio agent link read two native Building scenes with navigation telemetry. Missing-owner, absent-scene and invalid-ID requests were checked.",
       "evidence": [
         "docs/evidence/integration-tools-b954cd47a.json",
-        "docs/evidence/building-live-owner-b954cd47a.json"
+        "docs/evidence/building-live-owner-b954cd47a.json",
+        "docs/evidence/integration-ad5786f5a-building.log.txt"
       ]
     },
     "studio": {
@@ -336,8 +337,10 @@
     },
     "platforms": {
       "status": "not_run",
-      "note": "Stage 35D planned; integration verification pending.",
-      "evidence": []
+      "note": "Stage 35D planned; integration verification pending. Linux ARM64 native focused tests passed on ad5786f5a. Windows execution remains open.",
+      "evidence": [
+        "docs/evidence/integration-ad5786f5a-linux.log.txt"
+      ]
     },
     "dependencies": {
       "status": "not_run",
@@ -412,6 +415,8 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integrated-graph-2a56cbf39.json"
+    "docs/evidence/feature-gate-ad5786f5a-contracts.json",
+    "docs/evidence/feature-gate-ad5786f5a-catalog.json",
+    "docs/evidence/feature-gate-ad5786f5a-skill-audit.json"
   ]
 }

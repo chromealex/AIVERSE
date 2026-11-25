@@ -112,10 +112,11 @@
       ]
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The declared feature policy lists no prerequisite manifests. The integrated report resolved the dependency order and roadmap without policy errors.",
       "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+        "docs/agents/feature-policy.json",
+        "docs/evidence/integration-1209eaa44-policy.log.txt"
       ]
     },
     "headless": {
@@ -184,6 +185,8 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integrated-graph-2a56cbf39.json"
+    "docs/evidence/feature-gate-ad5786f5a-contracts.json",
+    "docs/evidence/feature-gate-ad5786f5a-catalog.json",
+    "docs/evidence/feature-gate-ad5786f5a-skill-audit.json"
   ]
 }

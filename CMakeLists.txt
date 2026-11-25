@@ -431,6 +431,7 @@ elseif(AIVERSE_PLATFORM STREQUAL "web")
 elseif(UNIX AND NOT ANDROID)
     target_link_libraries(aiverse_pack PUBLIC ${CMAKE_DL_LIBS})
 endif()
+target_link_libraries(aiverse_pack PRIVATE aiverse_zstd_dec)
 target_include_directories(aiverse_pack PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 if(AIVERSE_BUILD_TOOLS OR AIVERSE_BUILD_TESTS)
     add_library(aiverse_pack_writer STATIC engine/pack/PackWriter.cpp engine/pack/Unpacker.cpp)
@@ -640,9 +641,8 @@ if(AIVERSE_FBX)
 else()
     target_compile_definitions(aiverse_models PRIVATE AIVERSE_NO_FBX=1)
 endif()
-# KTX2 zstd supercompression: the decoder comes with aiverse_runtime (aiverse_zstd_dec) or, in host tools,
-# with aiverse_pack_writer (full zstd); linking aiverse_zstd_dec here would pull both into tests and tools.
-target_link_libraries(aiverse_models PUBLIC aiverse_engine)
+# TextureCodec reads KTX2 with the same decoder target used by resource packs.
+target_link_libraries(aiverse_models PUBLIC aiverse_engine PRIVATE aiverse_zstd_dec)
 
 # Programmable presentation animation graphs reuse the existing model sampler and IK.
 target_sources(aiverse_models PRIVATE engine/render/SurfaceLocomotion.cpp engine/render/AnimationContacts.cpp engine/render/FullBodyIK.cpp engine/render/AnimationGraph.cpp engine/render/AnimationRig.cpp engine/render/AnimationMotion.cpp)
