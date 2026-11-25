@@ -58,6 +58,7 @@ def main():
             shutil.copy(src, temp/src.name)
         # Only reference packs installed with the .NET SDK are needed.
         (temp/"NuGet.Config").write_text("<configuration><packageSources><clear/></packageSources></configuration>")
+        (temp/"global.json").write_text('{"sdk":{"version":"8.0.100","rollForward":"latestFeature"}}')
         def run(*command):
             subprocess.run(command, cwd=temp, env=env, check=True)
         run("dotnet", "build", "RenderFrame.csproj", "--nologo", "-v:q")
