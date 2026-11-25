@@ -1,0 +1,118 @@
+{
+  "schema": 1,
+  "id": "native-simulation-checks",
+  "owner": "agents",
+  "changed_paths": [
+    "apps/editor/core/BalanceOps.cpp",
+    "apps/editor/core/NativeBuildOps.cpp",
+    "apps/editor/core/NativeBuildOps.h",
+    "apps/editor/core/ScenarioOps.cpp",
+    "apps/editor/core/ScriptOps.cpp",
+    "apps/editor/core/Workspace.cpp"
+  ],
+  "traits": {
+    "editable": false,
+    "simulation": false,
+    "visible": false,
+    "runtime": false
+  },
+  "checks": {
+    "implementation": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "architecture": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "native_api": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "skill": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "mcp": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "platforms": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "dependencies": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "headless": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "examples": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "tests": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "handoff": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "documentation": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [],
+    "mcp_tools": [],
+    "studio_panels": [],
+    "studio_methods": []
+  },
+  "test_reports": []
+}
