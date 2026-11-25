@@ -1,0 +1,10 @@
+{
+  "sha": "49e018e9d8316dc9cd988042aa804f036cf2b953",
+  "argv": [
+    "bash",
+    "/tmp/light-place-check.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-light-placement-ui.log.txt",
+  "sha256": "049ba06e1c743ef7497be737042b1ef61dbc3fb4734179919948d261939496ab"
+}
