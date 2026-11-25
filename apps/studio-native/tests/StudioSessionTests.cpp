@@ -494,9 +494,11 @@ void entityWorkflow() {
         {
             fs::create_directories(project/"shaders");
             const auto path=project/"shaders"/"precise.json";
-            std::ofstream(path) << R"({"domain":"material","nodes":[{"id":"c","op":"constant","value":[0.2000,0.7,1,1]}],"outputs":{"color":"c"}})";
+            std::ofstream(path) << R"({"version":1,"domain":"material","nodes":[{"id":"c","op":"constant","value":[0.2000,0.7,1,1]}],"outputs":{"color":"c"}})";
             auto params=Json::parse(R"({"name":"precise"})");
-            const auto loaded=call("studio.shaderGraphGet",params)["result"];
+            const auto reply=call("studio.shaderGraphGet",params);
+            AIVERSE_TEST_CHECK(!reply.has("error"));
+            const auto& loaded=reply["result"];
             const auto baseline=loaded.getStr("originalJson");
             AIVERSE_TEST_CHECK(baseline.find("0.2000")!=std::string::npos);
             params.set("expectedProject",Json::string(session.workspace().project.dir));
