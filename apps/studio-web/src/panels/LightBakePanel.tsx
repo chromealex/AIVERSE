@@ -26,6 +26,7 @@ export default function LightBakePanel({scope}:{scope?:StudioGraphDocumentScope}
   const [patch,setPatch]=useState<Settings>({});
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
+  const [outputRevision,setOutputRevision]=useState(0);
   const [confirmClear,setConfirmClear]=useState(false);
   const [revision,refresh]=useState(0);
   const project=scope?.projectPath, epoch=scope?.epoch;
@@ -90,12 +91,14 @@ export default function LightBakePanel({scope}:{scope?:StudioGraphDocumentScope}
         </StudioField>)}</details>
         <StudioButton disabled={busy || !dirty} variant="primary" onClick={()=>void write('lightbake_set',patch)}>Apply settings</StudioButton>
       </StudioSection>
-      <StudioSection title="Baked output">
+      <StudioSection title="Baked output" actions={<StudioButton size="sm" disabled={busy} onClick={()=>{
+        setConfirmClear(false);setOutputRevision(n=>n+1);refresh(n=>n+1);
+      }}>Refresh output</StudioButton>}>
         {state.bake.exists ? <>
           <p>{state.bake.mode} · {state.bake.folder}</p>
           <dl>{['pages','regions','texels','probes'].map(key=><div key={key}><dt>{key}</dt><dd>{state.bake.stats?.[key] ?? 0}</dd></div>)}</dl>
           {epoch && state.bake.hash && !!state.bake.atlasPages?.length &&
-            <LightBakeAtlas key={state.bake.hash} epoch={epoch} hash={state.bake.hash} pages={state.bake.atlasPages}/>}
+            <LightBakeAtlas key={state.bake.hash+':'+outputRevision} epoch={epoch} hash={state.bake.hash} pages={state.bake.atlasPages}/>}
           <StudioButton variant="danger" disabled={busy} onClick={()=>confirmClear?void write('lightbake_clear',{}):setConfirmClear(true)}>
             {confirmClear?'Confirm clear':'Clear baked files'}</StudioButton>
           {confirmClear && <StudioButton disabled={busy} onClick={()=>setConfirmClear(false)}>Cancel</StudioButton>}
