@@ -14,14 +14,18 @@
     "docs/agent-handoffs/direct3d-renderer-stage2.md",
     "docs/agent-handoffs/direct3d-window-resize.md",
     "docs/agent-handoffs/render-backends-sampled-textures.md",
+    "docs/agent-handoffs/render-backends-windows-native.md",
     "docs/devlog/systems.json",
     "docs/direct3d.md",
+    "docs/evidence/direct3d-windows-native.json",
+    "docs/evidence/direct3d-windows-native.log.txt",
     "docs/features/direct3d-renderer.json",
     "engine/gfx/Gfx.h",
     "engine/gfx/d3d/Direct3D.cpp",
     "engine/gfx/d3d/Direct3D.h",
     "engine/gfx/d3d/GfxDirect3D.cpp",
     "engine/render/graph/GraphGpuProfile.h",
+    "skills/visuals/aiverse-modeling/SKILL.md",
     "tests/render/direct3d_device.cpp",
     "tests/render/direct3d_rhi.cpp",
     "tests/render/headless_model_capture.py"
@@ -34,103 +38,136 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Clip-space indexed triangles, per-pixel depth, textures and framebuffer readback exercised through the Device API.",
+      "evidence": [
+        "engine/gfx/d3d/GfxDirect3D.cpp",
+        "docs/evidence/direct3d-windows-native.json"
+      ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Process-owned gfx::Device implements the common render interface. Model capture shares the model loader and thumbnail path across devices.",
+      "evidence": [
+        "engine/gfx/d3d/GfxDirect3D.cpp",
+        "apps/modelview/HeadlessModelCapture.cpp"
+      ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "D3D11 and D3D9 RHI and both native render targets cross-built. Native Windows execution pending.",
+      "status": "pass",
+      "note": "Device creation, indexed geometry, sampled textures, capture and resource updates exercised through the public C++ interface.",
       "evidence": [
-        "docs/agent-handoffs/direct3d-renderer-stage2.md"
+        "engine/gfx/d3d/GfxDirect3D.cpp",
+        "docs/evidence/direct3d-windows-native.json"
       ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The modeling skill documents the capture command and backend selection.",
+      "evidence": [
+        "skills/visuals/aiverse-modeling/SKILL.md"
+      ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "Device selection belongs to the native capture process. There is no authored operation or scene property to expose over MCP.",
       "evidence": []
     },
     "studio": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "The backend is selected by the host when it creates a device. This feature introduces no editable Studio data.",
       "evidence": []
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "The opaque device belongs to the process, with no inspector-facing entity or component.",
       "evidence": []
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "GPU and raster resources have process lifetime. Capture produces PNG via the existing exporter and adds no persisted scene fields.",
       "evidence": []
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "Backend selection happens before any draw. It creates no graph nodes or graph assets.",
       "evidence": []
     },
     "performance": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "The Windows suite measures correctness on small render targets. Representative GPU frame-time and memory measurements remain open.",
+      "evidence": [
+        "docs/agent-handoffs/render-backends-windows-native.md"
+      ]
     },
     "platforms": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Windows Server 2022 x64 native MSVC run exercising WARP and HAL, including HWND presentation and resize.",
+      "evidence": [
+        "docs/evidence/direct3d-windows-native.json"
+      ]
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Windows SDK D3D11, DXGI, D3D9 and D3DCompiler are linked only for Windows targets.",
+      "evidence": [
+        "CMakeLists.txt",
+        "engine/gfx/d3d/GfxDirect3D.cpp"
+      ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Both offscreen surfaces and public Device paths passed on Windows.",
+      "evidence": [
+        "docs/evidence/direct3d-windows-native.json"
+      ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The documentation gives the native model capture command. The test exercises its rendering contract.",
+      "evidence": [
+        "docs/direct3d.md",
+        "docs/evidence/direct3d-windows-native.json"
+      ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Six native Windows CTests exercise D3D11 WARP and D3D9 HAL, native surfaces, Device draws and HWND resize.",
+      "evidence": [
+        "docs/evidence/direct3d-windows-native.json"
+      ]
     },
     "handoff": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Stage SHA, runner, test outcomes and remaining scope.",
+      "evidence": [
+        "docs/agent-handoffs/render-backends-windows-native.md"
+      ]
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Render API, capture invocation, supported formats and scope are documented.",
+      "evidence": [
+        "docs/direct3d.md"
+      ]
     },
     "publishing": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Windows-native backend; browser playback cannot exercise the Direct3D API. Native capture publishing is pending.",
+      "evidence": [
+        "docs/direct3d.md"
+      ]
     }
   },
   "integrations": {
-    "skills": [],
+    "skills": [
+      "aiverse-modeling"
+    ],
     "mcp_tools": [],
     "studio_panels": [],
     "studio_methods": []
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/direct3d-windows-native.json"
+  ]
 }

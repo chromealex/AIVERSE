@@ -1,2 +1,4 @@
 # Preserve the bytes used for the report SHA-256 on all worktrees.
 building-caverns-*.log.txt -text
+cpu-renderer-win-ci-regression.log.txt -text
+direct3d-windows-native.log.txt -text
