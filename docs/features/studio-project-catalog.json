@@ -3,6 +3,9 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/editor/core/OverlayOps.h",
+    "apps/studio-web/tests/nested-dock.mjs",
+    "apps/studio-web/src/workspaces.ts",
     "apps/studio-web/src/panels/useOverlayPreview.ts",
     "apps/studio-web/src/nestedDock.ts",
     "apps/studio-native/tests/overlay-plan/linked.py",

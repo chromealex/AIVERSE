@@ -32,7 +32,7 @@ test('on-demand tools reopen in their registered home exactly once',()=>{
 });
 test('move reorders within a tab stack',()=>{
   const t=moveTab(defaultDockTree(),'animation','dock-center','scene');
-  assert.deepEqual(findDockStack(t,'dock-center').tabs,['animation','scene','game','materials','facial_rig','shader_graph','anim_graph','anim_rig','human_creator','human_appearance','rules','build','scripts','snapshot_diff','feature_readiness']);
+  assert.deepEqual(findDockStack(t,'dock-center').tabs,['animation','scene','game','materials','facial_rig','shader_graph','anim_graph','anim_rig','human_creator','human_appearance','rules','build','scripts','snapshot_diff','feature_readiness','overlays']);
   assert.equal(findDockStack(t,'dock-center').active,'animation');
 });
 test('dragging panels across stacks retains identity',()=>{
