@@ -265,7 +265,8 @@
     "docs/agent-handoffs/feature-gate-stage82-material-isolated-staging-2026-11-24.md",
     "docs/agent-handoffs/feature-gate-stage83-material-quarantine-restore-2026-11-24.md",
     "docs/features/graph-framework.json",
-    "apps/studio-web/src/graphs/GraphDiagnostics.tsx"
+    "apps/studio-web/src/graphs/GraphDiagnostics.tsx",
+    "docs/agent-handoffs/pr183-publication-integration-2026-11-25.md"
   ],
   "traits": {
     "editable": true,
@@ -303,8 +304,8 @@
       "evidence": [
         "skills/workflow/aiverse-graph-authoring/SKILL.md",
         "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md",
-        "docs/evidence/feature-gate-e0b95cf24-catalog.log.txt",
-        "docs/evidence/feature-gate-e0b95cf24-skill-audit.log.txt",
+        "docs/evidence/feature-gate-a4a078735-catalog.log.txt",
+        "docs/evidence/feature-gate-a4a078735-skill-audit.log.txt",
         "skills/workflow/aiverse-graph-authoring/SKILL.md"
       ]
     },
@@ -550,6 +551,7 @@
     "docs/evidence/feature-gate-e0b95cf24-native-project.json",
     "docs/evidence/feature-gate-e0b95cf24-web.json",
     "docs/evidence/feature-gate-e0b95cf24-studio-contracts.json",
-    "docs/evidence/feature-gate-e0b95cf24-typecheck.json"
+    "docs/evidence/feature-gate-e0b95cf24-typecheck.json",
+    "docs/evidence/pr183-publication-native-630793aca.json"
   ]
 }
