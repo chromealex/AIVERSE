@@ -145,7 +145,7 @@ def systems_html(systems, ctx):
         sid = esc(s['id'])
         link = f'<a class="sys-link" href="system-{sid}.html">{ctx.T["cardMore"]}</a>'
         badge = version_badge(s, ctx)
-        head = f'<div class="sys-head"><h3><a href="system-{sid}.html">{esc(s["name"])}</a></h3>{badge}</div>'
+        head = f'<div class="sys-head"><h3><a href="system-{sid}.html">{esc(ctx.loc(s, "name"))}</a></h3>{badge}</div>'
         text = f'<p class="sys-tag">{esc(ctx.loc(s, "tagline"))}</p><p>{esc(ctx.loc(s, "essence"))}</p>'
         if s.get('cover'):
             c = s['cover']
@@ -154,7 +154,7 @@ def systems_html(systems, ctx):
                          f'<div class="sys-body">{head}{text}{link}</div></article>')
         else:
             cards.append(f'<article class="sys-card sys-pending" id="sys-{sid}">'
-                         f'<div class="sys-placeholder" aria-hidden="true">{MARK_LIGHT}<span>{esc(s["name"])}</span></div>'
+                         f'<div class="sys-placeholder" aria-hidden="true">{MARK_LIGHT}<span>{esc(ctx.loc(s, "name"))}</span></div>'
                          f'<div class="sys-body">{head}{text}<p class="sys-wait">{ctx.T["coverPending"]}</p>{link}</div></article>')
     return '\n'.join(cards)
 
@@ -288,11 +288,11 @@ def feature_page(s, it, body_html, ctx):
     sib = ''.join(f'<a class="chip{" chip-ink" if o is it else ""}" href="{sib_href(o)}">{esc(ctx.loc(o, "name"))}</a>'
                   for o in s['includes'])
     return (f'<section class="sp-hero fp-hero"><p class="crumbs"><a href="./#systems">{ctx.T["crumbSystems"]}</a> / '
-            f'<a href="system-{sid}.html">{esc(s["name"])}</a> / {esc(ctx.loc(it, "name"))}</p>'
+            f'<a href="system-{sid}.html">{esc(ctx.loc(s, "name"))}</a> / {esc(ctx.loc(it, "name"))}</p>'
             f'<h1>{esc(ctx.loc(it, "name"))}</h1><p class="sp-lead">{esc(ctx.loc(it, "text"))}</p></section>'
             f'{gal}<article class="doc fp-body">{body_html}</article>'
-            f'<section class="sp-sec sp-others"><p class="eyebrow">{ctx.T["incOther"].format(s=esc(s["name"]))}</p>'
-            f'<div class="chips">{sib}</div><p><a class="btn btn-line" href="system-{sid}.html">← {esc(s["name"])}</a></p></section>'
+            f'<section class="sp-sec sp-others"><p class="eyebrow">{ctx.T["incOther"].format(s=esc(ctx.loc(s, "name")))}</p>'
+            f'<div class="chips">{sib}</div><p><a class="btn btn-line" href="system-{sid}.html">← {esc(ctx.loc(s, "name"))}</a></p></section>'
             '<div class="lightbox" id="lightbox" role="dialog" aria-modal="true"><button type="button" id="lb-close" aria-label="×">×</button>'
             '<img id="lb-img" alt=""><p id="lb-cap"></p></div>')
 
@@ -332,7 +332,7 @@ def system_page(s, flagships, entries, ctx, repo_blob, doc_pages):
     elif core:
         cover = ''
     else:
-        cover = (f'<div class="sp-cover sp-pending"><div class="sys-placeholder">{MARK_LIGHT}<span>{esc(s["name"])}</span></div>'
+        cover = (f'<div class="sp-cover sp-pending"><div class="sys-placeholder">{MARK_LIGHT}<span>{esc(ctx.loc(s, "name"))}</span></div>'
                  f'<p><strong>{ctx.T["pendingTitle"]}</strong> {esc(ctx.loc(s, "coverBrief"))}</p></div>')
     inc = ''.join(include_card(s, i, ctx) for i in s['includes'])
     ena = ''.join(f'<li>{esc(x)}</li>' for x in (ctx.loc(s, 'enables') or []))
@@ -395,7 +395,7 @@ def roadmap_lines(flagships, ctx):
         done = sum(1 for it in rm if it['status'] == 'done')
         now_m = f'<span class="ln-now-m">{esc(ctx.loc(rm[now], "title"))}</span>' if now < n else ''
         rows.append(f'<a class="ln" href="roadmap.html#{esc(s["id"])}" style="--c:{col};--x:{xn:.2f}%">'
-                    f'<span class="ln-n">{esc(s["name"])}<small>{esc(ctx.T["rmProgress"].format(d=done, n=n))}</small>'
+                    f'<span class="ln-n">{esc(ctx.loc(s, "name"))}<small>{esc(ctx.T["rmProgress"].format(d=done, n=n))}</small>'
                     f'{now_m}</span>'
                     f'<span class="ln-track"><span class="ln-rail"></span>{"".join(sts)}</span></a>')
     return (f'<section id="roadmap" class="section wrap ln-sec"><div class="ln-head"><div><p class="eyebrow">{ctx.T["navRoadmap"]}</p>'
@@ -409,7 +409,7 @@ def roadmap_lines(flagships, ctx):
 def roadmap_page(flagships, ctx):
     """Now / next / later: one row per system, done items folded, the current one highlighted."""
     chips = [f'<button class="filter" type="button" data-sys="" aria-pressed="true">{ctx.T["rmAll"]}</button>']
-    chips += [f'<button class="filter" type="button" data-sys="{esc(s["id"])}" aria-pressed="false">{esc(s["name"])}</button>'
+    chips += [f'<button class="filter" type="button" data-sys="{esc(s["id"])}" aria-pressed="false">{esc(ctx.loc(s, "name"))}</button>'
               for s in flagships]
 
     def item(it, cls):
@@ -437,7 +437,7 @@ def roadmap_page(flagships, ctx):
         rows.append(
             f'<section class="nn-row" id="{esc(s["id"])}" data-sys="{esc(s["id"])}" style="--c:{line_color(s, flagships)}">'
             f'<div class="nn-sys"><span class="nn-ring" style="--p:{pct}"><i>{len(done)}/{len(rm)}</i></span>'
-            f'<span><a class="nn-name" href="{href}">{esc(s["name"])}</a>'
+            f'<span><a class="nn-name" href="{href}">{esc(ctx.loc(s, "name"))}</a>'
             f'<span class="nn-last">{ctx.T["nnLast"]} {esc(last)}</span></span></div>'
             f'<div class="nn-col" data-label="{ctx.T["nnDone"]}"><ul class="nn-done">{"".join(item(it, "") for it in recent)}</ul>{more}</div>'
             f'<div class="nn-col" data-label="{ctx.T["rmNow"]}">'

@@ -1684,10 +1684,13 @@
           "titleEn": "Tests and visual verification"
         },
         {
-          "status": "planned",
+          "status": "done",
           "target": null,
           "title": "Замеры производительности на CPU",
-          "titleEn": "CPU performance measurements"
+          "titleEn": "CPU performance measurements",
+          "date": "2026-11-25",
+          "text": "Тест MotionWeave на Mac, 1 000 акторов без IK, 120 кадров в сборке Debug. Среднее время обновления — 2,57 мс последовательно и 0,82 мс при семи рабочих потоках.",
+          "textEn": "Mac Debug benchmark with 1,000 actors, no IK and 120 frames. Mean update time was 2.57 ms serially and 0.82 ms with seven workers."
         }
       ],
       "taglineEn": "Character animation",
@@ -3008,14 +3011,17 @@
           "target": null,
           "title": "Studio на Windows",
           "titleEn": "Studio on Windows",
-          "text": "Общее с Mac ядро редактора, интерфейс в WebView2, сцена и игра на Vulkan. Приложение собирается, первый запуск на Windows впереди.",
-          "textEn": "An editor core shared with the Mac, the interface in WebView2, Scene and Game on Vulkan. The application builds; the first run on Windows is ahead."
+          "text": "Studio собирается с MSVC. На Windows проверены интерфейс WebView2 и повторное открытие плавающего окна. Проверка отображения сцены и игры через Vulkan остаётся отдельным этапом.",
+          "textEn": "Studio builds with MSVC. The WebView2 interface and floating-window restoration have been exercised on Windows. Scene and Game rendering through Vulkan still needs verification."
         },
         {
-          "status": "planned",
+          "status": "done",
           "target": null,
           "title": "Плавающие окна панелей на Windows",
-          "titleEn": "Floating panel windows on Windows"
+          "titleEn": "Floating panel windows on Windows",
+          "date": "2026-11-22",
+          "text": "Вкладку можно открыть в отдельном окне WebView2 и вернуть в док. Studio восстанавливает окно при следующем запуске.",
+          "textEn": "A tab can open in a separate WebView2 window and return to the dock. Studio restores the window on relaunch."
         },
         {
           "status": "planned",
@@ -3219,31 +3225,41 @@
     },
     {
       "id": "import",
-      "name": "Импорт из Unity и Godot",
-      "nameEn": "Import from Unity and Godot",
+      "name": "Импорт проектов и карт",
+      "nameEn": "Project and map import",
       "doc": "docs/engine-import.md",
       "core": true,
       "article": "docs/engine-import.md",
-      "tagline": "Перенос проекта с другого движка",
-      "taglineEn": "Moving a project from another engine",
-      "essence": "Импортёр переносит сцены, префабы, модели, частицы и анимации; остальное попадает в отчёт для агента.",
-      "essenceEn": "The importer moves scenes, prefabs, models, particles and animations; the rest goes into a report for an agent.",
+      "tagline": "Проекты других движков и карты Warcraft III",
+      "taglineEn": "Projects from other engines and Warcraft III maps",
+      "essence": "Импортёр проектов переносит сцены, модели и анимации. Импортёр Warcraft III создаёт карту AIVERSE с рельефом и размещает объекты, для которых нашёл модели.",
+      "essenceEn": "The project importer converts scenes, models and animations. The Warcraft III importer creates an AIVERSE map with terrain and places objects with resolved models.",
       "roadmap": [
         {
-          "status": "in-progress",
+          "status": "done",
           "target": null,
           "title": "Чтение карт Warcraft III",
-          "titleEn": "Warcraft III map import",
-          "text": "Архивы MPQ, высоты, объекты и размещение на карте; предпросмотр рельефа в Studio. Интеграция игровых объектов и проверка на реальных картах ещё в работе.",
-          "textEn": "MPQ archives, heights, objects and placements; Studio terrain preview. Game object integration and real-map verification remain in progress."
+          "titleEn": "Reading Warcraft III maps",
+          "text": "Из .w3m, .w3x и распакованных карт импортёр читает высоты рельефа, метаданные и размещения объектов. Карту с рельефом можно открыть в Studio.",
+          "textEn": "The importer reads terrain heights, map metadata and placements from .w3m, .w3x and extracted maps. Studio can open the resulting heightfield.",
+          "date": "2026-11-23"
+        },
+        {
+          "status": "done",
+          "target": null,
+          "title": "Размещение юнитов и декораций Warcraft III",
+          "titleEn": "Warcraft III unit and doodad placement",
+          "text": "Импортёр сопоставляет ID с моделями, регистрирует типы в правилах проекта и размещает объекты на карте. Размещения без найденной модели перечислены в отчёте.",
+          "textEn": "The importer resolves object IDs to models, registers types in project rules and places entities on the map. Unresolved placements appear in the report.",
+          "date": "2026-11-23"
         },
         {
           "status": "planned",
           "target": null,
-          "title": "Перенос игровых объектов Warcraft III в ECS",
-          "titleEn": "Warcraft III objects to native ECS",
-          "text": "Соответствие ID моделей, материалов, правил, вода и растительность через действующие системы движка.",
-          "textEn": "Map object IDs to models, materials and native rules; reuse existing water and foliage systems."
+          "title": "Игровые правила, вода, растительность и проходимость Warcraft III",
+          "titleEn": "Warcraft III gameplay rules, water, vegetation and pathing",
+          "text": "Перенести поведение объектов и подключить данные карты к системам воды, растительности и навигации движка.",
+          "textEn": "Port object behaviour and connect map data to the engine’s water, vegetation and navigation systems."
         }
       ],
       "includes": [
@@ -3287,12 +3303,14 @@
       "enables": [
         "Перенести мобильную игру с Unity и продолжить её здесь.",
         "Передать логику на C# агенту для переноса в Lua или C++.",
-        "Импортировать проект Godot тем же инструментом."
+        "Импортировать проект Godot тем же инструментом.",
+        "Открыть карту Warcraft III с рельефом, юнитами и декорациями в своём проекте."
       ],
       "enablesEn": [
         "Move a mobile game from Unity and carry on here.",
         "Hand C# logic to an agent to port into Lua or C++.",
-        "Import a Godot project with the same tool."
+        "Import a Godot project with the same tool.",
+        "Open a Warcraft III map with terrain, units and doodads in your project."
       ]
     },
     {
@@ -3645,12 +3663,21 @@
           "titleEn": "Animation and camera for the new moves"
         },
         {
+          "status": "done",
+          "target": null,
+          "title": "Лестницы на картах FPS",
+          "titleEn": "Ladders in FPS maps",
+          "text": "Хост читает зоны лестниц из карты и обрабатывает подъём игрока внутри зоны.",
+          "textEn": "The host loads ladder volumes from the map and handles climbing inside them.",
+          "date": "2026-11-25"
+        },
+        {
           "status": "planned",
           "target": null,
-          "title": "Уступы, лестницы и вода в картах FPS",
-          "titleEn": "Ledges, ladders and water in FPS maps",
-          "text": "Метки в формате карты, чтобы хост сообщал эти режимы.",
-          "textEn": "Map format tags so the host reports these modes."
+          "title": "Уступы и вода на картах FPS",
+          "titleEn": "Ledges and water in FPS maps",
+          "text": "Добавить метки уступов и воды в формат карты FPS, чтобы хост определял режим движения.",
+          "textEn": "Add ledge and water tags to FPS maps so the host can select the movement mode."
         },
         {
           "id": "encounter-phase-determinism",
