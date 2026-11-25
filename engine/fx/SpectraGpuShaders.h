@@ -320,7 +320,7 @@ bool collideSdf(thread Particle& p,float3 from,constant Uniforms& u,device const
     float norm=length(normal);
     if(norm<=0.00001f)return false;
     normal/=norm;
-    if(penetration==0.0f&&dot(delta,normal)>=0.0f)return false;
+)MSL" R"MSL(    if(penetration==0.0f&&dot(delta,normal)>=0.0f)return false;
     p.positionAge.xyz=from+delta*t+normal*(penetration+0.001f);
     float vn=dot(p.velocityLife.xyz,normal);
     if(vn<0.0f)p.velocityLife.xyz=(p.velocityLife.xyz-normal*vn)*(1.0f-u.collisionResponse.y)-normal*(vn*u.collisionResponse.x);
@@ -550,7 +550,7 @@ kernel void cs_main(uint2 gid [[thread_position_in_grid]],
     if(u.meta.x==5u) {
         if(id==0u) {
             uint alive=min(atomic_load_explicit(&aliveCounter[0],memory_order_relaxed),u.meta.y);
- #ifdef SPECTRA_GPU_OWNED_ALLOCATION
+)MSL" R"MSL( #ifdef SPECTRA_GPU_OWNED_ALLOCATION
             alive=min(atomic_load_explicit(&aliveCounter[6],memory_order_relaxed),alive);
  #endif
             const bool procedural=u.gravityDt.w>0.5f;
@@ -1015,7 +1015,7 @@ bool collideSdf(inout Particle p,vec3 from,float dt,out vec3 eventNormal) {
     float distance,previous=0.0,penetration=0.0,t=0.0;
     vec3 normal;
     if(!sampleSdf(from,distance,normal))return false;
-    if(distance<radius)penetration=radius-distance;
+)GLSL" R"GLSL(    if(distance<radius)penetration=radius-distance;
     else {
         bool found=false;
         for(uint i=1u;i<=steps;++i) {
@@ -1290,7 +1290,7 @@ void main(){
         return;
     }
     if(u.meta.x!=2u && u.meta.x!=4u && u.meta.x!=12u)return;
-    if(u.meta.x==2u && id>=u.meta.w)return;
+)GLSL" R"GLSL(    if(u.meta.x==2u && id>=u.meta.w)return;
     if(id>=u.meta.y)return;
     // Mode 2 uses the CPU's live map; mode 4 compacts entirely on GPU.
     uint slot=u.meta.x==2u ? liveSlots[id] : id;

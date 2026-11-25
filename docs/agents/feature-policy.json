@@ -36,6 +36,11 @@
         "engine/world/NereidCascadeScene.h"
       ]
     },
+    "windows-msvc-portability": {
+      "requires": [],
+      "roadmap": {"system": "build", "id": "windows-msvc-portability"},
+      "api_paths": ["engine/fx/SpectraGpuShaders.h", "engine/game/MapGrid.h", "engine/mechanics/MobBehaviour.h", "apps/editor/core/ProjectDocumentJournal.h"]
+    },
     "feature-gate": {
       "requires": [],
       "roadmap": {

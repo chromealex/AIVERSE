@@ -1,0 +1,18 @@
+{
+  "sha": "562d48a2ecb9b212f29bb5ffde702148807c711a",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/pr203-msvc-integration-20261125/mac",
+    "--config",
+    "Debug",
+    "--output-on-failure",
+    "--parallel",
+    "2",
+    "-R",
+    "^(spectrafx_contract|spectrafx_metal_gpu)$"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/windows-msvc-portability-merged-mac-20261125.log.txt",
+  "sha256": "677f4eddeb7d3c462d2255e4d1e6a395836cc4f8c4a1e7d8ee2c0812b0ebb99d"
+}

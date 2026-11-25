@@ -19,6 +19,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#undef MoveFile // windows.h macro clashes with ProjectHistory::MoveFile; this header calls MoveFileExW directly
 #elif defined(__unix__) || defined(__APPLE__)
 #include <fcntl.h>
 #include <unistd.h>

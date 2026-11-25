@@ -57,11 +57,11 @@ inline bool mobInputsValid(const MobSelf& self,std::span<const MobCandidate> c,s
 inline Vec2 swarmCorrection(const MobBehaviourConfig& c,const MobSelf& self,Vec2 desired,std::span<const MobNeighbour> neighbours){
     auto magnitude=desired.length();if(magnitude.raw==0||c.maxNeighbours==0)return {};
     auto forward=desired/magnitude;Vec2 right{forward.y,-forward.x};
-    std::vector<const MobNeighbour*> near;for(const auto& n:neighbours)if(n.id!=self.id)near.push_back(&n);
-    std::sort(near.begin(),near.end(),[&](auto a,auto b){auto da=(a->position-self.position).lengthSq(),db=(b->position-self.position).lengthSq();return da<db||(da==db&&a->id<b->id);});
-    if(near.size()>c.maxNeighbours)near.resize(c.maxNeighbours);
+    std::vector<const MobNeighbour*> nearby;for(const auto& n:neighbours)if(n.id!=self.id)nearby.push_back(&n);
+    std::sort(nearby.begin(),nearby.end(),[&](auto a,auto b){auto da=(a->position-self.position).lengthSq(),db=(b->position-self.position).lengthSq();return da<db||(da==db&&a->id<b->id);});
+    if(nearby.size()>c.maxNeighbours)nearby.resize(c.maxNeighbours);
     Vec2 sum{};const Fixed diag=Fixed::fromRatio(70710678,100000000);
-    for(auto n:near){
+    for(auto n:nearby){
         auto delta=self.position-n->position;auto distance=delta.length();auto spacing=(self.radius+n->radius)*Fixed::fromRatio(c.spacingMilli,1000);
         if(spacing.raw<=0)continue;
         if(distance.raw==0){auto sign=self.id<n->id?1_fx:-1_fx;sum+=Vec2{diag,diag}*sign;continue;}

@@ -1,0 +1,144 @@
+{
+  "schema": 1,
+  "id": "windows-msvc-portability",
+  "owner": "builds-platforms",
+  "changed_paths": [
+    "apps/editor/core/ProjectDocumentJournal.h",
+    "docs/agents/feature-policy.json",
+    "engine/fx/SpectraGpuShaders.h",
+    "engine/game/MapGrid.h",
+    "engine/mechanics/MobBehaviour.h"
+  ],
+  "traits": {
+    "editable": false,
+    "simulation": false,
+    "visible": false,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "The four PR #203 compiler repairs are present on this integration tree; the original Windows MSVC target builds are documented by the source branch.",
+      "evidence": [
+        "docs/agent-handoffs/msvc-windows-build-2026-11-25.md",
+        "docs/agent-handoffs/windows-msvc-portability-initial.md"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "The patch changes compiler spelling and raw literal boundaries in existing owners; no ownership, ECS or runtime dependency changes.",
+      "evidence": [
+        "docs/agent-handoffs/windows-msvc-portability-initial.md"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "MapGrid and MobBehaviour retain their signatures and semantics; only local identifiers change.",
+      "evidence": [
+        "engine/game/MapGrid.h",
+        "engine/mechanics/MobBehaviour.h"
+      ]
+    },
+    "skill": {
+      "status": "not_applicable",
+      "note": "Compiler portability repair adds no authoring operation or skill surface.",
+      "evidence": []
+    },
+    "mcp": {
+      "status": "not_applicable",
+      "note": "No MCP method or schema changes; the existing MCP target was built on the source Windows branch.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_applicable",
+      "note": "No Studio feature or control changes; the existing Studio target was built on the source Windows branch.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_applicable",
+      "note": "No inspected data or UI behavior changes.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_applicable",
+      "note": "No persistence format or journal behavior changes; the MoveFile macro is undefined only after windows.h.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "No graph asset or execution changes.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "pass",
+      "note": "The embedded shader source is byte-identical after concatenation, and the remaining edits only rename local identifiers or undefine a macro; no runtime algorithm changes.",
+      "evidence": [
+        "docs/agent-handoffs/windows-msvc-portability-initial.md"
+      ]
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "The source branch reports successful Windows 11 MSVC 19.44 Release builds of aiversemcp, aiversebuild and aiverse_studio; this integrator built aiversemcp and aiversebuild on Mac.",
+      "evidence": [
+        "docs/agent-handoffs/msvc-windows-build-2026-11-25.md",
+        "docs/agent-handoffs/windows-msvc-portability-initial.md"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "No package, dependency or build setting is added.",
+      "evidence": [
+        "docs/agent-handoffs/windows-msvc-portability-initial.md"
+      ]
+    },
+    "headless": {
+      "status": "not_applicable",
+      "note": "No simulation operation is added.",
+      "evidence": []
+    },
+    "examples": {
+      "status": "not_applicable",
+      "note": "No new API or data format needs an example.",
+      "evidence": []
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Merged-tree Mac quick gate built and passed 551/551 CTest tests (five GPU frame tests were CTest Skipped); focused SpectraFX contract and Metal GPU tests were rerun with recorded SHA provenance.",
+      "evidence": [
+        "docs/evidence/windows-msvc-portability-merged-mac-20261125.json",
+        "docs/agent-handoffs/windows-msvc-portability-initial.md"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Preparation, source code stage and their exact commit SHAs are documented.",
+      "evidence": [
+        "docs/agent-handoffs/windows-msvc-portability-initial.md",
+        "docs/agent-handoffs/msvc-windows-build-2026-11-25.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "The source handoff explains the compiler failures and limits; the Builds and platforms roadmap records the integration.",
+      "evidence": [
+        "docs/agent-handoffs/windows-msvc-portability-initial.md",
+        "docs/agent-handoffs/msvc-windows-build-2026-11-25.md",
+        "docs/devlog/systems.json"
+      ]
+    },
+    "publishing": {
+      "status": "not_applicable",
+      "note": "This compiler repair produces no new visible output or web demo.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [],
+    "mcp_tools": [],
+    "studio_panels": [],
+    "studio_methods": []
+  },
+  "test_reports": [
+    "docs/evidence/windows-msvc-portability-merged-mac-20261125.json"
+  ]
+}

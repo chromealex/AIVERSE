@@ -3372,6 +3372,16 @@
           "titleEn": "Bound the GitHub Actions check queue",
           "text": "Новые коммиты PR отменяют устаревшие проверки той же ветки; публикация сайта сохраняется.",
           "textEn": "New PR commits cancel stale checks for the same branch while site publication remains unaffected."
+        },
+        {
+          "id": "windows-msvc-portability",
+          "status": "done",
+          "date": "2026-11-25",
+          "target": null,
+          "title": "Восстановить сборку инструментов и Studio в Windows MSVC",
+          "titleEn": "Restore tools and Studio builds with Windows MSVC",
+          "text": "Исправлены несовместимые с MSVC литералы шейдеров и макросы Windows без изменения поведения; исходная ветка собрала инструменты и Studio на Windows, интеграционное дерево прошло Mac quick gate (551/551).",
+          "textEn": "Fixed MSVC shader literal limits and Windows macro collisions without behavior changes; the source branch built tools and Studio on Windows, and the integration tree passed the Mac quick gate (551/551)."
         }
       ]
     },
