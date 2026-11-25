@@ -116,8 +116,8 @@
       ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Merged-tree native tests and provenance pending; prior stage evidence is in the handoff.",
+      "status": "pass",
+      "note": "Both named CTests passed on the merged tree. See the recorded command, test output and digest.",
       "evidence": [
         "tests/world/vehicle_region_group_test.cpp",
         "tests/world/region_gamecore_integration_test.cpp"
@@ -152,5 +152,7 @@
     "studio_panels": [],
     "studio_methods": []
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/ow01-mixed-native.json"
+  ]
 }
