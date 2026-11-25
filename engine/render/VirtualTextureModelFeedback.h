@@ -203,9 +203,8 @@ private:
 
         gfx::TextureHandle alpha = fallbackWhite_;
         bool redChannel = false;
-        if (material.baseTex >= 0 &&
-            size_t(material.baseTex) < model.images.size()) {
-            const auto& image = model.images[size_t(material.baseTex)];
+        if (const auto* resolved=resolveMaterialImage(model,material,&Material::baseTex)) {
+            const auto& image=*resolved;
             if (masked && image.virtualAlphaMask.valid()) {
                 alpha=image.virtualAlphaMask;
                 redChannel=true;

@@ -9,7 +9,7 @@ export const portY=(index:number)=>25+index*14;
 export const nodeHeight=(inputs:readonly Port[],outputs:readonly Port[])=>Math.max(54,38+Math.max(inputs.length,outputs.length)*14);
 export function graphGeometry(view:GraphView,preview:readonly Positioned[]=[]){
  const moved=new Map(preview.map(p=>[p.id,p]));
- const nodes=view.nodes.map(n=>({...n,...moved.get(n.id),height:Math.max(nodeHeight(n.inputs,n.outputs),n.values?.length?73:0)}));
+ const nodes=view.nodes.map(n=>({...n,...moved.get(n.id),height:Math.max(nodeHeight(n.inputs,n.outputs),n.values?.length?73:0)+(n.thumbnail?72:0)}));
  const byId=new Map(nodes.map(n=>[n.id,n]));
  const ports:PortGeometry[]=[];
  for(const n of nodes){

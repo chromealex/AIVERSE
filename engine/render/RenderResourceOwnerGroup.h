@@ -269,19 +269,14 @@ public:
                     "RenderResourceOwnerGroup stale or mixed-device registration");
         }
         auto stats=snapshotOwners(device.gpuHealthy());
-        std::vector<const Model*> modelsForPool;
+        std::vector<GeometryPoolPageReference> pagesForPool;
+        std::set<const ModelResourceCache*> seen;
         for(const auto& entry:owners_) {
-            // Never dereference a destroyed cache even if the original
-            // address has been reused by a new owner.
-            if(entry.lifetime.expired())continue;
-            const ModelResourceCache* owner=entry.cache;
-            owner->forEachOwnedModel([&](const Model& model,bool) {
-                if(model.geometryPoolPage)modelsForPool.push_back(&model);
-            });
+            if(entry.lifetime.expired() || !seen.insert(entry.cache).second)continue;
+            const auto pages=entry.cache->geometryPoolPageReferences();
+            pagesForPool.insert(pagesForPool.end(),pages.begin(),pages.end());
         }
-        stats.geometryPages=geometryPoolReferencedStats(
-            device,std::span<const Model* const>(
-                modelsForPool.data(),modelsForPool.size()));
+        stats.geometryPages=geometryPoolPageReferencedStats(device,pagesForPool);
         stats.deviceGeometryPool=geometryPoolStats(device);
         return stats;
     }

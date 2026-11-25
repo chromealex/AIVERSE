@@ -30,10 +30,10 @@ struct DagFixtureDevice : FakeDevice {
     std::set<uint32_t> pipelines;
     BufferReadFn pending;
     size_t readBytes=0;
-    uint64_t completed=0;
+    uint64_t completed=0,submitted=1;
     bool reject=false;
     DagFixtureDevice(){info_.backend=gfx::Backend::Vulkan;computeEnabled=true;beginFrame(1,1);}
-    uint64_t gpuSubmissionFence()const override{return 1;}
+    uint64_t gpuSubmissionFence()const override{return submitted;}
     uint64_t gpuCompletedFence()const override{return completed;}
     gfx::ComputeHandle createCompute(const gfx::ComputeDesc& d)override{
         auto h=FakeDevice::createCompute(d);if(h.valid())pipelines.insert(h.id);return h;
@@ -60,20 +60,147 @@ static void checkMaterializedOwner(){
     dev.deliver();owner.tick(dev,"fixture");
     auto status=owner.status();
     requireGraphTest(status.getStr("state")=="ready"&&status.getInt("completedOutputs")==3&&status.getInt("reusedOutputs")==1,"materialized output set failed");
-    requireGraphTest(dev.buffers.empty()&&dev.pipelines.empty(),"completed materialized resources not released");
+    requireGraphTest(status.getBool("busy")&&status.getInt("materializedIdleBytes")==0&&!dev.buffers.empty(),"cache accepted before completed GPU fence");
+    dev.completed=dev.submitted;owner.tick(dev,"fixture");
+    status=owner.status();
+    requireGraphTest(!status.getBool("busy")&&status.getInt("materializedIdleBytes")>0&&status.getInt("materializedIdlePipelines")>0,"completed materialized cache not retained");
+    ++dev.submitted;
     auto started=owner.start(args,"fixture");owner.tick(dev,"fixture");
+    requireGraphTest(owner.status().getBool("materializedBufferCacheHit")&&owner.status().getInt("materializedPipelineCacheHits")>0,"matching retired GPU cache not reused");
     Json cancel=Json::object();cancel.set("request",started["request"]);
     owner.cancel(cancel,"fixture");
     requireGraphTest(owner.status().getBool("draining")&&!dev.buffers.empty(),"cancel freed in-flight GPU storage");
     dev.deliver();owner.tick(dev,"fixture");
+    requireGraphTest(owner.status().getBool("busy")&&!dev.buffers.empty(),"cancel retired before completed GPU fence");
+    dev.completed=dev.submitted;owner.tick(dev,"fixture");
     requireGraphTest(!owner.status().getBool("busy")&&dev.buffers.empty()&&dev.pipelines.empty(),"cancel did not retire materialized storage");
-    dev.reject=true;owner.start(args,"fixture");owner.tick(dev,"fixture");
+    ++dev.submitted;dev.reject=true;owner.start(args,"fixture");owner.tick(dev,"fixture");
     requireGraphTest(owner.status().getStr("state")=="failed"&&owner.status().getBool("draining")&&!dev.buffers.empty(),"partial dispatch rejection lost retirement");
-    dev.completed=1;owner.tick(dev,"fixture");
+    dev.completed=dev.submitted;owner.tick(dev,"fixture");
     requireGraphTest(!owner.status().getBool("busy")&&dev.buffers.empty()&&dev.pipelines.empty(),"failed dispatch fence did not retire");
     owner.shutdownAfterIdle(dev);
 }
-// In-memory SDF edits must leave a fresh project free of published assets.
+// Fake readback bytes only exercise the request lifetime and exact destination
+// acceptance gate. Real shader/copy/mip execution needs the native GPU fixture.
+struct ResidentTextureFixture : DagFixtureDevice {
+    TextureReadFn pendingTexture;
+    gfx::TextureHandle readTarget{};
+    std::set<uint32_t> copied;
+    size_t copyCount=0;
+    bool rejectCopy=false,mipRequested=false;
+    bool supportsStorageBufferTextureCopy()const override{return true;}
+    bool bufferInfo(gfx::BufferHandle h,gfx::BufferInfo& out)const override{
+        const auto it=buffers.find(h.id);if(it==buffers.end())return false;
+        out={it->second.size(),1};return true;
+    }
+    bool textureInfo(gfx::TextureHandle h,gfx::TextureInfo& out)const override{
+        const auto it=textures.find(h.id);if(it==textures.end())return false;
+        out={it->second.w,it->second.h,gfx::PixelFormat::RGBA8};return true;
+    }
+    bool copyStorageBufferToTexture2D(gfx::BufferHandle from,gfx::TextureHandle to,
+            const gfx::BufferTextureCopy2D& copy)override{
+        const auto it=buffers.find(from.id);auto t=textures.find(to.id);
+        if(rejectCopy||it==buffers.end()||t==textures.end()||
+           !gfx::validBufferTextureCopy2D(copy,it->second.size(),t->second.w,t->second.h))return false;
+        mipRequested|=copy.generateMipmaps;copied.insert(to.id);++copyCount;return true;
+    }
+    bool readTextureAsync(gfx::TextureHandle h,gfx::TextureReadbackDesc desc,TextureReadFn fn)override{
+        if(pendingTexture||desc.mipLevel!=0||desc.arrayLayer!=0||!copied.contains(h.id)||!textures.contains(h.id))return false;
+        readTarget=h;pendingTexture=std::move(fn);return true;
+    }
+    void deliverTexture(bool valid=true){
+        const auto& t=textures.at(readTarget.id);
+        gfx::TextureReadbackResult result;
+        result.width=t.w;result.height=t.h;result.format=gfx::PixelFormat::RGBA8;
+        result.pixels.assign(size_t(t.w)*t.h*4u,255);
+        if(!valid)result.pixels[0]=0;
+        auto fn=std::move(pendingTexture);pendingTexture={};fn(std::move(result));
+    }
+    bool waitForResourceIdle()override{return true;}
+};
+static void checkResidentTextureOwner(){
+    ResidentTextureFixture dev;
+    render::RenderDeviceLifetime epoch(dev);
+    editor::TextureGraphGpuPreview owner;
+    const auto args=Json::parse(R"({"action":"start","materialized":true,"fusePointwise":true,
+        "gpuTextureTransfer":true,"gpuTextureMipmaps":true,"bakeSet":true,
+        "graph":{"version":1,"size":8,"nodes":[{"id":"a","op":"constant","inputs":[],"properties":{"value":1}}],
+        "outputs":{"ao":"a","height":"a","mask":"a"}}})");
+    bool refused=false;
+    try{owner.start(args,"fixture");}catch(const std::invalid_argument&){refused=true;}
+    requireGraphTest(refused,"resident request accepted without native lease");
+    auto started=owner.start(args,"fixture",epoch.lease());
+    owner.tick(dev,"fixture");
+    requireGraphTest(bool(dev.pendingTexture)&&!dev.pending&&dev.copyCount==1&&dev.mipRequested,
+            "resident owner did not validate copied texture");
+    dev.deliverTexture();owner.tick(dev,"fixture");
+    requireGraphTest(owner.status().getInt("gpuTextureAccepted")==0&&owner.status().getBool("busy"),
+            "accepted texture before its frame fence");
+    dev.completed=dev.submitted;++dev.submitted;
+    owner.tick(dev,"fixture");owner.tick(dev,"fixture");
+    requireGraphTest(bool(dev.pendingTexture)&&dev.copyCount==2&&dev.textures.size()==2,
+            "duplicate bindable output failed to get its own GPU texture");
+    dev.deliverTexture();dev.completed=dev.submitted;++dev.submitted;
+    owner.tick(dev,"fixture");
+    const auto ready=owner.status();
+    requireGraphTest(ready.getBool("gpuTextureSetReady")&&!ready.getBool("busy")&&
+            ready.getInt("gpuTextureAccepted")==2&&ready.getInt("completedOutputs")==3,
+            "resident set not accepted atomically");
+    requireGraphTest(ready.getInt("reusedOutputs")==1,"nonbindable duplicate did not reuse accepted bytes");
+    refused=false;
+    try{owner.start(args,"fixture",epoch.lease());}catch(const std::runtime_error&){refused=true;}
+    requireGraphTest(refused,"unadopted resident set silently replaced");
+    render::Model model;model.materials.resize(1);
+    view::AppearanceAssetRegistry registry;
+    view::AppearanceAssetRegistry::Asset asset;asset.model=&model;asset.materials=model.materials;
+    requireGraphTest(registry.publishPrepared("fixture",asset),"fixture appearance missing");
+    const auto old=registry.find("fixture");
+    render::ModelImageRollbackPool rollback;
+    std::string error;
+    const auto request=started.getStr("request");
+    const auto existing=dev.textures.size();
+    requireGraphTest(!owner.publishCompletedGpuMaterial("other",request,registry,"fixture",
+        old->version,old->modelPublicationGeneration,0,model,dev,epoch.lease(),rollback,&error),
+        "stale project published a resident set");
+    auto live=old;auto mirror=old->materials;
+    const view::LiveAppearanceMaterialTarget stamp{old->modelPublicationGeneration,old->version,0};
+    requireGraphTest(owner.publishCompletedGpuSnapshot("fixture",request,live,stamp,
+        model,dev,epoch.lease(),rollback,&mirror,&error),"resident set could not be adopted by live snapshot");
+    requireGraphTest(live->version==old->version+1&&live->modelPublicationGeneration==old->modelPublicationGeneration&&
+        live->materials[0].occlusionTex==0&&mirror[0].occlusionTex==0&&
+        old->materials[0].occlusionTex==-1&&model.materials[0].occlusionTex==-1,
+        "live appearance snapshot or compatibility mirror was not atomically updated");
+    requireGraphTest(owner.status().getBool("gpuTexturePublished")&&model.images.size()==2&&
+        dev.textures.size()==existing&&dev.copied.contains(model.images[0].tex.id)&&
+        dev.copied.contains(model.images[1].tex.id),"adoption allocated replacement GPU textures");
+    requireGraphTest(!owner.publishCompletedGpuMaterial("fixture",request,registry,"fixture",
+        old->version,old->modelPublicationGeneration,0,model,dev,epoch.lease(),rollback,&error),
+        "resident set published twice");
+    // Cancel a second request before its callback or fence is complete.
+    started=owner.start(args,"fixture",epoch.lease());owner.tick(dev,"fixture");
+    requireGraphTest(bool(dev.pendingTexture)&&dev.textures.size()==existing+1,"second resident request missing");
+    Json cancel=Json::object();cancel.set("request",started["request"]);
+    owner.cancel(cancel,"fixture");dev.deliverTexture();owner.tick(dev,"fixture");
+    requireGraphTest(owner.status().getBool("busy")&&dev.textures.size()==existing+1,
+        "cancel destroyed a resident texture before completion");
+    dev.completed=dev.submitted;++dev.submitted;owner.tick(dev,"fixture");
+    requireGraphTest(!owner.status().getBool("busy")&&dev.textures.size()==existing,
+        "cancel did not retire candidate without touching adopted images");
+    // Strict GPU mode rejects actual copied bytes that disagree with CPU.
+    owner.start(args,"fixture",epoch.lease());owner.tick(dev,"fixture");
+    dev.deliverTexture(false);dev.completed=dev.submitted;++dev.submitted;
+    owner.tick(dev,"fixture");
+    requireGraphTest(owner.status().getStr("state")=="failed"&&!owner.status().getBool("gpuTextureSetReady")&&
+        dev.textures.size()==existing,"copy parity failure fell back or leaked candidate");
+    // A partially created destination remains owned until its copy fence.
+    dev.rejectCopy=true;owner.start(args,"fixture",epoch.lease());owner.tick(dev,"fixture");
+    requireGraphTest(owner.status().getStr("state")=="failed"&&owner.status().getBool("draining")&&
+        dev.textures.size()==existing+1,"partial GPU copy failure lost retirement");
+    dev.completed=dev.submitted;owner.tick(dev,"fixture");
+    requireGraphTest(!owner.status().getBool("busy")&&dev.textures.size()==existing,"partial copy did not retire");
+    owner.shutdownAfterIdle(dev);registry.clear();render::releaseModel(dev,model);
+    requireGraphTest(dev.textures.empty()&&dev.buffers.empty()&&dev.pipelines.empty(),"resident fixture leaked resources");
+}
 static void checkSdfEdits(const fs::path& root) {
     editor::Workspace ws;
     ws.project.dir = root.string();
@@ -155,6 +282,7 @@ static void checkSdfEdits(const fs::path& root) {
 
 int main() {
     checkMaterializedOwner();
+    checkResidentTextureOwner();
     {
         using namespace render::texture_graph;
         const auto p=compile(Json::parse(R"({"version":1,"size":8,"nodes":[{"id":"c","op":"color","inputs":[],"properties":{"value":[1,0,0]}},{"id":"s","op":"constant","inputs":[],"properties":{"value":0.5}}],"outputs":{"color":"c","height":"s","ao":"s"}})"));
@@ -377,11 +505,16 @@ int main() {
     const auto textureCatalog=call("texture_graph_catalog",Json::object());
     requireGraphTest(textureCatalog.getBool("ok")&&textureCatalog["outputTypes"].getStr("normal")=="normal","texture output catalog missing types");
     const auto textureTemplates=call("texture_graph_templates",Json::object());
-    requireGraphTest(textureTemplates.getBool("ok")&&textureTemplates["templates"].size()==6,"texture starter library missing");
+    requireGraphTest(textureTemplates.getBool("ok"),"texture starter library unavailable");
+    std::set<std::string> templateNames;
     for(const auto& row:textureTemplates["templates"].items()){
+        const auto name=row.getStr("name");
+        requireGraphTest(!name.empty()&&templateNames.insert(name).second,"invalid or duplicate texture template name");
         Json args=Json::object();args.set("graph",row["graph"]);
         requireGraphTest(call("texture_graph_validate",args).getBool("ok"),"invalid texture template");
     }
+    for(const char* name : {"metal", "stone", "wood", "brick", "earth", "fabric", "ceramic_tiles", "metal_panels", "sci_fi_hex", "scales", "rubber", "dotted_surface", "striped_surface", "hdr_studio_environment"})
+        requireGraphTest(templateNames.contains(name),"expected texture template missing");
     tex.set("textureName",Json::string("fixture_set"));
     const auto bakedSet=call("texture_graph_bake_set",tex);
     requireGraphTest(bakedSet.getBool("ok")&&bakedSet["files"].size()==2,"PBR set bake failed");
@@ -436,6 +569,12 @@ int main() {
     const auto multiSource=render::texture_graph::gpu::compileMaterializedDag(blendTexture,{3},8);
     requireGraphTest(multiSource.nodes[3].msl.find("float* input2 [[buffer(3)]]")!=std::string::npos&&multiSource.nodes[3].glsl.find("mix(v0,v1,v2.x)")!=std::string::npos,"multi-input expression or binding missing");
     requireGraphTest(multiSource.packs[0].glsl.find("0xff000000u")!=std::string::npos,"RGBA8 pack missing");
+    const auto fusedSource=render::texture_graph::gpu::compileMaterializedDag(blendTexture,{3},8,render::texture_graph::gpu::materializedBudgetBytes,true);
+    requireGraphTest(fusedSource.reachableNodes==4&&fusedSource.fusedNodes==3&&fusedSource.plan.schedule.passes.size()==1,"pointwise region did not fuse");
+    requireGraphTest(fusedSource.nodes[3].glsl.find("mix(fusedNode0,fusedNode1,fusedNode2.x)")!=std::string::npos,"fused shared expression missing");
+    requireGraphTest(fusedSource.nodes[3].msl.find("buffer(1)")==std::string::npos&&fusedSource.totalBytes<multiSource.totalBytes,"fused leaf region retained intermediate buffers");
+    const auto pinnedFusion=render::texture_graph::gpu::compileMaterializedDag(sharedTexture,{0,1,2},128,render::texture_graph::gpu::materializedBudgetBytes,true);
+    requireGraphTest(pinnedFusion.fusedNodes==0&&pinnedFusion.plan.schedule.passes.size()==3,"fusion crossed pinned output or normal boundary");
     const auto sharedHeight=render::texture_graph::gpu::plan(sharedTexture,0,128,true);
     const auto sharedNormal=render::texture_graph::gpu::plan(sharedTexture,1,128,true);
     requireGraphTest(sharedHeight.twoPass&&sharedNormal.twoPass&&sharedHeight.scratchBytes==sharedNormal.scratchBytes,"shared scalar plan missing");
@@ -450,6 +589,8 @@ int main() {
     const auto headlessGpuTexture=call("texture_graph_gpu_preview",Json::parse(R"({"action":"read"})"));
     requireGraphTest(headlessGpuTexture.getStr("state")=="unavailable","headless texture GPU preview fabricated");
     requireGraphTest(!call("texture_graph_gpu_preview",Json::parse(R"({"action":"cancel","request":"1"})")).getBool("ok"),"headless GPU cancellation fabricated");
+    requireGraphTest(call("texture_graph_gpu_preview",Json::parse(R"({"action":"materialTarget","typeIndex":0,"choiceIndex":0,"materialIndex":0})")).getStr("state")=="unavailable","headless live material target fabricated");
+    requireGraphTest(!call("texture_graph_gpu_preview",Json::parse(R"({"action":"applyMaterial","request":"1","typeIndex":0,"choiceIndex":0,"materialIndex":0,"expectedVersion":"1","expectedModelPublication":"1"})")).getBool("ok"),"headless live material adoption fabricated");
 
     auto fullTexture=render::texture_graph::compile(Json::parse(R"({"version":1,"size":1024,"nodes":[{"id":"height","op":"constant","inputs":[],"properties":{"value":0.5}},{"id":"normal","op":"normal","inputs":["height"]}],"outputs":{"normal":"normal"}})"));
     const auto fullPlan=render::texture_graph::gpu::plan(fullTexture,1,1024);

@@ -46,8 +46,7 @@ inline bool sculptGpuMaskEligible(const render::Model& model,
                                    const render::Material& m) noexcept {
     if(m.alpha!=render::AlphaMode::Mask || m.transparent ||
        m.shaderGraph || m.team!=render::TeamMode::None ||
-       m.baseTex<0 || std::size_t(m.baseTex)>=model.images.size() ||
-       !model.images[std::size_t(m.baseTex)].tex.valid() ||
+       !render::resolvedMaterialTexture(model,m,&render::Material::baseTex).valid() ||
        !std::isfinite(m.alphaCutoff) || m.alphaCutoff<0.f ||
        m.alphaCutoff>1.f || !std::isfinite(m.baseColor.w) ||
        m.baseColor.w<0.f || m.baseColor.w>1.f ||
@@ -214,7 +213,7 @@ inline bool appendSculptGpuMaterialGeometry(
                               masks.size()+stagedMasks.size()<256u;
         SculptGpuMaskBatch mask;
         if(sampleMask) {
-            mask.baseTexture=model.images[std::size_t(material.baseTex)].tex;
+            mask.baseTexture=render::resolvedMaterialTexture(model,material,&render::Material::baseTex);
             mask.uniform.alpha[0]=material.baseColor.w;
             mask.uniform.alpha[1]=material.alphaCutoff;
             mask.uniform.uv0[0]=material.uvOffset.x;

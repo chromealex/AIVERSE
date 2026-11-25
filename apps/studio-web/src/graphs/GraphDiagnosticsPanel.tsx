@@ -4,7 +4,7 @@ import type {GraphView} from './graphFramework';
 import {inspectGraph} from './graphDiagnostics';
 import type {DiagnosticPolicy,GraphDiagnosticReport} from './graphDiagnostics';
 
-export default function GraphDiagnostics({view,policy}:{view:GraphView;policy:DiagnosticPolicy}){
+export default function GraphDiagnosticsPanel({view,policy}:{view:GraphView;policy:DiagnosticPolicy}){
  const [sample,setSample]=useState<{view:GraphView;report:GraphDiagnosticReport;ms:number}|null>(null);
  const stale=sample!==null&&sample.view!==view;
  const inspect=()=>{

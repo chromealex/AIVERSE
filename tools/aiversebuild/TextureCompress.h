@@ -18,10 +18,15 @@ struct AstcOptions {
     bool mipmaps = true;      // full chain down to 1x1
     bool alpha = true;        // false: alpha forced to 1 (cheaper blocks)
     std::string quality = "medium";   // astcenc preset: fastest | fast | medium | thorough
+    bool semanticMips = false;
+    bool normal = false;
 };
 
 // Path of the astcenc executable, or "" when none is found.
 std::string findAstcenc();
+std::string findCompressonator();
+bool encodeCompressonatorDds(const std::string& input,const std::string& extension,int width,int height,
+    const std::string& format,bool mipmaps,const std::string& encoder,const std::string& tmpDir,std::string& dds,std::string& err);
 
 // Raw blocks of a .astc file (16-byte header + blocks); false when malformed.
 bool readAstcFile(const std::string& bytes, int& blockX, int& blockY, int& width, int& height, std::string& blocks);

@@ -9,6 +9,7 @@
 #include "ModelResidentEstimate.h"
 #include "RenderDeviceLifetime.h"
 #include "ModelReadLease.h"
+#include "GlobalGeometryPool.h"
 #ifndef __EMSCRIPTEN__
 #include "ModelPreparationService.h"
 #endif
@@ -539,6 +540,15 @@ public:
         }
         retired_.forEachPending([&](const std::unique_ptr<Model>& model) {
             if(model && model->geometryPoolPage)result.push_back(model.get());
+        });
+        return result;
+    }
+    // Snapshot one weak page identity per owned Model, resident or retired.
+    // No borrowed Model pointers leave the guarded enumeration.
+    std::vector<GeometryPoolPageReference> geometryPoolPageReferences() const {
+        std::vector<GeometryPoolPageReference> result;
+        forEachOwnedModel([&](const Model& model,bool) {
+            if(model.geometryPoolPage)result.emplace_back(model.geometryPoolPage);
         });
         return result;
     }

@@ -4,9 +4,11 @@
 #include "AppearanceAuthoringService.h"
 #include "AppearanceChoiceAuthoring.h"
 #include "ModelPublicationEpoch.h"
+#include "LiveAppearanceMaterialTarget.h"
 #include "engine/render/RenderDeviceLifetime.h"
 #include "engine/render/ModelReadLease.h"
-#include "engine/render/graph/TextureGraphMaterialBinding.h"
+#include "engine/render/graph/TextureGraphGpuTextureTransfer.h"
+#include "engine/render/graph/TextureGraphImageReclamation.h"
 #include <algorithm>
 #include <cstdint>
 #include <cmath>
@@ -530,9 +532,19 @@ public:
     // Native host only: at a joined frame boundary, with the mutable Model
     // still owned by the host and no readers touching its image vector.
     // Existing snapshots keep their original image indices. New textures are
-    // append-only until the Model is retired by its existing resource owner.
-    // The per-model cap bounds repeated edits without invalidating old pins.
-    static constexpr size_t maxProceduralImages=24;
+    // append-only by default; explicitly certified tombstones may recycle after retirement.
+    // The per-model live and historical caps bound repeated edits.
+    static constexpr size_t maxProceduralImages=render::texture_graph::maxLiveProceduralImages;
+    // Includes every currently registered snapshot for this Model. Caller
+    // must additionally enumerate any external pins and raw material copies.
+    render::texture_graph::GraphImageReclaimResult collectTextureGraphImages(
+            render::Model& model,gfx::Device& device,const render::RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,const render::texture_graph::GraphImageRoots& external) const {
+        std::vector<std::span<const render::Material>> roots(external.extra.begin(),external.extra.end());
+        for(const auto& [key,asset]:assets_){(void)key;if(asset&&asset->model==&model)roots.emplace_back(asset->materials);}
+        return render::texture_graph::reclaimGraphImages(model,device,lease,rollback,
+            {external.complete,external.activeReaders,roots,external.trackedOnly,external.recycleSlots});
+    }
     bool publishTextureGraphMaterial(const std::string& key,uint64_t expectedVersion,
             uint64_t expectedModelPublication,size_t materialIndex,
             render::Model& model,gfx::Device& device,
@@ -541,45 +553,122 @@ public:
             const render::texture_graph::Program& program,
             const std::vector<render::Image>& images,
             std::string_view generation,std::string* error=nullptr) {
-        if(error)error->clear();
-        try {
-            const auto it=assets_.find(key);
-            if(it==assets_.end()||dirty(key))
-                throw std::invalid_argument("appearance missing or dirty");
-            const auto old=it->second;
-            if(!expectedVersion||old->version!=expectedVersion||
-               !expectedModelPublication||old->modelPublicationGeneration!=expectedModelPublication||
-               old->model!=&model||materialIndex>=old->materials.size())
-                throw std::invalid_argument("appearance publication identity changed");
-            if(!lease.validFor(device)||!device.gpuHealthy())
-                throw std::runtime_error("appearance graphics owner unavailable");
-            if(versionSerial_==std::numeric_limits<uint64_t>::max())
-                throw std::overflow_error("appearance version overflow");
-            auto plan=render::texture_graph::prepareMaterialImages(program,images,generation);
-            size_t retained=0;
-            for(const auto& image:model.images)
-                if(image.name.rfind("#texture-graph/",0)==0)++retained;
-            if(retained>maxProceduralImages||plan.entries.size()>maxProceduralImages-retained)
-                throw std::runtime_error("procedural image budget exhausted; retire/reload Model through owner");
-            // Preallocate the replacement snapshot before GPU allocation.
-            auto next=std::make_shared<Asset>(*old);
-            next->version=versionSerial_+1;
-            render::ModelImageUploadTransaction transaction(device,rollback,lease);
-            next->materials[materialIndex]=render::texture_graph::stageMaterialImages(
-                transaction,model,old->materials[materialIndex],std::move(plan));
-            if(!lease.validFor(device)||!device.gpuHealthy())
-                throw std::runtime_error("appearance graphics owner lost during staging");
-            // No external callbacks between the image commit and publishing
-            // the preallocated snapshot. Old indices and graph epoch survive.
-            transaction.commit();
-            model.markMaterialChanged();
-            it->second=std::move(next);
-            ++versionSerial_;
-            return true;
-        }catch(const std::exception& ex) {
-            if(error)*error=ex.what();
-            return false;
-        }
+        return publishTextureGraphMaterialImpl(key,expectedVersion,expectedModelPublication,materialIndex,
+            model,device,lease,rollback,program,[&](auto& transaction,const render::Material& base){
+                auto plan=render::texture_graph::prepareMaterialImages(program,images,generation);
+                return render::texture_graph::stageMaterialImages(transaction,model,base,std::move(plan));
+            },error);
+    }
+    // Same immutable publication contract for completed GPU copies. Native
+    // caller owns the graph request and confirms output acceptance. No
+    // automatic CPU upload, raw-handle RPC, or change to host model ownership.
+    bool publishGpuTextureGraphMaterial(const std::string& key,uint64_t expectedVersion,
+            uint64_t expectedModelPublication,size_t materialIndex,
+            render::Model& model,gfx::Device& device,
+            const render::RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,
+            const render::texture_graph::Program& program,
+            std::span<render::texture_graph::GraphGpuTextureCopy* const> candidates,
+            std::string_view generation,bool acceptedByGraphOwner,std::string* error=nullptr) {
+        return publishTextureGraphMaterialImpl(key,expectedVersion,expectedModelPublication,materialIndex,
+            model,device,lease,rollback,program,[&](auto& transaction,const render::Material& base){
+                return render::texture_graph::stageCompletedGraphGpuTextures(transaction,model,base,
+                    program,generation,candidates,device,acceptedByGraphOwner);
+            },error);
+    }
+
+    // Hosts already owning a live immutable Snapshot need no temporary
+    // registry or replacement Model. Caller resolves the resident Model and
+    // joins all CPU readers before calling, just as for registry publication.
+    // A compatibility material mirror is optional; it is staged before the
+    // image commit and swapped together with the actual live snapshot.
+    static bool publishGpuTextureGraphSnapshot(Snapshot& live,const LiveAppearanceMaterialTarget& target,
+            render::Model& model,gfx::Device& device,
+            const render::RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,
+            const render::texture_graph::Program& program,
+            std::span<render::texture_graph::GraphGpuTextureCopy* const> candidates,
+            std::string_view generation,bool acceptedByGraphOwner,
+            std::vector<render::Material>* materialMirror=nullptr,std::string* error=nullptr) {
+        return publishTextureGraphSnapshotImpl(live,target,target.nextVersion(),model,device,lease,
+            rollback,program,[&](auto& transaction,const render::Material& base){
+                return render::texture_graph::stageCompletedGraphGpuTextures(transaction,model,base,
+                    program,generation,candidates,device,acceptedByGraphOwner);
+            },materialMirror,error);
+    }
+
+    static bool publishRadianceColorSnapshot(Snapshot& live,const LiveAppearanceMaterialTarget& target,
+            render::Model& model,gfx::Device& device,const render::RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,render::texture_graph::GraphGpuTextureCopy& candidate,
+            std::string_view generation,bool baseColor,std::string* error=nullptr){
+        const char* channel=baseColor?"color":"emissive";
+        const auto slot=baseColor?&render::Material::baseTex:&render::Material::emissiveTex;
+        render::texture_graph::Program binding;binding.outputs.emplace(channel,0);
+        return publishTextureGraphSnapshotImpl(live,target,target.nextVersion(),model,device,lease,rollback,binding,
+            [&](auto& transaction,const render::Material& base){
+                using namespace render::texture_graph;
+                require(graphGpuTextureCopyComplete(candidate,device),"HDR copy fence not complete");
+                require(base.shading==render::ShadingModel::Pbr&&!base.shaderGraph,"linear color binding requires built-in PBR material");
+                gfx::TextureInfo info{};
+                require(device.textureInfo(candidate.image.tex,info)&&(info.format==gfx::PixelFormat::RGBA16F||info.format==gfx::PixelFormat::RGBA32F),"invalid HDR color texture format");
+                candidate.image.name=gpuGraphImageName(generation,channel);
+                candidate.image.proceduralGraphImage=true;candidate.image.proceduralLinearRadiance=true;
+                auto result=base;
+                pinGraphMaterialBinding(result,slot,candidate.image);
+                result.*slot=transaction.stageCompletedGpuImage(model,candidate.image,candidate.lease,candidate.fence);
+                // The user explicitly applies a radiance map; default black
+                // factor would otherwise hide it. Preserve existing nonzero tint.
+                if(!baseColor&&result.emissive.x==0&&result.emissive.y==0&&result.emissive.z==0)result.emissive={1,1,1};
+                candidate.encoded=false;candidate.fence=0;candidate.lease={};
+                return result;
+            },nullptr,error);
+    }
+
+    // Explicit saved material graph with a single session resource @radiance.
+    // Other source paths must already be resident imported images on this model.
+    static bool publishRadianceGraphSnapshot(Snapshot& live,const LiveAppearanceMaterialTarget& target,
+            render::Model& model,gfx::Device& device,const render::RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,render::texture_graph::GraphGpuTextureCopy& candidate,
+            std::string_view generation,const render::graph::Program& graph,std::string* error=nullptr){
+        render::texture_graph::Program binding;binding.outputs.emplace("emissive",0); // one image transaction
+        return publishTextureGraphSnapshotImpl(live,target,target.nextVersion(),model,device,lease,rollback,binding,
+            [&](auto& transaction,const render::Material& base){
+                using namespace render::texture_graph;
+                require(graph.domain=="material"&&graph.textures.size()<=4,"invalid HDR material graph");
+                require(base.shading==render::ShadingModel::Pbr,"HDR graph binding requires PBR material");
+                require(graphGpuTextureCopyComplete(candidate,device),"HDR copy fence not complete");
+                const auto it=std::find(graph.textures.begin(),graph.textures.end(),"@radiance");
+                require(it!=graph.textures.end(),"Shader Graph must declare @radiance");
+                const size_t slot=size_t(it-graph.textures.begin());
+                require(bool(graph.linearRadianceSlots&(1u<<slot)),"@radiance requires linear sampling");
+                gfx::TextureInfo info{};
+                require(device.textureInfo(candidate.image.tex,info)&&(info.format==gfx::PixelFormat::RGBA16F||info.format==gfx::PixelFormat::RGBA32F),"invalid HDR source format");
+                auto result=base;result.shaderGraph=std::make_shared<const render::graph::Program>(graph);
+                result.graphSourcePins={};for(auto& index:result.graphTextures)index=-1;
+                for(size_t i=0;i<graph.textures.size();++i)if(i!=slot){
+                    for(size_t j=0;j<model.images.size();++j){
+                        const auto& image=model.images[j];
+                        if(!render::runtimeGraphImage(image)&&image.tex.valid()&&image.name==graph.textures[i]&&
+                           (!(graph.linearRadianceSlots&(1u<<i))||image.importedLinearRadiance)){
+                            result.graphTextures[i]=int(j);break;
+                        }
+                    }
+                    require(result.graphTextures[i]>=0,"Other Shader Graph textures must already be resident");
+                }
+                candidate.image.name=gpuGraphImageName(generation,"emissive")+"_shader";
+                candidate.image.proceduralGraphImage=true;candidate.image.proceduralLinearRadiance=true;
+                if(!candidate.image.proceduralGraphPin)candidate.image.proceduralGraphPin=std::make_shared<const render::ProceduralImagePin>();
+                result.graphSourcePins[slot]=candidate.image.proceduralGraphPin;
+                result.graphTextures[slot]=transaction.stageCompletedGpuImage(model,candidate.image,candidate.lease,candidate.fence);
+                candidate.encoded=false;candidate.fence=0;candidate.lease={};return result;
+            },nullptr,error);
+    }
+
+    static bool publishRadianceEmissiveSnapshot(Snapshot& live,const LiveAppearanceMaterialTarget& target,
+            render::Model& model,gfx::Device& device,const render::RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,render::texture_graph::GraphGpuTextureCopy& candidate,
+            std::string_view generation,std::string* error=nullptr){
+        return publishRadianceColorSnapshot(live,target,model,device,lease,rollback,candidate,generation,false,error);
     }
 
     void erase(const std::string& key) {
@@ -594,6 +683,86 @@ public:
         // animated source from aliasing a new generation in a live View.
     }
 private:
+    template<class Stage>
+    static bool publishTextureGraphSnapshotImpl(Snapshot& live,const LiveAppearanceMaterialTarget& target,
+            uint64_t nextVersion,render::Model& model,gfx::Device& device,
+            const render::RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,
+            const render::texture_graph::Program& program,Stage&& stage,
+            std::vector<render::Material>* materialMirror,std::string* error) {
+        if(error)error->clear();
+        try {
+            const auto old=live;
+            if(!old||old->model!=&model||
+               !target.matches(old->modelPublicationGeneration,old->version,old->materials.size())||
+               nextVersion<=old->version)
+                throw std::invalid_argument("appearance publication identity changed");
+            if(!lease.validFor(device)||!device.gpuHealthy())
+                throw std::runtime_error("appearance graphics owner unavailable");
+            if(materialMirror==&model.materials)
+                throw std::invalid_argument("cannot overwrite shared Model base materials");
+            size_t count=0;
+            for(const auto& [name,node]:program.outputs){
+                (void)node;(void)render::texture_graph::outputKind(name);
+                if(render::texture_graph::materialSlot(name))++count;
+            }
+            if(!count||count>6)throw std::invalid_argument("invalid bindable graph output count");
+            const auto stats=render::texture_graph::graphImageStats(model,rollback);
+            if(rollback.unrecoverableBatches()||stats.live>maxProceduralImages||count>maxProceduralImages-stats.live||
+               stats.pendingRetirement>maxProceduralImages-stats.live-count)
+                throw std::runtime_error("procedural image budget exhausted; collect retired images or retire/reload Model through owner");
+            const auto historical=stats.live+stats.tombstones;
+            size_t reusable=0;
+            for(const auto& image:model.images)if(render::ModelImageUploadTransaction::reusableGraphSlot(image,lease.generation(),rollback))++reusable;
+            const auto appended=count>reusable?count-reusable:0;
+            if(historical>render::texture_graph::maxHistoricalProceduralSlots||
+               appended>render::texture_graph::maxHistoricalProceduralSlots-historical)
+                throw std::runtime_error("procedural image index history exhausted; retire/reload Model through owner");
+            // Preallocate the replacement snapshot before GPU allocation.
+            auto next=std::make_shared<Asset>(*old);
+            next->version=nextVersion;
+            render::ModelImageUploadTransaction transaction(device,rollback,lease,true);
+            next->materials[target.material]=stage(transaction,old->materials[target.material]);
+            if(transaction.pendingImages()!=count)throw std::logic_error("incomplete graph image transaction");
+            if(!lease.validFor(device)||!device.gpuHealthy())
+                throw std::runtime_error("appearance graphics owner lost during staging");
+            std::vector<render::Material> mirror;
+            if(materialMirror)mirror=next->materials;
+            // No external callbacks between the image commit and publishing
+            // the preallocated snapshot. Old indices and graph epoch survive.
+            transaction.commit();
+            model.markMaterialChanged();
+            if(materialMirror)materialMirror->swap(mirror);
+            live=std::move(next);
+            return true;
+        }catch(const std::exception& ex) {
+            if(error)*error=ex.what();
+            return false;
+        }
+    }
+
+    template<class Stage>
+    bool publishTextureGraphMaterialImpl(const std::string& key,uint64_t expectedVersion,
+            uint64_t expectedModelPublication,size_t materialIndex,
+            render::Model& model,gfx::Device& device,
+            const render::RenderDeviceLifetime::Lease& lease,
+            render::ModelImageRollbackPool& rollback,
+            const render::texture_graph::Program& program,Stage&& stage,std::string* error) {
+        if(error)error->clear();
+        const auto it=assets_.find(key);
+        if(it==assets_.end()||dirty(key)){
+            if(error)*error="appearance missing or dirty";return false;
+        }
+        if(versionSerial_==std::numeric_limits<uint64_t>::max()){
+            if(error)*error="appearance version overflow";return false;
+        }
+        const bool ok=publishTextureGraphSnapshotImpl(it->second,
+            {expectedModelPublication,expectedVersion,materialIndex},versionSerial_+1,
+            model,device,lease,rollback,program,std::forward<Stage>(stage),nullptr,error);
+        if(ok)++versionSerial_;
+        return ok;
+    }
+
     // Mutation is confined to the owning presentation/render thread. Stable
     // shared snapshots may be read by consumers that hold their own handles.
     std::unordered_map<std::string,Snapshot> assets_;

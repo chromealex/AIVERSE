@@ -14,12 +14,12 @@ int main(){
     check((p.steps[3].releaseAfter==std::vector<size_t>{1,2}));
     p=planDagLifetime(edges,order,{0,3});
     check(p.peakLive==4&&p.retainedOutputs==2&&p.steps[2].releaseAfter.empty());
-    std::vector<std::vector<size_t>> chain(32);
+    std::vector<std::vector<size_t>> chain(64);
     std::vector<size_t> chainOrder;
-    for(size_t i=0;i<32;++i){chainOrder.push_back(i);if(i)chain[i]={i-1};}
-    p=planDagLifetime(chain,chainOrder,{31});
-    check(p.steps.size()==32&&p.peakLive==2&&p.retainedOutputs==1);
-    for(size_t i=1;i<32;++i)check(p.steps[i].releaseAfter==std::vector<size_t>{i-1});
+    for(size_t i=0;i<64;++i){chainOrder.push_back(i);if(i)chain[i]={i-1};}
+    p=planDagLifetime(chain,chainOrder,{63});
+    check(p.steps.size()==64&&p.peakLive==2&&p.retainedOutputs==1);
+    for(size_t i=1;i<64;++i)check(p.steps[i].releaseAfter==std::vector<size_t>{i-1});
     bool bad=false;try{(void)planDagLifetime(edges,{1,0,2,3,4},{3});}catch(const std::invalid_argument&){bad=true;}check(bad);
     bad=false;try{(void)planDagLifetime(edges,order,{5});}catch(const std::invalid_argument&){bad=true;}check(bad);
     bad=false;try{(void)planDagLifetime(edges,{0,1,2,3,3},{3});}catch(const std::invalid_argument&){bad=true;}check(bad);

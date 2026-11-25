@@ -749,15 +749,16 @@ public:
         const bool isRGBA = pixelFormat == MTLPixelFormatRGBA8Unorm ||
                             pixelFormat == MTLPixelFormatRGBA8Unorm_sRGB;
         const bool isHalf = pixelFormat == MTLPixelFormatRGBA16Float;
-        if ((!isBGRA && !isRGBA && !isHalf) ||
-            (isHalf ? t->fmt != PixelFormat::RGBA16F :
+        const bool isFloat = pixelFormat == MTLPixelFormatRGBA32Float;
+        if ((!isBGRA && !isRGBA && !isHalf && !isFloat) ||
+            (isFloat ? t->fmt != PixelFormat::RGBA32F : isHalf ? t->fmt != PixelFormat::RGBA16F :
              t->fmt != PixelFormat::RGBA8 && t->fmt != PixelFormat::RGBA8_sRGB))
             return false;
         const size_t width = size_t(std::max<NSUInteger>(1,
                               t->tex.width >> request.mipLevel));
         const size_t height = size_t(std::max<NSUInteger>(1,
                                t->tex.height >> request.mipLevel));
-        const size_t bpp = isHalf ? 8u : 4u;
+        const size_t bpp = isFloat ? 16u : isHalf ? 8u : 4u;
         // Align bytesPerRow for the Metal texture-to-buffer blit.
         if (width > SIZE_MAX / bpp) return false;
         const size_t packedRow = width*bpp;
@@ -1969,6 +1970,44 @@ public:
         screenReadable_ = readable;
         if (!capture_ && !captured_) layer_.framebufferOnly = readable ? NO : YES;
     }
+    bool supportsStorageBufferTextureCopy() const override {
+        return supportsCompute() && gpuHealthy();
+    }
+    bool supportsHdrTextureMipGeneration(PixelFormat f) const override {
+        return f==PixelFormat::RGBA16F&&supportsStorageBufferTextureCopy()&&supports(f);
+    }
+    bool copyStorageBufferToTexture2D(BufferHandle from,TextureHandle to,
+                                     const BufferTextureCopy2D& copy) override {
+        auto* source=buffers_.get(from.id);
+        const auto* dst=textures_.get(to.id);
+        const auto format=dst&&dst->tex?dst->tex.pixelFormat:MTLPixelFormatInvalid;
+        const size_t bpp=format==MTLPixelFormatRGBA16Float?8u:format==MTLPixelFormatRGBA32Float?16u:4u;
+        if(!cmd_||enc_||compute_||gpuIcbEncoder_||!supportsStorageBufferTextureCopy()||
+           !source||!source->storage||!dst||!dst->tex||dst->storage||
+           dst->dimension!=TextureDimension::Texture2D||
+           dst->tex.textureType!=MTLTextureType2D||dst->tex.sampleCount!=1||
+           (copy.generateMipmaps?(!dst->mips||dst->tex.mipmapLevelCount!=NSUInteger(maxTextureMipLevels(copy.width,copy.height,1))):dst->tex.mipmapLevelCount!=1)||
+           dst->tex.framebufferOnly||
+           (dst->tex.usage&MTLTextureUsageRenderTarget)||
+           (format!=MTLPixelFormatRGBA8Unorm&&format!=MTLPixelFormatRGBA8Unorm_sRGB&&format!=MTLPixelFormatRGBA16Float&&format!=MTLPixelFormatRGBA32Float)||
+           (bpp!=4&&copy.generateMipmaps&&!supportsHdrTextureMipGeneration(dst->fmt))||
+           !validBufferTextureCopy2D(copy,source->size,int(dst->tex.width),int(dst->tex.height),bpp)) {
+            error_="Metal: rejected storage buffer to RGBA texture copy";return false;
+        }
+        id<MTLBuffer> src=current(*source);
+        if(!src){error_="Metal: copy source unavailable";return false;}
+        id<MTLBlitCommandEncoder> blit=[cmd_ blitCommandEncoder];
+        if(!blit){error_="Metal: texture copy encoder unavailable";return false;}
+        [blit copyFromBuffer:src sourceOffset:NSUInteger(copy.sourceOffset)
+            sourceBytesPerRow:NSUInteger(copy.rowPitchBytes) sourceBytesPerImage:0
+            sourceSize:MTLSizeMake(NSUInteger(copy.width),NSUInteger(copy.height),1)
+            toTexture:dst->tex destinationSlice:0 destinationLevel:0
+            destinationOrigin:MTLOriginMake(0,0,0)];
+        if(copy.generateMipmaps)[blit generateMipmapsForTexture:dst->tex];
+        [blit endEncoding];
+        return true;
+    }
+
     bool copyColor(TextureHandle from, TextureHandle to) override {
         auto* dst = textures_.get(to.id);
         if (!cmd_ || enc_ || !dst) return false;
@@ -2041,7 +2080,14 @@ public:
         return true;
     }
 
-    void beginFrame(int w, int h) override {
+    void beginFrame(int w, int h) override { beginFrameInternal(w,h,true); }
+    bool supportsOffscreenFrames() const override { return true; }
+    bool beginOffscreenFrame() override {
+        if(cmd_ || !gpuHealthy()) return false;
+        beginFrameInternal(fbW_>0?fbW_:64,fbH_>0?fbH_:64,false);
+        return cmd_ != nil;
+    }
+    void beginFrameInternal(int w,int h,bool present) {
         fbW_ = w; fbH_ = h;
         dispatch_semaphore_wait(frameSemaphore_, DISPATCH_TIME_FOREVER);
         (void)transientGpuBudget();
@@ -2056,7 +2102,7 @@ public:
         // BEFORE commandBuffer creation; beginning in the fixture callback
         // would be too late for the already-created command buffer.
         maybeStartGpuTrace();
-        if (modelCounterEnabled_) {
+        if (present && modelCounterEnabled_) {
             std::fill(std::begin(modelCounterMarked_), std::end(modelCounterMarked_), false);
             modelCounterCurrent_ = nil;
             if (@available(macOS 11.0, iOS 14.0, *)) {
@@ -2077,15 +2123,15 @@ public:
         gpuEncodedIcbCursor_[frame_ % kFramesInFlight] = 0;
         uniformPage_=uniformOffset_=0;
         gpuIcbInstanceUploadedBytes_ = 0;
-        layer_.drawableSize = CGSizeMake(w, h);
+        if(present) layer_.drawableSize = CGSizeMake(w, h);
         // Opt-in late drawable acquisition (AIVERSE_METAL_LATE_DRAWABLE=1): the
         // drawable is taken at the first screen pass, after offscreen passes and
         // the game's CPU work. Default stays here: on the owner's Mac it showed no
         // gain and one run measured ~8 ms vs ~4 ms frames (2026-11-21, unresolved).
         drawable_ = nil;
-        drawablePending_ = true;
-        if (!lateDrawable_) acquireDrawable();
-        if (!depth_ || int(depth_.width) != w || int(depth_.height) != h) {
+        drawablePending_ = present;
+        if (present && !lateDrawable_) acquireDrawable();
+        if (present && (!depth_ || int(depth_.width) != w || int(depth_.height) != h)) {
             MTLTextureDescriptor* td = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float
                 width:NSUInteger(w) height:NSUInteger(h) mipmapped:NO];
             td.usage = MTLTextureUsageRenderTarget;
@@ -2093,6 +2139,12 @@ public:
             depth_ = [device_ newTextureWithDescriptor:td];
         }
         cmd_ = [queue_ commandBuffer];
+        if(!cmd_){
+            dispatch_semaphore_signal(frameSemaphore_);
+            drawable_=nil;drawablePending_=false;
+            gpuHealthy_->store(false);
+            return;
+        }
         __block dispatch_semaphore_t sem = frameSemaphore_;
         [cmd_ addCompletedHandler:^(id<MTLCommandBuffer>) { dispatch_semaphore_signal(sem); }];
         const uint64_t gpuToken = frame_;
@@ -2118,7 +2170,7 @@ public:
                 std::fprintf(stderr, "[metal] command buffer failed: %s\\n", description);
             }
             if(completed.status==MTLCommandBufferStatusCompleted) {
-                timing->store((completed.GPUEndTime-completed.GPUStartTime)*1000);
+                if(present) timing->store((completed.GPUEndTime-completed.GPUStartTime)*1000);
                 // Only a completed queue submission may release quarantined
                 // geometry spans. One Metal queue orders all model uploads
                 // and draws; atomically publish the highest completed frame.
@@ -2149,16 +2201,29 @@ public:
     id<MTLCounterSet> timestampCounterSet_ = nil;
     // 1 = explicit blit-command samples, 2 = blit stage-boundary samples
     int timestampScopeMode_ = 0;
+    // A real command is required for stage-boundary sampling on tile GPUs.
+    // This private marker buffer is never read by scene/graph work.
+    id<MTLBuffer> timestampScopeMarker_ = nil;
+    size_t timestampScopeInvalidLogged_ = 0;
 
     bool encodeGpuScopeTimestamp(id<MTLCounterSampleBuffer> samples,
                                  NSUInteger index) {
         if (@available(macOS 11.0, iOS 14.0, *)) {
         if (!cmd_ || enc_ || compute_ || gpuIcbEncoder_ || !samples)
             return false;
+        if (!timestampScopeMarker_) {
+            timestampScopeMarker_=[device_ newBufferWithLength:256 options:MTLResourceStorageModePrivate];
+            if (!timestampScopeMarker_) return false;
+            timestampScopeMarker_.label=@"AIVERSE GPU scope marker";
+        }
         if (timestampScopeMode_ == 1) {
             id<MTLBlitCommandEncoder> blit = [cmd_ blitCommandEncoder];
             if (!blit) return false;
+            // Sample after the opening marker and before the closing marker.
+            // A non-empty encoder avoids a driver-elided marker pass.
+            if(index==0)[blit fillBuffer:timestampScopeMarker_ range:NSMakeRange(0,256) value:0];
             [blit sampleCountersInBuffer:samples atSampleIndex:index withBarrier:YES];
+            if(index!=0)[blit fillBuffer:timestampScopeMarker_ range:NSMakeRange(0,256) value:1];
             [blit endEncoding];
             return true;
         }
@@ -2166,10 +2231,13 @@ public:
             MTLBlitPassDescriptor* descriptor=[MTLBlitPassDescriptor blitPassDescriptor];
             auto* attachment=descriptor.sampleBufferAttachments[0];
             attachment.sampleBuffer=samples;
-            attachment.startOfEncoderSampleIndex=index;
-            attachment.endOfEncoderSampleIndex=MTLCounterDontSample;
+            // Measure between the end of the opening marker and the start
+            // of the closing marker, excluding both marker fills.
+            attachment.startOfEncoderSampleIndex=index==0?MTLCounterDontSample:index;
+            attachment.endOfEncoderSampleIndex=index==0?index:MTLCounterDontSample;
             id<MTLBlitCommandEncoder> blit=[cmd_ blitCommandEncoderWithDescriptor:descriptor];
             if (!blit) return false;
+            [blit fillBuffer:timestampScopeMarker_ range:NSMakeRange(0,256) value:uint8_t(index)];
             [blit endEncoding];
             return true;
         }
@@ -2244,13 +2312,18 @@ public:
                     status!=MTLCommandBufferStatusError) {++i;continue;}
                 bool valid=false;
                 double elapsedMs=0.0;
+                uint64_t first=0,last=0,cpuFinal=0,gpuFinal=0;
+                size_t resolvedBytes=0;
                 if (t.ended && status==MTLCommandBufferStatusCompleted) {
                     NSData* data=[t.sample resolveCounterRange:NSMakeRange(0,2)];
+                    resolvedBytes=data?size_t(data.length):0;
                     if (data && data.length>=sizeof(MTLCounterResultTimestamp)*2) {
                         const auto* samples=
                             static_cast<const MTLCounterResultTimestamp*>(data.bytes);
                         MTLTimestamp cpuEnd=0,gpuEnd=0;
                         [device_ sampleTimestamps:&cpuEnd gpuTimestamp:&gpuEnd];
+                        first=samples[0].timestamp;last=samples[1].timestamp;
+                        cpuFinal=cpuEnd;gpuFinal=gpuEnd;
                         if (samples[0].timestamp>0 && samples[1].timestamp>samples[0].timestamp &&
                             samples[0].timestamp!=MTLCounterErrorValue &&
                             samples[1].timestamp!=MTLCounterErrorValue &&
@@ -2266,6 +2339,18 @@ public:
                                 elapsedMs>0.0 && elapsedMs<=250.0;
                         }
                     }
+                }
+                // Bounded diagnostic: preserve actual counter values for
+                // hardware acceptance, without inventing CPU fallback data.
+                if(!valid && timestampScopeInvalidLogged_<8 &&
+                   (std::getenv("AIVERSE_TEXTURE_GRAPH_REQUIRE_GPU_TIMINGS") ||
+                    std::getenv("AIVERSE_METAL_SCOPE_DIAGNOSTICS"))) {
+                    ++timestampScopeInvalidLogged_;
+                    std::fprintf(stderr,"[metal-scope] invalid mode=%d status=%lu ended=%d bytes=%zu samples=%llu,%llu cpu=%llu,%llu gpu=%llu,%llu ms=%.9g\n",
+                        timestampScopeMode_,(unsigned long)status,int(t.ended),resolvedBytes,
+                        (unsigned long long)first,(unsigned long long)last,
+                        (unsigned long long)t.cpuStart,(unsigned long long)cpuFinal,
+                        (unsigned long long)t.gpuStart,(unsigned long long)gpuFinal,elapsedMs);
                 }
                 result.push_back({t.tag,valid?elapsedMs:0.0,valid});
                 scopedCommands_.erase(scopedCommands_.begin()+i);

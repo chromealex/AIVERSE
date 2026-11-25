@@ -244,7 +244,7 @@ public:
                 // Inspecting a type's material names must work even when that
                 // type has no instances in the currently loaded map.
                 ed.retainEditorType(uint16_t(applyType_));
-                if (const render::Model* m = ed.view().modelOf(uint16_t(applyType_))) {
+                if (const auto read=ed.view().readModelOf(uint16_t(applyType_)); const auto* m=read.get()) {
                     std::string hint;
                     if (applyByNode_) { for (const auto& n : m->nodes) hint += n.name + "  "; }
                     else { for (const auto& mt : m->materials) hint += mt.name + "  "; }

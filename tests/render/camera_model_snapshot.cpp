@@ -23,6 +23,9 @@ int main(){
     nodes.clear();pose.clear();materials.clear();nodeMaterials.clear();
     draw.persistentId=999;
     size_t visits=0;
+    std::vector<std::span<const Material>> roots;
+    AIVERSE_TEST_CHECK(snapshot.appendGraphImageRoots(model,roots)&&roots.size()==1&&roots.front().size()==1);
+    Model unrelated;roots.clear();AIVERSE_TEST_CHECK(snapshot.appendGraphImageRoots(unrelated,roots)&&roots.empty());
     snapshot.forEach([&](const ModelDraw& captured){
         ++visits;
         AIVERSE_TEST_CHECK(captured.persistentId==73);
@@ -78,6 +81,33 @@ int main(){
     AIVERSE_TEST_CHECK(fallbacks==1 && preparedCount==1);
     mixed.clear();
     AIVERSE_TEST_CHECK(mixed.size()==0 && mixed.preparedCount()==0);
+    roots.clear();AIVERSE_TEST_CHECK(mixed.appendGraphImageRoots(model,roots)&&roots.empty());
+    // Prepared attachments own material/pose/mask snapshots and preserve
+    // pins across source mutation, snapshot copy and replay.
+    Model child;child.images.resize(1);
+    child.images[0].proceduralGraphImage=true;child.images[0].tex={33};
+    child.images[0].proceduralGraphPin=std::make_shared<const ProceduralImagePin>();
+    std::vector<Material> childMaterials(1);
+    childMaterials[0].baseTex=0;
+    childMaterials[0].proceduralGraphPins=withGraphMaterialPin({},0,child.images[0].proceduralGraphPin);
+    std::vector<uint8_t> childMask{1,0};
+    aiverse::view::ModelAttachment borrowed;borrowed.draw.model=&child;borrowed.draw.materials=&childMaterials;
+    borrowed.draw.materialMask=&childMask;
+    prepared.attachments.push_back(borrowed);mixed.recordPrepared(visual,prepared);
+    childMaterials.clear();childMask.clear();prepared.attachments.clear();
+    roots.clear();
+    AIVERSE_TEST_CHECK(mixed.appendGraphImageRoots(child,roots)&&roots.size()==1&&roots[0].size()==1);
+    auto childReplay=mixed;mixed.clear();
+    childReplay.forEachPrepared([&](const aiverse::view::View&,const aiverse::view::Object& object){
+        AIVERSE_TEST_CHECK(object.attachments.size()==1);
+        const auto& draw=object.attachments[0].draw;
+        AIVERSE_TEST_CHECK(draw.model==&child&&draw.materials&&draw.materials->size()==1);
+        AIVERSE_TEST_CHECK(resolvedMaterialTexture(child,draw.materials->front(),&Material::baseTex).id==33);
+        AIVERSE_TEST_CHECK(draw.materialMask&&draw.materialMask->size()==2&&draw.materialMask->at(1)==0);
+    });
+    AIVERSE_TEST_CHECK(!graphImageUnpinned(child.images[0].proceduralGraphPin));
+    childReplay.clear();
+    AIVERSE_TEST_CHECK(graphImageUnpinned(child.images[0].proceduralGraphPin));
 
     // Geometry packets are value-owned, except for the host-owned Mesh.
     // All primitive coordinates and draw parameters survive source mutation.

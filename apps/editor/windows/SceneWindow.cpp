@@ -528,7 +528,7 @@ private:
         if (selectedType >= 0 && size_t(selectedType) < ed.rules().types.size()) {
             ed.retainEditorType(uint16_t(selectedType));
             ImGui::Text("Выбран: %s", ed.rules().types[size_t(selectedType)].id.c_str());
-            if (const auto* model = ed.view().modelOf(uint16_t(selectedType))) {
+            if (const auto read=ed.view().readModelOf(uint16_t(selectedType)); const auto* model=read.get()) {
                 size_t chains = 0, levels = 0;
                 for (const auto& node : model->nodes) {
                     if (node.mesh < 0 || size_t(node.mesh) >= model->meshes.size()) continue;

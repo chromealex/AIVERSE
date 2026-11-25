@@ -92,7 +92,8 @@ export interface StudioShaderGraphList { graphs: string[] }
 export interface StudioShaderGraphOp { id:string; inputs:number; domains:string[] }
 export interface StudioShaderGraphCatalog { nodes:StudioShaderGraphOp[] }
 export interface StudioShaderGraphDocument {
-  graph: { version?: number; domain?: string; nodes?: Array<{id:string;op:string;inputs?:string[];position?:number[];value?:number|number[]}>; outputs?:Record<string,string> };
+  originalJson?: string;
+  graph: { version?: number; domain?: string; nodes?: Array<{id:string;op:string;inputs?:string[];position?:number[];value?:number|number[];texture?:string;srgb?:boolean}>; outputs?:Record<string,string> };
   nodes: number; samples: number;
 }
 export interface StudioGraphDocumentScope { projectPath:string; mapPath:string; epoch:string; revision:string }

@@ -22,7 +22,10 @@ float3 safeNormalize(float3 v, float3 fallback) { const float l = length(v); ret
 
 namespace {
 bool paletteStateEqual(const Material& a, const Material& b) {
-    if (a.shaderGraph || b.shaderGraph || a.alpha != AlphaMode::Opaque || b.alpha != AlphaMode::Opaque ||
+    // This palette contract has no Model parameter and compares raw slot
+    // indices. Procedural generations must use ordinary checked draws.
+    if (a.proceduralGraphPins || b.proceduralGraphPins ||
+        a.shaderGraph || b.shaderGraph || a.alpha != AlphaMode::Opaque || b.alpha != AlphaMode::Opaque ||
         a.transparent || b.transparent) return false;
     auto state = [](const Material& m) {
         return std::make_tuple(m.shading, m.normalScale, m.occlusionStrength,

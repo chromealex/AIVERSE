@@ -18,7 +18,7 @@ struct PassSchedule {
 // replace their previous value; no in-place read/write or implicit input.
 inline bool validPassSchedule(const PassSchedule& schedule,size_t budget){
     const auto count=schedule.slotBytes.size();
-    if(!count||count>32||schedule.passes.empty()||schedule.passes.size()>32||
+    if(!count||count>64||schedule.passes.empty()||schedule.passes.size()>64||
        schedule.resultSlot>=count||schedule.externalReady.size()>count)return false;
     size_t bytes=0;
     for(auto size:schedule.slotBytes){
@@ -32,7 +32,7 @@ inline bool validPassSchedule(const PassSchedule& schedule,size_t budget){
     }
     bool resultWritten=false;
     for(const auto& pass:schedule.passes){
-        if(pass.pipeline>=32||pass.output>=count||pass.inputs.size()>31)return false;
+        if(pass.pipeline>=64||pass.output>=count||pass.inputs.size()>31)return false;
         for(auto input:pass.inputs)
             if(input>=count||input==pass.output||!initialized[input])return false;
         initialized[pass.output]=true;

@@ -29,7 +29,7 @@ inline bool equivalentGpuMaterial(const Model& ma, const Material& a,
         if (g.domain != h.domain || g.vertexGlsl != h.vertexGlsl ||
             g.vertexMsl != h.vertexMsl || g.glsl != h.glsl ||
             g.msl != h.msl || g.outputs != h.outputs ||
-            g.textures != h.textures || g.minQuality != h.minQuality ||
+            g.textures != h.textures || g.linearRadianceSlots!=h.linearRadianceSlots || g.minQuality != h.minQuality ||
             g.usesVirtualTexture != h.usesVirtualTexture) return false;
     }
     auto state = [](const Material& m) {
@@ -45,27 +45,15 @@ inline bool equivalentGpuMaterial(const Model& ma, const Material& a,
             m.thinTransmission, m.shadowDiffusion, m.fixedShade.x, m.fixedShade.y,
             m.sssStrength, m.sssColor.x, m.sssColor.y, m.sssColor.z, m.sssScale, m.sssThickness, m.humanProfile.x, m.humanProfile.y, m.eyeOptics.x, m.eyeOptics.y, m.eyeOptics.z, m.eyeOptics.w);
     };
-    if (state(a) != state(b)) return false;
-    auto texture = [](const Model& model, int slot) -> uint32_t {
-        return slot >= 0 && size_t(slot) < model.images.size()
-            ? model.images[size_t(slot)].tex.id : 0;
-    };
-    const int ta[] = {a.baseTex, a.mrTex, a.normalTex, a.occlusionTex, a.emissiveTex, a.teamTex};
-    const int tb[] = {b.baseTex, b.mrTex, b.normalTex, b.occlusionTex, b.emissiveTex, b.teamTex};
-    for (size_t i = 0; i < 6; ++i)
-        if (texture(ma, ta[i]) != texture(mb, tb[i])) return false;
-    // A reduced VT base image can have a different full-resolution R8
-    // alpha mask despite otherwise equivalent material parameters.
-    const auto alphaTexture = [](const Model& model,const Material& material) {
-        return material.baseTex >= 0 &&
-               size_t(material.baseTex) < model.images.size() ?
-               model.images[size_t(material.baseTex)].virtualAlphaMask.id : 0u;
-    };
-    if (alphaTexture(ma,a) != alphaTexture(mb,b)) return false;
-    if (a.shaderGraph) {
-        for (size_t i = 0; i < a.shaderGraph->textures.size() && i < 4; ++i)
-            if (texture(ma, a.graphTextures[i]) != texture(mb, b.graphTextures[i])) return false;
-    }
+    if (state(a) != state(b)||resolvedLinearEmissive(ma,a)!=resolvedLinearEmissive(mb,b)||resolvedLinearBaseColor(ma,a)!=resolvedLinearBaseColor(mb,b)||resolvedBc5Normal(ma,a)!=resolvedBc5Normal(mb,b)) return false;
+    for(auto slot:{&Material::baseTex,&Material::mrTex,&Material::normalTex,
+                   &Material::occlusionTex,&Material::emissiveTex,&Material::teamTex})
+        if(resolvedMaterialTexture(ma,a,slot)!=resolvedMaterialTexture(mb,b,slot))return false;
+    // A reduced VT base image can have a different full-resolution R8 mask.
+    if(resolvedMaterialAlphaCoverage(ma,a)!=resolvedMaterialAlphaCoverage(mb,b))return false;
+    if(a.shaderGraph)
+        for(size_t i=0;i<a.shaderGraph->textures.size()&&i<4;++i)
+            if(resolvedGraphSourceTexture(ma,a,i)!=resolvedGraphSourceTexture(mb,b,i))return false;
     return true;
 }
 
@@ -85,7 +73,7 @@ inline uint64_t gpuMaterialStateHash(const Model& model, const Material& m) {
         str(g.domain); str(g.vertexGlsl); str(g.vertexMsl);
         str(g.glsl); str(g.msl); u(g.minQuality);
         u(g.usesVirtualTexture ? 1u : 0u);
-        u(g.textures.size());
+        u(g.textures.size());u(g.linearRadianceSlots);
         for (const auto& t : g.textures) str(t);
         u(g.outputs.size());
         for (const auto& [key, value] : g.outputs) { str(key); str(value); }
@@ -106,16 +94,13 @@ inline uint64_t gpuMaterialStateHash(const Model& model, const Material& m) {
     f(m.sssThickness);
     f(m.humanProfile.x); f(m.humanProfile.y);
     f(m.eyeOptics.x); f(m.eyeOptics.y); f(m.eyeOptics.z); f(m.eyeOptics.w);
-    auto texture = [&](int index) {
-        u(index >= 0 && size_t(index) < model.images.size()
-            ? model.images[size_t(index)].tex.id : 0);
-    };
-    for (int t : {m.baseTex, m.mrTex, m.normalTex, m.occlusionTex, m.emissiveTex, m.teamTex}) texture(t);
-    u(m.baseTex >= 0 && size_t(m.baseTex) < model.images.size() ?
-        model.images[size_t(m.baseTex)].virtualAlphaMask.id : 0u);
-    if (m.shaderGraph)
-        for (size_t i = 0; i < m.shaderGraph->textures.size() && i < 4; ++i)
-            texture(m.graphTextures[i]);
+    for(auto slot:{&Material::baseTex,&Material::mrTex,&Material::normalTex,
+                   &Material::occlusionTex,&Material::emissiveTex,&Material::teamTex})
+        u(resolvedMaterialTexture(model,m,slot).id);
+    u(resolvedMaterialAlphaCoverage(model,m).id);u(resolvedLinearEmissive(model,m));u(resolvedLinearBaseColor(model,m));u(resolvedBc5Normal(model,m));
+    if(m.shaderGraph)
+        for(size_t i=0;i<m.shaderGraph->textures.size()&&i<4;++i)
+            u(resolvedGraphSourceTexture(model,m,i).id);
     return hash;
 }
 
@@ -181,7 +166,7 @@ inline bool equivalentGpuIcbGraphPipelineMaterial(const Material& a,
            x.vertexMsl == y.vertexMsl &&
            x.outputs == y.outputs &&
            x.usesVirtualTexture == y.usesVirtualTexture &&
-           x.textures.size() == y.textures.size();
+           x.textures.size() == y.textures.size() && x.linearRadianceSlots==y.linearRadianceSlots;
 }
 inline uint64_t gpuIcbGraphPipelineHash(const Material& material) {
     uint64_t h=gpuIcbPbrPipelineHash(material);
@@ -196,7 +181,7 @@ inline uint64_t gpuIcbGraphPipelineHash(const Material& material) {
     str(g.domain);str(g.glsl);str(g.msl);
     str(g.vertexGlsl);str(g.vertexMsl);
     mix(uint64_t(g.minQuality));mix(g.usesVirtualTexture ? 1u : 0u);
-    mix(g.textures.size());
+    mix(g.textures.size());mix(g.linearRadianceSlots);
     for(const auto& [name,value]:g.outputs) {
         str(name);str(value);
     }

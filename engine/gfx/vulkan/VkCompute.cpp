@@ -402,13 +402,14 @@ void VulkanDevice::endCompute() {
 bool VulkanDevice::readBufferAsync(BufferHandle handle,size_t size,BufferReadFn callback){
     return readBufferRangeAsync(handle,0,size,std::move(callback));
 }
+
 bool VulkanDevice::readBufferRangeAsync(BufferHandle handle,size_t offset,size_t size,BufferReadFn callback) {
     if(!healthy_ || !recording_ || inPass_ || activeComputeId_ ||
        !callback || !handle.valid() || !size || (offset&3u) || (size&3u) || size>(64u*1024u) ||
        computeReads_.size()>=64)
         return false;
     const auto* buffer=buffers_.get(handle.id);
-    if(!buffer || offset>buffer->size||size>buffer->size-offset||((offset|size)&3u))return false;
+    if(!buffer || offset>buffer->size||size>buffer->size-offset)return false;
     GpuTransferReservation charge(transientGpuBudget(),size);if(!charge)return false;
     const VkBuffer source=resolveBuffer(handle.id,serial_);
     if(!source)return false;

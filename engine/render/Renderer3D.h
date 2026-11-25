@@ -705,6 +705,10 @@ public:
                                     const Material& material,
                                     ModelVirtualTextureBinding& out) const {
         out = {};
+        // A custom resolver must not resurrect a retired or stale tracked
+        // base slot through its external VT domain.
+        if(material.baseTex>=0&&size_t(material.baseTex)<model.images.size()&&
+           !resolveMaterialImage(model,material,&Material::baseTex))return false;
         if (!modelVirtualTextureResolver_ ||
             !modelVirtualTextureResolver_(model,material,out) ||
             !out.valid()) {
@@ -757,6 +761,18 @@ public:
     // before starting another draw submission; no GPU resources are owned here.
     void invalidateStaticModelCache(uint64_t persistentId);
     void invalidateModelCachesFor(const Model* model);
+    // Known renderer-owned CPU roots. Never dereference a borrowed
+    // previous-scene Material pointer. False means unresolved replay/raw
+    // table references, so a complete native root certificate is forbidden.
+    // Returned spans are valid only until the next renderer mutation.
+    bool appendGraphImageRoots(const Model& model,std::vector<std::span<const Material>>& roots) const;
+    // Explicit host contract: final CPU submission and all replay/provenance
+    // consumers of the scene are finished. Invalidates the old scene only,
+    // never destroys GPU resources or waits for GPU completion.
+    // Non-mutating preflight for hosts with more than one renderer. All
+    // participants must agree before any previous-scene state is discarded.
+    bool canDetachCompletedGraphImageReplay() const noexcept;
+    bool detachCompletedGraphImageReplay() noexcept;
     // Hierarchical wind masks (WindRigShader.h). Scene wind drives every
     // rigged draw that does not supply its own vertexParameters; the debug
     // view (editors only) recolours rigged materials by part/depth/weight.
@@ -1307,8 +1323,17 @@ public:
     bool ssrActive() const { return ssrThisFrame_; }       // the scene targets are bound this frame (water SSR)
 
     void setMaterialQuality(MaterialQuality q);
+    // Borrowed linear RGBA16F EnvironmentIbl atlas (130x330 legacy or
+    // 130x460 with integrated BRDF LUT); caller retains it until
+    // all renderer GPU reads complete. No ownership or scene-wide fallback.
+    bool setModelEnvironment(gfx::TextureHandle atlas,float rotation=0.f,float intensity=1.f){
+        if(atlas.valid()&&(!dev_||dev_->maxFragmentTextureSlots()<14||!dev_->supports(gfx::PixelFormat::RGBA16F)||
+            !std::isfinite(rotation)||!std::isfinite(intensity)||intensity<0.f||intensity>8.f))return false;
+        modelEnvironment_=atlas;modelEnvironmentRotation_=rotation;modelEnvironmentIntensity_=intensity;return true;
+    }
     MaterialQuality materialQuality() const { return matQuality_; }
     static MaterialQuality defaultMaterialQualityFor(const gfx::Device& dev, bool mobile);
+    void clearModelError() { modelError_.clear(); }
     const std::string& modelError() const { return modelError_; }   // last model shader failure
 
     const mat4& viewProj() const { return viewProj_; }
@@ -1652,7 +1677,7 @@ public:
 private:
     wind::SceneWind sceneWind_{};
     wind::WindDebugView windDebugView_ = wind::WindDebugView::Off;
-    struct WindDebugMaterials { uint64_t revision = 0; size_t count = 0; std::vector<Material> materials; };
+    struct WindDebugMaterials { const Model* model=nullptr; uint64_t revision = 0; size_t count = 0; std::vector<Material> materials; };
     std::unordered_map<const void*, WindDebugMaterials> windDebugMaterials_;
     bool applyWindRig(const ModelDraw& d);
     struct DrawItem {
@@ -1839,6 +1864,8 @@ private:
     // Reset every beginScene; secondary elevations use SSR/environment only.
     bool reflectionPlaneValid_ = false;
     float reflectionPlaneY_ = 0.f;
+    gfx::TextureHandle modelEnvironment_{};
+    float modelEnvironmentRotation_=0.f,modelEnvironmentIntensity_=1.f;
     bool modelReflections_ = false; // opt-in opaque PBR SSR; High trace + HDR only
     bool hdrFrame_ = false;
     HeightField heightField_;

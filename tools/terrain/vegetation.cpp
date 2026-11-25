@@ -1,6 +1,7 @@
 // Authoring host for native Arbor/Grass APIs. No scene-specific morphology.
 #include "engine/render/TerraWeaveModelAdapter.h"
 #include "engine/render/TerraWeaveGrassRender.h"
+#include "engine/world/TerraWeaveGrassSpeciesJson.h"
 #include "engine/world/TerraWeaveTreePresets.h"
 #include "engine/world/TerraWeaveBotanicalAppearance.h"
 #include <set>
@@ -81,15 +82,22 @@ int main(int argc,char** argv){try{
         for(const auto& v:doc["heightCm"].items())if(!v.isNumber()||v.integer()< -1000000||v.integer()>1000000)throw std::runtime_error("height range");
         for(const auto& v:doc["coverPermille"].items())if(!v.isNumber()||v.integer()<0||v.integer()>1000)throw std::runtime_error("cover range");
         auto sample=[&](const char* field,int64_t x,int64_t z){const double gx=double(x-ox)/step,gz=double(z-oz)/step;const auto ix=int64_t(std::floor(gx)),iz=int64_t(std::floor(gz));if(ix<0||iz<0||ix>=nx-1||iz>=nz-1)throw std::runtime_error("patch outside grid");const double tx=gx-ix,tz=gz-iz;const auto& a=doc[field];return int32_t(std::lround((a[size_t(iz*nx+ix)].integer()*(1-tx)+a[size_t(iz*nx+ix+1)].integer()*tx)*(1-tz)+(a[size_t((iz+1)*nx+ix)].integer()*(1-tx)+a[size_t((iz+1)*nx+ix+1)].integer()*tx)*tz));};
+        // Optional meadow grass (species, clumps, fields): ground-level default,
+        // per-patch override. Absent = legacy uniform blades, unchanged output.
+        const GrassMeadow groundMeadow=parseGrassMeadow(doc["meadow"],"ground meadow");
         uint64_t key=1;
         for(const auto& entry:doc["patches"].items()){
             GrassPatch p;p.key=key++;p.seed=seed;p.bounds={entry.getInt("minX"),entry.getInt("minZ"),entry.getInt("maxX"),entry.getInt("maxZ")};p.maximumBlades=uint32_t(std::clamp<int64_t>(entry.getInt("blades",2048),1,8192));
-            GrassRenderQuality q;q.maxBladesPerPatch=p.maximumBlades;q.crossedBlades=false;q.bladeSegments=3;q.bladeHeightCm=uint32_t(entry.getInt("bladeHeightCm",65));q.naturalBlades=true;q.bladeHalfWidthCm=uint32_t(entry.getInt("bladeHalfWidthCm",1));q.bladesPerTuft=uint32_t(entry.getInt("bladesPerTuft",16));q.tuftRadiusCm=uint32_t(entry.getInt("tuftRadiusCm",24));q.heightVariationPermille=uint32_t(entry.getInt("heightVariationPermille",450));validateGrassRenderQuality(q);
+            GrassRenderQuality q;q.maxBladesPerPatch=p.maximumBlades;q.crossedBlades=false;q.bladeSegments=3;q.bladeHeightCm=uint32_t(entry.getInt("bladeHeightCm",65));q.naturalBlades=true;q.bladeHalfWidthCm=uint32_t(entry.getInt("bladeHalfWidthCm",1));q.bladesPerTuft=uint32_t(entry.getInt("bladesPerTuft",16));q.tuftRadiusCm=uint32_t(entry.getInt("tuftRadiusCm",24));q.heightVariationPermille=uint32_t(entry.getInt("heightVariationPermille",450));
+            q.meadow=entry.has("meadow")?parseGrassMeadow(entry["meadow"],"patch "+std::to_string(p.key)+" meadow"):groundMeadow;
+            if(q.meadow.enabled())q.bladeSegments=uint32_t(entry.getInt("bladeSegments",4));
+            validateGrassRenderQuality(q);
             const auto ground=[&](int64_t x,int64_t z){return sample("heightCm",x,z);};
             const auto allows=[&](int64_t x,int64_t z){if(nativeShore){if(sample("sandPermille",x,z)>sandLimit)return false;}else if(doc.has("waterHeightCm")&&sample("heightCm",x,z)-sample("waterHeightCm",x,z)<270)return false;return int64_t(detail::mix64(uint64_t(x)^detail::mix64(uint64_t(z)))%1000)<sample("coverPermille",x,z);};
             auto model=makeGrassPatchLodModel(p,ground,q,allows);
             if(!model)continue;
-            model->materials[0].baseColor={.34f,.43f,.13f,1};const std::string name="grass-"+std::to_string(p.key);save(out,name,*model);
+            if(!q.meadow.enabled()){model->materials[0].baseColor={.34f,.43f,.13f,1};} /* meadow: pigment in vertex colour */
+            const std::string name="grass-"+std::to_string(p.key);save(out,name,*model);
             auto e=Json::object();e.set("file",Json::string(name+".gltf"));e.set("xCm",Json::number(p.bounds.minX));e.set("zCm",Json::number(p.bounds.minZ));patches.push(e);
         }
     }

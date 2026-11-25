@@ -29,8 +29,9 @@ TOOL = re.compile(r'^([a-z][a-z0-9]*(?:_[a-z0-9]+)+)(?:\s*\{.*\})?$')
 def mcp_tools(root=ROOT):
     names = set()
     for base in (root / 'apps', root / 'tools' / 'mcp'):
-        for p in base.rglob('*.cpp'):
-            names.update(REG.findall(p.read_text(encoding='utf-8', errors='replace')))
+        for pattern in ('*.cpp', '*.h'):
+            for p in base.rglob(pattern):
+                names.update(REG.findall(p.read_text(encoding='utf-8', errors='replace')))
     return names
 
 
@@ -65,6 +66,8 @@ def audit(root=ROOT, only=None, strict=False):
     # CTest identifiers in validation instructions are not MCP operations.
     cmake = (root / 'CMakeLists.txt').read_text(encoding='utf-8')
     test_names = set(re.findall(r'add_test\s*\(\s*NAME\s+([a-z][a-z0-9_]+)', cmake))
+    # Skills also name standalone fixture sources compiled by parameterized CMake loops.
+    test_names.update(p.stem for p in (root / 'tests').rglob('*_test.cpp'))
     errors, warnings = [], []
     for skill in sorted((root / 'skills').glob('*/*/SKILL.md')):
         sid = skill.parent.name

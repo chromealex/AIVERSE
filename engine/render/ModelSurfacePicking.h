@@ -20,10 +20,14 @@ inline bool rayModelBounds(float3 origin,float3 direction,float3 lo,float3 hi,co
 }
 inline float modelPickAlpha(const Model& model,const Material& material,float2 uv) {
     if(material.baseTex<0)return 1;
-    if(size_t(material.baseTex)>=model.images.size())return 0;
-    const auto& image=model.images[size_t(material.baseTex)];
+    // A stale or unpinned procedural slot is not reliable CPU alpha
+    // evidence. Keep the conservative no-hit policy for missing pixels.
+    const auto* resolved=resolveMaterialImage(model,material,&Material::baseTex);
+    if(!resolved)return 0;
+    const auto& image=*resolved;
     const auto* pixels=!image.rgba.empty()?&image.rgba:image.sharedRgba.get();
-    if(!pixels||image.width<1||image.height<1||pixels->size()<size_t(image.width)*image.height*4)return 0;
+    if(!pixels||image.width<1||image.height<1||
+       size_t(image.width)>pixels->size()/4/size_t(image.height))return 0;
     const float x=uv.x*material.uvScale.x,y=uv.y*material.uvScale.y,cs=std::cos(material.uvRotation),sn=std::sin(material.uvRotation);
     uv={material.uvOffset.x+cs*x-sn*y,material.uvOffset.y+sn*x+cs*y};
     const auto alpha=[&](int x,int y){if(image.repeat){x=(x%image.width+image.width)%image.width;y=(y%image.height+image.height)%image.height;}

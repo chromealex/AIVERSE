@@ -16,6 +16,55 @@ inline MaterialSlot materialSlot(std::string_view output) {
     if(output=="mask")return &Material::teamTex;
     return nullptr; // height and standalone roughness/metallic are not PBR slots.
 }
+inline size_t graphMaterialChannel(MaterialSlot slot){
+    const auto channel=proceduralMaterialChannel(slot);
+    if(channel>=6)throw std::invalid_argument("unknown graph material slot");
+    return channel;
+}
+// Prepare before moving an Image into the transaction. Copies of the base
+// material retain their old immutable pin set; the candidate gets a new set.
+inline void pinGraphMaterialBinding(Material& candidate,MaterialSlot slot,Image& image){
+    if(!image.proceduralGraphPin)image.proceduralGraphPin=std::make_shared<const ProceduralImagePin>();
+    candidate.proceduralGraphPins=withGraphMaterialPin(candidate.proceduralGraphPins,graphMaterialChannel(slot),image.proceduralGraphPin);
+}
+// Native callers retaining raw handles/indices must hold this pin as well,
+// or enumerate their external root explicitly at the collection boundary.
+inline GraphImagePin pinPublishedGraphImage(const Model& model,size_t index){
+    if(index>=model.images.size())return {};
+    const auto& image=model.images[index];
+    return image.proceduralGraphImage&&!image.proceduralGraphRetired&&image.tex.valid()?image.proceduralGraphPin:GraphImagePin{};
+}
+// Capture once on the owner thread while the Model is live. A reference is
+// weak: it is safe to retain across slot recycling, but does not keep the
+// Model, device or GPU image alive. Always resolve against a currently owned
+// Model under the existing reader/frame-boundary contract.
+inline GraphImageReference referencePublishedGraphImage(const Model& model,size_t index){
+    return {index,pinPublishedGraphImage(model,index)};
+}
+struct PublishedGraphImageAccess {
+    gfx::TextureHandle texture{};
+    GraphImagePin pin;
+    explicit operator bool()const noexcept{return texture.valid()&&bool(pin);}
+};
+// The returned pin must remain held for every use of the raw texture while
+// the model/device owner remains live. This is NOT a model/device lifetime
+// lease, nor permission to submit concurrently with model mutation.
+inline PublishedGraphImageAccess acquirePublishedGraphImage(const Model& model,
+        const GraphImageReference& reference){
+    const auto index=reference.index();
+    auto current=pinPublishedGraphImage(model,index);
+    auto pin=reference.acquire(index,current);
+    if(!pin)return {};
+    return {model.images[index].tex,std::move(pin)};
+}
+// A material-bound reference must use its original pin, not re-capture a
+// generation from a possibly stale raw index after a slot has been reused.
+inline GraphImageReference referenceGraphMaterialImage(const Material& material,MaterialSlot slot){
+    const auto channel=graphMaterialChannel(slot);
+    const auto index=material.*slot;
+    if(index<0||!material.proceduralGraphPins)return {};
+    return {size_t(index),(*material.proceduralGraphPins)[channel]};
+}
 struct MaterialImagePlan {
     struct Entry { MaterialSlot slot; Image image; };
     std::vector<Entry> entries;
@@ -46,6 +95,7 @@ inline MaterialImagePlan prepareMaterialImages(const Program& program,
             Image img;
             img.name="#texture-graph/"+std::string(generation)+"/"+name;
             img.width=src.width;img.height=src.height;img.rgba=src.rgba;
+            img.proceduralGraphImage=true;
             // Model image uploader and material shader own sampling/color
             // semantics. Do not reinterpret data maps or manufacture sRGB metadata.
             plan.entries.push_back({slot,std::move(img)});
@@ -71,8 +121,10 @@ inline Material stageMaterialImages(ModelImageUploadTransaction& transaction,
                     "material generation already staged");
     }
     Material result=base;
-    for(auto& entry:plan.entries)
+    for(auto& entry:plan.entries){
+        pinGraphMaterialBinding(result,entry.slot,entry.image);
         result.*(entry.slot)=transaction.stage(model,std::move(entry.image));
+    }
     return result;
 }
 } // namespace aiverse::render::texture_graph

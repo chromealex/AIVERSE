@@ -4,6 +4,7 @@
 #include "Model.h"
 #include "GeometryPoolEligibility.h"
 #include <span>
+#include <memory>
 
 namespace aiverse::render {
 struct GeometryPoolStats {
@@ -45,6 +46,13 @@ struct GeometryPoolReferencedStats {
 };
 GeometryPoolReferencedStats geometryPoolReferencedStats(
     gfx::Device& dev,std::span<const Model* const> models);
+// A non-owning, point-in-time page identity per distinct Model. Unlike a
+// Model pointer it is safe to discard after retirement, cannot keep GPU
+// storage alive, and rejects same-address ABA by control-block identity.
+// Combine disjoint owner snapshots only once per cache.
+using GeometryPoolPageReference=std::weak_ptr<GeometryPoolPage>;
+GeometryPoolReferencedStats geometryPoolPageReferencedStats(
+    gfx::Device& dev,std::span<const GeometryPoolPageReference> references);
 bool globalGeometryPoolingEnabled();
 void setGlobalGeometryPoolingEnabled(bool enabled);
 // Opt-in for immutable rigid LOD meshes; changes affect subsequent uploads,

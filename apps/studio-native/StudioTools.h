@@ -24,7 +24,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
         {"building_generator", {"building_graph_diagnostics"}},
         {"feature_readiness", {"feature_readiness_get", "feature_readiness_query", "feature_readiness_status_get", "feature_readiness_refresh"}},
         {"terrain", {"map_info", "terrain_sculpt", "terrain_level", "terrain_height", "terrain_heights", "terrain_paint",
-                     "terrain_paint_material", "terrain_material", "terrain_detail", "heightmap_import", "heightmap_export"}},
+                     "terraweave_meadow_get", "terraweave_meadow_set", "terrain_paint_material", "terrain_material", "terrain_detail", "heightmap_import", "heightmap_export"}},
         {"caverns", {"terraweave_caverns_paint","terraweave_caverns_pick"}},
         {"water", {"water_types", "water_network", "water_set", "water_delete", "water_shores", "water_bake", "nereid_water_state"}},
         {"roads", {"simulation_budget_plan", "road_types", "road_network", "road_add", "road_delete", "road_node_set", "road_edge_set", "road_split",
@@ -50,7 +50,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
         {"fx_functions", {"fx_function_list", "fx_function_get", "fx_function_set", "fx_function_import", "fx_function_export", "fx_import_unity"}},
         {"modeling", {"modeling_catalog", "modeling_list", "modeling_get", "modeling_create", "modeling_edit", "modeling_validate", "strata_capabilities", "strata_model_analyze", "modeling_apply", "modeling_build",
                       "modeling_duplicate", "modeling_lod", "modeling_export", "modeling_graph_set", "modeling_graph_import", "modeling_graph_publish",
-                      "texture_patterns", "texture_generate", "texture_graph_catalog", "texture_graph_list", "texture_graph_get", "texture_graph_validate", "texture_graph_set", "texture_graph_preview", "texture_graph_bake", "texture_graph_templates", "texture_graph_bake_set", "texture_graph_cache", "texture_graph_material_variant", "texture_graph_gpu_preview"}},
+                      "texture_patterns", "texture_generate", "texture_graph_catalog", "texture_graph_image_asset", "texture_graph_list", "texture_graph_get", "texture_graph_validate", "texture_graph_set", "texture_graph_preview", "texture_graph_bake", "texture_graph_templates", "texture_graph_bake_set", "texture_graph_cache", "texture_graph_material_variant", "texture_graph_gpu_preview"}},
         {"anim_assets", {"modeling_list", "animation_get", "animation_asset_get", "animation_asset_save", "animation_generate", "animation_bake", "animation_sample"}},
         {"anim_graph", {"graph_catalog", "graph_list", "graph_get", "graph_node_catalog", "graph_validate", "graph_diagnostics", "graph_dependencies", "graph_property_schema", "graph_asset_dependencies", "graph_runtime_capabilities", "graph_runtime_probe", "graph_live_snapshot", "graph_live_watch", "graph_live_profile", "graph_gpu_profile", "graph_debug_session", "animation_graph_list", "animation_graph_get", "animation_graph_validate", "animation_graph_set", "animation_graph_apply",
                         "animation_montage_validate"}},
@@ -88,7 +88,7 @@ inline bool studioToolAllowed(const std::string& op) {
 inline bool studioToolReadOnly(const std::string& op) {
     if(op=="building_graph_diagnostics")return true;
     if (op == "feature_readiness_query" || op == "feature_readiness_refresh") return true; // engine report only, no project mutation
-    if (op == "texture_graph_preview" || op == "texture_graph_catalog" || op == "texture_graph_templates" || op == "texture_graph_cache") return true;
+    if (op == "texture_graph_preview" || op == "texture_graph_image_asset" || op == "texture_graph_catalog" || op == "texture_graph_templates" || op == "texture_graph_cache") return true;
     if (op == "strata_capabilities" || op == "graph_diagnostics" || op == "graph_dependencies" || op == "graph_property_schema" || op == "graph_asset_dependencies" || op == "graph_runtime_capabilities" || op == "graph_runtime_probe" || op == "graph_live_snapshot" || op == "graph_live_watch" || op == "graph_live_profile" || op == "graph_gpu_profile" || op == "graph_debug_session") return true;
     if(op=="simulation_budget_plan"||op=="terraweave_caverns_pick"||op=="project_history_status")return true;
     if(op=="world_save_page"||op=="world_save_backups"||op=="world_save_retention_preview"||op=="world_job_status"||op=="world_simulation_lod_get"||op=="world_simulation_lod_validate")return true;

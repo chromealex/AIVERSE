@@ -93,6 +93,7 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
     session_->setMaterialSlotProvider([this](const std::string& asset) {
         return preview_ ? onScene([&] { return preview_->modelMaterialSlots(asset); }) : std::vector<std::string>{};
     });
+    session_->setTextureGraphGpuProvider([this](editor::Workspace& ws,const Json& p){return textureGraphGpu(ws,p);});
     // Workspace::toolList is the common aiversemcp discovery surface.
     // Authenticated agent calls and HTML5 buttons use the same runtime
     // commands, compiled graph validation and render-thread ownership.
@@ -248,6 +249,10 @@ void StudioHost::webReady() {
 // models in with a per-frame budget. requestId < 0: --project / last project.
 void StudioHost::openProject(const std::string& path, int64_t requestId) {
     if (projectLoading_) return;
+    if(preview_&&!textureGraphScope_.empty()){
+        try{onScene([&]{preview_->invalidateTextureGraphProject();});}catch(const std::exception& e){if(requestId>=0)sendError(Json::number(requestId),e.what());return;}
+        textureGraphWork_=true;textureGraphScope_.clear();
+    }
     session_->strokeCancel();mouse_={};
     // A temporary building Model belongs to the previous project's
     // renderer epoch. Retire it BEFORE the Workspace changes, even
@@ -433,6 +438,67 @@ void StudioHost::pollAgentRequests() {
         onScene([&] { preview_->captureFacialThumbnail((out / (id + ".png")).string(), false); });
     } catch (const std::exception&) {}
 }
+void StudioHost::ensureScene() {
+    if (!renderThread_) {
+        // The Scene renders on its own thread (Unreal-style render thread);
+        // AIVERSE_STUDIO_RENDER_THREAD=0 runs it on the UI thread instead.
+        const char* threaded = std::getenv("AIVERSE_STUDIO_RENDER_THREAD");
+        renderThread_ = std::make_unique<StudioRenderThread>([this] { renderSceneFrame(); }, !(threaded && std::string(threaded) == "0"));
+    }
+    if (!preview_) {
+        const char* continuous = std::getenv("AIVERSE_STUDIO_CONTINUOUS_REDRAW");
+        const bool always = continuous && std::string(continuous) == "1";
+        const bool composite = htmlComposite_;
+        renderThread_->invoke([&] {
+            // Created on its owner thread: GPU resource caches bind to it.
+            auto created = std::make_unique<StudioScene>(platform_.createDevice(StudioSurface::Scene));
+            // Default host: the native view covers HTML, so the renderer draws the
+            // orientation gizmo itself; composite mode uses the HTML gizmo.
+            created->setOrientationGizmo(!composite);
+            // Interactive viewport: redraw on change only, debounce lighting rebuilds.
+            // AIVERSE_STUDIO_CONTINUOUS_REDRAW=1 restores drawing every tick.
+            created->setContinuousRedraw(always);
+            preview_ = std::move(created);
+        });
+    }
+
+}
+Json StudioHost::textureGraphGpu(editor::Workspace& ws,const Json& p) {
+    const auto action=p.getStr("action");
+    if(action=="capabilities"){
+        try{
+            if(projectLoading_||ws.project.dir.empty())throw std::runtime_error("Open a project first");
+            if(!textureGraphError_.empty())throw std::runtime_error(textureGraphError_);
+            ensureScene();
+            return onScene([&]{return preview_->textureGraphCapabilities();});
+        }catch(const std::exception& e){
+            Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("available",Json::fromBool(false));
+            r.set("residentApply",Json::fromBool(false));r.set("reason",Json::string(e.what()));return r;
+        }
+    }
+    if(projectLoading_||ws.project.dir.empty())throw std::runtime_error("Open a project first");
+    if(!textureGraphError_.empty())throw std::runtime_error(textureGraphError_);
+    if(action=="start"||action=="enqueue"||action=="studioModelTargets"||action=="studioPbrPrepare")ensureScene();
+    if(!preview_)throw std::runtime_error("Start a Studio GPU preview first");
+    Json result;
+    onScene([&]{platform_.sceneThreadScope([&]{result=preview_->textureGraphOperation(ws,p);});});
+    textureGraphScope_=ws.project.dir;
+    textureGraphWork_=true;
+    return result;
+}
+void StudioHost::tickTextureGraph(const std::string& project) {
+    if(!preview_||(!textureGraphWork_&&textureGraphScope_==project))return;
+    if(!textureGraphWork_&&textureGraphScope_.empty())return;
+    try{
+        bool pending=false;
+        onScene([&]{platform_.sceneThreadScope([&]{pending=preview_->serviceTextureGraph(project);});});
+        textureGraphWork_=pending;textureGraphScope_=project;
+    }catch(const std::exception& e){
+        textureGraphWork_=false;textureGraphScope_=project;
+        textureGraphError_=e.what();
+        platform_.log("Studio Texture Graph: "+textureGraphError_);
+    }
+}
 Json StudioHost::buildingPanelFrame(const BuildingPreviewJob& job){
     // Only the Building render worker accesses its device/model.
     if(!buildingPanelPreview_)throw std::runtime_error("No active Building panel preview");
@@ -536,6 +602,7 @@ void StudioHost::tick() {
     publishBuildingPanelFrame();
     if (projectLoading_) return; // the background thread owns the session right now
     tickGame();
+    tickTextureGraph(session_->workspace().project.dir); // independent of Scene visibility
     // An empty Workspace owns an internal default MapDoc, NOT a loaded project.
     // Never render that provisional map as if it belonged to the user.
     if (session_->workspace().project.dir.empty()) return;
@@ -581,28 +648,7 @@ void StudioHost::tick() {
         return;
     }
     try {
-        if (!renderThread_) {
-            // The Scene renders on its own thread (Unreal-style render thread);
-            // AIVERSE_STUDIO_RENDER_THREAD=0 runs it on the UI thread instead.
-            const char* threaded = std::getenv("AIVERSE_STUDIO_RENDER_THREAD");
-            renderThread_ = std::make_unique<StudioRenderThread>([this] { renderSceneFrame(); }, !(threaded && std::string(threaded) == "0"));
-        }
-        if (!preview_) {
-            const char* continuous = std::getenv("AIVERSE_STUDIO_CONTINUOUS_REDRAW");
-            const bool always = continuous && std::string(continuous) == "1";
-            const bool composite = htmlComposite_;
-            renderThread_->invoke([&] {
-                // Created on its owner thread: GPU resource caches bind to it.
-                auto created = std::make_unique<StudioScene>(platform_.createDevice(StudioSurface::Scene));
-                // Default host: the native view covers HTML, so the renderer draws the
-                // orientation gizmo itself; composite mode uses the HTML gizmo.
-                created->setOrientationGizmo(!composite);
-                // Interactive viewport: redraw on change only, debounce lighting rebuilds.
-                // AIVERSE_STUDIO_CONTINUOUS_REDRAW=1 restores drawing every tick.
-                created->setContinuousRedraw(always);
-                preview_ = std::move(created);
-            });
-        }
+        ensureScene();
         // Character and material previews read live session state (facial binding, material drafts):
         // the UI thread waits for those frames. Everything else renders asynchronously.
         const bool facialBound = session_->facialPreviewBinding().bound();
@@ -777,6 +823,7 @@ void StudioHost::failScene(const std::string& message) {
         std::lock_guard<std::mutex> io(renderIoMutex_);
         renderOutputsFresh_ = false;
     }
+    textureGraphWork_=false;textureGraphScope_.clear();textureGraphError_.clear();
     try { onScene([&] { preview_.reset(); }); }
     catch (const std::exception& e) { platform_.log(std::string("AIVERSE native Scene release failed: ") + e.what()); }
 }

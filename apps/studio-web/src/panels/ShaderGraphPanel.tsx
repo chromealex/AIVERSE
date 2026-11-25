@@ -6,7 +6,7 @@ import { addShaderGraphNode, removeShaderGraphNode, shaderNodeCatalog, connectSh
 import type {ShaderClipboard} from './shaderGraphLayout';
 import GraphCanvas from '../graphs/GraphCanvas';
 import GraphGpuProfilePanel from '../graphs/GraphGpuProfilePanel';
-import GraphDiagnostics from '../graphs/GraphDiagnosticsPanel';
+import GraphDiagnosticsPanel from '../graphs/GraphDiagnosticsPanel';
 import {shaderAdapters,shaderProjection} from '../graphs/shaderAdapter';
 import type {PortRef} from '../graphs/graphGeometry';
 import {samePort} from '../graphs/graphGeometry';
@@ -209,7 +209,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
         {id:'template',label:'Insert tint template',disabled:!template,run:insertTemplate}
        ]}
        onMove={(id,x,y)=>{if(draft)editDraft(shaderAdapters.get(draft.domain??'material')?.move(draft,id,x,y)??draft)}}/>
-      <GraphDiagnostics view={view} policy={{cycles:'reject'}}/>
+      <GraphDiagnosticsPanel view={view} policy={{cycles:'reject'}}/>
       <GraphGpuProfilePanel projectPath={projectPath}/>
       {pendingOutput&&<StudioButton size="sm" onClick={()=>setPendingOutput(null)}>Cancel connection from {pendingOutput.node}</StudioButton>}
       {activeNode&&draft&&<StudioSection title={'Node: '+activeNode.id}>
@@ -222,6 +222,8 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
           if(next===draft&&from)setError('Invalid or unchanged connection.');else{editDraft(next);setError('');}
          }}><option value="">Disconnected</option>{draft.nodes?.filter(n=>n.id!==activeNode.id).map(n=><option key={n.id} value={n.id}>{n.id}</option>)}</StudioSelect>
         </div>)}
+        {['sampleTexture','sampleTextureLod','sampleRadiance','sampleRadianceLod'].includes(activeNode.op)&&<label className="au-row"><span>Texture source</span><StudioInput aria-label="Shader texture source" placeholder="content/textures/example.exr or @radiance" value={activeNode.texture??''} onChange={e=>editDraft({...draft,nodes:draft.nodes?.map(n=>n.id===activeNode.id?{...n,texture:e.target.value}:n)})}/></label>}
+        {['sampleRadiance','sampleRadianceLod'].includes(activeNode.op)&&<small>Linear HDR RGB and alpha; @radiance is bound explicitly by Texture Graph for this session.</small>}
         {['constant','parameter'].includes(activeNode.op)&&<div className="au-row">
          {['R','G','B','A'].map((label,i)=><StudioInput key={label} aria-label={label} type="number" step="any"
           value={activeValue[i]??0} onChange={e=>{if(e.target.value.trim()==='')return;const v=Array.from({length:4},(_,j)=>activeValue[j]??0);v[i]=Number(e.target.value);editDraft(setShaderValue(draft,activeNode.id,v))}}/>)}
