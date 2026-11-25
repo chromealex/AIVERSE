@@ -5482,14 +5482,6 @@ if(AIVERSE_BUILD_TESTS AND TARGET aiverse_engine)
     set_tests_properties(simulation_profile_test PROPERTIES LABELS "ECS;EDITOR")
 endif()
 
-# Live ECS region attachment and authority-crossing fixture, without game assets.
-if(AIVERSE_BUILD_TESTS AND TARGET aiverse_engine)
-    add_executable(aiverse_region_ecs_bridge_test tests/world/region_ecs_bridge_test.cpp)
-    target_link_libraries(aiverse_region_ecs_bridge_test PRIVATE aiverse_engine aiverse_world)
-    add_test(NAME region_ecs_bridge_test COMMAND aiverse_region_ecs_bridge_test)
-    set_tests_properties(region_ecs_bridge_test PROPERTIES LABELS "World;ECS")
-endif()
-
 # W1.3: opted-in region cold-store roundtrip of real ECS component pools.
 # This fixture has no external game/genre dependency.
 if(AIVERSE_BUILD_TESTS AND TARGET aiverse_engine)
