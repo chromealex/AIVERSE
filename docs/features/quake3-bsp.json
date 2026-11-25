@@ -27,7 +27,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "note": "Texture and baked page binding stage in progress. Existing planar, patch and PVS tests passed.",
       "evidence": []
     },
     "architecture": {
