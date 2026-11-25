@@ -176,6 +176,22 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && map.data.entities.size()==before);
    }
    {
+       const auto animation=call("studio.op",R"({"op":"animation_graph_edit","params":{"action":"new"}})");
+       AIVERSE_TEST_CHECK(!animation.has("error")&&!animation["result"].getBool("changed"));
+       AIVERSE_TEST_CHECK(animation["result"]["result"]["graph"].getStr("output")=="bind");
+       Json save=Json::object(),args=Json::object();
+       args.set("name",Json::string("pose_revision"));
+       args.set("graph",animation["result"]["result"]["graph"]);
+       save.set("op",Json::string("animation_graph_set"));save.set("params",args);
+       const auto initial=call("studio.op",save.dump().c_str());
+       const auto version=initial["result"]["result"].getStr("revision");
+       AIVERSE_TEST_CHECK(version.size()==64);
+       args.set("expectedRevision",Json::string(version));
+       auto changed=args["graph"];changed.set("model",Json::string("content/actor.gltf"));args.set("graph",changed);
+       save.set("params",args);
+       AIVERSE_TEST_CHECK(!call("studio.op",save.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(call("studio.op",save.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(call("studio.op",R"({"op":"animation_graph_list","expectedProject":"/wrong","params":{}})").has("error"));
        const auto materials=call("studio.materialCreate",R"({"name":"docked_steel","preset":"metal"})");
        const auto assetPath=materials["result"]["files"].getStr("docked_steel");
        AIVERSE_TEST_CHECK(assetPath=="content/materials/docked_steel.material.json");

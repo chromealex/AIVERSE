@@ -139,7 +139,7 @@ Derived from actual AIVERSE_EDITOR_WINDOW registrations in apps/editor/windows. 
 | --- | --- | --- |
 | `agent` | `apps/editor/windows/AgentWindow.cpp` | Agent panel: Claude Code over the agent link, change list, Undo all, screenshots (109/110) |
 | `animation_assets` | `apps/editor/windows/AnimationAssetsWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) |
-| `animation_graph` | `apps/editor/windows/AnimationGraphWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) |
+| `animation_graph` | `apps/editor/windows/AnimationGraphWindow.cpp` | Visual pose nodes and wiring, graph scopes, state outputs, transitions and conditions, draft undo, native model validation, and revision-checked saves. Model playback in the panel and full rig tooling are pending. |
 | `animation_rig` | `apps/editor/windows/AnimationRigWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) |
 | `assets` | `apps/editor/windows/AssetsWindow.cpp` | Partial: GUID catalog/import/moves/conflict handling/import settings merged and native-tested (78–79); visual and full legacy parity pending |
 | `animation_attachments` | `apps/editor/windows/AttachmentAuthoringWindow.cpp` | Attachments panel: layout JSON via the engine codec; no live GPU preview (111) |
@@ -191,7 +191,7 @@ Derived from actual AIVERSE_EDITOR_WINDOW registrations in apps/editor/windows. 
 
 **2026-11-25 inventory check.** The original table covered 49 C++ registration files. Scanning apps/editor/windows for lines beginning with AIVERSE_EDITOR_WINDOW found 51, including the two rows above. HTML panel counts measure a different inventory: the workspace redesign checked 59 registered HTML panels at desktop and narrow widths. The acceptance gallery verifies opening and layout. See [workspace verification](handoff/studio-html5/workspace-redesign-2026-11-25.md) for fixture and platform limits.
 
-Later stages added runtime inspection, Scene transforms and marquee selection, a separate animation timeline, Post FX controls and road/river spline gizmos. See [runtime](handoff/studio-html5/83-live-runtime-inspection.md), [Scene](handoff/studio-html5/99-multi-select-marquee-hierarchy-flags-asset-drop.md) and [timeline and splines](handoff/studio-html5/112-spline-gizmos-hub-postfx-timeline-splash.md). Animation Graph and Rig still route through ToolPanel. RulesPanel edits unit types, rules-level triggers and the damage matrix (b8250d349). Global settings and complete rules.json editing use native validation and stale-document checks (069d814e8). AttachmentsPanel edits sockets and transforms; live placement preview still needs acceptance.
+Later stages added runtime inspection, Scene transforms and marquee selection, a separate animation timeline, Post FX controls and road/river spline gizmos. See [runtime](handoff/studio-html5/83-live-runtime-inspection.md), [Scene](handoff/studio-html5/99-multi-select-marquee-hierarchy-flags-asset-drop.md) and [timeline and splines](handoff/studio-html5/112-spline-gizmos-hub-postfx-timeline-splash.md). Animation Graph has a dedicated visual authoring panel. Rig still routes through ToolPanel. RulesPanel edits unit types, rules-level triggers and the damage matrix (b8250d349). Global settings and complete rules.json editing use native validation and stale-document checks (069d814e8). AttachmentsPanel edits sockets and transforms; live placement preview still needs acceptance.
 
 ## Workflow gates and execution order
 

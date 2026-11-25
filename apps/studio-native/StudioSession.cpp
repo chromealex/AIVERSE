@@ -1895,6 +1895,7 @@ Json StudioSession::dispatchImpl(const Json& request) {
         } else if (method == "studio.op") {
             const std::string op=params.getStr("op");
             if (!studioToolAllowed(op)) throw std::runtime_error("This operation is not available in Studio panels: "+op);
+            if(op.starts_with("animation_graph_")&&params.has("expectedProject")&&params.getStr("expectedProject")!=ws_.project.dir)throw std::runtime_error("The active project changed");
             if((op.starts_with("world_save_")||op=="world_job_start"||op.starts_with("world_simulation_lod_"))&&params.getStr("expectedProject")!=ws_.project.dir)
                 throw std::runtime_error("World maintenance project changed; reopen the panel");
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");

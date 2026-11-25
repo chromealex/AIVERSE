@@ -1,0 +1,146 @@
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { invoke } from '../bridge';
+import './graphSurface.css';
+import './AnimationGraphPanel.css';
+
+type Node = {id:string;kind:string;position?:number[];a?:string;b?:string;input?:string;clip?:string;weight?:number};
+type Condition = {parameter:string;op?:string;value?:number};
+type Transition = {to:string;fade?:number;after?:number;when:Condition[]|Record<string,never>};
+type State = {id:string;output:string;transitions?:Transition[]};
+type Graph = {nodes:Node[];output:string;model?:string;parameters?:Record<string,unknown>;states?:State[];initial?:string;graphs?:Record<string,Graph>};
+// Dock tabs unmount inactive panels. Retain only unsaved documents for this window.
+const drafts=new Map<string,{name:string;draft:Graph;saved:Graph|null;revision:string}>();
+const kinds=['bind','clip','blend','additive','twoBoneIK','rig','stack','subgraph','motionMatching','native'];
+const ports=(n:Node):('a'|'b'|'input')[]=>n.kind==='additive'||n.kind==='blend'?['a','b']:n.input!==undefined?['input']:[];
+const position=(n:Node,i:number)=>({x:n.position?.[0]??24+190*(i%3),y:n.position?.[1]??24+90*Math.floor(i/3)});
+const nodeOptions=(nodes:Node[])=>nodes.map(n=><option key={n.id}>{n.id}</option>);
+
+export default function AnimationGraphPanel({projectPath,tools}:{projectPath:string;tools:ReactNode}){
+ const restored=drafts.get(projectPath);
+ const [names,setNames]=useState<string[]>([]),[name,setName]=useState(restored?.name??''),[newName,setNewName]=useState('');
+ const [draft,setDraft]=useState<Graph|null>(restored?.draft??null),[saved,setSaved]=useState<Graph|null>(restored?.saved??null);
+ const [revision,setRevision]=useState(restored?.revision??'');
+ const [past,setPast]=useState<Graph[]>([]),[scope,setScope]=useState(''),[selection,select]=useState('');
+ const [nodeName,setNodeName]=useState('');
+ useEffect(()=>setNodeName(selection),[selection]);
+ const [kind,setKind]=useState('clip'),[tab,setTab]=useState<'nodes'|'states'|'tools'>('nodes');
+ const [stateId,setStateId]=useState(''),[stateName,setStateName]=useState('');
+ const [parameter,setParameter]=useState(''),[notice,setNotice]=useState('');
+ const [busy,setBusy]=useState(false),[error,setError]=useState('');
+ const scoped=scope?draft?.graphs?.[scope]:draft;
+ const graph=scoped&&Array.isArray(scoped.nodes)?scoped:null;
+ const scalars=Object.keys(graph?.parameters??{}).filter(k=>!Array.isArray(graph?.parameters?.[k]));
+ const current=graph?.nodes.find(n=>n.id===selection),states=graph?.states??[];
+ const state=states.find(s=>s.id===stateId)??states[0];
+ const dirty=JSON.stringify(saved)!==JSON.stringify(draft);
+ const drag=useRef<{id:string;x:number;y:number;left:number;top:number;before:Graph}|null>(null);
+ useEffect(()=>{
+  if(dirty&&draft)drafts.set(projectPath,{name,draft,saved,revision});
+  else drafts.delete(projectPath);
+ },[projectPath,name,dirty,draft,saved,revision]);
+ async function op(method:string,params:Record<string,unknown>={}){
+  const reply=await invoke('studio.op',{op:'animation_graph_'+method,params,expectedProject:projectPath});
+  return reply.result as {graph:Graph;graphs:string[];revision:string};
+ }
+ useEffect(()=>{
+  let active=true;
+  if(projectPath)void op('list').then(r=>{if(active)setNames(r.graphs);}).catch(e=>{if(active)setError(String(e));});
+  return ()=>{active=false;};
+ },[projectPath]);
+ async function run(fn:()=>Promise<void>){
+  if(busy)return;
+  setBusy(true);setError('');setNotice('');
+  try{await fn();}catch(e){setError(String(e));}finally{setBusy(false);}
+ }
+ function change(next:Graph){
+  if(draft)setPast(h=>[...h.slice(-39),draft]);
+  setDraft(next);setError('');setNotice('');
+ }
+ function inScope(next:Graph){
+  return scope&&draft?{...draft,graphs:{...draft.graphs,[scope]:next}}:next;
+ }
+ function patchNode(id:string,patch:Partial<Node>){
+  if(graph)change(inScope({...graph,nodes:graph.nodes.map(n=>n.id===id?{...n,...patch}:n)}));
+ }
+ function updateState(next:State){
+  if(graph)change(inScope({...graph,states:states.map(s=>s.id===next.id?next:s)}));
+ }
+ async function load(id:string){
+  const r=await op('get',{name:id});if(!Array.isArray(r.graph?.nodes))throw new Error('Asset has no pose graph');setDraft(r.graph);setSaved(r.graph);setRevision(r.revision);setName(id);setScope('');setPast([]);select('');setStateId('');
+ }
+ async function edit(action:string,params:Record<string,unknown>){
+  const r=await op('edit',{action,graph:draft,scope,...params});change(r.graph);
+ }
+ const positions=new Map(graph?.nodes.map((n,i)=>[n.id,position(n,i)]));
+ const xs=[...positions.values()].map(p=>p.x),ys=[...positions.values()].map(p=>p.y);
+ const left=Math.min(0,...xs)-12,top=Math.min(0,...ys)-12;
+ const width=Math.max(360,...xs.map(x=>x+180))-left,height=Math.max(155,...ys.map(y=>y+70))-top;
+ return <section className="anim-editor" aria-label="Animation Graph">
+  <header><strong>Animation Graph</strong><select aria-label="Animation graph asset" value={name} disabled={busy||dirty} onChange={e=>void run(()=>load(e.target.value))}>
+   <option value="" disabled>Select graph</option>{names.map(n=><option key={n}>{n}</option>)}</select>
+   <button aria-label="Reload animation graph" disabled={busy||dirty||!projectPath} onClick={()=>void run(async()=>{setNames((await op('list')).graphs);if(name)await load(name);})}>Reload</button>
+   <input aria-label="New graph name" placeholder="New graph name" value={newName} onChange={e=>setNewName(e.target.value)}/>
+   <button disabled={busy||dirty||!projectPath||!/^[-\w]{1,64}$/.test(newName)||names.includes(newName)} onClick={()=>void run(async()=>{
+    const id=newName;const initial=await op('edit',{action:'new'});await op('set',{name:id,graph:initial.graph});
+    setNames((await op('list')).graphs);await load(id);setNewName('');
+   })}>Create graph</button></header>
+  <nav aria-label="Graph views">{(['nodes','states','tools'] as const).map(t=><button key={t} aria-pressed={t===tab} onClick={()=>setTab(t)}>{t==='nodes'?'Pose graph':t==='states'?'States':'Operations'}</button>)}</nav>
+  {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
+  {tab==='tools'?tools:!graph?<p>{projectPath?'Open or create an animation graph.':'Open a project to edit animation graphs.'}</p>:<>
+   <div className="anim-actions"><select aria-label="Graph scope" value={scope} disabled={busy} onChange={e=>{setScope(e.target.value);select('');setStateId('');}}>
+    <option value="">Root graph</option>{Object.keys(draft?.graphs??{}).map(s=><option key={s}>{s}</option>)}</select>
+    <label>Model<input value={draft?.model??''} disabled={busy} placeholder="content/model.glb" onChange={e=>{if(draft)change({...draft,model:e.target.value});}}/></label>
+    <button disabled={busy||!draft?.model} onClick={()=>void run(async()=>{await op('validate',{graph:draft});setNotice('Graph compiled against '+draft?.model);})}>Validate</button>
+    <button disabled={busy||!past.length} onClick={()=>{setDraft(past[past.length-1]);setPast(p=>p.slice(0,-1));}}>Undo</button>
+    <button disabled={busy||!dirty} onClick={()=>{setDraft(saved);setPast([]);setScope('');select('');setError('');}}>Discard</button>
+    <button disabled={busy||!dirty} onClick={()=>void run(async()=>{const r=await op('set',{name,graph:draft,expectedRevision:revision});setDraft(r.graph);setSaved(r.graph);setRevision(r.revision);setPast([]);})}>Save graph</button>
+   </div>
+   {tab==='nodes'?<>
+    <div className="anim-canvas graph-surface"><svg width={width} height={height} viewBox={left+' '+top+' '+width+' '+height} aria-label="Pose node connections">
+     {graph.nodes.flatMap(n=>ports(n).map((port,i)=>{const start=positions.get(n[port]??''),end=positions.get(n.id);
+      if(!start||!end)return null;const x=start.x+144,y=start.y+26,v=end.y+18+i*18;
+      return <path key={n.id+port} className="graph-wire" d={`M${x} ${y} C${x+48} ${y} ${end.x-48} ${v} ${end.x} ${v}`}/>;}))}
+     {graph.nodes.map(n=>{const p=positions.get(n.id)!;return <g key={n.id} transform={`translate(${p.x} ${p.y})`} role="button" tabIndex={0} aria-label={'Select '+n.id} aria-pressed={selection===n.id} className="graph-draggable"
+       onClick={()=>select(n.id)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select(n.id);}}}
+       onPointerDown={e=>{if(busy||!draft||e.button!==0)return;select(n.id);e.currentTarget.setPointerCapture(e.pointerId);drag.current={id:n.id,x:e.clientX,y:e.clientY,left:p.x,top:p.y,before:draft};}}
+       onPointerMove={e=>{const d=drag.current;if(!d||d.id!==n.id)return;const dx=e.clientX-d.x,dy=e.clientY-d.y;if(!dx&&!dy)return;setDraft(inScope({...graph,nodes:graph.nodes.map(v=>v.id===n.id?{...v,position:[Math.round(d.left+dx),Math.round(d.top+dy)]}:v)}));}}
+       onLostPointerCapture={()=>{const d=drag.current;drag.current=null;if(d&&JSON.stringify(d.before)!==JSON.stringify(draft))setPast(h=>[...h.slice(-39),d.before]);}}>
+      <title>{n.id} · {n.kind}</title><rect className="graph-node-body" width="144" height="52" rx="6"/><path className="graph-node-accent" data-source={n.id===graph.output} d="M2 10 V34"/><text className="graph-node-operation" x="12" y="21">{n.id}</text>
+      <text className="graph-node-id" x="12" y="41">{n.kind}{graph.output===n.id?' · output':''}</text>
+      <circle className="anim-port" cx="144" cy="26" r="3"/>{ports(n).map((port,i)=><circle className="anim-port" key={port} cx="0" cy={18+i*18} r="3"/>)}</g>;})}</svg></div>
+    <fieldset disabled={busy}><label>Node type<select value={kind} onChange={e=>setKind(e.target.value)}>{kinds.map(k=><option key={k}>{k}</option>)}</select></label>
+     <button onClick={()=>void run(async()=>{let i=1;while(positions.has(kind+i))i++;const id=kind+i;
+      await edit('add',{kind,id});select(id);})}>Add node</button>
+     {current&&<><label>Node name<input value={nodeName} onChange={e=>setNodeName(e.target.value)}/></label>
+      <button disabled={!nodeName.trim()||positions.has(nodeName.trim())} onClick={()=>void run(async()=>{const id=nodeName.trim();await edit('rename',{id:current.id,name:id});select(id);})}>Rename</button>{ports(current).map(port=><label key={port}>{port}<select value={current[port]??''} onChange={e=>void run(()=>edit('connect',{source:e.target.value,id:current.id,port}))}>{nodeOptions(graph.nodes.filter(n=>n.id!==current.id))}</select></label>)}
+      {current.kind==='clip'&&<label>Clip<input value={current.clip??''} onChange={e=>patchNode(current.id,{clip:e.target.value})}/></label>}
+      {current.weight!==undefined&&<label>Weight<input type="number" min="0" max="1" step=".05" value={current.weight} onChange={e=>{if(e.target.validity.valid&&Number.isFinite(e.target.valueAsNumber))patchNode(current.id,{weight:e.target.valueAsNumber});}}/></label>}
+      <button disabled={current.id===graph.output} onClick={()=>change(inScope({...graph,output:current.id}))}>Use as output</button>
+      <button onClick={()=>void run(async()=>{await edit('remove',{id:current.id});select('');})}>Remove node</button></>}
+    </fieldset>
+   </>:<fieldset disabled={busy} className="anim-states">
+    <label>New state<input value={stateName} onChange={e=>setStateName(e.target.value)}/></label>
+    <button disabled={!stateName.trim()||states.some(s=>s.id===stateName.trim())||states.length>=64} onClick={()=>{const id=stateName.trim();change(inScope({...graph,states:[...states,{id,output:graph.output,transitions:[]}]}));setStateId(id);setStateName('');}}>Add state</button>
+    <label>Scalar parameter<input value={parameter} placeholder="speed" onChange={e=>setParameter(e.target.value)}/></label>
+    <button disabled={!parameter.trim()||Object.hasOwn(graph.parameters??{},parameter.trim())} onClick={()=>{change(inScope({...graph,parameters:{...graph.parameters,[parameter.trim()]:0}}));setParameter('');}}>Add parameter</button>
+    {state&&<><label>State<select value={state.id} onChange={e=>setStateId(e.target.value)}>{states.map(s=><option key={s.id}>{s.id}</option>)}</select></label>
+     <label>Output pose<select value={state.output} onChange={e=>updateState({...state,output:e.target.value})}>{nodeOptions(graph.nodes)}</select></label>
+     <button disabled={(graph.initial??states[0]?.id)===state.id} onClick={()=>change(inScope({...graph,initial:state.id}))}>Set initial state</button>
+     <button disabled={states.length<2||(state.transitions?.length??0)>=64} onClick={()=>updateState({...state,transitions:[...state.transitions??[],{to:states.find(s=>s!==state)!.id,fade:.2,after:0,when:[]}]})}>Add transition</button>
+     {(state.transitions??[]).map((t,i)=>{const patch=(value:Partial<Transition>)=>updateState({...state,transitions:state.transitions!.map((v,j)=>j===i?{...v,...value}:v)});
+      return <div className="anim-transition" key={i}><span>{state.id} →</span><label>Destination<select value={t.to} onChange={e=>patch({to:e.target.value})}>{states.map(s=><option key={s.id}>{s.id}</option>)}</select></label>
+       {(['after','fade'] as const).map(k=><label key={k}>{k==='after'?'Delay (s)':'Fade (s)'}<input type="number" min="0" step="any" value={t[k]??(k==='fade'?.2:0)} onChange={e=>{if(e.target.validity.valid&&Number.isFinite(e.target.valueAsNumber))patch({[k]:e.target.valueAsNumber});}}/></label>)}
+       {(Array.isArray(t.when)?t.when:[]).map((c,index)=>{
+        const conditions=Array.isArray(t.when)?t.when:[];
+        const editCondition=(value:Partial<Condition>)=>patch({when:conditions.map((v,j)=>j===index?{...v,...value}:v)});
+        return <div className="anim-condition" key={index}><label>When<select value={c.parameter} onChange={e=>editCondition({parameter:e.target.value})}>{scalars.map(k=><option key={k}>{k}</option>)}</select></label>
+         <label>Comparison<select value={c.op??'eq'} onChange={e=>editCondition({op:e.target.value})}>{Object.entries({eq:'=',ne:'≠',gt:'>',ge:'≥',lt:'<',le:'≤'}).map(([op,symbol])=><option key={op} value={op}>{symbol}</option>)}</select></label>
+         <label>Value<input type="number" step="any" value={c.value??1} onChange={e=>{if(Number.isFinite(e.target.valueAsNumber))editCondition({value:e.target.valueAsNumber});}}/></label>
+         <button onClick={()=>patch({when:conditions.filter((_,j)=>j!==index)})}>Remove condition</button></div>;
+       })}
+       <button disabled={!scalars.length||(Array.isArray(t.when)&&t.when.length>=32)} onClick={()=>patch({when:[...Array.isArray(t.when)?t.when:[],{parameter:scalars[0],op:'gt',value:0}]})}>Add condition</button>
+       <button onClick={()=>updateState({...state,transitions:state.transitions!.filter((_,j)=>j!==i)})}>Remove transition</button></div>;})}</>}
+   </fieldset>}
+  </>}
+ </section>;
+}

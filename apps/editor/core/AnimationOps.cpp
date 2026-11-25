@@ -1,4 +1,5 @@
 #include "AnimationOps.h"
+#include "engine/pack/Sha256.h"
 #include "AnimationDocument.h"
 #include "engine/render/AnimationAsset.h"
 #include "engine/render/AnimationGraph.h"
@@ -19,15 +20,67 @@ namespace fs=std::filesystem;
 fs::path contained(const Workspace& w,const std::string& relative){if(w.project.dir.empty())throw std::runtime_error("open a project first");auto root=fs::weakly_canonical(w.project.dir),p=fs::weakly_canonical(root/relative);auto r=p.lexically_relative(root);if(r.empty()||*r.begin()=="..")throw std::runtime_error("path escapes project");return p;}
 fs::path path(const Workspace& w,const std::string& name){if(name.empty()||name.size()>64||name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")!=std::string::npos)throw std::runtime_error("asset name: use letters, digits, _ or -");return contained(w,"animations/"+name+".json");}
 Json load(const Workspace& w,const std::string& name){auto p=path(w,name);if(fs::file_size(p)>256*1024)throw std::runtime_error("asset exceeds 256 KiB");std::ifstream file(p,std::ios::binary);std::string text((std::istreambuf_iterator<char>(file)),{});return render::parseAnimationAsset(text);}
+std::string graphRevision(const Json& graph){
+    const auto bytes=graph.dump(-1);
+    const auto digest=pack::sha256(bytes.data(),bytes.size());
+    return pack::toHex(digest.data(),digest.size());
+}
 Json result(Json graph){Json r=Json::object();r.set("ok",Json::fromBool(true));r.set("graph",std::move(graph));return r;}
+Json savedResult(const Json& graph){
+    auto response=result(graph);
+    response.set("revision",Json::string(graphRevision(graph)));
+    return response;
+}
 void validate(const Workspace& w,const Json& g){auto m=loadAnimationModel(w,g.getStr("model"));render::AnimationGraph::compile(*m,g);}
 }
 std::unique_ptr<render::Model> loadAnimationModel(const Workspace& w,const std::string& file){if(file.empty())throw std::runtime_error("select a model");auto reader=[&w](const std::string& p,std::string& out){auto f=contained(w,p);std::ifstream stream(f,std::ios::binary);if(!stream)return false;out.assign(std::istreambuf_iterator<char>(stream),{});return true;};auto m=render::loadModel(file,reader);if(!m)throw std::runtime_error("cannot load animation model");return m;}
-void registerAnimationOps(Workspace& ws){auto schema=Json::parse(R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"expected":{"type":"object"},"target":{"type":"string"}}})");
+void registerAnimationOps(Workspace& ws){auto schema=Json::parse(R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"expected":{"type":"object"},"expectedRevision":{"type":"string"},"target":{"type":"string"}}})");
+    ws.registerOp({"animation_graph_edit","Edit a graph draft using the native animation document operations without saving it.",
+        Json::parse(R"({"type":"object","properties":{"action":{"type":"string"},"graph":{"type":"object"},"scope":{"type":"string"},"id":{"type":"string"},"kind":{"type":"string"},"source":{"type":"string"},"port":{"type":"string"},"name":{"type":"string"}},"required":["action"]})"),
+        [](const Json& p){
+            const auto action=p.getStr("action");
+            if(action=="new")return result(animation::makeGraph());
+            Json draft=p["graph"];
+            if(!draft.isObject()||draft.dump().size()>256*1024)throw std::runtime_error("Invalid animation draft");
+            Json* graph=&draft;
+            const auto scope=p.getStr("scope");
+            if(!scope.empty()){
+                auto* children=draft.find("graphs");
+                graph=children?children->find(scope):nullptr;
+            }
+            if(!graph||!(*graph)["nodes"].isArray())throw std::runtime_error("Unknown animation graph scope");
+            const auto id=p.getStr("id");
+            if(action=="connect")animation::connect(*graph,p.getStr("source"),id,p.getStr("port"));
+            else if(action=="remove")animation::remove(*graph,id);
+            else if(action=="rename")animation::rename(*graph,id,p.getStr("name"));
+            else if(action=="add"){
+                static const std::set<std::string> kinds={"bind","clip","blend","additive","rig","stack","twoBoneIK","subgraph","motionMatching","native"};
+                const auto kind=p.getStr("kind");
+                if(!kinds.count(kind)||id.empty())throw std::runtime_error("Invalid animation node");
+                const auto& nodes=(*graph)["nodes"];
+                auto node=animation::makeNode(kind,id,graph->getStr("output",nodes[0].getStr("id")));
+                int row=0;
+                for(const auto& existing:nodes.items()){
+                    const auto& pos=existing["position"];
+                    if(std::abs(pos[0].toDouble()-250)<160)row=std::max(row,int(std::clamp(pos[1].toDouble(),0.0,100000.0))+78);
+                }
+                Json pos=Json::array();pos.push(Json::number(int64_t(250)));pos.push(Json::number(int64_t(row)));
+                node.set("position",std::move(pos));
+                graph->member("nodes").push(std::move(node));
+                animation::sort(*graph);
+            }else throw std::runtime_error("Unknown animation graph edit");
+            return result(std::move(draft));
+        }});
     ws.registerOp({"animation_graph_list","List animation/rig assets in animations/.",Json::object(),[&ws](const Json&){Json r=Json::object(),a=Json::array();auto dir=path(ws,"placeholder").parent_path();std::vector<std::string> names;if(fs::exists(dir))for(auto& e:fs::directory_iterator(dir))if(e.is_regular_file()&&e.path().extension()==".json")names.push_back(e.path().stem().string());std::sort(names.begin(),names.end());for(auto& n:names)a.push(Json::string(n));r.set("graphs",a);return r;}});
-    ws.registerOp({"animation_graph_get","Read an animation/rig asset without executing custom callbacks.",schema,[&ws](const Json& p){return result(load(ws,p.getStr("name")));}});
+    ws.registerOp({"animation_graph_get","Read an animation/rig asset without executing custom callbacks.",schema,[&ws](const Json& p){return savedResult(load(ws,p.getStr("name")));}});
     ws.registerOp({"animation_graph_validate","Compile graph and rig against the selected model. Custom host callbacks require their host registry.",schema,[&ws](const Json& p){validate(ws,p["graph"]);return result(p["graph"]);}});
-    ws.registerOp({"animation_graph_set","Save an authoring draft; validates topology, not model-specific execution. expected prevents overwriting concurrent edits.",schema,[&ws](const Json& p){Json g=p["graph"];animation::sort(g);if(auto* graphs=g.find("graphs"))for(auto& [name,child]:graphs->membersMut()){(void)name;animation::sort(child);}auto file=path(ws,p.getStr("name"));if(fs::exists(file)&&(!p.has("expected")||!(load(ws,p.getStr("name"))==p["expected"])))throw std::runtime_error("asset changed; reload before saving");auto text=g.dump(2)+"\n";if(text.size()>256*1024)throw std::runtime_error("asset exceeds 256 KiB");fs::create_directories(file.parent_path());auto temp=file;temp+=".tmp";if(fs::is_symlink(temp))throw std::runtime_error("temporary path is symlink");{std::ofstream f(temp,std::ios::binary);f<<text;f.close();if(!f)throw std::runtime_error("cannot save asset");}fs::rename(temp,file);return result(g);}});
+    ws.registerOp({"animation_graph_set","Save an authoring draft; validates topology, not model-specific execution. expected prevents overwriting concurrent edits.",schema,[&ws](const Json& p){Json g=p["graph"];animation::sort(g);if(auto* graphs=g.find("graphs"))for(auto& [name,child]:graphs->membersMut()){(void)name;animation::sort(child);}auto file=path(ws,p.getStr("name"));if(fs::exists(file)){
+        const auto current=load(ws,p.getStr("name"));
+        const bool unchanged=p.has("expectedRevision")?p.getStr("expectedRevision")==graphRevision(current):
+            p.has("expected")&&current==p["expected"];
+        if(!unchanged)throw std::runtime_error("asset changed; reload before saving");
+    }else if(p.has("expectedRevision")||p.has("expected"))throw std::runtime_error("asset removed; reload before saving");
+    auto text=g.dump(2)+"\n";if(text.size()>256*1024)throw std::runtime_error("asset exceeds 256 KiB");fs::create_directories(file.parent_path());auto temp=file;temp+=".tmp";if(fs::is_symlink(temp))throw std::runtime_error("temporary path is symlink");{std::ofstream f(temp,std::ios::binary);f<<text;f.close();if(!f)throw std::runtime_error("cannot save asset");}fs::rename(temp,file);return savedResult(g);}});
     ws.registerOp({"animation_graph_apply","Validate saved asset against target type model and apply a graph snapshot through rules_set.",schema,[&ws](const Json& p){Json g=load(ws,p.getStr("name"));auto target=p.getStr("target");const auto& types=ws.project.rulesJson["types"];if(!types.has(target))throw std::runtime_error("unknown target type");auto view=types[target]["view"];std::string model=view.getStr("model");if(model.empty())throw std::runtime_error("target needs a single model");g.set("model",Json::string(model));validate(ws,g);view.set("animationGraph",g);view.set("programmableAnimation",Json::fromBool(true));Json q=Json::object();q.set("path",Json::string("types."+target+".view"));q.set("value",view);return ws.call("rules_set",q);}});
 
     // Advanced animation authoring is reusable by the editor and its MCP agent.
