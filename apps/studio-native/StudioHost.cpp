@@ -1116,9 +1116,12 @@ void StudioHost::moveEnd() {
     Json params = Json::object();
     params.set("entityId", Json::string(commit->id));
     const auto inspected = request("studio.inspect", params);
+    Json colliderScope;
     std::map<std::string, double> current;
     for (const auto& component : inspected["result"]["components"].items()) {
-        if (component.getStr("id") != "Transform") continue;
+        const bool box=component.getStr("id")=="OrientedBoxCollider" && commit->tool!=Tool::Move;
+        if(box)colliderScope=component["scope"];
+        if (!box && component.getStr("id") != "Transform") continue;
         for (const auto& field : component["properties"].items())
             if (field.getBool("editable", true) && field["value"].isNumber()) current[field.getStr("key")] = field["value"].toDouble();
     }
@@ -1148,7 +1151,8 @@ void StudioHost::moveEnd() {
     if (!values.members().empty()) {
         Json set = Json::object();
         set.set("entityId", Json::string(commit->id));
-        set.set("componentId", Json::string("Transform"));
+        set.set("componentId", Json::string(colliderScope.isObject()?"OrientedBoxCollider":"Transform"));
+        if(colliderScope.isObject())set.set("scope",colliderScope);
         set.set("values", values);
         if(commit->expectedRevision)set.set("expectedRevision",Json::number(int64_t(*commit->expectedRevision)));
         const auto outcome = request("studio.setProperties", set);

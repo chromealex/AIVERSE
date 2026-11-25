@@ -1,4 +1,5 @@
 #include "StudioHierarchyGroups.h"
+#include "StudioOrientedCollider.h"
 #include "StudioEntityNesting.h"
 #include "aiverselib/world/EvolveAreaScaleMath.h"
 #include <regex>
@@ -671,6 +672,23 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
                 if(descriptor.kind==editor::DocumentComponentKind::Transform)continue;
                 Json data,fields=Json::array();
                 if(editor::readDocumentComponent(ws_.map,node.ref,descriptor.kind,data)){
+                    if(std::string_view(descriptor.id)=="OrientedBoxCollider"){
+                        Json pose;
+                        if(editor::readDocumentComponent(ws_.map,node.ref,editor::DocumentComponentKind::Transform,pose)){
+                            fields.push(numericProp("rotationY","Yaw (degrees)",pose["rotationY"]));
+                            for(size_t axis=0;axis<3;++axis){
+                                const auto key=std::string("scale")+"XYZ"[axis];
+                                const auto label=std::string("Size ")+"XYZ"[axis];
+                                auto dimension=numericProp(key.c_str(),label.c_str(),pose["scale"][axis]);
+                                dimension.set("min",Json::number(0.001,3));
+                                dimension.set("max",num(axis==1?200000:4096));
+                                fields.push(std::move(dimension));
+                            }
+                            auto box=component(descriptor.id,descriptor.title,fields);
+                            box.set("scope",graphDocumentScope());components.push(std::move(box));
+                            continue;
+                        }
+                    }
                     if(std::string_view(descriptor.id)=="BoxCollider" && data["min"].size()==3 && data["max"].size()==3){
                         for(const auto* bound:{"min","max"})for(size_t axis=0;axis<3;++axis){
                             const auto key=std::string(bound)+"XYZ"[axis];
@@ -5190,7 +5208,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 for(const auto& id:targets)if(locked_.contains(id)||hidden_.contains(id))throw std::runtime_error("Transform requires editable entity");
             }
             const std::string componentId=params.getStr("componentId");
-            if(componentId=="BoxCollider"){
+            if(componentId=="BoxCollider" || componentId=="OrientedBoxCollider"){
                 if(!ws_.map.data.worldSpace || !sameDocumentScope(params["scope"],graphDocumentScope()))
                     throw std::runtime_error("Map changed. Reload collider properties.");
                 Json staged=ws_.map.toJson();
@@ -5201,7 +5219,12 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                     const auto id=nodeId(ws_.map,editor::DocumentEntityRef::fpsCollider(i));
                     if(!remaining.erase(id))continue;
                     auto& box=colliders.at(i);
-                    if(locked_.contains(id) || hidden_.contains(id) || box.has("yaw") ||
+                    if(locked_.contains(id) || hidden_.contains(id))throw std::runtime_error("Collider is locked or hidden.");
+                    if(componentId=="OrientedBoxCollider"){
+                        editOrientedCollider(box,values);
+                        continue;
+                    }
+                    if(box.has("yaw") ||
                        box["min"].size()!=3 || box["max"].size()!=3)
                         throw std::runtime_error("Select an editable axis-aligned box.");
                     for(const auto& [key,value]:values.members()){
