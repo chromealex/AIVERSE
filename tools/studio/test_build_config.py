@@ -9,9 +9,11 @@ ROOT = Path(__file__).resolve().parents[2]
 class StudioBuildConfigTests(unittest.TestCase):
     def test_objective_cpp_enabled_by_root_before_targets(self):
         cmake=(ROOT/"CMakeLists.txt").read_text(encoding="utf-8")
-        option='option(AIVERSE_BUILD_STUDIO_HTML5 "Enable opt-in macOS HTML5 Studio" OFF)'
+        option='option(AIVERSE_BUILD_STUDIO_HTML5 '
         self.assertEqual(cmake.count(option),1)
-        language=cmake.index("enable_language(OBJCXX)",cmake.index(option))
+        guard=cmake.index("if(APPLE AND AIVERSE_BUILD_STUDIO_HTML5)",cmake.index(option))
+        language=cmake.index("enable_language(OBJCXX)",guard)
+        self.assertLess(guard,language)
         self.assertLess(cmake.index(option),language)
         self.assertLess(language,cmake.index("add_library(aiverse_engine STATIC"))
         native=(ROOT/"apps/studio-native/CMakeLists.txt").read_text(encoding="utf-8")

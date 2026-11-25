@@ -12,7 +12,7 @@ class ContentProjectLayoutTests(unittest.TestCase):
         self.assertIn('fs::create_directories(content, ec);',method)
         self.assertIn('fs::is_symlink(contentStatus)',method)
         self.assertGreater(method.index('const fs::path content = dst / "content";'),
-                           method.index('if (templateId != "empty")'))
+                           method.index('if (templateId != "empty" && !isCatalogTemplate(templateId))'))
         self.assertLess(method.index('fs::create_directories(content, ec);'),
                         method.index('Json m = Json::parseFile'))
 
