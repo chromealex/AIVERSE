@@ -1,0 +1,46 @@
+{
+  "id": "2026-11-25-render-projectile-impact-height",
+  "date": "2026-11-25",
+  "system": "render",
+  "title": "Высота попадания снаряда",
+  "titleEn": "Projectile impact height",
+  "summary": "Высота попадания задаётся отдельно для каждого типа цели. Видимый снаряд и его след идут от дула к этой точке.",
+  "summaryEn": "Each target type can set its impact height. The visible projectile and its trail follow the same line from the muzzle to that point.",
+  "body": [
+    "На полигоне оранжевая полоса отмечает высоту попадания. Выберите установку и укажите другую мишень правой кнопкой, чтобы сменить цель."
+  ],
+  "bodyEn": [
+    "The orange band on each range target marks its impact height. Select the launcher and right-click another target to switch."
+  ],
+  "status": "in-progress",
+  "verified": "Оба кадра сняты клиентом AIVERSE на Mac с одного ракурса.",
+  "verifiedEn": "Both frames were captured with the AIVERSE Mac client from the same camera position.",
+  "limits": "Для обычных прямых выстрелов на плоской карте. Высота измеряется от основания цели в мировых единицах.",
+  "limitsEn": "Applies to ordinary straight shots on flat maps. Heights are measured from the target base in world units.",
+  "links": [
+    {
+      "title": "Полигон",
+      "titleEn": "Open firing range",
+      "href": "https://chromealex.github.io/AIVERSE/demos/projectile-impact-height/?map=0"
+    },
+    {
+      "title": "Настройка модели",
+      "titleEn": "Model setup",
+      "href": "docs/models.md"
+    }
+  ],
+  "branch": "feature/aiv197_projectile_height",
+  "commit": "27ff5b374",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-render-projectile-impact-height/before.jpg",
+      "caption": "До изменения след проходит над низкой мишенью",
+      "captionEn": "Before the change, the trail passes above the short target"
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-render-projectile-impact-height/after.jpg",
+      "caption": "След опускается к оранжевой метке на низкой мишени",
+      "captionEn": "The trail descends toward the orange band on the short target"
+    }
+  ]
+}
