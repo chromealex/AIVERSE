@@ -138,7 +138,7 @@ public:
     void hover(double x, double y, double w, double h); // x < 0: left the view
     void select(double x, double y, double w, double h, const std::string& mode);
     void selectionAction(const std::string& method);
-    bool playerStartArmed() const { return !playerStartToken_.empty(); }
+    bool scenePickerArmed() const { return !scenePickerToken_.empty(); }
     bool brushArmed() const;
     bool resolveBrushPoint(double x,double y,double w,double h,render::float3& at,std::string* error=nullptr);
     bool updateBrushCursor(double x, double y, double w, double h);
@@ -337,8 +337,12 @@ private:
     double wpHitX_=0,wpHitY_=0;
     std::size_t wpHitOrdinal_=0;
     Json wpNumericPreview_;
-    void finishPlayerStartPick(Json result);
-    std::string playerStartToken_;
+    void finishScenePick(Json result);
+    std::string scenePickerToken_;
+    bool pickingArea_=false;
+    Json areaScope_;
+    std::optional<StudioMapCell> areaOrigin_;
+    void updateAreaPick(int phase,double x,double y,double w,double h);
     Json forestPlantArm_; // one-shot, bound to project/map/revision
     StudioWorldProcessLiveOptions wpLiveOptions_;
     double wpLiveRefresh_=0;

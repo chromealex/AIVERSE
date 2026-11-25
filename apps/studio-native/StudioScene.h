@@ -2,6 +2,7 @@
 // macOS-only native preview: AIVERSE gfx::Device + Renderer3D over a CAMetalLayer.
 // No ImGui, no CPU texture readback, no dependency on UI component hierarchy.
 #pragma once
+#include "apps/studio-native/StudioMapAreaBounds.h"
 #include "engine/fx/SpectraSdfFileIO.h"
 #include <chrono>
 #include <memory>
@@ -406,6 +407,8 @@ public:
     // Ray through (x, y) onto the ground plane y = 0 (asset drops).
     bool caveScreenRay(float x,float y,float width,float height,render::float3& origin,render::float3& direction)const;
     std::optional<Json> playerStartPlacement(float x,float y,float w,float h,const editor::MapDoc& doc) const;
+    std::optional<render::float3> flatMapPoint(float x,float y,float w,float h,const editor::MapDoc& doc) const;
+    void showAreaBounds(std::optional<StudioMapAreaBounds> rect){areaBounds_=rect;}
     bool groundPoint(float x, float y, float width, float height, render::float3& out) const;
     std::optional<Json> forestPick(float x,float y,float w,float h,const std::string& project,const std::string& path,uint64_t revision) const;
     void setForestSelection(Json selection){forestSelection_=std::move(selection);}
@@ -729,6 +732,7 @@ private:
     std::vector<OverlayShape> overlayShapes_;
     std::optional<SkyShot> skyShot_;
     bool brushVolume_=false,brushFill_=false;
+    std::optional<StudioMapAreaBounds> areaBounds_;
     bool brushVisible_ = false; render::float3 brushCenter_{}; float brushRadius_ = 0;
     void drawBrushCursor(const render::Camera& view, int width, int height);
     void drawTransformGizmo(const render::Camera& view, int width, int height);

@@ -115,9 +115,10 @@ public:
     void setPlanetViewAgentProvider(PlanetViewAgentProvider provider){planetViewAgent_=std::move(provider);}
     Json previewExternalAssets(const std::vector<std::filesystem::path>& files,
                                const std::string& destination); // native picker ONLY
+    Json graphDocumentScope() const;
 private:
     Json snapshot() const;
-    Json graphDocumentScope() const;
+
     Json mapPlayer(const Json& params);
     Json mapProperties(const Json& params,bool write);
     Json hierarchyGroups(const Json& params);

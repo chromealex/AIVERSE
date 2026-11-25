@@ -1073,7 +1073,7 @@ bool StudioHost::gizmoAt(double x, double y, double w, double h) {
     return true;
 }
 bool StudioHost::moveBegin(double x, double y, double w, double h) {
-    if (projectLoading_ || !playerStartToken_.empty()) return false;
+    if (projectLoading_ || !scenePickerToken_.empty()) return false;
     return preview_ && onScene([&] { return preview_->beginTransformDrag(float(x), float(y), float(w), float(h)); });
 }
 void StudioHost::moveUpdate(double x, double y, double w, double h, bool invertSnap) {
@@ -2250,14 +2250,39 @@ bool StudioHost::humanPick(StudioSurface surface,double x,double y,double w,doub
     sendEventPayload(region ? "human.facePick" : "human.sculpt", payload);
     return true;
 }
-void StudioHost::finishPlayerStartPick(Json result){
-    if(playerStartToken_.empty())return;
-    result.set("token",Json::string(playerStartToken_));
-    playerStartToken_.clear();
-    sendEventPayload("playerStart.picked",result);
+void StudioHost::finishScenePick(Json result){
+    if(scenePickerToken_.empty())return;
+    result.set("token",Json::string(scenePickerToken_));
+    const bool area=pickingArea_;
+    scenePickerToken_.clear();pickingArea_=false;areaOrigin_.reset();areaScope_=Json{};
+    if(area && preview_)onScene([&]{preview_->showAreaBounds({});});
+    sendEventPayload(area?"area.picked":"playerStart.picked",result);
+}
+void StudioHost::updateAreaPick(int phase,double x,double y,double w,double h){
+    if(projectLoading_ || !session_ || !preview_ || session_->graphDocumentScope()!=areaScope_){
+        finishScenePick(Json::object());return;
+    }
+    const auto hit=onScene([&]{return preview_->flatMapPoint(float(x),float(y),float(w),float(h),session_->workspace().map);});
+    std::optional<StudioMapAreaBounds> bounds;
+    if(hit){
+        const StudioMapCell cell{int(std::floor(hit->x)),int(std::floor(hit->z))};
+        if(phase==0)areaOrigin_=cell;
+        if(areaOrigin_)bounds=studioAreaBetween(*areaOrigin_,cell);
+    }
+    if(phase==1 || (phase==0 && bounds)){
+        onScene([&]{preview_->showAreaBounds(bounds);});return;
+    }
+    Json result=Json::object();
+    if(bounds){
+        Json rect=Json::array();
+        for(int coord:*bounds)rect.push(Json::number(int64_t(coord)));
+        result.set("rect",std::move(rect));
+    }else result.set("error",Json::string("Both corners must be inside the map."));
+    finishScenePick(std::move(result));
 }
 void StudioHost::select(double x, double y, double w, double h, const std::string& mode) {
-    if(!playerStartToken_.empty() && mode=="replace"){
+    if(!scenePickerToken_.empty() && mode=="replace"){
+        if(pickingArea_)return;
         Json result=Json::object(),start;
         if(!projectLoading_ && session_ && preview_ && placement_.visible && w>=2 && h>=2 && x>=0 && y>=0 && x<w && y<h){
             const auto& map=session_->workspace().map;
@@ -2266,7 +2291,7 @@ void StudioHost::select(double x, double y, double w, double h, const std::strin
         }
         if(start.isNull())result.set("error",Json::string("No map surface at this point. Pick a point inside the map."));
         else result.set("start",std::move(start));
-        finishPlayerStartPick(std::move(result));
+        finishScenePick(std::move(result));
         return;
     }
     if(forestPlantArm_.isObject()&&mode=="replace"){
@@ -2375,7 +2400,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
         if(!projectLoading_&&session_->strokeCancel())sendEvent("document.changed", "");
         m = {};
         m.active = true; m.pressX = x; m.pressY = y;
-        if(!playerStartToken_.empty()&&!mods.alt&&!mods.command&&!mods.ctrl&&!mods.shift){m.playerStart=true;return;}
+        if(!scenePickerToken_.empty()&&!mods.alt&&!mods.command&&!mods.ctrl&&!mods.shift){m.playerStart=true;if(pickingArea_)updateAreaPick(0,x,y,w,h);return;}
         if(forestPlantArm_.isObject()&&!mods.alt&&!mods.command&&!mods.ctrl&&!mods.shift){m.forest=true;return;}
         // Explicit authored World Processes handles have priority only when
         // the clicked point is within their small screen-space hit radius.
@@ -2395,7 +2420,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
             if (now - lastHoverTime_ >= 0.05) { lastHoverTime_ = now; hover(x, y, w, h); }
             return;
         }
-        if(m.playerStart){if(std::hypot(x-m.pressX,y-m.pressY)>=5.0)m.dragged=true;return;}
+        if(m.playerStart){if(pickingArea_){updateAreaPick(1,x,y,w,h);return;}if(std::hypot(x-m.pressX,y-m.pressY)>=5.0)m.dragged=true;return;}
         if(m.forest){
             if(std::hypot(x-m.pressX,y-m.pressY)>=5.0)m.dragged=true;
             if(forestPlantArm_.getStr("action")=="move"&&session_&&preview_&&!projectLoading_){
@@ -2431,7 +2456,12 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
     m = {};
     if (!st.active) return;
     if(st.playerStart){
-        if(!playerStartToken_.empty()&&!st.dragged&&std::hypot(x-st.pressX,y-st.pressY)<5.0&&
+        if(pickingArea_){
+            if(mods.alt||mods.command||mods.ctrl||mods.shift)finishScenePick(Json::object());
+            else updateAreaPick(2,x,y,w,h);
+            return;
+        }
+        if(!scenePickerToken_.empty()&&!st.dragged&&std::hypot(x-st.pressX,y-st.pressY)<5.0&&
            !mods.alt&&!mods.command&&!mods.ctrl&&!mods.shift)select(x,y,w,h,"replace");
         return;
     }
@@ -2460,7 +2490,7 @@ bool StudioHost::sceneKey(StudioSceneKey key, bool down, StudioSceneMods mods, b
         if (key == K::V) { setPivotSnap(false); return true; }
         return false;
     }
-    if(key==K::Escape&&!playerStartToken_.empty()){finishPlayerStartPick(Json::object());mouse_={};return true;}
+    if(key==K::Escape&&!scenePickerToken_.empty()){finishScenePick(Json::object());mouse_={};return true;}
     if(key==K::Escape&&forestPlantArm_.isObject()){
         forestPlantArm_=Json{};mouse_={};if(preview_)onScene([&]{preview_->setForestDragPreview(Json{});});Json out=Json::object();out.set("cancelled",Json::fromBool(true));sendEventPayload("planetForest.planted",out);return true;
     }
@@ -2877,7 +2907,7 @@ void StudioHost::applyViewport(const Json& params) {
     NativeViewportPlacement placed;
     if (!platform_.placeSurface(StudioSurface::Scene, rect, placed)) return;
     placement_ = placed;
-    if (!placement_.visible) {finishPlayerStartPick(Json::object());readyEmitted_ = false;if(!projectLoading_&&session_->strokeCancel())sendEvent("document.changed", "");mouse_={};}
+    if (!placement_.visible) {finishScenePick(Json::object());readyEmitted_ = false;if(!projectLoading_&&session_->strokeCancel())sendEvent("document.changed", "");mouse_={};}
 }
 Json StudioHost::viewportInput(const Json& input) {
     const std::string kind = input.getStr("kind");
@@ -3181,17 +3211,22 @@ bool StudioHost::handleHostMethod(const Json& req) {
         Json out=Json::object();out.set("active",Json::fromBool(false));return out;
     });
     if(method=="studio.planetSceneBody")return answer([&]{return planetSceneBodyRequest(params);});
-    if(method=="studio.playerStartPick")return answer([&]{
+    if(method=="studio.playerStartPick" || method=="studio.areaPick")return answer([&]{
         const auto token=params.getStr("token");
-        if(token.empty()||token.size()>128)throw std::runtime_error("Invalid player picker token");
+        if(token.empty()||token.size()>128)throw std::runtime_error("Invalid Scene picker token");
         if(params.getBool("armed")){
             if(projectLoading_||!session_||!preview_||!placement_.visible||!platform_.surfaceDrawable(StudioSurface::Scene))
-                throw std::runtime_error("Open the Scene view to place a start.");
+                throw std::runtime_error("Open the Scene view to pick map coordinates.");
             if(brushArmed()||session_->strokeActive()||mouse_.active||wpDrag_.active||forestPlantArm_.isObject()||
                onScene([&]{return preview_->caveGlobeRequested();}))throw std::runtime_error("Finish the active Scene tool first.");
-            finishPlayerStartPick(Json::object());
-            playerStartToken_=token;
-        }else if(playerStartToken_==token)finishPlayerStartPick(Json::object());
+            finishScenePick(Json::object());
+            if(method=="studio.areaPick"){
+                const auto& map=session_->workspace().map.data;
+                if(map.planet()||map.worldSpace)throw std::runtime_error("Area drawing requires a flat grid map.");
+                areaScope_=session_->graphDocumentScope();pickingArea_=true;
+            }
+            scenePickerToken_=token;
+        }else if(scenePickerToken_==token)finishScenePick(Json::object());
         return Json::object();
     });
     if(method=="studio.planetForestArm")return answer([&]{
@@ -3216,7 +3251,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
             if(wpLiveOptions_.live&&wpLiveOptions_.forest)throw std::runtime_error("Disable live forest before authoring");
             if(mouse_.active||wpDrag_.active)throw std::runtime_error("Finish the active Scene gesture first");
             const auto sceneBody=worldProcessSceneBody();if(sceneBody.empty())throw std::runtime_error("Wait for a current planetary Scene");
-            finishPlayerStartPick(Json::object());
+            finishScenePick(Json::object());
             forestPlantArm_=params;forestPlantArm_.set("project",Json::string(ws.project.dir));forestPlantArm_.set("sceneBody",Json::string(sceneBody));
         }
         out.set("armed",Json::fromBool(forestPlantArm_.isObject()));return out;

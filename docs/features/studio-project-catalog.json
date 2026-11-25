@@ -210,6 +210,7 @@
       "studio.mapRegions",
       "studio.mapRegionName",
       "studio.playerStartPick",
+      "studio.areaPick",
       "studio.gameEntities",
       "studio.hierarchyGroups",
       "studio.gameSelectEntity",

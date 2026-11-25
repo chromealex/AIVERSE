@@ -15,7 +15,15 @@ using namespace aiverse;
 using namespace aiverse::studio;
 using namespace aiverse::render;
 
+#include "apps/studio-native/StudioMapAreaBounds.h"
+
 int main() {
+    {
+        const StudioMapAreaBounds expected{2,3,8,10},single{4,5,1,1};
+        AIVERSE_TEST_CHECK(studioAreaBetween({9,3},{2,12})==expected);
+        AIVERSE_TEST_CHECK(studioAreaBetween({2,12},{9,3})==expected);
+        AIVERSE_TEST_CHECK(studioAreaBetween({4,5},{4,5})==single);
+    }
     {
         editor::MapDoc doc;doc.reset(16,16);
         auto& map=doc.data;

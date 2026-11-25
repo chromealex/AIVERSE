@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Scan } from 'lucide-react';
-import { invoke } from '../bridge';
+import { invoke, onNativeEvent } from '../bridge';
 import type { StudioMapProperties, StudioSnapshot } from '../types';
 import { StudioButton, StudioInput } from '../ui';
 import type { CameraBookmark } from '../components/sceneBookmarks';
@@ -29,6 +29,7 @@ export function MapAreas({data,revision,busy,onApply}:{
   const [deleting,setDeleting]=useState(false);
   const [pending,setPending]=useState(false);
   const [error,setError]=useState('');
+  const [pickToken,setPickToken]=useState('');
   const [drawing,setDrawing]=useState(false);
   const [preview,setPreview]=useState<Bounds>();
   const origin=useRef<[number,number]|undefined>(undefined);
@@ -40,12 +41,36 @@ export function MapAreas({data,revision,busy,onApply}:{
   const locked=pending||busy||stale;
   const dirty=!!draft && (current===null || JSON.stringify(fields)!==JSON.stringify(readFields(base,current??'')));
   const duplicate=fields.name!==current && Object.hasOwn(base.areas,fields.name);
-  const discard=()=>{setDraft(undefined);setError('');setDeleting(false);setDrawing(false);setPreview(undefined);origin.current=undefined;};
+  const discard=()=>{setPickToken('');setDraft(undefined);setError('');setDeleting(false);setDrawing(false);setPreview(undefined);origin.current=undefined;};
   const edit=(values:Partial<Fields>)=>{
     setError('');
     setDraft(prev=>({base:prev?.base??base,original:prev?prev.original:current??null,
       fields:{...(prev?.fields??fields),...values}}));
   };
+  useEffect(()=>{
+    if(!pickToken)return;
+    if(locked||deleting){setPickToken('');return;}
+    let active=true;
+    const off=onNativeEvent((event,payload)=>{
+      const result=payload as {token?:string;rect?:Bounds;error?:string};
+      if(event!=='area.picked'||result.token!==pickToken)return;
+      setPickToken('');
+      if(result.error)setError(result.error);
+      if(result.rect){
+        const bounds=result.rect.map(String);
+        setDraft(prev=>prev && ({...prev,fields:{...prev.fields,bounds}}));
+      }
+    });
+    const escape=(e:KeyboardEvent)=>{if(e.key==='Escape'){e.preventDefault();setPickToken('');}};
+    window.addEventListener('keydown',escape);
+    void invoke('studio.areaPick',{token:pickToken,armed:true}).catch(e=>{
+      if(active){setError(e instanceof Error?e.message:String(e));setPickToken('');}
+    });
+    return ()=>{
+      active=false;off();window.removeEventListener('keydown',escape);
+      void invoke('studio.areaPick',{token:pickToken,armed:false}).catch(()=>{});
+    };
+  },[pickToken,locked,deleting]);
   function create(){
     let i=1;while(Object.hasOwn(data.areas,'Area '+i))i++;
     discard();setDraft({base:data,original:null,fields:{name:'Area '+i,bounds:['0','0','1','1']}});
@@ -112,10 +137,16 @@ export function MapAreas({data,revision,busy,onApply}:{
       {duplicate && <small role="alert">An area already has this name.</small>}
       <div className="insp-map__size">{labels.map((label,i)=><label key={label}>{label}<StudioInput required type="number" step="any"
         value={fields.bounds[i]} onChange={e=>edit({bounds:fields.bounds.map((v,k)=>k===i?e.target.value:v)})}/></label>)}</div>
-      {base.grid && <div className="insp-map__actions"><StudioButton aria-pressed={drawing} onClick={()=>setDrawing(!drawing)}>{drawing?'Cancel drawing':'Draw bounds'}</StudioButton>
-        <StudioButton disabled={!valid(fields)} onClick={()=>void focus()}>Show in Scene</StudioButton></div>}
+      {base.grid && <div className="insp-map__actions"><StudioButton disabled={!!pickToken} aria-pressed={drawing} onClick={()=>setDrawing(!drawing)}>{drawing?'Cancel drawing':'Draw on grid'}</StudioButton>
+        <StudioButton aria-pressed={!!pickToken} onClick={()=>{
+          if(pickToken){setPickToken('');return;}
+          edit({});setDrawing(false);setPreview(undefined);origin.current=undefined;
+          setPickToken(Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-'));
+        }}>{pickToken?'Cancel Scene drawing':'Draw in Scene'}</StudioButton>
+        {pickToken && <small role="status">Drag between two map cells in Scene.</small>}
+        <StudioButton disabled={!!pickToken||!valid(fields)} onClick={()=>void focus()}>Show in Scene</StudioButton></div>}
       {current && fields.name!==current && <small>Map triggers and wave routes will use the new name. Check script references separately.</small>}
-      <div className="insp-map__actions"><StudioButton type="submit" variant="primary" disabled={!dirty||duplicate||!valid(fields)}>{current===null?'Create area':'Apply'}</StudioButton>
+      <div className="insp-map__actions"><StudioButton type="submit" variant="primary" disabled={!!pickToken||!dirty||duplicate||!valid(fields)}>{current===null?'Create area':'Apply'}</StudioButton>
         {!dirty && current && <StudioButton onClick={()=>{setDraft({base,original:current,fields});setDeleting(true);}}>Remove area</StudioButton>}</div>
     </fieldset></form>}
     {deleting && <div className="insp-map__actions"><span>Remove {current}?</span><StudioButton disabled={locked} onClick={()=>void save(true)}>Confirm removal</StudioButton></div>}

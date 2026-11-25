@@ -1984,17 +1984,23 @@ std::optional<Json> StudioScene::forestGroundPlacement(float x,float y,float w,f
 std::optional<Json> StudioScene::playerStartPlacement(float x,float y,float w,float h,const editor::MapDoc& doc)const{
     if(!cameraInitialized_||x<0||y<0||w<2||h<2||x>=w||y>=h||doc.data.worldSpace)return {};
     if(doc.data.planet())return forestGroundPlacement(x,y,w,h,doc.path,doc.revision);
-    if(planetMode_||terrainRevision_!=doc.revision)return {};
+    const auto hit=flatMapPoint(x,y,w,h,doc);
+    if(!hit)return {};
+    Json start=Json::array();
+    start.push(Json::number(std::min(double(doc.data.w)-.5,std::round(double(hit->x)*2)/2)));
+    start.push(Json::number(std::min(double(doc.data.h)-.5,std::round(double(hit->z)*2)/2)));
+    return start;
+}
+std::optional<float3> StudioScene::flatMapPoint(float x,float y,float w,float h,const editor::MapDoc& doc)const{
+    if(!cameraInitialized_||planetMode_||doc.data.worldSpace||doc.data.planet()||terrainRevision_!=doc.revision||
+       !(x>=0 && y>=0 && x<w && y<h && w>=2 && h>=2))return {};
     float3 origin,direction,at;
     if(!viewCamera().screenRay(x,y,w,h,origin,direction))return {};
     const float t=studioRayMesh(origin,direction,terrainCpu_);
     if(std::isfinite(t))at=origin+direction*t;
     else if(!groundPoint(x,y,w,h,at))return {};
     if(at.x<0||at.z<0||at.x>=doc.data.w||at.z>=doc.data.h)return {};
-    Json start=Json::array();
-    start.push(Json::number(std::min(double(doc.data.w)-.5,std::round(double(at.x)*2)/2)));
-    start.push(Json::number(std::min(double(doc.data.h)-.5,std::round(double(at.z)*2)/2)));
-    return start;
+    return at;
 }
 bool StudioScene::groundPoint(float x,float y,float width,float height,float3& out) const {
     float3 o,d;
@@ -3776,6 +3782,15 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         renderer_.line({at.x,at.y-extent,at.z},{at.x,at.y+extent,at.z},color);
         renderer_.line({at.x,at.y,at.z-extent},{at.x,at.y,at.z+extent},color);
     }
+    if(areaBounds_ && !fpsProject && !planetaryChart){
+        const auto [left,top,width,height]=*areaBounds_;
+        const auto point=[&](int x,int z){return float3{float(x),showTerrain?terrainPreviewCorner(map,x,z,levelHeight)+.08f:.08f,float(z)};};
+        const auto color=rgba(255,214,105);
+        for(int x=left;x<left+width;++x)for(int z:{top,top+height})
+            renderer_.line(point(x,z),point(x+1,z),color);
+        for(int z=top;z<top+height;++z)for(int x:{left,left+width})
+            renderer_.line(point(x,z),point(x,z+1),color);
+    }
     if(regionBorderLetter_ && !fpsProject && !planetaryChart){
         if(regionBordersDirty_)regionBorders_.measure(map,levelHeight,showTerrain);
         const auto bounds=regionBorders_.visible(map,view,framebufferWidth,framebufferHeight);
@@ -4924,6 +4939,7 @@ uint64_t StudioScene::frameSignature(int width,int height,const editor::MapDoc& 
     value(marquee_.on);value(marquee_.x0);value(marquee_.y0);value(marquee_.x1);value(marquee_.y1);
     value(wind_.revision);value(wind_.enabled);value(wind_.speed);value(wind_.directionDeg);
     value(wind_.gust);value(wind_.scale);value(wind_.debug);
+    value(areaBounds_.has_value());if(areaBounds_)for(int coord:*areaBounds_)value(coord);
     value(regionBorderLetter_);value(brushVisible_);vec(brushCenter_);value(brushRadius_);
     value(overlayShapes_.size());
     for(const auto& shape:overlayShapes_){value(shape.kind);vec(shape.a);vec(shape.b);value(shape.radius);
