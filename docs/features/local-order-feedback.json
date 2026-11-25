@@ -34,8 +34,11 @@
     "site/manifest.json",
     "skills/gameplay/aiverse-view/SKILL.md",
     "skills/workflow/aiverse-site-publish/SKILL.md",
+    "tests/extra-test-suites.txt",
+    "tests/site_web_demos.py",
     "tests/tests.cpp",
-    "tools/site/build.py"
+    "tools/site/build.py",
+    "tools/site/web_demos.py"
   ],
   "traits": {
     "runtime": true,
