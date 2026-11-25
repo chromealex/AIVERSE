@@ -119,7 +119,7 @@ export interface StudioMapProperties {
 export interface StudioMapChanges {name?:string;size?:[number,number];roadsOnly?:boolean;victory?:Record<string,unknown>|null}
 export interface StudioSnapshot {
   graphDocument?: StudioGraphDocumentScope;
-  project: { name: string; path: string; dirty: boolean; historyVersion?: string; assetHistoryVersion?: string };
+  project: { name: string; path: string; dirty: boolean; actorSession?:boolean; historyVersion?: string; assetHistoryVersion?: string };
   scene: { name: string; mapProperties?:boolean; worldSpace?:boolean; mapRegions?:boolean; groupings?:string[]; entities: StudioEntity[] };
   selectedId: string | null;
   /** Whole selection, primary (selectedId) last. */
@@ -589,8 +589,8 @@ export interface StudioParams {
   'studio.entitiesDuplicate': { entityIds: string[] };
   'studio.entityFlags': { entityIds: string[]; hidden?: boolean; locked?: boolean };
   'studio.assetPlace': { asset: string; x: number; z: number };
-  'studio.rulesDocument': {section:'global'|'document'|'actorSimulation'};
-  'studio.rulesDocumentSave': {section:'global'|'document'|'actorSimulation';projectPath:string;original:string;value:unknown};
+  'studio.rulesDocument': {section:'global'|'document'|'actorSimulation'|'actorMovement'};
+  'studio.rulesDocumentSave': {section:'global'|'document'|'actorSimulation'|'actorMovement';projectPath:string;original:string;value:unknown};
   'studio.planetSceneBody': {body?:string;mapPath?:string;expectedRevision?:string};
   'studio.planetForestArm': {armed:boolean;mapPath?:string;expectedRevision?:string;species?:number;key?:number;habit?:'tree'|'shrub';action?:'plant'|'pick'|'move'};
   'studio.planetForestMove': {mapPath:string;expectedRevision:string;species:number;key:number;at:{body:string;face:number;x:number;y:number}};

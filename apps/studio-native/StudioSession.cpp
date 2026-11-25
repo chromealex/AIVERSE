@@ -950,6 +950,7 @@ Json StudioSession::snapshot() const {
     Json project = Json::object();
     project.set("name", str(ws_.project.manifest.getStr("name", "No project opened")));
     project.set("path", str(ws_.project.dir));
+    project.set("actorSession",Json::fromBool(ws_.project.actorSession()));
     project.set("historyVersion",str(ws_.project.historyVersion()));
     project.set("assetHistoryVersion",str(assetHistoryVersion()));
     project.set("dirty", Json::fromBool(ws_.map.dirty || ws_.project.rulesDirty || ws_.project.manifestDirty));
@@ -4326,15 +4327,21 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
             const auto section=params.getStr("section");
             const bool simulation=section=="actorSimulation";
-            if(simulation && !ws_.project.actorSession())throw std::runtime_error("Open an actor project to edit simulation settings.");
-            if(!simulation && section!="global"&&section!="document") throw std::runtime_error("Unknown rules section");
+            const bool movement=section=="actorMovement";
+            const bool actorSettings=simulation || movement;
+            if(actorSettings && !ws_.project.actorSession())throw std::runtime_error("Open an actor project to edit simulation settings.");
+            if(!actorSettings && section!="global"&&section!="document") throw std::runtime_error("Unknown rules section");
             const auto separate=[](const std::string& key){
                 return key=="types"||key=="resources"||key=="techs"||key=="factions"||key=="triggers";
             };
             const auto readSection=[&](){
-                if(simulation){
+                if(actorSettings){
                     const auto config=actor::readConfig(ws_.project.rulesJson);
                     Json result=Json::object();
+                    if(movement){
+                        result.set("speed",Json::number(config.motor.speed));result.set("sprintSpeed",Json::number(config.motor.sprintSpeed));
+                        return result;
+                    }
                     result.set("tickRate",num(config.tickRate));result.set("snapshotRate",num(config.snapshotRate));
                     result.set("maxPlayers",num(config.maxPlayers));return result;
                 }
@@ -4357,19 +4364,19 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                     for(const auto& [key,value]:ws_.project.rulesJson.members())
                         if(separate(key))candidate.set(key,value);
                 }
-                if(simulation){
+                if(actorSettings){
                     Json patch=Json::object();
                     for(const auto& [key,value]:edited.members()){
-                        if(!current.has(key)||!value.isNumber()||value.toDouble()!=value.integer())
-                            throw std::runtime_error("Invalid simulation setting: "+key);
+                        if(!current.has(key)||!value.isNumber()||(simulation && value.toDouble()!=value.integer()))
+                            throw std::runtime_error("Invalid actor setting: "+key);
                         if(value!=current[key])patch.set(key,value);
                     }
                     if(patch.has("maxPlayers") && patch.getInt("maxPlayers")<int64_t(ws_.map.data.extra["players"].size()))
                         throw std::runtime_error("Player limit is below the number of players in the open scene.");
                     candidate=std::move(patch);
                 }
-                Json args=Json::object();args.set("path",str(simulation?"actor":""));args.set("value",candidate);
-                const auto changed=simulation && !candidate.size()?Json::object():ws_.call(simulation?"rules_merge":"rules_set",args,"studio");
+                Json args=Json::object();args.set("path",str(movement?"actor.motor":simulation?"actor":""));args.set("value",candidate);
+                const auto changed=actorSettings && !candidate.size()?Json::object():ws_.call(actorSettings?"rules_merge":"rules_set",args,"studio");
                 if(changed.has("error"))throw std::runtime_error(changed.getStr("error"));
                 current=readSection();
             }
