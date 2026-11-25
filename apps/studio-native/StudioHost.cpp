@@ -2959,11 +2959,19 @@ Json StudioHost::viewportInput(const Json& input) {
         onScene([&] { preview_->setOrientation(float(yaw), float(pitch)); });
         return ok();
     }
-    if (kind == "handle") {
+    if (kind == "areaGesture" || kind == "handle") {
         const double x = input["x"].toDouble(), y = input["y"].toDouble(), w = input["width"].toDouble(), h = input["height"].toDouble();
         const std::string phase = input.getStr("phase");
         if (!input["x"].isNumber() || !input["y"].isNumber() || !input["width"].isNumber() || !input["height"].isNumber() ||
             !finite({x, y, w, h}) || w < 2 || h < 2 || w > 20000 || h > 20000) throw std::runtime_error("Invalid move coordinates");
+        if(kind=="areaGesture"){
+            if(!pickingArea_ || input.getStr("token")!=scenePickerToken_)return ok();
+            if(phase=="down")updateAreaPick(0,x,y,w,h);
+            else if(phase=="drag" || phase=="up"){
+                if(areaOrigin_)updateAreaPick(phase=="up"?2:1,x,y,w,h);
+            }else throw std::runtime_error("Invalid area gesture phase");
+            return ok();
+        }
         if (phase == "down") { result.set("hit", Json::fromBool(moveBegin(x, y, w, h))); return result; }
         if (phase == "drag") { moveUpdate(x, y, w, h, input["invertSnap"].boolean(false)); return ok(); }
         if (phase == "up") { moveEnd(); return ok(); }
@@ -3226,6 +3234,10 @@ bool StudioHost::handleHostMethod(const Json& req) {
                 areaScope_=session_->graphDocumentScope();pickingArea_=true;
             }
             scenePickerToken_=token;
+            if(pickingArea_ && htmlComposite_){
+                Json armed=Json::object();armed.set("token",Json::string(token));
+                sendEventPayload("area.armed",armed);
+            }
         }else if(scenePickerToken_==token)finishScenePick(Json::object());
         return Json::object();
     });

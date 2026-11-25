@@ -20,6 +20,8 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
   const element = useRef<HTMLElement>(null);
   const drag = useRef<{ x: number; y: number; startX: number; startY: number; moved: boolean; mode: DragMode; button: number } | null>(null);
   const pendingDelta = useRef<{ x: number; y: number; raf: number; mode: Exclude<DragMode, 'select' | 'handle'> }>({ x: 0, y: 0, raf: 0, mode: 'orbit' });
+  const areaToken=useRef('');
+  const areaPointer=useRef<{id:number;token:string}|null>(null);
   const flying = useRef(false);
   const handleInFlight = useRef(false);
   const flySpeedRef = useRef(1);
@@ -40,6 +42,11 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
   useEffect(() => {
     if (!native) return;
     return onNativeEvent((event, payload) => {
+      if(event==='area.armed' || event==='area.picked'){
+        const token=(payload as {token?:string})?.token;
+        if(token && event==='area.armed')areaToken.current=token;
+        else if(token===areaToken.current)areaToken.current='';
+      }
       if (event === 'viewport.ready') { setGpuReady(true); setGpuError(''); }
       if (event === 'viewport.camera' && isSceneCameraState(payload)) setCamera(payload);
       if (event === 'viewport.error') {
@@ -136,6 +143,11 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
           target.closest('input, textarea, select, [contenteditable="true"]')) return;
       const key=shortcutKey(event);
       boost=event.shiftKey;
+      if(key==='escape' && areaToken.current){
+        event.preventDefault();
+        void invoke('studio.areaPick',{token:areaToken.current,armed:false}).catch(console.warn);
+        return;
+      }
       if (event.altKey) return;
       if (!flying.current && !event.repeat && !event.shiftKey && SCENE_TOOL_KEYS[key]) {
         event.preventDefault();
@@ -214,6 +226,20 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
     flying.current=false;
     setNavigationActive(false);
   };
+  function sendAreaPointer(event:React.PointerEvent<HTMLElement>,token:string,phase:'down'|'drag'|'up'){
+    const bounds=event.currentTarget.getBoundingClientRect();
+    return send({kind:'areaGesture',token,phase,x:event.clientX-bounds.left,y:event.clientY-bounds.top,
+      width:bounds.width,height:bounds.height});
+  }
+  function cancelPointer(event:React.PointerEvent<HTMLElement>){
+    const area=areaPointer.current;
+    if(area){
+      if(area.id!==event.pointerId)return;
+      areaPointer.current=null;
+      void invoke('studio.areaPick',{token:area.token,armed:false}).catch(console.warn);
+    }
+    endDrag();
+  }
   const navigationReady = native && active && gpuReady;
   return <section ref={element} className={'viewport' + (native && active && gpuReady ? ' viewport-native' : '')}
     aria-label={native && active ? 'Native Scene viewport' : 'Viewport placeholder'}
@@ -222,8 +248,15 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
     onPointerDown={event => {
       if (!composite() || !active || !gpuReady) return;
       event.currentTarget.focus();
+      if(areaPointer.current || drag.current)return;
+      if(areaToken.current && event.button===0 && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey){
+        areaPointer.current={id:event.pointerId,token:areaToken.current};
+        event.currentTarget.setPointerCapture(event.pointerId);
+        void sendAreaPointer(event,areaToken.current,'down');
+        return;
+      }
       const mode=navigationFor(event.button,{alt:event.altKey,meta:event.metaKey});
-      if (!mode || drag.current) return;
+      if (!mode) return;
       if (mode!=='select') leaveAutoIso();
       if (mode==='look') flying.current=true;
       drag.current = { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY,
@@ -241,6 +274,14 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
       event.currentTarget.setPointerCapture(event.pointerId);
     }}
     onPointerMove={event => {
+      const area=areaPointer.current;
+      if(area){
+        if(area.id===event.pointerId && area.token===areaToken.current && !handleInFlight.current){
+          handleInFlight.current=true;
+          void sendAreaPointer(event,area.token,'drag').finally(()=>{handleInFlight.current=false;});
+        }
+        return;
+      }
       const state=drag.current;
       if (!state || !composite() || !gpuReady) return;
       const dx=event.clientX-state.x,dy=event.clientY-state.y;
@@ -256,6 +297,16 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
       } else if (state.moved && state.mode!=='select') sendDelta(dx,dy,state.mode);
     }}
     onPointerUp={event => {
+      const area=areaPointer.current;
+      if(area){
+        if(event.pointerId!==area.id || event.button!==0)return;
+        areaPointer.current=null;
+        if(event.altKey||event.ctrlKey||event.metaKey||event.shiftKey)
+          void invoke('studio.areaPick',{token:area.token,armed:false}).catch(console.warn);
+        else void sendAreaPointer(event,area.token,'up');
+        if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);
+        return;
+      }
       const state=drag.current;
       if (!state || event.button!==state.button) return;
       endDrag();
@@ -272,8 +323,8 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
         void send({kind:'pick', x:event.clientX-bounds.left,y:event.clientY-bounds.top,width:bounds.width,height:bounds.height});
       }
     }}
-    onPointerCancel={endDrag}
-    onLostPointerCapture={() => { if (drag.current) endDrag(); }}
+    onPointerCancel={cancelPointer}
+    onLostPointerCapture={cancelPointer}
     onWheel={event => {
       if (!composite() || !active || !gpuReady) return;
       if (flying.current) { showSpeed(stepFlySpeed(flySpeedRef.current, event.deltaY)); return; }
