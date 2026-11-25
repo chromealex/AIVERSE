@@ -1163,7 +1163,7 @@ static void checkPlanetRootSupport(){
         [](World&,const auto&){return false;},[](World&,const auto&){return false;}));
     AIVERSE_TEST_CHECK(evolve::pendingPlanetPlantFalls(ecs).size()==1);
     AIVERSE_TEST_CHECK(wp::commitPlanetPhysicalDelivery(ecs,lowered,"terra",7,
-        [](World&,const auto&){return false;},[](World& staged,const auto& fall){
+        [](World&,const auto&){return false;},[](World&,const auto& fall){
             // Fixture receipt only; production owner writes a durable shape.
             return fall.event.id.key==10;
         }));
