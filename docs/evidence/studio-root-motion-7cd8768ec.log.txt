@@ -1,0 +1,16 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+    Start  46: animation_root_motion_bake
+1/3 Test  #46: animation_root_motion_bake .......   Passed    0.30 sec
+    Start 589: studio_session
+2/3 Test #589: studio_session ...................   Passed   18.66 sec
+    Start 594: studio_mcp_registry
+3/3 Test #594: studio_mcp_registry ..............   Passed    1.80 sec
+
+100% tests passed, 0 tests failed out of 3
+
+Label Time Summary:
+EDITOR    =  20.46 sec*proc (2 tests)
+MCP       =   1.80 sec*proc (1 test)
+
+Total Test time (real) =  20.79 sec

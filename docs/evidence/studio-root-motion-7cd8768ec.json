@@ -1,0 +1,14 @@
+{
+  "sha": "7cd8768ec88c001523022781d53f5b3f1805800c",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^(animation_root_motion_bake|studio_session|studio_mcp_registry)$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-root-motion-7cd8768ec.log.txt",
+  "sha256": "fbcfdcac59c20bb767e5825de9e49b95f28bdba2538cfd20d8463b437c1e0315"
+}
