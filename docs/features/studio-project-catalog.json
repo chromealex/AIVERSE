@@ -5,6 +5,8 @@
   "changed_paths": [
     "apps/studio-native/StudioLightingPreview.h",
     "apps/studio-web/src/panels/LightBakeAtlas.tsx",
+    "apps/studio-native/StudioLightBakeJob.h",
+    "apps/editor/core/LightBakeCapture.h",
     "engine/bake/CapturedBake.cpp",
     "engine/bake/CapturedBake.h",
     "tests/bake/bake_tests.cpp",

@@ -1,4 +1,5 @@
 #include <tuple>
+#include "engine/bake/CapturedBake.h"
 // macOS-only native preview: AIVERSE gfx::Device + Renderer3D over a CAMetalLayer.
 // No ImGui, no CPU texture readback, no dependency on UI component hierarchy.
 #pragma once
@@ -434,6 +435,7 @@ public:
     void drawAttachments(int width,int height);
     void drawAnimationPose(int width,int height,const std::shared_ptr<const render::Model>& source,
                            const render::Pose& pose,float yaw);
+    bake::CapturedBake captureLightBake(const editor::MapDoc& doc, const std::string& project, const game::Rules& rules);
     void setBakedSceneEnabled(bool enabled);
     Json bakedSceneStatus() const;
     uint32_t drawCalls() const { return renderer_.drawCalls(); }

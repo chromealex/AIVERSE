@@ -21,7 +21,7 @@
 #include "engine/bake/CapturedBake.h"
 #include "engine/platform/Platform.h"
 #include "engine/render/BakedLighting.h"
-#include "engine/view/game/GameLights.h"
+#include "../core/LightBakeCapture.h"
 
 namespace aiverse::editor {
 
@@ -29,8 +29,6 @@ namespace fs = std::filesystem;
 using namespace aiverse::render;
 
 namespace {
-float3 sq(float3 c) { return {c.x * c.x, c.y * c.y, c.z * c.z}; }
-
 using BakeInput = bake::CapturedBake;
 } // namespace
 
@@ -182,34 +180,10 @@ private:
     void finishCapture(Editor& ed) {
         ed.renderer().setModelCapture({});
         bake::markStaticNodes(input_, firstFrame_);
-        // lighting as the Scene shows it now (time of day preview included)
-        const Lighting& l = ed.renderer().lighting;
-        input_.sun.dir = l.sunDir;
-        input_.sun.color = sq(l.sunColor) * l.sunIntensity;
-        input_.sky.sky = sq(l.skyColor);
-        input_.sky.ground = sq(l.groundColor);
         const auto& grid = ed.editGrid();
-        const MapDoc& doc = ed.doc();
-        // map lights marked "bake": mixed / baked
-        const Json mapJson = doc.toJson();
-        auto lights = game::GameLights::parseMapLights(mapJson["lights"]);
-        for (const auto& ml : lights) {
-            if (!ml.bake) continue;
-            const PointLight p = game::GameLights::glowLight(ml, {ml.x, ed.view().heightAt(grid, ml.x, ml.z), ml.z}, 0, 1, 0, 0);
-            bake::BakeLight bl;
-            bl.pos = p.pos; bl.color = p.color * p.intensity; bl.radius = p.radius;
-            bl.dir = p.dir; bl.cosOuter = p.cosOuter; bl.cosInner = p.cosInner;
-            bl.bakedOnly = ml.bake == 2;
-            input_.lights.push_back(bl);
-        }
-        // terrain heights (the view's surface), half a cell apart
-        input_.ex = float(doc.data.w); input_.ez = float(doc.data.h);
-        input_.nx = int(std::ceil(input_.ex / input_.step)) + 1;
-        input_.nz = int(std::ceil(input_.ez / input_.step)) + 1;
-        input_.heights.resize(size_t(input_.nx) * size_t(input_.nz));
-        for (int z = 0; z < input_.nz; ++z)
-            for (int x = 0; x < input_.nx; ++x)
-                input_.heights[size_t(z) * size_t(input_.nx) + size_t(x)] = ed.view().heightAt(grid, std::min(float(x) * input_.step, input_.ex), std::min(float(z) * input_.step, input_.ez));
+        const auto& doc = ed.doc();
+        captureBakeEnvironment(input_, ed.renderer().lighting, doc.data.extra["lights"], doc.data.w, doc.data.h,
+            [&](float x, float z) { return ed.view().heightAt(grid, x, z); });
         state_ = kBaking;
         thread_ = std::thread([this] { run(); });
     }

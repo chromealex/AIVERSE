@@ -1,4 +1,5 @@
 #include "engine/render/BakedLighting.h"
+#include "apps/editor/core/LightBakeCapture.h"
 #include "engine/render/LightmapUv.h"
 #include <future>
 #include "engine/view/MaterialLibraryFiles.h"
@@ -427,6 +428,38 @@ struct StudioScene::SceneBake {
     uint64_t generation=0, pendingGeneration=0;
     bool enabled=false, needsLoad=false, exists=false;
 };
+
+bake::CapturedBake StudioScene::captureLightBake(const editor::MapDoc& doc, const std::string& project, const game::Rules& rules) {
+    if (!sceneCacheValid_ || modelsPending_ || sceneKey_.doc != &doc ||
+        sceneKey_.revision != doc.revision || sceneKey_.project != project)
+        throw std::runtime_error("Scene is still loading the active map");
+    if (doc.data.planet()) throw std::runtime_error("Lightmap capture requires a planar map");
+    bake::CapturedBake capture;
+    editor::captureBakeEnvironment(capture,renderer_.lighting,doc.data.extra["lights"],doc.data.w,doc.data.h,
+        [&](float x,float z){return sceneKey_.fps ? 0.f : terrainPreviewHeight(doc.data,x,z,sceneKey_.levelHeight);},
+        showTerrain_ && !sceneKey_.fps);
+    for (const auto& instance : modelInstances_) {
+        if (!instance.model || !instance.model->path.starts_with("content/")) continue;
+        const int index = studioMapEntityIndex(instance.id,doc);
+        if (index < 0) continue;
+        const int type = rules.findType(doc.data.entities[size_t(index)].type);
+        if (type >= 0) {
+            const auto& unit = rules.types[size_t(type)];
+            if ((!unit.structure && unit.speed > Fixed{}) || (unit.layer & game::kLayerAir)) continue;
+        }
+        const auto& model = *instance.model;
+        bake::CapturedBake::Draw draw;
+        draw.path = model.path;
+        for (const auto& node : model.bindWorld) draw.nodeWorld.push_back(instance.world * node);
+        draw.still.assign(draw.nodeWorld.size(),1);
+        const auto authored = instanceMaterials_.find(instance.id);
+        const auto* materials = authored == instanceMaterials_.end() ? nullptr : &authored->second.materials;
+        if (graphPresentation_) materials = graphPresentation_->materials(model,instance.id,materials);
+        if (materials) draw.materials = *materials;
+        capture.draws.push_back(std::move(draw));
+    }
+    return capture;
+}
 
 void StudioScene::setBakedSceneEnabled(bool enabled) {
     if(!sceneBake_)sceneBake_=std::make_unique<SceneBake>();

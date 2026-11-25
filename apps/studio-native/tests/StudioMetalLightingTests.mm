@@ -1,7 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/CAMetalLayer.h>
 #include "apps/studio-native/StudioScene.h"
-#include "engine/bake/CapturedBake.h"
+#include "apps/studio-native/StudioLightBakeJob.h"
 #include "apps/studio-native/StudioLightingPreview.h"
 #include <filesystem>
 #include <fstream>
@@ -29,39 +29,65 @@ int aiverseMain(int argc,char** argv) { @autoreleasepool {
         {
             const auto project=std::filesystem::absolute(argv[1])/"baked-scene";
             std::filesystem::create_directories(project/"field.bake");
-            bake::CapturedBake input;
-            input.folder="field.bake";input.ex=input.ez=8;input.nx=input.nz=9;input.step=1;
-            input.heights.assign(81,0);input.settings.pageSize=64;input.settings.texelsPerUnit=2;
-            input.settings.samples=8;input.settings.probeSpacing=0;input.settings.threads=2;
-            input.settings.mode=bake::BakedMode::Subtractive;
-            input.settings.probeSpacing=2;input.settings.probeHeight=2;input.settings.probeSamples=16;
             const std::string asset="content/column.obj";
             std::filesystem::create_directories(project/"content");
+            std::filesystem::remove(project/(asset+".lmuv"));
             std::ofstream(project/asset)<<"v -1 0 -1\nv 1 0 -1\nv 0 2 0\nv 0 0 1\nf 1 3 2\nf 2 3 4\nf 4 3 1\nf 1 2 4\n";
             auto read=[&](const std::string& path,std::string& bytes){
                 std::ifstream in(project/path,std::ios::binary);if(!in)return false;
                 bytes.assign(std::istreambuf_iterator<char>(in),{});return true;
             };
-            auto model=render::loadModel(asset,read);
             editor::DocEntity column;column.type="column";column.x=2;column.z=4;
             doc.data.entities.push_back(column);
-            column.x=6;doc.data.entities.push_back(column);
-            const auto proxies=studio::studioDocumentProxies(doc,false);
-            const auto object=std::find_if(proxies.begin(),proxies.end(),[](const auto& p){return p.id=="entity:0";});
-            if(object==proxies.end())throw std::runtime_error("Missing column placement");
-            const auto& base=*object;
-            const auto placement=render::mat4::translate({base.center.x,base.center.y-base.half.y,base.center.z})*render::mat4::rotateY(base.yaw);
-            bake::CapturedBake::Draw captured;captured.path=asset;
-            for(const auto& node:model->bindWorld)captured.nodeWorld.push_back(placement*node);
-            captured.still.assign(captured.nodeWorld.size(),1);input.draws.push_back(std::move(captured));
-            const auto rules=Json::parse(R"({"types":{"column":{"view":{"model":"content/column.obj"}}}})");
-            input.sun.on=false;input.sky.sky=input.sky.ground={.1f,.15f,2.f};
-            const auto result=bake::runCapturedBake(input,read,
-                [&](const auto& file,const auto& bytes){std::ofstream out(project/file,std::ios::binary);
-                    out.write(bytes.data(),bytes.size());return bool(out);},{});
-            if(!result.error.empty())throw std::runtime_error(result.error);
+            column.x=6;column.type="runner";doc.data.entities.push_back(column);
+            const auto rules=Json::parse(R"({"types":{"column":{"view":{"model":"content/column.obj"}},"runner":{"move":{"speed":3},"view":{"model":"content/column.obj"}}}})");
+            const auto parsed=game::loadRules(rules);
+            const auto originalLights=doc.data.extra["lights"];
+            auto lights=originalLights;
+            lights.push(Json::parse(R"({"x":1,"z":3,"bake":"mixed"})"));
+            lights.push(Json::parse(R"({"x":5,"z":7,"bake":"baked","type":"spot"})"));
+            doc.data.extra.set("lights",lights);
             doc.path=(project/"field.json").string();
             auto draw=[&]{scene.frame(160,160,doc,false,"","",empty,0,1.5f,project.string(),rules);};
+            draw();
+            auto input=scene.captureLightBake(doc,project.string(),parsed);
+            if(input.nx!=17 || input.nz!=17 || input.heights.size()!=289 || input.draws.size()!=1 ||
+               input.draws.front().path!=asset || input.lights.size()!=2 || input.lights[0].bakedOnly || !input.lights[1].bakedOnly)
+                throw std::runtime_error("Unexpected Studio bake capture");
+            auto copy=doc;
+            try {
+                (void)scene.captureLightBake(copy,project.string(),parsed);
+                throw std::logic_error("Accepted stale document for baking");
+            } catch(const std::runtime_error&) {}
+            input.folder="field.bake";input.settings.pageSize=64;input.settings.texelsPerUnit=2;
+            input.settings.samples=8;input.settings.threads=2;input.settings.mode=bake::BakedMode::Subtractive;
+            input.settings.probeSpacing=2;input.settings.probeHeight=2;input.settings.probeSamples=16;
+            input.sun.on=false;input.sky.sky=input.sky.ground={.1f,.15f,2.f};
+            studio::StudioLightBakeJob job;
+            auto finish=[&]{
+                for(int i=0;i<2000;++i){
+                    if(auto result=job.poll())return *result;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                }
+                throw std::runtime_error("Timed out waiting for Studio background bake");
+            };
+            std::promise<void> entered,release;
+            const auto gate=release.get_future().share();
+            bool gated=false;
+            job.start(input,[&](const auto& file,auto& bytes){
+                if(!gated){gated=true;entered.set_value();gate.wait();}
+                return read(file,bytes);
+            },[](const auto&,const auto&){return true;});
+            const bool started=entered.get_future().wait_for(std::chrono::seconds(3))==std::future_status::ready;
+            job.cancel();release.set_value();
+            if(!started || finish().error!="cancelled")throw std::runtime_error("Background cancellation failed");
+            job.start(input,read,
+                [&](const auto& file,const auto& bytes){std::ofstream out(project/file,std::ios::binary);
+                    out.write(bytes.data(),bytes.size());return bool(out);});
+            const auto result=finish();
+            if(job.progress().fraction<=0)throw std::runtime_error("Missing background bake progress");
+            if(!result.error.empty())throw std::runtime_error(result.error);
+            std::cout<<"Captured static column, excluded moving unit, sampled 289 terrain heights\n";
             scene.setBakedSceneEnabled(true);
             for(int i=0;i<100 && (scene.bakedSceneStatus().getInt("lightmapped")<2 || !scene.bakedSceneStatus().getInt("probed"));++i){
                 draw();std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -89,6 +115,7 @@ int aiverseMain(int argc,char** argv) { @autoreleasepool {
             doc.path=(project/"other.json").string();draw();
             if(scene.bakedSceneStatus().getBool("loaded"))throw std::runtime_error("Scene leak across maps");
             std::cout<<"Baked terrain draws verified, blue channel changed at "<<changed<<" pixels\n";
+            doc.data.extra.set("lights",originalLights);
             scene.setBakedSceneEnabled(false);doc.path.clear();doc.data.entities.clear();++doc.revision;
         }
 
