@@ -95,8 +95,8 @@
       ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Record focused tests against the stage SHA.",
+      "status": "pass",
+      "note": "Console headless tests recorded on the implementation SHA. All 286 web tests and the native studio_session test passed locally.",
       "evidence": [
         "apps/studio-native/tests/StudioSessionTests.cpp"
       ]
@@ -132,5 +132,7 @@
       "studio.buildReveal"
     ]
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/studio-console-bfa1673fb.json"
+  ]
 }
