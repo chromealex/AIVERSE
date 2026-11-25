@@ -12,9 +12,9 @@ namespace aiverse::editor {
 class AnimationPreviewSessions {
     struct Preview {
         std::string project;
-        float ground = 0;
+        float ground = 0, yaw = .5f;
         int64_t token = 0;
-        std::unique_ptr<render::Model> model;
+        std::shared_ptr<const render::Model> model;
         render::AnimationGraphInstance player;
         render::Pose pose;
         std::vector<render::mat4> world;
@@ -81,6 +81,24 @@ class AnimationPreviewSessions {
         return out;
     }
 public:
+    struct DrawFrame {
+        std::shared_ptr<const render::Model> source;
+        render::Pose pose;
+        float yaw=.5f;
+    };
+    DrawFrame drawFrame(const std::string& project,bool rig) {
+        std::lock_guard lock(mutex_);
+        const auto& slot=panels_[rig?1:0];
+        if(!slot||slot->project!=project)return {};
+        DrawFrame result{slot->model,slot->pose,slot->yaw};
+        const auto climb=slot->player.locomotionReport();
+        if(climb.active){
+            const auto shift=climb.position-(slot->model->boundsMin+slot->model->boundsMax)*.5f;
+            for(size_t i=0;i<result.pose.size();++i)
+                if(slot->model->nodes[i].parent<0)result.pose[i].t=result.pose[i].t-shift;
+        }
+        return result;
+    }
     Json command(const Workspace& ws,const Json& params) {
         const auto panel=params.getStr("panel"),action=params.getStr("action");
         if(panel!="graph"&&panel!="rig")throw std::runtime_error("Unknown animation preview panel");
@@ -129,6 +147,7 @@ public:
         }
         const float ground=params.has("ground")?float(numeric(params["ground"])):slot->ground;
         if(params.has("ground")&&!slot->player.hasContacts())throw std::runtime_error("This graph has no contact rig");
+        if(params.has("yaw"))slot->yaw=float(numeric(params["yaw"]));
         slot->player.parameters()=std::move(controls);
         if(ground!=slot->ground)setGround(*slot,ground);
         return evaluate(*slot,float(dt));

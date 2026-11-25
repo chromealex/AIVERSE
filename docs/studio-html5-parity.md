@@ -221,3 +221,5 @@ Animation Graph and Animation Rig each own a native playback session. Their HTML
 Animation preview ground height and solver diagnostics run in the owning panel. On macOS the two-foot rig reported two stable supports at zero and none at −10 without advancing playback. Independent sessions are covered by studio_animation_preview. The live climbing readout still needs an articulated climbing fixture in the desktop app.
 
 Rig vector parameters appear as draggable targets in the skeleton view. Keep controls applies modified values to the selected graph scope as one undoable edit. On macOS a physical drag moved the solved wrist, and Save graph persisted the target while preserving its third component and the pole. Independent skinned mesh rendering remains open.
+
+Skinned preview stage: publish the evaluated native pose and draw its imported model on dedicated Graph and Rig GPU surfaces. Verify an actual weighted mesh in two poses.

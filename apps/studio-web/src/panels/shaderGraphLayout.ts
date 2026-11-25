@@ -70,7 +70,8 @@ export function shaderOutputNames(domain?:string):string[] {
 }
 
 export function setShaderOutput(graph:GraphSource,channel:string,id:string):GraphSource {
- if(!shaderOutputNames(graph.domain).includes(channel))return graph;
+ if(!shaderOutputNames(graph.domain).includes(channel)&&!Object.hasOwn(graph.outputs??{},channel))return graph;
+ if((graph.outputs?.[channel]??'')===id)return graph;
  if(id ? !graph.nodes?.some(n=>n.id===id) : channel==='color')return graph;
  const outputs={...graph.outputs};
  if(id)outputs[channel]=id;

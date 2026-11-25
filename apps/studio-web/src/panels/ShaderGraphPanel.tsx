@@ -175,6 +175,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
   setBusy(true);setError('');
   try{
    await invoke('studio.op',{expectedProject:projectPath,op:'shader_graph_create',params:{name:newName,domain:newDomain}});
+   if(saveScope.current.projectPath!==projectPath)return;
    setNames(old=>Array.from(new Set([...old,newName])).sort());setSearch('');
    setSelected(newName);setCreating(false);setNewName('');
   }catch(e){setError(String(e));}finally{setBusy(false);}
@@ -321,7 +322,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
           {['low','medium','high'].map(q=><option key={q}>{q}</option>)}</select></label>}
        </fieldset></details>
        <details><summary>Graph outputs</summary><fieldset>
-        {shaderOutputNames(draft.domain).map(channel=><label key={channel}>{channel}
+        {[...new Set([...shaderOutputNames(draft.domain),...Object.keys(draft.outputs??{})])].map(channel=><label key={channel}>{channel}
          <select value={draft.outputs?.[channel]??''} onChange={event=>{
           editDraft(setShaderOutput(draft,channel,event.target.value));setMessage('');setError('');
          }}><option value="" disabled={channel==='color'}>Unassigned</option>{sourceOptions}</select>

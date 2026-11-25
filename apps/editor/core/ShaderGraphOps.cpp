@@ -28,11 +28,11 @@ fs::path graphPath(const Workspace& ws, const std::string& name) {
     if(relative.empty() || relative=="." || *relative.begin()=="..") throw std::runtime_error("graph path escapes project");
     return path;
 }
-void writeGraph(const fs::path& file,const Json& graph,bool createOnly) {
+void createGraphFile(const fs::path& file,const Json& graph) {
     const auto bytes=graph.dump(2)+"\n";
     if(bytes.size()>256*1024)throw std::runtime_error("graph exceeds 256 KiB");
     fs::create_directories(file.parent_path());
-    if(createOnly&&fs::exists(file))throw std::runtime_error("Shader Graph already exists");
+    if(fs::exists(file))throw std::runtime_error("Shader Graph already exists");
     std::random_device random;
     fs::path directory;
     do {directory=file.parent_path()/(".shader-write-"+std::to_string(random()));}
@@ -45,7 +45,6 @@ void writeGraph(const fs::path& file,const Json& graph,bool createOnly) {
     std::ofstream stream(pending,std::ios::binary);
     stream<<bytes;stream.close();
     if(!stream)throw std::runtime_error("Cannot write Shader Graph");
-    if(!createOnly){fs::rename(pending,file);return;}
     // Publish the complete new asset without overwriting a concurrent creator.
 #if defined(__APPLE__)
     if(::renamex_np(pending.c_str(),file.c_str(),RENAME_EXCL)!=0)
@@ -86,7 +85,8 @@ void registerShaderGraphOps(Workspace& ws) {
         [&ws](const Json& p){
             const auto name=p.getStr("name");
             const auto file=graphPath(ws,name);
-            writeGraph(file,render::graph::makeDefault(p.getStr("domain")),true);
+            graph_asset::Transaction tx(file,ws.project.dir);
+            createGraphFile(file,render::graph::makeDefault(p.getStr("domain")));
             Json out=Json::object();out.set("name",Json::string(name));return out;
         }});
     ws.registerOp({"shader_graph_set","Validate and atomically save shaders/<name>.json. Existing assets require expected original graph; missing expected means create-only. Applying is separate.",schema,[&ws](const Json& p){

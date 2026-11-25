@@ -1322,6 +1322,7 @@ StudioScene::~StudioScene() {
         if(studioCyclorama_.ib.valid())device_->destroyBuffer(studioCyclorama_.ib);
         if (cube_.vb.valid()) device_->destroyBuffer(cube_.vb);
         if (cube_.ib.valid()) device_->destroyBuffer(cube_.ib);
+        if(animationModel_)releasePreviewModel(*animationModel_);
         if (materialSphere_) {
             releasePreviewModel(*materialSphere_);
             materialSphere_.reset();
@@ -2249,6 +2250,51 @@ void StudioScene::finishReplayTransaction() {
         rollbackReplayTransaction("failed",reason.empty()?"Replay candidate failed":reason);
     }
 }
+void StudioScene::drawAnimationPose(int width,int height,const std::shared_ptr<const render::Model>& source,
+                                    const render::Pose& pose,float yaw) {
+    if(!device_||width<2||height<2)return;
+    if(source!=animationSource_){
+        if(animationModel_){
+            if(!device_->waitForResourceIdle())throw std::runtime_error("Animation preview GPU busy");
+            releasePreviewModel(*animationModel_);
+            animationModel_.reset();
+            animationSource_.reset();
+        }
+        if(source){
+            auto model=std::make_unique<render::Model>(*source);
+            try {
+                if(!render::uploadModel(*device_,*model))throw std::runtime_error("Animation model upload failed");
+            } catch(...){releasePreviewModel(*model);throw;}
+            animationModel_=std::move(model);
+            animationSource_=source;
+        }
+    }
+    render::Camera camera;
+    camera.yaw=yaw;camera.pitch=.15f;camera.minDistance=.01f;camera.fovY=.6f;
+    if(source){
+        camera.target=(source->boundsMin+source->boundsMax)*.5f;
+        const auto size=source->boundsMax-source->boundsMin;
+        camera.distance=std::max({size.x,size.y,size.z,.3f})*2.1f*std::max(1.f,float(height)/width);
+    }
+    device_->beginFrame(width,height);
+    StudioFrameScope frame{*device_};
+    renderer_.beginScene(camera,width,height);
+    renderer_.lighting.skyColor={.8f,.85f,.9f};
+    renderer_.lighting.groundColor={.5f,.5f,.5f};
+    renderer_.lighting.fogDensity=0;
+    std::vector<render::mat4> world;
+    if(animationModel_&&pose.size()==animationModel_->nodes.size()){
+        render::worldMatrices(*animationModel_,pose,world);
+        render::ModelDraw draw;
+        draw.model=animationModel_.get();draw.nodeWorld=&world;draw.pose=&pose;
+        renderer_.drawModel(draw);
+    }
+    gfx::PassDesc pass;
+    pass.clearColor[0]=.07f;pass.clearColor[1]=.09f;pass.clearColor[2]=.135f;
+    renderer_.render(pass,&antialiasing_);
+    renderer_.resolvePostFx();
+}
+
 void StudioScene::frameSpectraDock(int framebufferWidth,int framebufferHeight) {
     if(!device_ || framebufferWidth<2 || framebufferHeight<2)return;
     // GPU updates/retirement happen between frames, before an active pass.

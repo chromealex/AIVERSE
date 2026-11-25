@@ -124,7 +124,7 @@ namespace studio = aiverse::studio;
     NSWindow* window_;
     WKWebView* web_;
     StudioMetalView* viewport_;
-    NSView* assetViews_[5];
+    NSView* assetViews_[int(studio::StudioSurface::Count)-int(studio::StudioSurface::Material)];
     StudioFxView* fxViewport_;
     StudioGameView* gameViewport_;
     StudioDeviceChromeView* gameChrome_;
@@ -172,7 +172,7 @@ public:
     }
     // The Scene's device is made on its render thread: the layers were captured on the main thread.
     void setLayers(void* scene, void* game, void* fx) {
-        for(int i=0;i<5;++i)assetLayers_[i]=(__bridge void*)shell_->assetViews_[i].layer;
+        for(int i=0;i<int(studio::StudioSurface::Count)-int(studio::StudioSurface::Material);++i)assetLayers_[i]=(__bridge void*)shell_->assetViews_[i].layer;
         sceneLayer_=scene;gameLayer_=game;fxLayer_=fx;
     }
     std::unique_ptr<aiverse::gfx::Device> createDevice(studio::StudioSurface surface) override {
@@ -330,7 +330,7 @@ private:
     __unsafe_unretained StudioShell* shell_;
     void* sceneLayer_=nullptr;
     void* gameLayer_=nullptr;
-    void* assetLayers_[5]={};
+    void* assetLayers_[int(studio::StudioSurface::Count)-int(studio::StudioSurface::Material)]={};
     void* fxLayer_=nullptr;
 };
 
@@ -782,10 +782,10 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
     fxViewport_.shell=self;fxViewport_.hidden=YES;
     [window_.contentView addSubview:fxViewport_
         positioned:(htmlComposite_?NSWindowBelow:NSWindowAbove) relativeTo:web_];
-    for(int i=0;i<5;++i){
-        NSView* view=i>=3?[[StudioCharacterSurface alloc] initWithFrame:NSZeroRect]:[[NSView alloc] initWithFrame:NSZeroRect];
+    for(int i=0;i<int(studio::StudioSurface::Count)-int(studio::StudioSurface::Material);++i){
+        NSView* view=i>=3&&i<=4?[[StudioCharacterSurface alloc] initWithFrame:NSZeroRect]:[[NSView alloc] initWithFrame:NSZeroRect];
         view.wantsLayer=YES;view.layer=[CAMetalLayer layer];view.hidden=YES;
-        if(i>=3){
+        if(i>=3&&i<=4){
             StudioCharacterSurface* character=(StudioCharacterSurface*)view;
             character.photo=[CALayer layer];character.photo.hidden=YES;
             view.layer.masksToBounds=YES;
@@ -1031,7 +1031,7 @@ static NSString* studioFloatPanel(NSWindow* window,NSDictionary<NSString*,NSWind
         [window_.contentView addSubview:viewport_ positioned:(htmlComposite_ ? NSWindowBelow : NSWindowAbove) relativeTo:web_];
         core_->surfaceDetached(studio::StudioSurface::Scene);
     }
-    for(int i=0;i<5;++i)if(assetViews_[i].window==window){
+    for(int i=0;i<int(studio::StudioSurface::Count)-int(studio::StudioSurface::Material);++i)if(assetViews_[i].window==window){
         NSView* view=assetViews_[i];[view removeFromSuperview];view.hidden=YES;
         [window_.contentView addSubview:view positioned:NSWindowAbove relativeTo:web_];
         core_->surfaceDetached(static_cast<studio::StudioSurface>(int(studio::StudioSurface::Material)+i));

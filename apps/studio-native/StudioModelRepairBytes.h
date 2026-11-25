@@ -13,11 +13,12 @@
 #include <string>
 #include <stdexcept>
 #include <limits>
+#include "engine/view/MaterialLibraryFiles.h"
 
 namespace aiverse::studio {
 inline constexpr size_t StudioResourceEditBudget=8u*1024u*1024u;
 inline bool studioRepairModelExtension(const std::filesystem::path& path){
-    return path.extension()==".gltf"||path.extension()==".glb"||path.extension()==".obj"||path.extension()==".mtl"||path.extension()==".dae";
+    return view::materialAssetPath(path.generic_string())||path.extension()==".gltf"||path.extension()==".glb"||path.extension()==".obj"||path.extension()==".mtl"||path.extension()==".dae";
 }
 inline bool studioRepairGltfExtension(const std::filesystem::path& path){
     return path.extension()==".gltf"||path.extension()==".glb";

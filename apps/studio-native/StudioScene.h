@@ -411,6 +411,8 @@ public:
     // Scene brush ring under the cursor (radius in world units); hidden when visible=false.
     // Texture Resources / Frame Capture panels: live GPU textures (format-based size estimate) and draw calls.
     Json textureResources() const;
+    void drawAnimationPose(int width,int height,const std::shared_ptr<const render::Model>& source,
+                           const render::Pose& pose,float yaw);
     uint32_t drawCalls() const { return renderer_.drawCalls(); }
     // Project extension gizmos (editor/extensions.lua scene_gizmos): world-space lines, circles (screen px), points.
     struct OverlayShape { int kind = 0; render::float3 a{}, b{}; float radius = 8, thickness = 2; uint8_t r = 90, g = 180, bl = 255; std::string text; };   // kind: 1 line, 2 circle, 3 point, 4 label
@@ -571,6 +573,8 @@ private:
     std::string planetChartIdentity_;
     std::string sparseTerrainError_;
     bool terrainWasShown_=false,terrainCavernsAuthored_=false;
+    std::shared_ptr<const render::Model> animationSource_;
+    std::unique_ptr<render::Model> animationModel_;
     std::unique_ptr<render::Model> materialSphere_;
     std::unique_ptr<render::Model> buildingPreview_;
     bool buildingPreviewGpuReady_=false;

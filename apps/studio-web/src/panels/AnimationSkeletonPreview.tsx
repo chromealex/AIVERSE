@@ -1,5 +1,6 @@
 import {useEffect,useRef,useState,type PointerEvent} from 'react';
 import {invoke} from '../bridge';
+import SpectraDockViewport from './SpectraDockViewport';
 
 type Point=[number,number,number];
 type Inputs=Record<string,number|Point>;
@@ -43,11 +44,13 @@ export default function AnimationSkeletonPreview({projectPath,graph,scope,panel,
  const [plane,setPlane]=useState<Plane>('Front'),[fit,setFit]=useState<Point[]>([]),[selected,select]=useState(-1);
  const [inputs,setInputs]=useState<Inputs>({}),[error,setError]=useState('');
  const drag=useRef<{pointer:number;name:string;start:DOMPoint;value:Point}|null>(null);
+ const [showMesh,setShowMesh]=useState(false),[yaw,setYaw]=useState(.5);
+ const pendingYaw=useRef<number|undefined>(undefined);
  const pendingGround=useRef<number|undefined>(undefined);
  const running=useRef(false),changes=useRef<Inputs>({}),steps=useRef(0);
  useEffect(()=>{
   let active=true,token=0,timer=0,last=performance.now();
-  drag.current=null;pendingGround.current=undefined;
+  drag.current=null;pendingGround.current=undefined;pendingYaw.current=undefined;setYaw(.5);
   setOpened(null);setFrame(null);setError('');select(-1);setPlaying(false);running.current=false;changes.current={};steps.current=0;
   async function command<T>(params:Record<string,unknown>){
    const response=await invoke('studio.op',{op:'animation_graph_preview',expectedProject:projectPath,params:{panel,...params}});
@@ -61,8 +64,9 @@ export default function AnimationSkeletonPreview({projectPath,graph,scope,panel,
     last=now;
     const edits=changes.current;changes.current={};if(steps.current)steps.current--;
     const height=pendingGround.current;pendingGround.current=undefined;
-    if(dt||height!==undefined||Object.keys(edits).length){
-     const next=await command<Frame>({action:'frame',token,dt,inputs:edits,...(height===undefined?{}:{ground:height})});
+    const angle=pendingYaw.current;pendingYaw.current=undefined;
+    if(dt||height!==undefined||angle!==undefined||Object.keys(edits).length){
+     const next=await command<Frame>({action:'frame',token,dt,inputs:edits,...(angle===undefined?{}:{yaw:angle}),...(height===undefined?{}:{ground:height})});
      if(active)setFrame(next);
     }
     if(active)timer=window.setTimeout(tick,33);
@@ -91,8 +95,13 @@ export default function AnimationSkeletonPreview({projectPath,graph,scope,panel,
    <button aria-label="Step skeleton preview" disabled={!opened||playing} onClick={()=>steps.current++}>Step</button>
    <button onClick={()=>setRestart(n=>n+1)}>Restart</button>
    <button disabled={!frame} onClick={()=>setFit(poseAndControls(frame!.points,inputs))}>Fit pose</button>
+   <button disabled={!opened} aria-pressed={showMesh} onClick={()=>setShowMesh(v=>!v)}>Model preview</button>
    {opened&&!bind&&Object.keys(inputs).length>0&&<button disabled={busy||!Object.keys(edits).length} onClick={()=>onKeep(edits)}>Keep controls</button>}
   </div>
+  {showMesh&&opened&&<div className="motion-model-preview">
+   <SpectraDockViewport id={panel==='rig'?'animationRig':'animationGraph'} label="Animated model preview"/>
+   <label>Model rotation<input type="range" min={-Math.PI} max={Math.PI} step=".01" value={yaw} onChange={e=>{const angle=e.target.valueAsNumber;setYaw(angle);pendingYaw.current=angle;}}/></label>
+  </div>}
   {error&&<p role="alert">{error}</p>}
   {opened&&frame?<div className="motion-preview-page">
    <div className="motion-preview-stage"><svg viewBox={[area.left,area.top,area.width,area.height].join(' ')} aria-label="Evaluated skeleton">

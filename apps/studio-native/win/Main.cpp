@@ -225,7 +225,7 @@ public:
                                 width, height, nullptr, nullptr, instance, nullptr);
         if (!main_) { fatal("The main window could not be created"); return 1; }
         extendClientOverCaption(main_);
-        for (int i = 0; i < 8; ++i) {
+        for (int i = 0; i < int(studio::StudioSurface::Count); ++i) {
             surfaces_[i] = CreateWindowExW(0, kSurfaceClass, nullptr, WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN, 0, 0, 16, 16,
                                            main_, nullptr, instance, nullptr);
             SetWindowLongPtrW(surfaces_[i], GWLP_USERDATA, LONG_PTR(i));
@@ -559,7 +559,7 @@ public:
         WinShell* s = gShell;
         if (s && s->core_) {
             const int which = int(GetWindowLongPtrW(h, GWLP_USERDATA));
-            if(which>=6)return s->characterInput(h,msg,wp,lp,static_cast<studio::StudioSurface>(which));
+            if(which==int(studio::StudioSurface::Character)||which==int(studio::StudioSurface::Appearance))return s->characterInput(h,msg,wp,lp,static_cast<studio::StudioSurface>(which));
             if(which>=3)return DefWindowProcW(h,msg,wp,lp);
             const LRESULT handled = which==0?s->sceneInput(h,msg,wp,lp):
                 which==1?s->gameInput(h,msg,wp,lp):
@@ -948,7 +948,7 @@ private:
             if ((*it)->hwnd == hwnd) { floats_.erase(it); return; }
     }
     void releaseSurfaces(HWND host) {
-        for (int i = 0; i < 8; ++i) {
+        for (int i = 0; i < int(studio::StudioSurface::Count); ++i) {
             HWND child = surfaces_[i];
             if (!child || GetParent(child) != host) continue;
             ShowWindow(child, SW_HIDE);
@@ -1315,7 +1315,7 @@ private:
     std::string project_;
     bool dev_ = false;
     HWND main_ = nullptr;
-    HWND surfaces_[8] = {}; // Scene, Game, FX
+    HWND surfaces_[int(studio::StudioSurface::Count)] = {}; // Scene, Game, FX
     Com<ICoreWebView2Controller> controller_;
     Com<ICoreWebView2> web_;
     std::unique_ptr<studio::StudioHost> core_;
