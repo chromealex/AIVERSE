@@ -298,8 +298,39 @@ float GameOverlays::groundY(const OverlayDef& d, float x, float z, float anchorG
     return lift_;
 }
 
+void GameOverlays::appendPlan(PlanPrimitive primitive) {
+    if (plan_->size() >= 65536) throw std::runtime_error("Overlay plan is too dense; select fewer overlays");
+    plan_->push_back(primitive);
+}
+
+std::vector<GameOverlays::PlanPrimitive> GameOverlays::groundPlan(const GameScene& scene, const MapGrid& grid, double time) {
+    if (dev_ || plan_) throw std::logic_error("Overlay plan requires a private CPU preview");
+    std::vector<PlanPrimitive> primitives;
+    plan_ = &primitives;
+    struct Reset {
+        std::vector<PlanPrimitive>*& target;
+        ~Reset() { target = nullptr; }
+    } reset{plan_};
+    camTarget_ = ctx_.hasCursor ? ctx_.cursor : float3{grid.w * 0.5f, 0, grid.h * 0.5f};
+    // A still frame shows a fully entered condition, including overlays with a fade-in.
+    double fade = 0;
+    for (const auto& def : set_.defs) fade = std::max(fade, double(def.style.fadeIn));
+    if (fade > 0) {
+        prepare(scene, time - fade, nullptr, grid, float(std::max(grid.w, grid.h)));
+        for (uint16_t index : worldDefs_) if (set_.defs[index].enabled) gather(set_.defs[index], index, false);
+    }
+    prepare(scene, time, nullptr, grid, float(std::max(grid.w, grid.h)));
+    for (uint16_t index : worldDefs_) {
+        const auto& def = set_.defs[index];
+        if (!def.enabled || def.style.space != OvSpace::Ground || !gather(def, index, false)) continue;
+        for (const auto& instance : insts_) emit(def, index, instance);
+    }
+    return primitives;
+}
+
 void GameOverlays::tri(const OverlayDef& d, float3 a, float3 b, float3 c, uint32_t col, gfx::TextureHandle tex, const float* uv) {
     if ((col >> 24) == 0) return;
+    if (plan_) { appendPlan({a, b, c, col, true}); return; }
     const bool batch = d.style.onTop || d.style.additive || tex.valid();
     if (!batch) { if (r_) r_->triangle(a, b, c, col); return; }
     if (!dev_) return;
@@ -316,6 +347,7 @@ void GameOverlays::seg(const OverlayDef& d, float3 a, float3 b, uint32_t col) {
     const bool batch = d.style.onTop || d.style.additive;
     float w = d.style.thickness;
     if (w <= 0) {
+        if (plan_) { appendPlan({a, b, {}, col, false}); return; }
         if (!batch) { if (r_) r_->line(a, b, col); return; }
         w = 0.035f;   // hairline in the batch: a thin ribbon
     }

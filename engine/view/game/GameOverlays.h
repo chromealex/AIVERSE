@@ -112,6 +112,13 @@ public:
     bool outlineHovered() const { return outlineHovered_; }
     const std::vector<OverlayMinimapMark>& minimapMarks() const { return marks_; }
 
+    struct PlanPrimitive {
+        render::float3 a, b, c;
+        uint32_t color;
+        bool triangle;
+    };
+    // Capture the ground pass of a private CPU preview using the same shape emitter as drawWorld.
+    std::vector<PlanPrimitive> groundPlan(const GameScene&, const MapGrid&, double time);
     void drawWorld(render::Renderer3D& r, const GameScene& s, double time, const std::vector<uint8_t>* vision, const MapGrid& grid, const GameView& view);
     void drawScreen(const render::Camera& cam, const GameScene& s, float w, float h, float ox, float oy, void* drawList, const GameView& view);
     // view.draw batches of the view scripts (window points), in layer order; textures through this TextureCache.
@@ -127,6 +134,8 @@ public:
     size_t popupCount() const { return popups_.size(); }
 
 private:
+    std::vector<PlanPrimitive>* plan_ = nullptr;
+    void appendPlan(PlanPrimitive primitive);
     struct Inst {
         render::float3 pos;              // world point (y = ground)
         int obj = -1;                    // scene object index

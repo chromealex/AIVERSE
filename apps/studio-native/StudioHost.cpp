@@ -1,4 +1,5 @@
 #include "StudioHierarchyGroups.h"
+#include "StudioOverlayPlan.h"
 #include "apps/editor/core/LightBakeOps.h"
 #include "StudioDocumentIds.h"
 #include "engine/view/game/GameLights.h"
@@ -104,6 +105,7 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
     : platform_(platform), engineRoot_(engineRoot), htmlComposite_(htmlComposite) {
     // The project opens asynchronously after the UI loads (splash and progress).
     session_ = std::make_unique<StudioSession>(engineRoot, std::string());
+    registerStudioOverlayPlan(*session_);
     session_->setPlanetViewAgentProvider([this](const std::string& name,const Json& args){return planetViewAgentRequest(name,args);});
     session_->setMaterialSlotProvider([this](const std::string& asset) {
         return preview_ ? onScene([&] { return preview_->modelMaterialSlots(asset); }) : std::vector<std::string>{};

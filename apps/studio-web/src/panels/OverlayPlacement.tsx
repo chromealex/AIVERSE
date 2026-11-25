@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import OverlayPlan from './OverlayPlan';
 import { invoke } from '../bridge';
 import type { StudioGraphDocumentScope } from '../types';
 import { StudioAlert, StudioField, StudioInput, StudioPanel, StudioSection, StudioSelect } from '../ui';
@@ -24,7 +25,7 @@ function TerrainPatch({data}:{data:Placement}) {
   </figure>;
 }
 
-export default function OverlayPlacement({scope,tools}:{scope?:StudioGraphDocumentScope;tools:ReactNode}) {
+export default function OverlayPlacement({scope,tools,selectionKey}:{selectionKey:string;scope?:StudioGraphDocumentScope;tools:ReactNode}) {
   const [type,setType] = useState('');
   const [x,setX] = useState('');
   const [z,setZ] = useState('');
@@ -49,6 +50,7 @@ export default function OverlayPlacement({scope,tools}:{scope?:StudioGraphDocume
     return ()=>{live=false;};
   },[projectPath,epoch,revision,type,x,z]);
   return <StudioPanel title="Overlays">
+    {scope && data?.planar && <OverlayPlan selectionKey={selectionKey} scope={scope} placeType={type} x={x} z={z} pick={(px,pz)=>{setX(String(px));setZ(String(pz));}}/>}
     <StudioSection title="Placement preview">
       {!scope?<p>Open a map to preview placement.</p>:<>
         {error && <StudioAlert tone="danger">{error}</StudioAlert>}

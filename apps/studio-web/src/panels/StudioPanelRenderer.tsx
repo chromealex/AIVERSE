@@ -124,7 +124,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'postfx': return <PostFxPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'lightbake': return <LightBakePanel key={snapshot?.graphDocument?.epoch} scope={snapshot?.graphDocument}/>;
       case 'roads': return <RoadsPanel key={snapshot?.graphDocument?.epoch} scope={snapshot?.graphDocument} advanced={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
-      case 'overlays': return <OverlayPlacement key={snapshot?.graphDocument?.epoch} scope={snapshot?.graphDocument} tools={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
+      case 'overlays': return <OverlayPlacement selectionKey={JSON.stringify([snapshot?.selectedIds,snapshot?.scene.entities.filter(e=>e.visible===false).map(e=>e.id),snapshot?.project.historyVersion])} key={snapshot?.graphDocument?.epoch} scope={snapshot?.graphDocument} tools={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
       case 'terrain': case 'water': case 'tiles': case 'generate':
       case 'effects': case 'models':
       case 'fields': case 'physis': case 'raid': case 'balance': case 'fx_functions': case 'modeling':

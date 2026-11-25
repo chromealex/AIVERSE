@@ -3,6 +3,12 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-native/StudioOverlayPlan.h",
+    "apps/editor/core/OverlayPreviewTerritory.h",
+    "apps/studio-native/tests/overlay-plan/run.py",
+    "apps/studio-native/tests/overlay-plan/check.js",
+    "apps/studio-web/src/panels/OverlayPlan.tsx",
+    "engine/view/game/GameOverlaysDraw.cpp",
     "apps/editor/core/OverlayPreviewGrid.h",
     "apps/editor/core/OverlayOps.cpp",
     "apps/studio-web/src/panels/OverlayPlacement.tsx",
