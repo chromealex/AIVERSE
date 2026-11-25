@@ -140,6 +140,8 @@ struct GameScene {
     // view.entity_fx overrides (scale, opacity, colour) by entity; null = none (EntityFx.h)
     std::shared_ptr<EntityFxStore> entityFx;
     std::vector<SceneObject> objects;
+    PlanetForestVisualSnapshot planetForest;
+    PlanetForestMotionHistory planetForestMotion;
     std::map<uint64_t, render::mat4> entityFrames; // optional final frames supplied by a native presentation host
     std::vector<std::pair<render::float3, render::float3>> roads;
     std::vector<render::float3> moveMarkers;
@@ -757,6 +759,8 @@ public:
     // Match maps: the simulation's Surface is the source of bodies, orbits, corner heights and cell flags
     // (map JSON only for visual keys). Call after the sim is set up, before buildTerrain().
     void setSimWorld(std::shared_ptr<const Surface> surf, const MapGrid& grid, const Json& map);
+    // Render-owner barrier; compares immutable snapshot identity (also rollback).
+    bool syncSimPlanetTerrain(const MapGrid& grid);
     // Sim-space positions (anchor(body) + local, Surface.h) <-> body + body-local position.
     static bool simToBody(render::float3 sim, int& body, render::float3& local);
     static render::float3 bodyToSim(int body, render::float3 local) { return anchorF(body) + local; }
@@ -1209,6 +1213,9 @@ private:
     render::float3 camPos_;
     // planets
     PlanetRenderer planets_;
+    // Authored visual detail retained only for bodies with explicit fine relief.
+    struct PlanetDetailBaseline { std::vector<int16_t> corners,detail; int scale=0; };
+    std::vector<PlanetDetailBaseline> planetDetailBaseline_;
     PlanetCaveDraw planetCaveDraw_;
     GamePlanetGroundFx planetGroundFx_;   // territory, rock, roads, lanes on sphere faces
     PlanetFlora planetFlora_;            // TerraWeave trees and rocks on planet bodies

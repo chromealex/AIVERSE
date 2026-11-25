@@ -23,7 +23,8 @@
     "apps/editor/core/Workspace.cpp",
     "docs/editor-native-ecs-inspector.md",
     "CMakeLists.txt",
-    "apps/editor/core/StudioPlayTools.cpp"
+    "apps/editor/core/StudioPlayTools.cpp",
+    "apps/studio-native/StudioAgentHistoryPolicy.h"
   ],
   "traits": {
     "editable": true,
@@ -37,7 +38,7 @@
       "note": "The local paused map preview reported eleven removals. The native handler checked the token and applied once. The exact original map and edited map were recovered by one undo and one redo. The Studio suite exercised the panel contract.",
       "evidence": [
         "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
-        "docs/evidence/feature-gate-cda38a15c-web.json"
+        "docs/evidence/feature-gate-9feb8dd61-web.json"
       ]
     },
     "architecture": {
@@ -53,7 +54,7 @@
       "note": "The local paused map preview reported eleven removals. The native handler checked the token and applied once. The exact original map and edited map were recovered by one undo and one redo. The Studio suite exercised the panel contract.",
       "evidence": [
         "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
-        "docs/evidence/feature-gate-cda38a15c-web.json"
+        "docs/evidence/feature-gate-9feb8dd61-web.json"
       ]
     },
     "skill": {
@@ -105,10 +106,11 @@
       ]
     },
     "performance": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The 2000-entity native fixture measured preview/apply, exercised 200 removals among 1999 roads and verified one-step undo. Bulk compaction uses a linear ordinal table and a bounded number of traversals.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/agent-handoffs/studio-play-review-bulk-2026-11-25.md",
+        "apps/studio-native/tests/StudioSessionTests.cpp"
       ]
     },
     "platforms": {
@@ -148,7 +150,7 @@
       "note": "The local paused map preview reported eleven removals. The native handler checked the token and applied once. The exact original map and edited map were recovered by one undo and one redo. The Studio suite exercised the panel contract.",
       "evidence": [
         "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
-        "docs/evidence/feature-gate-cda38a15c-web.json"
+        "docs/evidence/feature-gate-9feb8dd61-web.json"
       ]
     },
     "handoff": {
@@ -191,9 +193,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-cda38a15c-studio-contracts.json",
-    "docs/evidence/feature-gate-cda38a15c-web.json",
-    "docs/evidence/feature-gate-cda38a15c-typecheck.json",
-    "docs/evidence/feature-gate-cda38a15c-skill-audit.json"
+    "docs/evidence/feature-gate-9feb8dd61-studio-contracts.json",
+    "docs/evidence/feature-gate-9feb8dd61-web.json",
+    "docs/evidence/feature-gate-9feb8dd61-typecheck.json",
+    "docs/evidence/feature-gate-9feb8dd61-skill-audit.json"
   ]
 }

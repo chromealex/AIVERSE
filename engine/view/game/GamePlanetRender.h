@@ -31,6 +31,8 @@ public:
     void init(gfx::Device& dev, const TerrainLook& look, const render::FileReader& read, const std::string& contentBase);
     void shutdown(gfx::Device& dev);
     void setWorld(const PlanetWorld& w);
+    // Same topology only; used after owner height publication.
+    void bindSimSurface(std::shared_ptr<const Surface> surf) { world_.sim=std::move(surf); }
     const PlanetWorld& world() const { return world_; }
     bool active() const { return !world_.empty(); }
     const PlanetSurface* surface(int body) const { return body >= 0 && size_t(body) < bodies_.size() && bodies_[size_t(body)].surf ? &*bodies_[size_t(body)].surf : nullptr; }
@@ -40,6 +42,7 @@ public:
     void updateHeights(int body, const std::vector<int16_t>& corners);   // only chunks over changed corners rebuild
     // Cell flags of a body changed (painting): colours / splat of every chunk of that body rebuild.
     void updateFlags(int body, const std::vector<uint8_t>& flags);
+    void updateSeaLevel(int body,float level){if(body>=0&&size_t(body)<world_.bodies.size())world_.bodies[size_t(body)].seaLevel=level;}
     // Explicit detail heights of a body changed (editor detail sculpt; same scale as drawn): rebuilds the
     // affected chunks. Returns false when the body draws no detail at that scale (caller re-sets the world).
     bool updateDetail(int body, const std::vector<int16_t>& detail);

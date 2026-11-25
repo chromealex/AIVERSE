@@ -1,0 +1,2 @@
+# Stage 20
+Geometry3D.h adds standalone vector primitives, box/sphere overlaps, ray-box/sphere/plane/triangle intersections and barycentric hit data. Forward ray parameters, not metric distance unless direction normalized. Floating point; near degeneracies require testing. Catalog 0.2.0 and skill updated. No builds/tests. Next closest triangle/segment and capsule queries. Branch feature/world-processes-stage31-bidirectional-handles

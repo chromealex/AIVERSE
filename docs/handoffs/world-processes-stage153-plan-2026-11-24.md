@@ -1,0 +1,2 @@
+# Stage 153 — plan
+Base 7cad78bf466886ddded0805abbbf8fd1a76c4303. Current-only visibility: viewer 0 unrestricted; other viewers use exact canonical stacked-grid bytes, only 2 visible. Physical motion visibility follows current centre, not planted site. Invalid/missing field fails closed. Suppress all dynamic-owner cosmetic tree fallback in restricted view (stable opt-in resource, not mutable binding count). Rock scatter stays static. No history cache, simulation change or network security claim. Add CPU regression and record actual verification.

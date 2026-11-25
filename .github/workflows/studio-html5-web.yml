@@ -6,12 +6,20 @@ on:
       - 'apps/studio-web/**'
       - 'apps/studio-native/**'
       - 'tools/studio/**'
+      - 'apps/editor/core/**'
+      - 'engine/pack/Sha256.*'
+      - 'tools/mcp/**'
+      - 'CMakeLists.txt'
       - '.github/workflows/studio-html5-web.yml'
   pull_request:
     paths:
       - 'apps/studio-web/**'
       - 'apps/studio-native/**'
       - 'tools/studio/**'
+      - 'apps/editor/core/**'
+      - 'engine/pack/Sha256.*'
+      - 'tools/mcp/**'
+      - 'CMakeLists.txt'
       - '.github/workflows/studio-html5-web.yml'
   workflow_dispatch:
 
@@ -85,17 +93,17 @@ jobs:
             -DCMAKE_BUILD_TYPE=Debug \
             -DAIVERSE_BUILD_EDITOR=ON \
             -DAIVERSE_BUILD_CLIENT=OFF \
-            -DAIVERSE_BUILD_TOOLS=OFF \
+            -DAIVERSE_BUILD_TOOLS=ON \
             -DAIVERSE_BUILD_TESTS=ON \
             -DAIVERSE_BUILD_STUDIO_HTML5=ON
       - name: Compile Metal host and native contracts
         run: |
           cmake --build build/studio-native-ci \
-            --target aiverse_studio aiverse_studio_content_tests aiverse_studio_asset_catalog_tests aiverse_studio_asset_transfer_tests aiverse_studio_move_journal_tests aiverse_studio_visual_picking_tests aiverse_studio_model_picking_tests aiverse_studio_session_tests aiverse_studio_lighting_validation_tests aiverse_studio_material_validation_tests aiverse_studio_pbr_adapter_tests aiverse_studio_shader_graph_name_tests aiverse_studio_shader_graph_draft_tests aiverse_studio_light_preview_math_tests aiverse_studio_authored_lights_tests aiverse_studio_fps_lighting_contract_tests aiverse_studio_fps_lighting_document_tests aiverse_studio_scene_nodes_tests aiverse_studio_document_visuals_tests aiverse_studio_viewport_layout_tests aiverse_studio_terrain_tests aiverse_studio_render_lighting_tests \
+            --target aiverse_studio aiversemcp aiverse_studio_owner_history_tests aiverse_studio_content_tests aiverse_studio_asset_catalog_tests aiverse_studio_asset_transfer_tests aiverse_studio_move_journal_tests aiverse_studio_visual_picking_tests aiverse_studio_model_picking_tests aiverse_studio_session_tests aiverse_studio_lighting_validation_tests aiverse_studio_material_validation_tests aiverse_studio_pbr_adapter_tests aiverse_studio_shader_graph_name_tests aiverse_studio_shader_graph_draft_tests aiverse_studio_light_preview_math_tests aiverse_studio_authored_lights_tests aiverse_studio_fps_lighting_contract_tests aiverse_studio_fps_lighting_document_tests aiverse_studio_scene_nodes_tests aiverse_studio_document_visuals_tests aiverse_studio_viewport_layout_tests aiverse_studio_terrain_tests aiverse_studio_render_lighting_tests \
             --parallel 3
       # studio_metal_lighting is left out: it opens an NSWindow and needs a Metal device.
       - name: Run native contract tests
-        run: ctest --test-dir build/studio-native-ci --output-on-failure --no-tests=error -R '^studio_(content_directory|asset_catalog|asset_transfers|move_journal|visual_picking|model_picking|session|shader_graph_name|shader_graph_draft|pbr_adapter|material_validation|material_schema|lighting_validation|light_preview_math|authored_lights|fps_lighting_contract|fps_lighting_document|scene_nodes|document_visuals|viewport_layout|terrain_geometry|render_lighting)$'
+        run: ctest --test-dir build/studio-native-ci --output-on-failure --no-tests=error -R '^studio_(content_directory|asset_catalog|asset_transfers|move_journal|visual_picking|model_picking|session|shader_graph_name|shader_graph_draft|pbr_adapter|material_validation|material_schema|lighting_validation|light_preview_math|authored_lights|fps_lighting_contract|fps_lighting_document|scene_nodes|document_visuals|viewport_layout|terrain_geometry|render_lighting|owner_history|mcp_registry)$'
 
   windows-native:
     name: Windows HTML5 + Vulkan native host (MSVC)
@@ -114,11 +122,11 @@ jobs:
           npm install --no-audit --no-fund
           npm run build
       - name: Configure Studio (Visual Studio 2022, x64)
-        run: cmake -S . -B build/studio-windows-ci -G "Visual Studio 17 2022" -A x64 -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_CLIENT=OFF -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_BUILD_STUDIO_HTML5=ON
+        run: cmake -S . -B build/studio-windows-ci -G "Visual Studio 17 2022" -A x64 -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TOOLS=ON -DAIVERSE_BUILD_CLIENT=OFF -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_BUILD_STUDIO_HTML5=ON
       - name: Build AiverseStudio.exe and the session contract
-        run: cmake --build build/studio-windows-ci --config Release --target aiverse_studio aiverse_studio_session_tests --parallel 4
+        run: cmake --build build/studio-windows-ci --config Release --target aiverse_studio aiversemcp aiverse_studio_owner_history_tests aiverse_studio_session_tests aiverse_studio_asset_transfer_tests aiverse_studio_move_journal_tests --parallel 4
       - name: Studio session contract (Windows)
-        run: ctest --test-dir build/studio-windows-ci -C Release --output-on-failure --no-tests=error -R "^studio_session$"
+        run: ctest --test-dir build/studio-windows-ci -C Release --output-on-failure --no-tests=error -R "^studio_(session|asset_transfers|move_journal|owner_history|mcp_registry)$"
       - name: Check the package (exe, WebView2 loader, UI)
         shell: bash
         run: |

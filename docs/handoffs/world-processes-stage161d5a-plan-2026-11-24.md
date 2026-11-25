@@ -1,0 +1,2 @@
+# Stage 161D5a — scope
+Transient project/map-scoped Scene body selection (auto or explicit surface body). No document edit. Continuous selected direct-plant relocation in native Scene with a read-only ghost and one validated MapDoc edit on release; stale context, live mode, invalid hit and Escape fail closed. Existing one-click relocation remains supported. Native typed bridge and panel controls. Mac verification deferred; MCP and camera-local sampling separate.

@@ -53,6 +53,7 @@ PlanetWorld loadPlanetWorld(const Json& map, std::vector<std::string>* warnings)
     const Json& wj = map["world"];
     if (!wj.isObject() || !wj["bodies"].isArray()) return w;
     auto warn = [&](const std::string& m) { if (warnings) warnings->push_back("world: " + m); };
+    w.forestManifest = wj["terraweaveForest"];
     std::vector<std::string> parents;
     for (const Json& bj : wj["bodies"].items()) {
         PlanetBody b;
@@ -167,6 +168,7 @@ PlanetWorld planetWorldFromSim(std::shared_ptr<const Surface> surf, const std::v
     PlanetWorld w;
     if (!surf || surf->bodies.empty()) return w;
     w.sim = surf;
+    w.forestManifest = visual.forestManifest;
     w.start = surf->startBody;
     for (size_t i = 0; i < surf->bodies.size(); ++i) {
         const BodyDef& d = surf->bodies[i];

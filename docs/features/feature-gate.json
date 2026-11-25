@@ -3,6 +3,7 @@
   "id": "feature-gate",
   "owner": "agents",
   "changed_paths": [
+    "engine/platform/EnhancedInputConfig.h",
     "AGENTS.md",
     "tools/agents/check_feature.py",
     "tools/agents/audit_compliance.py",
@@ -56,6 +57,7 @@
     "tools/studio/test_build_config.py",
     "tools/studio/test_content_layout.py",
     "tools/studio/test_reference_pin_zoom.py",
+    "tools/studio/verify_headless.sh",
     "tools/studio/test_scene_tools.py",
     "apps/studio-web/tests/nested-dock.mjs",
     "CMakeLists.txt",
@@ -107,8 +109,8 @@
       "evidence": [
         "skills/workflow/aiverse-new-feature/SKILL.md",
         "docs/evidence/integration-acceptance-d5608fb7f.json",
-        "docs/evidence/feature-gate-cda38a15c-catalog.log.txt",
-        "docs/evidence/feature-gate-cda38a15c-skill-audit.log.txt"
+        "docs/evidence/feature-gate-9feb8dd61-catalog.log.txt",
+        "docs/evidence/feature-gate-9feb8dd61-skill-audit.log.txt"
       ]
     },
     "mcp": {
@@ -184,9 +186,9 @@
       "evidence": [
         "docs/evidence/integration-tools-b954cd47a.json",
         "docs/evidence/feature-readiness-stdio-b954cd47a.json",
-        "docs/evidence/feature-gate-cda38a15c-feature-suite.log.txt",
-        "docs/evidence/feature-gate-cda38a15c-native-project.log.txt",
-        "docs/evidence/feature-gate-cda38a15c-contracts.log.txt"
+        "docs/evidence/feature-gate-9feb8dd61-feature-suite.log.txt",
+        "docs/evidence/feature-gate-9feb8dd61-native-project.log.txt",
+        "docs/evidence/feature-gate-9feb8dd61-contracts.log.txt"
       ]
     },
     "handoff": {
@@ -232,13 +234,13 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-cda38a15c-contracts.json",
-    "docs/evidence/feature-gate-cda38a15c-catalog.json",
-    "docs/evidence/feature-gate-cda38a15c-skill-audit.json",
-    "docs/evidence/feature-gate-cda38a15c-feature-suite.json",
-    "docs/evidence/feature-gate-cda38a15c-native-project.json",
-    "docs/evidence/feature-gate-cda38a15c-web.json",
-    "docs/evidence/feature-gate-cda38a15c-studio-contracts.json",
-    "docs/evidence/feature-gate-cda38a15c-typecheck.json"
+    "docs/evidence/feature-gate-9feb8dd61-contracts.json",
+    "docs/evidence/feature-gate-9feb8dd61-catalog.json",
+    "docs/evidence/feature-gate-9feb8dd61-skill-audit.json",
+    "docs/evidence/feature-gate-9feb8dd61-feature-suite.json",
+    "docs/evidence/feature-gate-9feb8dd61-native-project.json",
+    "docs/evidence/feature-gate-9feb8dd61-web.json",
+    "docs/evidence/feature-gate-9feb8dd61-studio-contracts.json",
+    "docs/evidence/feature-gate-9feb8dd61-typecheck.json"
   ]
 }

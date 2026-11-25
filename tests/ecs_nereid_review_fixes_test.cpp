@@ -219,6 +219,18 @@ static void cascadeMeshAddressSurvivesSetCascades(){
     AIVERSE_TEST_CHECK(scene.meshFor(7)==nullptr && scene.count()==1);
 }
 
+static void duplicateCascadeIdsPreserveScene(){
+    world::NereidCascadeScene scene;
+    world::NereidCascadeSource a;a.id=7;a.cascade.enabled=false;
+    scene.setCascades({a});
+    const render::Mesh* before=scene.meshFor(7);
+    bool threw=false;
+    try{scene.setCascades({a,a});}
+    catch(const std::invalid_argument&){threw=true;}
+    AIVERSE_TEST_CHECK(threw);
+    AIVERSE_TEST_CHECK(scene.count()==1 && scene.meshFor(7)==before);
+}
+
 static void reAddedSurfaceGetsFreshRevision(){
     world::NereidWaterScene scene;
     world::NereidSceneSurface lake;
@@ -312,6 +324,7 @@ int main(){
     obstructionIndexMatchesScan();
     wakeTileCullMatchesShaderEllipse();
     cascadeMeshAddressSurvivesSetCascades();
+    duplicateCascadeIdsPreserveScene();
     reAddedSurfaceGetsFreshRevision();
     duplicateSedimentLinksDoNotThrow();
     floodSystemStepsInPlace();

@@ -158,9 +158,11 @@ jobs:
             tests/libraries/building_structure_graph_tests.cpp -o /tmp/aiverse_building_structure_graph_tests
           # Compile the Renderer3D adapter even without a live GPU in CI.
           g++ $FLAGS tests/libraries/building_dual_leaf_restore_tests.cpp \
-            engine/world/SpatialWorld.cpp engine/core/Fixed.cpp engine/data/Json.cpp \
+            engine/world/SpatialWorld.cpp engine/world/TriangleCollision.cpp engine/core/Fixed.cpp engine/data/Json.cpp \
             -o /tmp/aiverse_building_dual_leaf_restore_tests
-          g++ $FLAGS apps/studio-native/tests/StudioBuildingTopologyTests.cpp \
+          # Link the PNG encoder used by the preview without pulling other Studio editor operations.
+          g++ $FLAGS -ffunction-sections -fdata-sections -Wl,--gc-sections \
+            apps/studio-native/tests/StudioBuildingTopologyTests.cpp apps/editor/core/BrandingOps.cpp \
             engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_studio_building_topology_tests
           g++ $FLAGS -fsyntax-only tests/render/runtime_building_model_compile.cpp
           g++ $FLAGS -fsyntax-only examples/world/runtime-building/main.cpp
@@ -175,7 +177,7 @@ jobs:
           /tmp/aiverse_building_structure_graph_tests
           /tmp/aiverse_building_surface_pattern_tests
           /tmp/aiverse_building_dual_leaf_restore_tests
-          /tmp/aiverse_studio_building_topology_tests
+          /tmp/aiverse_studio_building_topology_tests "$GITHUB_WORKSPACE"
       - name: Export all twelve procedural architectural PBR styles
         shell: bash
         run: |

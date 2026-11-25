@@ -1,0 +1,2 @@
+# Stage 23
+GeometryEPA.h implements bounded expanding polytope from caller-supplied enclosing Minkowski tetrahedron, horizon cancellation and penetration normal/depth. GJK-to-EPA simplex export remains required for automatic pipeline; seed provenance is caller responsibility. No build/tests. Next integrate simplex export and contact witnesses. Branch feature/world-processes-stage31-bidirectional-handles

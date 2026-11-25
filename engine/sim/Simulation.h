@@ -72,6 +72,8 @@ public:
     // Save states: write / read the module's dynamic state (World pools and resources). The reading side runs
     // on a simulation set up from the same rules and map. Default: not supported.
     virtual bool serializeState(Simulation&, Archive&) { return false; }
+    // Optional module layout extension; zero keeps the legacy save selection.
+    virtual uint32_t minimumSaveVersion(const Simulation&) const { return 0; }
     // Called before the world is copied or hashed (rollback snapshots, checksums): a module that keeps
     // state outside the World lazily (scripting VM) writes it in now.
     virtual void prepareSnapshot(Simulation&) {}
@@ -111,6 +113,9 @@ struct SimConfig {
     uint32_t tickRate = 20;        // ticks per second
     uint32_t inputDelayTicks = 2;  // commands issued at tick T execute at T + delay (lockstep latency hiding)
     bool recordCommands = true;  // dedicated realtime servers may use an external bounded replay sink
+    // Host-only admission: never true on a Fixed lockstep peer. Setting it
+    // does not install any physics or make Box3D cross-platform deterministic.
+    bool singleAuthorityPhysics = false;
 };
 
 class Simulation {
@@ -251,6 +256,8 @@ public:
     GameModule& module() { return *module_; }
     const GameModule& module() const { return *module_; }
     uint32_t tick() const { return tick_; }
+    // Local presentation/cache discontinuity; excluded from snapshots and checksum.
+    uint64_t stateRestoreSerial() const { return stateRestoreSerial_; }
     Fixed dt() const { return dt_; }
     uint32_t tickRate() const { return tickRate_; }
     const SimConfig& config() const { return cfg_; }
@@ -263,6 +270,7 @@ public:
     int result() { return module_->result(*this); }
 
 private:
+    bool deserializeArchive(Archive& archive, uint32_t version, std::string* err);
     Hasher checksumHeader() const;
     struct System { std::string name; SystemFn fn; };
 
@@ -272,6 +280,7 @@ private:
     PersistentEcsRegistry persistentEcs_;
     Random rng_;
     uint32_t tick_ = 0;
+    uint64_t stateRestoreSerial_ = 0;
     uint32_t tickRate_ = 20;
     Fixed dt_;
     double accumulator_ = 0.0; // real-time only, never affects the simulation

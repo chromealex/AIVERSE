@@ -40,7 +40,8 @@ inline b3Vec3 physisB3(Vec3 value) {
 // Wind drag is in Newtons and uses PHYSIS storms/gusts at current positions.
 inline bool applyPhysisToBody(Scene& scene, const aiverse::World& physisWorld,
                               BodyHandle handle,
-                              const PhysisBodyMaterial& material = {}) {
+                              const PhysisBodyMaterial& material = {},
+                              Vec3 simulationOffset = {}) {
     if (!scene.valid(handle) || scene.motion(handle) != Motion::Dynamic)
         return false;
     const b3BodyId id = scene.native(handle);
@@ -55,6 +56,14 @@ inline bool applyPhysisToBody(Scene& scene, const aiverse::World& physisWorld,
         !physisFixed(bodyMass, receiver.massKg) ||
         !physisFixed(gravityScale, receiver.gravityScale))
         return false;
+    // Translation-only frame: Box3D body-local axes match simulation axes.
+    // Convert to canonical PHYSIS sample coordinates before evaluating forces.
+    constexpr auto limit=Fixed::fromInt(1000000);
+    for(auto v:{simulationOffset.x,simulationOffset.y,simulationOffset.z})
+        if(v< -limit||v>limit)return false;
+    receiver.position=receiver.position+simulationOffset;
+    for(auto v:{receiver.position.x,receiver.position.y,receiver.position.z})
+        if(v< -limit||v>limit)return false;
     receiver.dragCoefficient = material.dragCoefficient;
     receiver.areaSqMeters = material.areaSqMeters;
     receiver.airDensity = material.airDensity;

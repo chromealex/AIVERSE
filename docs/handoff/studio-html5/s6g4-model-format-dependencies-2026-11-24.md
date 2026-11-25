@@ -1,0 +1,13 @@
+# S6g.4 — GLB/Wavefront dependency coverage and grouped moves (2026-11-24)
+
+Owner Studio; branch feature/studio-html5. Base aaab5d338dd146007d2a0ac0ed7b6aac0fe6a058. Roadmap d577f0800fbe0731de38ca5a6356d1a5bf634ec9; implementation 900d0ac968bf3230f506b4fe69d611b71fa82b2a; GLB chunk validation and grouped move fixture cc15101ed5368a3b4d70c23bb408370331fb80ed.
+
+## Implemented
+- Existing StudioAssetReferences graph scans GLB v2 JSON chunk with bounded streaming header traversal and no BIN materialization. Rejects malformed actual GLB header/chunk table and duplicate JSON chunks; opaque non-GLB placeholders remain outside coverage. Text JSON model with .glb extension supported as in runtime.
+- OBJ mtllib and the MTL texture slots actually used by ModelObj.cpp (map_Kd, map_Bump/map_bump/bump/norm, map_Ke). The engine resolves both library and textures relative to OBJ, not MTL; graph records OBJ as owner and MTL line as field. No arbitrary path or symlink target reads; bounded text/file/result scans. Ignored renderer slots do not generate edges.
+- Existing move preview distinguishes unconditional map/rules blockers from resource rows marked validateOnApply/preservesDefault. Multi-selection is no longer blocked by UI solely for read-only model edges; existing native transfer owner validates complete actual selected relocation set and individual undo/redo before publication. Does not rewrite source URIs.
+- Native regression scenarios for GLB with binary payload, OBJ-relative MTL textures, ignored slots, unsafe partial move refusal, safe complete selection and folder moves, history replay.
+- Registry/API backward-compatible fields and UI labels, skill and MCP docs updated.
+
+## Evidence / limitations
+GitHub commits pushed and read back. Tests added, NOT RUN; no local native compilation, CTest, TS typecheck/build, MCP transport, real UI or performance verification. No main merge. Existing budget can reject large/unrelated malformed models; opaque GLB, unsupported formats, dynamic scripts, encoded/parent-relative cross-directory URI cases and symlink/race edge cases remain limited. No source URI rewrite, no claim of all formats. Batch history across multiple dependent steps and durable map save coordination remain separate work. UI final-choice validation can reject a selection at apply time; no automatic repair. Next S6g.5: native paged graph and coverage diagnostics, additional typed model/asset readers, path-aware URI preservation/repair under transactional history. Then expand coordinated history and recovery policy/MCP with explicit safety boundaries. Final QA remains required.

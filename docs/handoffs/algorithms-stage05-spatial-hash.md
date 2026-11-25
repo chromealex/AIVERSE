@@ -1,0 +1,2 @@
+# Stage 4–5
+SpatialTree.h adds fixed-root quad/octrees; erase scans nodes, no pruning. Bvh.h adds refit for unchanged IDs. Spatial.h adds optional unordered cell storage via SpatialHash2D/3D and queryBatch CSR offsets. AABB outputs sorted IDs regardless of hash iteration. No concurrent writes, no tests/build. Next optimize tree erase/pruning and integrate EVOLVE. Branch feature/world-processes-stage31-bidirectional-handles

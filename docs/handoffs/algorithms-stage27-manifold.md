@@ -1,0 +1,2 @@
+# Stage 27
+GeometryManifold.h adds caller-supplied convex face clipping, paired projected contacts, duplicate filtering and bounded deepest/farthest reduction. Reference normal points A toward B. Incident face validity is caller precondition. No automatic face selection, persistent cache or build/tests. Next face selection and persistent contacts. Branch feature/world-processes-stage31-bidirectional-handles

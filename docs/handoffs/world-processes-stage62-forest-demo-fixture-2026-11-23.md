@@ -1,0 +1,4 @@
+# Stage62 — forest demo authoring fixture
+Branch: feature/world-processes-stage31-bidirectional-handles; main unchanged.
+Commit 0c61ac2f adds examples/native/world_processes/evolve-forest-demo.json: three adjacent 30m x 30m areas centered at -30, 0, +30m X, healthy/polluted/recovery states, industrial contamination and restoration pressure. Stable IDs and explicit offsets.
+To run: concrete game supplies type/owner, spawns identical rooted species in each area through TerraWeave authority, registers PHYSIS then EVOLVE and TerraWeave with enableEvolveForestClimate=true. Compare fertility and plant health over equal ticks; restore same World snapshot and replay. Natural climate links are not configured in fixture; host must attach real PHYSIS cells. This is a component fixture, not a runnable game or complete map. No compile/tests. Next: concrete game setup and natural climate binding, then QA.

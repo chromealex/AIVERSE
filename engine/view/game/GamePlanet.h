@@ -55,6 +55,7 @@ struct PlanetBody {
 struct PlanetWorld {
     std::vector<PlanetBody> bodies;
     int start = 0;
+    Json forestManifest; // optional world.terraweaveForest species catalogue (presentation only)
     // simulation surface (match maps): body centres come from Surface::bodyPosition, geometry from its corners
     std::shared_ptr<const Surface> sim;
     bool empty() const { return bodies.empty(); }

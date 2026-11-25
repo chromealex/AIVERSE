@@ -3,6 +3,7 @@
 #include <string>
 #include <future>
 #include <optional>
+#include <memory>
 #include <map>
 #include <set>
 #include <vector>
@@ -83,6 +84,8 @@ public:
     bool strokeBegin(double x, double z, std::string* error,double y=0);
     bool strokeDab(double x, double z, std::string* error,double y=0);
     bool strokeEnd(std::string* error = nullptr);
+    bool strokeActive() const noexcept{return stroking_;}
+    bool strokeCancel();
     // Stats panel: the host reports the Scene's frame time (ms, smoothed) and its frame count.
     void setSceneFrameStats(double ms, uint64_t frames) { sceneFrameMs_=ms; sceneFrames_=frames; }
     // Scene overlay shapes from editor/extensions.lua scene_gizmos(ctx) (empty without a project or script).
@@ -100,6 +103,8 @@ public:
         ws_.registerOp({"texture_graph_gpu_owner_preview","Native Studio GPU preview and validated bake owner",
             std::move(schema),[this,provider=std::move(provider)](const Json& p){return provider(ws_,p);},true});
     }
+    using PlanetViewAgentProvider=std::function<Json(const std::string&,const Json&)>;
+    void setPlanetViewAgentProvider(PlanetViewAgentProvider provider){planetViewAgent_=std::move(provider);}
     Json previewExternalAssets(const std::vector<std::filesystem::path>& files,
                                const std::string& destination); // native picker ONLY
 private:
@@ -108,8 +113,12 @@ private:
     uint64_t graphDocumentEpoch_=1;
     Json buildRequest(const std::string& method, const Json& params);
     Json dispatchImpl(const Json& request);
+    Json dispatchImplCore(const Json& request);
     // History panel: a label per MapDoc undo / redo snapshot (MapDoc keeps only snapshots).
     std::vector<std::string> undoLabels_, redoLabels_;
+    std::map<uint64_t,std::string> historyLabelsById_;
+    void labelNewHistory(uint64_t mark,const std::string& label);
+    std::string historyVersion() const;
     static std::string historyLabel(const std::string& method, const Json& params);
     void syncHistoryLabels();
     Json historyJson() const;
@@ -119,6 +128,7 @@ private:
     Json inspectorFor(const std::string& entityId) const; // entity header + components
     Json setMeshRenderer(int index, const std::string& key, const Json& value);
     MaterialSlotProvider materialSlots_;
+    PlanetViewAgentProvider planetViewAgent_;
     int indexFor(const std::string& id) const;
     editor::Workspace ws_;
     std::string selected_;
@@ -142,6 +152,15 @@ private:
     uint64_t previewMaterialRevision_ = 0;
     void refreshMaterialPreview();
     std::optional<StudioTransferPlan> pendingAssetTransfer_;
+    std::optional<StudioTransferPlan> agentAssetTransfer_;
+    std::string agentAssetTransferVersion_;
+    std::map<std::string,std::string> agentAssetTransferGuids_;
+    editor::ProjectHistory assetHistory_;
+    std::string assetHistoryPersistenceWarning_;
+    void loadAssetHistory();
+    void finishAssetHistoryPublication(StudioAssetHistoryPublication& publication,bool success) noexcept;
+    std::string assetHistoryVersion() const;
+    Json assetHistoryJson() const;
     StudioWindState wind_;
     Json windSceneStats_;
     // Agent panel (studio.agent*): link server, the Claude Code run, its transcript and change list.
@@ -151,6 +170,14 @@ private:
     std::vector<std::string> agentLines_;
     Json agentChanges_=Json::array();
     int64_t agentRunStart_=-1;
+    std::vector<uint64_t> agentStartIds_,agentEditIds_;
+    std::string agentHistoryProject_,agentHistoryMap_;
+    bool agentHistoryUnsafe_=false;
+    bool agentBatchFenced_=false;
+    std::string agentBatchOwnerVersion_;
+    std::string batchOwnerVersion() const;
+    Json agentBatchPreview(bool redo) const;
+    void applyAgentBatch(bool redo,const std::string& expectedToken);
     struct AgentShot { int client; Json id; };
     std::vector<AgentShot> agentShots_;
     SceneBrush brush_;
@@ -160,8 +187,13 @@ private:
     Json sceneBrushJson() const;
     Json strokePoints_=Json::array(); int strokeDabs_=0;
     double sceneFrameMs_=0; uint64_t sceneFrames_=0;
-    size_t strokeDepth_=0; bool stroking_=false; double strokeX_=0, strokeY_=0, strokeHeight_=0;   // History position when the current conversation started (Undo all)
+    std::unique_ptr<editor::MapDoc::CompoundEdit> strokeTransaction_;
+    uint64_t strokeHistoryMark_=0; bool stroking_=false; double strokeX_=0, strokeY_=0, strokeHeight_=0;
+    bool strokeDabImpl(double x,double z,std::string* error,double y);
     Json agentRequest(const std::string& method, const Json& params);
+    Json agentLinkedCall(const std::string& name,const Json& args);
+    Json agentHistoryLink(Json change) const;
+    bool agentCanUndoAll() const;
 };
 Json hubTemplatesJson(const std::string& engineDir, const Json& params);
 }

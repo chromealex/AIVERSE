@@ -187,6 +187,10 @@ Implementation: `f82db744f747226138770a949bcfb13e62613cb8`. Desktop normal test 
 
 Stage 38AJ Mac targeted acceptance: user supplied final CTest lines `32/32 Test #493: studio_model_picking ... Passed 0.01 sec` and `100% tests passed, 0 tests failed out of 32`. Record user-supplied summary PASS 32/32 (includes material_batches_unit in the requested run); full log, printed checkout SHA, tracked tree status and individual timing evidence were not supplied. Expected checkout was f1a2894cdf0488857a41d4e38afd9ca4dc1ed8a8; not independently established. Do not promote the feature gate: live Studio/MCP, Vulkan hardware and merged-tree Mac quick gate still NOT RUN.
 
+## Algorithms Stage 45 — noise fixture registration (2026-11-24)
+- Code SHA: `9a565026a826ec3998c07a56cd5c9529ecdf0820`, branch `feature/world-processes-stage31-bidirectional-handles`.
+- Root and standalone library CMake register `library_noise`; the root test is an ordinary CTest, so the unified runner can discover it without hard-coding its name.
+- Isolated Linux C++20 fixture (exact source blobs verified): Clang 17 Release PASS, GCC 14 Release PASS, Clang ASan+UBSan PASS. Full CMake/CTest and ./run-tests.sh NOT RUN. Details and exact commands: [stage 45 handoff](../handoffs/algorithms-stage45-noise-fractals.md).
 
 ## KINGSTON local macOS storage guard — 2026-11-24
 - Implementation: cce6e0799608bdf3241f4c6940b077260142a829, integration/building-graph-stage36b-20261124. User's Stage 36C quick build stopped at 94% with ENOSPC because the prior default was worktree-local. Local Darwin now defaults to /Volumes/KINGSTON/AIVERSE-builds/<worktree>/all-tests, checks the volume is actually mounted and writable, rejects build paths whose physical parent or final directory is outside KINGSTON, and exports TMPDIR beneath the build directory. Hosted GitHub Actions and non-Darwin keep the portable default. Existing explicit external paths remain supported; no cache migration or deletion. Preserve script executable mode.

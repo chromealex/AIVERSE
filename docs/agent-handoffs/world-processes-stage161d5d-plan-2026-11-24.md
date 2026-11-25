@@ -1,0 +1,2 @@
+# Stage 161D5d — scope
+Explicit authenticated linked-only MCP operations for current completed local forest, rendered/desired body and orbit camera get/set. Shared host handlers and map identity guards; no generic browser RPC, no ECS mutation. Transient view operations isolated from map history and no-op forest edits do not fence agent history. Extend registry refusal audit and record remaining feature gaps. Native acceptance deferred.

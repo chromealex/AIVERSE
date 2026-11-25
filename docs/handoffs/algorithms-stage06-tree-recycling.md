@@ -1,0 +1,2 @@
+# Stage 6
+SpatialTree.h tracks ID-to-node location, removes directly from the owning node, prunes empty ancestors and recycles node slots. Exposes activeNodeCount and allocatedNodeCount. Fixed root, no concurrent mutation, vector capacity retains high-water allocation. No build or tests executed. Next integrate EVOLVE and register skill. Branch feature/world-processes-stage31-bidirectional-handles

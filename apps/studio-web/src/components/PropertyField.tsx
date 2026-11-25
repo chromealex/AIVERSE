@@ -2,6 +2,7 @@ import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import type { StudioProperty } from '../types';
 import AssetReferencePicker from './AssetReferencePicker';
+import EntityReferencePicker from './EntityReferencePicker';
 import { isSameFieldValue, parseFieldDraft, scrubValue, validateBooleanChange } from '../propertyLogic';
 
 interface PropertyFieldProps {
@@ -78,6 +79,16 @@ export default function PropertyField({ property, disabled, onChange, variant = 
         kinds={property.assetKinds} disabled={locked}
         onChange={value => { if (value !== property.value) onChange(value); }}/>
       {property.description && <small className="property-description">{property.description}</small>}
+    </div>;
+  }
+
+  if (property.type === 'text' && property.entityReference) {
+    return <div className="property-row">
+      <span>{property.label}</span>
+      <EntityReferencePicker label={property.label} value={String(property.value)}
+        options={property.options ?? []} disabled={locked}
+        onChange={value => { if (value !== property.value) onChange(value); }}/>
+      {property.description && <small className="property-description au-field__hint">{property.description}</small>}
     </div>;
   }
 

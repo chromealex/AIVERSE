@@ -85,11 +85,21 @@ struct ForestNutrientCycleOutcome {
     uint64_t revision=0;
 };
 
+// Optional coordinate policy: the caller selects one adjacent cell and
+// projected flow speed, while the shared ledger owns debits/credits,
+// cadence, uptake/leaching and simultaneous source accounting.
+struct ForestNutrientDownstream {
+    int64_t x=0,z=0;
+    uint32_t speedCmPerSec=0;
+};
+using ForestNutrientRouting=std::function<std::optional<ForestNutrientDownstream>(
+    int64_t,int64_t,const ForestNutrientCellClimate&)>;
 inline ForestNutrientCycleOutcome advanceForestNutrientCycle(
         ForestDeadwoodResource& resource,uint64_t completedTick,
         ForestNutrientCellSampler climate,
         ForestNutrientCycleSettings settings={},
-        std::span<const ForestNutrientJunctionLink> junctions={}) {
+        std::span<const ForestNutrientJunctionLink> junctions={},
+        ForestNutrientRouting routing={}) {
     validateForestNutrientCycleSettings(settings);
     if(!climate)
         throw std::invalid_argument("TerraWeave nutrient cycle needs climate/water");
@@ -207,12 +217,17 @@ inline ForestNutrientCycleOutcome advanceForestNutrientCycle(
         const int64_t fz=sampled.currentZcmPerSec;
         const int64_t ax=fx<0?-fx:fx;
         const int64_t az=fz<0?-fz:fz;
-        const int64_t speed=std::max(ax,az);
-        if(speed<int64_t(settings.minFlowCmPerSec))continue;
         const bool xPrimary=ax>=az;
         const int64_t sx=xPrimary?(fx>0?1:-1):0;
         const int64_t sz=xPrimary?0:(fz>0?1:-1);
-        const Cell dest{source.x+sx,source.z+sz};
+        auto route=routing?routing(source.x,source.z,sampled):
+            std::optional<ForestNutrientDownstream>{{source.x+sx,source.z+sz,uint32_t(std::max(ax,az))}};
+        if(!route)continue;
+        const auto speed=route->speedCmPerSec;
+        if(speed>10000)throw std::invalid_argument("TerraWeave nutrient routing speed");
+        if(speed<settings.minFlowCmPerSec||!speed)continue;
+        const Cell dest{route->x,route->z};
+        if(dest==Cell{source.x,source.z})continue;
         const int64_t limit=kWorldLimitCm/
             ForestDeadwoodResource::kNutrientCellCm;
         if(dest.first<=-limit || dest.first>=limit ||

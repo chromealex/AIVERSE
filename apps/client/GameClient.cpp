@@ -299,6 +299,8 @@ void GameClient::toMenu() {
     playback_.reset();
     pendingPings_.clear();
     hostPaused_ = hostStep_ = false;
+    hostSpeed_=0;
+    hostCheckpoint_.clear();
     mapLoading_ = false; loadingTypes_.clear(); loadingSplash_.shutdown();
     sound_.detach();
     natureStop();
@@ -675,6 +677,8 @@ bool GameClient::startMatch(size_t idx, const Json& initialVars, const MatchFile
         std::string terr; // 2D tile maps: the tileset decides cell kinds / levels / fields
         if (!applyTilesToMap(map, [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); }, &terr)) throw std::runtime_error(terr);
         SimConfig cfg;
+        // startMatch owns offline play. Network peers construct their simulation in Lobby.
+        cfg.singleAuthorityPhysics = !playback;
         cfg.seed = uint64_t(std::time(nullptr));
         if (const char* sd = std::getenv("AIVERSE_SEED")) cfg.seed = uint64_t(std::strtoull(sd, nullptr, 10));   // testing: reproducible matches
         if (file) cfg.seed = file->seed;
@@ -1554,6 +1558,23 @@ bool GameClient::hostPaused() const {
 bool GameClient::hostCanStep() const {
     return hostCanControl() && hostPaused_ && screen_ == Screen::Playing && !topDownPaused();
 }
+bool GameClient::hostCheckpoint(bool restore) {
+    if(!hostCanStep())return false;
+    if(!restore){
+        auto bytes=sim_->serialize();
+        if(bytes.empty()||bytes.size()>64u*1024u*1024u)return false;
+        hostCheckpoint_=std::move(bytes);return true;
+    }
+    if(hostCheckpoint_.empty())return false;
+    std::string error;
+    if(!sim_->deserialize(hostCheckpoint_,&error))return false;
+    hostStep_=false;
+    return true;
+}
+bool GameClient::setHostSpeed(double speed) {
+    if(!hostCanControl()||!(speed>=1&&speed<=100))return false;
+    hostSpeed_=speed;return true;
+}
 bool GameClient::setHostPaused(bool paused) {
     if (!hostCanControl()) return false;
     hostPaused_ = paused; hostStep_ = false;
@@ -1809,7 +1830,8 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         }
         else if (!netMatch_ && !topDownPaused() && (!hostFrozen || singleStep)) {   // single player: the escape preview pauses the match
             for (auto& b : bots_) b.update(*sim_);
-            static const double simSpeed = [] { const char* v = std::getenv("AIVERSE_SIM_SPEED"); return v ? std::clamp(std::atof(v), 0.1, 16.0) : 1.0; }();
+            static const double defaultSimSpeed = [] { const char* v = std::getenv("AIVERSE_SIM_SPEED"); return v ? std::clamp(std::atof(v), 0.1, 16.0) : 1.0; }();
+            const double simSpeed=hostCanControl()&&hostSpeed_>0?hostSpeed_:defaultSimSpeed;
             if (singleStep) sim_->step();
             else if (simSpeed == 1.0) sim_->advance(dt);
             else sim_->advance(dt * simSpeed, int(8 * simSpeed + .5));   // testing: match time faster than real time

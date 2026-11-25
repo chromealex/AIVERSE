@@ -1,0 +1,13 @@
+# Stage 161D5c — shared planetary forest MCP authoring
+Date 2026-11-24. Owner World Processes / editor core / Studio.
+Branch feature/world-processes-stage31-bidirectional-handles.
+Base 40793b217f08ec4975998bccd4a1b03c35c3388a; plan c95339a433297b0fb315c6b8583c27dd198ab9cd; implementation 980d9514a6698b5ab6d68a3a8d5f7d3420bbcf44; acceptance fixture a8fa5aef78616b0ab03fe5aae64f351ab34db255.
+
+- apps/editor/core/PlanetForestDocument.h: move the existing authored document read/validation/transactions from Studio to shared editor core, preserve exact MapDoc identity and revision checks; allow planting via exactly one direct planetary coordinate or marker with optional ageTicks; remove by unique species/key without deleting the marker entity.
+- apps/editor/core/PlanetOps.cpp: register planet_forest_get/set/plant/move/remove in Workspace for standalone MCP and editor. Explicit schemas, readback and changed flag; existing MapDoc undo/redo, history labels and change notification. Complete set validates ecological configuration, PHYSIS weather mappings, ARBOR catalogue and texture directory before commit. Null config inherits module; null catalogue removes visual catalogue. Marker-bound movement requires explicit conversion. No synthetic entity, auto-save, live ECS mutation or new authority.
+- apps/studio-native/StudioPlanetForestDocument.h and StudioSession.cpp: compatibility aliases plus use Workspace operations for the existing document read/set/plant/move RPCs.
+- CMakeLists.txt: shared editor core include path for existing native library headers; add UNIX standalone MCP fixture to CTest.
+- tests/editor/planet_forest_mcp.py: isolated two-body project via real stdio transport, tool list, no-project refusal, complete set, direct planting, stale revision rejection, move, no-op, undo/redo, marker-bound rejection/removal, preservation of marker and save/reopen. Fixture written, NOT RUN.
+- tools/mcp/audit_registry.py: add required five-operation family. skills/world/aiverse-world-processes/SKILL.md and docs/devlog/systems.json updated.
+
+Actual evidence: Git commits and source inspection only. No compiled aiversemcp or Studio binary is available through this remote connector; C++ build, tools/list, mcp_registry, fixture, skill audit and native visual checks NOT RUN. No main merge. Do not claim complete MCP or runtime parity. Live ECS query remains Studio-only; authenticated linked Studio MCP readback, camera/selection authoring, full forest streaming and final acceptance remain open. Next: Stage 161D5d authenticated live readback and feature-gap audit; then integrated build/test gate.

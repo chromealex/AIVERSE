@@ -1,3 +1,4 @@
+#include <tuple>
 // macOS-only native preview: AIVERSE gfx::Device + Renderer3D over a CAMetalLayer.
 // No ImGui, no CPU texture readback, no dependency on UI component hierarchy.
 #pragma once
@@ -18,6 +19,13 @@
 #include <optional>
 #include "apps/studio-native/StudioModelPicking.h"
 #include "apps/studio-native/StudioDocumentVisuals.h"
+#include "apps/studio-native/StudioPlanetPreview.h"
+#include "apps/studio-native/StudioPlanetProcessOverlays.h"
+#include "apps/studio-native/StudioPlanetForestOverlays.h"
+#include "apps/studio-native/StudioForestCameraFocus.h"
+#include "apps/studio-native/StudioPlanetForestTextures.h"
+#include "apps/studio-native/StudioPlanetRegionEditing.h"
+#include "apps/studio-native/StudioPlanetGravityEditing.h"
 #include "apps/studio-native/StudioAuthoredLights.h"
 #include "apps/editor/core/MapDoc.h"
 #include "engine/gfx/Gfx.h"
@@ -338,6 +346,10 @@ public:
     void setOrthographic(bool ortho);
     struct CameraState { float yaw = 0, pitch = 0, distance = 0; bool ortho = false; render::float3 target{}; };
     CameraState cameraState() const { return {camera_.yaw, camera_.pitch, camera_.distance, camera_.ortho, camera_.target}; }
+    void setPlanetOrbitCamera(const CameraState& state){
+        tween_.active=false;camera_.target=state.target;camera_.distance=state.distance;
+        camera_.yaw=state.yaw;camera_.pitch=state.pitch;camera_.ortho=state.ortho;autoIso_=false;cameraInitialized_=true;
+    }
     // Corner orientation gizmo rendered by Renderer3D, for the default host where
     // the Metal view covers the WebView (the HTML gizmo is used in composite mode).
     void setOrientationGizmo(bool enabled) { orientationGizmo_ = enabled; }
@@ -366,9 +378,9 @@ public:
     // invertSnap: Ctrl/Cmd held flips the snap setting for this drag step.
     void updateTransformDrag(float x, float y, float width, float height, bool invertSnap);
     struct TransformCommit { std::string id; TransformTool tool = TransformTool::Move; int axis = -1;
-        render::float3 move{}; float degrees = 0; float factor = 1; };
+        render::float3 move{}; float degrees = 0; float factor = 1; Json surfacePlacement; std::optional<uint64_t> expectedRevision; };
     std::optional<TransformCommit> endTransformDrag();
-    bool transformDragActive() const { return drag_.axis >= 0; }
+    bool transformDragActive() const { return drag_.axis >= 0 || !planetDragId_.empty(); }
     void clearTransformPreview();
     std::string transformCaption() const; // "Move X +1.25" while dragging, else empty
     // Scene model streaming after a project/map opens: models load within a per-frame
@@ -389,6 +401,15 @@ public:
     // Ray through (x, y) onto the ground plane y = 0 (asset drops).
     bool caveScreenRay(float x,float y,float width,float height,render::float3& origin,render::float3& direction)const;
     bool groundPoint(float x, float y, float width, float height, render::float3& out) const;
+    std::optional<Json> forestPick(float x,float y,float w,float h,const std::string& project,const std::string& path,uint64_t revision) const;
+    void setForestSelection(Json selection){forestSelection_=std::move(selection);}
+    std::optional<Json> forestGroundPlacement(float x,float y,float w,float h,const std::string& path,uint64_t revision) const;
+    bool beginPlanetRegionDrag(const editor::MapDoc& doc,const std::string& id,float x,float y,float width,float height);
+    std::optional<Json> updatePlanetRegionDrag(const editor::MapDoc& doc,float x,float y,float width,float height,bool symmetric,bool snap,bool finish);
+    void cancelPlanetRegionDrag(){planetRegionDrag_.reset();}
+    bool beginPlanetGravityDrag(const editor::MapDoc& doc,float x,float y,float width,float height);
+    std::optional<Json> updatePlanetGravityDrag(const editor::MapDoc& doc,float x,float y,float width,float height,bool snap,bool finish);
+    void cancelPlanetGravityDrag(){planetGravityDrag_.reset();}
     // Material slot names of a loaded content model (for the Inspector's Mesh Renderer).
     std::vector<std::string> modelMaterialSlots(const std::string& asset) const;
     // Scene brush ring under the cursor (radius in world units); hidden when visible=false.
@@ -398,10 +419,32 @@ public:
     // Project extension gizmos (editor/extensions.lua scene_gizmos): world-space lines, circles (screen px), points.
     struct OverlayShape { int kind = 0; render::float3 a{}, b{}; float radius = 8, thickness = 2; uint8_t r = 90, g = 180, bl = 255; std::string text; };   // kind: 1 line, 2 circle, 3 point, 4 label
     void setOverlayShapes(std::vector<OverlayShape> shapes) { overlayShapes_ = std::move(shapes); }
+    void setPlanetSceneBody(std::string project,std::string path,std::string body){
+        planetBodyProject_=std::move(project);planetBodyPath_=std::move(path);planetBodyOverride_=std::move(body);
+        forestSelection_=Json{};forestDragPreview_=Json{};clearTransformPreview();
+    }
+    std::string planetSceneBodyOverride(const std::string& project,const std::string& path)const{
+        return planetBodyProject_==project&&planetBodyPath_==path?planetBodyOverride_:std::string{};
+    }
+    void setForestDragPreview(Json value){forestDragPreview_=std::move(value);}
+    std::string planetSceneBody(const std::string& project,const std::string& path,uint64_t revision)const{
+        return planetMode_&&planetPreview_&&planetModelProject_==project&&planetMapPath_==path&&planetRevision_==revision&&
+            (planetSceneBodyOverride(project,path).empty()||planetSceneBodyOverride(project,path)==planetPreview_->bodyId)?planetPreview_->bodyId:std::string{};
+    }
+    std::optional<StudioForestCameraFocus> planetForestCamera(const std::string& project,const std::string& path,uint64_t revision,int width,int height)const{
+        const auto body=planetSceneBody(project,path,revision);
+        if(body.empty()||!cameraInitialized_)return {};
+        StudioForestCameraFocus focus{body,viewCamera(),width,height};
+        return focus.valid()?std::optional<StudioForestCameraFocus>(focus):std::nullopt;
+    }
+    void setPlanetLiveSnapshot(Json snapshot,std::string project,std::string path,uint64_t revision,std::string layer,std::string aetherLayer){
+        planetLiveSnapshot_=std::move(snapshot);planetLiveProject_=std::move(project);
+        planetLivePath_=std::move(path);planetLiveRevision_=revision;planetLiveLayer_=std::move(layer);planetLiveAetherLayer_=std::move(aetherLayer);
+    }
     // World point -> view point (same units as pick / groundPoint); false when behind the camera.
     bool projectPoint(render::float3 world, float width, float height, render::float2& out) const;
     void setBrushCursor(bool visible, render::float3 center, float radius,bool volume=false,bool fill=false) { brushVisible_=visible; brushCenter_=center; brushRadius_=radius; brushVolume_=volume; brushFill_=fill; }
-    void resetCamera() { if(device_){device_->waitForResourceIdle();spectraSources_.shutdown();} lightingRevision_ = std::numeric_limits<uint64_t>::max(); cameraInitialized_ = false; terrainRevision_ = std::numeric_limits<uint64_t>::max(); clearDocumentModels(); }
+    void resetCamera() { if(device_){device_->waitForResourceIdle();spectraSources_.shutdown();} lightingRevision_ = std::numeric_limits<uint64_t>::max(); cameraInitialized_ = false; planetRevision_=std::numeric_limits<uint64_t>::max(); terrainRevision_ = std::numeric_limits<uint64_t>::max(); clearDocumentModels(); }
     // Frames actually drawn / skipped because nothing visible changed (diagnostics).
     uint64_t framesDrawn() const { return framesDrawn_; }
     uint64_t framesSkipped() const { return framesSkipped_; }
@@ -434,6 +477,82 @@ private:
     render::Mesh cube_;
     render::Mesh studioCyclorama_;
     render::Mesh terrain_;
+    render::Mesh planetTerrain_;
+    std::array<render::Mesh,6> planetLiveTerrainFaces_{};
+    std::array<Json,6> planetLiveTerrainFaceSignatures_{};
+    Json planetLiveTerrainGrid_;
+    // CPU triangles from the same successful upload used by the Scene.
+    std::optional<render::MeshBuilder> planetLiveTerrainCpu_;
+    bool planetLiveTerrainVisible_=false;
+    float planetAuthoredOccluderRadius_=0.f,planetLiveOccluderRadius_=0.f;
+    const render::MeshBuilder* visiblePlanetTerrain()const{
+        return planetLiveTerrainVisible_&&planetLiveTerrainCpu_?&*planetLiveTerrainCpu_:nullptr;
+    }
+    void clearLivePlanetTerrain();
+    bool syncLivePlanetTerrain(const editor::MapDoc& doc,const std::string& projectPath);
+    std::optional<StudioPlanetPreview> planetPreview_;
+    PlanetProcessOverlays planetProcessOverlays_;
+    PlanetForestOverlays planetForestOverlays_;
+    Json planetForestOverlayRecipe_;
+    Json planetForestModelCatalog_;
+    std::string planetForestModelProject_;
+    std::map<uint32_t,std::unique_ptr<render::Model>> planetForestModels_;
+    std::set<uint32_t> planetForestRejectedModels_;
+    std::map<uint32_t,bool> planetForestEvergreen_;
+    std::map<std::tuple<uint32_t,int,int>,std::vector<render::Material>> planetForestSeasonMaterials_;
+    using ForestRootModelKey=std::tuple<uint32_t,bool,uint32_t>;
+    std::map<ForestRootModelKey,std::unique_ptr<render::Model>> planetForestRootModels_;
+    std::set<ForestRootModelKey> planetForestRejectedRoots_;
+    std::map<uint32_t,std::unique_ptr<render::Model>> planetForestLogModels_;
+    std::set<uint32_t> planetForestRejectedLogs_;
+    StudioForestTextureStamp planetForestTextureStamp_;
+    std::chrono::steady_clock::time_point planetForestTextureCheck_{};
+    size_t planetForestModelBytes_=0;
+    bool planetForestModelsPending_=false;
+    struct ForestFarChunk { render::Mesh mesh; Json rows; float scale=-1.f; size_t bytes=0; };
+    std::map<int64_t,ForestFarChunk> planetForestFarChunks_;
+    std::string planetForestFarBody_,planetForestFarProject_,planetForestFarPath_,planetForestFarEpoch_;
+    uint64_t planetForestFarRevision_=0;
+    using ForestVisualId=std::pair<int64_t,std::string>;
+    std::map<ForestVisualId,float> planetForestDetailWeights_;
+    std::chrono::steady_clock::time_point planetForestBlendTime_{};
+    std::string planetForestBlendIdentity_;
+    render::Mesh planetForestBlendProxy_;
+    void clearPlanetForestFarMesh();
+    void drawPlanetForestFarChunks(const Json& rows,float flora,int width,int height);
+    void clearPlanetForestModels();
+    void syncPlanetForestModels(const editor::MapDoc& doc,const std::string& projectPath);
+    bool planetForestLiveCurrent(const editor::MapDoc& doc,const std::string& projectPath)const;
+    void drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std::string& projectPath,int width,int height);
+    Json forestSelection_,forestDragPreview_;
+    std::string planetBodyProject_,planetBodyPath_,planetBodyOverride_;
+    Json planetLiveSnapshot_;
+    std::string planetLiveProject_,planetLivePath_,planetLiveLayer_,planetLiveAetherLayer_;
+    uint64_t planetLiveRevision_=0;
+    struct PlanetRegionDrag { PlanetRegionChart chart; PlanetRegionHandle handle=PlanetRegionHandle::Center;
+        uint64_t revision=0; std::optional<evolve::Area> candidate; };
+    std::optional<PlanetRegionDrag> planetRegionDrag_;
+    struct PlanetGravityDrag {
+        PlanetGravityHandle original,candidate;
+        render::float3 normal{},startHit{};
+        bool resize=false,valid=false;
+        uint64_t revision=0;
+    };
+    std::optional<PlanetGravityDrag> planetGravityDrag_;
+    std::vector<PlanetGravityHandle> planetGravityHandles_;
+    void drawPlanetGravityHandles(const render::Camera& view,int width,int height);
+    void drawPlanetRegionHandles(const render::Camera& view,int width,int height,const editor::MapDoc& doc);
+    std::string planetMapPath_;
+    uint64_t planetRevision_=std::numeric_limits<uint64_t>::max();
+    bool planetMode_=false;
+    std::string planetDragId_;
+    uint64_t planetTransformRevision_=0;
+    Json planetDragOriginal_,planetDragPlacement_;
+    void framePlanet(int width,int height,const editor::MapDoc& doc,const std::string& selectedId,
+                     const std::string& projectPath,const Json& rules);
+    std::string planetModelProject_;
+    const Json* planetModelRules_=nullptr;
+
     render::Mesh planetCutTerrain_;
     render::Mesh globeMesh_;
     std::optional<StudioPlanetGlobe> globe_;

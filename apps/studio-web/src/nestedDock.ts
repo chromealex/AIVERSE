@@ -10,7 +10,7 @@ export const STUDIO_PANEL_TITLES: Record<StudioPanel,string> = {
   rules: "Rules",
   human_appearance: "VIVID Appearance",
   build: "Build",
-  wind: "Ветер",
+  wind: "Wind",
   history: "History",
   terrain: "Terrain",
   water: "Water",

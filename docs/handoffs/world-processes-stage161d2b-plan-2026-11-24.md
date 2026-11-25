@@ -1,0 +1,2 @@
+# Stage 161D2b — delivery scope
+Read-only completed local ECS forest snapshot reused by Scene. Add explicit liveForest option, current-map guard, body-local root positions, support/state marker and real consequence capsule center/rotation/dimensions, shared payload and line budgets; no synthetic physics. Acceptance: correct identity/body/tick, stale/remote rejection, capped samples and distinct authored/live view; no changes to persistence or runtime. Scene relocation is a separate stage. Mac acceptance deferred.

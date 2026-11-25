@@ -1,0 +1,418 @@
+{
+  "schema": 1,
+  "id": "world-processes-planet-authoring",
+  "owner": "World Processes / TerraWeave / native Studio",
+  "changed_paths": [
+    ".github/workflows/world-processes.yml",
+    "AGENTS.md",
+    "CMakeLists.txt",
+    "apps/client/GameClient.cpp",
+    "apps/client/GameClient.h",
+    "apps/client/HostedClient.cpp",
+    "apps/client/HostedClient.h",
+    "apps/editor/core/PlanetForestDocument.h",
+    "apps/editor/core/PlanetOps.cpp",
+    "apps/editor/core/Workspace.cpp",
+    "apps/editor/core/Workspace.h",
+    "apps/editor/core/WorldInspect.cpp",
+    "apps/fps/client.cpp",
+    "apps/studio-native/CMakeLists.txt",
+    "apps/studio-native/StudioForestCameraFocus.h",
+    "apps/studio-native/StudioGameSurface.cpp",
+    "apps/studio-native/StudioGameSurface.h",
+    "apps/studio-native/StudioHost.cpp",
+    "apps/studio-native/StudioHost.h",
+    "apps/studio-native/StudioPlanetAetherSnapshot.h",
+    "apps/studio-native/StudioPlanetCircuitSnapshot.h",
+    "apps/studio-native/StudioPlanetCrowdSnapshot.h",
+    "apps/studio-native/StudioPlanetEchoSnapshot.h",
+    "apps/studio-native/StudioPlanetForestDocument.h",
+    "apps/studio-native/StudioPlanetForestOverlays.h",
+    "apps/studio-native/StudioPlanetForestSnapshot.h",
+    "apps/studio-native/StudioPlanetForestTextures.h",
+    "apps/studio-native/StudioPlanetForestWeather.h",
+    "apps/studio-native/StudioPlanetFractureSnapshot.h",
+    "apps/studio-native/StudioPlanetGravityEditing.h",
+    "apps/studio-native/StudioPlanetLiveBudget.h",
+    "apps/studio-native/StudioPlanetLiveSnapshot.h",
+    "apps/studio-native/StudioPlanetLiveTerrain.h",
+    "apps/studio-native/StudioPlanetMorphSnapshot.h",
+    "apps/studio-native/StudioPlanetPreview.h",
+    "apps/studio-native/StudioPlanetProcessOverlays.h",
+    "apps/studio-native/StudioPlanetRegionEditing.h",
+    "apps/studio-native/StudioPlanetSocietySnapshot.h",
+    "apps/studio-native/StudioPlanetWorldProcesses.h",
+    "apps/studio-native/StudioScene.cpp",
+    "apps/studio-native/StudioScene.h",
+    "apps/studio-native/StudioSession.cpp",
+    "apps/studio-native/StudioSession.h",
+    "apps/studio-native/StudioTools.h",
+    "apps/studio-native/StudioWorldProcessDiagnostics.h",
+    "apps/studio-native/StudioWorldProcessLiveOptions.h",
+    "apps/studio-native/StudioWorldProcessesEditing.h",
+    "apps/studio-native/StudioWorldProcessesGizmos.h",
+    "apps/studio-native/tests/StudioSessionTests.cpp",
+    "apps/studio-native/tests/StudioTerrainGeometryTests.cpp",
+    "apps/studio-native/win/StudioWindows.cmake",
+    "apps/studio-web/package.json",
+    "apps/studio-web/src/App.tsx",
+    "apps/studio-web/src/components/EvolveGroupNumeric.tsx",
+    "apps/studio-web/src/components/GranularGridEditor.css",
+    "apps/studio-web/src/components/GranularGridEditor.tsx",
+    "apps/studio-web/src/components/PropertyField.tsx",
+    "apps/studio-web/src/components/WorldProcessDiagnostics.css",
+    "apps/studio-web/src/components/WorldProcessDiagnostics.tsx",
+    "apps/studio-web/src/mock.ts",
+    "apps/studio-web/src/nestedDock.ts",
+    "apps/studio-web/src/panels/BuildPanel.tsx",
+    "apps/studio-web/src/panels/InspectorPanel.tsx",
+    "apps/studio-web/src/panels/PlanetForestPanel.css",
+    "apps/studio-web/src/panels/PlanetForestPanel.tsx",
+    "apps/studio-web/src/panels/RulesPanel.tsx",
+    "apps/studio-web/src/panels/SceneBrushBar.tsx",
+    "apps/studio-web/src/panels/StudioPanelRenderer.tsx",
+    "apps/studio-web/src/panels/generated/WindPanel.tsx",
+    "apps/studio-web/src/panels/inspectorActions.ts",
+    "apps/studio-web/src/panels/planetForestSchema.ts",
+    "apps/studio-web/src/propertyLogic.ts",
+    "apps/studio-web/src/styles.css",
+    "apps/studio-web/src/types.ts",
+    "apps/studio-web/src/windowGroups.ts",
+    "apps/studio-web/tests/bridge.test.mjs",
+    "apps/studio-web/tests/mock.test.mjs",
+    "apps/studio-web/tests/planetForestSchema.test.mjs",
+    "apps/studio-web/tests/workspaces.test.mjs",
+    "docs/agent-handoffs/world-processes-pr124-current-main-2026-11-25.md",
+    "docs/agent-handoffs/world-processes-stage161d5d-2026-11-24.md",
+    "docs/agents/contracts/world-ownership.md",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/entries/2026-11-25-terraweave-fallen-arbor.json",
+    "docs/devlog/systems.json",
+    "engine/core/Archive.h",
+    "engine/game/GameCore.cpp",
+    "engine/game/GameCore.h",
+    "engine/game/GameState.h",
+    "engine/game/MapGrid.h",
+    "engine/game/Native.h",
+    "engine/game/PlanetSeaGrid.h",
+    "engine/game/PlanetSeaVolume.h",
+    "engine/game/PlanetSurfaceState.h",
+    "engine/game/PlanetTerrainWater.h",
+    "engine/game/Planets.cpp",
+    "engine/game/Save.cpp",
+    "engine/physics/Character.cpp",
+    "engine/physics/Character.h",
+    "engine/physics/PhysisBox3D.h",
+    "engine/physics/Scene.cpp",
+    "engine/render/TerraWeaveBotanicalForest.h",
+    "engine/sim/Simulation.cpp",
+    "engine/sim/Simulation.h",
+    "engine/view/game/GamePlanet.cpp",
+    "engine/view/game/GamePlanet.h",
+    "engine/view/game/GamePlanetFlora.cpp",
+    "engine/view/game/GamePlanetFlora.h",
+    "engine/view/game/GamePlanetRender.cpp",
+    "engine/view/game/GamePlanetRender.h",
+    "engine/view/game/GamePlanetView.cpp",
+    "engine/view/game/GameView.cpp",
+    "engine/view/game/GameView.h",
+    "engine/world/NereidCascadeScene.h",
+    "engine/world/SimulationLod.h",
+    "engine/world/TerraWeaveForestEcology.h",
+    "engine/world/TerraWeaveForestManifest.h",
+    "engine/world/TerraWeaveForestNutrientCycle.h",
+    "engine/world/TerraWeaveForestSpeciesManifest.h",
+    "engine/world/TerraWeaveForestSpeciesProfile.h",
+    "engine/world/TerraWeaveRootEvents.h",
+    "engine/world/TerraWeaveTreePresets.h",
+    "engine/world/TerraWeaveVegetationSoil.h",
+    "engine/world/nereid/NereidSedimentTransport.h",
+    "engine/world/nereid/NereidSphereWater.h",
+    "examples/native/world_processes/planet-demo/README.md",
+    "libraries/catalog.json",
+    "libraries/include/aiverselib/world/AetherEcs.h",
+    "libraries/include/aiverselib/world/AetherPhysisBridge.h",
+    "libraries/include/aiverselib/world/AetherPhysisStratification.h",
+    "libraries/include/aiverselib/world/CircuitDevices.h",
+    "libraries/include/aiverselib/world/CircuitEcs.h",
+    "libraries/include/aiverselib/world/CircuitSurfaceWiring.h",
+    "libraries/include/aiverselib/world/CrowdEcs.h",
+    "libraries/include/aiverselib/world/CrowdGameCoreSurface.h",
+    "libraries/include/aiverselib/world/CrowdRoutes.h",
+    "libraries/include/aiverselib/world/CrowdSurfaceSlots.h",
+    "libraries/include/aiverselib/world/EchoEcs.h",
+    "libraries/include/aiverselib/world/EvolveArea.h",
+    "libraries/include/aiverselib/world/EvolveAreaScaleMath.h",
+    "libraries/include/aiverselib/world/EvolveClimateProjection.h",
+    "libraries/include/aiverselib/world/EvolveEcs.h",
+    "libraries/include/aiverselib/world/EvolvePhysisBridge.h",
+    "libraries/include/aiverselib/world/EvolvePlanetDeadwood.h",
+    "libraries/include/aiverselib/world/EvolvePlanetEcologySampling.h",
+    "libraries/include/aiverselib/world/EvolvePlanetForestEcology.h",
+    "libraries/include/aiverselib/world/EvolvePlanetForestRetirement.h",
+    "libraries/include/aiverselib/world/EvolvePlanetNaturalFalls.h",
+    "libraries/include/aiverselib/world/EvolvePlanetNutrients.h",
+    "libraries/include/aiverselib/world/EvolvePlanetRootClimate.h",
+    "libraries/include/aiverselib/world/EvolvePlanetRootSupport.h",
+    "libraries/include/aiverselib/world/EvolvePresets.h",
+    "libraries/include/aiverselib/world/EvolveRegionWorkBudget.h",
+    "libraries/include/aiverselib/world/EvolveSimulationLod.h",
+    "libraries/include/aiverselib/world/EvolveSpatialIndex.h",
+    "libraries/include/aiverselib/world/EvolveSurfaceEcology.h",
+    "libraries/include/aiverselib/world/EvolveSurfaceRegions.h",
+    "libraries/include/aiverselib/world/EvolveVisualization.h",
+    "libraries/include/aiverselib/world/FractureEcs.h",
+    "libraries/include/aiverselib/world/FracturePhysisBridge.h",
+    "libraries/include/aiverselib/world/FracturePlanetFoundation.h",
+    "libraries/include/aiverselib/world/GranularDocument.h",
+    "libraries/include/aiverselib/world/GranularEcs.h",
+    "libraries/include/aiverselib/world/GranularGameCorePlanetSoil.h",
+    "libraries/include/aiverselib/world/GranularPlanetSoilGeometry.h",
+    "libraries/include/aiverselib/world/GranularPlanetTerrainTransfer.h",
+    "libraries/include/aiverselib/world/GranularSurfaceField.h",
+    "libraries/include/aiverselib/world/ImprintCrowdBridge.h",
+    "libraries/include/aiverselib/world/ImprintEcs.h",
+    "libraries/include/aiverselib/world/ImprintSurfaceTrails.h",
+    "libraries/include/aiverselib/world/ImprintTrails.h",
+    "libraries/include/aiverselib/world/MorphEcs.h",
+    "libraries/include/aiverselib/world/MorphGravityBinding.h",
+    "libraries/include/aiverselib/world/MorphPhysisGravity.h",
+    "libraries/include/aiverselib/world/MorphPlanetModelFrame.h",
+    "libraries/include/aiverselib/world/NereidPlanetBankErosion.h",
+    "libraries/include/aiverselib/world/NereidPlanetSedimentTransport.h",
+    "libraries/include/aiverselib/world/PlanetArborCollision.h",
+    "libraries/include/aiverselib/world/PlanetCharacterGravityFrame.h",
+    "libraries/include/aiverselib/world/PlanetConsequenceOwner.h",
+    "libraries/include/aiverselib/world/PlanetConsequencePublisher.h",
+    "libraries/include/aiverselib/world/PlanetForestPendingDelivery.h",
+    "libraries/include/aiverselib/world/PlanetForestStaticSources.h",
+    "libraries/include/aiverselib/world/PlanetFractureDelivery.h",
+    "libraries/include/aiverselib/world/PlanetGranularPhysicalFrame.h",
+    "libraries/include/aiverselib/world/PlanetPhysicalDelivery.h",
+    "libraries/include/aiverselib/world/PlanetProcessGeometry.h",
+    "libraries/include/aiverselib/world/PlanetSourceIdentity.h",
+    "libraries/include/aiverselib/world/PlanetSourcePublisher.h",
+    "libraries/include/aiverselib/world/PlanetTerrainCollision.h",
+    "libraries/include/aiverselib/world/PlanetTerrainFootprint.h",
+    "libraries/include/aiverselib/world/PlanetTerrainResidency.h",
+    "libraries/include/aiverselib/world/SocietyEcs.h",
+    "libraries/include/aiverselib/world/SocietyNpcTriggers.h",
+    "libraries/include/aiverselib/world/SurfaceGravitySupport.h",
+    "libraries/include/aiverselib/world/WorldProcessBudgetedQueries.h",
+    "libraries/include/aiverselib/world/WorldProcessEntityBudget.h",
+    "libraries/include/aiverselib/world/WorldProcessGravity.h",
+    "libraries/include/aiverselib/world/WorldProcessReportJobs.h",
+    "libraries/include/aiverselib/world/WorldProcessSurfaceFrame.h",
+    "libraries/include/aiverselib/world/WorldProcesses.h",
+    "libraries/include/aiverselib/world/WorldProcessesAuthoring.h",
+    "libraries/include/aiverselib/world/WorldProcessesExtendedAuthoring.h",
+    "libraries/include/aiverselib/world/WorldProcessesExtendedInspector.h",
+    "libraries/include/aiverselib/world/WorldProcessesExtendedLinks.h",
+    "libraries/include/aiverselib/world/WorldProcessesInspector.h",
+    "libraries/include/aiverselib/world/WorldProcessesLinkedAuthoring.h",
+    "libraries/include/aiverselib/world/WorldProcessesMapHydration.h",
+    "libraries/include/aiverselib/world/WorldProcessesNativeModule.h",
+    "libraries/include/aiverselib/world/WorldProcessesPlanetBankPipeline.h",
+    "libraries/include/aiverselib/world/WorldProcessesPlanetForestPipeline.h",
+    "libraries/include/aiverselib/world/WorldProcessesPlanetPhysicsHost.h",
+    "libraries/include/aiverselib/world/WorldProcessesQueries.h",
+    "libraries/include/aiverselib/world/WorldProcessesSuite.h",
+    "skills/catalog.json",
+    "skills/editor/studio-ui/SKILL.md",
+    "skills/world/aiverse-aether/SKILL.md",
+    "skills/world/aiverse-circuit/SKILL.md",
+    "skills/world/aiverse-crowd/SKILL.md",
+    "skills/world/aiverse-echo/SKILL.md",
+    "skills/world/aiverse-evolve/SKILL.md",
+    "skills/world/aiverse-fracture/SKILL.md",
+    "skills/world/aiverse-granular/SKILL.md",
+    "skills/world/aiverse-imprint/SKILL.md",
+    "skills/world/aiverse-morph/SKILL.md",
+    "skills/world/aiverse-physis/SKILL.md",
+    "skills/world/aiverse-planets/SKILL.md",
+    "skills/world/aiverse-society/SKILL.md",
+    "skills/world/aiverse-spatial-queries/SKILL.md",
+    "skills/world/aiverse-world-processes/SKILL.md",
+    "tests/ecs_aether_gas_test.cpp",
+    "tests/ecs_echo_acoustics_test.cpp",
+    "tests/ecs_fracture_structure_test.cpp",
+    "tests/editor/planet_forest_mcp.py",
+    "tests/geometry/surface_proxy.cpp",
+    "tests/libraries/CMakeLists.txt",
+    "tests/libraries/policy_mechanics_batch2.inc",
+    "tests/libraries/policy_mechanics_batch3.inc",
+    "tests/libraries/world_processes_run.sh",
+    "tests/libraries/world_processes_test.cpp",
+    "tests/physics/scene_tests.cpp",
+    "tests/planet_forest_visual_test.cpp",
+    "tests/world_processes_authoring_test.cpp",
+    "tests/world_processes_gamecore_native_test.cpp",
+    "tests/world_processes_inspector_test.cpp",
+    "tests/world_processes_linked_test.cpp",
+    "tests/world_processes_map_hydration_test.cpp",
+    "tests/world_processes_native_acceptance.sh",
+    "tests/world_processes_planet_host_test.cpp",
+    "tests/world_processes_verify.sh",
+    "tools/evolve-demo-acceptance.py",
+    "tools/mcp/audit_registry.py",
+    "tools/skills/audit.py",
+    "tools/skills/catalog.py"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": true,
+    "visible": true,
+    "runtime": true
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-world-processes",
+      "aiverse-evolve"
+    ],
+    "mcp_tools": [
+      "planet_forest_get",
+      "studio_planet_forest_live"
+    ],
+    "studio_methods": [
+      "studio.planetForest",
+      "studio.planetForestLive"
+    ],
+    "studio_panels": [
+      "rules",
+      "scene"
+    ]
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Four directional handles support symmetric and fixed-opposite resizing. A fallen tree uses the existing ARBOR model and completed physics pose.",
+      "evidence": [
+        "docs/agent-handoffs/world-processes-pr124-current-main-2026-11-25.md"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "MapDoc owns edits. Simulation resources own the terrain and forest. Studio reads snapshots and never advances ecology or Box3D.",
+      "evidence": [
+        "docs/agent-handoffs/world-processes-stage161d5d-2026-11-24.md",
+        "docs/agent-handoffs/world-processes-pr124-current-main-2026-11-25.md"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "Native module composition installs the forest publisher for a single authority. Motion is exposed through the completed-tick snapshot.",
+      "evidence": [
+        "examples/native/world_processes/planet-demo/README.md",
+        "docs/agent-handoffs/world-processes-pr124-current-main-2026-11-25.md"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "The World Processes and EVOLVE recipes describe the native API, forest editing, live diagnostics and authored species.",
+      "evidence": [
+        "skills/world/aiverse-world-processes/SKILL.md",
+        "skills/world/aiverse-evolve/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "pass",
+      "note": "Authenticated live Studio readback identified the selected project, Terra, the physical plant and its published transform.",
+      "evidence": [
+        "docs/agent-handoffs/world-processes-pr124-current-main-2026-11-25.md"
+      ]
+    },
+    "studio": {
+      "status": "pass",
+      "note": "Rules opens the forest authoring panel. Show live forest in Scene renders the settled plant in its physical pose.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-terraweave-fallen-arbor.json",
+        "examples/native/world_processes/planet-demo/README.md"
+      ]
+    },
+    "inspector": {
+      "status": "pass",
+      "note": "The live inspector distinguishes standing, spent and physical plants and exposes the last motion tick.",
+      "evidence": [
+        "docs/agent-handoffs/world-processes-pr124-current-main-2026-11-25.md"
+      ]
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "The native GameCore fixture distinguishes legacy seat and planet payloads, checks archive integrity and round-trips edited terrain.",
+      "evidence": [
+        "docs/agent-handoffs/world-processes-pr124-current-main-2026-11-25.md"
+      ]
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "The area handles and forest inspector edit typed map properties. Existing process links remain map entity references.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "On a one-plant Terra map, 50 authenticated live requests after five warmups took 17.07 ms median and 23.27 ms p95 end-to-end. Studio RSS grew by 16 KiB over the sample. GPU execution time and multi-plant stress remain unmeasured.",
+      "evidence": [
+        "docs/agent-handoffs/world-processes-pr124-current-main-2026-11-25.md"
+      ]
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "Native physics and Metal rendering exercised on macOS. Windows, Linux GPU, and browser parity for the native Studio overlay have no corresponding frame.",
+      "evidence": [
+        "docs/agent-handoffs/world-processes-pr124-current-main-2026-11-25.md"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Studio reuses the ARBOR prototype builder, TerraWeave catalog and the Box3D consequence publisher. Explicit capsule recipes retain their existing path.",
+      "evidence": [
+        "docs/agent-handoffs/world-processes-pr124-current-main-2026-11-25.md"
+      ]
+    },
+    "headless": {
+      "status": "pass",
+      "note": "The native GameCore acceptance case drives fixed ticks, archive checks and real Box3D without opening Studio.",
+      "evidence": [
+        "docs/agent-handoffs/world-processes-pr124-current-main-2026-11-25.md"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "The planet and moon example gives the exact config, map catalog and Play sequence for natural mortality.",
+      "evidence": [
+        "examples/native/world_processes/planet-demo/README.md"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "All 11 focused native World Processes, physics and Studio cases passed on the refreshed checkout.",
+      "evidence": [
+        "docs/evidence/pr124-world-processes-48352ee2.json"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Stage SHAs, integration decisions, captures and the verification boundary are recorded in the integration handoff.",
+      "evidence": [
+        "docs/agent-handoffs/world-processes-pr124-current-main-2026-11-25.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "Playable setup and Studio controls are documented with the example.",
+      "evidence": [
+        "examples/native/world_processes/planet-demo/README.md"
+      ]
+    },
+    "publishing": {
+      "status": "pass",
+      "note": "The bilingual devlog embeds the native Metal frame. Native Studio editor tooling uses the editor-frame exception for the browser demo.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-terraweave-fallen-arbor.json"
+      ]
+    }
+  },
+  "test_reports": [
+    "docs/evidence/pr124-world-processes-48352ee2.json"
+  ]
+}
