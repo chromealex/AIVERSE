@@ -1,0 +1,48 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native/DartConfiguration.tcl
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native/DartConfiguration.tcl
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 556
+    Start 556: studio_metal_lighting
+
+556: Test command: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native/apps/studio-native/aiverse_studio_metal_lighting_tests "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native/apps/studio-native/metal-lighting-captures"
+556: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native/apps/studio-native
+556: Test timeout computed to be: 90
+556: [metal-assets] libraries=0 sourceMisses=14 pipelines=18 pipelineFailures=0 archive=0 strict=0
+556: [metal-assets] libraries=0 sourceMisses=40 pipelines=74 pipelineFailures=0 archive=0 strict=0
+556: Captured a cold Studio map with zero presented frames
+556: Recovered a missing model UV sidecar on an unchanged bake
+556: Conflicting bake header preserved, staged UV and atlas published on retry
+556: Captured static column, excluded moving unit, sampled 289 terrain heights
+556: Terrain, matching and moved model receivers: {"enabled":true,"loaded":true,"lightmapped":2,"probed":1}
+556: Baked terrain draws verified, blue channel changed at 8140 pixels
+556: Independent weather framebuffer means 37.0053 28.8254
+556: Preview geometry · GI: CPU · Direct: Luma PASS
+556: Preview geometry · GI: GPU · Direct: Luma PASS
+556: Preview geometry · GI: off · Direct: Luma PASS
+556: Preview geometry · GI: off · Direct: Luma PASS
+556: Luma light removal delta 47418 in 3896 pixels
+556: Negative-coordinate FPS and material transition PASS
+556: Idle frame skipping PASS
+556: Studio Metal lighting PASS
+1/1 Test #556: studio_metal_lighting ............   Passed    9.65 sec
+
+The following tests passed:
+	studio_metal_lighting
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+EDITOR      =   9.65 sec*proc (1 test)
+LIGHTING    =   9.65 sec*proc (1 test)
+
+Total Test time (real) =   9.68 sec
+2026-11-26 02:14:47.415 AiverseStudioHTML5[69233:82313423] [studio-web] JS: CROSS main DONE_1
+2026-11-26 02:14:47.414 AiverseStudioHTML5[69233:82313423] [studio-web] JS: CROSS main VERIFIED {"sceneOpened":false,"hash":"d2142d80c8def9be","stats":{"instances":3,"regions":3,"pages":2,"texels":1066655,"probes":578,"triangles":8200},"loadedInScene":false}
+Duplicate submit and invalid quality rejected. Settings undo/redo verified. MCP tools listed. Invalid force rejected. Inline settings applied. Observed baking -> idle. Unchanged bake skipped. {"loaded": true, "lightmappedPrimitives": 3, "probePrimitives": 0, "failed": false, "progress": 1}
