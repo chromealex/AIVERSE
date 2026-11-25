@@ -3188,7 +3188,7 @@
           "titleEn": "Software rendering on the CPU"
         },
         {
-          "status": "planned",
+          "status": "in-progress",
           "title": "Доступ к рендереру из Python, C# и Java",
           "titleEn": "Use the renderer from Python, C# and Java"
         },
