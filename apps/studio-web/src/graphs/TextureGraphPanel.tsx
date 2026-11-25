@@ -33,7 +33,7 @@ function projection(graph:Obj,catalog:Obj[]):GraphView{
  return {nodes,links};
 }
 export default function TextureGraphPanel({projectPath,disabled,onEdit}:{projectPath:string;disabled:boolean;onEdit:(key:MaterialKey,value:FieldValue)=>void}){
- const [text,setText]=useState(JSON.stringify(template,null,2)),[name,setName]=useState(''),[original,setOriginal]=useState<{name:string;graph:Obj}|null>(null);
+ const [text,setText]=useState(JSON.stringify(template,null,2)),[name,setName]=useState(''),[original,setOriginal]=useState<{name:string;graph:Obj|string}|null>(null);
  const [overrideText,setOverrideText]=useState('{}'),[parameterName,setParameterName]=useState(''),[parameterField,setParameterField]=useState(''),[variantName,setVariantName]=useState(''),[baseMaterial,setBaseMaterial]=useState(''),[bakedSet,setBakedSet]=useState('');
  const [templates,setTemplates]=useState<Obj[]>([]),[outputTypes,setOutputTypes]=useState<Obj>({}),[newOp,setNewOp]=useState('constant'),[pending,setPending]=useState<PortRef|null>(null);
  const [assets,setAssets]=useState<{guid:string;path:string;key:MaterialKey}[]>([]);
@@ -62,7 +62,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
    if(action==='load'){
     const r=await op('texture_graph_get',{name});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||!object(r.graph))throw new Error('Graph unavailable');
-    setOriginal({name,graph:r.graph});edit(r.graph);setSelected('');setPending(null);return;
+    setOriginal({name,graph:typeof r.originalJson==='string'?r.originalJson:r.graph});edit(r.graph);setSelected('');setPending(null);return;
    }
    if(action==='variant'){
     if(!bakedSet)throw new Error('Bake a set and configure its importer first');
@@ -94,7 +94,7 @@ export default function TextureGraphPanel({projectPath,disabled,onEdit}:{project
    if(action==='save'){
     const r=await op('texture_graph_set',{name,graph,...(original?.name===name?{expected:original.graph}:{})});if(token!==epoch.current)return;
     if(!object(r)||r.ok!==true||!object(r.graph))throw new Error('Native save rejected');
-    setOriginal({name,graph:r.graph});setNames(old=>[...new Set([...old,name])].sort());setStatus('Graph saved');return;
+    setOriginal({name,graph:typeof r.originalJson==='string'?r.originalJson:r.graph});setNames(old=>[...new Set([...old,name])].sort());setStatus('Graph saved');return;
    }
    if(action==='validate'){
     const r=await op('texture_graph_validate',{graph,overrides});if(token!==epoch.current)return;if(!object(r)||r.ok!==true)throw new Error('Native validation failed');setStatus('Native topology and work budget valid');return;

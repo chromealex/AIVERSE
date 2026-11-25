@@ -492,6 +492,24 @@ void entityWorkflow() {
             return session.dispatch(request);
         };
         {
+            fs::create_directories(project/"shaders");
+            const auto path=project/"shaders"/"precise.json";
+            std::ofstream(path) << R"({"domain":"material","nodes":[{"id":"c","op":"constant","value":[0.2000,0.7,1,1]}],"outputs":{"color":"c"}})";
+            auto params=Json::parse(R"({"name":"precise"})");
+            const auto loaded=call("studio.shaderGraphGet",params)["result"];
+            const auto baseline=loaded.getStr("originalJson");
+            AIVERSE_TEST_CHECK(baseline.find("0.2000")!=std::string::npos);
+            params.set("expectedProject",Json::string(session.workspace().project.dir));
+            params.set("expected",Json::string(baseline));
+            auto draft=loaded["graph"];
+            draft.member("nodes").items().front().set("value",Json::parse("[0.375,0.7,1,1]"));
+            params.set("graph",draft);
+            const auto saved=call("studio.shaderGraphSave",params);
+            AIVERSE_TEST_CHECK(!saved.has("error") && saved["result"]["originalJson"].isString());
+            AIVERSE_TEST_CHECK(call("studio.shaderGraphSave",params).has("error"));
+            AIVERSE_TEST_CHECK(Json::parseFile(path.string())==draft);
+        }
+        {
             // Every map entity exposes a full 3D Transform; the first Y/rotation/scale
             // edit of a legacy unit writes components.Transform and keeps facing in sync.
             auto params=Json::object();params.set("entityId",Json::string("entity:0"));

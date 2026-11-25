@@ -140,7 +140,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Building owner and Stage 53-54 guarded graph writes plus planetary inspection are present in the integration staging tree. Full Caverns owner reconciliation and merged-tree acceptance remain pending.",
+      "note": "Building owner and Stage 53-54 guarded graph writes plus planetary inspection are present in the integration staging tree. Building and Caverns owners are reconciled. A native Shader Graph panel save rejected the unchanged material_tint original after WebView converted its decimal numbers. Carry native originals through Studio and retest guarded edits.",
       "evidence": []
     },
     "architecture": {
