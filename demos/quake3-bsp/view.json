@@ -1,0 +1,75 @@
+{
+  "schema": 1,
+  "kind": "models",
+  "items": [
+    {
+      "id": "egyptian-trouble",
+      "title": "Egyptian Trouble",
+      "model": "maps/oacmpdm3.bsp",
+      "camera": {
+        "eye": [
+          -280,
+          632,
+          24
+        ],
+        "target": [
+          224,
+          632,
+          -128
+        ]
+      },
+      "files": [
+        "maps/oacmpdm3.bsp",
+        "scripts/akom_glass.shader",
+        "scripts/akom_lights.shader",
+        "scripts/akom_liquids.shader",
+        "scripts/akom_numbers.shader",
+        "scripts/akom_sfx.shader",
+        "scripts/akom_sky.shader",
+        "scripts/akom_teleporter.shader",
+        "scripts/gig01.shader",
+        "scripts/oa3_textures_egyptsoc.shader",
+        "scripts/oacmp_egyptsoc.shader",
+        "scripts/oacmp_evil8.shader",
+        "scripts/oacmp_evil8_grate.shader",
+        "scripts/oajgctf1.shader",
+        "scripts/oajgdm1.shader",
+        "scripts/oajgdm2.shader",
+        "scripts/oajgdm3.shader",
+        "scripts/shaderlist.txt",
+        "textures/akom_sfx/akombumpy.tga",
+        "textures/akom_teleporter/aw_teleporter.tga",
+        "textures/akom_teleporter/black_10.tga",
+        "textures/oacmp_egyptsoc_floor/block02a.tga",
+        "textures/oacmp_egyptsoc_floor/block04a.tga",
+        "textures/oacmp_egyptsoc_floor/block06a.tga",
+        "textures/oacmp_egyptsoc_floor/block07a.tga",
+        "textures/oacmp_egyptsoc_floor/marker1ag.tga",
+        "textures/oacmp_egyptsoc_mat/block01a.tga",
+        "textures/oacmp_egyptsoc_mat/wood05a.tga",
+        "textures/oacmp_egyptsoc_sfx/lig_064-02w2.tga",
+        "textures/oacmp_egyptsoc_sfx/lig_064-04w2.tga",
+        "textures/oacmp_egyptsoc_sfx/lig_064-05y1.tga",
+        "textures/oacmp_egyptsoc_sfx/lig_b064-01e.tga",
+        "textures/oacmp_egyptsoc_trim/128-01pa.tga",
+        "textures/oacmp_egyptsoc_trim/128-02pa.tga",
+        "textures/oacmp_egyptsoc_trim/128-05e.tga",
+        "textures/oacmp_egyptsoc_trim/256-04a.tga",
+        "textures/oacmp_egyptsoc_trim/s064-05o.tga",
+        "textures/oacmp_egyptsoc_trim/v064-03c_r.tga",
+        "textures/oacmp_egyptsoc_trimd/s064-01ed.tga",
+        "textures/oacmp_egyptsoc_trimd/s064-01fr.tga",
+        "textures/oacmp_egyptsoc_wall/relief03a.tga",
+        "textures/oacmp_egyptsoc_wall/relief04a.tga",
+        "textures/oacmp_egyptsoc_wall/stone01a.tga",
+        "textures/oacmp_egyptsoc_wall/stone02a.tga",
+        "textures/oacmp_egyptsoc_wall/stone03a.tga",
+        "textures/oacmp_egyptsoc_wall/stone04a.tga",
+        "textures/oacmp_egyptsoc_wall/stone05a_r.tga",
+        "textures/oacmp_egyptsoc_wall/stone06a.tga",
+        "textures/oacmp_egyptsoc_wall/stone09a.tga"
+      ],
+      "scale": 0.03125
+    }
+  ]
+}
