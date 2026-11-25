@@ -1,0 +1,5 @@
+# Building Linux linkage and Windows InputFlow build
+
+Commit 0f840cea9 updates the focused Building workflow to include TriangleCollision.cpp beside SpatialWorld.cpp. GitHub job 139103581928 previously failed at the standalone dual-leaf link with an undefined SpatialWorld::castCollider. The corrected command compiled with GCC 13 on Linux ARM64, with warnings as errors, and the resulting executable passed single/dual-leaf authored and zero-revision rollback. The accompanying float-bound change removes the C4305 expression reported by Windows job 139103582767. Its four focused Mac tests passed. Windows execution is tracked separately.
+
+Integration 5b12ad21e incorporates origin/main 1e87455fd (#186), including the GCC 13 fixes and the prior main-owner NEREID evidence. Git merged the shared Vulkan implementation and FPS client. The final combined-tree Mac quick run uses this source. The Play Mode Review regression and before/after timings are recorded in studio-play-review-bulk-2026-11-25.md.

@@ -3,6 +3,7 @@
   "id": "feature-gate",
   "owner": "agents",
   "changed_paths": [
+    "engine/platform/EnhancedInputConfig.h",
     "AGENTS.md",
     "tools/agents/check_feature.py",
     "tools/agents/audit_compliance.py",
