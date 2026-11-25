@@ -1,0 +1,13 @@
+{
+  "sha": "0d83a28885f262258a360d7f939f845dcd2d95ee",
+  "argv": [
+    "npm",
+    "--prefix",
+    "apps/studio-web",
+    "run",
+    "test:web"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-box-inspector-0d83a2888.log.txt",
+  "sha256": "145f845caaa4705c6a70d234204b31555acd6d6bfe10d7fea60f416a22d96263"
+}
