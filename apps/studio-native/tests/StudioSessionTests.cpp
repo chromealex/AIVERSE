@@ -6,6 +6,7 @@
 #include "apps/editor/core/ProjectDocumentJournal.h"
 #include "tests/TestCheck.h"
 #include "apps/studio-native/StudioGameLaunch.h"
+#include "apps/studio-native/StudioNetworkPlay.h"
 #include "engine/actor/Project.h"
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/studio-native/StudioGameDevice.h"
@@ -2296,6 +2297,20 @@ static void worldSceneInspectorProperties() {
         };
         const auto initial=call("studio.snapshot")["result"];
         AIVERSE_TEST_CHECK(initial["scene"].getBool("worldSpace")&&initial["scene"].getBool("mapProperties"));
+        Json network=Json::object();
+        network.set("project",initial["project"]["path"]);
+        network.set("mode",Json::string("listen"));
+        const auto hostArgs=studio::studioNetworkArguments(session.workspace(),network);
+        AIVERSE_TEST_CHECK((hostArgs==std::vector<std::string>{"--project",session.workspace().project.dir,"--map-index","0","--listen"}));
+        network.set("mode",Json::string("connect"));
+        network.set("address",Json::string("ws://[::1]:27101"));
+        const auto joinArgs=studio::studioNetworkArguments(session.workspace(),network);
+        AIVERSE_TEST_CHECK(joinArgs.size()==6&&joinArgs[4]=="--connect"&&joinArgs[5]=="ws://[::1]:27101");
+        for(const char* invalid:{"udp://","udp://localhost:65536","ws://[::1]:0","ws://[::1","http://localhost","udp://local host"}){
+            bool rejected=false;
+            try{studio::validateStudioServerAddress(invalid);}catch(const std::runtime_error&){rejected=true;}
+            AIVERSE_TEST_CHECK(rejected);
+        }
         Json params=Json::object();params.set("scope",initial["graphDocument"]);
         const auto summary=call("studio.mapProperties",params)["result"];
         AIVERSE_TEST_CHECK(!summary.getBool("grid")&&summary["worldSpace"].getInt("colliders")==2&&summary["worldSpace"].getInt("spawns")==2);
