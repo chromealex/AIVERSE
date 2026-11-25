@@ -1,0 +1,24 @@
+2026-11-25 22:58:44.902 AiverseStudioHTML5[7478:81490855] [studio-web] JS: CROSS networkplayproof Rejected Open the actor project again before starting network play.
+2026-11-25 22:58:44.902 AiverseStudioHTML5[7478:81490855] [studio-web] JS: CROSS networkplayproof Rejected Enter a server address without spaces.
+2026-11-25 22:58:44.903 AiverseStudioHTML5[7478:81490855] [studio-web] JS: CROSS networkplayproof Rejected Use a server port from 1 to 65535.
+2026-11-25 22:58:45.084 AiverseStudioHTML5[7478:81490855] [studio-web] JS: CROSS networkplayproof HOST_STARTED
+2026-11-25 22:58:53.269 AiverseStudioHTML5[7478:81490855] [studio-web] JS: CROSS networkplayproof READY_FOR_CAPTURE
+COMMAND    PID          USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+AiverseGa 7955 aleksandrfeer    3u  IPv6 0x3d41e73c123585da      0t0  UDP *:27100
+COMMAND    PID          USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+AiverseGa 8091 aleksandrfeer    3u  IPv4 0xd8ad973ad48e7507      0t0  UDP *:58606
+AIVERSE FPS
+Health: 100 Ammo: 30 / 120 Server tick: 849
+Assault rifle
+1: Assault rifle
+jump; Esc: release.
+LMB: fire / capture mouse; 1-4: weapon; R: reload; WASD: move; Shift: sprint; Ctri: crouch; Space:
++
+AIVERSE FPS
+Health: 100 Ammo: 30 / 120 Server tick: 1041
+Assault rifle
+1: Assault rifle
+jump; Esc: release.
+LMB: fire / capture mouse; 1-4: weapon; R: reload; WASD: move; Shift: sprint; Ctri: crouch; Space:
++
+UDP game HUD confirmed advancing server ticks [849, 1041]

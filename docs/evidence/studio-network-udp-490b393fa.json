@@ -1,0 +1,10 @@
+{
+  "sha": "490b393fa51352aa78f9f3c53eda69dd0e0828be",
+  "argv": [
+    "bash",
+    "/tmp/network-udp.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-network-udp-490b393fa.log.txt",
+  "sha256": "db4d1abe9c64d4606796b7f6c4a962e80af48c5bd045330ba689125be5728f3e"
+}
