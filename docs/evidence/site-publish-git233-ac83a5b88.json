@@ -1,0 +1,10 @@
+{
+  "sha": "ac83a5b88df0fe86e9097be5565282c3a4bdb7c3",
+  "argv": [
+    "python3.12",
+    "/private/tmp/aiverse-site-publish-dry-run.py"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/site-publish-git233-ac83a5b88.log.txt",
+  "sha256": "138927135c590eabbeb1e6106f63b1fda534419a303275efeab09055de2e3561"
+}

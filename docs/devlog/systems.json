@@ -3355,6 +3355,14 @@
           "titleEn": "Shared development log and system roadmaps"
         },
         {
+          "status": "done",
+          "date": "2026-11-25",
+          "title": "Публикация сайта с Git 2.33",
+          "titleEn": "Site publication with Git 2.33",
+          "text": "Проверен полный сухой прогон публикации на Git 2.33: 152 страницы на двух языках, без ошибок и без отправки в gh-pages.",
+          "textEn": "A full publication dry run passed on Git 2.33: 152 pages in two languages, with no errors and no push to gh-pages."
+        },
+        {
           "id": "mac-build-test-runner",
           "status": "done",
           "date": "2026-11-25",

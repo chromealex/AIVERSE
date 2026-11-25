@@ -761,7 +761,14 @@ def cmd_publish(args):
         index = out.parent / (out.name + '.index')
         env = dict(os.environ, GIT_INDEX_FILE=str(index))
         git('read-tree', 'origin/gh-pages', env=env)
-        git(f'--work-tree={out}', 'add', '--sparse', '-A', env=env)
+        try:
+            git(f'--work-tree={out}', 'add', '--sparse', '-A', env=env)
+        except SystemExit as error:
+            # Git 2.33 has no --sparse for add. Disable sparse checkout for
+            # this index-only invocation so every generated page is staged.
+            if 'unknown option' not in str(error) or 'sparse' not in str(error):
+                raise
+            git('-c', 'core.sparseCheckout=false', f'--work-tree={out}', 'add', '-A', env=env)
         tree = git('write-tree', env=env)
         if tree == git('rev-parse', 'origin/gh-pages^{tree}'):
             print('publish: gh-pages already matches main, nothing to push')
