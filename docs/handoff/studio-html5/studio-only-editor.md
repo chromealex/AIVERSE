@@ -394,3 +394,5 @@ Actor movement b39103483b7a5c516d43357397ab374c42304044. StudioSession.cpp reads
 Actor loadout stage. Port game damage and magazine authoring for both legacy single weapon and ordered weapon lists. Save changed fields atomically, preserve other metadata and verify both formats.
 
 Actor loadout ee59734cd008cbe0cf2332c4fa92552b1b0cd90f. ActorLoadout.tsx, LensCameraPanel.tsx, types.ts and StudioSession.cpp expose scoped atomic editing of individual game damage/magazine fields. Native and Vite builds, typecheck and web suite passed (docs/evidence/studio-actor-loadout-ee59734cd.json). Real macOS HTML Studio checked two separate projects with actor.weapon and actor.weapons. Invalid slot count, out-of-range damage and stale saves rejected. Compared every JSON field after editing and verified unchanged map bytes. Captures docs/devlog/media/2026-11-25-studio-actor-loadout/. Next check legacy collider bounds authoring. Windows and merged-tree acceptance remain open.
+
+Collider Inspector stage. Expose axis-aligned world-space collider min/max properties, validate the complete batch through actor_set and check scoped edits, undo/redo and disk persistence.
