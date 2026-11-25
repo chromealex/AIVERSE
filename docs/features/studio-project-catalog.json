@@ -199,6 +199,7 @@
       "studio.mapProperties",
       "studio.mapPropertiesSet",
       "studio.mapPlayer",
+      "studio.playerStartPick",
       "studio.gameEntities",
       "studio.hierarchyGroups",
       "studio.gameSelectEntity",
