@@ -1,0 +1,10 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/nereid-gcc13-main-gate/mac
+Test project /Volumes/KINGSTON/AIVERSE-builds/nereid-gcc13-main-gate/mac
+    Start 196: ecs_nereid_review_fixes_test
+1/2 Test #196: ecs_nereid_review_fixes_test .....   Passed    0.79 sec
+    Start 215: library_policy_mechanics
+2/2 Test #215: library_policy_mechanics .........   Passed    0.73 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Total Test time (real) =   1.56 sec

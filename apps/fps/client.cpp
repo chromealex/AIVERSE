@@ -320,7 +320,8 @@ struct App {
         const auto cameraBlock=[&](const char* key){
             Json block=render::resolveCameraPreset(rules["camera"][key]);
             if(!block.isObject())block=Json::object();
-            for(const auto& [k,v]:render::resolveCameraPreset(map["camera"][key]).members())block.set(k,v);
+            const Json mapCameraBlock=render::resolveCameraPreset(map["camera"][key]);
+            for(const auto& [k,v]:mapCameraBlock.members())block.set(k,v);
             return block;};
         look.settings=render::cameraLookFrom(cameraBlock("firstPerson"));
         chase=render::cameraChaseFrom(cameraBlock("chase"));

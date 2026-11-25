@@ -27,8 +27,10 @@ inline void affixes(){
     ItemMigration m;m.fromVersion=1;m.renamed[3]=6;m.rescale[6]={2,1};
     ItemInstance old{9,1,20,1,0,{{3,2},{4,3}},{0,0}};auto mig=migrateItem(d2,old,m);CHECK(mig&&mig->version==2&&mig->affixes[0].affix==4&&mig->affixes[1].affix==6&&mig->affixes[1].value==4);
     ReactionData rd;rd.elements[1]={1,300,true};rd.elements[2]={2,300,true};rd.elements[3]={3,300,false};rd.reactions.push_back({1,2,1,2000,true});
-    AuraState au;ElementHit fire{5,1},water{5,2};auto e=applyElements(rd,au,1,std::span(&fire,1));CHECK(e&&e->empty()&&au.auras[5].contains(1));
-    e=applyElements(rd,au,2,std::span(&water,1));CHECK(e->size()==1&&e->front().multiplierMilli==2000&&!au.auras.contains(5));
+    AuraState au;ElementHit fire{5,1},water{5,2};auto first=applyElements(rd,au,1,std::span(&fire,1));CHECK(first.has_value());
+    const auto firstEvents=std::move(first).value();CHECK(firstEvents.empty()&&au.auras[5].contains(1));
+    auto second=applyElements(rd,au,2,std::span(&water,1));CHECK(second.has_value());
+    const auto secondEvents=std::move(second).value();CHECK(secondEvents.size()==1&&secondEvents.front().multiplierMilli==2000&&!au.auras.contains(5));
     applyElements(rd,au,3,std::span(&fire,1));CHECK(applyElements(rd,au,400,{})&&au.auras.empty());roundtrip(au);
 }
 inline void quests(){
@@ -74,10 +76,13 @@ inline void herds(){
     HerdConfig c;HerdState s;CHECK(addHerd(s,{1,7,0,{},{},{3,1,2}}));CHECK(s.herds[1].leader==1);
     std::map<int64_t,TamingDef> tame{{7,{7,50,400,100,300,100,1000,10}}};
     std::vector<MemberFact> f{{1,{0_fx,{},0_fx}},{2,{20_fx,{},0_fx}},{3,{1_fx,{},{}}}};
-    auto r=stepHerds(c,tame,s,1,f,{});CHECK(r&&r->steer.size()==3);
-    auto far=std::find_if(r->steer.begin(),r->steer.end(),[](auto& x){return x.animal==2;});CHECK(far->direction.x<Fixed{});   // straggler returns
-    f[2].alarmed=true;f[2].threat={5_fx,{},{}};r=stepHerds(c,tame,s,2,f,{});for(auto& st:r->steer)CHECK(st.fleeing);       // panic spreads
-    f[2].alarmed=false;f[0].alive=false;r=stepHerds(c,tame,s,3,f,{});CHECK(s.herds[1].leader==2);
+    auto first=stepHerds(c,tame,s,1,f,{});CHECK(first.has_value());
+    const HerdReport firstReport=std::move(first).value();CHECK(firstReport.steer.size()==3);
+    auto far=std::find_if(firstReport.steer.begin(),firstReport.steer.end(),[](auto& x){return x.animal==2;});CHECK(far!=firstReport.steer.end()&&far->direction.x<Fixed{});   // straggler returns
+    f[2].alarmed=true;f[2].threat={5_fx,{},{}};
+    auto second=stepHerds(c,tame,s,2,f,{});CHECK(second.has_value());
+    const HerdReport panicReport=std::move(second).value();for(const auto& st:panicReport.steer)CHECK(st.fleeing);       // panic spreads
+    f[2].alarmed=false;f[0].alive=false;CHECK(stepHerds(c,tame,s,3,f,{}).has_value());CHECK(s.herds[1].leader==2);
     TameCommand feed{TameCommandKind::Feed,3,9,50};stepHerds(c,tame,s,4,f,std::span(&feed,1));CHECK(s.bonds[3][9].trust==400);
     stepHerds(c,tame,s,5,f,std::span(&feed,1));CHECK(s.bonds[3][9].trust==400);                                           // cooldown
     stepHerds(c,tame,s,20,f,std::span(&feed,1));stepHerds(c,tame,s,40,f,std::span(&feed,1));CHECK(tamedOwner(s,3)==9);

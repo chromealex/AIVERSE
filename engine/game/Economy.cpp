@@ -163,7 +163,7 @@ void GameCore::sysFields(Simulation& sim) {
 
 namespace {
 void ensureTypeComponents(World& w, Entity e, const UnitType& t) {
-    if (!t.weapons.empty() && !w.has<Combat>(e)) w.add<Combat>(e);
+    if (!t.weapons.empty() && !w.has<Combat>(e)) w.add<Combat>(e, Combat{});
     if ((!t.produces.empty() || !t.researches.empty() || !t.upgrades.empty()) && !w.has<Production>(e)) w.add<Production>(e);
     if ((t.garrisonMax > 0 || t.spawnUnit != kNoType) && !w.has<Garrison>(e)) w.add<Garrison>(e);
     if (!t.abilities.empty() && !w.has<AbilityState>(e)) w.add<AbilityState>(e);

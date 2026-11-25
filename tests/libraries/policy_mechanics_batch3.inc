@@ -45,7 +45,9 @@ inline void diplomacy(){
     std::vector<DiploCommand> setup{{DiploCommand::AddFaction,1},{DiploCommand::AddFaction,2},{DiploCommand::AddFaction,3}};CHECK(stepDiplomacy(c,s,1,setup,facts,values));
     DiploCommand war{DiploCommand::DeclareWar,1,2};auto e=stepDiplomacy(c,s,2,std::span(&war,1),facts,values);CHECK(e&&atWar(s,1,2)&&relation(s,c,1,2)<0);
     DiploCommand peace{DiploCommand::Propose,0,0,{1,2,{},{Treaty::Peace}}};e=stepDiplomacy(c,s,3,std::span(&peace,1),facts,values);
-    CHECK(e->back().kind==DiploEventKind::Rejected);                                  // the stronger side refuses a plain peace
+    CHECK(e.has_value());
+    const auto peaceEvents=std::move(e).value();
+    CHECK(!peaceEvents.empty()&&peaceEvents.back().kind==DiploEventKind::Rejected);     // the stronger side refuses a plain peace
     peace.deal.items.push_back({1,7,500,0});values[2][7]=1;e=stepDiplomacy(c,s,4,std::span(&peace,1),facts,values);CHECK(!atWar(s,1,2));
     DiploCommand rewar{DiploCommand::DeclareWar,1,2};e=stepDiplomacy(c,s,5,std::span(&rewar,1),facts,values);CHECK(e->back().kind==DiploEventKind::Rejected);   // truce
     DiploCommand gift{DiploCommand::Modify,2,3,{},Treaty::War,{9,500,0,0}};stepDiplomacy(c,s,6,std::span(&gift,1),facts,values);
