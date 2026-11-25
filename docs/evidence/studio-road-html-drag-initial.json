@@ -1,0 +1,10 @@
+{
+  "sha": "5d72e7da42deba0ef4b64df01a55f4467252fdef",
+  "argv": [
+    "bash",
+    "/tmp/road-html-check.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-road-html-drag-initial.log.txt",
+  "sha256": "5c6fd6da10c89a1f4aaa35df8971cb6af94337b84e2e25eba51203aa1b5fcb05"
+}

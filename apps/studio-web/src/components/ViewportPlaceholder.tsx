@@ -21,7 +21,7 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
   const drag = useRef<{ x: number; y: number; startX: number; startY: number; moved: boolean; mode: DragMode; button: number } | null>(null);
   const pendingDelta = useRef<{ x: number; y: number; raf: number; mode: Exclude<DragMode, 'select' | 'handle'> }>({ x: 0, y: 0, raf: 0, mode: 'orbit' });
   const roadToken=useRef('');
-  const roadPointer=useRef<{id:number;token:string;x:number;y:number}|null>(null);
+  const roadPointer=useRef<{id:number;token:string;x:number;y:number;moved:boolean}|null>(null);
   const areaToken=useRef('');
   const areaPointer=useRef<{id:number;token:string}|null>(null);
   const flying = useRef(false);
@@ -255,7 +255,7 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
       event.currentTarget.focus();
       if(areaPointer.current || roadPointer.current || drag.current)return;
       if(roadToken.current && event.button===0 && !event.altKey && !event.ctrlKey && !event.metaKey){
-        roadPointer.current={id:event.pointerId,token:roadToken.current,x:event.clientX,y:event.clientY};
+        roadPointer.current={id:event.pointerId,token:roadToken.current,x:event.clientX,y:event.clientY,moved:false};
         event.currentTarget.setPointerCapture(event.pointerId);
         return;
       }
@@ -284,6 +284,11 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
       event.currentTarget.setPointerCapture(event.pointerId);
     }}
     onPointerMove={event => {
+      const road=roadPointer.current;
+      if(road && event.pointerId===road.id){
+        if(Math.hypot(event.clientX-road.x,event.clientY-road.y)>=5)road.moved=true;
+        return;
+      }
       const area=areaPointer.current;
       if(area){
         if(area.id===event.pointerId && area.token===areaToken.current && !handleInFlight.current){
@@ -311,7 +316,7 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
       if(road && event.pointerId===road.id && event.button===0){
         roadPointer.current=null;
         if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);
-        if(road.token===roadToken.current && !event.altKey && !event.ctrlKey && !event.metaKey &&
+        if(!road.moved && road.token===roadToken.current && !event.altKey && !event.ctrlKey && !event.metaKey &&
             Math.hypot(event.clientX-road.x,event.clientY-road.y)<5){
           const bounds=event.currentTarget.getBoundingClientRect();
           void send({kind:'pick',roadToken:road.token,chain:event.shiftKey,x:event.clientX-bounds.left,
