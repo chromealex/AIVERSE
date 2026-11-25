@@ -1,0 +1,10 @@
+2026-11-26 00:53:19.601 AiverseStudioHTML5[7176:82009755] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/shader-frame-qa-ZNrG6H/Catalog.app/Contents/Resources/studio-web
+2026-11-26 00:53:19.742 AiverseStudioHTML5[7176:82009755] [studio-web] served index.html (4766 bytes)
+2026-11-26 00:53:19.745 AiverseStudioHTML5[7176:82009755] [studio-web] served assets/index-xyjqapxd.js (1514355 bytes)
+2026-11-26 00:53:19.782 AiverseStudioHTML5[7176:82009755] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 00:53:20.117 AiverseStudioHTML5[7176:82009755] [studio-web] served index.html (4766 bytes)
+2026-11-26 00:53:20.119 AiverseStudioHTML5[7176:82009755] [studio-web] served assets/index-xyjqapxd.js (1514355 bytes)
+2026-11-26 00:53:20.153 AiverseStudioHTML5[7176:82009755] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html?window=bindingproof&panels=lighting
+2026-11-26 00:53:20.327 AiverseStudioHTML5[7176:82009755] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 00:53:20.330 AiverseStudioHTML5[7176:82009755] [studio-web] JS: CROSS bindingproof document.changed {"message":""}
+2026-11-26 00:53:25.481 AiverseStudioHTML5[7176:82009755] [studio-web] JS: CROSS bindingproof FAIL Preset missing courtyard
