@@ -155,6 +155,16 @@
         "apps/studio-native/StudioWorldProcessesEditing.h",
         "libraries/include/aiverselib/world/WorldProcessesNativeModule.h"
       ]
+    },
+    "material-techniques": {
+      "requires": [],
+      "roadmap": {
+        "system": "render",
+        "id": "material-techniques"
+      },
+      "api_paths": [
+        "engine/render/MaterialTechnique.h"
+      ]
     }
   },
   "claims": []

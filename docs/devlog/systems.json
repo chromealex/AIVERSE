@@ -3179,6 +3179,7 @@
         },
         {
           "status": "in-progress",
+          "id": "material-techniques",
           "title": "Техники материалов по расстоянию и возможностям GPU",
           "titleEn": "Select material techniques by distance and GPU capabilities"
         },
