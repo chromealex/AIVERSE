@@ -17,10 +17,19 @@
     "demos/order-upgrade/ui/hud/courtyard.rml",
     "docs/agent-handoffs/local-order-feedback-initial.md",
     "docs/agent-handoffs/order-upgrade-implementation.md",
+    "docs/agent-handoffs/order-upgrade-validation.md",
     "docs/agents/feature-policy.json",
+    "docs/devlog/entries/2026-11-25-gameplay-order-upgrade.json",
+    "docs/devlog/media/2026-11-25-gameplay-order-upgrade/metal-upgrade.png",
+    "docs/devlog/media/2026-11-25-gameplay-order-upgrade/order.png",
+    "docs/devlog/media/2026-11-25-gameplay-order-upgrade/source.png",
+    "docs/devlog/media/2026-11-25-gameplay-order-upgrade/tower.png",
     "docs/devlog/systems.json",
+    "docs/evidence/local-order-upgrade-native-20261125.json",
+    "docs/evidence/local-order-upgrade-native-20261125.log.txt",
     "docs/features/local-order-feedback.json",
     "docs/game-format.md",
+    "docs/handoff/studio-html5/local-order-upgrade-authoring.md",
     "docs/ru/game-format.md",
     "docs/ru/scripting.md",
     "docs/scripting.md",
@@ -43,44 +52,71 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Local player orders reach the Lua handler and ephemeral authored overlay once.",
+      "evidence": [
+        "apps/client/GameClient.cpp",
+        "tests/tests.cpp",
+        "docs/evidence/local-order-upgrade-native-20261125.log.txt"
+      ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The client queues local view input separately from simulation and replay; checksum and tick remain unchanged.",
+      "evidence": [
+        "apps/client/GameClient.cpp",
+        "docs/evidence/local-order-upgrade-native-20261125.log.txt"
+      ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "ViewScripts::queueLocalOrder and OverlayContext::orders pass a presentation-only event.",
+      "evidence": [
+        "engine/view/game/GameViewScript.h",
+        "apps/client/GameClient.cpp",
+        "docs/evidence/local-order-upgrade-native-20261125.log.txt"
+      ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The existing aiverse-view workflow documents the order ring, the Lua payload and the upgrade appearance option.",
+      "evidence": [
+        "skills/gameplay/aiverse-view/SKILL.md"
+      ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Created and read a local_order_ring through native MCP stdio and verified it after reopening the project.",
+      "evidence": [
+        "docs/agent-handoffs/order-upgrade-validation.md",
+        "docs/evidence/local-order-upgrade-native-20261125.log.txt"
+      ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Native Studio session dispatch authors the ring with studio.op, then undoes/redoes the saved transaction.",
+      "evidence": [
+        "apps/studio-native/tests/StudioSessionTests.cpp",
+        "docs/evidence/local-order-upgrade-native-20261125.log.txt"
+      ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Overlays inspector reuses the native local_order_ring template and existing edit controls.",
+      "evidence": [
+        "apps/editor/core/OverlayOps.cpp",
+        "apps/studio-native/tests/StudioSessionTests.cpp",
+        "docs/evidence/local-order-upgrade-native-20261125.log.txt"
+      ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Overlay definitions round-trip through project files. Click events expire in their local frame path.",
+      "evidence": [
+        "apps/studio-native/tests/StudioSessionTests.cpp",
+        "docs/evidence/local-order-upgrade-native-20261125.log.txt",
+        "docs/agent-handoffs/order-upgrade-validation.md"
+      ]
     },
     "graphs": {
       "status": "not_applicable",
@@ -90,49 +126,80 @@
       ]
     },
     "performance": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Three-object courtyard instrumentation measured client and view stages across 120-frame windows. Workload and timing limits are in the validation handoff.",
+      "evidence": [
+        "docs/agent-handoffs/order-upgrade-validation.md"
+      ]
     },
     "platforms": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The local demo ran in macOS Metal and Chrome WebGL 2. Other graphics backends have no runtime evidence in this check.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-gameplay-order-upgrade.json",
+        "docs/agent-handoffs/order-upgrade-validation.md",
+        "docs/devlog/media/2026-11-25-gameplay-order-upgrade/order.png",
+        "docs/devlog/media/2026-11-25-gameplay-order-upgrade/metal-upgrade.png"
+      ]
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Uses the existing game view, Lua, ECS, overlay, RmlUi and native Studio dependencies.",
+      "evidence": [
+        "engine/view/game/GameViewScript.h",
+        "apps/editor/core/OverlayOps.cpp"
+      ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Headless replays preserve authoritative simulation; all three restore checks matched 40 subsequent ticks mid-upgrade.",
+      "evidence": [
+        "docs/evidence/local-order-upgrade-native-20261125.log.txt",
+        "docs/agent-handoffs/order-upgrade-validation.md"
+      ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Watchtower orders offers local point selection, a restartable upgrade and a toggle for script labels.",
+      "evidence": [
+        "demos/order-upgrade/README.md",
+        "demos/order-upgrade/ui/hud/courtyard.rml"
+      ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Native focused regressions, Studio session, the Rules schema, headless restore and native MCP registry ran against the recorded tree.",
+      "evidence": [
+        "docs/evidence/local-order-upgrade-native-20261125.json",
+        "docs/evidence/local-order-upgrade-native-20261125.log.txt"
+      ]
     },
     "handoff": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Implementation SHA, verification commands, captures, web deliverables and remaining platform limits are recorded.",
+      "evidence": [
+        "docs/agent-handoffs/order-upgrade-validation.md",
+        "docs/agent-handoffs/order-upgrade-implementation.md"
+      ]
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Developer documentation describes the project setting or callback and the playable example.",
+      "evidence": [
+        "docs/scripting.md",
+        "demos/order-upgrade/README.md"
+      ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Playable Web output was loaded locally. The bilingual devlog, captured frames and public route are prepared for publication by MAIN after integration.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-gameplay-order-upgrade.json",
+        "demos/order-upgrade/README.md",
+        "docs/agent-handoffs/order-upgrade-validation.md",
+        "docs/devlog/media/2026-11-25-gameplay-order-upgrade/order.png",
+        "docs/devlog/media/2026-11-25-gameplay-order-upgrade/metal-upgrade.png"
+      ]
     }
   },
   "integrations": {
@@ -153,5 +220,7 @@
       "studio.op"
     ]
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/local-order-upgrade-native-20261125.json"
+  ]
 }

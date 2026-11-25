@@ -1,0 +1,11 @@
+{
+  "sha": "578d6e47687a48ea665131570c1752295ae60d99",
+  "argv": [
+    "/bin/sh",
+    "-ec",
+    "\nb=/Volumes/KINGSTON/AIVERSE-builds/aiv199-orders-upgrade\n\"$b/focus-orders\"\n\"$b/debug-authoring/aiverse_studio_session_tests\"\npython3.12 tests/order_upgrade_mcp.py \"$b/debug-authoring/aiversemcp\" .\npython3.12 tools/mcp/audit_registry.py \"$b/debug-authoring/aiversemcp\" --engine . --feature-manifest docs/features/local-order-feedback.json --feature-manifest docs/features/structure-upgrade-appearance.json\nnode --experimental-strip-types --test apps/studio-web/tests/rulesSchema.test.mjs\n/Volumes/KINGSTON/AIVERSE-builds/main-mac-4d11ba62/all-tests/aiverse_headless --project demos/order-upgrade --map maps/courtyard.json --verify-restore-at 5 --verify-restore-ticks 40 --max-seconds 25 --dump\npython3.12 tools/site/build.py check\n"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/local-order-upgrade-native-20261125.log.txt",
+  "sha256": "cdc84bb486a5f39750c3b14b97e21689f57e539f65a870d4ec2ab73cb0d8ad26"
+}
