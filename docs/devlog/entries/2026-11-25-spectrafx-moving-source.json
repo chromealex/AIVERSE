@@ -1,0 +1,30 @@
+{
+  "id": "2026-11-25-spectrafx-moving-source",
+  "date": "2026-11-25",
+  "system": "spectrafx",
+  "title": "Дымовой след движущегося источника",
+  "titleEn": "Smoke trails from moving sources",
+  "summary": "После пролёта источника дым остаётся в воздухе и продолжает подниматься.",
+  "summaryEn": "Smoke remains in the air and continues rising after its source passes.",
+  "body": [
+    "В редакторе графов SpectraFX выберите Moving smoke trail и привяжите граф к движущейся сущности. Сопло и локальный свет следуют за ней, а ранее выпущенный дым рассеивается."
+  ],
+  "bodyEn": [
+    "Choose Moving smoke trail in the SpectraFX graph editor and attach the graph to a moving entity. Its nozzle and light travel with it while previously emitted smoke dissipates."
+  ],
+  "status": "experimental",
+  "verified": "Шлейф снят в нативном предпросмотре Studio на macOS с Metal.",
+  "verifiedEn": "Captured in the native Studio preview on macOS with Metal.",
+  "limits": "Подача дыма прекращается, когда сопло полностью выходит за пределы заданного объёма.",
+  "limitsEn": "Injection stops when the nozzle moves entirely outside the authored domain.",
+  "branch": "feature/spectrafx-html5-data-interfaces-20261123",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-spectrafx-moving-source/01.png",
+      "caption": "Подсвеченное сопло справа и дым от его предыдущих положений слева.",
+      "captionEn": "The lit nozzle on the right and smoke from earlier positions to its left."
+    }
+  ],
+  "links": [],
+  "author": "render"
+}

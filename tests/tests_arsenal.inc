@@ -175,7 +175,7 @@ TEST(arsenal_fists_hit_scan_in_reach_only) {
     run(*sim, 0.25);
     CHECK(hand1(*sim).current == 0);
     shoot(*sim, kEast);
-    run(*sim, 0.5);                                   // two punches (cooldown 0.4)
+    run(*sim, 0.6);                                   // input delay + two punches spaced by the full 0.4 s cooldown
     CHECK(arsHp(*sim, near) == Fixed::fromInt(20));
     shoot(*sim, kSouth);                              // three cells away: out of reach
     run(*sim, 1.0);
@@ -267,6 +267,29 @@ TEST(arsenal_dying_loses_the_weapons_and_pays_the_fine) {
     CHECK(again.valid() && again != hero);
     CHECK(hand1(*sim).hero == again && hand1(*sim).ammo == std::vector<int32_t>({-1, 3, 0, 0}) && hand1(*sim).current == 1);
     CHECK(cash(*sim) == Fixed::fromInt(70));
+}
+
+TEST(arsenal_migrates_legacy_hand_cooldown) {
+    Json oldRules = Json::parse(kArsenalRules);
+    for (auto& weapon : oldRules.member("types").member("guy").member("weapons").itemsMut())
+        weapon.set("preciseCooldown", Json::fromBool(false));
+    const auto map = arsenalMap(R"({"type":"guy","owner":1,"pos":[3.5,8.5]},{"type":"ped","owner":2,"pos":[11.5,8.5]})");
+    auto oldGame = makeSimJson(oldRules.dump(), map);
+    auto newGame = makeSimJson(kArsenalRules, map);
+    shoot(*oldGame, kEast);
+    for (int i = 0; i < 4; ++i) { oldGame->step(); newGame->step(); }
+    const auto& oldHand = hand1(*oldGame);
+    CHECK(oldHand.readyAt > oldGame->tick() && oldHand.ammo[1] == 2);
+    std::string bytes;
+    Archive writer(&bytes);
+    ars(*oldGame).io(*oldGame, writer);
+    Archive reader(bytes);
+    ars(*newGame).io(*newGame, reader);
+    CHECK(reader.ok() && reader.remaining() == 0);
+    CHECK(hand1(*newGame).readyAt == oldHand.readyAt && hand1(*newGame).ammo == oldHand.ammo);
+    shoot(*newGame, kEast);
+    while (newGame->tick() < oldHand.readyAt) newGame->step();
+    CHECK(hand1(*newGame).ammo == oldHand.ammo);
 }
 
 TEST(arsenal_determinism_save_and_rollback) {

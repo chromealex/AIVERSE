@@ -228,6 +228,7 @@ int gPlayer(lua_State* L, Vm& vm) {
     auto* pi = sim.player(uint8_t(s));
     if (!pi || s < 1) { lua_pushnil(L); return 1; }
     lua_createtable(L, 0, 6);
+    setS(L, "controller", controllerName(pi->controller));
     setI(L, "slot", pi->slot); setI(L, "team", pi->team); setB(L, "alive", pi->alive); setS(L, "name", pi->name);
     GameState& gs = m.state(sim);
     if (pi->slot < gs.players.size()) {
@@ -880,11 +881,21 @@ int gMessage(lua_State* L, Vm& vm) {
     lua_pop(L, 1);
     Vec3 at{};
     if (!lua_isnoneornil(L, 3) && (!argFx(L, vm, 3, at.x, "x") || !argFx(L, vm, 4, at.z, "z"))) return -1;
+    auto message = std::make_shared<MatchMessage>();
+    message->text = text;
+    if (!lua_isnoneornil(L, 5)) {
+        Fixed seconds;
+        if (!argFx(L, vm, 5, seconds, "duration")) return -1;
+        message->duration = float(seconds.toDouble());
+    }
+    if (lua_isstring(L, 6)) message->style = lua_tostring(L, 6);
     GameState& gs = m.state(sim);
     auto it = std::find(gs.trig.messages.begin(), gs.trig.messages.end(), text);
     int64_t idx = it - gs.trig.messages.begin();
     if (it == gs.trig.messages.end()) gs.trig.messages.push_back(text);
-    sim.emit({kEvMessage, uint8_t(p), kNullEntity, kNullEntity, idx, at});
+    SimEvent event{kEvMessage, uint8_t(p), kNullEntity, kNullEntity, idx, at};
+    event.message = std::move(message);
+    sim.emit(event);
     return 0;
 }
 int gVictory(lua_State* L, Vm& vm) {
@@ -1610,7 +1621,7 @@ Json scriptApiReference() {
     a.push(fn("game.command(p, {type, units, x, z, target, param, queue})", "any player command: move attack stop hold patrol gather build train cancel rally smart send research place sell deploy ability reinforce claim auto_build upgrade surrender player_ability dig paint_room pick_up drop slap possess direct build_road connect_road transit stance retreat load unload guard follow formation build_line merge split trade trade_route tribute diplomacy buy_item use_item drop_item pick_item learn bounty rotate lock end_turn topdown topdown_ability topdown_enter topdown_weapon; param may be a type / tech / player ability / stance / formation name; packed params by field: w h extra, end_x end_z, resource sell to amount other ally reward, topdown: angle magnitude aim_angle aim fire"));
     a.push(fn("game.cast(h, ability, target | x, z) / game.player_ability(p, id, x, z [, free])", "abilities"));
     a.push(fn("game.set_var(name, v) / game.add_var(name, v)", "trigger variables (shared with rules triggers)"));
-    a.push(fn("game.message(p, text [, x, z])", "notice for player p (0 = everyone)"));
+    a.push(fn("game.message(p, text [, x, z, duration, style])", "notice for player p (0 = everyone)"));
     a.push(fn("game.victory(p) / game.defeat(p) / game.draw()", "end conditions"));
     a.push(fn("game.clear_data(h)", "forget the entity's game.data table"));
     a.push(fn("game.research(p, tech) / game.enable_type(p, type, on) / game.add_score(p, amount) / game.enable_trigger(id, on)", "rules state"));

@@ -1,3 +1,127 @@
+## Stage 18 — native FX snapshot capture (2026-11-23; QA deferred)
+
+The independent SpectraFX Graph GPU preview has a one-shot **Capture
+Frame** action with native RHI readback, bounded 256/512/768px JPEG
+thumbnail, Save JPEG and async capture status. There is no continuous
+GPU-to-browser bitmap streaming. The existing authenticated MCP tool
+`fx_graph_preview` supports `{"action":"capture","maxSide":512}`
+and `{"action":"captureStatus"}`, with results under
+`capture:{pending,ready,width,height,mime,image?,error?}`.
+The native host enforces 128–768px max dimension, 600 KiB JPEG,
+one in-flight capture, ten-second timeout and callback-safe
+project-switch/close behavior. No gameplay ECS writes or untrusted
+disk path. **Current source intentionally not built or tested per
+user request; previous 2/2 CTest applies to older source only.**
+Agent handoff: `docs/agent-handoffs/spectrafx-studio-stage18-native-gpu-frame-capture-2026-11-23.md`.
+
+## 2026-11-23 — SpectraFX Studio Stages 15–17 (features only; tests postponed)
+
+Added production-native preview-authoring controls to the independent
+FX viewport and existing `aiversemcp` `fx_graph_preview` tool:
+
+- **Stage 15**: `playback {speed:0.25|0.5|1|2|4,loop:boolean}`
+  uses whole fixed 1/60s simulation ticks, bounded quarter-tick
+  accumulator and native-frame restart at 3600 ticks. `stage`
+  selects `background:dark|neutral|light|black` and boolean grid/axes;
+  `cameraPreset` uses perspective/front/side/top with a separate FX
+  camera. All supported through the HTML5 Graph pane and MCP.
+- **Stage 16**: opt-in `Auto-reload graph` recompiles an immutable
+  in-memory Graph v2 after 650ms debounce. Save Draft/Publish remain
+  explicit; native compiler rejects invalid candidate graphs without
+  replacing last-good state. Successful recompilation restores Play.
+  Native backend initialization failure is a known separate hazard,
+  not a proven atomic swap.
+- **Stage 17**: `burst {count:1..8}` queues bounded native one-shot
+  emitter events (max 32 queued), `clear` defers particle reset to
+  the next native device frame. HTML5 Trigger Burst/Clear controls
+  and real burst/queue counters; no gameplay/ECS writes.
+
+Docs:
+`docs/agent-handoffs/spectrafx-studio-stage15-playback-stage-2026-11-23.md`,
+`docs/agent-handoffs/spectrafx-studio-stage16-auto-reload-2026-11-23.md`,
+`docs/agent-handoffs/spectrafx-studio-stage17-burst-events-2026-11-23.md`.
+
+**User deliberately deferred ALL testing until later.** No exact-SHA
+TypeScript/Vite/AppleClang/Metal/Windows/Vulkan/interactive GUI PASS
+has been observed for Stages 15–17. Do not describe the source
+implementation as hardware-verified. Prior 2/2 Mac CTest PASS belongs
+to an older Scene-only preview.
+
+## 2026-11-23 — Stage 13: independent Scene and FX GPU swapchains
+
+The SpectraFX Graph native GPU preview **NO LONGER BORROWS OR
+REPOSITIONS the map Scene drawable**. StudioHost now uses three
+`StudioSurface` values: `Scene`, `Game` and `Fx`. The native
+`Fx` viewport owns its own `StudioScene`, renderer, camera, gfx Device
+and native CAMetalLayer (macOS) / Win32 Vulkan child window (Windows).
+Both map Scene and FX are framed on the **same render-owner thread**
+using separate swapchains and can be displayed simultaneously.
+`studio.viewportRect {id:"fx"}` places ONLY the FX surface. The
+browser never draws fake particles or receives GPU handles.
+`studio.spectraPreview` and `aiversemcp fx_graph_preview` remain
+the shared playback/camera/parameter control surface, but target
+`fxPreview_` rather than the authored Scene. No native map brush,
+selection, asset drop, keyboard deletion or ECS mutation is permitted
+from the dedicated FX window. Independent map Scene camera/history
+are untouched. Both renderer/device lifetimes retire on the native
+owner thread.
+
+This supersedes Stage 11's **one shared native surface** limitation
+without replacing the established Stage 11 HTML5 dock rectangle.
+Metal CTest source now creates two real devices and captures different
+GPU frames; macOS Studio CI also compiles the full native host.
+**Full AppleClang/Metal, Windows Vulkan and WKWebView UI acceptance
+not yet observed as PASS.** Required agent handoff:
+`docs/agent-handoffs/spectrafx-studio-stage13-independent-gpu-targets-2026-11-23.md`.
+
+
+## 2026-11-23 — встроенный GPU-просмотр в HTML5 Studio и управление через MCP (этапы 11–12)
+
+Вкладка **SpectraFX Graph** теперь содержит собственную область настоящего
+нативного рендера частиц. Существующий render-thread GPU viewport Studio
+перемещается в HTML5-панель и переключается на изолированную сцену
+эффекта с собственной камерой и сеткой. Карта игры не рисуется и не
+изменяется, при закрытии вкладки прежняя камера Scene восстанавливается.
+Это не эмуляция в React и не второй графический контекст. При
+одновременном открытии Scene и Graph последний временно владеет
+общим viewport.
+
+В `aiversemcp` сохранены все инструменты графа `fx_graph_*`:
+поиск/чтение, node_catalog/edit, validate/set/delete/bake,
+draft_list/get/set/publish. Новый инструмент **`fx_graph_preview`**
+использует тот же native-runtime:
+
+```json
+{"action":"load","graphName":"preview_fx"}
+{"action":"play"}
+{"action":"pause"}
+{"action":"step"}
+{"action":"seek","tick":120}
+{"action":"parameter","name":"wind_lift","value":3}
+{"action":"cameraOrbit","dx":12,"dy":-4}
+{"action":"cameraZoom","amount":15}
+{"action":"cameraReset"}
+{"action":"status"}
+{"action":"stop"}
+```
+
+Загрузка также принимает `graph` (объект Graph v2) либо
+`graphName` + `draft:true`. Пути строго ограничены проектом.
+MCP без запущенного нативного Studio явно сообщает об отсутствии
+GPU-viewport; фальшивых частиц нет. Изолированная камера не
+даёт менять сущности карты через клики в FX-превью.
+
+**Результаты новых тестов пока не подтверждены:** предыдущее
+успешное CTest 2/2 на Mac относилось к старому предпросмотру в Scene.
+Перед слиянием нужны сборка AppleClang, Node/Vite, реальные кадры и
+проверка Windows/Vulkan.
+
+Handoff:
+`docs/agent-handoffs/spectrafx-studio-stage11-embedded-preview-2026-11-23.md`
+и
+`docs/agent-handoffs/spectrafx-studio-stage12-mcp-camera-2026-11-23.md`.
+
+
 # AIVERSE SpectraFX
 
 **SpectraFX** — официальное название универсальной, не зависящей от жанра системы визуальных эффектов в AIVERSE. Её устройство вдохновлено процессом авторинга и событийной моделью Unreal Niagara, но это **не** копия кода, форматов ассетов или редактора Unreal. `aiverse::spectra` — пространство имён публичного C++ API.
@@ -3339,3 +3463,39 @@ AIVERSE; сами шесть исходных файлов тестов/комп
 
 Проверка нативной интеграции записана в
 `docs/agent-handoffs/inspector-spectrafx-main-2026-11-20.md`.
+
+## Многослойный огонь с дымом в предпросмотре (2026-11-24)
+
+`examples/spectrafx/fire_smoke_v2.vfx.json` объединяет объёмный газ на GPU и
+спрайтовые частицы на CPU в одном графе v2. Объём отвечает за перенос дыма,
+горение, глубину и HDR-свечение; анимированные атласы добавляют языки огня,
+клубы дыма и искры. Нативный предпросмотр Studio загружает текстуры проекта
+относительно его каталога, а `engine/fx/...` — из каталога ресурсов движка.
+Допустимы только относительные пути к изображениям без переходов через симлинки.
+Для других CPU-графов тот же загрузчик передаётся через
+`GraphRuntimeOptions::textureLoader`.
+
+`VolumeOutput.lights` принимает до четырёх проверенных точечных источников
+`{position, color, radius, intensity}`. Они следуют за привязанным объёмом и
+освещают газ в существующем HDR-реймарчинге. Старые ассеты без этого поля
+сохраняют прежний вид. Пример использует сетку 96³; меньшие ассеты по-прежнему
+могут использовать 64³. Для объёмного предпросмотра включается bloom PRISMA.
+Исходные CC0-атласы PHYSIS доступны также в полном разрешении по путям
+`engine/assets/fx/physis/*_full_*`.
+
+Настоящий Metal-кадр предпросмотра снят в 1024×576 на светлом фоне. Внешний
+вид пока экспериментальный: ему всё ещё не хватает сложного внутреннего света
+в дыме и структуры пламени из кинематографичных референсов. Нативный кадр сам
+по себе не подтверждает производительность в продакшене или паритет Vulkan.
+
+## Дымовой след движущейся сущности
+
+В редакторе графов Studio выберите пресет **Moving smoke trail**.
+
+Установите `VolumeDomain.attachment` в `"trail"` и назначьте граф компоненту
+`SpectraSource` движущейся сущности. Источники газа и источники света объёма перемещаются
+вместе с сущностью. Выпущенный дым продолжает двигаться и рассеиваться в исходной
+области мира. Подберите начало и размер сетки под маршрут: за её границей дым поступает
+только туда, где радиус источника ещё пересекается с сеткой. Смена ревизии источника
+пересоздаёт поле. Режим `world` сохраняет начальное положение, а `follow` переносит
+весь объём. См. [пример графа](../../examples/spectrafx/moving_smoke_trail.vfx.json).

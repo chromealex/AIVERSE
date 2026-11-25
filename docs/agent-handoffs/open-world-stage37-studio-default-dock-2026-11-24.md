@@ -1,0 +1,9 @@
+# W1.37 — Studio default dock includes World Persistence
+
+Owner branch `codex/open-world-acceptance-20261124`; code SHA `7750dd3e2`. Paths `apps/studio-web/src/nestedDock.ts` and `apps/studio-web/tests/nested-dock.mjs`.
+
+On the merged PR #135 tree, HTML5 Studio `test:dock` failed 2/40 because `world_persistence`, `catalog` and `terraweave_generator` were registered in `STUDIO_PANELS` but missing from the default four-stack tree. This meant the World Persistence panel was not present in the initial dock layout. Added the three existing panel IDs to the right stack and updated dock assertions/close-reopen coverage. No backend operation, DTO, style, save schema or viewport behavior changed. Existing stored layouts are still normalized as before; this repairs the default layout only.
+
+Actual Mac verification from a source copy at `/Volumes/KINGSTON/AIVERSE-builds/open-world-acceptance-20261124/studio-web`: `npm run test:dock` PASS 40/40, `npm run test:web` PASS, `npm run typecheck` PASS, `npm run build` PASS (Vite 7.3.8, 1746 modules). The first build attempt failed only because the isolated copy lacked relative `engine/assets/branding/mark.png`; copying that source resource to the matching KINGSTON path allowed the production build to pass. `python3 tools/studio/test_world_persistence_panel.py` PASS 3/3 on the merged source before this edit. Actual macOS WKWebView and visual screenshots NOT RUN.
+
+Feature checklist for this bounded Studio repair: implementation, architecture, Studio source workflow, dependencies and tests PASS. Native backend/MCP and persistence were previously accepted by the merged-tree Mac quick gate at SHA `715b1afbc`; exact quick gate after this Studio edit NOT RUN. Inspector, graphs, performance, non-Mac platforms, WebView visual acceptance and publishing remain unverified or not applicable to the dock fix. Next: exact quick gate on this branch, live WebView visual check and W1.30c host work. Keep #135 Draft.

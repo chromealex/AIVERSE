@@ -16,5 +16,18 @@ int main() {
     AIVERSE_TEST_CHECK(!viewportPlacement({0,0,NAN,20,1,true},500,500,2).visible);
     AIVERSE_TEST_CHECK(!viewportPlacement({0,0,50,50,999,true},500,500,2).visible);
     AIVERSE_TEST_CHECK(!viewportPlacement({0,0,50,50,2,true},500,500,0).visible);
+    // Scene, Game and SpectraFX have independent native surfaces. Hiding or
+    // resizing FX must not change the layout/visibility of the map viewport.
+    const auto scene=viewportPlacement({0,40,700,610,2,true},1440,900,2);
+    const auto fx=viewportPlacement({720,160,620,400,2,true},1440,900,2);
+    AIVERSE_TEST_CHECK(scene.visible && fx.visible);
+    AIVERSE_TEST_CHECK(scene.x==0 && scene.y==250 && fx.x==720 && fx.y==340);
+    AIVERSE_TEST_CHECK(scene.pixelsW==1400 && scene.pixelsH==1220);
+    AIVERSE_TEST_CHECK(fx.pixelsW==1240 && fx.pixelsH==800);
+    const auto fxHidden=viewportPlacement({720,160,620,400,2,false},1440,900,2);
+    AIVERSE_TEST_CHECK(!fxHidden.visible && scene.visible);
+    const auto fxResized=viewportPlacement({720,160,400,290,2,true},1440,900,2);
+    AIVERSE_TEST_CHECK(fxResized.visible && fxResized.pixelsW==800 && fxResized.pixelsH==580);
+    AIVERSE_TEST_CHECK(scene.pixelsW==1400 && scene.pixelsH==1220);
     std::cout << "Studio viewport layout contract PASS\n";
 }

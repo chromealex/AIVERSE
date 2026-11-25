@@ -81,11 +81,47 @@ void GameClient::describeNetMaps() {
 
 // ------------------------------------------------------------------ actions from the documents
 
+void GameClient::stopLan() {
+#ifndef __EMSCRIPTEN__
+    lanDiscovery_.close();
+    lanRelay_.reset();
+#endif
+}
+
 void GameClient::netAction(const std::string& what, int arg) {
+#ifndef __EMSCRIPTEN__
+    if (what == "findLan") {
+        if (!lanRelay_ && !lanDiscovery_.browse(manifest_.getStr("id")))
+            netError_ = tr("lobby.discovery_failed");
+        else netError_.clear();
+        return;
+    }
+    if (what == "hostLan") {
+        if (netMatch_ || lanRelay_) return;
+        stopLan();
+        net::ServerConfig config;
+        config.wsPort = 0;
+        config.maxClients = 64;
+        config.name = netName_.empty() ? tr("lobby.lan_host") : netName_;
+        auto relay = std::make_unique<net::Server>(config);
+        if (!relay->listen(&netError_)) return;
+        if (!lanDiscovery_.advertise(manifest_.getStr("id"), config.name, relay->udpPort())) {
+            netError_ = tr("lobby.discovery_failed");
+            return;
+        }
+        netAddress_ = "127.0.0.1:" + std::to_string(relay->udpPort());
+        lanRelay_ = std::move(relay);
+        netAction("connect", -1);
+        return;
+    }
+#endif
     if (what == "open") { setScreen(Screen::Lobby); netError_.clear(); return; }
-    if (what == "back") { net_.reset(); setScreen(Screen::Menu); return; }
+    if (what == "back") { net_.reset(); stopLan(); setScreen(Screen::Menu); return; }
     if (what == "connect") {
         if (netName_.empty()) netName_ = tr("lobby.default_name");
+#ifndef __EMSCRIPTEN__
+        if (!lanRelay_) lanDiscovery_.close();
+#endif
         saveNetSettings();
         describeNetMaps();
         // By address: after a network drop it reconnects by itself and the match goes on (delta resume).
@@ -95,7 +131,7 @@ void GameClient::netAction(const std::string& what, int arg) {
         return;
     }
     if (!net_) return;
-    if (what == "disconnect") { net_.reset(); return; }
+    if (what == "disconnect") { net_.reset(); stopLan(); return; }
     if (what == "refresh") net_->refreshRooms();
     else if (what == "create" && arg >= 0 && size_t(arg) < netMaps_.size()) {
         const std::string name = roomName_.empty() ? tr("lobby.room_default", Args().str("name", netName_)) : roomName_;
@@ -119,6 +155,11 @@ void GameClient::netAction(const std::string& what, int arg) {
 
 void GameClient::updateNet(double dt, bool& advanced) {
     advanced = false;
+#ifndef __EMSCRIPTEN__
+    const auto now = net::nowMs();
+    if (lanRelay_) lanRelay_->update(now);
+    if (lanRelay_ || screen_ == Screen::Lobby) lanDiscovery_.update(now);
+#endif
     if (!net_) return;
     net_->update(net::nowMs());
     for (auto& e : net_->takeEvents()) {
@@ -179,6 +220,7 @@ void GameClient::updateNet(double dt, bool& advanced) {
 bool GameClient::joinBattle(const std::string& ticketText, const std::string& name, const std::string& compatKey, std::string* reason) {
     if (netMatch_) leaveNetMatch();
     net_.reset();
+    stopLan();
     battle_ = false;
     net::BattleJoinOptions o;
     o.name = name.empty() ? (netName_.empty() ? tr("lobby.default_name") : netName_) : name;
@@ -215,6 +257,7 @@ void GameClient::battleFailed(const std::string& reason, const std::string& text
 // server it named and join the queue it gave ("ticket:<ticket>" claims a reserved seat or a spectator
 // place, Server::reserve). The match then starts like any network match.
 void GameClient::joinServer(const std::string& address, const std::string& queueId) {
+    stopLan();
     if (netName_.empty()) netName_ = tr("lobby.default_name");
     describeNetMaps();
     net_ = std::make_unique<net::NetClient>(address, net::ClientIdentity{netName_, manifest_.getStr("id"), netKey_});
@@ -231,11 +274,12 @@ void GameClient::startNetMatch() {
         net_->leaveMatch();
         return;
     }
+    Json map;
     try {
         selection_.clear();
         for (auto& g : groups_) g.clear();
         city_.reset(); sim_.reset(); // MatchStart already dropped the previous session
-        Json map = Json::parse(mapText);
+        map = Json::parse(mapText);
         mapCamera_ = map["camera"];   // per-map top-down framing (topDownConfigure)
         std::string terr; // 2D tile maps: same as offline, or the match desyncs from the server's replay
         if (!applyTilesToMap(map, [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); }, &terr)) throw std::runtime_error(terr);
@@ -244,6 +288,7 @@ void GameClient::startNetMatch() {
         Json rules = readComposedJson(manifest_.getStr("rules", "rules.json"), [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); });
         if (!embedScripts(rules, map, [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); }, &terr)) throw std::runtime_error(terr);
         sim_->setup(rules, map);
+        attachNoticeEvents(true);
         configurePrisma(map);
         natureStart(map);
     } catch (const std::exception& e) {
@@ -272,8 +317,7 @@ void GameClient::startNetMatch() {
     view_.buildTerrain(*dev_, mod().state(*sim_).grid);
     sceneFromSim(*sim_, scene_, 0, spectator_ ? 0 : human_);
     fitCamera();
-    minimap_.build(*dev_, mod().state(*sim_), rules_);
-    ui_.setDynamicTexture("minimap", minimap_.texture(), minimap_.width(), minimap_.height());
+    buildMinimap(map);
     fx_.startMatch(*sim_, spectator_ ? 0 : human_, view_, mod().state(*sim_).grid);
     mode_ = Mode::Normal;
     notices_.clear();
@@ -287,6 +331,7 @@ void GameClient::leaveNetMatch() {
     if (battle_) { net_.reset(); battle_ = false; }   // a battle has no lobby to return to
     natureStop();
     fx_.stopMatch();
+    noticeEvents_.reset();
     city_.reset(); sim_.reset();
     bots_.clear();
     selection_.clear();
@@ -306,6 +351,17 @@ std::string GameClient::mapTitle(const std::string& file, const std::string& ser
 }
 
 void GameClient::buildLobby(UiState& s) {
+#ifndef __EMSCRIPTEN__
+    s.lanSupported = true;
+    if (!net_ || net_->phase() == net::NetClient::Phase::Disconnected) {
+        for (const auto& [address,host] : lanDiscovery_.hosts()) {
+            UiAction row;
+            row.label = host.label.empty() ? address : host.label + " (" + address + ")";
+            row.id = addAction([this,address] { netAddress_ = address; netAction("connect", -1); });
+            s.lanHosts.push_back(std::move(row));
+        }
+    }
+#endif
     s.netError = netError_;
     s.netMatch = netMatch_;
     if (!net_) { s.lobby = "connect"; return; }

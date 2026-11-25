@@ -1,0 +1,7 @@
+# Game FX budgets (#152)
+
+Accept original defaults, explicit zero limits, per-tier overrides across quality changes, malformed-data diagnostics, and a cumulative combat-event skip counter independent of particle drops. Verify with native events and actual particle bursts.
+
+Code 99002d11470d905ffc4b588cf0a38b48ed2e5579, codex/issue-backlog-completion. GameFx.cpp/.h parse fx/fx.json limits and count skipped combat events. ParticleSystem.cpp/.h own effective per-tier budgets across initialization and quality changes. ClientFx.cpp prints skippedCombat in FX debug output; EditorFxOps.cpp returns skippedCombatEvents from fx_preview. FxOps.cpp clarifies the standard low-tier warning. See docs/particles.md and skills/visuals/aiverse-fx/SKILL.md for native and data authoring.
+
+On macOS x86_64 compiled the registered tests/tests.cpp fx_budget_config_limits_particles_and_counts_skipped_events body against this GameFx.cpp, the rebuilt aiverse_fx library, real game simulation and renderer dependencies. ../issue-backlog-completion-mac/build-feedback/fxbudget printed PASS #152 (exit 0). Checks cover a 5-particle burst limit, live quality reduction to 1, skipped events across two updates, 0 limits, reset on attach, non-combat exclusion and malformed value fallback. Compiled ClientFx.cpp, EditorFxOps.cpp and core/FxOps.cpp with their actual CMake target flags and -fsyntax-only: all exited 0. Live editor readback, dense-scene performance and combined-tree gate remain pending.

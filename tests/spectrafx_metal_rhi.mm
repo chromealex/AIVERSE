@@ -82,6 +82,26 @@ int main() {
         }
         std::printf("[spectrafx-metal-rhi] device=%s\n",
                     device->info().name.c_str());
+        // Real RHI transfer budget: accepted staging remains charged until
+        // completion; rejection must not mark the device unhealthy.
+        auto transfer=device->createBuffer({aiverse::gfx::BufferType::Storage,
+            aiverse::gfx::Usage::Immutable,16,nullptr,"transient budget test"});
+        const uint32_t transferWords[4]={1,2,3,4};
+        device->setGpuTransferBudget(16);
+        device->beginFrame(kWidth,kHeight);
+        check(device->updateStorageBufferChecked(transfer,transferWords,16),"first transfer admitted");
+        check(!device->updateStorageBufferChecked(transfer,transferWords,16)&&device->gpuHealthy(),
+              "same-frame transfer budget denial");
+        check(device->gpuTransferBudgetStats().retiring==16,"encoded transfer charge");
+        device->endFrame();
+        check(device->waitForSubmittedGpuWork(),"transfer fence completion");
+        check(device->gpuTransferBudgetStats().charged()==0,"transfer charge not retired");
+        device->beginFrame(kWidth,kHeight);
+        check(device->updateStorageBufferChecked(transfer,transferWords,16),"transfer budget recovered");
+        device->endFrame();
+        check(device->waitForSubmittedGpuWork(),"transfer recovery completion");
+        device->destroyBuffer(transfer);
+        device->setGpuTransferBudget(0);
         auto colorA=texture(*device,aiverse::gfx::PixelFormat::RGBA8);
         auto colorB=texture(*device,aiverse::gfx::PixelFormat::RGBA8);
         auto depth=texture(*device,aiverse::gfx::PixelFormat::Depth);

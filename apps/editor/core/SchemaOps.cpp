@@ -106,6 +106,7 @@ void lintWalk(const Access& a, const Json& j, const std::string& path, bool isMa
     for (auto& [k, v] : j.members()) present.insert(k);
     for (auto& [k, v] : j.members()) {
         const std::string sub = path.empty() ? k : path + "." + k;
+        if (depth == 0 && k == "viewScripts") continue;   // ViewScripts::load reads the rules and map roots
         if (kPresentationKeys.count(k)) continue;   // the view reads these blocks, read or not by the loader
         const bool read = iterated || a.keys.count({&j, k});
         if (read) { lintWalk(a, v, sub, isMap, depth + 1, out); continue; }

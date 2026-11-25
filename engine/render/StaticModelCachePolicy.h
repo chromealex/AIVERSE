@@ -115,7 +115,7 @@ inline bool equivalentStaticRenderPacketDraw(const ModelDraw& a,
         a.materialOwnerKey == b.materialOwnerKey &&
         a.materialOwnerRevision == b.materialOwnerRevision &&
         a.flags == b.flags && a.variant == b.variant &&
-        a.flash == b.flash && a.teamGlow == b.teamGlow &&
+        a.flash == b.flash && a.flashColor == b.flashColor && a.teamGlow == b.teamGlow &&
         a.dissolve == b.dissolve &&
         eq4(a.tint, b.tint) && eq4(a.outline, b.outline) &&
         eq3(a.team, b.team) &&

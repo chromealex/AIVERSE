@@ -292,13 +292,14 @@ TEST(city_server_tickets_empty_seats_events_and_premises) {
         if (!emit) return;
         emit = false;
         SimEvent near; near.type = 901; near.a = heroA; near.value = -5; near.pos = Vec3{Fixed::fromInt(5), Fixed{}, Fixed::fromInt(5)};
+        near.flags = 1; near.resource = 2; near.subjectType = 3; near.subjectOwner = 1; near.subjectKey = heroA.packed();
         SimEvent his; his.type = 902; his.player = 2;
         s.emit(near); s.emit(his);
     });
     rig.run(6);
     const auto toAnn = ann.takeSimEvents(), toBob = bob.takeSimEvents();
     size_t annNear = 0, annHis = 0, bobNear = 0, bobHis = 0;
-    for (auto& e : toAnn) { annNear += e.type == 901 && e.a == heroA.index && e.value == -5 && e.x == 5 * 64; annHis += e.type == 902; }
+    for (auto& e : toAnn) { annNear += e.type == 901 && e.a == heroA.index && e.value == -5 && e.x == 5 * 64 && e.flags == 1 && e.resource == 2 && e.subjectType == 3 && e.subjectOwner == 1 && e.subjectKey == heroA.packed(); annHis += e.type == 902; }
     for (auto& e : toBob) { bobNear += e.type == 901; bobHis += e.type == 902 && e.player == 2 && e.a == UINT32_MAX; }
     CHECK(annNear == 1 && annHis == 0 && bobNear == 0 && bobHis == 1);
     // she walks east and leaves: her hero is gone from the city; she comes back where she left

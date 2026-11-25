@@ -22,6 +22,36 @@ float3 GameView::nodeWorldPos(const EntityAnim& st, const ModelChoice& ch, int n
     return st.drawn.transformPoint(local);
 }
 
+bool GameView::effectNodeOf(Entity e, const std::string& node, mat4& frame) const {
+    if (!e.valid()) return false;
+    const auto it=anims_.find(e.packed());
+    if(it==anims_.end())return false;
+    const auto& st=it->second;
+    if(!st.initialized || st.type>=looks_.size() || !st.last.visible ||
+       st.seen+1<frame_ || st.choice<0 || size_t(st.choice)>=looks_[st.type].models.size())return false;
+    const auto& choice=looks_[st.type].models[size_t(st.choice)];
+    if(!choice.model)return false;
+    frame=st.drawn;
+    if(node!="origin") {
+        const int index=choice.model->findNode(node);
+        if(index<0)return false;
+        if(size_t(index)<st.world.size())frame=frame*st.world[size_t(index)];
+        else if(size_t(index)<choice.model->bindWorld.size())frame=frame*choice.model->bindWorld[size_t(index)];
+        else return false;
+    }
+    if(planets_.active()) {
+        if(st.last.body!=planetCam_.body())return false;
+        const auto p=frame.transformPoint({0,0,0});
+        const auto local=pframe_.dirToWorld(p-bodyToView(st.last.body,{0,0,0}));
+        for(int col=0;col<3;++col) {
+            const auto axis=pframe_.dirToWorld({frame.at(0,col),frame.at(1,col),frame.at(2,col)});
+            frame.at(0,col)=axis.x;frame.at(1,col)=axis.y;frame.at(2,col)=axis.z;
+        }
+        frame.at(0,3)=local.x;frame.at(1,3)=local.y;frame.at(2,3)=local.z;
+    }
+    return true;
+}
+
 bool GameView::muzzleOf(Entity e, float3& pos, float3& dir) const {
     if (!e.valid()) return false;
     auto it = anims_.find(e.packed());
@@ -252,7 +282,12 @@ void GameView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, f
     const float4 pc = playerColor(o.colorOwner());
     d.team = {pc.x * pc.x, pc.y * pc.y, pc.z * pc.z};
     d.tint = {L.tint.x, L.tint.y, L.tint.z, alpha};
-    d.flash = st.eventAge[kProcEvHit] < 0.3f ? 0.3f * std::exp(-st.eventAge[kProcEvHit] * 12.0f) : 0.0f;
+    const float age = st.eventAge[kProcEvHit];
+    if (L.hitFlashDuration > 0 && age < L.hitFlashDuration) {
+        d.flash = L.hitFlashStrength * std::exp(-3.6f * age / L.hitFlashDuration);
+        if (hasFx) d.flash *= fx.v[EntityFxValues::kHitFlash];
+        if (d.flash > 0) d.flashColor = L.hitFlashColor;
+    }
     if (o.build < 1.0f && L.construction == Construction::Grow) { // under construction: washed out
         d.tint = {d.tint.x * 0.75f, d.tint.y * 0.75f, d.tint.z * 0.75f, alpha};
         d.flash += 0.06f;
@@ -353,11 +388,12 @@ void GameView::drawObject(Renderer3D& r, EntityAnim& st, const SceneObject& o, f
         }
         // ---- effect anchors
         if (!tintOverride)
-            for (const auto& f : show->fx) {
+            for (size_t slot = 0; slot < show->fx.size(); ++slot) {
+                const auto& f = show->fx[slot];
                 if (f.when && !(state & f.when)) continue;
                 if (o.hp > f.hpBelow) continue;
                 effects_.push_back({f.effect, o.entity, o.type, o.owner, nodeWorldPos(st, ch, f.node, f.offset),
-                                    f.intensity * (f.hpBelow <= 1 ? std::clamp(1.0f - o.hp / std::max(f.hpBelow, 0.01f), 0.2f, 1.0f) : 1.0f)});
+                                    f.intensity * (f.hpBelow <= 1 ? std::clamp(1.0f - o.hp / std::max(f.hpBelow, 0.01f), 0.2f, 1.0f) : 1.0f), slot});
             }
     }
 }
@@ -389,14 +425,19 @@ void GameView::drawTracers(Renderer3D& r, float dt, const MapGrid* grid) {
     tracers_.erase(std::remove_if(tracers_.begin(), tracers_.end(), [](const Tracer& s) { return s.age >= 1; }), tracers_.end());
 }
 
-void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o, float dt) {
+void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o, float dt,
+                              float3 up, bool useMuzzle) {
     EntityAnim& ps = anims_[key];
     ps.seen = frame_;
+    if(o.shooterType<looks_.size())ps.type=o.shooterType;
+    const float step=std::max(0.f,dt);
+    ps.phase+=step;
     if (!ps.launched) {
         ps.launched = true;
         ps.launch = {0, 0, 0};
         auto src = o.source.valid() ? anims_.find(o.source.packed()) : anims_.end();
-        if (src != anims_.end() && src->second.initialized && src->second.type < looks_.size()) {
+        if (useMuzzle && src != anims_.end() && src->second.initialized && src->second.type < looks_.size() &&
+            src->second.choice>=0 && size_t(src->second.choice)<looks_[src->second.type].models.size()) {
             const EntityAnim& s = src->second;
             const ModelChoice& ch = looks_[s.type].models[size_t(s.choice)];
             if (ch.muzzle >= 0) {
@@ -413,9 +454,39 @@ void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o,
         ps.launch = {ps.launch.x * k, ps.launch.y, ps.launch.z * k};
     }
     float size = 1;
+    const TypeLook::ProjectileLook* appearance=nullptr;
     if (o.shooterType < looks_.size()) {
         const TypeLook& SL = looks_[o.shooterType];
         size = o.shotWeapon >= 0 && size_t(o.shotWeapon) < SL.projectileScale.size() ? SL.projectileScale[size_t(o.shotWeapon)] : SL.projectileScaleDefault;
+        if(o.shotWeapon>=0 && size_t(o.shotWeapon)<SL.projectiles.size() &&
+           SL.projectiles[size_t(o.shotWeapon)].model)
+            appearance=&SL.projectiles[size_t(o.shotWeapon)];
+    }
+    if(appearance) {
+        const auto& cfg=appearance->config;
+        if(cfg.scale>=0)size=cfg.scale;
+        if(size<=0 || cfg.tint.w<=0)return;
+        ModelDraw draw;
+        draw.model=appearance->model;
+        // Custom models follow the authoritative 3D trajectory, not the
+        // legacy ball's permanent muzzle-height offset.
+        const float3 offset=useMuzzle?ps.launch*std::exp(-ps.phase*7.f):float3{};
+        if(length(o.facing)>1e-6f)ps.attackDirection=o.facing;
+        draw.world=view_adapter::projectileFlightFrame(o.pos+offset,ps.attackDirection,up)*
+            mat4::scale({size,size,size})*cfg.axisFix;
+        draw.tint=cfg.tint;
+        draw.flags=kDrawNoCastShadow;
+        if(appearance->clip>=0 && size_t(appearance->clip)<draw.model->clips.size()) {
+            const auto& clip=draw.model->clips[size_t(appearance->clip)];
+            const float time=clip.duration>0?std::fmod(ps.phase*cfg.clipSpeed,clip.duration):0.f;
+            bindPose(*draw.model,ps.pose);
+            sampleClip(clip,time,ps.pose);
+            worldMatrices(*draw.model,ps.pose,ps.world);
+            draw.pose=&ps.pose;
+            draw.nodeWorld=&ps.world;
+        }
+        ::aiverse::View::submitModel(r,draw);
+        return;
     }
     if(size>0) {
         ::aiverse::view::MeshObject packet;

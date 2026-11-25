@@ -17,6 +17,8 @@
 #include "FxModelMesh.h"
 #include "SpectraFxGpuRoutes.h"
 #include "SpectraFxCueInbox.h"
+#include "SpectraFxSignificance.h"
+#include "SpectraFxAccelerationFields.h"
 #include "SpectraFxEntityEffects.h"
 #include "../render/Renderer3D.h"
 #include "../render/TextureCache.h"
@@ -46,11 +48,22 @@ public:
         if(!reader_("fx/gpu/routes.json",routesText)) return true;
         SpectraFxGpuRouteAsset::Routes routes;
         SpectraFxGpuBudgetGovernor::Config budget;
+        SpectraFxSignificance::Config authoredImportance;
         std::optional<FxQuality> authoredQuality;
         if(!SpectraFxGpuRouteAsset::readText(routesText,routes,&lastError_,
-                                            &budget,&authoredQuality))
+                                            &budget,&authoredQuality,
+                                            &authoredImportance))
             return false;
         if(authoredQuality) quality_=*authoredQuality;
+        if(!significance_.configure(authoredImportance)) {
+            lastError_="invalid SpectraFX cue importance config";
+            return false;
+        }
+        for(const auto& [id,route]:routes)
+            if(!significance_.setEventWeight(id,route.importance)) {
+                lastError_="invalid SpectraFX route importance";
+                return false;
+            }
         if(routes.empty()) return true;
         if(!enable(budget)) return false;
         for(const auto& [type,route]:routes)
@@ -59,6 +72,17 @@ public:
         return true;
     }
 
+    void updateFieldSampler() {
+        if(!playback_)return;
+        if(fields_.empty()) {
+            playback_->setAccelerationSampler({});
+            return;
+        }
+        playback_->setAccelerationSampler([this](render::float3 pos,
+                                                 render::float3& result) {
+            return fields_.evaluate(pos,result);
+        });
+    }
     // Data-driven entity effects (SpectraFxEntityEffects.h): the "spectraFx"
     // blocks of rules then map, plus inline "spectraFx" objects found on
     // data lists the host names (selector prefix -> list). Enables the host
@@ -148,6 +172,40 @@ public:
     uint64_t cueEpoch() const {return inbox_.epoch();}
     const SpectraFxCueInbox::Stats& cueStats() const {return inbox_.stats();}
     size_t pendingCues() const {return inbox_.pending();}
+    // Explicit opt-in. Disabled by default for identical legacy FIFO playback.
+    // Only commands passing through the frame inbox are prioritized;
+    // entity attachments and direct dispatch retain their existing semantics.
+    bool configureCueSignificance(const SpectraFxSignificance::Config& config) {
+        return significance_.configure(config);
+    }
+    bool setCueImportance(uint32_t eventId,float importance) {
+        return significance_.setEventWeight(eventId,importance);
+    }
+    const SpectraFxSignificance& cueSignificance() const {return significance_;}
+    // Bind a presentation-only wind/gravity/turbulence acceleration field.
+    // Must be called after init/enable. Provider callbacks execute on the
+    // render owner thread, once per dedicated emitter before its GPU step.
+    // The renderer never reads PHYSIS/TerraWeave/NEREID directly: the native
+    // host is responsible for sampling a stable environment snapshot.
+    bool bindAccelerationField(uint64_t id,float weight,
+                               SpectraFxAccelerationFields::Sampler sampler) {
+        if(!enabled_)return false;
+        if(!fields_.bind(id,weight,std::move(sampler)))return false;
+        updateFieldSampler();
+        return true;
+    }
+    bool unbindAccelerationField(uint64_t id) {
+        if(!fields_.unbind(id))return false;
+        updateFieldSampler();
+        return true;
+    }
+    void clearAccelerationFields() {
+        fields_.clear();
+        updateFieldSampler();
+    }
+    const SpectraFxAccelerationFields& accelerationFields() const {
+        return fields_;
+    }
     bool enqueueCue(SpectraFxCue cue,bool visibleToViewer,
                     uint64_t expectedEpoch) {
         return enabled_ &&
@@ -188,9 +246,18 @@ public:
         entities_.flushGpu([this](const SpectraFxCue& cue) {
             playback_->dispatch(cue);
         });
-        inbox_.drain([this](const SpectraFxCue& cue) {
-            return playback_->dispatch(cue);
-        },maxCuesPerFrame_);
+        if(significance_.enabled())
+            inbox_.drainPrioritized(
+                [this,&view](const SpectraFxCue& cue) {
+                    return significance_.score(cue,view);
+                },
+                [this](const SpectraFxCue& cue) {
+                    return playback_->dispatch(cue);
+                },maxCuesPerFrame_);
+        else
+            inbox_.drain([this](const SpectraFxCue& cue) {
+                return playback_->dispatch(cue);
+            },maxCuesPerFrame_);
         playback_->updateGpu(std::clamp(dt,0.0f,0.1f),
                              view.eye,render::normalize(view.forward));
     }
@@ -263,6 +330,8 @@ public:
         if(enabled_) textures_.shutdown();
         enabled_=false;
         inbox_.reset();
+        significance_=SpectraFxSignificance{}; // per-project policy; no stale weights
+        fields_.clear(); // callback references must not leak across projects
         reader_={};
         textureBase_.clear();
         device_=nullptr;
@@ -274,6 +343,8 @@ public:
 private:
     ParticleSystem cpu_;
     SpectraFxEntityEffects entities_;
+    SpectraFxSignificance significance_{};
+    SpectraFxAccelerationFields fields_{};
     SpectraFxCueInbox inbox_{1024};
     size_t maxCuesPerFrame_=256;
     render::TextureCache textures_;

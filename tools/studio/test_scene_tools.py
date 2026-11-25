@@ -10,7 +10,7 @@ class SceneToolsContract(unittest.TestCase):
             self.assertIn("StudioScene::" + name, scene)
         self.assertIn("TransformTool::Rotate", scene)
         self.assertIn("TransformTool::Scale", scene)
-        self.assertEqual(scene.count("proxies_=studioDocumentProxies(doc"), 1, "single cached document-proxy rebuild path")
+        self.assertEqual(scene.count("proxies_=studioDocumentProxies(doc"), 1, "proxies built once per frame")
     def test_host_keys_and_commit(self):
         shell = read("apps/studio-native/mac/Main.mm")
         host = read("apps/studio-native/StudioHost.cpp")

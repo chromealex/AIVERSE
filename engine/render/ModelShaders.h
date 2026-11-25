@@ -585,7 +585,9 @@ void main() {
         col += sun * sh * base.rgb * lobe * clamp(m_uv1.z, 0.0, 1.0);
     }
     if (m_uv1.y > 0.5 && m_uv1.y < 1.5) col = m_light.w > 0.5 ? base.rgb * (m_uv1.z + m_uv1.w * clamp(dot(normalize(v_nrm), m_light.xyz), 0.0, 1.0)) : base.rgb;
-    col += emis * (1.0 + nightGlow()) + v_team.a * vec3(1.0, 0.85, 0.7) + edge * vec3(1.0, 0.45, 0.12) * 3.0 + v_team.rgb * (v_draw.w * teamW);
+    uint flashRGB = uint(max(v_lod.w - 1.0, 0.0));
+    vec3 flashColor = v_lod.w > 0.0 ? vec3((flashRGB >> 16u) & 255u, (flashRGB >> 8u) & 255u, flashRGB & 255u) / 255.0 : vec3(1.0, 0.85, 0.7);
+    col += emis * (1.0 + nightGlow()) + v_team.a * flashColor + edge * vec3(1.0, 0.45, 0.12) * 3.0 + v_team.rgb * (v_draw.w * teamW);
     float dist = length(u_camPos.xyz - v_wpos);
     col = mix(col, rtsDecodeScene(u_fog.rgb), 1.0 - exp(-dist * u_fog.w));
     col = rtsToneScene(col, u_skyColor.w > 0.5);
@@ -1284,7 +1286,9 @@ fragment float4 fs_main(VOut in [[stage_in]], bool frontFacing [[front_facing]],
         col += sun * sh * base.rgb * lobe * clamp(m.uv1.z, 0.0, 1.0);
     }
     if (m.uv1.y > 0.5 && m.uv1.y < 1.5) col = m.light.w > 0.5 ? base.rgb * (m.uv1.z + m.uv1.w * clamp(dot(normalize(in.nrm), m.light.xyz), 0.0, 1.0)) : base.rgb;
-    col += emis * (1.0 + lu.info.w) + in.team.a * float3(1.0, 0.85, 0.7) + edge * float3(1.0, 0.45, 0.12) * 3.0 + in.team.rgb * (in.draw.w * teamW);
+    uint flashRGB = uint(max(in.lod.w - 1.0, 0.0));
+    float3 flashColor = in.lod.w > 0.0 ? float3((flashRGB >> 16u) & 255u, (flashRGB >> 8u) & 255u, flashRGB & 255u) / 255.0 : float3(1.0, 0.85, 0.7);
+    col += emis * (1.0 + lu.info.w) + in.team.a * flashColor + edge * float3(1.0, 0.45, 0.12) * 3.0 + in.team.rgb * (in.draw.w * teamW);
     float dist = length(f.camPos.xyz - in.wpos);
     col = mix(col, rtsDecodeScene(f.fog.rgb), 1.0 - exp(-dist * f.fog.w));
     col = rtsToneScene(col, f.skyColor.w > 0.5);

@@ -74,6 +74,7 @@ public:
     void setup(Simulation& sim, const Json& rules, const Json& map) override;
     void applyCommand(Simulation& sim, const Command& cmd) override;
     void hashState(Simulation& sim, Hasher& h) override;
+    void hashArchivedState(Simulation& sim, Hasher& h, uint32_t layout) override;
     void prepareSnapshot(Simulation& sim) override { if (script_) script_->flush(sim); }   // world-space: script_ is null
     bool serializeState(Simulation& sim, Archive& a) override;   // Save.cpp
     int result(Simulation& sim) override;
@@ -127,6 +128,7 @@ public:
     static Vec3 snapToFootprint(const UnitType& t, Vec3 p, const Surface* surface = nullptr);
     bool requirementsMet(Simulation& sim, uint8_t player, const std::vector<Requirement>& req) const;
     bool canTrain(Simulation& sim, uint8_t player, uint16_t type) const; // requirements + unique
+    bool canAffordBuildStart(Simulation& sim, uint8_t player, uint16_t type, int* missing = nullptr) const;
     bool canAfford(Simulation& sim, uint8_t player, const std::vector<Amount>& cost, Fixed supply = {}, int* missing = nullptr) const;
     bool isVisible(Simulation& sim, uint8_t player, Vec3 p) const override;
     // Tests / tools: run the brute-force reference vision instead of the cached one (results are identical;
@@ -417,6 +419,8 @@ private:
     bool runDig(Simulation& sim, Entity e, Order& o);
     bool runClaimCell(Simulation& sim, Entity e, Order& o);
     bool runNeed(Simulation& sim, Entity e, Order& o);
+    bool campaignGuardCanTarget(World& world, Entity guard, Entity target) const;
+    Entity stepCampaignFight(Simulation& sim, Entity fighter, uint8_t owner);
     void movePossessed(Simulation& sim);
     void moveAgents(Simulation& sim);     // Avoidance.cpp: path following with ORCA avoidance and yielding
     void recomputeRooms(Simulation& sim);

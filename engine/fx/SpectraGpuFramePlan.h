@@ -8,7 +8,8 @@
 namespace aiverse::spectra::gpu_pipeline {
 
 enum class Phase : uint8_t {
-    ResetCounter, Spawn, Integrate, Compact, PublishIndirectArgs, Gather
+    ResetCounter, Spawn, Integrate, Compact, PublishIndirectArgs, Gather,
+    CollectFreeSlots, AllocateSpawn, ReserveFreeSlots, UpdateAliveList, PublishAliveList, RenderAliveList
 };
 struct Dispatch {
     Phase phase{};
@@ -16,7 +17,7 @@ struct Dispatch {
     uint32_t shaderMode=0;
 };
 struct FramePlan {
-    std::array<Dispatch,6> dispatches{};
+    std::array<Dispatch,8> dispatches{};
     uint32_t count=0;
     bool needsCompute() const {return count!=0;}
     bool push(Phase phase,uint32_t threads,uint32_t mode) {
@@ -49,6 +50,22 @@ inline FramePlan plan(uint32_t capacity,uint32_t births,
     } else if(survivors) {
         p.push(Phase::Gather,survivors,2);
     }
+    return p;
+}
+// GPU owns physical slots. Reserve a range from the persistent free stack,
+// then allocate independent births. Source kills precede this plan.
+inline FramePlan gpuAllocationPlan(uint32_t capacity,uint32_t births,bool integrate){
+    FramePlan p;
+    if(!capacity||births>capacity)return p;
+    // Always publish work count (including no-birth frames) and clear next
+    // list counter. Update still compacts when dt is frozen or kills queued.
+    (void)integrate; // update flag is supplied in uniforms
+    p.push(Phase::ReserveFreeSlots,1,10);
+    if(births)p.push(Phase::AllocateSpawn,births,8);
+    p.push(Phase::UpdateAliveList,capacity,11);
+    p.push(Phase::PublishAliveList,1,13);
+    p.push(Phase::RenderAliveList,capacity,12);
+    p.push(Phase::PublishIndirectArgs,1,5);
     return p;
 }
 } // namespace aiverse::spectra::gpu_pipeline

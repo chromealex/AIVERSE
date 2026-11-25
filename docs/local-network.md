@@ -111,3 +111,9 @@ reconnection to the same slot and live revocation of an active connection. Repro
 `tests/meta/local_match_listener.py --server <aiverse_fps_server> --probe <aiverse_session_native_probe>`.
 The issuer boundary tests are `python3 tests/meta/local_match.py`. Socket inspection
 confirmed both dedicated endpoints bind only 127.0.0.1 with `--loopback`.
+
+### Hosting from the client
+
+In the native client, open Online and choose **Host on LAN**, then create a room for the map in the usual lobby. Other players open Online, select **Find LAN games**, choose the host, and join its room. The embedded relay runs while the hosting client stays connected, including during the match. Disconnecting the host stops the relay.
+
+Discovery queries each active IPv4 broadcast subnet on UDP port 27017 (including LANs without a default route), falls back to limited broadcast if no subnet send succeeds, and accepts replies for the same project and network protocol. The game connection uses UDP port 27015. The lobby expires hosts after five seconds without a reply. Browser clients use their configured server address. Networks that isolate wireless clients can prevent discovery and game connections.

@@ -225,7 +225,7 @@ public:
                                 width, height, nullptr, nullptr, instance, nullptr);
         if (!main_) { fatal("The main window could not be created"); return 1; }
         extendClientOverCaption(main_);
-        for (int i = 0; i < 2; ++i) {
+        for (int i = 0; i < 3; ++i) {
             surfaces_[i] = CreateWindowExW(0, kSurfaceClass, nullptr, WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN, 0, 0, 16, 16,
                                            main_, nullptr, instance, nullptr);
             SetWindowLongPtrW(surfaces_[i], GWLP_USERDATA, LONG_PTR(i));
@@ -559,7 +559,9 @@ public:
         WinShell* s = gShell;
         if (s && s->core_) {
             const int which = int(GetWindowLongPtrW(h, GWLP_USERDATA));
-            const LRESULT handled = which == 0 ? s->sceneInput(h, msg, wp, lp) : s->gameInput(h, msg, wp, lp);
+            const LRESULT handled = which==0?s->sceneInput(h,msg,wp,lp):
+                which==1?s->gameInput(h,msg,wp,lp):
+                s->fxInput(h,msg,wp,lp);
             if (handled != LRESULT(-1)) return handled;
         }
         switch (msg) {
@@ -567,6 +569,36 @@ public:
         case WM_PAINT: ValidateRect(h, nullptr); return 0;
         case WM_MOUSEACTIVATE: return MA_ACTIVATE;
         default: return DefWindowProcW(h, msg, wp, lp);
+        }
+    }
+    // Dedicated native Vulkan FX child. It may only orbit/zoom its own
+    // particle camera; it never routes to Scene selection, brush or ECS.
+    LRESULT fxInput(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
+        if(!core_)return -1;
+        switch(msg) {
+        case WM_LBUTTONDOWN:
+        case WM_RBUTTONDOWN:
+            SetFocus(h);SetCapture(h);fxLast_={GET_X_LPARAM(lp),GET_Y_LPARAM(lp)};
+            return 0;
+        case WM_MOUSEMOVE:
+            if(GetCapture()==h && (wp&(MK_LBUTTON|MK_RBUTTON))) {
+                const POINT now{GET_X_LPARAM(lp),GET_Y_LPARAM(lp)};
+                core_->fxCameraOrbit(now.x-fxLast_.x,now.y-fxLast_.y);
+                fxLast_=now;
+            }
+            return 0;
+        case WM_LBUTTONUP:
+        case WM_RBUTTONUP:
+            if(GetCapture()==h)ReleaseCapture();
+            return 0;
+        case WM_MOUSEWHEEL:
+            core_->fxCameraZoom(double(GET_WHEEL_DELTA_WPARAM(wp))/120.0*2.0);
+            return 0;
+        case WM_KEYDOWN:
+        case WM_KEYUP:
+        case WM_DROPFILES:
+            return 0; // never select/map-edit/drop into an effect viewport
+        default:return -1;
         }
     }
     // A dock tab torn out of the editor. Real caption (dark) so it moves, resizes and closes on its own.
@@ -660,7 +692,9 @@ public:
     }
 
 private:
-    static int index(studio::StudioSurface s) { return s == studio::StudioSurface::Scene ? 0 : 1; }
+    static int index(studio::StudioSurface s) {
+        return s==studio::StudioSurface::Scene?0:s==studio::StudioSurface::Game?1:2;
+    }
     static void postTask(HWND target, std::function<void()> fn) {
         auto* task = new std::function<void()>(std::move(fn));
         if (!target || !PostMessageW(target, kRunTask, 0, LPARAM(task))) delete task;
@@ -892,12 +926,13 @@ private:
             if ((*it)->hwnd == hwnd) { floats_.erase(it); return; }
     }
     void releaseSurfaces(HWND host) {
-        for (int i = 0; i < 2; ++i) {
+        for (int i = 0; i < 3; ++i) {
             HWND child = surfaces_[i];
             if (!child || GetParent(child) != host) continue;
             ShowWindow(child, SW_HIDE);
             SetParent(child, main_);
-            if (core_) core_->surfaceDetached(i == 0 ? studio::StudioSurface::Scene : studio::StudioSurface::Game);
+            if (core_) core_->surfaceDetached(i==0?studio::StudioSurface::Scene:
+                i==1?studio::StudioSurface::Game:studio::StudioSurface::Fx);
         }
     }
     void closeAllFloats() {
@@ -1259,12 +1294,13 @@ private:
     std::string project_;
     bool dev_ = false;
     HWND main_ = nullptr;
-    HWND surfaces_[2] = {nullptr, nullptr}; // Scene, Game
+    HWND surfaces_[3] = {nullptr, nullptr, nullptr}; // Scene, Game, FX
     Com<ICoreWebView2Controller> controller_;
     Com<ICoreWebView2> web_;
     std::unique_ptr<studio::StudioHost> core_;
     int captured_ = -1;
     bool tracking_ = false;
+    POINT fxLast_{0,0};
     std::pair<double, double> last_{0, 0}, lastGame_{0, 0};
     uint32_t highSurrogate_ = 0;
     Com<ICoreWebView2Environment> env_;

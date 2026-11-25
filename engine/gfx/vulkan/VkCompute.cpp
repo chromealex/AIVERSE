@@ -13,6 +13,13 @@
 
 namespace aiverse::gfx::vk {
 
+bool VulkanDevice::supportsStorageUniformCompute(uint32_t slots) const{
+    const auto& l=gpuProps_.limits;
+    return supportsCompute()&&slots>=9&&slots<=32&&
+        slots-1<=l.maxPerStageDescriptorStorageBuffers&&slots-1<=l.maxDescriptorSetStorageBuffers&&
+        slots<=l.maxPerStageResources&&l.maxPerStageDescriptorUniformBuffers>=1&&
+        l.maxDescriptorSetUniformBuffers>=1&&l.maxUniformBufferRange>=4096;
+}
 ComputeHandle VulkanDevice::createCompute(const ComputeDesc& desc) {
     if (!supportsCompute() || !desc.glsl) {
         error_="Vulkan: compute requires a compute-capable queue and GLSL source";
@@ -20,11 +27,15 @@ ComputeHandle VulkanDevice::createCompute(const ComputeDesc& desc) {
     }
     std::vector<uint32_t> spirv;
     const bool bufferOnly=desc.vulkanLayout==VulkanComputeLayout::BufferPushConstants;
-    if (!(bufferOnly ? compileComputeProgram(desc.glsl,spirv,&error_)
+    const bool extended=desc.vulkanLayout==VulkanComputeLayout::StorageUniforms;
+    if(extended&&!supportsStorageUniformCompute(desc.storageUniformSlots)){
+        error_="Vulkan: insufficient storage/uniform compute descriptors";return {};
+    }
+    if (!((bufferOnly||extended) ? compileComputeProgram(desc.glsl,spirv,&error_)
                      : compileComputeProgram(desc.glsl,spirv,error_))) return {};
     VCompute compute;
-    compute.bufferPushConstants=bufferOnly;
-    compute.bufferBindings=bufferOnly ? std::min(8u,std::min(
+    compute.bufferPushConstants=bufferOnly;compute.storageUniforms=extended;
+    compute.bufferBindings=extended?desc.storageUniformSlots:bufferOnly ? std::min(8u,std::min(
         gpuProps_.limits.maxPerStageDescriptorStorageBuffers,
         gpuProps_.limits.maxDescriptorSetStorageBuffers)) : 4u;
     if (compute.bufferBindings<4 || (bufferOnly && gpuProps_.limits.maxPushConstantsSize<128)) {
@@ -43,7 +54,7 @@ ComputeHandle VulkanDevice::createCompute(const ComputeDesc& desc) {
             vkDestroyDescriptorSetLayout(device_,compute.descriptorLayout,nullptr);
         if (compute.shader) vkDestroyShaderModule(device_,compute.shader,nullptr);
     };
-    std::array<VkDescriptorSetLayoutBinding,17> bindings{};
+    std::array<VkDescriptorSetLayoutBinding,32> bindings{};
     for (uint32_t i=0;i<4;++i)
         bindings[i]={i,VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,1,VK_SHADER_STAGE_COMPUTE_BIT,nullptr};
     for (uint32_t i=0;i<8;++i)
@@ -55,12 +66,12 @@ ComputeHandle VulkanDevice::createCompute(const ComputeDesc& desc) {
     bindings[16]={16u,VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,1,VK_SHADER_STAGE_COMPUTE_BIT,nullptr};
     auto li=vkStruct<VkDescriptorSetLayoutCreateInfo>(
         VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
-    if (bufferOnly) {
+    if (bufferOnly||extended) {
         bindings={};
         for (uint32_t i=0;i<compute.bufferBindings;++i)
-            bindings[i]={i,VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,1,VK_SHADER_STAGE_COMPUTE_BIT,nullptr};
+            bindings[i]={i,extended&&i==8?VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,1,VK_SHADER_STAGE_COMPUTE_BIT,nullptr};
     }
-    li.bindingCount=bufferOnly ? compute.bufferBindings : uint32_t(bindings.size());
+    li.bindingCount=(bufferOnly||extended) ? compute.bufferBindings : 17u;
     li.pBindings=bindings.data();
     if (vkCreateDescriptorSetLayout(device_,&li,nullptr,&compute.descriptorLayout)!=VK_SUCCESS) {
         error_="Vulkan: compute resource binding layout creation failed";
@@ -126,9 +137,9 @@ bool VulkanDevice::beginCompute(ComputeHandle handle) {
 void VulkanDevice::setComputeBuffer(int slot,BufferHandle buffer) {
     const auto* compute=computes_.get(activeComputeId_);
     const auto* source=buffers_.get(buffer.id);
-    if (!compute || slot<0 || uint32_t(slot)>=compute->bufferBindings || !source ||
+    if (!compute || slot<0 || uint32_t(slot)>=compute->bufferBindings || (compute->storageUniforms&&slot==8)|| !source ||
         (source->type!=BufferType::Storage &&
-         !(compute->bufferPushConstants && source->type==BufferType::Indirect))) {
+         !((compute->bufferPushConstants||compute->storageUniforms) && source->type==BufferType::Indirect))) {
         computeStateValid_=false;
         error_="Vulkan: invalid compute storage buffer binding";
         return;
@@ -137,7 +148,7 @@ void VulkanDevice::setComputeBuffer(int slot,BufferHandle buffer) {
 }
 
 void VulkanDevice::setComputeTexture(int slot,TextureHandle image) {
-    if (!activeComputeId_ || computes_.get(activeComputeId_)->bufferPushConstants ||
+    if (!activeComputeId_ || (computes_.get(activeComputeId_)->bufferPushConstants||computes_.get(activeComputeId_)->storageUniforms) ||
         slot<0 || slot>=int(computeSampled_.size()) ||
         !textures_.get(image.id)) {
         computeStateValid_=false;
@@ -149,7 +160,7 @@ void VulkanDevice::setComputeTexture(int slot,TextureHandle image) {
 
 bool VulkanDevice::bindComputeStorageTexture(int slot,TextureHandle image) {
     const VTexture* t=textures_.get(image.id);
-    if (!activeComputeId_ || computes_.get(activeComputeId_)->bufferPushConstants ||
+    if (!activeComputeId_ || (computes_.get(activeComputeId_)->bufferPushConstants||computes_.get(activeComputeId_)->storageUniforms) ||
         slot<0 || slot>=int(computeStorage_.size()) ||
         !t || !t->image || !t->storage || t->samples!=1 ||
         !supportsStorageTexture(t->format,t->dimension)) {
@@ -179,14 +190,25 @@ void VulkanDevice::dispatch(uint32_t x,uint32_t y) {
     (void)dispatchChecked(x,y);
 }
 
-bool VulkanDevice::dispatchChecked(uint32_t x,uint32_t y) {
-    if (!activeComputeId_ || !computeStateValid_ || !healthy_ || !recording_ || inPass_ || !x || !y) return false;
+bool VulkanDevice::dispatchChecked(uint32_t x,uint32_t y){return dispatchInternal(x,y,{},0);}
+bool VulkanDevice::dispatchGpuIndirect(BufferHandle args,size_t offset){
+    if(!args.valid())return false;
+    return dispatchInternal(0,0,args,offset);
+}
+bool VulkanDevice::dispatchInternal(uint32_t x,uint32_t y,BufferHandle indirect,size_t offset) {
+    if (!activeComputeId_ || !computeStateValid_ || !healthy_ || !recording_ || inPass_ || (!indirect.valid()&&(!x||!y))) return false;
+    VkBuffer indirectBuffer=VK_NULL_HANDLE;
+    if(indirect.valid()){
+        const auto* b=buffers_.get(indirect.id);
+        if(!b||(b->type!=BufferType::Storage&&b->type!=BufferType::Indirect)||(offset&3u)||offset>b->size||12u>b->size-offset)return false;
+        indirectBuffer=resolveBuffer(indirect.id,serial_);if(!indirectBuffer)return false;
+    }
     const VCompute* compute=computes_.get(activeComputeId_);
-    if (!compute || (compute->bufferPushConstants && computeUniforms_.empty())) {
+    if (!compute || ((compute->bufferPushConstants||compute->storageUniforms) && computeUniforms_.empty())) {
         error_="Vulkan: compute resource was destroyed";return false;
     }
-    if ((uint64_t(x)+63u)/64u>gpuProps_.limits.maxComputeWorkGroupCount[0] ||
-        y>gpuProps_.limits.maxComputeWorkGroupCount[1]) {
+    if (!indirect.valid()&&((uint64_t(x)+63u)/64u>gpuProps_.limits.maxComputeWorkGroupCount[0] ||
+        y>gpuProps_.limits.maxComputeWorkGroupCount[1])) {
         error_="Vulkan: compute dispatch exceeds device workgroup count limit";
         return false;
     }
@@ -208,8 +230,9 @@ bool VulkanDevice::dispatchChecked(uint32_t x,uint32_t y) {
         VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
     poolInfo.maxSets=1;
     VkDescriptorPoolSize bufferPool{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,compute->bufferBindings};
-    poolInfo.poolSizeCount=compute->bufferPushConstants ? 1u : uint32_t(poolSizes.size());
-    poolInfo.pPoolSizes=compute->bufferPushConstants ? &bufferPool : poolSizes.data();
+    const VkDescriptorPoolSize extendedPool[2]={{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,compute->bufferBindings-1},{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,1}};
+    poolInfo.poolSizeCount=compute->storageUniforms?2u:compute->bufferPushConstants ? 1u : uint32_t(poolSizes.size());
+    poolInfo.pPoolSizes=compute->storageUniforms?extendedPool:compute->bufferPushConstants ? &bufferPool : poolSizes.data();
     VkDescriptorPool pool=VK_NULL_HANDLE;
     if (vkCreateDescriptorPool(device_,&poolInfo,nullptr,&pool)!=VK_SUCCESS) {
         error_="Vulkan: compute descriptor pool allocation failed";return false;
@@ -227,8 +250,8 @@ bool VulkanDevice::dispatchChecked(uint32_t x,uint32_t y) {
     // Immutable addresses; no vector reallocation can invalidate the
     // VkWriteDescriptorSet pImageInfo/pBufferInfo pointers.
     std::array<VkDescriptorImageInfo,12> images{};
-    std::array<VkDescriptorBufferInfo,9> buffers{};
-    std::array<VkWriteDescriptorSet,21> writes{};
+    std::array<VkDescriptorBufferInfo,33> buffers{};
+    std::array<VkWriteDescriptorSet,45> writes{};
     size_t writeCount=0;
     auto pushImage=[&](uint32_t binding,VkDescriptorType type,
                        VkDescriptorImageInfo* image) {
@@ -269,11 +292,12 @@ bool VulkanDevice::dispatchChecked(uint32_t x,uint32_t y) {
                   &images[4u+slot]);
     }
     for(size_t slot=0;slot<compute->bufferBindings;++slot) {
+        if(compute->storageUniforms&&slot==8)continue;
         const auto h=computeBuffers_[slot];
         if(!h.valid())continue;
         VBuffer* b=buffers_.get(h.id);
         if (!b || (b->type!=BufferType::Storage &&
-            !(compute->bufferPushConstants && b->type==BufferType::Indirect)) || !b->size) {
+            !((compute->bufferPushConstants||compute->storageUniforms) && b->type==BufferType::Indirect)) || !b->size) {
             error_="Vulkan: storage buffer was deleted before compute submission";
             vkDestroyDescriptorPool(device_,pool,nullptr);return false;
         }
@@ -283,7 +307,7 @@ bool VulkanDevice::dispatchChecked(uint32_t x,uint32_t y) {
             vkDestroyDescriptorPool(device_,pool,nullptr);return false;
         }
         buffers[slot]={native,0,VkDeviceSize(b->size)};
-        pushBuffer(compute->bufferPushConstants ? uint32_t(slot) : uint32_t(12u+slot),VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        pushBuffer((compute->bufferPushConstants||compute->storageUniforms) ? uint32_t(slot) : uint32_t(12u+slot),VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                    &buffers[slot]);
     }
 
@@ -299,8 +323,8 @@ bool VulkanDevice::dispatchChecked(uint32_t x,uint32_t y) {
             vkDestroyDescriptorPool(device_,pool,nullptr);return false;
         }
         std::memcpy(uniformAlloc.mapped,computeUniforms_.data(),bytes);
-        buffers[8]={uniformBuffer,0,VkDeviceSize(bytes)};
-        pushBuffer(16u,VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,&buffers[8]);
+        buffers[32]={uniformBuffer,0,VkDeviceSize(bytes)};
+        pushBuffer(compute->storageUniforms?8u:16u,VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,&buffers[32]);
     }
     vkUpdateDescriptorSets(device_,uint32_t(writeCount),writes.data(),0,nullptr);
     VkCommandBuffer command=slots_[size_t(slot_)].main;
@@ -319,10 +343,10 @@ bool VulkanDevice::dispatchChecked(uint32_t x,uint32_t y) {
     before.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT |
                          VK_ACCESS_SHADER_WRITE_BIT;
     before.dstAccessMask=VK_ACCESS_SHADER_READ_BIT |
-                         VK_ACCESS_SHADER_WRITE_BIT;
+                         VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
     vkCmdPipelineBarrier(command,VK_PIPELINE_STAGE_TRANSFER_BIT |
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
                          0,1,&before,0,nullptr,0,nullptr);
     vkCmdBindPipeline(command,VK_PIPELINE_BIND_POINT_COMPUTE,compute->pipeline);
     vkCmdBindDescriptorSets(command,VK_PIPELINE_BIND_POINT_COMPUTE,
@@ -330,7 +354,8 @@ bool VulkanDevice::dispatchChecked(uint32_t x,uint32_t y) {
     if (compute->bufferPushConstants)
         vkCmdPushConstants(command,compute->layout,VK_SHADER_STAGE_COMPUTE_BIT,
             0,uint32_t(computeUniforms_.size()),computeUniforms_.data());
-    vkCmdDispatch(command,uint32_t((uint64_t(x)+63u)/64u),y,1);
+    if(indirectBuffer)vkCmdDispatchIndirect(command,indirectBuffer,offset);
+    else vkCmdDispatch(command,uint32_t((uint64_t(x)+63u)/64u),y,1);
     for(const auto handle:computeStorage_) {
         if(!handle.valid())continue;
         const VTexture* t=textures_.get(handle.id);
@@ -374,7 +399,10 @@ void VulkanDevice::endCompute() {
     computeUniforms_.clear();
 }
 
-bool VulkanDevice::readBufferAsync(BufferHandle handle,size_t size,
+bool VulkanDevice::readBufferAsync(BufferHandle handle,size_t size,BufferReadFn callback){
+    return readBufferRangeAsync(handle,0,size,std::move(callback));
+}
+bool VulkanDevice::readBufferRangeAsync(BufferHandle handle,size_t offset,size_t size,
                                    BufferReadFn callback) {
     return readBufferRangeAsync(handle,0,size,std::move(callback));
 }
@@ -385,7 +413,8 @@ bool VulkanDevice::readBufferRangeAsync(BufferHandle handle,size_t offset,size_t
        computeReads_.size()>=64)
         return false;
     const auto* buffer=buffers_.get(handle.id);
-    if(!buffer || offset>buffer->size || size>buffer->size-offset)return false;
+    if(!buffer || offset>buffer->size||size>buffer->size-offset||((offset|size)&3u))return false;
+    GpuTransferReservation charge(transientGpuBudget(),size);if(!charge)return false;
     const VkBuffer source=resolveBuffer(handle.id,serial_);
     if(!source)return false;
     PendingComputeRead pending;
@@ -404,7 +433,7 @@ bool VulkanDevice::readBufferRangeAsync(BufferHandle handle,size_t offset,size_t
                          VK_PIPELINE_STAGE_TRANSFER_BIT,
                          VK_PIPELINE_STAGE_TRANSFER_BIT,0,
                          1,&before,0,nullptr,0,nullptr);
-    VkBufferCopy region{VkDeviceSize(offset),0,VkDeviceSize(size)};
+    VkBufferCopy region{offset,0,size};
     vkCmdCopyBuffer(cb,source,pending.buffer,1,&region);
     auto after=vkStruct<VkMemoryBarrier>(VK_STRUCTURE_TYPE_MEMORY_BARRIER);
     after.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -413,7 +442,43 @@ bool VulkanDevice::readBufferRangeAsync(BufferHandle handle,size_t offset,size_t
                          VK_PIPELINE_STAGE_HOST_BIT,0,
                          1,&after,0,nullptr,0,nullptr);
     computeReads_.push_back(std::move(pending));
-    return true;
+    charge.submitted(gpuSubmissionFence());return true;
+}
+
+bool VulkanDevice::readBuffer(BufferHandle handle,void* data,size_t size){
+    if(!healthy_||recording_||inPass_||activeComputeId_||!data||!size||(size&3u)||
+       slots_[size_t(slot_)].preRecording)return false;
+    const auto* src=buffers_.get(handle.id);
+    if(!src||size>src->size||src->versions.empty())return false;
+    GpuTransferReservation charge(transientGpuBudget(),size);if(!charge)return false;
+    VkBuffer dst=VK_NULL_HANDLE;Allocation alloc{};
+    if(!createBufferObject(size,VK_BUFFER_USAGE_TRANSFER_DST_BIT,true,dst,alloc))return false;
+    VkCommandPool pool=VK_NULL_HANDLE;
+    auto cleanup=[&](){if(pool)vkDestroyCommandPool(device_,pool,nullptr);vkDestroyBuffer(device_,dst,nullptr);memory_.release(alloc);};
+    auto pi=vkStruct<VkCommandPoolCreateInfo>(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
+    pi.queueFamilyIndex=queueFamily_;pi.flags=VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+    if(vkCreateCommandPool(device_,&pi,nullptr,&pool)!=VK_SUCCESS){cleanup();return false;}
+    VkCommandBuffer cb=VK_NULL_HANDLE;
+    auto ai=vkStruct<VkCommandBufferAllocateInfo>(VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO);
+    ai.commandPool=pool;ai.level=VK_COMMAND_BUFFER_LEVEL_PRIMARY;ai.commandBufferCount=1;
+    if(vkAllocateCommandBuffers(device_,&ai,&cb)!=VK_SUCCESS){cleanup();return false;}
+    auto bi=vkStruct<VkCommandBufferBeginInfo>(VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO);
+    bi.flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    if(vkBeginCommandBuffer(cb,&bi)!=VK_SUCCESS){cleanup();return false;}
+    auto before=vkStruct<VkMemoryBarrier>(VK_STRUCTURE_TYPE_MEMORY_BARRIER);
+    before.srcAccessMask=VK_ACCESS_MEMORY_WRITE_BIT;before.dstAccessMask=VK_ACCESS_TRANSFER_READ_BIT;
+    vkCmdPipelineBarrier(cb,VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,VK_PIPELINE_STAGE_TRANSFER_BIT,0,1,&before,0,nullptr,0,nullptr);
+    VkBufferCopy copy{0,0,size};
+    vkCmdCopyBuffer(cb,src->versions[size_t(src->current)].buffer,dst,1,&copy);
+    auto after=vkStruct<VkMemoryBarrier>(VK_STRUCTURE_TYPE_MEMORY_BARRIER);
+    after.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;after.dstAccessMask=VK_ACCESS_HOST_READ_BIT;
+    vkCmdPipelineBarrier(cb,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_PIPELINE_STAGE_HOST_BIT,0,1,&after,0,nullptr,0,nullptr);
+    if(vkEndCommandBuffer(cb)!=VK_SUCCESS){cleanup();return false;}
+    auto si=vkStruct<VkSubmitInfo>(VK_STRUCTURE_TYPE_SUBMIT_INFO);si.commandBufferCount=1;si.pCommandBuffers=&cb;
+    bool ok=vkQueueSubmit(queue_,1,&si,VK_NULL_HANDLE)==VK_SUCCESS;
+    if(ok)ok=vkQueueWaitIdle(queue_)==VK_SUCCESS;
+    if(ok&&alloc.mapped)std::memcpy(data,alloc.mapped,size);else{healthy_=false;ok=false;}
+    cleanup();return ok;
 }
 
 void VulkanDevice::deliverComputeReadbacks() {

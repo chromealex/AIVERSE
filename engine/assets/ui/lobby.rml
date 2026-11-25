@@ -21,6 +21,11 @@
     <div data-if="lobby == 'connect' || lobby == 'connecting'">
         <div class="field"><span class="flabel">{{ 'lobby.server' | tr(lang) }}</span><input type="text" data-value="netAddress"/></div>
         <div class="field"><span class="flabel">{{ 'lobby.name' | tr(lang) }}</span><input type="text" data-value="netName" maxlength="24"/></div>
+        <div data-if="lanSupported &amp;&amp; lobby == 'connect'">
+            <button data-event-click="net('hostLan')">{{ 'lobby.lan_host' | tr(lang) }}</button>
+            <button data-event-click="net('findLan')">{{ 'lobby.lan_find' | tr(lang) }}</button>
+            <button data-for="host : lanHosts" data-event-click="act(host.id)">{{host.label}}</button>
+        </div>
         <p class="dim" data-if="lobby == 'connecting'">{{netStatus}}</p>
         <div class="buttons">
             <button data-if="lobby == 'connect'" data-event-click="net('connect')">{{ 'lobby.connect' | tr(lang) }}</button>

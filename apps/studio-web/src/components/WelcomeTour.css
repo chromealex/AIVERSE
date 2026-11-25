@@ -9,3 +9,6 @@
 .tour__dots button{width:7px;height:7px;border-radius:50%;border:0;padding:0;background:var(--au-line-strong);cursor:pointer}
 .tour__dots button.is-on{background:var(--au-accent)}
 .tour__actions{display:flex;justify-content:flex-end;gap:6px;margin-top:4px}
+
+.tour__card { max-height: calc(100vh - 24px); overflow: auto; }
+.tour__actions { flex-wrap: wrap; }

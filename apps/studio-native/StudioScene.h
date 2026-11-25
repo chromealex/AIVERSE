@@ -1,6 +1,7 @@
 // macOS-only native preview: AIVERSE gfx::Device + Renderer3D over a CAMetalLayer.
 // No ImGui, no CPU texture readback, no dependency on UI component hierarchy.
 #pragma once
+#include "engine/fx/SpectraSdfFileIO.h"
 #include <chrono>
 #include <memory>
 #include <optional>
@@ -30,6 +31,8 @@
 #include "engine/render/AdaptiveShadowResolution.h"
 #include "engine/render/RenderDeviceLifetime.h"
 #include "apps/studio-native/StudioFacialGpuPreview.h"
+#include "apps/studio-native/StudioSpectraPreview.h"
+#include "apps/studio-native/StudioSpectraSources.h"
 
 namespace aiverse::editor { class Workspace; class TextureGraphGpuPreview; }
 namespace aiverse::studio {
@@ -50,7 +53,216 @@ public:
                uint64_t previewRevision, float levelHeight = 1.5f,
                const std::string& projectPath = {}, const Json& rules = Json::object(),
                const StudioFacialPreviewBinding* facialBinding=nullptr);
+    // Called only through StudioHost::onScene, between render-thread frames.
+    // A real SpectraFX graph runs on the native Device in the Scene pass.
+    // The same native Scene CAMetalLayer can be hosted inside the HTML5
+    // SpectraFX Graph pane. Preserve the authored-map camera while the FX
+    // workspace uses its own isolated camera and never renders map entities.
+    void setSpectraDockMode(bool enabled) {
+        if (spectraDockMode_==enabled)return;
+        if (enabled) {
+            sceneCameraBeforeSpectra_=camera_;
+            sceneCameraInitializedBeforeSpectra_=cameraInitialized_;
+            camera_.target={0,1.0f,0};
+            camera_.distance=6.5f;
+            camera_.yaw=0.45f;camera_.pitch=0.23f;camera_.ortho=false;
+            cameraInitialized_=true;
+        } else {
+            camera_=sceneCameraBeforeSpectra_;
+            cameraInitialized_=sceneCameraInitializedBeforeSpectra_;
+        }
+        spectraDockMode_=enabled;
+        tween_.active=false;
+        lastFrameSignature_=0;
+        settleFrames_=30;
+    }
+    bool spectraDockMode() const {return spectraDockMode_;}
+    void setSpectraEngineAssetRoot(std::string root){spectraEngineAssetRoot_=std::move(root);}
+    // Explicit native scene-host hook; publish after document activation and
+    // before frame preparation. Isolated FX preview has independent data.
+    bool setSpectraSceneDataRegistry(std::shared_ptr<const spectra::DataInterfaceRegistry> registry) {
+        return spectraSources_.setDataInterfaceRegistry(std::move(registry));
+    }
+    void resetSpectraDockCamera() {
+        if(!spectraDockMode_)return;
+        camera_.target={0,1.0f,0};
+        camera_.distance=6.5f;
+        camera_.yaw=0.45f;camera_.pitch=0.23f;camera_.ortho=false;
+        cameraInitialized_=true;
+        tween_.active=false;
+        lastFrameSignature_=0;settleFrames_=30;
+    }
+    Json spectraPreviewCommand(const Json& input,const std::string& project,bool frameProvenance=false) {
+        spectraPreview_->setTextureBases(project.empty()?std::string{}:project+"/",spectraEngineAssetRoot_);
+        const auto action=input.getStr("action","status");
+        if(!frameProvenance){
+            if(project!=spectraProject_){
+                discardReplayBackup();
+                if(spectraPreview_->active())spectraPreview_->stop(*device_);
+                replayAttemptGeneration_=0;replayOutcome_.clear();replayError_.clear();
+            }
+            spectraProject_=project;
+            finishReplayTransaction();
+            if(action=="stop"){
+                discardReplayBackup();
+                replayAttemptGeneration_=0;replayOutcome_.clear();replayError_.clear();
+            }
+            if(action=="replayCancel"&&spectraReplayBackup_){
+                rollbackReplayTransaction("cancelled","");
+                return spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
+            }
+        }
+        if(action!="status"&&action!="stop"&&action!="replayCancel"&&(spectraReplayBackup_||spectraPreview_->replayPending())){
+            Json out=spectraPreview_->status();
+            out.set("error",Json::string("Replay restore pending; cancel or wait"));
+            return out;
+        }
+        if(action=="replayRestore") {
+            if(!spectraDockMode_)throw std::runtime_error("Replay restore requires FX stage");
+            const auto background=input.getStr("background");
+            if((background!="dark"&&background!="neutral"&&background!="light"&&background!="black")||
+               input["grid"].type()!=Json::Type::Bool||input["axes"].type()!=Json::Type::Bool)
+                throw std::runtime_error("Invalid replay stage");
+            const Json& c=input["camera"];
+            auto read=[&](const char* key,double limit){
+                const Json& v=c[key];
+                if(!v.isNumber()||!std::isfinite(v.toDouble())||std::abs(v.toDouble())>limit)
+                    throw std::runtime_error(std::string("Invalid replay camera field: ")+key);
+                return float(v.toDouble());
+            };
+            if(!c.isObject()||c["ortho"].type()!=Json::Type::Bool)
+                throw std::runtime_error("Invalid replay camera");
+            const float yaw=read("yaw",1000),pitch=read("pitch",1.56),distance=read("distance",100000);
+            const float x=read("targetX",1000000),y=read("targetY",1000000),z=read("targetZ",1000000);
+            if(distance<0.01f)throw std::runtime_error("Invalid replay camera distance");
+            const double speed=input["speed"].toDouble();
+            if(!input["speed"].isNumber()||input["loop"].type()!=Json::Type::Bool||
+               (speed!=0.25&&speed!=0.5&&speed!=1.0&&speed!=2.0&&speed!=4.0))
+                throw std::runtime_error("Invalid replay playback settings");
+            if(!spectraPreview_->canBeginReplayTransaction())
+                throw std::runtime_error("Checkpoint or replay operation pending");
+            const Json graph=input.has("graph")?input["graph"]:spectraPreview_->authoredGraph();
+            if(!graph.isObject()||graph.getInt("version")!=2)
+                throw std::runtime_error("Replay requires a loaded Graph v2");
+            // Candidate owns its own runtime but borrows the same native Device.
+            // No live state is changed by validation or backend failure.
+            auto candidate=std::make_unique<StudioSpectraPreview>();
+            candidate->setTextureBases(project.empty()?std::string{}:project+"/",spectraEngineAssetRoot_);
+            Json load=Json::object();load.set("action",Json::string("load"));
+            load.set("graph",graph);
+            load.set("gpuBirthRandom",Json::fromBool(input.has("gpuBirthRandom")?
+                input.getBool("gpuBirthRandom"):spectraPreview_->authoredGpuBirthRandom()));
+            if(input.has("gpuOwnedAllocation")&&input["gpuOwnedAllocation"].type()!=Json::Type::Bool)
+                throw std::runtime_error("gpuOwnedAllocation must be boolean");
+            load.set("gpuOwnedAllocation",Json::fromBool(input.has("gpuOwnedAllocation")?
+                input.getBool("gpuOwnedAllocation"):spectraPreview_->authoredGpuOwnedAllocation()));
+            const auto loaded=candidate->command(*device_,load,fx::projectSdfReader(project));
+            Json prepare=input;prepare.set("action",Json::string("replayPrepare"));
+            const auto prepared=loaded.getBool("ready")&&loaded.getStr("error").empty()?
+                candidate->command(*device_,prepare):loaded;
+            if(!prepared.getBool("ready")||!prepared.getStr("error").empty()){
+                candidate->stop(*device_);
+                Json rejected=spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
+                rejected.set("error",Json::string(prepared.getStr("error")));
+                return rejected;
+            }
+            replayBackupCamera_=camera_;replayBackupCameraInitialized_=cameraInitialized_;
+            replayBackupTween_=tween_;
+            replayBackupBackground_=fxBackground_;replayBackupGrid_=fxGrid_;replayBackupAxes_=fxAxes_;
+            spectraReplayBackup_=std::move(spectraPreview_);
+            spectraPreview_=std::move(candidate);
+            replayAttemptGeneration_=uint64_t(prepared["generation"].integer());
+            replayOutcome_="pending";replayError_.clear();
+            fxBackground_=background;fxGrid_=input.getBool("grid");fxAxes_=input.getBool("axes");
+            camera_.yaw=yaw;camera_.pitch=pitch;camera_.distance=distance;
+            camera_.target={x,y,z};camera_.ortho=c.getBool("ortho");cameraInitialized_=true;
+            tween_.active=false;lastFrameSignature_=0;settleFrames_=30;
+            return spectraPreviewCommand(Json::parse(R"({"action":"status"})"),project);
+        }
+        if(action=="stage") {
+            const auto background=input.getStr("background");
+            if(background!="dark" && background!="neutral" &&
+               background!="light" && background!="black")
+                throw std::runtime_error("FX stage background must be dark, neutral, light or black");
+            if(input["grid"].type()!=Json::Type::Bool ||
+               input["axes"].type()!=Json::Type::Bool)
+                throw std::runtime_error("FX stage grid and axes must be booleans");
+            fxBackground_=background;
+            fxGrid_=input.getBool("grid");
+            fxAxes_=input.getBool("axes");
+        }
+        if(action=="cameraPreset") {
+            if(!spectraDockMode_)throw std::runtime_error("FX camera preset requires the FX stage");
+            const auto preset=input.getStr("preset");
+            if(preset!="perspective" && preset!="front" &&
+               preset!="side" && preset!="top")
+                throw std::runtime_error("FX camera preset must be perspective, front, side or top");
+            resetSpectraDockCamera();
+            if(preset=="front"){camera_.yaw=0;camera_.pitch=0;camera_.ortho=true;}
+            else if(preset=="side"){camera_.yaw=1.5707963f;camera_.pitch=0;camera_.ortho=true;}
+            else if(preset=="top"){camera_.yaw=0;camera_.pitch=1.54f;camera_.ortho=true;}
+        }
+        if(action=="cameraRestore") {
+            if(!spectraDockMode_)throw std::runtime_error("FX camera restore requires FX stage");
+            const Json& c=input["camera"];
+            if(c.type()!=Json::Type::Object)throw std::runtime_error("FX camera must be object");
+            auto read=[&](const char* key,double limit)->float {
+                const Json& v=c[key];
+                if(v.type()!=Json::Type::Number || !std::isfinite(v.toDouble()) || std::abs(v.toDouble())>limit)
+                    throw std::runtime_error(std::string("Invalid FX camera field: ")+key);
+                return static_cast<float>(v.toDouble());
+            };
+            const float yaw=read("yaw",1000),pitch=read("pitch",1.56),distance=read("distance",100000);
+            const float x=read("targetX",1000000),y=read("targetY",1000000),z=read("targetZ",1000000);
+            if(distance<0.01f || c["ortho"].type()!=Json::Type::Bool)
+                throw std::runtime_error("Invalid FX camera distance/projection");
+            camera_.yaw=yaw;camera_.pitch=pitch;camera_.distance=distance;
+            camera_.target={x,y,z};camera_.ortho=c.getBool("ortho");cameraInitialized_=true;
+        }
+        if(action=="stage"||action=="cameraPreset"||action=="cameraRestore"||action=="status") {
+            const Json state=spectraPreview_->command(*device_,Json::parse(R"({"action":"status"})"));
+            Json out=state;
+            out.set("background",Json::string(fxBackground_));
+            out.set("grid",Json::fromBool(fxGrid_));
+            out.set("axes",Json::fromBool(fxAxes_));
+            Json camera=Json::object();
+            camera.set("yaw",Json::number(camera_.yaw));
+            camera.set("pitch",Json::number(camera_.pitch));
+            camera.set("distance",Json::number(camera_.distance));
+            camera.set("targetX",Json::number(camera_.target.x));
+            camera.set("targetY",Json::number(camera_.target.y));
+            camera.set("targetZ",Json::number(camera_.target.z));
+            camera.set("ortho",Json::fromBool(camera_.ortho));
+            out.set("camera",std::move(camera));
+            out.set("replayAttemptGeneration",Json::number(int64_t(replayAttemptGeneration_)));
+            out.set("replayOutcome",Json::string(replayOutcome_));
+            out.set("replayError",Json::string(replayError_));
+            if(action!="status") {lastFrameSignature_=0;settleFrames_=30;}
+            return out;
+        }
+        Json result=spectraPreview_->command(*device_,input,fx::projectSdfReader(project));
+        result.set("background",Json::string(fxBackground_));
+        result.set("grid",Json::fromBool(fxGrid_));
+        result.set("axes",Json::fromBool(fxAxes_));
+        // Preview spawns near the current Scene camera target; never steal
+        // the user's editor camera or change map editing navigation.
+        lastFrameSignature_=0;settleFrames_=30;
+        return result;
+    }
     void captureNextFrame(gfx::Device::CaptureFn callback) { lastFrameSignature_=0; device_->captureNextFrame(std::move(callback)); }
+    using FxTaggedCaptureFn=std::function<void(uint64_t,int,int,std::vector<uint8_t>,Json)>;
+    void captureNextFrameTagged(FxTaggedCaptureFn callback) {
+        lastFrameSignature_=0;
+        device_->captureNextFrameTagged([history=fxFrameProvenance_,callback=std::move(callback)](uint64_t serial,int w,int h,std::vector<uint8_t> pixels){
+            Json metadata;
+            for(const auto& entry:*history)if(entry.first==serial){metadata=entry.second;break;}
+            if(callback)callback(serial,w,h,std::move(pixels),std::move(metadata));
+        });
+    }
+    uint64_t fxFrameSerial() const {return device_?device_->frameSerial():0;}
+    uint64_t fxCompletedFrameSerial() const {return device_?device_->completedFrameSerial():0;}
+    uint64_t fxSubmissionFence() const {return device_?device_->gpuSubmissionFence():0;}
+    uint64_t fxCompletedFence() const {return device_?device_->gpuCompletedFence():0;}
     const std::string& lightingStatus() const { return lightingStatus_; }
     // Preview wind for every rigged model (<model>.wind.json) + debug view.
     void setWindPreview(const StudioWindState& state) { wind_ = state; }
@@ -149,7 +361,7 @@ public:
     // World point -> view point (same units as pick / groundPoint); false when behind the camera.
     bool projectPoint(render::float3 world, float width, float height, render::float2& out) const;
     void setBrushCursor(bool visible, render::float3 center, float radius) { brushVisible_=visible; brushCenter_=center; brushRadius_=radius; }
-    void resetCamera() { lightingRevision_ = std::numeric_limits<uint64_t>::max(); cameraInitialized_ = false; terrainRevision_ = std::numeric_limits<uint64_t>::max(); clearDocumentModels(); }
+    void resetCamera() { if(device_){device_->waitForResourceIdle();spectraSources_.shutdown();} lightingRevision_ = std::numeric_limits<uint64_t>::max(); cameraInitialized_ = false; terrainRevision_ = std::numeric_limits<uint64_t>::max(); clearDocumentModels(); }
     // Frames actually drawn / skipped because nothing visible changed (diagnostics).
     uint64_t framesDrawn() const { return framesDrawn_; }
     uint64_t framesSkipped() const { return framesSkipped_; }
@@ -188,6 +400,29 @@ private:
     std::map<std::string,std::vector<render::Material>> primitiveMaterials_; // per frame, per entity
     render::Model* builtinPrimitive(bool sphere);
     StudioFacialGpuPreview facialGpu_;
+    StudioSpectraSources spectraSources_;
+    std::unique_ptr<StudioSpectraPreview> spectraPreview_=std::make_unique<StudioSpectraPreview>();
+    std::string spectraEngineAssetRoot_;
+    std::unique_ptr<StudioSpectraPreview> spectraReplayBackup_;
+    uint64_t replayAttemptGeneration_=0;
+    std::string replayOutcome_,replayError_;
+    render::Camera replayBackupCamera_{};
+    bool replayBackupCameraInitialized_=false,replayBackupGrid_=true,replayBackupAxes_=true;
+    std::string replayBackupBackground_;
+    void discardReplayBackup();
+    void rollbackReplayTransaction(const std::string& outcome,const std::string& reason);
+    void finishReplayTransaction();
+    std::shared_ptr<std::deque<std::pair<uint64_t,Json>>> fxFrameProvenance_=std::make_shared<std::deque<std::pair<uint64_t,Json>>>();
+    // Not a second gfx device: the same Scene renderer is placed in the
+    // SpectraFX panel and switches between authored map and isolated FX.
+    bool spectraDockMode_=false;
+    std::string fxBackground_="dark";
+    bool fxGrid_=true,fxAxes_=true;
+    bool sceneCameraInitializedBeforeSpectra_=false;
+    render::Camera sceneCameraBeforeSpectra_{};
+    void frameSpectraDock(int framebufferWidth,int framebufferHeight);
+
+    std::string spectraProject_;
     std::string facialFramedGuid_; // character the camera was last framed on
     std::string thumbnailPath_;   // pending preset thumbnail capture
     bool thumbnailCrop_=true;
@@ -236,6 +471,7 @@ private:
     std::chrono::steady_clock::time_point windClock_ = std::chrono::steady_clock::now();
     // Facial/material preview FXAA (LDR); the map view keeps PRISMA HDR post_.
     render::PostFx antialiasing_;
+    bool spectraDockHdr_=false;
     render::Camera camera_;
     render::AdaptiveShadowResolution shadowResolution_;
     bool cameraInitialized_ = false;
@@ -246,6 +482,7 @@ private:
         float fromDistance = 0, toDistance = 0, fromYaw = 0, toYaw = 0, fromPitch = 0, toPitch = 0;
         std::chrono::steady_clock::time_point start{};
     } tween_;
+    CameraTween replayBackupTween_{};
     void startTween(render::float3 target, float distance, float yaw, float pitch);
     void stepTween();
     // Camera actually submitted/picked: clip planes follow distance, ortho keeps

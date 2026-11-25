@@ -122,6 +122,7 @@
   "hud.ready": "READY", "hud.cooldown_seconds": "{seconds}s",
   "@language": "English",
 
+  "matchfiles": {"finished": "End of replay", "save": "Save in a new slot", "load": "Load match", "record": "Save replay", "watch": "Watch replay", "play": "Play", "pause": "Pause"},
   "menu": {
     "difficulty": "Difficulty",
     "easy": "Easy",
@@ -147,6 +148,9 @@
   },
 
   "hud": {
+    "idle_worker": "Idle worker",
+    "send_chat": "Send",
+    "messages": "Messages",
     "per_second": "({value}/s)",
     "supply": "Supply: {used}/{cap}",
     "eliminated": " (out)",
@@ -267,6 +271,9 @@
   },
 
   "lobby": {
+    "lan_host": "Host on LAN",
+    "lan_find": "Find LAN games",
+    "discovery_failed": "Could not open LAN discovery",
     "title": "Online game",
     "server": "Server",
     "name": "Your name",

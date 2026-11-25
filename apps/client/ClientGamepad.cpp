@@ -10,7 +10,7 @@ using platform::Key;
 using platform::PadAxis;
 using platform::PadButton;
 
-Key ClientGamepad::keyFromName(const std::string& n) {
+const char* ClientGamepad::keyName(Key key) {
     static const char* kNames[] = {"Unknown", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T",
                                    "U", "V", "W", "X", "Y", "Z", "Num0", "Num1", "Num2", "Num3", "Num4", "Num5", "Num6", "Num7", "Num8", "Num9",
                                    "Escape", "Enter", "Tab", "Backspace", "Delete", "Insert", "Space", "Left", "Right", "Up", "Down", "Home",
@@ -19,7 +19,12 @@ Key ClientGamepad::keyFromName(const std::string& n) {
                                    "Minus", "Equal", "LeftBracket", "RightBracket", "Semicolon", "Apostrophe", "Comma", "Period", "Slash",
                                    "Backslash", "GraveAccent"};
     static_assert(sizeof kNames / sizeof kNames[0] == size_t(Key::Count), "key names follow platform::Key");
-    for (size_t i = 1; i < size_t(Key::Count); i++) if (n == kNames[i]) return Key(i);
+    return size_t(key) < size_t(Key::Count) ? kNames[size_t(key)] : "Unknown";
+}
+
+Key ClientGamepad::keyFromName(const std::string& n) {
+    if (n.size() == 1 && n[0] >= 'a' && n[0] <= 'z') return Key(int(Key::A) + n[0] - 'a');
+    for (size_t i = 1; i < size_t(Key::Count); i++) if (n == keyName(Key(i))) return Key(i);
     if (n.size() == 1 && n[0] >= '0' && n[0] <= '9') return Key(int(Key::Num0) + (n[0] - '0'));
     return Key::Unknown;
 }

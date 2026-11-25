@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react';
 /** AIVERSE Studio UI: stable, genre-independent visual building blocks.
  * Import from "../ui" (path relative to panel). UI state lives in React;
  * engine data/actions MUST go via typed ../bridge, never via these components.
@@ -73,12 +74,13 @@ export function StudioSection({title,actions,className,children,...props}:Studio
   </section>;
 }
 export interface StudioFieldProps extends Omit<LabelHTMLAttributes<HTMLLabelElement>,'htmlFor'> {
-  label: string; htmlFor: string; hint?: string; error?: string;
+  label: string; htmlFor?: string; hint?: string; error?: string;
   children: ReactNode;
 }
 export function StudioField({label,htmlFor,hint,error,className,children,...props}:StudioFieldProps) {
   return <div className={classes('au-field',className)}>
-    <label {...props} htmlFor={htmlFor} className="au-field__label">{label}</label>
+    {htmlFor?<label {...props} htmlFor={htmlFor} className="au-field__label">{label}</label>:
+      <span className="au-field__label">{label}</span>}
     {children}
     {hint && <small className="au-field__hint">{hint}</small>}
     {error && <small className="au-field__error" role="alert">{error}</small>}
@@ -170,4 +172,23 @@ export function StudioProgress({value,max=100,label,className}:StudioProgressPro
     className={classes('au-progress',className)}>
     <div className="au-progress__bar" style={{width:safe+'%'}}/>
   </div>;
+}
+
+/** Window-sized overlay with browser-managed focus containment and restoration. */
+export function StudioDialog({ label, className, onDismiss, dismissOnBackdrop = true, children }: {
+  label: string; className: string; onDismiss: () => void; dismissOnBackdrop?: boolean; children: ReactNode;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useLayoutEffect(() => {
+    const dialog = ref.current;
+    dialog?.showModal();
+    return () => dialog?.close();
+  }, []);
+  return <dialog ref={ref} className={classes('au-dialog', className)} role="dialog"
+    aria-modal="true" aria-label={label} data-native-overlay
+    onCancel={event => { event.preventDefault(); onDismiss(); }}
+    onMouseDown={event => { if (dismissOnBackdrop && event.target === event.currentTarget) onDismiss(); }}
+    onKeyDown={event => event.stopPropagation()}>
+    {children}
+  </dialog>;
 }

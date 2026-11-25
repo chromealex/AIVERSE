@@ -1,0 +1,5 @@
+# SpectraFX Stage 106 — compact procedural billboard rendering
+
+Parent `350a2e0b65b31355876f702d62a172863a9a9c6b`; branch `feature/spectrafx-html5-data-interfaces-20261123`.
+
+Opt-in Metal procedural billboards: compute compaction writes one 40-byte record per particle rather than four expanded vertices. A shared six-index UInt16 quad and instance_id expand the corners in the native vertex shader. Direct draw uses instanceCount; GPU-authored indirect arguments emit six indices and alive instances. Nonprocedural and custom GPU material graphs keep the existing expanded route. Studio opts in for its pooled groups, with GPU indirect when supported. Group identity includes policy; conservative admission accounts for the smaller allocation. Metal omits vertex descriptor for shaders without stage-in attributes. Pure geometry-size regression authored. No Metal/CPU build or tests run. Large-group checkpoints remain disabled; procedural path is Metal only, not yet verified on hardware. Next: remove remaining host slot scans and staging overallocations, page-based growth, GPU frustum culling and project-configurable profiles. Main unchanged.

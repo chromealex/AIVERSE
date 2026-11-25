@@ -67,7 +67,14 @@ void applyDamage(Simulation& sim, const Rules& rules, Entity target, Fixed dmg, 
     if (sourceOwner != 0) u->lastAttacker = sourceOwner;
     if (source.valid()) u->lastHitBy = source;
     h.hit(target, source, fin);
-    sim.emit({kEvHit, sourceOwner, target, source, fin.raw, w.get<Transform>(target).pos});
+    SimEvent event{kEvHit, sourceOwner, target, source, fin.raw, w.get<Transform>(target).pos};
+    if constexpr (requires { h.critical; }) {
+        if (h.critical && fin.raw > 0) event.flags |= kHitCritical;
+    }
+    event.subjectType = u->type;
+    if (auto* owner = w.tryGet<Owner>(target)) event.subjectOwner = owner->player;
+    event.subjectKey = target.packed();
+    sim.emit(event);
     h.afterHit(target, source, wd, u->hp.raw <= 0);
     // creeps fight back as a camp
     if (auto* g = w.tryGet<Guard>(target); g && w.alive(source) && w.has<Unit>(source)) {

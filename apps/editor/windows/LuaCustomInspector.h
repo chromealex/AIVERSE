@@ -31,7 +31,7 @@ extern "C" {
 namespace aiverse::editor {
 
 class LuaCustomInspector {
-    friend struct LuaCustomInspectorSandboxTest; // test-only access, no keyword macro or public API
+    friend struct LuaCustomInspectorSandboxTest;
     // Sandbox contract (review fix 2026-11-21):
     // - every call into script code runs inside lua_pcall of a C trampoline with the
     //   instruction-budget hook and the memory cap active, so a script error never

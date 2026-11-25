@@ -128,7 +128,7 @@ export default function MaterialsPanel({projectPath,previewMaterial,textureOnly=
       value={query} onChange={e=>setQuery(e.target.value)}/>
     </label>
     {loading?<p className="materials-empty"><StudioLoader size={30} label="Loading…"/></p>:
-     names.length===0?<p className="materials-empty">No library materials. Create one with the native editor.</p>:
+     names.length===0?<p className="materials-empty">{connected && projectPath ? 'Choose New material to create the first material.' : 'No library materials.'}</p>:
      names.filter(n=>n.toLowerCase().includes(query.toLowerCase())).map(n=>
       <button key={n} type="button" aria-pressed={name===n}
        className={'materials-list-item'+(n===name?' active':'')} onClick={()=>switchTo(n)}>

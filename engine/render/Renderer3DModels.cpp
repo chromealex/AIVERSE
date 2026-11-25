@@ -1748,7 +1748,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             it.model = m; it.prim = &p; it.materialIndex = materialIndex;
             it.mat = &mats[size_t(materialIndex)];
             it.vertexOverride = customVertexStream ? d.vertexOverride : gfx::BufferHandle{};
-            it.tint = d.tint; it.team = d.team; it.flash = d.flash; it.flags = d.flags | (mats[size_t(std::clamp(mi, 0, int(mats.size()) - 1))].transparent ? uint32_t(kDrawTransparent) : 0u);
+            it.tint = d.tint; it.team = d.team; it.flash = d.flash; it.flashColor = d.flashColor; it.flags = d.flags | (mats[size_t(std::clamp(mi, 0, int(mats.size()) - 1))].transparent ? uint32_t(kDrawTransparent) : 0u);
             it.dissolve = d.dissolve; it.teamGlow = d.teamGlow; it.outline = d.outline;
             it.rigid = rigid;
             it.motionPersistentId = d.persistentId;
@@ -2039,6 +2039,7 @@ void Renderer3D::packModelInstance(const ModelItem& x, int phase,
     // Two spare floats in the existing 144-byte Inst slot (vec4 lod).
     // Per-instance palette mode uses z; normal LOD and GI keep xy/anim.
     d[34] = float(instanceMaterial);
+    d[35] = float(x.flashColor); // RGB8 + 1 is exactly representable in float32.
 }
 
 bool Renderer3D::drawModelBatch(const uint32_t* items, uint32_t count,

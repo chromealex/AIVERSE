@@ -1,0 +1,81 @@
+{
+  "version": 2,
+  "description": "CPU swept scene collision; native host supplies a SceneCollisionRegistry. No automatic collision provider in isolated preview.",
+  "parameters": {},
+  "nodes": [
+    {
+      "id": "spawn",
+      "type": "Spawn",
+      "properties": {
+        "burst": 16
+      },
+      "position": [
+        30,
+        180
+      ]
+    },
+    {
+      "id": "init",
+      "type": "Initialize",
+      "properties": {
+        "life": 2,
+        "speed": 18,
+        "size": 0.2,
+        "spread": 10,
+        "gravity": [
+          0,
+          -3,
+          0
+        ]
+      },
+      "position": [
+        230,
+        180
+      ]
+    },
+    {
+      "id": "collision",
+      "type": "CollisionModule",
+      "properties": {
+        "scene": true,
+        "ground": false,
+        "bounce": 0.6,
+        "dampen": 0.15,
+        "radius": 0.5
+      },
+      "position": [
+        450,
+        180
+      ]
+    },
+    {
+      "id": "out",
+      "type": "SpriteOutput",
+      "properties": {
+        "texture": "builtin:spark",
+        "blend": "additive"
+      },
+      "position": [
+        680,
+        180
+      ]
+    }
+  ],
+  "links": [
+    {
+      "from": "spawn",
+      "to": "init"
+    },
+    {
+      "from": "init",
+      "to": "collision"
+    },
+    {
+      "from": "collision",
+      "to": "out"
+    }
+  ],
+  "outputs": [
+    "out"
+  ]
+}

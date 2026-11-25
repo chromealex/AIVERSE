@@ -1,3 +1,193 @@
+## 2026-11-23 — Stage 18: real native SpectraFX frame capture (tests deferred)
+
+`apps/studio-native/StudioHost::captureSpectraFrame` now adds bounded
+asynchronous one-shot readback of the dedicated native FX drawable,
+NOT a browser-generated screenshot. The existing `gfx::Device`
+`captureNextFrame` is scheduled on the native render owner and
+completed via an immutable shared callback state guarded by a mutex.
+`studio.spectraPreview` and authenticated `aiversemcp`
+`fx_graph_preview` share new actions
+`{"action":"capture","maxSide":512}` and
+`{"action":"captureStatus"}`. Capture status includes
+`capture:{pending,ready,width,height,mime,image?,error?}` in the
+normal preview status. Max capture side 128–768, default 512;
+JPEG ≤600 KiB, at most one outstanding request, 10s timeout;
+project switch, FX detach and shutdown discard stale results.
+Graph UI exposes Capture Frame, genuine JPEG thumbnail and Save
+captured JPEG. No gameplay/ECS writes, fake particles, filesystem
+output path or continuous video streaming. **No current-source
+AppleClang/Metal, Node/Vite, CTest, Mac UI or Windows Vulkan tests
+were run (user requested features first).**
+Handoff:
+`docs/agent-handoffs/spectrafx-studio-stage18-native-gpu-frame-capture-2026-11-23.md`.
+
+## 2026-11-23 — SpectraFX Studio Stages 15–17 (features only; tests postponed)
+
+Added production-native preview-authoring controls to the independent
+FX viewport and existing `aiversemcp` `fx_graph_preview` tool:
+
+- **Stage 15**: `playback {speed:0.25|0.5|1|2|4,loop:boolean}`
+  uses whole fixed 1/60s simulation ticks, bounded quarter-tick
+  accumulator and native-frame restart at 3600 ticks. `stage`
+  selects `background:dark|neutral|light|black` and boolean grid/axes;
+  `cameraPreset` uses perspective/front/side/top with a separate FX
+  camera. All supported through the HTML5 Graph pane and MCP.
+- **Stage 16**: opt-in `Auto-reload graph` recompiles an immutable
+  in-memory Graph v2 after 650ms debounce. Save Draft/Publish remain
+  explicit; native compiler rejects invalid candidate graphs without
+  replacing last-good state. Successful recompilation restores Play.
+  Native backend initialization failure is a known separate hazard,
+  not a proven atomic swap.
+- **Stage 17**: `burst {count:1..8}` queues bounded native one-shot
+  emitter events (max 32 queued), `clear` defers particle reset to
+  the next native device frame. HTML5 Trigger Burst/Clear controls
+  and real burst/queue counters; no gameplay/ECS writes.
+
+Docs:
+`docs/agent-handoffs/spectrafx-studio-stage15-playback-stage-2026-11-23.md`,
+`docs/agent-handoffs/spectrafx-studio-stage16-auto-reload-2026-11-23.md`,
+`docs/agent-handoffs/spectrafx-studio-stage17-burst-events-2026-11-23.md`.
+
+**User deliberately deferred ALL testing until later.** No exact-SHA
+TypeScript/Vite/AppleClang/Metal/Windows/Vulkan/interactive GUI PASS
+has been observed for Stages 15–17. Do not describe the source
+implementation as hardware-verified. Prior 2/2 Mac CTest PASS belongs
+to an older Scene-only preview.
+
+## 2026-11-23 — Stage 14: dual Scene/FX viewport QA hardening
+
+The real native Scene and SpectraFX editor now use two separate GPU
+drawables and independent cameras (Stage 13), both serialized on the
+existing native render thread. Stage 14 extends
+`StudioViewportLayoutTests.cpp` to verify two simultaneous independent
+rectangles, DPR, FX hide/resize without mutating Scene geometry.
+The focused macOS CI includes
+`aiverse_studio_viewport_layout_tests` and CTest
+`studio_viewport_layout` in addition to native Metal, codec and
+Workspace/MCP tests. `SpectraDockViewport.tsx` no longer dispatches
+the obsolete shared-surface reflow event when FX closes, preventing
+unnecessary authored Scene redraws.
+**Exact-SHA AppleClang/Metal, Node/Vite, Windows and dual live
+WKWebView screenshot QA remain unverified.** Detailed handoff:
+`docs/agent-handoffs/spectrafx-studio-stage14-dual-viewport-qa-2026-11-23.md`.
+
+## 2026-11-23 — Stage 13: independent Scene and FX GPU swapchains
+
+The SpectraFX Graph native GPU preview **NO LONGER BORROWS OR
+REPOSITIONS the map Scene drawable**. StudioHost now uses three
+`StudioSurface` values: `Scene`, `Game` and `Fx`. The native
+`Fx` viewport owns its own `StudioScene`, renderer, camera, gfx Device
+and native CAMetalLayer (macOS) / Win32 Vulkan child window (Windows).
+Both map Scene and FX are framed on the **same render-owner thread**
+using separate swapchains and can be displayed simultaneously.
+`studio.viewportRect {id:"fx"}` places ONLY the FX surface. The
+browser never draws fake particles or receives GPU handles.
+`studio.spectraPreview` and `aiversemcp fx_graph_preview` remain
+the shared playback/camera/parameter control surface, but target
+`fxPreview_` rather than the authored Scene. No native map brush,
+selection, asset drop, keyboard deletion or ECS mutation is permitted
+from the dedicated FX window. Independent map Scene camera/history
+are untouched. Both renderer/device lifetimes retire on the native
+owner thread.
+
+This supersedes Stage 11's **one shared native surface** limitation
+without replacing the established Stage 11 HTML5 dock rectangle.
+Metal CTest source now creates two real devices and captures different
+GPU frames; macOS Studio CI also compiles the full native host.
+**Full AppleClang/Metal, Windows Vulkan and WKWebView UI acceptance
+not yet observed as PASS.** Required agent handoff:
+`docs/agent-handoffs/spectrafx-studio-stage13-independent-gpu-targets-2026-11-23.md`.
+
+
+## 2026-11-23 — SpectraStudio embedded native FX preview + MCP (Stages 11–12)
+
+The latest HTML5 SpectraFX Graph panel includes a **real embedded native
+Metal/Vulkan particle viewport**: `SpectraDockViewport.tsx` reports its
+scroll-clipped CSS rect as `studio.viewportRect {id:"fx"}`. StudioHost
+repositions its existing Scene GPU surface with FX priority and switches
+StudioScene into a neutral grid stage with isolated camera, preserving the
+authored map camera and blocking all Scene entity edits. The real
+`spectra::GraphRuntime` executes on the render thread, then draws inside
+native GPU render passes. Scene and FX share one surface; concurrent
+independent rendering is NOT supported in this initial stage.
+
+`fx_graph_preview` is now in the existing `aiversemcp` tools/list,
+sharing a render-thread callback with `studio.spectraPreview`.
+Supports status/load/play/pause/step/seek/restart/parameter/stop plus
+cameraReset/cameraOrbit/cameraZoom. `load` accepts safe graphName,
+`draft:true`, or inline Graph v2. All earlier `fx_graph_*` asset CRUD,
+editor and draft MCP tools remain unchanged. Standalone MCP reports no
+native GPU viewport and does not fake frames.
+Node clipping tests, native Metal isolated dock tests and MCP discovery,
+safe path/callback tests were AUTHORED. No exact-SHA AppleClang/Metal/
+HTML5/WebView/Windows PASS has been observed for these latest changes;
+the user's prior native CTest 2/2 PASS predates the embedded viewport.
+
+Handoffs:
+`docs/agent-handoffs/spectrafx-studio-stage11-embedded-preview-2026-11-23.md`
+`docs/agent-handoffs/spectrafx-studio-stage12-mcp-camera-2026-11-23.md`
+
+## 2026-11-23 — Stage 8 native SpectraFX Scene preview (source/QA pending)
+
+On draft stacked PR #115, `StudioSpectraPreview.h` now wraps one real
+`spectra::GraphRuntime` owned by StudioScene's native render thread.
+Allowlisted `studio.spectraPreview` host operations load/validate an
+unsaved Graph v2 and control Play/Pause/Restart/Step/Seek, finite named
+VM parameters and actual backend status. Native GPU/CPU particle
+simulation steps between beginFrame and the scene pass, then draws
+inside the real open Renderer3D HDR pass before PRISMA resolves.
+The HTML5 SpectraFX tab has real native Scene preview controls, not
+fake DOM particles; open Scene to see the effects. No standalone
+offscreen preview picture in the graph panel yet.
+
+**Stage 8 exact-source native Studio build/Metal acceptance NOT confirmed**.
+The macOS CAMetalLayer regression target and CI were authored, but
+queued run is not a PASS. See mandatory handoff
+`docs/agent-handoffs/spectrafx-studio-stage8-native-preview-2026-11-23.md`
+for changed files, commits, test plan, risks and next step.
+Parent PR #113 remains draft; main unchanged.
+
+## 2026-11-23 — HTML5 SpectraStudio Graph authoring Stage 7 (draft PR #115)
+
+The `fx_graph` dock tab now includes three new authoring surfaces:
+(1) typed Data Interface param/provider inspector with native Assets picker,
+(2) Graph v2 topology canvas with native Add/Delete/Connect/Disconnect, and
+(3) Curve/Gradient key editor for existing v2 data nodes with normalized
+times, scalar keys, RGBA opacity and static visual plots. These are
+**editor authoring interfaces, NOT actual GPU particle preview frames**.
+All graph Validate/Save Draft/Publish actions still route via whitelisted
+Studio Workspace operations. No direct JS filesystem write or renderer
+ownership. Source lives on `feature/spectrafx-html5-data-interfaces-20261123`,
+stacked on parent draft PR #113. Main and `feature/studio-html5` unchanged.
+
+Handoff chain:
+- `docs/agent-handoffs/spectrafx-studio-stage5-2026-11-23.md`
+- `docs/agent-handoffs/spectrafx-studio-stage6-graph-canvas-2026-11-23.md`
+- `docs/agent-handoffs/spectrafx-studio-stage7-curve-gradient-2026-11-23.md`
+
+**Acceptance:** prior Stage 5 early Ubuntu Node22 suite PASS 14/14 plus Vite;
+that evidence predates Graph Canvas and Curve/Gradient. New Node/Vite
+checks are queued; real macOS/Windows UI, hardware RHI and full SpectraFX
+GPU preview remain unverified. Next: resolve exact-SHA CI first, then
+design native render-owned preview mailbox/timeline with safe fences and
+real image capture. Do not merge either draft PR until real validation.
+
+## 2026-11-23 — Graph v2 Data Interfaces, Stage 4 (PR #113, QA pending)
+
+New typed `dataInterfaces` bindings + runtime-only DataInterface node map
+immutable host-provided scalar samples into existing VM `param0..param7`
+at burst time. Editor model has shared node metadata and atomic binding edit
+helpers; HTML5 Studio GUI integration remains outstanding. Source changes
+and tests are on `feature/spectrafx-significance-data-20261123`, not main.
+**No native PASS recorded for Stage 4 yet.** CI is queued. Must run focused
+Linux/macOS compiler+runtime CTests, Metal parity and full acceptance before
+marking done. Canonical handoff:
+`docs/agent-handoffs/spectrafx-data-interfaces-stage4-2026-11-23.md`.
+Previous stages:
+`docs/agent-handoffs/spectrafx-significance-stage1-2026-11-23.md`,
+`docs/agent-handoffs/spectrafx-significance-stage2-routes-2026-11-23.md`,
+`docs/agent-handoffs/spectrafx-fields-stage3-2026-11-23.md`.
+
 ## 2026-11-20 — Inspector revalidated with lighting main
 
 Combined implementation `4acfb482742d2bb1d615c3eaae60308af09ffa1b` preserves incoming main `d84e958b1`.

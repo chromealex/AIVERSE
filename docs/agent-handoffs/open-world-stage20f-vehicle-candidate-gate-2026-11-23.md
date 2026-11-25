@@ -1,0 +1,3 @@
+# W1.20f — vehicle candidate gate
+
+Commit `11c32b914ebe1289473e0b22a29019e21e14fdfe`, PR #116 Draft. ActorRegionOwnership.cpp adds experimental regionDirtyOnlyVehicles flag. Candidate application is allowed only with initialized nonoverflow journals, prior seat index, strict audit disabled, and every canonical crossing covered by candidates. Otherwise all pending groups apply. Canonical full scan remains; since pending groups are already crossing groups, this gate does not reduce traversal or migration count. It is scaffolding, not a completed dirty-only vehicle implementation. No native tests run. Next: actual incremental seat index with writer coverage and configuration plumbing, then skill/catalog. No main merge.

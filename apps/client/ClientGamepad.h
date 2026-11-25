@@ -63,6 +63,7 @@ public:
     static constexpr int kLT = int(platform::PadButton::Count), kRT = kLT + 1, kSlots = kLT + 2;
     static int slotFromName(const std::string& s);   // -1: unknown
     static Binding parseBinding(const std::string& s);
+    static const char* keyName(platform::Key key);
     static platform::Key keyFromName(const std::string& s);
 
 private:

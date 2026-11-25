@@ -15,6 +15,8 @@ struct ScriptSoundPlay {
     float gain = 1, pan = 0, pitch = 1, at = 0;   // at: seconds into the clip
     int variant = -1;                             // 0-based; -1 random
     int loop = -1;                                // -1 = the sound's own setting
+    bool positional = false;
+    float x = 0, y = 0, z = 0;
 };
 
 struct ScriptSoundSettings {
@@ -28,6 +30,7 @@ public:
     virtual bool available() const = 0;                          // a mixer runs (else plays return no handle)
     virtual uint32_t play(const std::string& name, const ScriptSoundPlay& p) = 0;   // 0 = not started
     virtual void set(uint32_t voice, float gain, float pan, float pitch) = 0;      // NaN = unchanged
+    virtual void position(uint32_t, float, float, float) {}
     virtual void stop(uint32_t voice, float fade) = 0;
     virtual void pause(uint32_t voice, bool paused) = 0;
     virtual void seek(uint32_t voice, float seconds) = 0;

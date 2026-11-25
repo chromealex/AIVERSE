@@ -330,6 +330,7 @@ struct ModelDraw {
     // (layers & Renderer3D::visibilityMask()) != 0; skipped draws also cast
     // no shadow in that view. Default layer 0 (bit 1).
     uint32_t layers = 1;
+    uint32_t flashColor = 0; // 0 = legacy warm highlight, otherwise packed RGB8 + 1
 };
 
 enum DrawFlags : uint32_t {
@@ -941,6 +942,10 @@ public:
     // With a post hook: ends the scene pass, runs the effects into screenPass (left open). No-op otherwise.
     // Call after everything that belongs to the 3D scene (particles), before UI.
     void resolvePrisma(); // canonical image processing resolve; leaves UI pass open
+    // One-shot consumer of real main depth, after its writer ends, only on
+    // the offscreen post-process path. Callback must finish any compute pass.
+    using SceneDepthConsumer=std::function<void(gfx::Device&,gfx::TextureHandle,const mat4&,float3)>;
+    void consumeResolvedSceneDepth(SceneDepthConsumer fn){sceneDepthConsumer_=std::move(fn);}
     // Presentation-only camera cut / teleport / view replacement hooks.
     // Invalidating a view keeps GPU target allocations but discards all
     // previous transform and deformation history. No ECS mutation.
@@ -1711,7 +1716,7 @@ private:
         gfx::DrawIndexedIndirectCommand gpuLodNear{}, gpuLodFar{};
         float gpuLodMaxPixels = 0, gpuLodError = 0;
         float3 gpuLodBoundsMin{}, gpuLodBoundsMax{};
-        mat4 world; float4 tint; float3 team; float flash; uint32_t flags;
+        mat4 world; float4 tint; float3 team; float flash; uint32_t flags; uint32_t flashColor = 0;
         uint64_t motionPersistentId = 0; // 0: transient, never tracked
         int motionNodeIndex = -1;
         int32_t joints;     // offset into jointData_ (floats), -1 when not palette-skinned
@@ -1846,6 +1851,8 @@ private:
     int sceneW_ = 0, sceneH_ = 0;
     PostProcess* post_ = nullptr;      // set by render() when the hook is active, cleared by resolvePrisma()
     gfx::PassDesc postOut_;
+    gfx::TextureHandle resolvedDepthSource_;
+    SceneDepthConsumer sceneDepthConsumer_;
 
     // trace tier
     bool traceWanted_ = true;

@@ -433,6 +433,9 @@ bool GameCore::runOrder(Simulation& sim, Entity e, Order& o) {
     };
     auto chase = [&](Entity target) -> bool { // true while the target is valid
         if (!w.alive(target) || !w.has<Unit>(target)) return false;
+        const auto& tt = rules_.types[w.get<Unit>(target).type];
+        if (std::any_of(t.weapons.begin(), t.weapons.end(), [](const WeaponDef& wd) { return wd.targetTags || wd.ignoreTags; }) &&
+            std::none_of(t.weapons.begin(), t.weapons.end(), [&](const WeaponDef& wd) { return weaponTargetMatches(wd, tt.layer, tt.tags); })) return false;
         Fixed range = rangeTo(target);
         if (contactDistance(sim, e, target) <= range) {
             if (m && m->moving) stopMoving(sim, e);

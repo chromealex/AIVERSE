@@ -5,10 +5,10 @@ import re
 from pathlib import Path
 
 EXPECTED = ("spectrafx_metal_gpu", "spectrafx_metal_billboard",
-            "spectrafx_metal_rhi", "spectrafx_metal_scene")
+            "spectrafx_metal_rhi", "spectrafx_metal_scene", "spectrafx_metal_allocator")
 TEST_LINE = re.compile(
     r"^\s*\d+/\d+\s+Test\s+#\d+:\s+"
-    r"(spectrafx_metal_(?:gpu|billboard|rhi|scene))\s+(.+)$"
+    r"(spectrafx_metal_(?:gpu|billboard|rhi|scene|allocator))\s+(.+)$"
 )
 
 def parse_results(log):

@@ -155,6 +155,11 @@ int main(int argc, char** argv) {
         auto zone = [&] { auto d = box({5, 1, 0}, {2, 2, 2}, Motion::Static); d.sensor = true; return s.create(d); }();
         auto hit = s.raycast({0, 10, 0}, {0, -20, 0});
         require(hit.body == a && std::abs(hit.point.y - 2.5f) < 1e-3f && hit.normal.y > 0.99f, "closest hits box");
+        const auto sphere=s.sphereCast({0,10,0},{0,-20,0},0.5f);
+        require(sphere.body==a&&sphere.fraction<hit.fraction&&sphere.normal.y>0.99f,"radius cast hits earlier than ray");
+        require(s.sphereCast({0,10,0},{0,-20,0},0.5f,{.ignore=a}).body==g,"sphere ignore filter");
+        require(s.sphereCast({5,10,0},{0,-20,0},0.5f).body==g,"sphere skips sensors");
+        require(s.sphereCast({0,10,0},{0,-20,0},-1.f).body==kNoBody,"invalid sphere radius");
         auto all = s.raycastAll({0, 10, 0}, {0, -20, 0});
         require(all.size() == 2 && all[0].body == a && all[1].body == g, "all hits, ordered");
         require(s.raycast({0, 10, 0}, {0, -20, 0}, {.ignore = a}).body == g, "ignore filter");

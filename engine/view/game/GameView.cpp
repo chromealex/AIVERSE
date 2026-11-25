@@ -1300,6 +1300,14 @@ void GameView::draw(Renderer3D& r, const GameScene& input, double time, const st
         drawTypes_.push_back(o.type);
         if (!streamingTypes_) loadType(o.type);
     }
+    // A projectile can outlive its shooter. Keep its authored type available
+    // even when no unit of that type is in the current scene.
+    for (const auto& o : input.objects) {
+        if (!o.isProjectile || !o.visible || o.shooterType>=looks_.size()) continue;
+        if (!streamingTypes_ && !typeLoaded(o.shooterType) &&
+            rules_->types[o.shooterType].view.has("projectiles"))
+            loadType(o.shooterType);
+    }
     // All synchronous Model loads above must finish BEFORE this scope.
     // The cache owns unique_ptr<Model>; the reader guard blocks
     // replace/invalidate/trim/shutdown until the View's graph evaluation
@@ -2196,7 +2204,11 @@ void sceneFromSim(Simulation& sim, GameScene& out, float alpha, uint8_t viewer) 
     w.each<Projectile, Transform>([&](Entity e, Projectile& pr, Transform& t) {
         SceneObject so;
         so.entity = e; so.isProjectile = true; so.source = pr.source;
-        if (auto* su = w.tryGet<Unit>(pr.source)) { so.shooterType = su->type; if (pr.sourceType == su->type) so.shotWeapon = pr.weapon; } // picks the projectile's light and size
+        if(pr.sourceType<R.types.size())so.shooterType=pr.sourceType;
+        else if(auto* su=w.tryGet<Unit>(pr.source))so.shooterType=su->type;
+        so.shotWeapon=int8_t(view_adapter::projectileAppearanceSlot(R,pr));
+        const Vec3 delta=t.pos-t.prevPos;
+        so.facing=toF(delta.lengthSq().raw>0?delta:pr.aim-t.pos);
         so.pos = lerp(toF(t.prevPos), toF(t.pos), alpha);
         if (viewer != 0) {
             int x = int(t.pos.x.floorInt()), y = int(t.pos.z.floorInt());

@@ -1,0 +1,5 @@
+# Stage 103 — explicit pooled scene emission route
+
+Parent `a41802d0c809608bd030e1baddff95e99b7c3f4e`; branch `feature/spectrafx-html5-data-interfaces-20261123`.
+
+Studio now owns an optional existing GpuPoolWorld and GpuEcsAttachmentPresenter alongside the Stage 102 CPU presenter. A Graph v2 explicitly declaring scenePoolEmission (burstsPerSecond, metresPerBurst, lifetimeSeconds, maxBurstsPerFrame) can enter a shared GPU group only if strict eligibility, RequireGpu initialization, policy binding and unit source scale succeed. Other instances retain the existing compiled CPU effect route. No implicit conversion of legacy continuous effects into pooled bursts. Separate mirrors ensure one route per entity. Shared pool frame is prepared after Device.beginFrame, synchronized and stepped once, drawn once in the main pass, finished with scope guard. Definitions and resources retire on existing owner reset. Headless policy regression source added. No build or tests run. Explicit pooled policy editor, per-source parameters, runtime pool recovery and parity on hardware, graph reload and planet/world-space pose remain follow-up. Main untouched.

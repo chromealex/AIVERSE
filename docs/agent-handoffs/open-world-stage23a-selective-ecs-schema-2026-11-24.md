@@ -1,0 +1,3 @@
+# Persistent ECS stage 23a
+
+PersistentEcs.h extends existing registry with schemas(), captureSchema() and restoreSchemas(). Uses existing stable IDs, Archive codecs, migrations and validators; selected full pools/resources restored atomically into staged World, unselected schemas unchanged. Requires pre-restored entity allocator/liveness and sorted unique chunks. No stable-ID remapping, per-entity deltas, disk integration or Simulation public forwarding yet. Existing snapshot format unchanged. No native tests run. Next Simulation forwarding and durable selection policy, then entity identity mapping. PR #116 Draft; no main merge.

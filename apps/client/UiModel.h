@@ -1,4 +1,6 @@
 #pragma once
+#include <algorithm>
+#include "engine/data/Json.h"
 #include <RmlUi/Core.h>
 #include <string>
 #include <vector>
@@ -21,8 +23,27 @@ struct UiAction {        // command card button; `id` indexes GameClient::action
     int id = 0;
     int alt = -1;             // optional second button of the row (e.g. "watch" next to "join")
     std::string altLabel;
+    std::string page, cellStyle;
+    int column = -1, row = -1;
+    bool positioned = false;
     bool operator==(const UiAction&) const = default;
 };
+inline void applyCardSlot(UiAction& action, const aiverse::Json& slot) {
+    if (!slot.isObject()) return;
+    action.positioned = true;
+    action.page = slot.getStr("page");
+    action.column = int(std::clamp<int64_t>(slot.getInt("column", -1), -1, 15));
+    action.row = int(std::clamp<int64_t>(slot.getInt("row", -1), -1, 31));
+}
+
+struct SelectedUnit {
+    std::string type, name, icon, subgroup, unitClass, damageType, armorType;
+    float hp = 0, maxHp = 0, hpFraction = 0, energy = 0, attackMin = 0, attackMax = 0, armor = 0;
+    bool invulnerable = false, hasInventory = false;
+    int selectAction = -1;
+    bool operator==(const SelectedUnit&) const = default;
+};
+
 struct UiSection {             // built per section, flattened into UiState::card for the document
     std::string title, kind;
     std::vector<UiAction> actions;
@@ -30,6 +51,11 @@ struct UiSection {             // built per section, flattened into UiState::car
 struct UiState {
     std::string screen = "menu";   // menu | lobby | playing | paused | over
     std::string gameName, error, platformInfo;
+    bool lanSupported = false;
+    std::vector<UiAction> lanHosts;
+    std::vector<std::string> saveSlots, replaySlots;
+    bool canSaveMatch = false, watchingReplay = false, replayPaused = false;
+    std::string replaySpeed;
     std::vector<std::string> maps;
     std::vector<UiAction> languages;
     std::string lang;                  // active language: argument of the `tr` transform in documents
@@ -40,14 +66,18 @@ struct UiState {
     std::vector<std::string> chat;
     bool isHost = false, myReady = false, canStart = false, netMatch = false, searching = false;
     std::vector<UiItem> top, entityActions, worldCounters;
-    std::vector<UiAction> topActions;
+    std::vector<UiAction> topActions, selectionShortcuts;
     std::string clock;
     std::vector<std::string> notices;
-    bool hasSelection = false, ownSelection = false;
+    std::vector<UiItem> noticeRows, messageHistory;
+    bool messageLogOpen = false, hasMessageLog = false, canChat = false;
+    bool hasSelection = false, ownSelection = false, hasPortrait = false, showPortrait = false;
     std::string selTitle, emptyHint;
-    std::vector<std::string> selInfo;
+    std::vector<std::string> selInfo, selectedStatuses;
+    std::vector<SelectedUnit> selectedUnits;
     std::vector<UiAction> scriptCards, scriptStatus, scriptSupport, scriptTop;
     std::string scriptTitle;
+    std::string cardGridStyle, cardPage;
     std::vector<UiAction> card;       // flat: one nesting level keeps RmlUi's data-for updates simple
     std::string overTitle, overTime;
     std::string modeHint, hintStyle, boxStyle, minimapStyle;
@@ -62,6 +92,26 @@ struct UiState {
 };
 
 inline void bindUiState(Rml::DataModelConstructor& c, UiState& b) {
+    if (auto h = c.RegisterStruct<SelectedUnit>()) {
+        h.RegisterMember("type", &SelectedUnit::type);
+        h.RegisterMember("name", &SelectedUnit::name);
+        h.RegisterMember("icon", &SelectedUnit::icon);
+        h.RegisterMember("subgroup", &SelectedUnit::subgroup);
+        h.RegisterMember("unitClass", &SelectedUnit::unitClass);
+        h.RegisterMember("damageType", &SelectedUnit::damageType);
+        h.RegisterMember("armorType", &SelectedUnit::armorType);
+        h.RegisterMember("hp", &SelectedUnit::hp);
+        h.RegisterMember("maxHp", &SelectedUnit::maxHp);
+        h.RegisterMember("hpFraction", &SelectedUnit::hpFraction);
+        h.RegisterMember("energy", &SelectedUnit::energy);
+        h.RegisterMember("attackMin", &SelectedUnit::attackMin);
+        h.RegisterMember("attackMax", &SelectedUnit::attackMax);
+        h.RegisterMember("armor", &SelectedUnit::armor);
+        h.RegisterMember("invulnerable", &SelectedUnit::invulnerable);
+        h.RegisterMember("hasInventory", &SelectedUnit::hasInventory);
+        h.RegisterMember("selectAction", &SelectedUnit::selectAction);
+    }
+    c.RegisterArray<std::vector<SelectedUnit>>();
     if (auto h = c.RegisterStruct<UiItem>()) {
         h.RegisterMember("text", &UiItem::text); h.RegisterMember("sub", &UiItem::sub);
         h.RegisterMember("style", &UiItem::style); h.RegisterMember("warn", &UiItem::warn);
@@ -73,6 +123,9 @@ inline void bindUiState(Rml::DataModelConstructor& c, UiState& b) {
         h.RegisterMember("enabled", &UiAction::enabled); h.RegisterMember("active", &UiAction::active);
         h.RegisterMember("progress", &UiAction::progress); h.RegisterMember("id", &UiAction::id);
         h.RegisterMember("kind", &UiAction::kind); h.RegisterMember("header", &UiAction::header);
+        h.RegisterMember("page", &UiAction::page); h.RegisterMember("column", &UiAction::column);
+        h.RegisterMember("row", &UiAction::row); h.RegisterMember("positioned", &UiAction::positioned);
+        h.RegisterMember("cellStyle", &UiAction::cellStyle);
         h.RegisterMember("alt", &UiAction::alt); h.RegisterMember("altLabel", &UiAction::altLabel);
     }
     c.RegisterArray<std::vector<UiAction>>();
@@ -80,11 +133,20 @@ inline void bindUiState(Rml::DataModelConstructor& c, UiState& b) {
     c.RegisterArray<std::vector<std::string>>();
 
     c.Bind("screen", &b.screen); c.Bind("gameName", &b.gameName); c.Bind("error", &b.error);
+    c.Bind("lanSupported",&b.lanSupported); c.Bind("lanHosts",&b.lanHosts);
+    c.Bind("saveSlots",&b.saveSlots); c.Bind("replaySlots",&b.replaySlots); c.Bind("canSaveMatch",&b.canSaveMatch);
+    c.Bind("watchingReplay",&b.watchingReplay); c.Bind("replayPaused",&b.replayPaused); c.Bind("replaySpeed",&b.replaySpeed);
     c.Bind("platformInfo", &b.platformInfo); c.Bind("maps", &b.maps);
     c.Bind("worldCounters", &b.worldCounters); c.Bind("entityActions", &b.entityActions); c.Bind("top", &b.top); c.Bind("topActions", &b.topActions); c.Bind("clock", &b.clock); c.Bind("notices", &b.notices);
+    c.Bind("noticeRows", &b.noticeRows); c.Bind("messageHistory", &b.messageHistory);
+    c.Bind("messageLogOpen", &b.messageLogOpen); c.Bind("hasMessageLog", &b.hasMessageLog); c.Bind("canChat", &b.canChat);
+    c.Bind("selectedUnits", &b.selectedUnits); c.Bind("selectedStatuses", &b.selectedStatuses);
+    c.Bind("selectionShortcuts", &b.selectionShortcuts);
+    c.Bind("hasPortrait",&b.hasPortrait); c.Bind("showPortrait",&b.showPortrait);
     c.Bind("hasSelection", &b.hasSelection); c.Bind("ownSelection", &b.ownSelection);
     c.Bind("selTitle", &b.selTitle); c.Bind("emptyHint", &b.emptyHint); c.Bind("selInfo", &b.selInfo);
     c.Bind("scriptTop", &b.scriptTop); c.Bind("scriptCards", &b.scriptCards); c.Bind("scriptStatus", &b.scriptStatus); c.Bind("scriptSupport", &b.scriptSupport); c.Bind("scriptTitle", &b.scriptTitle);
+    c.Bind("cardGridStyle", &b.cardGridStyle); c.Bind("cardPage", &b.cardPage);
     c.Bind("card", &b.card); c.Bind("overTitle", &b.overTitle); c.Bind("overTime", &b.overTime);
     c.Bind("dispatchCount", &b.dispatchCount); c.Bind("dispatchCaption", &b.dispatchCaption);
     c.Bind("dispatchRatio", &b.dispatchRatio); c.Bind("dispatchStyle", &b.dispatchStyle);
@@ -106,10 +168,12 @@ inline void syncUiState(Rml::DataModelHandle model_, UiState& bound_, UiState s)
         bound_.name = std::move(s.name);                     \
         model_.DirtyVariable(#name);                         \
     }
-        AIVERSE_SYNC(screen) AIVERSE_SYNC(gameName) AIVERSE_SYNC(error) AIVERSE_SYNC(platformInfo) AIVERSE_SYNC(maps)
-        AIVERSE_SYNC(worldCounters) AIVERSE_SYNC(entityActions) AIVERSE_SYNC(top) AIVERSE_SYNC(topActions) AIVERSE_SYNC(clock) AIVERSE_SYNC(notices) AIVERSE_SYNC(hasSelection) AIVERSE_SYNC(ownSelection)
+        AIVERSE_SYNC(screen) AIVERSE_SYNC(gameName) AIVERSE_SYNC(error) AIVERSE_SYNC(platformInfo) AIVERSE_SYNC(maps) AIVERSE_SYNC(saveSlots) AIVERSE_SYNC(replaySlots) AIVERSE_SYNC(lanSupported) AIVERSE_SYNC(lanHosts)
+        AIVERSE_SYNC(canSaveMatch) AIVERSE_SYNC(watchingReplay) AIVERSE_SYNC(replayPaused) AIVERSE_SYNC(replaySpeed)
+        AIVERSE_SYNC(worldCounters) AIVERSE_SYNC(entityActions) AIVERSE_SYNC(top) AIVERSE_SYNC(topActions) AIVERSE_SYNC(clock) AIVERSE_SYNC(notices) AIVERSE_SYNC(hasSelection) AIVERSE_SYNC(ownSelection) AIVERSE_SYNC(hasPortrait) AIVERSE_SYNC(showPortrait)
+        AIVERSE_SYNC(selectedUnits) AIVERSE_SYNC(selectedStatuses) AIVERSE_SYNC(selectionShortcuts) AIVERSE_SYNC(noticeRows) AIVERSE_SYNC(messageHistory) AIVERSE_SYNC(messageLogOpen) AIVERSE_SYNC(hasMessageLog) AIVERSE_SYNC(canChat)
         AIVERSE_SYNC(scriptTop) AIVERSE_SYNC(scriptCards) AIVERSE_SYNC(scriptStatus) AIVERSE_SYNC(scriptSupport) AIVERSE_SYNC(scriptTitle)
-        AIVERSE_SYNC(selTitle) AIVERSE_SYNC(emptyHint) AIVERSE_SYNC(selInfo) AIVERSE_SYNC(card) AIVERSE_SYNC(overTitle) AIVERSE_SYNC(overTime)
+        AIVERSE_SYNC(selTitle) AIVERSE_SYNC(emptyHint) AIVERSE_SYNC(selInfo) AIVERSE_SYNC(card) AIVERSE_SYNC(cardGridStyle) AIVERSE_SYNC(cardPage) AIVERSE_SYNC(overTitle) AIVERSE_SYNC(overTime)
         AIVERSE_SYNC(dispatchCount) AIVERSE_SYNC(dispatchCaption) AIVERSE_SYNC(dispatchRatio) AIVERSE_SYNC(dispatchStyle)
         AIVERSE_SYNC(modeHint) AIVERSE_SYNC(hintStyle) AIVERSE_SYNC(boxStyle) AIVERSE_SYNC(minimapStyle) AIVERSE_SYNC(lines) AIVERSE_SYNC(touch) AIVERSE_SYNC(showCard)
         AIVERSE_SYNC(languages) AIVERSE_SYNC(lang) AIVERSE_SYNC(tools) AIVERSE_SYNC(hasHowto) AIVERSE_SYNC(howtoOpen)

@@ -664,7 +664,8 @@ still applies.
 `view.camera()` returns the host camera `{x, z, zoom, pitch, yaw, width, height, ortho}`: target on the ground, zoom in
 the units of game.json `"camera"` (orthographic: visible view-plane height in world units; perspective: distance),
 angles in degrees, viewport in framebuffer pixels. `view.set_camera{x =, z =, zoom =, pitch =, yaw =}` changes any
-subset after the frame's view scripts (pitch 5..90, zoom > 0, finite values). A game ports its own framing with it
+subset after the frame's view scripts, before client world streaming and rendering (pitch 5..90, zoom > 0,
+finite values). The world scene and `view.to_screen` use the resulting camera in the same frame. A game ports its own framing with it
 (OpenWar: `scripts/view/openwar/camera.lua`, Unity's ArmyMapView). Presentation only; the client applies it, the
 editor Game view does not yet. Test: `openwar_player_colors_flat_lighting_view_camera`.
 
@@ -821,3 +822,19 @@ This checks identical-input continuation, not arbitrary alternate command histor
 player abilities). The manifest may opt into generic world-anchored entity controls;
 see [Entity action controls](entity-action-controls.md). Presentation captures an
 explicit source, while normal entity commands and game handlers remain authoritative.
+
+Use `view.entity_fx(entity, {hit_flash = 0})` to suppress the model hit highlight for one entity. The multiplier defaults to 1 and uses the existing entity_fx timing and easing.
+
+Match view handlers may register `ui.on("keydown", function(e) ... end)`. The payload has the platform key name (e.g. `F9`, `Enter` or `Num1`) and boolean `shift`, `ctrl`, `alt`, `super`. Return true to consume the press. Text fields retain keyboard input and an existing back handler takes precedence for Escape. Rules command hotkeys also accept these key names.
+
+For a positional loop use `local h = sound.play("machinery", {x=12, z=5, y=1, loop=true})`. Move it with `sound.set(h, {x=13,z=5,y=1})`; stop it with `sound.stop(h, 0.2)`. Coordinates are world units, and omitted y defaults to zero.
+
+`game.message(player, text, x, z, duration, style)` accepts optional display seconds and one project CSS class; use nil coordinates for a HUD-only line. Player 0 broadcasts. View scripts can use `view.notice(text, {duration=5, style="warning"})`; UI Lua supports `game.notice(text, 5, "warning")`. The Messages button reopens match history with newest lines first, including chat and system notices.
+
+In-match chat from the Messages panel travels in the simulation command stream. Use `on("chat", function(e) ... end)` in simulation scripts to handle `e.player` and `e.text` deterministically; view scripts can use `view.on("chat", fn)`. Each message is one line of UTF-8, up to 256 bytes. Lobby chat uses its existing relay.
+
+`game.player(slot).controller` is `human`, `computer` or `empty`. The server records controller transitions in confirmed input. Use `on("player_left", function(e) ... end)` to observe the departing slot in `e.player` and the replacement kind in `e.controller`. Disconnects leave a human seat empty until it resumes; reassignment of an existing bot to a different host keeps its computer controller.
+
+View Lua can retain a particle handle from `h = view.start_fx(name, x, z, y)`. Use `view.move_fx(h, x, z, y, dx, dy, dz)` for an absolute position or `view.attach_fx(h, entity, offsetX, offsetZ, offsetY)` to follow a visible holder. The direction defaults to local up. `view.stop_fx(h)` lets particles fade and `view.kill_fx(h)` removes them immediately. Handles belong to the current match.
+
+Use `view.shake_camera{amplitude=0.4,frequency=12,duration=0.5,x=20,z=15,radius=30}` to shake the main camera. Amplitude is in metres, frequency in Hz and duration in seconds. Radius gives linear distance falloff to zero. Omit radius for full strength everywhere.

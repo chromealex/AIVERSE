@@ -10,6 +10,8 @@ This is not the lockstep relay (`engine/net/server`, every client simulates ever
 
 ## What goes over the wire
 
+City protocol 5 adds combat presentation metadata to the Sim event payload and includes resource IDs in the content identity. Upgrade server and client together; protocol 4 peers are rejected at handshake.
+
 | Message | Channel | Content |
 |---|---|---|
 | Hello | reliable, client → server | protocol, content id (unit type ids, the map's size, players and entities), the player's id and ticket |
@@ -18,7 +20,7 @@ This is not the lockstep relay (`engine/net/server`, every client simulates ever
 | Snapshot | latest-only, `snapshotRate` per second | the hero's id; entities within `radius` cells that changed, 14 bytes each: id, type, owner, x, z (1/64 cell), facing, hp, flags; every projectile in view, 13 bytes each |
 | Fixed / Gone | reliable | things that stand (did not change for `restMs`): told once when they come into view, removed by id |
 | Event | reliable | an incident (`traffic` incidents: injured, crime, fire, wreck) that happened in view: kind, place, subject |
-| Sim | reliable | `SimEvent`s of the server's simulation that happened in view or are about this player (sound, effects, notices) |
+| Sim | reliable | `SimEvent`s of the server's simulation that happened in view or are about this player (sound, effects, notices), including critical flag and bounty resource, victim type/owner and identity (39 bytes/event in protocol 5) |
 | Premises | reliable, on change, looked at once a second | who owns / rents each of the map's premises as this player may know it (nobody, he, somebody else), its business and staff; the books and the stash only of his own |
 | Account | reliable, on change | the player's money, debt, game day |
 

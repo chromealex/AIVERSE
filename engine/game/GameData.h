@@ -38,7 +38,7 @@ Stat parseStat(const std::string& s, bool* ok = nullptr);
 
 // lerp (statuses): the final value moves toward 1 by the summed lerp of all statuses (BW Lerp(totalDef, 1, suppress))
 // floor (statuses): the product of the holder's status multipliers on this stat stays >= floor (BW Slowdown2 1/3)
-struct StatMod { Stat stat = Stat::Damage; Fixed add{}; Fixed mul = Fixed::fromInt(1); Fixed lerp{}; Fixed floor{}; };
+struct StatMod { Stat stat = Stat::Damage; Fixed add{}; Fixed mul = Fixed::fromInt(1); Fixed lerp{}; Fixed floor{}; uint16_t stackingGroup = 0; };
 
 // What a modifier applies to: types with any of `tags`, or one `type`, or everything.
 struct ModTarget { uint64_t tags = 0; uint16_t type = kNoType; bool all = false; };
@@ -69,6 +69,7 @@ struct ResourceDef {
     // fidelity mechanics (Originals.cpp): gains on match events and player stat mods per whole unit held
     Fixed gainKill{}, gainCapture{}, gainCaptured{}, gainUpgrade{}, gainLost{}, gainDefended{};
     Fixed min{};              // floor (negative regen = decay)
+    std::string hudLabelFormat;  // optional presentation pattern for the resource bar
     std::vector<std::pair<uint64_t, StatMod>> perUnitMods; // tags (0 = all) -> mod * floor(stock) (morale suns)
 };
 
@@ -83,6 +84,11 @@ enum class ArmorModel : uint8_t { Subtract = 0, Percent = 1, Classes = 2 };
 constexpr uint16_t kDamagePure = 0xFFFF;   // damage type: no damage table; in the classes model armor is already applied
 struct ClassAttack { uint16_t cls = 0; Fixed amount{}; };
 
+// Shared target-tag policy: require at least one included tag, reject any excluded tag.
+inline bool targetTagsMatch(uint64_t actual, uint64_t include, uint64_t exclude) {
+    return (!include || (actual & include)) && !(actual & exclude);
+}
+
 struct WeaponDef {
     ProjectileFlight flight;
     std::string id;
@@ -90,7 +96,13 @@ struct WeaponDef {
     Fixed minRange{};
     Fixed damage = Fixed::fromInt(5);
     Fixed cooldown = Fixed::fromInt(1);
+    bool preciseCooldown = true; // positive periods carry their remainder by default
+    Fixed windup{}, backswing{}; // attack-speed-scaled seconds before release and after release
+    bool hasAttackTiming() const { return windup.raw > 0 || backswing.raw > 0; }
     uint8_t targets = kLayerGround;
+    uint64_t targetTags = 0, ignoreTags = 0;
+    uint8_t extraTargets = 0; // distinct secondary targets for one accepted attack
+    uint64_t extraTargetTags = 0, extraIgnoreTags = 0;
     Fixed projectileSpeed{};
     Fixed splash{};
     uint16_t damageType = 0;
@@ -106,6 +118,10 @@ struct WeaponDef {
     Fixed killsCrew{};                  // chance per hit to kill the crew of a crewed target (Z snipers)
     std::vector<ClassAttack> attacks;   // classes model: class attacks (AoE II: melee 6, cavalry +15)
 };
+
+inline bool weaponTargetMatches(const WeaponDef& weapon, uint8_t layer, uint64_t tags) {
+    return layerHit(weapon.targets, layer) && targetTagsMatch(tags, weapon.targetTags, weapon.ignoreTags);
+}
 
 // ------------------------------------------------------------------ abilities and effects
 struct Amount { uint16_t res = 0; Fixed value{}; };
@@ -342,6 +358,8 @@ struct UnitType {
     int16_t trap = -1;                         // index into Rules::traps
     std::vector<FieldEmitDef> fieldEmit;       // "field": grid field emitters (GridFieldData.h)
     Json view;
+    Json cardSlot;
+    std::string hotkey;  // client command-card shortcut
 };
 
 // ------------------------------------------------------------------ techs / factions / rules
@@ -355,6 +373,8 @@ struct TechDef {
     std::vector<std::pair<ModTarget, StatMod>> effects;
     int requiresAnyCount = 0;                  // "requiresAny": {"count": 2, "of": [...]}: that many different types of the list (AoE ages)
     std::vector<uint16_t> requiresAny;
+    Json cardSlot;
+    std::string hotkey;  // client command-card shortcut
 };
 
 struct FactionStart { uint16_t type = 0; Fixed dx{}, dz{}; int count = 1; };
@@ -512,7 +532,7 @@ struct HandRules {
     Fixed slapWork = Fixed::fromRatio(3, 2);
 };
 
-struct PossessionRules { bool enabled = false; std::vector<Amount> cost, drain; };
+struct PossessionRules { bool enabled = false; bool firstPerson = false; std::vector<Amount> cost, drain; };
 
 struct RoadNetworkRules {
     bool enabled = false;
@@ -571,6 +591,11 @@ struct TrapDef {
 
 struct ProgressionRules;   // ProgressionData.h
 struct Rules {
+    // One-based IDs for opt-in strongest-wins timed stat modifier groups.
+    std::vector<std::string> modifierGroups;
+    // Optional final movement speed bounds; absent keys preserve legacy behavior.
+    bool hasMinUnitSpeed = false, hasMaxUnitSpeed = false;
+    Fixed minUnitSpeed{}, maxUnitSpeed{};
     bool scriptedAI = false;                  // external ComputerPlayer must yield to the game's controller
     std::string aiController = "builtin";     // rules ai.controller: builtin, scripted or a registered kind (AIControllers.h)
     MechRules mech;                           // agent-mech rules (MechData.h)

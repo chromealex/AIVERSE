@@ -1,0 +1,3 @@
+# W1.23l — unified WAL session
+
+UnifiedWalSession.h stages replay before durable append and publishes only after successful sync; failed append disables session. Open replays existing identity-prefixed WAL under world lock and optionally repairs incomplete tail, checks sequence against writer. Caller supplies verified checkpoint, unified UWT1-prefixed identity, private directory and matching WAL path, materializer and codecs. No unified checkpoint publisher or host wiring yet; no native tests run. Next verify lock API and implement unified checkpoint format/publication. PR #116 Draft; no main merge.

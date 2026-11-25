@@ -1,0 +1,12 @@
+# Stage 133 — planetary gameplay sources and live terrain
+
+Branch: feature/spectrafx-html5-data-interfaces-20261123
+Plan: 023df8d88c5730f328f1315daa35a1ab4eaa6909
+Implementation: 762911f41fe34a0bd0f5bfb7ba3f93cac5582b4c
+View transition fix: 309fa3bb86ef89fac3f5af26f4b49c1ab94f80ce
+
+GameView publishes body-local visual source position/direction using existing placeObject ground/sea placement and actual PlanetSurface terrain. ClientFx now accepts visible ECS graph sources on active planet; existing CPU ParticleSystem view-space, radial up and altitude functions remain authoritative for rendering. Body switch and enter/leave clear graph source state. Transit and other-body sources are excluded intentionally. For PHYSIS and NEREID, capture positions are translated by the Fixed simulation anchor, not orbital/render origin. Water surface point is returned in particle-local coordinates; vectors share world-aligned axes. Canonical NEREID sphere selection was factored to an optional exact-centre filter, preserving unfiltered behavior. Live field cache includes offset, centre and wave time. Actual rendered flat/planet terrain values copied at prepared source positions into immutable per-frame registry; height is flat elevation or spherical relief, clearance is distance above ground along reference up. No duplicate simulation or new persistence/schema.
+
+Paths: engine/world/SpectraFieldRegion.h, SpectraPhysisSnapshot.h, SpectraWaterSnapshot.h, SpectraLiveFields.h, engine/world/nereid/NereidSphereWater.h, engine/view/game/GameView.h and GamePlanetView.cpp, apps/client/ClientFx.h/.cpp, tests/vfx_graph_runtime_test.cpp, skill and roadmap/area notes. Regression source includes translated sphere surface and competing high-priority other planet. Explicit scope: NEREID sphere centres must match simulation anchors exactly; no planet transit FX, GPU pool client routing, general socket authoring or continuous GPU field sampling. Weather/water remain bounded nearest samples, terrain is exact prepared CPU source positions only, not a generic arbitrary-position terrain cache. PHYSIS uses its own actual fields, not implicit radial weather generation. Same-tick restore hook still open.
+
+No compile, CTest, hardware, profiling, visual/UI or MCP runtime validation executed per user request. No main sync or merge. Next: game GPU pool integration with explicit view-space contract, then remaining collision/geometry/audio/fluid matrix. No full completion claim.

@@ -15,7 +15,7 @@ else()
     find_package(SQLite3 REQUIRED)
     add_executable(aiverse_studio MACOSX_BUNDLE mac/Main.mm mac/StudioAssetSchemeHandler.mm ${AIVERSE_STUDIO_SOURCES})
     target_include_directories(aiverse_studio PRIVATE "${PROJECT_SOURCE_DIR}")
-    target_link_libraries(aiverse_studio PRIVATE aiverse_hosted_client SQLite::SQLite3 aiverse_lua aiverse_editor_core aiverse_runtime aiverse_game_view AIVERSE::vivid_human AIVERSE::libraries "-framework Cocoa" "-framework WebKit")
+    target_link_libraries(aiverse_studio PRIVATE aiverse_hosted_client SQLite::SQLite3 aiverse_lua aiverse_editor_core aiverse_runtime aiverse_fx aiverse_game_view AIVERSE::vivid_human AIVERSE::libraries "-framework Cocoa" "-framework WebKit")
     target_sources(aiverse_studio PRIVATE $<TARGET_OBJECTS:aiverse_runtime>)
     target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
     # Publish / Build panel: the packager built next to Studio.
@@ -46,13 +46,58 @@ else()
         message(FATAL_ERROR "HTML5 bundle missing: build on KINGSTON and set AIVERSE_STUDIO_WEB_DIST")
     endif()
 endif()
+# Portable Studio image codec contract: compile the actual private stb
+# implementation using diagnostics as errors, not a globally disabled -W
+# category. Exercise real lossless PNG and lossy JPEG memory roundtrips.
+if(AIVERSE_BUILD_TESTS)
+    add_executable(aiverse_studio_image_codecs_tests
+        tests/StudioImageCodecsWarningTests.cpp)
+    target_include_directories(aiverse_studio_image_codecs_tests
+        PRIVATE "${PROJECT_SOURCE_DIR}")
+    target_compile_options(aiverse_studio_image_codecs_tests PRIVATE
+        $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Werror=unused-function>
+        $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Werror=missing-field-initializers>
+        $<$<CXX_COMPILER_ID:AppleClang,Clang,GNU>:-Werror=deprecated-declarations>)
+    add_test(NAME studio_image_codecs COMMAND aiverse_studio_image_codecs_tests)
+    set_tests_properties(studio_image_codecs PROPERTIES LABELS "EDITOR;TOOLS"
+        PASS_REGULAR_EXPRESSION "Studio image codecs PASS"
+        FAIL_REGULAR_EXPRESSION "Studio image codecs FAIL")
+endif()
+
 if(AIVERSE_BUILD_TESTS AND APPLE)
     add_executable(aiverse_studio_metal_lighting_tests tests/StudioMetalLightingTests.mm StudioScene.cpp StudioFacialGpuPreview.cpp StudioAssetCatalog.cpp)
     target_include_directories(aiverse_studio_metal_lighting_tests PRIVATE "${PROJECT_SOURCE_DIR}")
-    target_link_libraries(aiverse_studio_metal_lighting_tests PRIVATE SQLite::SQLite3 aiverse_editor_core aiverse_runtime aiverse_game_view AIVERSE::libraries "-framework Cocoa")
+    target_link_libraries(aiverse_studio_metal_lighting_tests PRIVATE SQLite::SQLite3 aiverse_editor_core aiverse_runtime aiverse_fx aiverse_game_view AIVERSE::libraries "-framework Cocoa")
     target_sources(aiverse_studio_metal_lighting_tests PRIVATE $<TARGET_OBJECTS:aiverse_runtime>)
     add_test(NAME studio_metal_lighting COMMAND aiverse_studio_metal_lighting_tests "${CMAKE_CURRENT_BINARY_DIR}/metal-lighting-captures")
     set_tests_properties(studio_metal_lighting PROPERTIES LABELS "EDITOR;LIGHTING" TIMEOUT 90 PASS_REGULAR_EXPRESSION "Studio Metal lighting PASS" FAIL_REGULAR_EXPRESSION "Studio Metal lighting FAIL")
+    # Real GPU SpectraFX preview: the Scene owns all device work and renders
+    # into its normal depth-tested HDR pass; no browser/ImGui fake frames.
+    add_executable(aiverse_studio_spectrafx_preview_tests
+        tests/StudioSpectraPreviewTests.mm StudioScene.cpp
+        StudioFacialGpuPreview.cpp StudioAssetCatalog.cpp)
+    target_include_directories(aiverse_studio_spectrafx_preview_tests
+        PRIVATE "${PROJECT_SOURCE_DIR}")
+    target_link_libraries(aiverse_studio_spectrafx_preview_tests PRIVATE
+        SQLite::SQLite3 aiverse_editor_core aiverse_runtime aiverse_fx
+        aiverse_game_view AIVERSE::vivid_human AIVERSE::libraries "-framework Cocoa")
+    target_sources(aiverse_studio_spectrafx_preview_tests
+        PRIVATE $<TARGET_OBJECTS:aiverse_runtime>)
+    set_source_files_properties(tests/StudioSpectraPreviewTests.mm
+        PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+    add_test(NAME studio_spectrafx_preview
+        COMMAND aiverse_studio_spectrafx_preview_tests)
+    add_test(NAME studio_spectrafx_fire_smoke
+        COMMAND aiverse_studio_spectrafx_preview_tests)
+    set_tests_properties(studio_spectrafx_fire_smoke PROPERTIES
+        ENVIRONMENT "AIVERSE_SPECTRA_FIRE_GRAPH_PATH=${PROJECT_SOURCE_DIR}/examples/spectrafx/fire_smoke_v2.vfx.json;AIVERSE_SPECTRA_ENGINE_ASSETS=${PROJECT_SOURCE_DIR}/engine/assets/"
+        LABELS "EDITOR;SpectraFX;GPU;Volumetrics" TIMEOUT 120
+        PASS_REGULAR_EXPRESSION "Studio SpectraFX Metal preview PASS"
+        FAIL_REGULAR_EXPRESSION "Studio SpectraFX Metal preview FAIL")
+    set_tests_properties(studio_spectrafx_preview PROPERTIES
+        LABELS "EDITOR;SpectraFX;GPU" TIMEOUT 90
+        PASS_REGULAR_EXPRESSION "Studio SpectraFX Metal preview PASS"
+        FAIL_REGULAR_EXPRESSION "Studio SpectraFX Metal preview FAIL")
     add_executable(aiverse_studio_render_lighting_tests tests/StudioRenderLightingTests.cpp StudioSession.cpp StudioAssetCatalog.cpp StudioAssetTransfers.cpp)
     target_include_directories(aiverse_studio_render_lighting_tests PRIVATE "${PROJECT_SOURCE_DIR}")
     target_link_libraries(aiverse_studio_render_lighting_tests PRIVATE aiverse_lua aiverse_editor_core SQLite::SQLite3)
@@ -203,6 +248,10 @@ if(AIVERSE_BUILD_TESTS AND APPLE)
     target_link_libraries(aiverse_studio_terrain_tests PRIVATE aiverse_editor_core)
     add_test(NAME studio_terrain_geometry COMMAND aiverse_studio_terrain_tests)
     set_tests_properties(studio_terrain_geometry PROPERTIES LABELS "EDITOR")
+    add_executable(aiverse_studio_spectra_transfer_tests tests/StudioSpectraTransferLeaseTests.cpp)
+    target_include_directories(aiverse_studio_spectra_transfer_tests PRIVATE "${PROJECT_SOURCE_DIR}")
+    add_test(NAME studio_spectra_transfer COMMAND aiverse_studio_spectra_transfer_tests)
+    set_tests_properties(studio_spectra_transfer PROPERTIES LABELS "EDITOR;SpectraFX")
     add_executable(aiverse_studio_viewport_layout_tests tests/StudioViewportLayoutTests.cpp)
     target_include_directories(aiverse_studio_viewport_layout_tests PRIVATE "${PROJECT_SOURCE_DIR}")
     add_test(NAME studio_viewport_layout COMMAND aiverse_studio_viewport_layout_tests)

@@ -4,6 +4,8 @@
 #include <cmath>
 
 #include "GameClient.h"
+#include "engine/render/TextureCache.h"
+#include "engine/world/WorldAssets.h"
 
 namespace aiverse::client {
 
@@ -21,7 +23,13 @@ uint32_t darken(uint32_t c, int num, int den) {
 
 } // namespace
 
-void Minimap::build(gfx::Device& dev, const GameState& gs, const Rules&) {
+void GameClient::buildMinimap(const Json& map) {
+    if (planet()) minimap_.buildPlanet(*dev_, view_);
+    else minimap_.build(*dev_, mod().state(*sim_), map.getStr("minimapBackground", manifest_.getStr("minimapBackground")));
+    ui_.setDynamicTexture("minimap", minimap_.texture(), minimap_.width(), minimap_.height());
+}
+
+void Minimap::build(gfx::Device& dev, const GameState& gs, const std::string& background) {
     release(dev);
     gridW_ = gs.grid.w; gridH_ = gs.grid.h;
     const int side = std::max(1, std::max(gridW_, gridH_));
@@ -29,6 +37,11 @@ void Minimap::build(gfx::Device& dev, const GameState& gs, const Rules&) {
     cellsPerPx_ = 1.0f / pxPerCell;
     w_ = std::max(1, int(std::ceil(float(gridW_) * pxPerCell)));
     h_ = std::max(1, int(std::ceil(float(gridH_) * pxPerCell)));
+    std::vector<uint8_t> image;
+    int iw = 0, ih = 0;
+    std::string bytes;
+    const bool painted = world::safeAssetPath(background) && platform::readContentFile(background, bytes) &&
+                         render::decodeImage(bytes, iw, ih, image) && iw > 0 && ih > 0;
     base_.assign(size_t(w_) * size_t(h_), 0);
     for (int y = 0; y < h_; ++y)
         for (int x = 0; x < w_; ++x) {
@@ -37,6 +50,16 @@ void Minimap::build(gfx::Device& dev, const GameState& gs, const Rules&) {
             uint32_t c = rgba(60, 92, 50);
             if (!(f & kCellGround) && (f & kCellWater)) c = rgba(50, 100, 150);
             else if (!(f & kCellGround)) c = rgba(110, 106, 100);
+            if (painted) {
+                const size_t sx = size_t(x) * size_t(iw) / size_t(w_);
+                const size_t sy = size_t(y) * size_t(ih) / size_t(h_);
+                const uint8_t* pixel = image.data() + 4 * (sy * size_t(iw) + sx);
+                auto blend = [&](int channel) {
+                    const int terrain = int((c >> (channel * 8)) & 255u);
+                    return (pixel[channel] * pixel[3] + terrain * (255 - pixel[3]) + 127) / 255;
+                };
+                c = rgba(blend(0), blend(1), blend(2));
+            }
             base_[size_t(y) * size_t(w_) + size_t(x)] = c;
         }
     pixels_ = base_;

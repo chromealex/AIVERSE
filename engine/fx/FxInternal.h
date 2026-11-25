@@ -303,6 +303,9 @@ struct ParticleSystem::Impl {
     std::vector<SubSpawn> pending;
     std::unordered_map<uint32_t, FxHandle> children;   // particle uid -> its birth sub-effect
     std::function<float(float, float)> ground;
+    std::shared_ptr<const SceneCollisionRegistry> sceneCollision;
+    uint32_t sceneCollisionBudget=8192;
+    SceneCollisionStats sceneCollisionStats{};
     std::function<float3(float3)> upFn;        // curved worlds (setUpFunction)
     std::function<float(float3)> altFn;        // curved worlds (setAltitudeFunction)
     bool haveSpace = false;                    // setViewSpace

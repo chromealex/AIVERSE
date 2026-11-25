@@ -75,6 +75,11 @@ int Model::findClip(const std::string& name) const {
     }
     return -1;
 }
+int Model::findImage(const std::string& name) const {
+    for (size_t i = 0; i < images.size(); ++i) if (images[i].name == name) return int(i);
+    const auto alias = imageAliases.find(name);
+    return alias == imageAliases.end() ? -1 : alias->second;
+}
 int Model::findMaterial(const std::string& name) const {
     for (size_t i = 0; i < materials.size(); ++i) if (materials[i].name == name) return int(i);
     return -1;
