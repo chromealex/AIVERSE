@@ -886,7 +886,14 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(call("studio.materialCreate",create.dump().c_str()).has("error"));
        AIVERSE_TEST_CHECK(!call("studio.setProperty",R"({"entityId":"entity:@second","componentId":"MeshRenderer","key":"material:*","value":"cliff"})").has("error"));
        AIVERSE_TEST_CHECK(!call("studio.save").has("error"));
-       const auto graph=Json::parseFile((project/"materials.json").string())["materials"]["cliff"]["shaderGraph"];
+       const auto materialPath=Json::parseFile((project/"materials.json").string())["materials"].getStr("cliff");
+       AIVERSE_TEST_CHECK(materialPath=="content/materials/cliff.material.json");
+       const auto catalog=call("studio.assets");
+       bool listed=false;
+       for(const auto& asset:catalog["result"]["files"].items())
+           if("content/"+asset.getStr("path")==materialPath && !asset.getStr("guid").empty()) listed=true;
+       AIVERSE_TEST_CHECK(listed);
+       const auto graph=Json::parseFile((project/materialPath).string())["shaderGraph"];
        AIVERSE_TEST_CHECK(graph["outputs"].has("normal"));
        bool colorBound=false,normalBound=false;
        for (const auto& node:graph["nodes"].items()) {
