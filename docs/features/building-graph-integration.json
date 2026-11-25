@@ -306,9 +306,12 @@
       ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Stage 35D planned; integration verification pending.",
-      "evidence": []
+      "status": "pass",
+      "note": "In native Studio the Graphs tab showed the actual selected candidate topology, room, five sockets, four exterior entrances, one connected group and native solid count. The Materials tab showed four generated PBR channels for the hull.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage26-2026-11-25.md",
+        "docs/evidence/integrated-acceptance-3e2a609f0.json"
+      ]
     },
     "persistence": {
       "status": "not_run",
@@ -316,9 +319,12 @@
       "evidence": []
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Stage 36A shared geometry source and fixture synchronized to common branch at 153d70605b9347a925daaba7fb0fd797ccf490c9; full merge pending.",
-      "evidence": []
+      "status": "pass",
+      "note": "The shared canvas displayed the native room, exterior nodes and dependency owners for a real candidate. Three native seed variants and the structural counts were verified in the integrated editor.",
+      "evidence": [
+        "docs/agent-handoffs/building-caverns-integration-stage26-2026-11-25.md",
+        "docs/evidence/integrated-acceptance-3e2a609f0.json"
+      ]
     },
     "performance": {
       "status": "not_run",
@@ -397,6 +403,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integration-acceptance-d5608fb7f.json"
+    "docs/evidence/integrated-acceptance-3e2a609f0.json"
   ]
 }

@@ -263,10 +263,11 @@
       ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Read current map reported absence on an unauthored map. After native carve/fill and save, a fresh Studio process showed exact IDs, radii, revision and count in its Caverns inspector.",
       "evidence": [
-        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+        "docs/agent-handoffs/building-caverns-integration-stage26-2026-11-25.md",
+        "docs/evidence/integrated-acceptance-3e2a609f0.json"
       ]
     },
     "persistence": {
@@ -277,10 +278,11 @@
       ]
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native map snapshot projected the two saved authored volume dependencies and their exact stable IDs and radii on the shared graph canvas.",
       "evidence": [
-        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+        "docs/agent-handoffs/building-caverns-integration-stage26-2026-11-25.md",
+        "docs/evidence/integrated-acceptance-3e2a609f0.json"
       ]
     },
     "performance": {
@@ -365,6 +367,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integration-acceptance-d5608fb7f.json"
+    "docs/evidence/integrated-acceptance-3e2a609f0.json"
   ]
 }

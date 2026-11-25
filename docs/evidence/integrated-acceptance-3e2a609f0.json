@@ -1,0 +1,11 @@
+{
+  "sha": "3e2a609f07c6c18b934f08e1a1bf53a498b18b93",
+  "argv": [
+    "python3.12",
+    "-c",
+    "import json, subprocess, sys\nfrom pathlib import Path\nsubprocess.run([sys.executable,'tools/skills/audit.py','--strict'],check=True)\nreports=sorted(Path('docs/evidence').glob('*-b954cd47a.json'))+[Path('docs/evidence/building-export-1894e6dd8.json')]\nreports += sorted(Path('docs/evidence').glob('*-1e2ae0d47.json'))\nfor path in reports:\n    print(f'Running {path.name}',flush=True)\n    argv=json.loads(path.read_bytes())['argv']\n    if path.name.startswith('building-live-owner-'):\n        # Studio creates a project descriptor on open. Keep it in an isolated fixture.\n        argv[-1]=argv[-1].replace(\"port=Path(temp)/'port'\", \"import shutil\\n project=Path(temp)/'project'\\n shutil.copytree(root/'examples/projectiles',project)\\n port=Path(temp)/'port'\").replace(\"str(root/'examples/projectiles')\",\"str(project)\")\n    if path.name.startswith('integration-native-contracts-'):\n        argv[-1]=argv[-1].replace('/aiverse_vfx_ops_tests','/stage26-vfx/aiverse_vfx_ops_tests')\n    subprocess.run(argv,check=True)\n\nroot=Path('/Volumes/KINGSTON/AIVERSE-builds/caverns-stage59/0f4394d81d798f28bfdf6b5e43991057a9e7636b')\nsubprocess.run([root/'aiverse_runtime_library_tests'],check=True)\nfor case in ('traffic_population_recurring_budget_and_restore','traffic_population_determinism_and_saves'):\n    subprocess.run([root/'aiverse_tests',case],check=True)"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/integrated-acceptance-3e2a609f0.log.txt",
+  "sha256": "874aaf7080767ea004477b98ec91508cfa23db96c574c835cba734a24b9fa7c3"
+}
