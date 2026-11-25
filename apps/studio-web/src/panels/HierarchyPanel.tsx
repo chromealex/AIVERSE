@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { shortcutKey } from '../keyboard';
-import { Box, Copy, Eye, EyeOff, Focus, Lightbulb, Lock, LockOpen, Plus, Search, Shield, Trash2, User, X } from 'lucide-react';
-import { matchesHierarchy, parseHierarchyFilter, rangeIds } from '../hierarchyFilter';
+import { Box, ChevronDown, ChevronRight, Copy, Eye, EyeOff, Focus, Lightbulb, Lock, LockOpen, Plus, Search, Shield, Trash2, User, X } from 'lucide-react';
+import { groupedHierarchy, matchesHierarchy, parseHierarchyFilter, rangeIds, type HierarchyGrouping } from '../hierarchyFilter';
 import { invoke } from '../bridge';
 import type { StudioEntity, StudioEntityCatalog, StudioSnapshot } from '../types';
 import { StudioButton, StudioContextMenu, StudioIconButton, StudioSelect, type StudioMenuItem } from '../ui';
@@ -15,6 +15,8 @@ const kindIcon = (node: StudioEntity) => node.kind === 'Light' ? Lightbulb
 /** Compact, content-first Hierarchy: search on top, dense rows, drag reorder, context menu. */
 export default function HierarchyPanel({ snapshot, busy, connected, search, setSearch,
   rows, select, selectIds, hoverId, updateSnapshot, setBusy }: StudioPanelContext) {
+  const [grouping, setGrouping] = useState<HierarchyGrouping>('scene');
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const anchor = useRef<string | null>(null);
   const [catalog, setCatalog] = useState<StudioEntityCatalog | null>(null);
   const [error, setError] = useState('');
@@ -27,6 +29,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
   const project = snapshot?.project.path;
   useEffect(() => {
     let active = true;
+    setCollapsed(new Set()); anchor.current = null;
     setCatalog(null); setCreating(false); setError('');
     if (connected && project) void invoke('studio.entityCatalog', {}).then(result => {
       if (active) { setCatalog(result); setType(result.types[0]?.id ?? ''); }
@@ -38,11 +41,14 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
   const selectedId = snapshot?.selectedId ?? null;
   const selectedSet = useMemo(() => new Set(snapshot?.selectedIds ?? (selectedId ? [selectedId] : [])), [snapshot?.selectedIds, selectedId]);
   const editable = (id: string | null | undefined) => mapEntities && !!id?.startsWith('entity:');
-  const visible = useMemo(() => {
+  const matches = useMemo(() => {
     if (!search.trim()) return rows;
     const filter = parseHierarchyFilter(search);
     return rows.filter(({node}) => matchesHierarchy(node, filter, selectedSet));
   }, [rows, search, selectedSet]);
+  const display = useMemo(() => groupedHierarchy(matches, grouping, collapsed), [matches, grouping, collapsed]);
+  const visible = useMemo(() => display.flatMap(row => 'node' in row ? [row] : []), [display]);
+  const canReorder = grouping === 'scene' && !search && !busy;
   // Selection targets for row actions: the whole selection when the row is part of it.
   const targets = (id: string) => selectedSet.has(id) ? [...selectedSet] : [id];
   const click = (event: React.MouseEvent, id: string) => {
@@ -94,21 +100,29 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     }
     const key = shortcutKey(event);
     if ((event.metaKey || event.ctrlKey) && key === 'f') { event.preventDefault(); searchRef.current?.focus(); return; }
-    if (!selectedId || busy) return;
-    const index = visible.findIndex(({node}) => node.id === selectedId);
+    if (busy) return;
+    const focused = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('[data-id]')?.dataset.id : undefined;
+    const index = visible.findIndex(({node}) => node.id === (focused ?? selectedId));
     if ((event.metaKey || event.ctrlKey) && key === 'a') { event.preventDefault(); void selectIds(visible.map(r => r.node.id)); return; }
+    if ((event.key === 'Enter' || event.key === ' ') && event.target instanceof HTMLElement && event.target.matches('[role=option]')) {
+      const id = event.target.dataset.id;
+      if (id) { event.preventDefault(); anchor.current = id; void select(id, event.metaKey || event.ctrlKey ? 'toggle' : 'replace'); }
+      return;
+    }
+    if (!visible.length) return;
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       const next = visible[Math.max(0, Math.min(visible.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)))];
       if (next) { anchor.current = next.node.id; void select(next.node.id, event.shiftKey ? 'add' : 'replace');
         listRef.current?.querySelector<HTMLElement>(`[data-id="${CSS.escape(next.node.id)}"]`)?.focus(); }
-    } else if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); remove(selectedId); }
+    } else if (!selectedId) return;
+    else if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); remove(selectedId); }
     else if ((event.metaKey || event.ctrlKey) && key === 'd') { event.preventDefault(); duplicate(selectedId); }
     else if (key === 'f' && !event.metaKey && !event.ctrlKey) { event.preventDefault(); void focus(selectedId); }
   };
 
   const dragOver = (event: DragEvent<HTMLElement>, id: string) => {
-    if (!event.dataTransfer.types.includes(DRAG_MIME) || !editable(id)) return;
+    if (!canReorder || !event.dataTransfer.types.includes(DRAG_MIME) || !editable(id)) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
     const r = event.currentTarget.getBoundingClientRect();
@@ -119,7 +133,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     const entityId = event.dataTransfer.getData(DRAG_MIME);
     const placement = drop?.placement ?? 'before';
     setDrop(null);
-    if (!entityId || entityId === targetId || !editable(entityId) || !editable(targetId)) return;
+    if (!canReorder || !entityId || entityId === targetId || !editable(entityId) || !editable(targetId)) return;
     event.preventDefault();
     void mutate(() => invoke('studio.entityMove', { entityId, targetId, placement }));
   };
@@ -148,6 +162,13 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
         icon={<Plus size={14}/>} disabled={busy || !canCreate} aria-expanded={creating}
         onClick={() => setCreating(value => !value)}/>
     </div>
+    {project && <label className="hier__grouping">Group by
+      <StudioSelect value={grouping} aria-label="Group scene objects by" onChange={event => {
+        setGrouping(event.target.value as HierarchyGrouping); setCollapsed(new Set()); anchor.current = null; setDrop(null);
+      }}>
+        <option value="scene">Scene order</option><option value="type">Type</option><option value="owner-type">Owner → type</option>
+      </StudioSelect>
+    </label>}
     {creating && <form className="hier__create" onSubmit={event => { event.preventDefault(); create(); }}>
       <StudioSelect aria-label="Entity type" value={type} disabled={busy} onChange={event => setType(event.target.value)}>
         {catalog?.types.map(item => <option key={item.id} value={item.id}>{item.name || item.id}</option>)}
@@ -161,18 +182,34 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
       onMouseLeave={() => hover('')}
       onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDrop(null); }}>
       {!project && <p className="hier__empty">Open a project to see its scene objects.</p>}
-      {project && visible.length === 0 && <p className="hier__empty">{search ? 'No matching objects.' : 'The scene is empty.'}</p>}
-      {visible.map(({node, depth}) => {
+      {project && matches.length === 0 && <p className="hier__empty">{search ? 'No matching objects.' : 'The scene is empty.'}</p>}
+      {display.map(row => {
+        if ('members' in row) {
+          const Chevron = row.collapsed ? ChevronRight : ChevronDown;
+          return <div key={'group:'+row.key} className="hier__group" style={{paddingInlineStart:4+row.depth*12}}>
+            <button type="button" aria-label={(row.collapsed?'Expand ':'Collapse ')+row.label} aria-expanded={!row.collapsed}
+              onClick={() => setCollapsed(current => {
+                const next = new Set(current);
+                if (next.has(row.key)) next.delete(row.key); else next.add(row.key);
+                return next;
+              })}><Chevron size={13}/></button>
+            <button type="button" title={'Select '+row.members.length+' matching objects'} disabled={busy}
+              onClick={event => {anchor.current = row.members[row.members.length-1]; void selectIds(row.members, event.metaKey || event.ctrlKey ? 'add' : 'replace');}}>
+              <span>{row.label}</span><small>{row.members.length}</small>
+            </button>
+          </div>;
+        }
+        const {node, depth} = row;
         const Icon = kindIcon(node);
         const selected = selectedSet.has(node.id);
         const hidden = node.visible === false;
-        const dragging = editable(node.id) && !search;
+        const dragging = editable(node.id) && canReorder;
         return <div key={node.id} data-id={node.id} role="option" aria-selected={selected} tabIndex={selected ? 0 : -1}
           className={'hier__row' + (selected ? ' is-selected' : '') + (node.id === selectedId ? ' is-primary' : '') +
             (node.id === hoverId ? ' is-hover' : '') + (hidden ? ' is-hidden' : '') +
             (drop?.id === node.id ? ' is-drop-' + drop.placement : '')}
           style={{ paddingInlineStart: 6 + depth * 12 }}
-          draggable={dragging && !busy}
+          draggable={dragging}
           onDragStart={event => { event.dataTransfer.setData(DRAG_MIME, node.id); event.dataTransfer.effectAllowed = 'move'; }}
           onDragEnd={() => setDrop(null)}
           onDragOver={event => dragOver(event, node.id)}
@@ -195,7 +232,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
         </div>;
       })}
     </div>
-    <div className="hier__footer">{search ? `${visible.length} / ${rows.length}` : rows.length} objects{selectedSet.size > 1 ? ` · ${selectedSet.size} selected` : ''}</div>
+    <div className="hier__footer">{search ? `${matches.length} / ${rows.length}` : rows.length} objects{selectedSet.size > 1 ? ` · ${selectedSet.size} selected` : ''}</div>
     {menu && <StudioContextMenu x={menu.x} y={menu.y} label="Entity actions"
       items={menuItems(menu.id)} onClose={() => setMenu(null)}/>}
   </div>;

@@ -19,3 +19,18 @@ test('shift ranges keep the clicked row last', () => {
   assert.deepEqual(rangeIds(['a', 'b', 'c', 'd'], 'd', 'b'), ['c', 'd', 'b']);
   assert.deepEqual(rangeIds(['a'], 'zz', 'a'), ['a']);
 });
+
+test('owner and type groups retain membership and display order after collapse and filtering', async () => {
+  const {groupedHierarchy} = await import('../src/hierarchyFilter.ts');
+  const rows = [e('a','Alpha','Worker',{owner:1}),e('b','Mine','Prop',{owner:0}),
+    e('c','Beta','Worker',{owner:1}),e('d','Torch','Light')].map(node=>({node,depth:0}));
+  assert.equal(groupedHierarchy(rows,'scene',new Set()),rows);
+  const list=groupedHierarchy(rows,'owner-type',new Set());
+  assert.deepEqual(list[0].members,['a','c']);
+  assert.equal(list[1].label,'Worker');
+  const hidden=groupedHierarchy(rows,'owner-type',new Set([list[1].key]));
+  assert.deepEqual(hidden.filter(r=>r.node).map(r=>r.node.id),['b','d']);
+  assert.equal(hidden.at(-3).label,'No owner');
+  const filtered=groupedHierarchy(rows.slice(2),'type',new Set());
+  assert.deepEqual(filtered[0].members,['c']);
+});
