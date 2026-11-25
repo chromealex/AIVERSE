@@ -166,7 +166,7 @@ Derived from actual AIVERSE_EDITOR_WINDOW registrations in apps/editor/windows. 
 | `physis` | `apps/editor/windows/PhysisWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) |
 | `postfx` | `apps/editor/windows/PrismaWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) |
 | `studio_asset_audit` | `apps/editor/windows/ProjectAuditWindow.cpp` | Asset Audit panel (108) |
-| `project` | `apps/editor/windows/ProjectWindow.cpp` | Partial: native map new/open/save/save-as and dirty close/quit protection (Stage 71); project creation/settings/import/FPS templates and visual QA pending |
+| `project` | `apps/editor/windows/ProjectWindow.cpp` | Mac verified searchable map and rules groups, disk-only maps, create/edit, duplicate protection and Rules shortcut. Native map new/open/save/save-as and dirty guard remain covered by Stage 71. Project Hub and Windows have separate verification. |
 | `raid` | `apps/editor/windows/RaidWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) |
 | `roads` | `apps/editor/windows/RoadsWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) + Scene road drawing (111); no node gizmos yet |
 | `rules` | `apps/editor/windows/RulesWindow.cpp` | Partial: unit-type form (health, move, vision, cost, weapons, flags) + raw JSON per type via rules_get/rules_set (stage 100); techs/resources/triggers/damage table pending |
@@ -245,3 +245,5 @@ The native host checks project scripts while the panel is closed and logs change
 Mac Studio verified an on_frame failure at scripts/view/studio-play-overlay.lua:2. Console identified the source as Lua view. Scripts selected the exact error statement and displayed the simulation print and view failure together. Errors only retained the view failure and Stop cleared the live error count. Captures docs/evidence/studio-console-html5/view-script-source.png and view-script-log.png.
 
 The Mac app created scripts/main.lua with on_start and unit_died and scripts/view/hud.lua with view.on_frame. A duplicate request reported the collision and preserved the source. The saved rules listed both scripts exactly once. The map ran with zero Lua VM errors. Reopening the project restored both file entries and their correct roles. Captures docs/evidence/studio-console-html5/script-create-form.png and script-created-source.png.
+
+Desktop evidence in docs/evidence/studio-project-catalog. The Mac bundle opened a disk-only map, discovered an externally copied map after Refresh, created and renamed studio.crystal and rejected a duplicate. The renamed item persisted across app restart.

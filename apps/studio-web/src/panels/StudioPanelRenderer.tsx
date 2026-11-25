@@ -175,7 +175,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
         return <MaterialsPanel textureOnly projectPath={snapshot?.project.path ?? ''} previewMaterial={snapshot?.previewMaterial}/>;
       case 'shader_graph':
         return <ShaderGraphPanel projectPath={snapshot?.project.path ?? ''}/>;
-      case 'project': return <ProjectPanel {...ctx}/>;
+      case 'project': return <ProjectPanel key={snapshot?.project.path} {...ctx}/>;
       case 'facial_rig':
         return <FacialRigPanel projectPath={snapshot?.project.path ?? ''}/>;
       case 'runtime': return <RuntimePanel snapshot={snapshot}/>;

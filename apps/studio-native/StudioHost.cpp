@@ -3584,7 +3584,7 @@ void StudioHost::afterSessionReply(const Json& req, const Json& reply) {
        (method=="studio.op"&&req["params"].getStr("op")=="shader_graph_apply"))sendEvent("assets.changed","");
     if (method == "studio.materialPreview") sendEvent("material.preview", req["params"].getStr("name"));
     if(method=="studio.assetMetaPatch"||method=="studio.assetHistoryStep"||method=="studio.assetTransferCommit"||method=="studio.assetDelete"||method=="studio.assetFolderCreate"||method=="studio.assetTrashApply"||method=="studio.assetHistoryResetApply"||method=="studio.agentBatchApply"||(method=="studio.agentHistoryStep"&&req["params"].getStr("scope")=="assets"))sendEvent("assets.changed", "");
-    if (documentChangingMethods().count(method) || (method == "studio.op" && reply["result"].getBool("changed")))
+    if (documentChangingMethods().count(method) || (method=="studio.projectRule" && req["params"].has("value")) || (method == "studio.op" && reply["result"].getBool("changed")))
         sendEvent("document.changed", "");
 }
 void StudioHost::handleMessage(const std::string& json) {

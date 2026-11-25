@@ -3745,20 +3745,70 @@ Json StudioSession::dispatchImplCore(const Json& request) {
         } else if (method == "studio.project") {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
             Json state=Json::object(),maps=Json::array();
+            std::set<std::string> listed;
             for (const auto& item:ws_.project.manifest["maps"].items()) {
-                Json row=Json::object();row.set("file",str(item.getStr("file")));
-                row.set("title",str(item.getStr("title",item.getStr("file"))));maps.push(std::move(row));
+                const auto file=item.getStr("file");
+                listed.insert(file);
+                Json row=Json::object();row.set("file",str(file));
+                row.set("title",str(item.getStr("title",file)));maps.push(std::move(row));
             }
+            namespace fs=std::filesystem;
+            std::error_code ec;
+            const fs::path folder=ws_.mapsDir();
+            std::set<std::string> additional;
+            if (!fs::is_symlink(folder,ec)) {
+                for (fs::directory_iterator it(folder,ec),end; !ec && it!=end; it.increment(ec)) {
+                    const auto& entry=*it;
+                    if(entry.path().extension()!=".json" || entry.is_symlink(ec) || !entry.is_regular_file(ec))continue;
+                    const auto file=(fs::path("maps")/entry.path().filename()).generic_string();
+                    if(!listed.count(file))additional.insert(file);
+                }
+            }
+            for(const auto& file:additional){
+                Json row=Json::object();row.set("file",str(file));row.set("title",str(fs::path(file).stem().string()));maps.push(std::move(row));
+            }
+            Json groups=Json::object();
+            for(const auto* key:{"types","resources","techs","factions"}){
+                Json rows=Json::array();
+                for(const auto& [id,value]:ws_.project.rulesJson[key].members()){
+                    Json row=Json::object();row.set("id",str(id));row.set("name",str(value.getStr("name",id)));rows.push(std::move(row));
+                }
+                groups.set(key,std::move(rows));
+            }
+            state.set("groups",std::move(groups));
+            state.set("rulesError",str(ws_.project.rulesError));
             state.set("maps",std::move(maps));state.set("currentMap",str(ws_.map.path.empty()?"":ws_.relative(ws_.map.path)));
             state.set("canCreateMap",Json::fromBool(!ws_.map.data.worldSpace));
             state.set("maxMapSize",num(game::kMaxMapSize));reply.set("result",std::move(state));
+        } else if (method == "studio.projectRule") {
+            if (ws_.project.dir.empty() || ws_.project.dir!=params.getStr("project")) throw std::runtime_error("Project changed");
+            const auto key=params.getStr("group"),id=params.getStr("id");
+            if(key!="types" && key!="resources" && key!="techs" && key!="factions") throw std::runtime_error("Unknown rule group");
+            if(id.empty())throw std::runtime_error("Enter a rule ID");
+            const auto& group=ws_.project.rulesJson[key];
+            if(params.has("value")){
+                const auto& value=params["value"];
+                if(!value.isObject() || !params.has("original"))throw std::runtime_error("Expected a rule object and original value");
+                if(params["original"].isNull()){
+                    if(group.has(id))throw std::runtime_error("Rule ID already exists");
+                }else if(!group.has(id) || params.getStr("original")!=group[id].dump())throw std::runtime_error("Rule changed. Reopen it before saving.");
+                auto updated=group.isObject()?group:Json::object();updated.set(id,value);
+                Json args=Json::object();args.set("path",str(key));args.set("value",std::move(updated));
+                const auto changed=ws_.call("rules_set",args,"studio");
+                if(changed.has("error"))throw std::runtime_error(changed.getStr("error"));
+            }else if(!group.has(id))throw std::runtime_error("Rule no longer exists");
+            Json result=Json::object();result.set("text",str(ws_.project.rulesJson[key][id].dump()));reply.set("result",std::move(result));
         } else if (method == "studio.openMap" || method == "studio.newMap") {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
             if (method == "studio.openMap") {
                 const auto file=params.getStr("file");bool listed=false;
                 for (const auto& item:ws_.project.manifest["maps"].items()) listed|=item.getStr("file")==file;
-                if (file.empty() || !listed) throw std::runtime_error("Choose a map from the current project");
                 namespace fs=std::filesystem;
+                const fs::path candidate(file);
+                const bool localMap=candidate.parent_path()=="maps" && candidate.extension()==".json" &&
+                    !fs::is_symlink(ws_.mapsDir()) && !fs::is_symlink(fs::path(ws_.project.dir)/candidate) &&
+                    fs::is_regular_file(fs::path(ws_.project.dir)/candidate);
+                if (file.empty() || (!listed && !localMap)) throw std::runtime_error("Choose a map from the current project");
                 const auto root=fs::weakly_canonical(ws_.project.dir);
                 const auto path=fs::weakly_canonical(root/file);
                 const auto relative=path.lexically_relative(root);

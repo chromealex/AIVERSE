@@ -1,0 +1,136 @@
+{
+  "schema": 1,
+  "id": "studio-project-catalog",
+  "owner": "HTML5 Studio",
+  "changed_paths": [
+    "apps/studio-native/StudioSession.cpp",
+    "apps/studio-web/src/panels/generated/ProjectPanel.tsx"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": false,
+    "visible": true,
+    "runtime": false
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Project catalog implementation or observed Mac desktop result.",
+      "evidence": [
+        "apps/studio-web/src/panels/generated/ProjectPanel.tsx"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Project catalog implementation or observed Mac desktop result.",
+      "evidence": [
+        "apps/studio-native/StudioSession.cpp"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "Project catalog implementation or observed Mac desktop result.",
+      "evidence": [
+        "apps/studio-native/StudioSession.cpp"
+      ]
+    },
+    "skill": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "mcp": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "pass",
+      "note": "Project catalog implementation or observed Mac desktop result.",
+      "evidence": [
+        "docs/evidence/studio-project-catalog/project-maps-final.png"
+      ]
+    },
+    "inspector": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "Project catalog implementation or observed Mac desktop result.",
+      "evidence": [
+        "apps/editor/core/Workspace.cpp"
+      ]
+    },
+    "graphs": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "platforms": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "dependencies": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "headless": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "examples": {
+      "status": "pass",
+      "note": "Project catalog implementation or observed Mac desktop result.",
+      "evidence": [
+        "docs/evidence/studio-project-catalog/project-resources-final.png"
+      ]
+    },
+    "tests": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Project catalog implementation or observed Mac desktop result.",
+      "evidence": [
+        "docs/agent-handoffs/studio-project-catalog-initial.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "Project catalog implementation or observed Mac desktop result.",
+      "evidence": [
+        "docs/studio-html5-parity.md"
+      ]
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [],
+    "mcp_tools": [],
+    "studio_panels": [
+      "project"
+    ],
+    "studio_methods": [
+      "studio.project",
+      "studio.openMap",
+      "studio.projectRule"
+    ]
+  },
+  "test_reports": []
+}

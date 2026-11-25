@@ -3075,7 +3075,7 @@
           "target": null,
           "title": "HTML Studio — единственный редактор",
           "titleEn": "HTML Studio as the sole editor",
-          "detail": "HTML5 Studio создаёт и подключает Lua-файлы через окно Scripts и показывает диагностику во время игры."
+          "detail": "Окно Project в HTML5 Studio объединяет карты, типы, ресурсы, технологии и фракции проекта."
         },
         {
           "id": "studio-graph-legibility",

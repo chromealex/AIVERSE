@@ -1738,6 +1738,25 @@ void entityWorkflow() {
         AIVERSE_TEST_CHECK(call("studio.newMap",Json::parse(R"({"name":"new","width":0,"height":32})")).has("error"));
         AIVERSE_TEST_CHECK(session.workspace().map.toJson()==prior);
         AIVERSE_TEST_CHECK(call("studio.openMap",Json::parse(R"({"file":"../rules.json"})")).has("error"));
+        // Catalog writes reject stale documents and duplicate IDs; dotted IDs are literal.
+        auto catalogRule=Json::parse(R"({"group":"resources","id":"test.crystal","original":null,"value":{"name":"Crystal"}})");
+        catalogRule.set("project",Json::string(session.workspace().project.dir));
+        const auto createdRule=call("studio.projectRule",catalogRule);
+        AIVERSE_TEST_CHECK(!createdRule.has("error"));
+        AIVERSE_TEST_CHECK(call("studio.projectRule",catalogRule).has("error"));
+        catalogRule.set("original",createdRule["result"]["text"]);
+        catalogRule.set("value",Json::parse(R"({"name":"Blue crystal"})"));
+        AIVERSE_TEST_CHECK(!call("studio.projectRule",catalogRule).has("error"));
+        AIVERSE_TEST_CHECK(call("studio.projectRule",catalogRule).has("error"));
+        AIVERSE_TEST_CHECK(session.workspace().project.rulesJson["resources"]["test.crystal"].getStr("name")=="Blue crystal");
+        fs::copy_file(project/"maps"/"scene.json",project/"maps"/"local-copy.json");
+        bool foundLocal=false;
+        const auto projectCatalog=call("studio.project")["result"];
+        for(const auto& map:projectCatalog["maps"].items())foundLocal |= map.getStr("file")=="maps/local-copy.json";
+        AIVERSE_TEST_CHECK(foundLocal);
+        AIVERSE_TEST_CHECK(!call("studio.openMap",Json::parse(R"({"file":"maps/local-copy.json"})")).has("error"));
+        AIVERSE_TEST_CHECK(!call("studio.openMap",Json::parse(R"({"file":"maps/scene.json"})")).has("error"));
+        fs::remove(project/"maps"/"local-copy.json");
         const auto revision=session.workspace().map.revision;
         AIVERSE_TEST_CHECK(!call("studio.newMap",Json::parse(R"({"name":"New document","width":32,"height":24})")).has("error"));
         AIVERSE_TEST_CHECK(session.workspace().map.data.w==32 && session.workspace().map.dirty);
