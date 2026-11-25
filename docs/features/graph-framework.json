@@ -159,8 +159,8 @@
       "evidence": [
         "skills/workflow/aiverse-graph-authoring/SKILL.md",
         "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md",
-        "docs/evidence/feature-gate-fbadae3ca-catalog.log.txt",
-        "docs/evidence/feature-gate-fbadae3ca-skill-audit.log.txt",
+        "docs/evidence/feature-gate-a0b8fad0a-catalog.log.txt",
+        "docs/evidence/feature-gate-a0b8fad0a-skill-audit.log.txt",
         "skills/workflow/aiverse-graph-authoring/SKILL.md"
       ]
     },
@@ -174,9 +174,9 @@
       "note": "Pending implementation or actual verification. Native Studio on Mac generated a building GLB and displayed its independent preview and authored room graph. The Caverns inspector was verified after a document identity fix. At 460ce965c the Studio TypeScript check, 256 web cases and 55 Python contract cases (one skipped) passed. Live native acceptance is tracked separately.",
       "evidence": [
         "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md",
-        "docs/evidence/feature-gate-fbadae3ca-typecheck.log.txt",
-        "docs/evidence/feature-gate-fbadae3ca-web.log.txt",
-        "docs/evidence/feature-gate-fbadae3ca-studio-contracts.log.txt"
+        "docs/evidence/feature-gate-a0b8fad0a-typecheck.log.txt",
+        "docs/evidence/feature-gate-a0b8fad0a-web.log.txt",
+        "docs/evidence/feature-gate-a0b8fad0a-studio-contracts.log.txt"
       ]
     },
     "inspector": {
@@ -356,13 +356,13 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-fbadae3ca-contracts.json",
-    "docs/evidence/feature-gate-fbadae3ca-catalog.json",
-    "docs/evidence/feature-gate-fbadae3ca-skill-audit.json",
-    "docs/evidence/feature-gate-fbadae3ca-feature-suite.json",
-    "docs/evidence/feature-gate-fbadae3ca-native-project.json",
-    "docs/evidence/feature-gate-fbadae3ca-web.json",
-    "docs/evidence/feature-gate-fbadae3ca-studio-contracts.json",
-    "docs/evidence/feature-gate-fbadae3ca-typecheck.json"
+    "docs/evidence/feature-gate-a0b8fad0a-contracts.json",
+    "docs/evidence/feature-gate-a0b8fad0a-catalog.json",
+    "docs/evidence/feature-gate-a0b8fad0a-skill-audit.json",
+    "docs/evidence/feature-gate-a0b8fad0a-feature-suite.json",
+    "docs/evidence/feature-gate-a0b8fad0a-native-project.json",
+    "docs/evidence/feature-gate-a0b8fad0a-web.json",
+    "docs/evidence/feature-gate-a0b8fad0a-studio-contracts.json",
+    "docs/evidence/feature-gate-a0b8fad0a-typecheck.json"
   ]
 }

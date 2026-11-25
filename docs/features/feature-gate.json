@@ -107,8 +107,8 @@
       "evidence": [
         "skills/workflow/aiverse-new-feature/SKILL.md",
         "docs/evidence/integration-acceptance-d5608fb7f.json",
-        "docs/evidence/feature-gate-fbadae3ca-catalog.log.txt",
-        "docs/evidence/feature-gate-fbadae3ca-skill-audit.log.txt"
+        "docs/evidence/feature-gate-a0b8fad0a-catalog.log.txt",
+        "docs/evidence/feature-gate-a0b8fad0a-skill-audit.log.txt"
       ]
     },
     "mcp": {
@@ -182,9 +182,9 @@
       "evidence": [
         "docs/evidence/integration-tools-b954cd47a.json",
         "docs/evidence/feature-readiness-stdio-b954cd47a.json",
-        "docs/evidence/feature-gate-fbadae3ca-feature-suite.log.txt",
-        "docs/evidence/feature-gate-fbadae3ca-native-project.log.txt",
-        "docs/evidence/feature-gate-fbadae3ca-contracts.log.txt"
+        "docs/evidence/feature-gate-a0b8fad0a-feature-suite.log.txt",
+        "docs/evidence/feature-gate-a0b8fad0a-native-project.log.txt",
+        "docs/evidence/feature-gate-a0b8fad0a-contracts.log.txt"
       ]
     },
     "handoff": {
@@ -204,9 +204,12 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Read-only engine readiness report/dashboard implemented in source; native build, real MCP, Studio UI and publishing verification pending.",
-      "evidence": []
+      "status": "pass",
+      "note": "Prepared the bilingual Studio diary with real native editor captures. The site checker accepted 59 entries and the local builder generated both languages. The release-site contract documents the native editor tool exception for a separate browser demo. Public deployment follows main integration.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-25-studio-local-play-inspection.json",
+        "docs/agents/contracts/release-site.md"
+      ]
     }
   },
   "integrations": {
@@ -227,13 +230,13 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-fbadae3ca-contracts.json",
-    "docs/evidence/feature-gate-fbadae3ca-catalog.json",
-    "docs/evidence/feature-gate-fbadae3ca-skill-audit.json",
-    "docs/evidence/feature-gate-fbadae3ca-feature-suite.json",
-    "docs/evidence/feature-gate-fbadae3ca-native-project.json",
-    "docs/evidence/feature-gate-fbadae3ca-web.json",
-    "docs/evidence/feature-gate-fbadae3ca-studio-contracts.json",
-    "docs/evidence/feature-gate-fbadae3ca-typecheck.json"
+    "docs/evidence/feature-gate-a0b8fad0a-contracts.json",
+    "docs/evidence/feature-gate-a0b8fad0a-catalog.json",
+    "docs/evidence/feature-gate-a0b8fad0a-skill-audit.json",
+    "docs/evidence/feature-gate-a0b8fad0a-feature-suite.json",
+    "docs/evidence/feature-gate-a0b8fad0a-native-project.json",
+    "docs/evidence/feature-gate-a0b8fad0a-web.json",
+    "docs/evidence/feature-gate-a0b8fad0a-studio-contracts.json",
+    "docs/evidence/feature-gate-a0b8fad0a-typecheck.json"
   ]
 }

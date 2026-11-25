@@ -32,17 +32,21 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native profiler measures Simulation steps and individual scheduled systems. Authenticated MCP started, queried and stopped a bounded capture against the paused actor authority, and the native panel displayed a completed eight-tick capture. The native profile fixture covered scheduling changes and checksum parity.",
       "evidence": [
-        "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "tests/simulation_profile_test.cpp",
+        "docs/evidence/studio-play-ad676e70c/simulation_profiler.png"
       ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native profiler measures Simulation steps and individual scheduled systems. Authenticated MCP started, queried and stopped a bounded capture against the paused actor authority, and the native panel displayed a completed eight-tick capture. The native profile fixture covered scheduling changes and checksum parity.",
       "evidence": [
-        "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "tests/simulation_profile_test.cpp",
+        "docs/evidence/studio-play-ad676e70c/simulation_profiler.png"
       ]
     },
     "native_api": {
@@ -62,10 +66,12 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Verify the typed local Studio handler, headless refusal and guarded requests over the authenticated agent link.",
+      "status": "pass",
+      "note": "The native profiler measures Simulation steps and individual scheduled systems. Authenticated MCP started, queried and stopped a bounded capture against the paused actor authority, and the native panel displayed a completed eight-tick capture. The native profile fixture covered scheduling changes and checksum parity.",
       "evidence": [
-        "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "tests/simulation_profile_test.cpp",
+        "docs/evidence/studio-play-ad676e70c/simulation_profiler.png"
       ]
     },
     "studio": {
@@ -131,17 +137,21 @@
       ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native profiler measures Simulation steps and individual scheduled systems. Authenticated MCP started, queried and stopped a bounded capture against the paused actor authority, and the native panel displayed a completed eight-tick capture. The native profile fixture covered scheduling changes and checksum parity.",
       "evidence": [
-        "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "tests/simulation_profile_test.cpp",
+        "docs/evidence/studio-play-ad676e70c/simulation_profiler.png"
       ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native profiler measures Simulation steps and individual scheduled systems. Authenticated MCP started, queried and stopped a bounded capture against the paused actor authority, and the native panel displayed a completed eight-tick capture. The native profile fixture covered scheduling changes and checksum parity.",
       "evidence": [
-        "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "tests/simulation_profile_test.cpp",
+        "docs/evidence/studio-play-ad676e70c/simulation_profiler.png"
       ]
     },
     "handoff": {
@@ -159,10 +169,11 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Prepared the bilingual Studio diary with real native editor captures. The site checker accepted 59 entries and the local builder generated both languages. The release-site contract documents the native editor tool exception for a separate browser demo. Public deployment follows main integration.",
       "evidence": [
-        "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
+        "docs/devlog/entries/2026-11-25-studio-local-play-inspection.json",
+        "docs/agents/contracts/release-site.md"
       ]
     }
   },
@@ -181,9 +192,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-fbadae3ca-studio-contracts.json",
-    "docs/evidence/feature-gate-fbadae3ca-web.json",
-    "docs/evidence/feature-gate-fbadae3ca-typecheck.json",
-    "docs/evidence/feature-gate-fbadae3ca-skill-audit.json"
+    "docs/evidence/feature-gate-a0b8fad0a-studio-contracts.json",
+    "docs/evidence/feature-gate-a0b8fad0a-web.json",
+    "docs/evidence/feature-gate-a0b8fad0a-typecheck.json",
+    "docs/evidence/feature-gate-a0b8fad0a-skill-audit.json"
   ]
 }

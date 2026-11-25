@@ -35,24 +35,33 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "G1 is in scope. Use the existing actor client and loopback authority for local Studio Play and capture the actual region ledger.",
+      "status": "pass",
+      "note": "The native Studio host used the desktop actor client and its loopback server as the sole ledger owner. After stop, restart, stable pause and exact single step, authenticated MCP and native Studio returned epoch, tick, two occupied cells and two materialized entities. The standalone endpoint refused local-only calls.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "docs/evidence/studio-actor-g1/world-explorer-final.png",
+        "apps/fps/HostedActorClient.h",
+        "docs/evidence/integration-ad5786f5a-headless.log.txt"
       ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Studio host used the desktop actor client and its loopback server as the sole ledger owner. After stop, restart, stable pause and exact single step, authenticated MCP and native Studio returned epoch, tick, two occupied cells and two materialized entities. The standalone endpoint refused local-only calls.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "docs/evidence/studio-actor-g1/world-explorer-final.png",
+        "apps/fps/HostedActorClient.h",
+        "docs/evidence/integration-ad5786f5a-headless.log.txt"
       ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Studio host used the desktop actor client and its loopback server as the sole ledger owner. After stop, restart, stable pause and exact single step, authenticated MCP and native Studio returned epoch, tick, two occupied cells and two materialized entities. The standalone endpoint refused local-only calls.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "docs/evidence/studio-actor-g1/world-explorer-final.png",
+        "apps/fps/HostedActorClient.h",
+        "docs/evidence/integration-ad5786f5a-headless.log.txt"
       ]
     },
     "skill": {
@@ -64,10 +73,13 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Verify the typed local Studio handler, headless refusal and guarded requests over the authenticated agent link.",
+      "status": "pass",
+      "note": "The native Studio host used the desktop actor client and its loopback server as the sole ledger owner. After stop, restart, stable pause and exact single step, authenticated MCP and native Studio returned epoch, tick, two occupied cells and two materialized entities. The standalone endpoint refused local-only calls.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "docs/evidence/studio-actor-g1/world-explorer-final.png",
+        "apps/fps/HostedActorClient.h",
+        "docs/evidence/integration-ad5786f5a-headless.log.txt"
       ]
     },
     "studio": {
@@ -136,10 +148,13 @@
       ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The native Studio host used the desktop actor client and its loopback server as the sole ledger owner. After stop, restart, stable pause and exact single step, authenticated MCP and native Studio returned epoch, tick, two occupied cells and two materialized entities. The standalone endpoint refused local-only calls.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "docs/evidence/studio-actor-g1/world-explorer-final.png",
+        "apps/fps/HostedActorClient.h",
+        "docs/evidence/integration-ad5786f5a-headless.log.txt"
       ]
     },
     "handoff": {
@@ -157,10 +172,11 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Prepared the bilingual Studio diary with real native editor captures. The site checker accepted 59 entries and the local builder generated both languages. The release-site contract documents the native editor tool exception for a separate browser demo. Public deployment follows main integration.",
       "evidence": [
-        "docs/handoff/studio-html5/s1-world-explorer-2026-11-24.md"
+        "docs/devlog/entries/2026-11-25-studio-local-play-inspection.json",
+        "docs/agents/contracts/release-site.md"
       ]
     }
   },
@@ -179,9 +195,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-fbadae3ca-studio-contracts.json",
-    "docs/evidence/feature-gate-fbadae3ca-web.json",
-    "docs/evidence/feature-gate-fbadae3ca-typecheck.json",
-    "docs/evidence/feature-gate-fbadae3ca-skill-audit.json"
+    "docs/evidence/feature-gate-a0b8fad0a-studio-contracts.json",
+    "docs/evidence/feature-gate-a0b8fad0a-web.json",
+    "docs/evidence/feature-gate-a0b8fad0a-typecheck.json",
+    "docs/evidence/feature-gate-a0b8fad0a-skill-audit.json"
   ]
 }

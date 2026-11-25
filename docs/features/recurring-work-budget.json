@@ -105,10 +105,11 @@
       "evidence": []
     },
     "performance": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "An optimized macOS run scanned ten million scheduled indices across 10000 ticks for 200000 entities at the 1000-visit cap in 0.0443 seconds. The pure planner and cursor use no dynamic allocations. Process peak RSS was 1294336 bytes. This is the scheduling overhead; traffic decisions have their own costs.",
       "evidence": [
-        "docs/agent-handoffs/world-simulation-stage01-recurring-budget-2026-11-24.md"
+        "docs/agent-handoffs/feature-gate-vulkan-and-native-play-2026-11-25.md",
+        "engine/sim/RecurringWork.h"
       ]
     },
     "platforms": {
@@ -192,8 +193,8 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-fbadae3ca-contracts.json",
-    "docs/evidence/feature-gate-fbadae3ca-catalog.json",
-    "docs/evidence/feature-gate-fbadae3ca-skill-audit.json"
+    "docs/evidence/feature-gate-a0b8fad0a-contracts.json",
+    "docs/evidence/feature-gate-a0b8fad0a-catalog.json",
+    "docs/evidence/feature-gate-a0b8fad0a-skill-audit.json"
   ]
 }

@@ -33,14 +33,16 @@
       "evidence": [
         "docs/evidence/studio-play-ad676e70c/runtime.png",
         "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
-        "docs/evidence/feature-gate-fbadae3ca-web.json"
+        "docs/evidence/feature-gate-a0b8fad0a-web.json"
       ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The inspector operates on references in the active native simulation. Select and inspect use the current session epoch. Reading after a guarded change returned the new value from the same entity.",
       "evidence": [
-        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+        "docs/evidence/studio-actor-g1/verified-native-results.json",
+        "apps/studio-native/StudioGameSurface.cpp",
+        "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt"
       ]
     },
     "native_api": {
@@ -49,7 +51,7 @@
       "evidence": [
         "docs/evidence/studio-play-ad676e70c/runtime.png",
         "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
-        "docs/evidence/feature-gate-fbadae3ca-web.json"
+        "docs/evidence/feature-gate-a0b8fad0a-web.json"
       ]
     },
     "skill": {
@@ -139,7 +141,7 @@
       "evidence": [
         "docs/evidence/studio-play-ad676e70c/runtime.png",
         "docs/evidence/studio-play-ad676e70c/studio-undo.log.txt",
-        "docs/evidence/feature-gate-fbadae3ca-web.json"
+        "docs/evidence/feature-gate-a0b8fad0a-web.json"
       ]
     },
     "handoff": {
@@ -157,10 +159,11 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Prepared the bilingual Studio diary with real native editor captures. The site checker accepted 59 entries and the local builder generated both languages. The release-site contract documents the native editor tool exception for a separate browser demo. Public deployment follows main integration.",
       "evidence": [
-        "docs/handoff/studio-html5/s3-entity-debugger-2026-11-24.md"
+        "docs/devlog/entries/2026-11-25-studio-local-play-inspection.json",
+        "docs/agents/contracts/release-site.md"
       ]
     }
   },
@@ -181,9 +184,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-fbadae3ca-studio-contracts.json",
-    "docs/evidence/feature-gate-fbadae3ca-web.json",
-    "docs/evidence/feature-gate-fbadae3ca-typecheck.json",
-    "docs/evidence/feature-gate-fbadae3ca-skill-audit.json"
+    "docs/evidence/feature-gate-a0b8fad0a-studio-contracts.json",
+    "docs/evidence/feature-gate-a0b8fad0a-web.json",
+    "docs/evidence/feature-gate-a0b8fad0a-typecheck.json",
+    "docs/evidence/feature-gate-a0b8fad0a-skill-audit.json"
   ]
 }
