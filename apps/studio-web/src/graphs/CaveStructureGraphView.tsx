@@ -18,6 +18,8 @@ export function CaveStructureGraphView({data}:{data:CaveInspection}){
  const go=(next:number)=>{setPage(next);setSelected('');};
  return <StudioSection title="Caverns authored SDF graph">
   <small>Archive v1 · generator {data.generatorVersion} · revision {data.revision} · {data.stamps.length} stamps · {data.entrances.length} entrances</small>
+  {data.planet&&<div className="au-stack"><small>Body {data.planet.anchor.body} · region {data.planet.activeRegionId} · cube face {data.planet.anchor.face} · extent {data.planet.anchor.halfExtentCm} cm</small>
+   <small>{data.planet.regions.length} authored regions. Showing the active region only; coordinates are chart-local centimetres, not world XYZ.</small></div>}
   <div className="au-row" style={{flexWrap:'wrap'}}>
    <StudioSelect aria-label="Caverns entry filter" value={filter} onChange={e=>{const v=e.target.value;setFilter(v==='carve'||v==='fill'||v==='entrance'?v:'all');go(0)}}>
     <option value="all">All entries</option><option value="carve">Carve</option><option value="fill">Fill</option><option value="entrance">Entrances</option>
@@ -63,8 +65,8 @@ function ScopedCaveNativeInspection({scope}:{scope:StudioGraphDocumentScope}){
    if(!gate.current.isCurrent(ticket))return;
    const result=validateCaveCapture(ticket.scope,r);
    if(result.status==='ready')setState({kind:'ready',data:inspectCaveReply(result.report)});
-   else if(result.status==='absent')setState({kind:'absent',message:'No authored Caverns snapshot in this map.'});
-   else if(result.status==='unsupported')setState({kind:'unsupported',message:'Caverns are not supported on this map type.'});
+   else if(result.status==='absent')setState({kind:'absent',message:'No authored Caverns snapshot or selected planetary region in this map.'});
+   else if(result.status==='unsupported')setState({kind:'unsupported',message:'This native Caverns owner does not expose the required map-type inspection contract.'});
    else setState({kind:'unavailable',message:'The native Caverns owner operation is not registered in this build.'});
   }catch(e){
    if(gate.current.isCurrent(ticket))setState({kind:'error',message:e instanceof Error?e.message:String(e)});
@@ -99,6 +101,6 @@ export function CaveInspectionImport(){
   <StudioTextarea aria-label="Caverns get response JSON" placeholder="Caverns get response JSON" rows={5} value={raw} onChange={e=>{setRaw(e.target.value);setData(null);setError('')}}/>
   <StudioButton size="sm" disabled={!raw.trim()} onClick={load}>Inspect supplied data</StudioButton>
   {error&&<StudioAlert tone="danger">{error}</StudioAlert>}
-  {data&&<CaveStructureGraphView key={data.revision} data={data}/>}
+  {data&&<CaveStructureGraphView key={(data.planet?.activeRegionId??'flat')+':'+data.revision} data={data}/>}
  </StudioSection>;
 }

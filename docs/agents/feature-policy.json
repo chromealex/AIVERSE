@@ -23,6 +23,92 @@
         "apps/editor/core/GraphOps.h",
         "apps/studio-web/src/graphs/graphFramework.ts"
       ]
+    },
+    "building-graph-integration": {
+      "requires": [
+        "graph-framework"
+      ],
+      "roadmap": {
+        "system": "world",
+        "id": "building-graph-integration"
+      },
+      "api_paths": [
+        "engine/systems/BuildingStructureGraph.h"
+      ]
+    },
+    "terraweave-caverns": {
+      "requires": [
+        "graph-framework"
+      ],
+      "roadmap": {
+        "system": "terraweave",
+        "id": "terraweave-caverns"
+      },
+      "api_paths": [
+        "engine/world/TerraWeaveCaverns.h"
+      ]
+    },
+    "recurring-work-budget": {
+      "requires": [],
+      "roadmap": {
+        "system": "world",
+        "id": "world-recurring-simulation-budget"
+      },
+      "api_paths": [
+        "libraries/include/aiverselib/runtime/WorkBudget.h"
+      ]
+    },
+    "studio-world-explorer": {
+      "requires": [],
+      "roadmap": {
+        "system": "studio",
+        "id": "studio-world-explorer-live"
+      },
+      "api_paths": [
+        "apps/studio-native/StudioGameSurface.h"
+      ]
+    },
+    "studio-simulation-profiler": {
+      "requires": [],
+      "roadmap": {
+        "system": "studio",
+        "id": "studio-simulation-profiler"
+      },
+      "api_paths": [
+        "engine/sim/Simulation.h"
+      ]
+    },
+    "studio-entity-debugger": {
+      "requires": [],
+      "roadmap": {
+        "system": "studio",
+        "id": "studio-entity-debugger"
+      },
+      "api_paths": [
+        "apps/studio-native/StudioRuntimeInspect.h"
+      ]
+    },
+    "studio-runtime-debugger": {
+      "requires": [
+        "studio-entity-debugger"
+      ],
+      "roadmap": {
+        "system": "studio",
+        "id": "studio-runtime-debugger"
+      },
+      "api_paths": [
+        "apps/studio-native/StudioRuntimeEdit.h"
+      ]
+    },
+    "studio-play-mode-review": {
+      "requires": [],
+      "roadmap": {
+        "system": "studio",
+        "id": "studio-play-review"
+      },
+      "api_paths": [
+        "apps/studio-native/StudioSession.h"
+      ]
     }
   },
   "claims": []

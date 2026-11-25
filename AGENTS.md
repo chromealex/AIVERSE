@@ -8,7 +8,7 @@ Read this file completely before changing anything. The linked contracts are bin
 - Reuse existing owners, libraries, skills and native APIs before implementing. Never introduce a competing solver or game-specific code into the engine.
 - Own branch/worktree, sync main, preserve other agents' work; no force push or pruning another worktree. At most five active capability areas; finish or hand back before starting another.
 - Integrate each completed feature or integration branch into `main` with a squash: one final commit per branch, including its code, tests, docs and handoffs. Keep the branch's stage commits and handoff history intact; do not rewrite or force-push it. Never use a regular merge commit or fast-forward that brings the branch's individual commits into `main`.
-- Before implementation update roadmap and feature manifest. After every stage commit a separate handoff with exact SHA, paths, real test evidence and next step, including failed stages.
+- Before implementation update roadmap, feature delivery record and feature manifest. After every stage commit a separate handoff with exact SHA, paths, real test evidence and next step, including failed stages.
 - Never claim unrun tests passed. The merged-tree Mac quick gate remains mandatory before main. Build outputs and caches go to /Volumes/KINGSTON; no silent fallback on Mac.
 - Every applicable feature exposes native API, skill, MCP and Studio, with appropriate persistence, tests and examples. Visible features require real captures and web demos subject to the publishing contract.
 - Current release: 3.0.0 released; next 3.1.0. MAIN integrator owns release tags and publication.
@@ -48,6 +48,7 @@ back into AGENTS.md: this file holds only rules that apply to every agent.
 | water bodies, flow, buoyancy | [docs/agents/nereid.md](docs/agents/nereid.md) — NEREID water framework summary |
 | weather, wind, fire, quake, nature fields | [docs/agents/physis.md](docs/agents/physis.md) — PHYSIS environmental ECS: diagnostics, stages 15-79, map authoring |
 | build monitor, CI triage | [docs/agents/build-monitor.md](docs/agents/build-monitor.md) — Terminal build monitor, warnings/errors reporting |
+| caves, subterranean SDF, Carve/Fill, cave navigation/streaming | [docs/agents/caverns.md](docs/agents/caverns.md) — Caverns owner rules, Stage 1–45 handoffs |
 | terrain, foliage, shoreline, erosion, ecology | [docs/agents/terraweave.md](docs/agents/terraweave.md) — TerraWeave terrain/foliage/ecology stages 53-65, cosmetic rocks |
 | animation, VIVID digital humans, View model lifetime, LOD retarget | [docs/agents/motionweave.md](docs/agents/motionweave.md) — MotionWeave / Universal View stages 117-161, VIVID digital humans, animation reporting rule |
 | climbing, legged locomotion | [docs/agents/surface-locomotion.md](docs/agents/surface-locomotion.md) — Procedural climbing, spider gaits and surface locomotion |

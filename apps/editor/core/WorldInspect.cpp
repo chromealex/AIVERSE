@@ -53,9 +53,10 @@ struct J {
     Json ref(Entity e) const {
         if (!e.valid()) return Json();
         Json r = Json::object();
-        r.set("$entity", Json::number(int64_t(worldRef(e))));
+        r.set("$entity", Json::number(int64_t(worldRef(e)))); // legacy consumers
+        r.set("$entityRef", Json::string(std::to_string(worldRef(e)))); // lossless WebView navigation
         std::string label = "#" + std::to_string(e.index);
-        if (auto* u = w.tryGet<Unit>(e)) label = typeName(u->type) + " " + label;
+        if (const auto* u = w.tryGetConst<Unit>(e)) label = typeName(u->type) + " " + label;
         else if (!w.alive(e)) label += " (нет)";
         r.set("label", Json::string(label));
         return r;

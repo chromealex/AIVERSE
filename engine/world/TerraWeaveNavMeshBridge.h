@@ -78,6 +78,12 @@ public:
         // caves. One column may contain no walkable span after digging.
     }
     const EarthworksNavConfig& config()const{return cfg_;}
+    EarthworksNavSource withAdditionalBlocked(Blocked extra)const {
+        const auto prior=blocked_;
+        return EarthworksNavSource(earth_,cfg_,[prior,extra=std::move(extra)](int32_t x,int32_t z){
+            return (prior&&prior(x,z))||(extra&&extra(x,z));
+        });
+    }
     int32_t height(int32_t x,int32_t z)const {
         if(x<0 || z<0 || x>=cfg_.width || z>=cfg_.depth)
             throw std::out_of_range("TerraWeave navmesh column index");

@@ -409,6 +409,57 @@ StudioScene::StudioScene(std::unique_ptr<gfx::Device> device)
 }
 void StudioScene::setTransformTool(TransformTool tool) { tool_ = tool; drag_ = TransformDrag{}; }
 void StudioScene::clearTransformPreview() { drag_ = TransformDrag{}; }
+bool StudioScene::setBuildingPreview(
+    std::unique_ptr<render::Model> next,std::string* error){
+    // Called only by StudioHost::onScene outside GPU passes.
+    if(!device_ || !deviceLifetime_ ||
+       !deviceLifetime_->lease().validFor(*device_)){
+        if(error)*error="Studio building preview GPU device unavailable";
+        return false;
+    }
+    if(buildingPreview_){
+        // Never invalidate a Model still retained in in-flight draw packets.
+        if(!device_->waitForResourceIdle()){
+            if(error)*error="Building preview GPU retirement barrier failed";
+            return false;
+        }
+        releasePreviewModel(*buildingPreview_);
+        buildingPreview_.reset();
+        buildingPreviewGpuReady_=false;
+    }
+    if(next){
+        next->batching.mergeRigid=false;
+        next->batching.autoLod=false;
+        next->batching.geometryPoolPolicy=
+            render::Model::Batching::GeometryPoolPolicy::Dedicated;
+        render::prepareModelUpload(*next);
+        if(!render::uploadModel(*device_,*next,true,false)){
+            if(!device_->waitForResourceIdle()){
+                // Keep a failed partial upload alive until another verified
+                // GPU-safe cleanup call; no CPU Model can dangle on failure.
+                buildingPreview_=std::move(next);
+                buildingPreviewGpuReady_=false;
+                if(error)*error="Building preview upload failed and GPU retirement is pending";
+                return false;
+            }
+            releasePreviewModel(*next);
+            if(error)*error="Building preview model GPU upload failed";
+            return false;
+        }
+        const auto min=next->boundsMin,max=next->boundsMax;
+        camera_.target={(min.x+max.x)*.5f,(min.y+max.y)*.5f,
+                        (min.z+max.z)*.5f};
+        const auto extent=max-min;
+        camera_.distance=std::max({extent.x,extent.y,extent.z,1.f})*1.9f;
+        camera_.yaw=.55f;camera_.pitch=.45f;camera_.ortho=false;
+        tween_.active=false;cameraInitialized_=true;
+        buildingPreview_=std::move(next);
+        buildingPreviewGpuReady_=true;
+    }
+    lastFrameSignature_=0;
+    if(error)error->clear();
+    return true;
+}
 void StudioScene::releasePreviewModel(render::Model& model) {
     // Retire CPU packets/layouts before the Model and its geometry disappear.
     renderer_.invalidateModelCachesFor(&model);
@@ -1107,10 +1158,14 @@ StudioScene::~StudioScene() {
             textureGraph_.reset();
         }
         if(graphPresentation_){if(idle)graphPresentation_->shutdown(*device_);graphPresentation_.reset();}
+        try {
+            if(!cavernsPreview_.close(*device_))cavernsPreview_.quarantineOnFailedTeardown();
+        }catch(...) {cavernsPreview_.quarantineOnFailedTeardown();}
         discardReplayBackup();
         spectraSources_.shutdown();
         spectraPreview_->stop(*device_); // before gfx Device and renderer are destroyed
         clearDocumentModels();
+        if(buildingPreview_){releasePreviewModel(*buildingPreview_);buildingPreview_.reset();}
         lightingRuntime_.shutdown(*device_,renderer_);
         if(lightingModel_) {
             renderer_.invalidateModelCachesFor(lightingModel_.get());
@@ -1128,8 +1183,15 @@ StudioScene::~StudioScene() {
         }
         for (auto* primitive:{&builtinCube_,&builtinSphere_})
             if (*primitive) { releasePreviewModel(**primitive); primitive->reset(); }
-        if (terrain_.vb.valid()) device_->destroyBuffer(terrain_.vb);
-        if (terrain_.ib.valid()) device_->destroyBuffer(terrain_.ib);
+        terrainRetirement_.retireBuffer(*device_,terrain_.vb);
+        terrainRetirement_.retireBuffer(*device_,terrain_.ib);
+        terrainRetirement_.retireBuffer(*device_,planetCutTerrain_.vb);
+        terrainRetirement_.retireBuffer(*device_,planetCutTerrain_.ib);
+        terrainRetirement_.retireBuffer(*device_,globeMesh_.vb);
+        terrainRetirement_.retireBuffer(*device_,globeMesh_.ib);
+        (void)terrainRetirement_.completeForShutdown(*device_);
+        sparseTerrainPreview_.release([&](auto& model){sparseTerrainRetirement_.retireModel(*device_,model);});
+        (void)sparseTerrainRetirement_.completeForShutdown(*device_);
         if (thumbColor_.valid()) device_->destroyTexture(thumbColor_);
         if (thumbDepth_.valid()) device_->destroyTexture(thumbDepth_);
         nereid_.shutdown(*device_);
@@ -1159,7 +1221,7 @@ std::string StudioScene::pick(float x, float y, float width, float height,
     float3 origin{}, direction{};
     // Facial preview is an imported Model, not an object in the active map.
     // Never route its clicks to unrelated MapDoc entities underneath.
-    if (materialMode_ || facialMode_ || !cameraInitialized_ ||
+    if (materialMode_ || facialMode_ || buildingPreview_ || !cameraInitialized_ ||
         !viewCamera().screenRay(x,y,width,height,origin,direction)) return {};
     // Pick the oriented cube mesh that Renderer3D actually draws, not its
     // expanded axis-aligned bounding box. Empty rotated corners are unpickable.
@@ -1189,6 +1251,9 @@ std::vector<std::string> StudioScene::idsInRect(float x0,float y0,float x1,float
         if(p.x>=lx&&p.x<=hx&&p.y>=ly&&p.y<=hy)out.push_back(proxy.id);
     }
     return out;
+}
+bool StudioScene::caveScreenRay(float x,float y,float width,float height,float3& origin,float3& direction)const {
+    return cameraInitialized_&&width>1&&height>1&&viewCamera().screenRay(x,y,width,height,origin,direction);
 }
 bool StudioScene::groundPoint(float x,float y,float width,float height,float3& out) const {
     float3 o,d;
@@ -1324,12 +1389,18 @@ void StudioScene::drawBrushCursor(const Camera& view,int width,int height) {
     const float w=std::max(1.5f,std::min(W,H)*0.002f);
     constexpr int N=48;
     float2 prev{};bool prevOk=false;
-    for(int i=0;i<=N;++i){
-        const float a=float(i)/N*6.2831853f;
-        const float3 p{brushCenter_.x+std::cos(a)*brushRadius_,brushCenter_.y+0.05f,brushCenter_.z+std::sin(a)*brushRadius_};
-        float2 s;const bool ok=view.worldToScreen(p,W,H,s);
-        if(ok&&prevOk)o.segment(prev.x,prev.y,s.x,s.y,w,rgba(120,200,255,220));
-        prev=s;prevOk=ok;
+    const uint32_t ink=brushVolume_&&brushFill_?rgba(255,175,100,220):rgba(120,200,255,220);
+    for(int plane=0;plane<(brushVolume_?3:1);++plane){
+        prevOk=false;
+        for(int i=0;i<=N;++i){
+            const float a=float(i)/N*6.2831853f;
+            const float u=std::cos(a)*brushRadius_,v=std::sin(a)*brushRadius_;
+            const float3 offset=plane==0?float3{u,brushVolume_?0.f:.05f,v}:
+                                plane==1?float3{u,v,0}:float3{0,u,v};
+            float2 s;const bool ok=view.worldToScreen(brushCenter_+offset,W,H,s);
+            if(ok&&prevOk)o.segment(prev.x,prev.y,s.x,s.y,w,ink);
+            prev=s;prevOk=ok;
+        }
     }
     float2 c;
     if(brushVisible_&&view.worldToScreen(brushCenter_,W,H,c)){o.segment(c.x-4,c.y,c.x+4,c.y,w,rgba(120,200,255,220));o.segment(c.x,c.y-4,c.x,c.y+4,w,rgba(120,200,255,220));}
@@ -1769,6 +1840,7 @@ void StudioScene::zoom(float wheel) {
     // Unity-like dolly: zoom toward the pivot; at the minimum distance keep
     // moving forward by pushing the pivot instead of stopping.
     const float next=camera_.distance*std::exp(-wheel*0.035f);
+    if(caveGlobeRequested()){camera_.target={0,0,0};camera_.distance=std::clamp(next,12.f,100.f);return;}
     constexpr float kMinDistance=2.0f;
     if(next<kMinDistance && wheel>0) {
         const float cp=std::cos(camera_.pitch),sp=std::sin(camera_.pitch);
@@ -1849,6 +1921,80 @@ void StudioScene::resetView() {
     cameraInitialized_=false;
     camera_.pitch=0.85f;
     camera_.yaw=0.55f;
+}
+void StudioScene::setCaveGlobe(std::string body,const std::string& project,const std::string& map){
+    if(body==globeBody_&&project==globeProject_&&map==globeMap_)return;
+    if(!device_)throw std::runtime_error("Caverns globe device unavailable");
+    if(!body.empty()&&!cavernsPreview_.close(*device_))
+        throw std::runtime_error("Caverns chart retirement refused");
+    terrainRetirement_.retireBuffer(*device_,globeMesh_.vb);
+    terrainRetirement_.retireBuffer(*device_,globeMesh_.ib);
+    globeMesh_={};globe_.reset();globeDoc_=nullptr;globeRevision_=0;
+    globeBody_=std::move(body);globeProject_=project;globeMap_=map;
+    globeReady_=false;globeError_.clear();planetCutDrawn_=false;
+    cameraInitialized_=false;tween_.active=false;lastFrameSignature_=0;
+    terrainRevision_=std::numeric_limits<uint64_t>::max();
+    lightingRevision_=terrainRevision_;
+}
+Json StudioScene::pickCaveGlobe(float x,float y,float width,float height,const editor::MapDoc& doc,
+                               const std::string& project)const{
+    Json out=Json::object();out.set("hit",Json::fromBool(false));
+    if(!globeReady_||!globe_||project!=globeProject_||doc.path!=globeMap_||
+       doc.revision!=globeRevision_||x<0||y<0||x>=width||y>=height)return out;
+    float3 origin,direction;
+    if(!caveScreenRay(x,y,width,height,origin,direction))return out;
+    const auto hit=globe_->pick(origin,direction);
+    if(!hit)return out;
+    out.set("hit",Json::fromBool(true));out.set("body",Json::string(globeBody_));
+    out.set("face",Json::number(int64_t(hit->face)));
+    out.set("aQ16",Json::number(hit->a.raw));out.set("bQ16",Json::number(hit->b.raw));
+    out.set("regionId",Json::string(hit->regionId));
+    out.set("mapRevisionText",Json::string(std::to_string(doc.revision)));
+    return out;
+}
+void StudioScene::renderCaveGlobe(int width,int height,const editor::MapDoc& doc){
+    (void)terrainRetirement_.collectWithoutIdle(*device_);
+    if(globeDoc_!=&doc||globeRevision_!=doc.revision){
+        globeReady_=false;globeError_.clear();
+        try{
+            if(terrainRetirement_.pending()>=64)throw std::runtime_error("Globe retirement budget");
+            auto candidate=StudioPlanetGlobe::capture(doc.data,globeBody_);
+            auto cpu=candidate.mesh();
+            auto mesh=cpu.upload(*device_);
+            if(!mesh.vb.valid()||!mesh.ib.valid()){
+                terrainRetirement_.retireBuffer(*device_,mesh.vb);
+                terrainRetirement_.retireBuffer(*device_,mesh.ib);
+                throw std::runtime_error("Globe overview upload failed");
+            }
+            terrainRetirement_.retireBuffer(*device_,globeMesh_.vb);
+            terrainRetirement_.retireBuffer(*device_,globeMesh_.ib);
+            globeMesh_=mesh;globe_=std::move(candidate);
+        }catch(const std::exception& e){globe_.reset();globeError_=e.what();}
+        globeDoc_=&doc;globeRevision_=doc.revision;
+    }
+    if(!cameraInitialized_){
+        camera_.target={0,0,0};camera_.distance=32.f;camera_.ortho=false;
+        camera_.pitch=.3f;camera_.yaw=.55f;tween_.active=false;cameraInitialized_=true;
+    }
+    // No chart or flat-scene object submissions in overview mode.
+    camera_.target={0,0,0};camera_.distance=std::clamp(camera_.distance,12.f,100.f);
+    tween_.active=false;
+    device_->beginFrame(width,height);StudioFrameScope scope{*device_};
+    renderer_.beginScene(viewCamera(),width,height);
+    renderer_.clearDynamicGiOverlay();
+    renderer_.lighting=render::Lighting{};
+    renderer_.lighting.sunIntensity=1.2f;renderer_.lighting.skyColor={.44f,.53f,.68f};
+    renderer_.lighting.fogDensity=0;
+    if(globe_&&globeMesh_.vb.valid()&&globeMesh_.ib.valid()){
+        renderer_.drawMesh(globeMesh_,mat4{}, {1,1,1,1},kDrawNoCastShadow);
+        for(const auto& marker:globe_->markers)
+            renderer_.drawMesh(cube_,mat4::translate(marker.position)*mat4::scale({marker.size,marker.size,marker.size}),
+                {.95f,.66f,.18f,1},kDrawNoCastShadow);
+    }
+    gfx::PassDesc pass;pass.clearColor[0]=.025f;pass.clearColor[1]=.035f;pass.clearColor[2]=.06f;pass.clearColor[3]=1.f;
+    renderer_.render(pass,&antialiasing_);renderer_.resolvePostFx();
+    globeReady_=globe_.has_value()&&globeMesh_.vb.valid()&&globeMesh_.ib.valid();
+    ++framesDrawn_;
 }
 // Real Scene-device render target placed inside the SpectraFX Graph dock.
 // This is deliberately a *mode* on the existing render-thread-owned
@@ -1958,7 +2104,6 @@ void StudioScene::frameSpectraDock(int framebufferWidth,int framebufferHeight) {
     while(fxFrameProvenance_->size()>64)fxFrameProvenance_->pop_front();
     // StudioFrameScope closes the native pass and frame on owner thread.
 }
-
 void StudioScene::frame(int framebufferWidth, int framebufferHeight, const editor::MapDoc& doc,
                              bool fpsProject, const std::string& selectedId,
                              const std::string& previewName, const Json& previewFactors,
@@ -1978,6 +2123,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     facialReady_=false;
     facialError_.clear();
+    globeReady_=false; // only the actual overview render enables picking
     if (!device_ || framebufferWidth < 2 || framebufferHeight < 2) return;
     if(spectraDockMode_) {
         // A dedicated VFX authoring viewport, not the authored map.
@@ -1989,6 +2135,29 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     if (renderer_.pendingProgramRetirements()) renderer_.collectRetiredPrograms();
     if (renderer_.pendingTargetRetirements()) renderer_.collectRetiredTargets();
     if (renderer_.hasPendingModelPipelineJobs()) renderer_.pollPendingModelPipelineJobs();
+    // This is a native isolated 3D preview. Existing Scene viewport
+    // orbit/zoom/pan operate on camera_ and never mutate the project.
+    if(buildingPreview_ && buildingPreviewGpuReady_){
+        lastFrameSignature_=0; // redraw while interactive camera is active
+        device_->beginFrame(framebufferWidth,framebufferHeight);
+        StudioFrameScope scope{*device_};
+        renderer_.beginScene(viewCamera(),framebufferWidth,framebufferHeight);
+        renderer_.clearDynamicGiOverlay();
+        renderer_.lighting=render::Lighting{};
+        renderer_.lighting.sunIntensity=1.25f;
+        renderer_.lighting.skyColor={.43f,.5f,.61f};
+        renderer_.lighting.groundColor={.25f,.27f,.29f};
+        renderer_.lighting.fogDensity=0;
+        render::ModelDraw draw;
+        draw.model=buildingPreview_.get();
+        renderer_.drawModel(draw);
+        gfx::PassDesc pass;
+        pass.clearColor[0]=.065f;pass.clearColor[1]=.08f;
+        pass.clearColor[2]=.11f;pass.clearColor[3]=1.f;
+        renderer_.render(pass,&antialiasing_);
+        renderer_.resolvePostFx();
+        return;
+    }
     const bool materialRequested = !previewName.empty() && previewFactors.isObject();
     const bool facialRequested = facialBinding.bound() && !materialRequested;
     // Those previews draw every frame; the map view redraws once they end.
@@ -2186,6 +2355,24 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         return;
     }
     const auto& map = doc.data;
+    if(caveGlobeRequested()){
+        if(projectPath!=globeProject_||doc.path!=globeMap_||!map.planet()||map.findBody(globeBody_)<0)
+            setCaveGlobe({},projectPath,doc.path);
+        else {renderCaveGlobe(framebufferWidth,framebufferHeight,doc);return;}
+    }
+    cavernsPreview_.syncDocument(*device_,doc,projectPath);
+    std::optional<terraweave::caverns::CavePlanetAnchor> selectedChart;
+    std::string chartIdentity;
+    if(map.planet())try{
+        const auto id=editor::planet_caves::activeRegionId(map);
+        if(!id.empty()){
+            selectedChart=editor::planet_caves::readAnchor(map);
+            chartIdentity=id+":"+terraweave::caverns::cavePlanetAnchorToJson(*selectedChart).dump(-1);
+        }
+    }catch(const std::exception&){selectedChart.reset();chartIdentity.clear();}
+    const bool planetaryChart=selectedChart.has_value();
+    const bool chartChanged=chartIdentity!=planetChartIdentity_;
+    if(chartChanged){planetChartIdentity_=chartIdentity;cameraInitialized_=false;sceneCacheValid_=false;terrainRevision_=std::numeric_limits<uint64_t>::max();lightingRevision_=terrainRevision_;}
     const auto now=std::chrono::steady_clock::now();
     if(lastSeenRevision_!=doc.revision){lastSeenRevision_=doc.revision;lastDocChange_=now;}
     {
@@ -2213,27 +2400,79 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         }
     }
     const auto& proxies=proxies_;
-    const bool showTerrain=showTerrain_;
+    const bool showTerrain=planetaryChart||showTerrain_;
+    const bool sparseTerrain=!map.planet()&&map.extra["terraweaveSparse"].isObject();
+    auto retireSparse=[&](auto& model){if(model)renderer_.invalidateModelCachesFor(model.get());sparseTerrainRetirement_.retireModel(*device_,model);};
+    (void)sparseTerrainRetirement_.collectWithoutIdle(*device_);
+    if((!sparseTerrain||sparseTerrainProject_!=projectPath)&&(sparseTerrainPreview_.residentCount()||sparseTerrainPreview_.authoredCount()))sparseTerrainPreview_.release(retireSparse);
+    sparseTerrainProject_=projectPath;
     snapPivots_.clear();
     // Same pivot as the Move gizmo: bottom centre (lights: centre).
     for (const auto& proxy:proxies) if (!hidden_.count(proxy.id))
         snapPivots_.push_back({proxy.id,proxy.light?proxy.center:float3{proxy.center.x,proxy.boundsMin.y,proxy.center.z}});
 
-    if (terrainRevision_ != doc.revision || terrainLevelHeight_ != levelHeight || (showTerrain && !terrain_.vb.valid())) {
-        // A document edit already makes the lighting stale (debounced below);
-        // force an immediate rebuild only for the other terrain causes.
-        if (terrainRevision_ == doc.revision) lightingRevision_=std::numeric_limits<uint64_t>::max();
-        terrainLevelHeight_ = levelHeight;
+    const bool caveAuthored=planetaryChart||(!map.extra["terraweaveCaverns"].isNull()&&!map.planet());
+    (void)terrainRetirement_.collectWithoutIdle(*device_);
+    const bool planetDocumentChanged=planetaryChart&&
+        (planetTerrainDoc_!=&doc||planetTerrainProject_!=projectPath);
+    if (terrainRevision_ != doc.revision || terrainLevelHeight_ != levelHeight ||
+        terrainWasShown_!=showTerrain || terrainCavernsAuthored_!=caveAuthored||planetDocumentChanged) {
+        // Preserve one exact CPU triangle source for both render paths.
+        // Never debounce the PBR receiver across a changed cut epoch.
+        if (terrainRevision_==doc.revision || caveAuthored || terrainCavernsAuthored_)
+            lightingRevision_=std::numeric_limits<uint64_t>::max();
+        if(terrainRetirement_.pending()>=64&&!terrainRetirement_.completeForShutdown(*device_))
+            throw std::runtime_error("Studio terrain retirement budget exhausted");
         MeshBuilder source;
-        Mesh replacement;
-        if(showTerrain){const auto stats=buildTerrainPreview(map,source,levelHeight);if(stats.quads)replacement=source.upload(*device_);}
-        if (terrain_.vb.valid()) device_->destroyBuffer(terrain_.vb);
-        if (terrain_.ib.valid()) device_->destroyBuffer(terrain_.ib);
-        terrain_ = replacement;
-        terrainRevision_ = doc.revision;
+        TerrainPreviewStats cutStats;
+        Mesh replacement{};
+        if(showTerrain){
+            cutStats=planetaryChart?buildPlanetChartPreview(map,source,doc.revision):buildTerrainPreview(map,source,levelHeight);
+            if(!source.empty()){
+                replacement=source.upload(*device_);
+                if(!replacement.vb.valid()||!replacement.ib.valid()){
+                    if(replacement.vb.valid())device_->destroyBuffer(replacement.vb);
+                    if(replacement.ib.valid())device_->destroyBuffer(replacement.ib);
+                    throw std::runtime_error("Studio terrain upload failed");
+                }
+            }
+        }
+        terrainRetirement_.retireBuffer(*device_,terrain_.vb);
+        terrainRetirement_.retireBuffer(*device_,terrain_.ib);
+        terrain_=replacement;
+        terrainCpu_=std::move(source);
+        terrainCutStats_=std::move(cutStats);
+        terrainLevelHeight_=levelHeight;
+        terrainWasShown_=showTerrain;terrainCavernsAuthored_=caveAuthored;
+        terrainRevision_=doc.revision;
+        planetTerrainDoc_=planetaryChart?&doc:nullptr;
+        planetTerrainProject_=planetaryChart?projectPath:std::string{};
+    }
+    // Stage the replacement using exactly the refined CPU plan used by the
+    // collar owner. Do not drop the solid baseline on upload/refusal.
+    auto chartPlan=planetaryChart?cavernsPreview_.planetRimPlan():nullptr;
+    if(chartPlan!=planetCutPlan_){
+        terrainRetirement_.retireBuffer(*device_,planetCutTerrain_.vb);
+        terrainRetirement_.retireBuffer(*device_,planetCutTerrain_.ib);
+        planetCutTerrain_={};planetCutPlan_=chartPlan;planetCutDrawn_=false;
+        planetCutTriangles_=0;planetCutError_.clear();
+        if(chartPlan)try{
+            if(terrainRetirement_.pending()>=64)throw std::runtime_error("Caverns chart surface retirement pressure");
+            MeshBuilder cut;
+            planetCutTriangles_=buildPlanetChartCutPreview(*chartPlan,cut);
+            if(cut.empty())throw std::runtime_error("Caverns empty chart cut mesh");
+            planetCutTerrain_=cut.upload(*device_);
+            if(!planetCutTerrain_.vb.valid()||!planetCutTerrain_.ib.valid())
+                throw std::runtime_error("Caverns chart cut upload failed");
+        }catch(const std::exception& e){
+            terrainRetirement_.retireBuffer(*device_,planetCutTerrain_.vb);
+            terrainRetirement_.retireBuffer(*device_,planetCutTerrain_.ib);
+            planetCutTerrain_={};planetCutError_=e.what();
+        }
+        lastFrameSignature_=0;
     }
     const Json& settings=lightingSettings_;
-    const bool useLighting=useLighting_;
+    const bool useLighting=useLighting_&&!planetaryChart;
     const auto& activeLights=activeLights_;
     Lighting environment;
     const auto& day=day_;
@@ -2255,10 +2494,11 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         }
         lightingRevision_=doc.revision;
         lightingStatus_="Preview geometry · GI: off · Direct: standard";
-        if(useLighting || fpsProject) {
+        if(!planetaryChart&&(useLighting || fpsProject)) {
             std::set<std::string> modelIds;
             for(const auto& instance:modelInstances_)modelIds.insert(instance.id);
-            lightingModel_=studioLightingPreview(doc,fpsProject,levelHeight,modelIds);
+            lightingModel_=studioLightingPreview(doc,fpsProject,levelHeight,modelIds,
+                (terrainCavernsAuthored_||sparseTerrain)?&terrainCpu_:nullptr);
             StaticShadowGeometry geometry;
             if(lightingModel_) {
                 prepareModelUpload(*lightingModel_);
@@ -2295,7 +2535,10 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     if (!cameraInitialized_ || lastMapWidth_ != map.w || lastMapHeight_ != map.h) {
         camera_.target = {map.w * .5f, 0.0f, map.h * .5f};
         camera_.distance = std::clamp(float(std::max(map.w, map.h)) * 1.4f, 16.0f, 100000.0f);
-        if(fpsProject && lightingModel_) {
+        if(planetaryChart){
+            const auto cap=selectedChart->halfExtentCm;
+            camera_.target={0,0,0};camera_.distance=std::clamp(float(cap)*.035f,3.f,100000.f);
+        }else if(fpsProject && lightingModel_) {
             const auto lo=lightingModel_->boundsMin,hi=lightingModel_->boundsMax;
             camera_.target=(lo+hi)*.5f;
             camera_.distance=std::clamp(std::max({hi.x-lo.x,hi.y-lo.y,hi.z-lo.z})*1.4f,16.f,100000.f);
@@ -2314,7 +2557,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         constexpr int kSettleFrames=30;
         const uint64_t signature=frameSignature(framebufferWidth,framebufferHeight,doc,fpsProject,selectedId);
         // Pending Assets thumbnails render inside a drawn frame (one per frame).
-        const bool animated=continuousRedraw_ || tween_.active || modelsPending_ || !thumbJobs_.empty() ||
+        const bool animated=continuousRedraw_ || tween_.active || modelsPending_ || cavernsPreview_.needsFrame() || sparseTerrain || !thumbJobs_.empty() ||
             lightingRevision_!=doc.revision || nereid_.configuredSurfaces()>0 ||
             (wind_.enabled && riggedInstances_>0) || day.clouds>0 || lodDiagnostics_ ||
             (lightingRuntime_.indirect && !lightingRuntime_.indirect->converged) ||
@@ -2328,6 +2571,34 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     // proxies/syncDocumentModels ran above: lighting needs modelInstances_ first.
     device_->beginFrame(framebufferWidth, framebufferHeight);
     StudioFrameScope scope{*device_};
+    // Stage both preview owners before draw submission. Share the exact
+    // surface plan pointer; neither half is drawn before its counterpart.
+    bool sparsePrepared=false;
+    if(sparseTerrain){
+        try{
+            if(sparseTerrainRetirement_.pending()>=128)throw std::runtime_error("Sparse terrain GPU retirement pressure");
+            const auto cm=[](float v){return int64_t(std::llround(std::clamp(double(v),-9990000.,9990000.)*100.));};
+            sparseTerrainPreview_.prepare(*device_,doc,cm(camera_.target.x),cm(camera_.target.z),
+                retireSparse,cavernsPreview_.visible());
+            sparsePrepared=true;sparseTerrainError_.clear();
+        }catch(const std::exception& e){sparseTerrainError_=e.what();}
+    }
+    auto surfaceGroup=sparsePrepared?sparseTerrainPreview_.surfaceGroup():nullptr;
+    const auto chartGroup=planetaryChart&&planetCutTerrain_.vb.valid()&&planetCutTerrain_.ib.valid()
+        ?planetCutPlan_:nullptr;
+    cavernsPreview_.syncRimGroup(planetaryChart?chartGroup:surfaceGroup);
+    cavernsPreview_.beforeRender(*device_,planetaryChart?view.eye():
+        brushVisible_&&brushVolume_?brushCenter_:camera_.target);
+    if(surfaceGroup&&!surfaceGroup->rims.empty()&&cavernsPreview_.rimRejected(surfaceGroup)){
+        const auto why=cavernsPreview_.rimError();
+        sparseTerrainPreview_.rejectSurfaceGroup(retireSparse,why.empty()?"Caverns matching volume unavailable":why);
+        surfaceGroup.reset();sparsePrepared=false;
+        cavernsPreview_.syncRimGroup({});
+    }
+    const bool pairedRimReady=cavernsPreview_.rimReady(surfaceGroup)&&
+        (!surfaceGroup||surfaceGroup->rims.empty()||sparseTerrainPreview_.surfaceGroupUploaded());
+    const bool pairedPlanetReady=chartGroup&&cavernsPreview_.rimReady(chartGroup);
+    planetCutDrawn_=pairedPlanetReady&&!cavernsPreview_.isolate();
     struct SpectraPoolFrameGuard { StudioSpectraSources& sources; ~SpectraPoolFrameGuard(){sources.finish();} } spectraPoolScope{spectraSources_};
     if(spectraPreview_->active()) {
         // Device-safe point: GPU simulation update before any encoder/pass.
@@ -2359,7 +2630,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         renderer_.lights.setNightGlow(day.night*1.5f);
         renderer_.lights.setClouds(day.clouds,.6f,16.f,0,0);
     }
-    if(!lightingRuntime_.direct || !lightingRuntime_.direct->enabled)
+    if(!planetaryChart&&(!lightingRuntime_.direct || !lightingRuntime_.direct->enabled))
         for(const auto& light:activeLights)renderer_.lights.add(light);
     lightingRuntime_.update(*device_,renderer_,camera_.target);
     if(lightingRuntime_.indirect || lightingRuntime_.direct)lightingStatus_=lightingRuntime_.status();
@@ -2368,16 +2639,18 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     // Temporary primitive preview (NOT legacy editor terrain, animation or materials).
     const float w = float(std::max(map.w, 1));
     const float h = float(std::max(map.h, 1));
-    if(lightingModel_) {
+    if(lightingModel_&&!cavernsPreview_.isolate()) {
         // Shared lit preview geometry (terrain + document proxies) owned by the lighting runtime.
         ModelDraw draw;draw.model=lightingModel_.get();renderer_.drawModel(draw);
     }
-    if(showTerrain){
+    if(showTerrain&&!cavernsPreview_.isolate()){
     if(lightingModel_) {
         // Terrain is already part of the lit preview model.
+    } else if (pairedPlanetReady) {
+        renderer_.drawMesh(planetCutTerrain_,mat4{}, {1,1,1,1},kDrawNoCastShadow);
     } else if (terrain_.vb.valid() && terrain_.ib.valid()) {
         renderer_.drawMesh(terrain_, mat4{}, {1,1,1,1}, kDrawNoCastShadow);
-    } else {
+    } else if(!terrainCutStats_.handled&&!terrainCavernsAuthored_) {
         // Unsupported planet maps or empty terrain: basic plane only.
         renderer_.drawMesh(cube_,
                            mat4::translate({w*.5f,-0.08f,h*.5f}) * mat4::scale({w,.12f,h}),
@@ -2385,9 +2658,9 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     const int xStep = std::max(1, map.w / 48);
     const int zStep = std::max(1, map.h / 48);
-    for (int x=0; !fpsProject && x<=map.w; x+=xStep)
+    for (int x=0; !planetaryChart && !fpsProject && x<=map.w; x+=xStep)
         renderer_.line({float(x),.01f,0},{float(x),.01f,h},rgba(55,84,109,120));
-    for (int z=0; !fpsProject && z<=map.h; z+=zStep)
+    for (int z=0; !planetaryChart && !fpsProject && z<=map.h; z+=zStep)
         renderer_.line({0,.01f,float(z)},{w,.01f,float(z)},rgba(55,84,109,120));
 
     } // external/Terra surface suppresses the default plane and grid
@@ -2395,7 +2668,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     selectedId_=selectedId;
     selectedPivotValid_=false;
     selectedBoxValid_=false;
-    for(auto& cached:proxyDraws_) {
+    if(!planetaryChart)for(auto& cached:proxyDraws_) {
         const auto& entity=proxies[cached.proxy];
         if(hidden_.count(entity.id))continue;
         const bool dragged=!drag_.id.empty() && entity.id==drag_.id;
@@ -2445,7 +2718,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     if(graphPresentation_)graphPresentation_->merged.clear();
     riggedInstances_=0; riggedParts_=0;
     const double windSeconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-windClock_).count();
-    for(const auto& instance:modelInstances_) {
+    if(!planetaryChart)for(const auto& instance:modelInstances_) {
         if(hidden_.count(instance.id))continue;
         render::ModelDraw draw;
         draw.model=instance.model;
@@ -2479,10 +2752,10 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             }
         }
     }
-    nereid_.draw(renderer_);
+    if(!planetaryChart)nereid_.draw(renderer_);
     // Editor gizmos for authored lights; actual light contribution is passed through
     // Renderer3D::lights, not faked with an overlay screenshot.
-    for(const auto& light:activeLights) {
+    if(!planetaryChart)for(const auto& light:activeLights) {
         const auto at=light.pos;
         const float extent=std::clamp(light.radius*.08f,.2f,2.f);
         const uint32_t color=rgba(245,200,100);
@@ -2504,6 +2777,12 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         o.segment(x0,y0,x1,y0,w,rgba(130,181,255,220));o.segment(x1,y0,x1,y1,w,rgba(130,181,255,220));
         o.segment(x1,y1,x0,y1,w,rgba(130,181,255,220));o.segment(x0,y1,x0,y0,w,rgba(130,181,255,220));
     }
+    if(sparseTerrain&&sparsePrepared&&!cavernsPreview_.isolate())
+        sparseTerrainPreview_.submit(renderer_,pairedRimReady,true);
+    // The exact collar may only draw with its matching surface (or explicit
+    // isolate mode). During a refused/pending pair the host hides old collars.
+    if(pairedRimReady&&(!chartGroup||pairedPlanetReady||cavernsPreview_.rimRejected(chartGroup)))
+        cavernsPreview_.draw(renderer_);
     gfx::PassDesc pass;
     pass.clearColor[0] = 0.038f; pass.clearColor[1] = 0.064f;
     pass.clearColor[2] = 0.098f; pass.clearColor[3] = 1.0f;

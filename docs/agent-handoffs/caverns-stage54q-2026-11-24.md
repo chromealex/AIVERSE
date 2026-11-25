@@ -1,0 +1,17 @@
+# Caverns Stage54q — paired planetary chart preview
+
+Date: 2026-11-24. Branch: `integration/caverns-studio-stage54c-20261124`. Code/test HEAD: `2e70ebfb800ab1c48a31e4d25c044343bab67fab`. Implementation c9e1591b10967ea1c79768a453461c209416ca15; roadmap 4c1d12c5. Main was confirmed zero commits ahead before work; main unchanged.
+
+## Implementation
+- `apps/studio-native/StudioPlanetCavernsRim.h`: convert the certified planetary cut to one chart-local storage patch, refine rim vertices on the existing Q16 chunk lattice, certify exact exterior and rim edges. Not a native PlanetRenderer leaf or Earthworks authority.
+- `StudioCavernsPreview.h`: recompute on immutable document changes (including terrain-only changes), use live visual source revision after undo/redo, request shared existing rim-group owner. Align ordinary chart spacing down to a multiple of 25 cm when >=25 cm at resolution 8. Small/unrepresentable charts refuse exact rim; baseline remains.
+- `engine/world/TerraWeaveCavernsClientVisualHost.h`: retain original explicit chart demand; reject rim slots beyond it; restore chart demand when exact plan clears or fails. Existing rim mode selects only required shaft chunks (unrelated chart interior not retained in paired mode). No new mesh streaming or physics owner.
+- `StudioTerrainGeometry.h`, `StudioScene.h/.cpp`: keep baseline coarse surface, upload separate cut candidate on immutable plan change, retire via existing terrain buffer owner. Same-frame render selection uses shared plan identity, collar readiness and successful surface upload; no draw of unmatched cut. Explicit isolate still hides surface. Existing diagnostic stats count visible paired mouths.
+- `apps/studio-native/tests/StudioTerrainGeometryTests.cpp`: add positive synthetic square-ring grid split (four extra boundary vertices), mesh counts, invalid lattice and damaged boundary refusal; earlier exact source fixture retained.
+- Existing Caverns skill updated. No MapDoc version, ECS simulation, MCP or inspector mutation schema changes.
+
+## Acceptance evidence
+Source committed and inspected, not compiled. Implementation/architecture/dependencies: source only. Native API: existing planner and visual host reused, new helper editor-only. Skill: updated. MCP/inspector/persistence: existing operations unchanged, regression NOT RUN. Studio: code wired, runtime/visual acceptance NOT RUN. Graphs: not applicable. Headless: no authority changes. Example: test fixture source only. Performance/platforms: NOT RUN. Tests: existing Studio test target extended, NOT RUN. Handoff/roadmap: recorded. Publishing: real captures/demo NOT RUN. GitHub workflow lookup at exact test HEAD returned no runs. No native compiler, CTest, frontend build or hardware verification executed. Mandatory Mac KINGSTON merged-tree quick gate outstanding.
+
+## Limitations and next step
+One coarse local chart, exact rim only within bounded interior slot group, no full chart/LOD parity, no full globe selection, no native gameplay loading/physics or gravity navigation. Next: preserve non-rim chart volume under paired mode; implement full chart coverage and camera-driven LOD with bounded work, keeping exact rim slots pinned and coherent. Add real native fixture for accepted/refused cuts and live paired upload/retirement. Then multi-region, globe picking, game authority loading and PHYSIS-aware navigation. Do not merge to main or claim feature complete.

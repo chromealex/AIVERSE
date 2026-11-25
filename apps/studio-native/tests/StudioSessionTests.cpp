@@ -70,7 +70,11 @@ void caveGraphCaptureWorkflow() {
         const auto undo=session.workspace().map.undoDepth();const auto dirty=session.workspace().map.dirty;
         bool registered=false;
         for(const auto& op:session.workspace().ops())registered|=op.name=="terraweave_caverns_paint"&&!op.guiOnly;
-        const auto r=call("studio.cavernsGraphInspect",original);
+        Json reordered=Json::object();
+        for(const auto* key:{"revision","epoch","mapPath","projectPath"})
+            reordered.set(key,original["scope"][key]);
+        Json wireParams=Json::object();wireParams.set("scope",reordered);
+        const auto r=call("studio.cavernsGraphInspect",wireParams);
         AIVERSE_TEST_CHECK(!r.has("error"));
         AIVERSE_TEST_CHECK(r["result"].getStr("status")==(registered?"ready":"unavailable"));
         if(registered){
@@ -386,6 +390,9 @@ void authoredEntityWorkflow() {
        const std::string type0=doc.data.entities[0].type;
        const size_t count=doc.data.entities.size(),depth=doc.undoDepth();
        const std::string body=std::string(R"({"entities":[{"index":0,"type":")")+type0+R"(","x":7.5,"z":9.25},{"index":999,"type":"__nope__","x":1,"z":1},{"index":0,"removed":false}]})";
+       auto dry=Json::parse(body);dry.set("dryRun",Json::fromBool(true));
+       const auto preview=call("studio.keepPlayChanges",dry.dump().c_str());
+       AIVERSE_TEST_CHECK(!preview.has("error") && preview["result"]["moved"].integer()==1 && doc.undoDepth()==depth);
        const auto kept=call("studio.keepPlayChanges",body.c_str());
        AIVERSE_TEST_CHECK(!kept.has("error") && kept["result"]["moved"].integer()==1 && kept["result"]["skipped"].integer()==1 && kept["result"]["removed"].integer()==0);
        AIVERSE_TEST_CHECK(doc.data.entities[0].x==7.5f && doc.data.entities[0].z==9.25f && doc.data.entities.size()==count && doc.undoDepth()==depth+1);
@@ -566,6 +573,9 @@ void entityWorkflow() {
         const auto plan=studio::studioGameLaunch(session.workspace(),true);
         AIVERSE_TEST_CHECK(plan.map && *plan.map==0);
         AIVERSE_TEST_CHECK(plan.project==session.workspace().project.dir);
+        AIVERSE_TEST_CHECK(studio::studioPlaySourceMatches(plan,session.workspace()));
+        auto stalePlan=plan;++stalePlan.sourceRevision;
+        AIVERSE_TEST_CHECK(!studio::studioPlaySourceMatches(stalePlan,session.workspace()));
         AIVERSE_TEST_CHECK(!studio::studioGameLaunch(session.workspace(),false).map);
         const auto catalog=call("studio.entityCatalog");
         AIVERSE_TEST_CHECK(catalog["result"].getBool("mapEntities"));
@@ -687,6 +697,7 @@ int main() {
     AIVERSE_TEST_CHECK(call(R"({"id":21,"method":"studio.materials","params":{}})").has("error"));
     AIVERSE_TEST_CHECK(call(R"({"id":22,"method":"studio.materialPatch","params":{"name":"steel","patch":{"metallic":0.5}}})").has("error"));
     AIVERSE_TEST_CHECK(call(R"({"id":23,"method":"studio.materialCreate","params":{"name":"new_material","preset":"metal"}})").has("error"));
+    AIVERSE_TEST_CHECK(call(R"({"id":51,"method":"studio.buildingPublishMaterial","params":{"style":"scifi","slot":"hull","name":"test"}})").has("error"));
     AIVERSE_TEST_CHECK(call(R"({"id":24,"method":"studio.materialPreview","params":{"name":"steel"}})").has("error"));
     AIVERSE_TEST_CHECK(call(R"({"id":25,"method":"studio.shaderGraphs","params":{}})").has("error"));
     AIVERSE_TEST_CHECK(call(R"({"id":26,"method":"studio.shaderGraphGet","params":{"name":"../escape"}})").has("error"));

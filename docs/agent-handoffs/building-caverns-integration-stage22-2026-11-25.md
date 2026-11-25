@@ -1,0 +1,10 @@
+# Native authoring and Studio acceptance after the factory correction
+
+Integration source commit `7a6869ece` records the stage reports and updates the manifests. Runtime code is identical to squash candidate `fb77c8bf1cbca8e38d25e0bea1947fd062603987`. The Studio acceptance runner tested `1894e6dd8`; the report-only source commit `b954cd47a` was used to record the subsequent checks. Exact commands, exit status, SHA and log hashes are in `docs/evidence/*-b954cd47a.json`.
+
+- The native Building runner exited 0, with 9/9 CTests including the four-yaw compact factory regression, WKWebView application build, web tests and all 55 Studio Python tests with the Vite dist present. Full logs on KINGSTON are in `building-caverns-gate-build/stage37-studio/reports/20261124T223017Z-44721`.
+- Every setting-specific GLB passed texture buffer, PNG and PBR channel validation: 12 meshes, 912 embedded PNGs, 228 materials. The separate sized model export passed 20/20.
+- A standalone native Simulation, real Building module, StudioSession and aiversemcp returned navigation telemetry for two live scenes and a negative response for an unknown scene.
+- On a temporary copy of the projectiles example, real MCP calls applied Caverns carve/fill stamps, exercised undo/redo, saved, and reopened the map in a fresh server. The complete snapshot and IDs matched.
+- The native Feature Gate generated a fresh report, finished its job, returned the correct source SHA and paginated feature results. The stdio budget planner, registry (368 tools), graph transactions, simulation profile and runtime vitals checks passed.
+- Strict audit against `69a1189c4` still exits 1 (296 diagnostics across the ten manifests, including mirrored checks). Of 180 declared criteria, 143 remain not_run, 26 pass and 11 are not applicable. These are manifest criteria, not 143 failed executable tests. Platform, live authoring, performance and publishing coverage remain outstanding. The four source PRs are represented by integration draft PR #190. The full Mac quick run is still pending.

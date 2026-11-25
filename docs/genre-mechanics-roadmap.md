@@ -69,6 +69,137 @@ Do not extend this roadmap into engine code until the requested batch is selecte
 3. Narrative/cinematic and physical interaction: supports story games and immersive puzzles.
 4. Vehicles/sports, cards/turns, production/survival and puzzle solvers as focused batches with real examples.
 
+## Active world feature: Caverns Stage54p (2026-11-24)
+
+IN PROGRESS — planetary chart cut/collar preflight on the existing Caverns owner. Use the exact authored coarse body triangles, preserve the solid preview until the matching volume is published, and report rejected cuts. Acceptance: unchanged MapDoc schema, shared cut planner, bounded inputs, no extra gameplay/renderer authority, revision-aware diagnostics, targeted regression tests and a separate handoff. GPU paired publication, full chart LOD, globe picking and game authority loading remain separate follow-up work. Native/Mac and frontend validation pending.
+
+### Stage54q — IN PROGRESS
+
+Connect the certified coarse chart cut to the existing exact collar owner and stage the replacement surface in Studio. Acceptance: a single immutable refined chart plan, Q16 grid and exterior boundary certificate, bounded demand restored on refusal, revision-safe same-frame draw selection, original solid surface on failure, no new physics or gameplay owner. Register regression source in the existing Studio test target. Native GPU/CPU and frontend acceptance remains pending.
+
+### Stage54r — IN PROGRESS
+
+Full bounded local chart volume, preserving non-rim slots during paired preview. Acceptance: chart-covering <=64 slot lattice with bounded presentation field, camera-distance per-slot LOD with hysteresis, exact rim slots forced to finest LOD, complete same-revision chart batch and conservative finest-lattice fallback on incompatible contours. No new authority, no gameplay field change; regression source and handoff required. Native/hardware acceptance pending.
+
+### Stage54s — IN PROGRESS
+
+Versioned multi-region planetary MapDoc, stable region IDs and explicit v1 migration, non-overlap across cube faces, region-scoped edit/readback and Studio selection with a single active chart owner (shared 64-slot preview budget). Acceptance: independent volumes and revisions, no stale cross-region brush writes, lossless save/undo and invalid edit refusal. Simultaneous same-body native cut publication is a separate runtime stage; do not imply it is supported. Native and frontend validation pending.
+
+### Stage54t — IN PROGRESS
+
+Native Studio single-body globe overview using bounded authored coarse surface triangles and the existing camera/Renderer3D. Acceptance: rotate/zoom, nearest hit against the exact displayed overview triangles, canonical cube-sphere anchor conversion, region selection and creation through existing validated Workspace operations, revision/project/map fences and local brush disabled in globe coordinates. Overview may downsample high-resolution bodies; full native CDLOD and runtime physics are separate. Register regression source and handoff; hardware/frontend QA pending.
+
+### Stage54u1 — IN PROGRESS
+
+Load v1/v2 planetary regions into one persistent ECS region-set resource using the actual immutable gameplay Surface. Share existing stamp transaction logic, validate stable IDs/anchors and conservative same-body separation, retain independent revisions, expose native freeze/edit API, and load from the standard planetary GameCore setup. Acceptance: bounded canonical archive and staged save validator, no editor/GPU dependency, no competing flat authority, deterministic state/hash/rollback via PersistentEcs. Physical publication and aggregate renderer leaf ownership are subsequent 54u slices, not asserted by loading alone. Native QA pending.
+
+### Stage54u2 — IN PROGRESS
+
+One complete body-level cut transaction over disjoint chart leaf sets. Acceptance: stable region-qualified slots, common surface epoch/revision, exact combined exterior/rim certificate, aggregate surface/volume/triangle budgets, current-epoch fencing, shared native owner and a single existing renderer publication. Preserve legacy single-chart API, reject conflicting leaf ownership and collider ranges before installation. Automatic GameCore physics/streaming demand remains later work. Native QA pending.
+
+### Stage54u3 — IN PROGRESS
+
+Native planet leaf baseline collision ownership in existing Box3D and SpatialWorld, exact renderer-captured original triangles, disjoint host-reserved ID namespace and explicit exclusion proof. Publish baseline before accepting cut; retire baseline exactly once on native cut commit, restore before reopening readers on close, quarantine irreversible failures. Standard spherical GameCore has grid movement rather than an existing Box3D planetary owner, so automatic actor locomotion and runtime demand remain separate integration work. Register real scene regression; native QA pending.
+
+### Stage54u4a — IN PROGRESS
+
+Deterministic body-local observer demand with hysteresis and pins, global bounded region/slot budget; immutable ECS snapshots and rollback-safe candidate identity; reuse existing stream worker tickets and exact native collar helpers to prepare a full body candidate. No clipped preview fields in gameplay; refuse incomplete exterior/shaft geometry. Host collision binding activation and safe baseline coverage transfer remain 54u4b. Native QA pending.
+
+### Stage54u4b — IN PROGRESS
+
+Genre-independent native host frame coordinator for planetary demand, shared builder and collision binding, exact source/epoch checks, explicit nav/GI hooks and actual host exclusion. Preserve old coherent cohort during rebuild; close/restore and release only under host proof of no occupied volume and safe baseline coverage. Bound pending jobs and resident cohorts; fail closed on pin/budget conflicts. Native API and example/test source, no automatic legacy motor conversion; no claim of tested traversal until native QA.
+
+### Stage54v1 — IN PROGRESS
+
+Use PHYSIS gravityAt as the sole field policy; expose exact local tangent motion frame and native residency admission; extend the existing Box3D character solver with a gravity-oriented query basis, preserving flat defaults and proxy orientation, and adapt existing Fixed locomotion policy without new position writers. Zero gravity rejects grounded motor and routes to existing host free-flight policy. Regression source for tilted/ceiling support, jump and PHYSIS radial fields; native QA pending. No default legacy host migration.
+
+### Stage54v2a — IN PROGRESS
+
+Bind immutable planetary navigation sources to the actual complete volume cohort and current native publication, not the chart extent alone. Share existing SDF provider and solver APIs; sample NEREID in simulation-anchor coordinates and require explicit PHYSIS cell mapping for planetary environment costs. Preserve conservative chart-Y support until oriented clearance and solver acceptance are implemented. Acceptance: region/native/source/environment epoch fences, bounded coverage, rejection outside actual lattice, no live ECS capture by worker callbacks, flat compatibility and registered regression source. Native QA pending.
+
+### Stage54v2b — IN PROGRESS
+
+Extend the shared SDF provider with deterministic gravity-oriented ground clearance, support, swept residency and step checks; preserve flat defaults and use existing graph algorithms. Restrict existing chart-Y NavMesh to compatible samples and validate all native/resident route segments, including projections. Fence native mesh caches by immutable provider identity across regions. Add registered fixtures for floor/wall/ceiling/zero gravity and invalid routes. Native QA pending; no arbitrary-gravity 2.5D mesh or host migration claimed.
+
+### Stage54v2c1 — IN PROGRESS
+
+Extend shared motor-neutral ECS navigation to resolve a scoped immutable provider per entity and persist stable region ID separately, preserving flat schemas. Search and steering use matching scope and canonical SDF/environment epochs; native residency remains a separate host admission fence, never a process-local lockstep epoch. Provide deterministic planetary region source capture and chart position/goal adapters. Test source for same-revision region separation and shared graph solvers. Native host commit/GI integration and QA remain follow-up.
+
+### Stage54v2c2 — IN PROGRESS
+
+Optional native committed navigation lease set owned by each existing planetary body cohort; stage complete region set from frozen authoritative environment before native commit, expose only after all-owner success, abort/retire/rollback revoke stale access. Environment-only refresh atomically replaces leases without rebuilding collision, with explicit canonical environment epoch and immutable mappings. Existing host GI hooks remain mandatory. Add native motor admission adapter and fixture source; keep persistent lockstep paths separate. Native QA pending.
+
+### Stage54v2c3a — IN PROGRESS
+
+Derive canonical navigation environment revisions from actual frozen PHYSIS gravity/traction and NEREID water/flood/sphere state, with persistent deterministic monotonic change tracking, explicit policy version and simulation wave time. Use the actual PHYSIS grid projection and existing NEREID sphere sampling. Register a shared fixed-tick capture before scoped repath/steering and reuse unchanged providers. Native input callback reads the same committed environment state. Acceptance: static state does not churn revisions; relevant changes/restore invalidate; no native epoch in lockstep, no second environment or motor owner. Real host/native QA remains pending.
+
+### Stage54v2c3b — IN PROGRESS
+
+Native Box3D host adapter consumes only admitted region-scoped steering against the current canonical environment lease, reuses existing oriented character motor and proxy, and leaves the single scene step to the host. Add a fixed-tick native Simulation fixture for canonical capture, scoped route, environment change, persistence and rollback, with actual PHYSIS/NEREID owner schemas. Default GameCore migration and full native GPU/GI transaction QA remain separate.
+
+### Stage55a — IN PROGRESS
+
+Restore CTest coverage of the existing Caverns fixtures, explicitly enable optional Box3D in the acceptance build, and run the existing unified runner plus native Studio/MCP and frontend checks. Record exact commit, configuration, inventory and logs. CPU/contract tests do not certify live GPU/GI publication or playable traversal; those need separate native evidence. Mac local outputs remain on KINGSTON. No merge until acceptance.
+
+### Stage56a — IN PROGRESS
+
+Connect planetary native cohort publication to the actual shared GiGeometryScene and existing CPU/GPU GI target. Stage an isolated copy of the shared scene; require host-reserved volume IDs, exact existing baseline leaf IDs and one GI-space projection; validate baseline triangle identity, replace rather than overlay, restore original materials/triangles on retire, fence stale snapshots and refuse unowned collisions. Publish only in the existing exclusive native barrier. Prepare retirement before irreversible native teardown. Managed ECS navigation leases remain owned by the runtime; actual host wiring, moving-body/rebase lifecycle and live GPU QA remain later stages. No new authored schema.
+
+### Stage56b — IN PROGRESS
+
+Compose the existing planetary runtime, canonical ECS environment and GI publication into one optional native host lifecycle. Bind actual existing Scene, SpatialWorld, GameView, GI scene and CPU/GPU target, retain explicit external owner proofs, and install restore notification without storing native handles in ECS. Gate frame publication on target readiness, refresh native environment leases at the actual motor boundary, and suppress stale GI after restore or irreversible failures. No automatic creation of a second Scene or migration of grid-based GameCore. Native game-specific host adoption and actual baseline GI source ownership remain required.
+
+### Stage56c — IN PROGRESS (GI coordinate transaction)
+
+Retain exact body-space triangle/material sources for leased cut, volume and original leaves. Reproject active GI cohorts atomically with the existing scene/target at the exclusive frame barrier, including host-supplied nonleased chunk coordinate mapping. Force full GI invalidation; refuse stale scene, invalid projection and unavailable fences without advancing the projection. Preserve collision/navigation native revision and ECS state. Host must supply frozen transforms and coordinate nongeometry GI inputs before presentation. Source regression: target refusal, moved cut, restored moved baseline and unrelated chunk mapping. Default native host adoption and real GPU/Mac acceptance remain separate.
+
+### Stage56d — IN PROGRESS (native baseline source and frame adapter)
+
+Connect the actual PlanetRenderer leaf capture to the existing native GI scene before cave publication. Opt-in host proofs reserve exact disjoint leaf IDs and material source; never overwrite external geometry or fabricate ownership. Baseline target refusal remains retryable before native commit. Capture the existing SphereViewFrame and PlanetWorld body centers by value for GI projection, provide old/new frame mapping for other registered producers. Keep native simulation anchors unchanged. Default client has no authoritative native planetary physics owner; no automatic adoption or live acceptance claimed.
+
+### Stage56e — IN PROGRESS (native volumetric locomotion)
+
+Expose an oriented 3D velocity sweep through the existing Box3D character query/plane solver, without ground snap or duplicate gravity. Admit swimming and flying route intents only against the current committed region/environment lease; sweep the same existing proxy, validate SDF segment and commit once. Swimming uses existing fixed LocomotionModes policy and actual NEREID immersion in the PHYSIS frame. Flight accepts the existing host motor's proposed velocity under route speed limits; zero gravity uses the chart frame. No extra simulation tick, second position owner or new schema. Surface transitions and default playable host integration remain separate.
+
+### Stage57a — IN PROGRESS (portal and traversal handoff)
+
+Add opt-in persisted cave occupancy and pending mouth transition distinct from route intent. Pin occupied and requested charts independent of route arrival/cancel, validate the actually committed cut rim and current native/environment lease at transition, require the existing collision owner's swept-crossing/exterior-coverage proof and authoritative position readback, then switch route scope without writing positions. Support in-chart traversal change through the existing provider and route assignment; retain pins on refusal or interrupted transition. No second motor, no native revision in persistence. Native host consumes automatic pins. Actual exterior motor integration, live traversals and acceptance remain pending.
+
+### Stage57b — IN PROGRESS (multi-tick native crossing)
+
+Extend optional persisted travel state with a crossing/clearance phase and monotonic movement receipt tick. Derive approach and clearance guidance from the exact committed rim; require the existing motor's real swept segment, exterior/cave coverage and whole-capsule side classification each tick. Keep the pending region pinned until destination-side clearance and legal interior landing; do not change the route or position during approach or partial crossing. Handle return through the rim and safe cancellation, revalidate current SDF after restore; no process-local native epochs in saved data. Explicit schema v2, no old-save compatibility claim. Native host example and source regressions; live acceptance later.
+
+### Stage57c — IN PROGRESS (staged native crossing and feasible mode selection)
+
+Select supported traversal from the current committed provider, PHYSIS support, NEREID immersion and explicit project capabilities; preserve swimming hysteresis and do not grant flight. Stage the existing oriented character/velocity sweep before publishing proxy or receipt, require genuine host exterior/cave coverage for the swept envelope, classify actual capsule clearance and commit only after admission. Quarantine if an irreversible native/ECS publication fails. No extra Scene step or new saved state. Native project adoption and live QA remain separate.
+
+### Stage58a — IN PROGRESS (single native motor dispatch)
+
+Bind existing Simulation and Box3D Scene identities to native host dispatch. Once per actual physics tick/entity/proxy, select exterior, crossing or occupied interior; use committed environment/navigation leases, optional capability-based mode change and canonical repath, existing motor/velocity policy, and exactly one host position publication. Duplicate attempts, wrong owners and stale restoration reject; irreversible failures quarantine. Integrate dispatch in the native example with no additional ECS motor or physics step. Actual runnable planet host with exterior coverage and GI target remains a subsequent bounded stage; no live QA claim.
+
+### Stage58b — IN PROGRESS (exterior collision leaf ownership)
+
+Reuse the existing baseline collision stage for exact PlanetRenderer leaves in the same Box3D/SpatialWorld and reserved ID pool. Transfer live solid leaf entries (not rebuilt colliders) between exterior registry and cave cohort at the exclusive owner barrier; transfer restored baseline back on retirement. Validate source geometry, revision, disjoint leaf/cell ownership and shared scene identity; refuse absent coverage and keep loaned IDs until return. Expose bounded leaf residency and real owner checks for project coverage policy. No independent simulation, no automatic global collision coverage claim. Native example and regression sources; runnable world and acceptance remain next.
+
+### Stage58c — IN PROGRESS (runnable native chamber example)
+
+Add opt-in desktop executable using actual shared Surface, PlanetRenderer/GameView, Simulation/PHYSIS/NEREID schemas, Box3D, SpatialWorld, exterior baseline registry, GiGeometryScene and CPU GI bridge. Bounded authored chamber and scripted native flight route; real resident leaf/volume IDs and no duplicate motor or Scene step. Fixed render frame to avoid continuous GI resets in this first example; draw through existing cave callback. Fail closed on owner refusal/recovery, explicit shutdown. Source-only until built/run; open-mouth traversal, moving frame, swim, restore and full coverage selection remain Stage58d and acceptance.
+
+### Stage58d1 — IN PROGRESS (native portal and swim scenarios)
+
+Extend opt-in planet demo with explicit shaft entry, canonical interior route and exit, and separate submerged chamber traversal using existing NEREID and locomotion. Keep one native dispatcher, persistent scenario phase and motion state, actual accepted rim and live coverage checks. Conservative swept-envelope proof restricted to known local patch and chart bounds. No simulated success or teleport at crossings; source only until real acceptance. Moving frame and native restore follow.
+
+### Stage58d2 — IN PROGRESS (orbital presentation and floating-origin scenario)
+
+Add opt-in moving planet demo with real Surface parent/orbit, one frozen LENS render/GI frame per publication, discrete rebases under actual native exclusion, coherent lights and focus. Remap unleased baseline vertices directly from canonical fixed body positions, rejecting ambiguous/missing identity instead of accumulating drift. Preserve ECS checksum, native physics tick and SpatialWorld mutation across presentation changes. Bounded CPU GI lattice and full invalidation per rebase; no claim of continuous scrolling or live acceptance. Restore scenario follows.
+
+### Stage58d3 — IN PROGRESS (synchronized native checkpoint)
+
+Bounded native demo checkpoint joins Simulation serialization with exact airborne controller state, real proxy orientation and entity/tick/checksum identity; no saved native handles. Restore only outside readers and after actual physics step; validate payload, restore ECS and reapply one kinematic proxy, invalidate native generations/steering, block admission until owner proof and rebuilt coverage. Add scripted save/advance/restore smoke including pending portal receipt and swimmer state. Restore render frame from saved simulation tick via exact GI reprojection. Dynamic body/ground support restoration is outside this bounded example; no live acceptance until built/run.
+
+### Stage59a — IN PROGRESS (native acceptance wiring)
+
+Register optional desktop native demo smoke tests in CTest; exercise chamber, portal, swim, orbit and restore, require explicit scenario and teardown markers and a nonzero failure for premature exit. Enable the demo and smoke matrix in existing Caverns CI with software GL/Xvfb; keep native and Studio artifacts. Add KINGSTON-only Mac launcher and source fixes identified during review. No success until actual CI/merged-tree Mac evidence; main untouched.
 Resource HUD (#131), in progress: allow a project to set each resource label format.
 
 Selection outlines (#174), in progress: let projects disable selection and hover silhouettes independently of authored overlays.

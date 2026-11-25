@@ -1624,7 +1624,7 @@ public:
         auto nativeColor = [&](PixelFormat format) {
             return format == PixelFormat::RGBA16F ? MTLPixelFormatRGBA16Float :
                    format == PixelFormat::RGBA8_sRGB ? MTLPixelFormatBGRA8Unorm_sRGB :
-                   layer_.pixelFormat;
+                   MTLPixelFormatBGRA8Unorm;
         };
         const int slots = d.depthOnly ? 0 : d.colorAttachmentCount;
         for (int colorSlot = 0; colorSlot < slots; ++colorSlot) {

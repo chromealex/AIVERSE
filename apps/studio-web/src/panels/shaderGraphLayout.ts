@@ -97,10 +97,15 @@ export function disconnectShaderInput(source:GraphSource,to:string,index:number)
  const inputs=node.inputs.slice();inputs[index]='';
  return {...source,nodes:source.nodes!.map(n=>n.id===to?{...n,inputs}:n)};
 }
+export function shaderValueComponents(value:GraphNode['value']):number[] {
+ if(typeof value==='number')return [value,value,value,value];
+ return value??[];
+}
 export function setShaderValue(source:GraphSource,id:string,value:readonly number[]):GraphSource {
  const node=source.nodes?.find(n=>n.id===id);
  if(!node||!['constant','parameter'].includes(node.op)||value.length!==4||!value.every(Number.isFinite))return source;
- if(Array.isArray(node.value)&&node.value.length===4&&node.value.every((v,i)=>v===value[i]))return source;
+ const previous=shaderValueComponents(node.value);
+ if(previous.length===4&&previous.every((v,i)=>v===value[i]))return source;
  return {...source,nodes:source.nodes!.map(n=>n.id===id?{...n,value:[...value]}:n)};
 }
 export function duplicateShaderNode(source:GraphSource,id:string):GraphSource {

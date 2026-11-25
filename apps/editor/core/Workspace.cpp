@@ -1,5 +1,6 @@
 #include "ModelingOps.h"
 #include "Workspace.h"
+#include <aiverselib/runtime/WorkBudget.h>
 #include "ShaderGraphOps.h"
 #include "GraphOps.h"
 #include "FeatureGateOps.h"
@@ -512,6 +513,7 @@ bool Workspace::openGame(const std::string& idOrDir, std::string* err) {
     std::error_code ec;
     dir = fs::weakly_canonical(dir, ec).string();
     if (!project.load(dir, err)) return false;
+    buildingGraphDiagnosticsProvider={}; // never expose the previous project's runtime
     {   // recent projects (shared with aiversemcp); the engine's own templates aren't user projects
         const std::string tpl = fs::weakly_canonical(fs::path(gamesDir()), ec).string();
         const bool isTemplate = dir.rfind(tpl, 0) == 0;
@@ -560,6 +562,29 @@ void Workspace::registerCoreOps() {
             result.set("note", str("Registration only. Verify tools/call against the built MCP executable and active editor; compile-time capabilities and runtime dependencies may differ."));
             return result;
         });
+    add("building_graph_diagnostics", "Read actual building graph invalidation ACK state from an attached runtime owner. Returns unavailable without a provider; ACK does not mean completed graph rebuild.",
+        R"({"type":"object","properties":{"sceneId":{"type":"string","pattern":"^[1-9][0-9]{0,18}$"}},"required":["sceneId"],"additionalProperties":false})",
+        [this](const Json& p){
+            const auto raw=p.getStr("sceneId");
+            if(raw.empty()||raw.size()>19||raw[0]=='0')throw std::runtime_error("Invalid building scene ID");
+            uint64_t id=0;
+            for(char c:raw){
+                if(c<'0'||c>'9'||id>(uint64_t(INT64_MAX)-uint64_t(c-'0'))/10)
+                    throw std::runtime_error("Invalid building scene ID");
+                id=id*10+uint64_t(c-'0');
+            }
+            Json out=Json::object();
+            if(!buildingGraphDiagnosticsProvider){
+                out.set("available",Json::fromBool(false));
+                out.set("reason",str("No runtime building diagnostics provider attached"));
+                return out;
+            }
+            const auto snapshot=buildingGraphDiagnosticsProvider(id);
+            out.set("available",Json::fromBool(snapshot.isObject()));
+            if(snapshot.isObject())out.set("snapshot",snapshot);
+            else out.set("reason",str("Building scene diagnostics unavailable"));
+            return out;
+        });
     add("feature_readiness_get", "Read an existing engine readiness report snapshot; not live verification.",
         R"({"type":"object","additionalProperties":false})",
         [this](const Json&) { return featureReadinessSnapshot(*this); });
@@ -603,6 +628,26 @@ void Workspace::registerCoreOps() {
             Json out=Json::object();
             out.set("queued",Json::fromBool(true));
             out.set("runCount",num(int64_t(count)));
+            return out;
+        });
+    add("simulation_budget_plan", "Calculate deterministic recurring decision visits per tick and maximum revisit latency. Pure planning only; does not change rules or live simulation.",
+        R"({"type":"object","properties":{"count":{"type":"integer","minimum":0,"maximum":2000000000},"periodTicks":{"type":"integer","minimum":1,"maximum":36000},"maxVisitsPerTick":{"type":"integer","minimum":0,"maximum":2000000000}},"required":["count","periodTicks"],"additionalProperties":false})",
+        [](const Json& p){
+            auto read=[&](const char* key,uint32_t maximum,uint32_t minimum,bool required){
+                if(!p.has(key)&&!required)return uint32_t(0);
+                const auto& v=p[key];
+                if(!v.isNumber()||v.fx().raw%Fixed::kOne||v.integer()<minimum||uint64_t(v.integer())>maximum)
+                    throw std::runtime_error(std::string("invalid simulation budget field: ")+key);
+                return uint32_t(v.integer());
+            };
+            const auto count=read("count",2000000000,0,true);
+            const auto period=read("periodTicks",36000,1,true);
+            const auto cap=read("maxVisitsPerTick",2000000000,0,false);
+            const auto plan=lib::runtime::planRecurringWork(count,period,cap);
+            Json out=Json::object();
+            out.set("visitsPerTick",Json::number(int64_t(plan.visitsPerTick)));
+            out.set("maxRevisitTicks",Json::number(int64_t(plan.maxRevisitTicks)));
+            out.set("meetsPeriod",Json::fromBool(plan.meetsPeriod));
             return out;
         });
     auto needProject = [this] { if (project.dir.empty()) throw std::runtime_error("no game is open: call open_game first"); };

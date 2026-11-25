@@ -6,6 +6,7 @@ import type {Point,Positioned,Rect} from './graphSelection';
 import type {GraphView} from './graphFramework';
 import {graphGeometry,nodeWidth,samePort} from './graphGeometry';
 import type {PortRef} from './graphGeometry';
+import '../panels/graphSurface.css';
 import './GraphCanvas.css';
 
 export interface GraphCommand {id:string;label:string;shortcut?:string;disabled?:boolean;run:()=>void}
@@ -90,7 +91,7 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
   {commands?.length&&<StudioButton size="sm" aria-expanded={menu} disabled={disabled} onClick={()=>setMenu(v=>!v)}>Actions</StudioButton>}
  </div>
  {menu&&<div className="au-row au-graph-actions" aria-label="Graph actions">{commands?.map(c=><StudioButton key={c.id} size="sm" disabled={disabled||c.disabled} onClick={()=>{setMenu(false);c.run()}}>{c.label}</StudioButton>)}</div>}
- <div className={"au-graph-canvas"+(enhancedNavigation?" au-graph-canvas--grid":"")} ref={scroll}>
+ <div className={"au-graph-canvas graph-surface"+(enhancedNavigation?" au-graph-canvas--grid":"")} ref={scroll}>
   <svg ref={svg} width={maxWidth*zoom} height={maxHeight*zoom} viewBox={`0 0 ${maxWidth} ${maxHeight}`}
    role="group" tabIndex={0} aria-label={label}
    onPointerDown={event=>{
@@ -116,7 +117,7 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
     const d=drag.current;if(d?.pointer===event.pointerId)setPreview(moveGroup(d.nodes,p.x-d.origin.x,p.y-d.origin.y));
    }} onPointerUp={e=>end(e,true)} onPointerCancel={e=>end(e,false)} onLostPointerCapture={e=>end(e,false)}>
    {groups.map(g=>{const members=geometry.nodes.filter(n=>g.members.includes(n.id));if(!members.length)return null;const x=Math.max(0,Math.min(...members.map(n=>n.x))-12),y=Math.max(0,Math.min(...members.map(n=>n.y))-24),w=Math.max(...members.map(n=>n.x+nodeWidth))+12-x,h=Math.max(...members.map(n=>n.y+n.height))+12-y;return <g key={g.id} pointerEvents="none"><rect x={x} y={y} width={w} height={h} rx="8" fill="var(--au-accent)" fillOpacity=".08" stroke="var(--au-accent)" strokeDasharray="5 4"/><text x={x+8} y={y+15} fill="var(--au-text-soft)" fontSize="11">{g.title}</text></g>;})}
-   {geometry.wires.map(edge=><path key={edge.id} opacity={ids.length&&!ids.includes(edge.from)&&!ids.includes(edge.to)?0.3:1} d={curve(edge.x1,edge.y1,edge.x2,edge.y2)} fill="none" stroke="var(--au-accent)" strokeWidth="2" pointerEvents="none"/>)}
+   {geometry.wires.map(edge=><path key={edge.id} className="graph-wire" data-emphasis={ids.length ? (ids.includes(edge.from)||ids.includes(edge.to) ? 'active' : 'quiet') : undefined} d={curve(edge.x1,edge.y1,edge.x2,edge.y2)} fill="none" stroke="var(--au-accent)" strokeWidth="2" pointerEvents="none"/>)}
    {pending&&cursor&&<path d={curve(pending.x,pending.y,cursor.x,cursor.y)} fill="none" stroke="var(--au-accent)" strokeDasharray="4 3" pointerEvents="none"/>}
    {geometry.nodes.map(node=>{
     const height=node.height;
@@ -137,15 +138,24 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
      stroke={ids.includes(node.id)?'var(--au-accent-ink)':'var(--au-accent)'} strokeWidth={highlighted?.includes(node.id)?3:1}/>
     {heat&&Number.isFinite(heat[node.id])&&heat[node.id]>0&&<rect x="1.5" y="1.5" width="127" height={height-3} rx="6" fill="var(--au-accent)" opacity={0.1+0.55*Math.min(1,heat[node.id])} pointerEvents="none"/>}
     {highlighted?.includes(node.id)&&<text x="118" y="15" textAnchor="end" fill="var(--au-text)" fontSize="10">●</text>}
+    {node.values ? <>
+     <title>{[node.label,node.id,...node.values].join(' · ')}</title>
+     <path className="graph-node-accent" data-source={node.values.length>0} d="M 2 10 V 27"/>
+     <svg x="11" width="108" height={height} overflow="hidden">
+      <text className="graph-node-operation" y="22">{node.label}</text>
+      <text className="graph-node-id" y="41">{node.id}</text>
+      {node.values.length>=3&&<rect y="51" width="12" height="12" rx="2"
+       fill={'rgb('+node.values.slice(0,3).map(v=>100*Math.min(1,Math.max(0,v))+'%').join(' ')+')'}><title>RGB components</title></rect>}
+      {node.values.length>0&&<text className="graph-node-value" x={node.values.length>=3?17:0} y="61">
+       {node.values.map(v=>Number(v.toPrecision(3))).join('  ')}
+      </text>}
+     </svg>
+    </> : <>
     <text x="10" y="15" fill="var(--au-text)" fontSize="11">{node.id}</text>
-    {node.thumbnail&&<image href={node.thumbnail} x="35" y={height-86-(node.values?.length?19:0)} width="60" height="60" preserveAspectRatio="xMidYMid meet" style={{imageRendering:"pixelated"}} pointerEvents="none"/>}
-    {node.thumbnail&&<text x="65" y={height-17-(node.values?.length?19:0)} textAnchor="middle" fill="var(--au-text-muted)" fontSize="8">CPU</text>}
-    <text x="10" y={height-(node.values?.length?23:5)} fill="var(--au-text-soft)" fontSize="10">{node.label}</text>
-    {!!node.values?.length&&<g>
-     {node.values.length>=3&&<rect x="10" y={height-15} width="11" height="11" rx="2"
-      fill={'rgb('+node.values.slice(0,3).map(v=>100*Math.min(1,Math.max(0,v))+'%').join(' ')+')'}/>}
-     <text x={node.values.length>=3?26:10} y={height-5} fill="var(--au-text)" fontSize="10">{node.values.map(v=>Number(v.toPrecision(3))).join('  ')}</text>
-    </g>}
+    <text x="10" y={height-5} fill="var(--au-text-soft)" fontSize="10">{node.label}</text>
+    </>}
+    {node.thumbnail&&<image href={node.thumbnail} x="35" y={height-86} width="60" height="60" preserveAspectRatio="xMidYMid meet" style={{imageRendering:"pixelated"}} pointerEvents="none"/>}
+    {node.thumbnail&&<text x="65" y={height-17} textAnchor="middle" fill="var(--au-text-muted)" fontSize="8">CPU</text>}
     {geometry.ports.filter(p=>p.node===node.id).map(p=><g key={p.direction+':'+p.port}>{typedPorts&&<text x={p.direction==='input'?9:nodeWidth-9} y={p.y-node.y+3} textAnchor={p.direction==='input'?'start':'end'} fill={portColor(p.type)} fontSize="9" pointerEvents="none">{p.direction==='input'?p.port+': '+p.type:p.type}</text>}<circle key={p.direction+':'+p.port}
      cx={p.x-node.x} cy={p.y-node.y} r="5" role={p.direction==='output'?(onOutput?'button':undefined):(onInput?'button':undefined)} tabIndex={disabled||readOnly||!(p.direction==='output'?onOutput:onInput)?-1:0}
      aria-label={node.id+' '+p.direction+' '+p.port+' '+p.type}
