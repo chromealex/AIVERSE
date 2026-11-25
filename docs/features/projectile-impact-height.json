@@ -155,5 +155,7 @@
       "studio.rulesSet"
     ]
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/projectile-impact-height-studio.json"
+  ]
 }
