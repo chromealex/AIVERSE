@@ -7,6 +7,7 @@
 #include "apps/editor/AuthoringWater.h"
 #include "StudioHumanCharacterBuild.h"
 #include "StudioSession.h"
+#include "engine/actor/ActorModule.h"
 #include "StudioPlanetForestDocument.h"
 #include "libraries/include/aiverselib/world/WorldProcessesAuthoring.h"
 #include "libraries/include/aiverselib/world/WorldProcessesLinkedAuthoring.h"
@@ -4324,11 +4325,19 @@ Json StudioSession::dispatchImplCore(const Json& request) {
         } else if (method=="studio.rulesDocument" || method=="studio.rulesDocumentSave") {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
             const auto section=params.getStr("section");
-            if(section!="global"&&section!="document") throw std::runtime_error("Unknown rules section");
+            const bool simulation=section=="actorSimulation";
+            if(simulation && !ws_.project.actorSession())throw std::runtime_error("Open an actor project to edit simulation settings.");
+            if(!simulation && section!="global"&&section!="document") throw std::runtime_error("Unknown rules section");
             const auto separate=[](const std::string& key){
                 return key=="types"||key=="resources"||key=="techs"||key=="factions"||key=="triggers";
             };
             const auto readSection=[&](){
+                if(simulation){
+                    const auto config=actor::readConfig(ws_.project.rulesJson);
+                    Json result=Json::object();
+                    result.set("tickRate",num(config.tickRate));result.set("snapshotRate",num(config.snapshotRate));
+                    result.set("maxPlayers",num(config.maxPlayers));return result;
+                }
                 if(section=="document")return ws_.project.rulesJson;
                 Json global=Json::object();
                 for(const auto& [key,value]:ws_.project.rulesJson.members())
@@ -4348,8 +4357,19 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                     for(const auto& [key,value]:ws_.project.rulesJson.members())
                         if(separate(key))candidate.set(key,value);
                 }
-                Json args=Json::object();args.set("path",str(""));args.set("value",std::move(candidate));
-                const auto changed=ws_.call("rules_set",args,"studio");
+                if(simulation){
+                    Json patch=Json::object();
+                    for(const auto& [key,value]:edited.members()){
+                        if(!current.has(key)||!value.isNumber()||value.toDouble()!=value.integer())
+                            throw std::runtime_error("Invalid simulation setting: "+key);
+                        if(value!=current[key])patch.set(key,value);
+                    }
+                    if(patch.has("maxPlayers") && patch.getInt("maxPlayers")<int64_t(ws_.map.data.extra["players"].size()))
+                        throw std::runtime_error("Player limit is below the number of players in the open scene.");
+                    candidate=std::move(patch);
+                }
+                Json args=Json::object();args.set("path",str(simulation?"actor":""));args.set("value",candidate);
+                const auto changed=simulation && !candidate.size()?Json::object():ws_.call(simulation?"rules_merge":"rules_set",args,"studio");
                 if(changed.has("error"))throw std::runtime_error(changed.getStr("error"));
                 current=readSection();
             }

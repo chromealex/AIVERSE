@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import { Camera, Plus, Save, Trash2 } from 'lucide-react';
 import { invoke, onNativeEvent } from '../bridge';
 import SpectraDockViewport from './SpectraDockViewport';
+import { ActorSimulation } from './ActorSimulation';
 import './LensCameraPanel.css';
 
 const optics = [
@@ -42,7 +43,7 @@ interface Document { scene: CameraScene; revision: string; ok: boolean; error?: 
 // and their original revisions so that returning to the tab preserves edits.
 const drafts=new Map<string,{document:Document;scene:CameraScene;selected?:number}>();
 
-export default function LensCameraPanel({project, operations,openScene}:{project:string; operations:ReactNode;openScene:()=>void}) {
+export default function LensCameraPanel({project, operations,openScene,worldSpace}:{worldSpace:boolean;project:string; operations:ReactNode;openScene:()=>void}) {
   const [presets,setPresets]=useState<FollowPreset[]>([]);
   const [presetError,setPresetError]=useState('');
   useEffect(()=>{
@@ -121,8 +122,8 @@ export default function LensCameraPanel({project, operations,openScene}:{project
   const outputField=(patch:CameraRecord['output'])=>update({output:{...camera?.output,...patch}});
   if(!project)return <div className="tool__empty">Open a project to edit cameras.</div>;
   return <div className="lens-page">
-    <nav aria-label="Actors and cameras">{['Cameras','Operations'].map(name=><button key={name} className="au-button au-button--sm" aria-pressed={tab===name} onClick={()=>setTab(name)}>{name}</button>)}</nav>
-    {tab==='Operations'?operations:<>
+    <nav aria-label="Actors and cameras">{(worldSpace?['Cameras','Simulation','Operations']:['Cameras','Operations']).map(name=><button key={name} className="au-button au-button--sm" aria-pressed={tab===name} onClick={()=>setTab(name)}>{name}</button>)}</nav>
+    {tab==='Simulation' && worldSpace?<ActorSimulation key={project} project={project}/>:tab==='Operations'?operations:<>
       <div className="lens-actions"><strong>Project cameras</strong>
         <button className="au-button au-button--sm" disabled={busy||!scene} onClick={()=>void create(false)}><Plus size={14}/>New camera</button>
         <button className="au-button au-button--sm" disabled={busy||!scene} onClick={()=>void create(true)}>New from Scene</button>

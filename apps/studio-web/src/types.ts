@@ -589,8 +589,8 @@ export interface StudioParams {
   'studio.entitiesDuplicate': { entityIds: string[] };
   'studio.entityFlags': { entityIds: string[]; hidden?: boolean; locked?: boolean };
   'studio.assetPlace': { asset: string; x: number; z: number };
-  'studio.rulesDocument': {section:'global'|'document'};
-  'studio.rulesDocumentSave': {section:'global'|'document';projectPath:string;original:string;value:unknown};
+  'studio.rulesDocument': {section:'global'|'document'|'actorSimulation'};
+  'studio.rulesDocumentSave': {section:'global'|'document'|'actorSimulation';projectPath:string;original:string;value:unknown};
   'studio.planetSceneBody': {body?:string;mapPath?:string;expectedRevision?:string};
   'studio.planetForestArm': {armed:boolean;mapPath?:string;expectedRevision?:string;species?:number;key?:number;habit?:'tree'|'shrub';action?:'plant'|'pick'|'move'};
   'studio.planetForestMove': {mapPath:string;expectedRevision:string;species:number;key:number;at:{body:string;face:number;x:number;y:number}};
