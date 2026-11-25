@@ -27,6 +27,7 @@ import ProjectPanel from './generated/ProjectPanel';
 import RuntimePanel from './generated/RuntimePanel';
 import BuildPanel from './BuildPanel';
 import ConsolePanel from './ConsolePanel';
+import StaticGeometryPanel from './StaticGeometryPanel';
 import ToolPanel from './ToolPanel';
 import SpectraDataInterfacesPanel from './SpectraDataInterfacesPanel';
 import SpectraLibraryPanel from './SpectraLibraryPanel';
@@ -168,6 +169,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'human_creator': return <HumanCreatorPanel snapshot={snapshot}/>;
       case 'terraweave_generator': return <TerraweaveGeneratorPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'catalog': return <CatalogPanel snapshot={snapshot}/>;
+      case 'static_geometry': return <StaticGeometryPanel key={snapshot?.project.path} projectPath={snapshot?.project.path ?? ''}/>;
       case 'world_persistence': return <WorldPersistencePanel projectPath={snapshot?.project.path ?? ''}/>;
       // AI_PANEL_CASES: add new panel renderers above this line.
       case 'game': return <GamePanel {...ctx}/>;

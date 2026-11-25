@@ -124,6 +124,26 @@ void registerGeometryOps(Workspace& ws){
     // named by game.json "geometryScene", geometry.json by default):
     // "auto" (the model's automatic choice), "strata" (force STRATA) or "lod"
     // (force the ordinary LOD path). Writes the scene atomically and reloads.
+    ws.registerOp({"geometry_instances_list","List static scene objects and their configured rendering modes.",Json::object(),[&ws](const Json&){
+        const auto relative=ws.project.manifest.getStr("geometryScene","geometry.json");
+        const auto file=projectPath(ws,relative);
+        auto result=ok();
+        result.set("file",Json::string(relative));
+        Json rows=Json::array();
+        if(fs::exists(file)){
+            const Json scene=Json::parseFile(file.string());
+            for(const auto& instance:scene["instances"].items()){
+                Json row=Json::object();
+                row.set("id",instance["id"]);
+                row.set("model",instance["model"]);
+                const auto& strata=instance["strata"];
+                row.set("mode",Json::string(strata.type()!=Json::Type::Bool?"auto":strata.boolean()?"strata":"lod"));
+                rows.push(std::move(row));
+            }
+        }
+        result.set("instances",std::move(rows));
+        return result;
+    }});
     Json strataSchema=Json::parse(R"({"type":"object","properties":{"id":{"type":"string","description":"instance id"},"mode":{"type":"string","enum":["auto","strata","lod"]}},"required":["id","mode"]})");
     ws.registerOp({"geometry_strata_set","Force STRATA, force the LOD path or return to auto for one object (instance id) of the static geometry scene.",strataSchema,[&ws](const Json& p){
         const std::string rel=ws.project.manifest.getStr("geometryScene","geometry.json");

@@ -103,6 +103,18 @@ TEST(geometry_mcp_analyze_apply_scene_roundtrip) {
     const auto got=ws.call("geometry_scene_get",Json::object());CHECK(got["scene"]["instances"].size()==1);
     const auto invalid=ws.call("geometry_scene_set",Json::parse(R"({"scene":{"version":1,"instances":[{"id":"a","model":"missing.obj"}]}})"));
     CHECK(invalid.has("error"));CHECK(ws.call("geometry_scene_get",Json::object())["scene"]==got["scene"]);
+    fs::rename(root/"game"/"geometry.json",root/"game"/"scenery.json");
+    ws.project.manifest.set("geometryScene",Json::string("scenery.json"));
+    for(const std::string mode:{"lod","strata","auto"}){
+        Json params=Json::object();
+        params.set("id",Json::string("a"));
+        params.set("mode",Json::string(mode));
+        CHECK(!ws.call("geometry_strata_set",params).has("error"));
+        const Json listed=ws.call("geometry_instances_list",Json::object());
+        CHECK(listed.getStr("file")=="scenery.json");
+        CHECK(listed["instances"][0].getStr("mode")==mode);
+        CHECK(listed["instances"][0].getStr("model")=="box.obj");
+    }
     fs::remove_all(root);
 }
 #endif

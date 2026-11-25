@@ -1,0 +1,4 @@
+.static-geometry{overflow:auto;height:100%;padding:10px;box-sizing:border-box}
+.static-geometry header,.static-geometry label{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:8px 0;border-bottom:1px solid var(--studio-border)}
+.static-geometry span,.static-geometry strong{min-width:0;overflow-wrap:anywhere}
+.static-geometry small{display:block;opacity:.75;margin-top:3px}
