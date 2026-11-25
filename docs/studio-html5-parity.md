@@ -143,7 +143,7 @@ Derived from actual AIVERSE_EDITOR_WINDOW registrations in apps/editor/windows. 
 | `animation_rig` | `apps/editor/windows/AnimationRigWindow.cpp` | Ordered rig units with native presets, nested parameter editing, contact setup, graph validation and save. Workspace operations available. Add and remove effectors, joints, legs, feet, capsules, balance masses and obstacles. Interactive skeleton preview remains open. |
 | `assets` | `apps/editor/windows/AssetsWindow.cpp` | Partial: GUID catalog/import/moves/conflict handling/import settings merged and native-tested (78–79); visual and full legacy parity pending |
 | `animation_attachments` | `apps/editor/windows/AttachmentAuthoringWindow.cpp` | Attachments edits both transforms and previews the parent, socket and static or MotionWeave child on its own native surface. Mac docked layouts and failed reimport verified. |
-| `branding` | `apps/editor/windows/BrandingWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) |
+| `branding` | `apps/editor/windows/BrandingWindow.cpp` | Dedicated icon editor and native per-platform variants. Detached macOS window saved an adaptive foreground. Splash editing uses the operation form; timed playback pending. |
 | `build` | `apps/editor/windows/BuildWindow.cpp` | Build panel: toolchain, estimate, build, log (103) |
 | `console` | `apps/editor/windows/ConsoleWindow.cpp` | Mac activity and build output verified. Windows verification pending |
 | `fields` | `apps/editor/windows/FieldsWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) + Scene field brush (111) |
