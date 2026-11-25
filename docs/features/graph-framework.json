@@ -154,11 +154,14 @@
       "evidence": []
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending implementation or actual verification. Previous Feature Gate branch evidence: Registered workflow skill exists; Mac QA v7 skill_catalog, skill_routing and skill_audit PASS. Documentation and catalog unchanged by main sync. This does not prove every runtime operation.",
+      "status": "pass",
+      "note": "The registered aiverse-graph-authoring recipe describes the native editing, persistence and diagnostics workflows. On 460ce965c the catalog and strict skill audit both passed.",
       "evidence": [
         "skills/workflow/aiverse-graph-authoring/SKILL.md",
-        "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md"
+        "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md",
+        "docs/evidence/feature-gate-460ce965c-catalog.log.txt",
+        "docs/evidence/feature-gate-460ce965c-skill-audit.log.txt",
+        "skills/workflow/aiverse-graph-authoring/SKILL.md"
       ]
     },
     "mcp": {
@@ -168,9 +171,12 @@
     },
     "studio": {
       "status": "not_run",
-      "note": "Pending implementation or actual verification. Native Studio on Mac generated a building GLB and displayed its independent preview and authored room graph. The Caverns inspector was verified after a document identity fix.",
+      "note": "Pending implementation or actual verification. Native Studio on Mac generated a building GLB and displayed its independent preview and authored room graph. The Caverns inspector was verified after a document identity fix. At 460ce965c the Studio TypeScript check, 256 web cases and 55 Python contract cases (one skipped) passed. Live native acceptance is tracked separately.",
       "evidence": [
-        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md",
+        "docs/evidence/feature-gate-460ce965c-typecheck.log.txt",
+        "docs/evidence/feature-gate-460ce965c-web.log.txt",
+        "docs/evidence/feature-gate-460ce965c-studio-contracts.log.txt"
       ]
     },
     "inspector": {
@@ -346,6 +352,11 @@
   },
   "test_reports": [
     "docs/evidence/integrated-graph-2a56cbf39.json",
-    "docs/evidence/spectrafx-gcc-checkpoint-b730fc08d.json"
+    "docs/evidence/spectrafx-gcc-checkpoint-b730fc08d.json",
+    "docs/evidence/feature-gate-460ce965c-typecheck.json",
+    "docs/evidence/feature-gate-460ce965c-web.json",
+    "docs/evidence/feature-gate-460ce965c-studio-contracts.json",
+    "docs/evidence/feature-gate-460ce965c-catalog.json",
+    "docs/evidence/feature-gate-460ce965c-skill-audit.json"
   ]
 }

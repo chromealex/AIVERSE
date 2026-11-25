@@ -106,7 +106,9 @@
       "note": "The feature-delivery skill routes to the strict feature contract. The audit of the skill catalog, checker regressions and native readiness refresh/query ran on this integration.",
       "evidence": [
         "skills/workflow/aiverse-new-feature/SKILL.md",
-        "docs/evidence/integration-acceptance-d5608fb7f.json"
+        "docs/evidence/integration-acceptance-d5608fb7f.json",
+        "docs/evidence/feature-gate-460ce965c-catalog.log.txt",
+        "docs/evidence/feature-gate-460ce965c-skill-audit.log.txt"
       ]
     },
     "mcp": {
@@ -119,8 +121,12 @@
     },
     "studio": {
       "status": "not_run",
-      "note": "Opt-in regeneration, job status, dependency graph and assignment proposals implemented in source; typecheck, build and visual validation pending.",
-      "evidence": []
+      "note": "Opt-in regeneration, job status, dependency graph and assignment proposals implemented in source; typecheck, build and visual validation pending. At 460ce965c the Studio TypeScript check, 256 web cases and 55 Python contract cases (one skipped) passed. Live native acceptance is tracked separately.",
+      "evidence": [
+        "docs/evidence/feature-gate-460ce965c-typecheck.log.txt",
+        "docs/evidence/feature-gate-460ce965c-studio-contracts.log.txt",
+        "docs/evidence/feature-gate-460ce965c-web.log.txt"
+      ]
     },
     "inspector": {
       "status": "not_applicable",
@@ -170,10 +176,13 @@
     },
     "tests": {
       "status": "pass",
-      "note": "20 feature-gate tests passed. Registry, contracts and all four readiness MCP operations were verified against the native implementation.",
+      "note": "20 feature-gate tests passed. Registry, contracts and all four readiness MCP operations were verified against the native implementation. The integrated source 460ce965c passed all 22 Feature Gate tests and the separate reused-cache native-project fixture.",
       "evidence": [
         "docs/evidence/integration-tools-b954cd47a.json",
-        "docs/evidence/feature-readiness-stdio-b954cd47a.json"
+        "docs/evidence/feature-readiness-stdio-b954cd47a.json",
+        "docs/evidence/feature-gate-460ce965c-feature-suite.log.txt",
+        "docs/evidence/feature-gate-460ce965c-native-project.log.txt",
+        "docs/evidence/feature-gate-460ce965c-contracts.log.txt"
       ]
     },
     "handoff": {
@@ -216,6 +225,14 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integrated-graph-2a56cbf39.json"
+    "docs/evidence/integrated-graph-2a56cbf39.json",
+    "docs/evidence/feature-gate-460ce965c-feature-suite.json",
+    "docs/evidence/feature-gate-460ce965c-native-project.json",
+    "docs/evidence/feature-gate-460ce965c-contracts.json",
+    "docs/evidence/feature-gate-460ce965c-catalog.json",
+    "docs/evidence/feature-gate-460ce965c-skill-audit.json",
+    "docs/evidence/feature-gate-460ce965c-typecheck.json",
+    "docs/evidence/feature-gate-460ce965c-studio-contracts.json",
+    "docs/evidence/feature-gate-460ce965c-web.json"
   ]
 }
