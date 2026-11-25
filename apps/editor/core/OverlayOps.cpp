@@ -1,4 +1,5 @@
 #include "OverlayOps.h"
+#include "OverlayPreviewGrid.h"
 #include "engine/view/game/GameOverlayData.h"
 
 #include <stdexcept>
@@ -84,6 +85,63 @@ void registerOverlayOps(Workspace& ws) {
     auto add = [&ws](const char* name, const char* desc, const char* schema, Workspace::OpFn fn, bool gui = false) {
         ws.registerOp({name, desc, Json::parse(schema), std::move(fn), gui});
     };
+    add("overlay_placement_preview",
+        "Preview the snapped structure footprint on a patch of the open map. Reads authored terrain without placing an entity.",
+        R"({"properties":{"placeType":{"type":"string"},"x":{"type":"number"},"z":{"type":"number"}}})",
+        [w](const Json& params) {
+            needProject(*w);
+            const auto& rules = w->project.rules;
+            const auto& map = w->map.data;
+            Json out = Json::object(), types = Json::array();
+            for (const auto& type : rules.types) if (type.structure) {
+                Json item = Json::object();
+                item.set("id", str(type.id));
+                item.set("name", str(type.name));
+                types.push(item);
+            }
+            out.set("types", types);
+            out.set("width", Json::number(int64_t(map.w)));
+            out.set("height", Json::number(int64_t(map.h)));
+            const bool planar = map.w > 0 && map.h > 0 && !map.planet() && !map.worldSpace;
+            out.set("planar", Json::fromBool(planar));
+            if (!planar || !params.has("placeType")) return out;
+            const auto index = rules.findType(params.getStr("placeType"));
+            if (index < 0 || !rules.types[size_t(index)].structure) throw std::runtime_error("Choose a structure type");
+            const auto& type = rules.types[size_t(index)];
+            auto coord = [&](const char* key, int limit, int extent) {
+                if (!params.has(key)) return snapPlacementCenter(float(limit) / 2, extent);
+                const auto& v = params[key];
+                if (!v.isNumber() || v.toDouble() < 0 || v.toDouble() >= limit)
+                    throw std::runtime_error(std::string(key) + " must be inside the map");
+                return snapPlacementCenter(float(v.toDouble()), extent);
+            };
+            const float x = coord("x", map.w, type.footprintW), z = coord("z", map.h, type.footprintH);
+            const int left = int(std::floor(x - type.footprintW * 0.5f + 0.01f));
+            const int top = int(std::floor(z - type.footprintH * 0.5f + 0.01f));
+            const int x0 = std::max(0, left - 3), z0 = std::max(0, top - 3);
+            const int x1 = std::min(map.w, left + type.footprintW + 3), z1 = std::min(map.h, top + type.footprintH + 3);
+            game::MapGrid patch;
+            patch.init(x1 - x0, z1 - z0);
+            Json rows = Json::array();
+            for (int j = z0; j < z1; ++j) {
+                std::string row;
+                for (int i = x0; i < x1; ++i) {
+                    const size_t cell = size_t(j * map.w + i);
+                    copyPreviewCell(map, rules, cell, patch, size_t(patch.index(i - x0, j - z0)));
+                    row += map.cells[cell];
+                }
+                rows.push(str(row));
+            }
+            out.set("rows", rows);
+            out.set("left", Json::number(int64_t(left - x0)));
+            out.set("top", Json::number(int64_t(top - z0)));
+            out.set("footprintW", Json::number(int64_t(type.footprintW)));
+            out.set("footprintH", Json::number(int64_t(type.footprintH)));
+            out.set("x", Json::number(double(x)));
+            out.set("z", Json::number(double(z)));
+            out.set("ok", Json::fromBool(patch.areaBuildable(left - x0, top - z0, type.footprintW, type.footprintH)));
+            return out;
+        });
     add("overlay_templates",
         "Ready overlay recipes (helper elements on screen / in the world): build grid while placing, attack range on select, "
         "aura radius, rally line, order path, damage numbers, resource popup, territory border on hover, build radius, ping "

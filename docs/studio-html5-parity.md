@@ -282,3 +282,5 @@ Light Bake transfer: restore the linked lightbake_bake and lightbake_status oper
 Light Bake transfer: prepare the map from the document while Scene is closed. Capture must not present a frame or change the layout.
 
 Roads transfer: author road nodes from a map-local network diagram, with revision-checked moves and Undo through road_node_set.
+
+Overlays transfer: share authored terrain sampling and preview a structure footprint against the open map inside the Overlays panel. Forced overlay rendering remains a separate acceptance item.

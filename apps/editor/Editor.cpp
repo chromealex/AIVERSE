@@ -1,6 +1,7 @@
 // Editor: lifecycle, docking layout, menus, documents, play-test and viewport rendering.
 // Window contents live in apps/editor/windows/*.cpp; the agent link in EditorAgent.cpp.
 #include "Editor.h"
+#include "core/OverlayPreviewGrid.h"
 #include "engine/world/TerraWeaveCavernsEditRuntime.h"
 #include "engine/world/TerraWeaveCavernsArchive.h"
 #include "engine/render/TerraWeaveCavernsShardGpuHost.h"
@@ -1172,18 +1173,7 @@ void Editor::syncGrid() {
     if (grid_.w != d.w || grid_.h != d.h) grid_.init(d.w, d.h);
     grid_.corner = d.corners;
     for (int i = 0; i < d.w * d.h; ++i) {
-        grid_.flags[size_t(i)] = game::cellFlagsFromChar(d.cells[size_t(i)]);
-        // diggable rock (rules "diggable"): solid cells drawn as rock blocks, like the client does
-        const int dk = rules().findDiggable(d.cells[size_t(i)]);
-        grid_.dig[size_t(i)] = dk >= 0 ? uint8_t(dk + 1) : 0;
-        grid_.digHp[size_t(i)] = dk >= 0 ? rules().diggables[size_t(dk)].hardness : Fixed{};
-        if (dk >= 0) grid_.flags[size_t(i)] = 0;
-        grid_.height[size_t(i)] = d.heights[size_t(i)];
-        grid_.level[size_t(i)] = d.levels[size_t(i)];
-        grid_.region[size_t(i)] = d.regions[size_t(i)] == '.' ? int16_t(-1) : int16_t(d.regions[size_t(i)]);
-        int8_t fr = d.fieldRes[size_t(i)];
-        grid_.fieldRes[size_t(i)] = fr >= 0 ? int16_t(std::max(0, rules().findResource(d.fieldResources[size_t(fr)]))) : int16_t(-1);
-        grid_.fieldAmt[size_t(i)] = Fixed::fromInt(d.fieldAmt[size_t(i)]);
+        copyPreviewCell(d, rules(), size_t(i), grid_, size_t(i));
     }
     // starting territory (rules territory.startRadius around owned structures), so the scene shows the claimed floor
     std::fill(grid_.territory.begin(), grid_.territory.end(), uint8_t(0));
@@ -2420,7 +2410,7 @@ void Editor::setOverlayContext(const Viewport& vp, const Camera& cam, bool play)
         const auto& t = rules().types[size_t(place)];
         const float px = oc.hasCursor ? x : cam.target.x, pz = oc.hasCursor ? z : cam.target.z;
         oc.placeType = place;
-        oc.placeAt = {(t.footprintW % 2) ? std::floor(px) + 0.5f : std::round(px), 0, (t.footprintH % 2) ? std::floor(pz) + 0.5f : std::round(pz)};
+        oc.placeAt = {snapPlacementCenter(px, t.footprintW), 0, snapPlacementCenter(pz, t.footprintH)};
         const game::MapGrid& g = play && sim_ ? simModule()->state(*sim_).grid : grid_;
         oc.placeOk = g.areaBuildable(int(std::floor(oc.placeAt.x - t.footprintW * 0.5f + 0.01f)), int(std::floor(oc.placeAt.z - t.footprintH * 0.5f + 0.01f)),
                                      t.footprintW, t.footprintH);

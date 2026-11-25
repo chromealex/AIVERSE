@@ -3,6 +3,9 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/editor/core/OverlayPreviewGrid.h",
+    "apps/editor/core/OverlayOps.cpp",
+    "apps/studio-web/src/panels/OverlayPlacement.tsx",
     "apps/studio-web/src/panels/RoadsPanel.tsx",
     "apps/studio-web/src/panels/RoadsPanel.css",
     "apps/studio-native/StudioLightingPreview.h",

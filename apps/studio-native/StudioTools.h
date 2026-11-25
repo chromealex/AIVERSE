@@ -40,7 +40,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
         {"static_geometry", {"geometry_instances_list","geometry_strata_set"}},
         {"models", {"asset_list", "model_info", "material_techniques_get", "material_techniques_set", "geometry_catalog", "geometry_analyze", "strata_capabilities", "strata_model_analyze", "geometry_proxy_bake", "geometry_proxy_lod"}},
         {"scripts", {"script_api", "script_list", "script_read", "script_write", "script_check"}},
-        {"overlays", {"overlay_templates", "overlay_list", "overlay_get", "overlay_set", "overlay_delete", "overlay_preview"}},
+        {"overlays", {"overlay_placement_preview", "overlay_templates", "overlay_list", "overlay_get", "overlay_set", "overlay_delete", "overlay_preview"}},
         {"branding", {"branding_get", "branding_set", "splash_preview", "icons_preview"}},
         {"fields", {"field_list", "field_get", "field_paint", "field_set_rules", "region_paint", "territory_paint"}},
         {"physis", {"physis_get", "physis_validate", "physis_set"}},
