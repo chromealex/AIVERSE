@@ -1,0 +1,11 @@
+{
+  "sha": "97e6133ed3037c5c47e10ef789bdb9e08d25c217",
+  "argv": [
+    "bash",
+    "-ec",
+    "root=/Volumes/KINGSTON/AIVERSE-builds/render-seven-integration\nctest --test-dir \"$root/all-tests\" --no-tests=error --output-on-failure -R \"^(render_cpu_device|render_cpu_textured_model|quake3_bsp|prisma_compositor|prisma_compositor_metal|model_triplanar_frame|material_technique_frame)$\"\ncmake --build \"$root/sdk-arm64\" --target aiverse_render_jni --parallel 3\n/usr/bin/python3 tests/render_sdk/languages.py \"$root/sdk-arm64/sdk/render/libaiverse_render.dylib\" --work \"$root/sdk-arm64/tmp\"\n/Library/Frameworks/Python.framework/Versions/3.12/bin/python3 tools/site/build.py check"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/render-seven-combined-preview.log.txt",
+  "sha256": "54526e8d9483486f31d08229d791fd275caad10d9bc41eed168a1a5d3c954db6"
+}

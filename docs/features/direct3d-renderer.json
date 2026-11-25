@@ -28,6 +28,8 @@
     "docs/evidence/direct3d-windows-native.json",
     "docs/evidence/direct3d-windows-native.log.txt",
     "docs/evidence/render-backend-thumbnail-performance.json",
+    "docs/evidence/render-seven-combined-preview.json",
+    "docs/evidence/render-seven-combined-preview.log.txt",
     "docs/features/direct3d-renderer.json",
     "engine/gfx/Gfx.h",
     "engine/gfx/d3d/Direct3D.cpp",
@@ -145,7 +147,8 @@
       "status": "pass",
       "note": "Six native Windows CTests exercise D3D11 WARP and D3D9 HAL, native surfaces, Device draws and HWND resize.",
       "evidence": [
-        "docs/evidence/direct3d-windows-45609748449.json"
+        "docs/evidence/direct3d-windows-45609748449.json",
+        "docs/evidence/render-seven-combined-preview.json"
       ]
     },
     "handoff": {
@@ -181,6 +184,6 @@
     "studio_methods": []
   },
   "test_reports": [
-    "docs/evidence/direct3d-windows-45609748449.json"
+    "docs/evidence/render-seven-combined-preview.json"
   ]
 }

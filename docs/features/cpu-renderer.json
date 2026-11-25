@@ -31,6 +31,8 @@
     "docs/evidence/cpu-renderer-window-stage-regression.log.txt",
     "docs/evidence/cpu-renderer/arch.png",
     "docs/evidence/render-backend-thumbnail-performance.json",
+    "docs/evidence/render-seven-combined-preview.json",
+    "docs/evidence/render-seven-combined-preview.log.txt",
     "docs/features/cpu-renderer.json",
     "engine/gfx/Gfx.h",
     "engine/gfx/cpu/GfxCpu.cpp",
@@ -146,7 +148,8 @@
       "status": "pass",
       "note": "Native Mac CTest covering device rasterization and textured model PNG.",
       "evidence": [
-        "docs/evidence/cpu-renderer-desktop-final.json"
+        "docs/evidence/cpu-renderer-desktop-final.json",
+        "docs/evidence/render-seven-combined-preview.json"
       ]
     },
     "handoff": {
@@ -181,6 +184,6 @@
     "studio_methods": []
   },
   "test_reports": [
-    "docs/evidence/cpu-renderer-desktop-final.json"
+    "docs/evidence/render-seven-combined-preview.json"
   ]
 }

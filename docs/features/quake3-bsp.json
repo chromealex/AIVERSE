@@ -31,6 +31,8 @@
     "docs/evidence/quake3-bsp-openarena-metal-20261125.json",
     "docs/evidence/quake3-bsp-openarena-metal-20261125.log.txt",
     "docs/evidence/quake3-bsp-studio-inspector.png",
+    "docs/evidence/render-seven-combined-preview.json",
+    "docs/evidence/render-seven-combined-preview.log.txt",
     "docs/features/quake3-bsp.json",
     "docs/models.md",
     "engine/render/BspShaderImages.h",
@@ -165,7 +167,8 @@
       "note": "Combined native CTest, real MCP and browser optical regression passed on the final code SHA.",
       "evidence": [
         "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.json",
-        "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.log.txt"
+        "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.log.txt",
+        "docs/evidence/render-seven-combined-preview.json"
       ]
     },
     "handoff": {
@@ -209,6 +212,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.json"
+    "docs/evidence/render-seven-combined-preview.json"
   ]
 }

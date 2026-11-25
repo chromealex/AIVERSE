@@ -12,6 +12,8 @@
     "docs/agents/feature-policy.json",
     "docs/devlog/entries/2026-11-25-render-renderer-sdk.json",
     "docs/devlog/systems.json",
+    "docs/evidence/render-seven-combined-preview.json",
+    "docs/evidence/render-seven-combined-preview.log.txt",
     "docs/evidence/renderer-sdk-arch.png",
     "docs/evidence/renderer-sdk-integration-ready.json",
     "docs/evidence/renderer-sdk-integration-ready.log.txt",
@@ -151,7 +153,8 @@
       "evidence": [
         "docs/evidence/renderer-sdk-languages.json",
         "docs/agent-handoffs/renderer-sdk-languages.md",
-        "docs/evidence/renderer-sdk-reviewed.json"
+        "docs/evidence/renderer-sdk-reviewed.json",
+        "docs/evidence/render-seven-combined-preview.json"
       ]
     },
     "handoff": {
@@ -187,6 +190,6 @@
     "studio_methods": []
   },
   "test_reports": [
-    "docs/evidence/renderer-sdk-reviewed.json"
+    "docs/evidence/render-seven-combined-preview.json"
   ]
 }
