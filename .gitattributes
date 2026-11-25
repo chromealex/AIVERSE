@@ -1,2 +1,3 @@
 *.sh text eol=lf
 *.bash text eol=lf
+docs/evidence/pr124-*.log.txt text eol=lf

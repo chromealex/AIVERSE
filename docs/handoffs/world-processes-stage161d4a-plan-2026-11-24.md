@@ -1,0 +1,2 @@
+# Stage 161D4a — delivery scope
+Authored standing trees in native Scene using existing merged ARBOR LOD model and botanical PBR material owner, spherical frame and authored appearance scale, shared model per species and renderer instancing path. Bounded prototype geometry/texture budgets and GPU retirement, no new simulation or runtime generator. Live state meshes and exposed roots follow separately. Mac acceptance deferred.

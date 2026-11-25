@@ -1,0 +1,11 @@
+{
+  "sha": "13c013c7a1e603806863bafdbf98a8644cd9147a",
+  "argv": [
+    "bash",
+    "-ec",
+    "ctest --test-dir /Volumes/KINGSTON/AIVERSE-builds/pr124-current-mac-8511 --output-on-failure --no-tests=error -R \"^library_(noise|runtime)$\"\nclang++ -std=c++20 -O3 -DNDEBUG -I libraries/include tests/libraries/noise_benchmark.cpp -o /Volumes/KINGSTON/AIVERSE-builds/pr124-current-mac-8511/pr124-noise-bench\n/Volumes/KINGSTON/AIVERSE-builds/pr124-current-mac-8511/pr124-noise-bench \"macOS arm64 Apple Silicon\""
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/pr124-shared-algorithms-13c013c7.log.txt",
+  "sha256": "25f7086868f4c52a7ca5dd22698027f9b6a3ca3dbab888ec8d72ab8076df3280"
+}

@@ -35,3 +35,7 @@ python3 tools/skills/audit.py --strict
 - Do not put a renderer- or platform-specific behavior in the generic MCP transport (`tools/mcp/main.cpp`); keep transport as JSON-RPC forwarding and the feature in its owning subsystem.
 - Add a test that uses the **built** `aiversemcp` and calls the operation end to end; test error paths, no mutation on failure, read-back, and GUI integration if GUI-only.
 - Update the family baseline in `tools/mcp/audit_registry.py`, the owning skill/doc, and a handoff. Record any unimplemented capability explicitly.
+
+### Planetary forest linked-view acceptance (Stage 161D5d)
+
+Registry baseline: five authored `planet_forest_*` operations plus four linked-only `studio_planet_*` operations. The registry audit must verify linked-only metadata and standalone refusal. On a real authenticated Studio link, get project identity from `game_info.dir` and map identity from `planet_forest_get`. Call `studio_planet_scene_get`, select the moon with `studio_planet_scene_body_set`, poll until activeBody matches, set a bounded camera and read back pose. Verify document revision/Undo depth unchanged; reject wrong project/map/revision/body, invalid camera data and active gesture. Start local Play of the saved map and check `studio_planet_forest_live` completed tick, matching body and physical/plant rows; stop Play and verify refusal. Repeat on both bodies with actual Metal Scene and inspect viewport. Source registration and policy fixture only; these native/linked checks have not been run.

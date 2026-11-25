@@ -1,5 +1,7 @@
 #include "apps/studio-native/StudioMoveJournal.h"
 #include "tests/TestCheck.h"
+#include "apps/editor/core/Workspace.h"
+#include "apps/editor/core/ProjectDocumentJournal.h"
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -72,6 +74,83 @@ int main() {
             expect(readFile(originalMeta)=="persistent-guid-sidecar","GUID metadata bytes changed");
             expect(readFile(materials)==materialBefore,"Material backup not restored");
         }
+        // v4: a resource document is written before the outer move commits.
+        // Recovery restores both exact original resource bytes and paths.
+        {
+            const auto model=root/"A"/"Model.gltf";
+            const std::string before="{ \"images\": [{\"uri\":\"Stone.png\"}] }\n";
+            const std::string after=R"({"images":[{"uri":"../B/Stone.png"}]})";
+            writeFile(model,before);
+            StudioMoveJournal journal(project);
+            journal.begin(operations,false,false,{{fs::path("content/A/Model.gltf"),before,after}});
+            fs::rename(original,moved);fs::rename(originalMeta,movedMeta);
+            writeFile(model,after);
+            StudioMoveJournal::recover(project);
+            expect(readFile(model)==before,"Resource repair exact bytes not restored");
+            expect(fs::exists(original)&&fs::exists(originalMeta),"Resource move not restored");
+            expect(!fs::exists(moved),"Resource destination survives rollback");
+            StudioMoveJournal::recover(project);
+            fs::remove(model);
+        }
+        // v5: the repaired model itself moves; restore at whichever
+        // endpoint owns it before reversing the rename.
+        {
+            const auto model=root/"A"/"Moved.gltf",target=root/"B"/"Moved.gltf";
+            const std::string before=R"({"images":[{"uri":"Stone.png"}]})",after=R"({"images":[{"uri":"../A/Stone.png"}]})";
+            writeFile(model,before);
+            StudioMoveJournal journal(project);
+            journal.begin({{"A/Moved.gltf","B/Moved.gltf"}},false,false,{{fs::path("content/A/Moved.gltf"),before,after}});
+            // Crash after the rename but before resource publication.
+            fs::rename(model,target);
+            StudioMoveJournal::recover(project);
+            expect(readFile(model)==before&&!fs::exists(target),"Moved resource pre-publication recovery failed");
+            journal.begin({{"A/Moved.gltf","B/Moved.gltf"}},false,false,{{fs::path("content/A/Moved.gltf"),before,after}});
+            fs::rename(model,target);writeFile(target,after);
+            StudioMoveJournal::recover(project);
+            expect(readFile(model)==before&&!fs::exists(target),"Moved resource recovery failed");
+            StudioMoveJournal::recover(project);fs::remove(model);
+        }
+        // v6: binary-safe moved GLB snapshot and exact pending recovery.
+        {
+            using namespace aiverse::studio;
+            const auto model=root/"A"/"Moved.glb",target=root/"B"/"Moved.glb";
+            StudioModelRepairDocument doc;doc.binary=true;doc.json=aiverse::Json::parse(R"({"images":[{"uri":"Stone.png"}]})");
+            studioGlbAppendU32(doc.tail,4);studioGlbAppendU32(doc.tail,0x004e4942);doc.tail.append("\xff\0\x80\x01",4);
+            const auto before=studioEncodeModelRepair(doc);
+            auto images=doc.json["images"];auto image=images[0];image.set("uri",aiverse::Json::string("../A/Stone.png"));images.at(0)=std::move(image);doc.json.set("images",std::move(images));
+            const auto after=studioEncodeModelRepair(doc);
+            writeFile(model,before);
+            StudioMoveJournal journal(project);
+            journal.begin({{"A/Moved.glb","B/Moved.glb"}},false,false,{{fs::path("content/A/Moved.glb"),before,after}});
+            fs::rename(model,target);writeFile(target,after);
+            const auto pending=project/".aiverse-cache"/"studio-move-journal"/"pending.json";
+            const auto manifest=aiverse::Json::parse(readFile(pending));
+            expect(manifest.getInt("version")==8&&manifest["resources"][0].getStr("encoding")=="hex","GLB journal lacks binary encoding");
+            StudioMoveJournal::recover(project);
+            expect(readFile(model)==before&&!fs::exists(target),"Binary resource exact recovery failed");
+            StudioMoveJournal::recover(project);fs::remove(model);
+        }
+        // v8: interruption after compact GLB publication at the moved path.
+        {
+            using namespace aiverse::studio;
+            const auto model=root/"A"/"Stream.glb",target=root/"B"/"Stream.glb";
+            auto doc=aiverse::Json::parse(R"({"images":[{"uri":"Stone.png"}]})");
+            std::string tail;studioGlbAppendU32(tail,4);studioGlbAppendU32(tail,0x004e4942);tail.append("\xff\0\x80\x01",4);
+            const auto before=studioEncodeGlbPrefix(doc,tail.size());
+            writeFile(model,before+tail);
+            const auto snapshot=studioReadGlbPrefix(model);
+            auto images=doc["images"];auto image=images[0];image.set("uri",aiverse::Json::string("../A/Stone.png"));images.at(0)=std::move(image);doc.set("images",std::move(images));
+            const auto after=studioEncodeGlbPrefix(doc,tail.size());
+            aiverse::editor::ProjectFileEdit edit{fs::path("content/A/Stream.glb"),before,after,snapshot.digest,snapshot.tailBytes};
+            StudioMoveJournal journal(project);
+            journal.begin({{"A/Stream.glb","B/Stream.glb"}},false,false,{edit});
+            fs::rename(model,target);edit.path=fs::canonical(target);
+            journal.applyResources({edit});
+            expect(readFile(target)==after+tail,"Streamed GLB publication changed tail");
+            StudioMoveJournal::recover(project);
+            expect(readFile(model)==before+tail&&!fs::exists(target),"Compact GLB rollback failed");
+            StudioMoveJournal::recover(project);fs::remove(model);
+        }
         // Commit marker forbids rollback on restart.
         {
             StudioMoveJournal journal(project);
@@ -121,6 +200,192 @@ int main() {
             expect(!fs::exists(original),"Malformed journal partially restored the target");
         }
         fs::remove_all(project/".aiverse-cache"/"studio-move-journal");
+        const std::string trash=".aiverse-cache/studio-asset-trash/0123456789abcdef01234567/asset";
+        fs::create_directories((project/trash).parent_path());
+        {
+            StudioMoveJournal journal(project);
+            journal.begin({{"content/B/Stone.png",trash},{"content/B/Stone.png.meta",trash+".meta"}},true);
+            fs::rename(moved,project/trash);
+            writeFile(materials,"external-material-change");
+            StudioMoveJournal::recover(project);
+            expect(fs::exists(moved)&&fs::exists(movedMeta),"Quarantine partial rollback failed");
+            expect(readFile(materials)=="external-material-change","Quarantine recovery modified unrelated materials");
+        }
+        // v3 replacement: the same live path is used by two ordered moves.
+        const std::string oldSlot=".aiverse-cache/studio-asset-trash/111111111111111111111111/asset";
+        const std::string newSlot=".aiverse-cache/studio-asset-trash/222222222222222222222222/asset";
+        fs::create_directories((project/oldSlot).parent_path());
+        fs::create_directories((project/newSlot).parent_path());
+        writeFile(project/newSlot,"replacement");
+        const std::vector<StudioMoveJournalOperation> replacement{
+            {"content/B/Stone.png",oldSlot,aiverse::studio::studioAssetFileDigest(moved)},
+            {newSlot,"content/B/Stone.png",aiverse::studio::studioAssetFileDigest(project/newSlot)}
+        };
+        for(int phase=0;phase<3;++phase){
+            StudioMoveJournal journal(project);journal.begin(replacement,true,true);
+            if(phase>=1)fs::rename(moved,project/oldSlot);
+            if(phase>=2)fs::rename(project/newSlot,moved);
+            StudioMoveJournal::recover(project);
+            expect(readFile(moved)=="pixels","Replacement old bytes not restored");
+            expect(readFile(project/newSlot)=="replacement","Replacement staging bytes lost");
+            expect(!fs::exists(project/oldSlot),"Replacement outgoing slot not restored");
+            expect(readFile(materials)=="external-material-change","Replacement recovery changed materials");
+        }
+        // Recovery refuses a changed outgoing payload before touching any path.
+        {
+            StudioMoveJournal journal(project);journal.begin(replacement,true,true);
+            fs::rename(moved,project/oldSlot);
+            fs::rename(project/newSlot,moved);
+            writeFile(moved,"external");
+            bool rejected=false;
+            try{StudioMoveJournal::recover(project);}catch(const std::runtime_error&){rejected=true;}
+            expect(rejected&&readFile(moved)=="external","Replacement recovery overwrote external bytes");
+            writeFile(moved,"replacement");
+            StudioMoveJournal::recover(project);
+            expect(readFile(moved)=="pixels","Replacement retry failed");
+        }
+        // S6f.4a: stage independent map and manifest owners, then
+        // exercise interruption at each existing-document publication boundary.
+        {
+            using namespace aiverse::editor;
+            const auto p=fs::canonical(project)/"CoordinatedSave";
+            fs::create_directories(p/"maps");
+            const auto mapFile=p/"maps"/"scene.json";
+            const auto manifestFile=p/"game.json";
+            const std::string manifestBefore=R"({"name":"Before"})";
+            writeFile(manifestFile,manifestBefore);
+            MapDoc map;map.reset(16,16);map.data.name="Before";
+            std::string error;
+            expect(map.save(mapFile.string(),&error),"Cannot create saved map fixture");
+            const auto mapBefore=readFile(mapFile);
+            Project owner;owner.dir=p.string();owner.savedManifestText=manifestBefore;
+            owner.manifest=aiverse::Json::parse(manifestBefore);
+            owner.manifest.set("name",aiverse::Json::string("After"));owner.manifestDirty=true;
+            map.beginEdit();map.data.name="After";
+            auto stagedMap=map;auto stagedProject=owner;
+            auto edits=stagedMap.stageExistingSave(p);
+            const auto projectEdits=stagedProject.stageDirtySave();
+            edits.insert(edits.end(),projectEdits.begin(),projectEdits.end());
+            expect(readFile(mapFile)==mapBefore&&readFile(manifestFile)==manifestBefore,
+                "Staging changed a saved owner");
+            expect(map.dirty&&owner.manifestDirty,"Staging changed live dirty flags");
+            for(size_t phase=0;phase<=edits.size();++phase){
+                ProjectDocumentJournal journal(p);
+                expect(journal.begin(edits),"Cannot prepare joint save");
+                for(size_t i=0;i<phase;++i)journal.publish(i);
+                expect(journal.recover(),"Cannot recover joint save");
+                expect(readFile(mapFile)==mapBefore&&readFile(manifestFile)==manifestBefore,
+                    "Interrupted joint save retained partial publication");
+            }
+            const auto lock=stagedMap.beginStagedSave();
+            applyProjectFileEdits(p,edits);stagedMap.finishStagedSave();
+            expect(!stagedMap.dirty&&!stagedProject.manifestDirty,"Joint save retained dirty flags");
+            expect(aiverse::Json::parseFile(mapFile.string()).getStr("name")=="After"&&
+                   aiverse::Json::parseFile(manifestFile.string()).getStr("name")=="After",
+                "Joint save did not publish both owners");
+        }
+        // S6f.4b.1: absent output is distinct from an existing empty file.
+        // Recover every publication prefix of a new map and manifest.
+        {
+            using namespace aiverse::editor;
+            const auto p=fs::canonical(project)/"NewMapSave";
+            fs::create_directories(p/"maps");
+            const auto manifest=p/"game.json",mapFile=p/"maps"/"new.json";
+            writeFile(manifest,"old");
+            MapDoc map;map.reset(16,16);map.data.name="New scene";
+            auto staged=map;
+            auto edits=staged.stageSave(p,mapFile.string(),true);
+            expect(edits.size()==1&&edits.front().createOnly,"Missing create-only map output");
+            const auto empty=p/"maps"/"empty.r16";
+            edits.push_back({empty,"","",{},0,true});
+            edits.push_back({manifest,"old","new"});
+            for(size_t phase=0;phase<=edits.size();++phase){
+                ProjectDocumentJournal journal(p);
+                expect(journal.begin(edits),"Cannot prepare new output transaction");
+                for(size_t i=0;i<phase;++i)journal.publish(i);
+                expect(journal.recover(),"Cannot recover new output transaction");
+                expect(!fs::exists(mapFile)&&!fs::exists(empty)&&readFile(manifest)=="old",
+                    "New output recovery left partial save");
+            }
+            {
+                ProjectDocumentJournal journal(p);
+                expect(journal.begin(edits),"Cannot prepare conflicting creation");
+                journal.publish(0);
+                writeFile(empty,"external");
+                bool refused=false;
+                try{journal.recover();}catch(const std::exception&){refused=true;}
+                expect(refused&&fs::exists(mapFile)&&readFile(empty)=="external",
+                    "Recovery overwrote or partially rolled back external conflict");
+                fs::remove(empty);
+                expect(journal.recover(),"Cannot retry new output recovery");
+            }
+            const auto lock=staged.beginStagedSave();
+            applyProjectFileEdits(p,edits);staged.finishStagedSave();
+            expect(!staged.dirty&&fs::exists(empty)&&readFile(empty).empty()&&readFile(manifest)=="new",
+                "New map transaction did not commit all outputs");
+            bool refused=false;
+            try{auto other=map;(void)other.stageSave(p,mapFile.string(),true);}
+            catch(const std::exception&){refused=true;}
+            expect(refused,"Save As silently overwrote an occupied map");
+        }
+        // S6f.4b.2: history checkpoint and map/terrain data have one
+        // durable commit point, including the first checkpoint creation.
+        {
+            using namespace aiverse::editor;
+            const auto p=fs::canonical(project)/"AtomicMapHistory";
+            fs::create_directories(p/"maps");
+            const auto file=p/"maps"/"scene.json";
+            MapDoc live;live.reset(16,16);live.data.name="Before";
+            live.beginEdit();live.data.name="After";
+            live.setHistoryLabel(live.historyMark(),"Rename scene");
+            auto staged=live;
+            auto edits=staged.stageSave(p,file.string(),true);
+            fs::path checkpoint;
+            {
+                const auto lock=staged.lockAtomicSave();
+                auto history=staged.stageHistoryCheckpoint(edits);checkpoint=history.path;
+                expect(history.createOnly,"First checkpoint must be created atomically");
+                edits.push_back(std::move(history));
+                for(size_t phase=0;phase<=edits.size();++phase){
+                    ProjectDocumentJournal journal(p);
+                    expect(journal.begin(edits),"Cannot stage atomic map history");
+                    for(size_t i=0;i<phase;++i)journal.publish(i);
+                    expect(journal.recover(),"Cannot recover atomic map history");
+                    expect(!fs::exists(file)&&!fs::exists(checkpoint),"Partial new map history survived rollback");
+                }
+                applyProjectFileEdits(p,edits);staged.finishAtomicSave();
+            }
+            MapDoc reopened;std::string error;
+            expect(reopened.load(file.string(),&error)&&error.empty(),"Cannot reopen atomic map");
+            expect(reopened.historyPersistenceWarning().empty()&&reopened.canUndo(),"Atomic map history did not restore");
+            expect(reopened.historyLabel(reopened.undoId(0))=="Rename scene","History label lost");
+            reopened.undo();expect(reopened.data.name=="Before"&&reopened.canRedo(),"Restored undo failed");
+            const auto oldMap=readFile(file),oldHistory=readFile(checkpoint);
+            auto next=reopened;
+            auto update=next.stageExistingSave(p);
+            {
+                const auto lock=next.lockAtomicSave();
+                update.push_back(next.stageHistoryCheckpoint(update));
+                expect(!update.back().createOnly,"Existing checkpoint misclassified");
+                for(size_t phase=0;phase<=update.size();++phase){
+                    ProjectDocumentJournal journal(p);expect(journal.begin(update),"Cannot stage checkpoint update");
+                    for(size_t i=0;i<phase;++i)journal.publish(i);
+                    expect(journal.recover(),"Cannot recover checkpoint update");
+                    expect(readFile(file)==oldMap&&readFile(checkpoint)==oldHistory,"Map/checkpoint rollback mismatch");
+                }
+                applyProjectFileEdits(p,update);next.finishAtomicSave();
+            }
+            error.clear();
+            expect(reopened.load(file.string(),&error)&&error.empty()&&reopened.canRedo(),
+                "Redo cursor did not survive atomic save");
+            reopened.redo();expect(reopened.data.name=="After","Restored redo failed");
+            const auto beforeExternal=readFile(file);
+            writeFile(file,beforeExternal+"\n");
+            bool refused=false;
+            try{auto copy=reopened;(void)copy.stageExistingSave(p);}
+            catch(const std::exception&){refused=true;}
+            expect(refused&&readFile(file)==beforeExternal+"\n","External map change was not fenced");
+        }
         fs::remove_all(project);
         std::cout<<"PASS studio persistent move recovery and collision safety\n";
     } catch (...) {

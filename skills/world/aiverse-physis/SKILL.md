@@ -1230,3 +1230,13 @@ Source `2b0190cb93e4335e7e458fa03d75239ef65c8424`.
 CTest `physis_fracture_outbox` authored, **NOT RUN**.
 Handoff:
 `docs/agent-handoffs/physis-stage82-fracture-outbox-2026-11-19.md`.
+
+## Stage 109: effective live planetary PHYSIS gravity
+
+In Studio, enable Live 3D overlay and the separate Effective PHYSIS gravity (planet) checkbox during local Play current map. The Scene uses the saved map/project/revision and selected-body guards. The existing EVOLVE layer can be off while gravity is shown. Effective arrows replace authored per-field arrows only while the live gravity snapshot is available; authoring handles and field data remain independent.
+
+The diagnostic samples actual canonical Surface positions through `physis::gravityAt` after a completed local simulation tick. This retains the owner's baseline, additive overlap, override priority/tie rule and component clamp, including default settings when the resource is absent (explicitly reported); no implicit radial baseline or separate field solver. Four by four sites per cube face, 96 per surface body and at most 16 bodies. If more than 1024 gravity components exist the diagnostic is unavailable instead of silently dropping fields. No stars without surfaces are sampled. Snapshot records body ID, face coordinates, body-local position, radial up, acceleration vector, magnitude, radial component and per-body min/max and classification counts. Fixed-point values are rounded for JSON presentation only.
+
+Cyan inward, orange outward, violet near-tangent, grey cross for magnitude <= approximately 0.01 m/s²; radial classification uses the same fixed threshold. Arrow lengths are clamped indicative display lengths; actual numeric values are returned by the snapshot. Browser panel reports sampled per-body magnitude range and counts, not global extrema or all-space gravity. No physics force application, persistence, gameplay change, trajectory prediction, volumetric field, or new RPC. Existing planar ecology remains unchanged.
+
+Source fixtures exercise two bodies, zero field, radial attraction, additive overlap, direct canonical-sampler comparison, reversal and fail-closed field budget. Native build, test execution, TypeScript typecheck, interactive UI, actual GPU screenshots and performance measurements NOT RUN. Next: AETHER gas cell and duct flux visualization from completed ECS state; remaining World Processes, physical owner dependencies and cross-branch integration are still open.

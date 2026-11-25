@@ -1,0 +1,2 @@
+# Stage 161D4c1 — delivery scope
+Read completed PHYSIS state through explicit authored planet weather mappings, no planar coordinate reinterpretation; sample local 3D wind zones, project tangent wind and reuse ARBOR GPU hierarchy. Seasonal visual policy uses PHYSIS seasonSignal, evergreen distinction, bounded leaf tint and bare canopy; no new simulation or calendar. Shared cache and snapshot budgets. Mac acceptance deferred. Texture refresh, runtime terrain and fallen bark refinements follow separately.

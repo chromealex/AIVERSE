@@ -7,6 +7,8 @@
 #include <set>
 #include "SimTools.h"
 #include "../../../engine/vehicles/Vehicles.h"
+#include "../../../libraries/include/aiverselib/world/WorldProcessesInspector.h"
+#include "../../../libraries/include/aiverselib/world/WorldProcessesExtendedInspector.h"
 #if AIVERSE_PREVIEW_THREAD
 #include <thread>
 #endif
@@ -616,6 +618,10 @@ Json inspectEntity(Simulation& sim, GameCore& mod, Entity e, const Json& rulesJs
     // avoiding callbacks from a previous project or stale preview.
     Json moduleSchemas = Json::object();
     mod.native().inspectComponents(sim, e, comps, moduleSchemas);
+    // Real opt-in ECHO/FRACTURE/AETHER components: Studio and native Editor
+    // share this read-only WorldInspect projection. Never synthesize a pool.
+    lib::worldprocess::inspector::appendWorldProcessComponents(w,e,comps,moduleSchemas);
+    lib::worldprocess::inspector::appendWorldProcessExtendedComponents(w,e,comps,moduleSchemas);
     r.set("components", comps);
     if (moduleSchemas.size() > 0) r.set("componentSchemas", moduleSchemas);
     if (auto* u = w.tryGet<Unit>(e); u && size_t(u->type) < R.types.size()) {

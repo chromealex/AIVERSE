@@ -1,0 +1,67 @@
+---
+name: aiverse-aether
+description: Use AIVERSE AETHER for Authoritative multi-species gas transport (smoke, toxin, oxygen) through rooms and ducts.
+---
+# AETHER — AIVERSE skill
+
+## When to activate
+Authoritative multi-species gas transport (smoke, toxin, oxygen) through rooms and ducts.
+
+Typical requests: smoke, ventilation, gas leaks, fire coupling, low oxygen. Use this skill only for this mechanic; for multi-system orchestration see `skills/world/aiverse-world-processes/SKILL.md`.
+
+## Canonical code and API
+- **Gameplay headers:** `libraries/include/aiverselib/world/AetherEcs.h`.
+- **Authoritative ECS:** `aether::GasCell, GasDuct, GasFlux`.
+- **Lifecycle:** `aiverse::aether::install(sim)`; per-tick behavior: `aether::advance(world,tick)`. Install once in the authoritative `Simulation::setup` phase, before the persistence registry seals; don't install the same system twice via suite and direct calls.
+- **CMake target:** no dedicated `AIVERSE::lib_*` target for this skill. This is an opt-in existing-native-module gameplay recipe (`runtime: none` in `skills/catalog.json`). The actual project links its established `AIVERSE::libraries` and any optional host owners (Box3D, Renderer3D, PHYSIS, TerraWeave) only when needed.
+- **Studio-authored components:** `AetherGasCell, AetherDuct, AetherFlux`. These are map authoring fields, not a writable duplicate of live ECS output.
+- **Adjacent adapters:** `AetherPhysisBridge.h`, `WorldProcessesLinkedAuthoring.h`, `WorldProcessesMapHydration.h`. Native project integrations are optional; include only in the target that already owns those subsystems.
+
+## Minimal C++20 usage pattern
+```cpp
+#include "aiverselib/world/AetherEcs.h"
+aiverse::aether::install(sim);
+// Author GasCell, GasDuct and GasFlux with full-generation Entity links.
+// Read smoke/toxin/oxygen in the canonical GasCell after the tick.
+```
+
+If using normal GameCore map projects instead of a custom module, prefer the compiled opt-in `world_processes` native module and Studio. Example fragments: `examples/native/world_processes/authoring-examples.json`; native setup/lifecycle: `examples/native/world_processes/README.md`.
+
+## Do not cross these ownership boundaries
+PHYSIS remains responsible for fire, wind and weather; NEREID owns water. AETHER is bounded gas mass, not full Navier–Stokes or particle graphics.
+
+## Acceptance checklist (execute when user lifts test deferral)
+- Conserved species except authored flux, duct direction/rate limits, saturation/underflow, disconnected rooms, PHYSIS fire ownership, COW/replay.
+- Verify C++ compilation, CTest source and actual run outcome; include GCC/Clang, ASan/UBSan where supported.
+- Check authoritative tick order, World snapshot/COW, persistent schema IDs, clean reload, rollback/replay checksums, malformed input rejection, and expired Entity generation references.
+- If the feature is visually observable, capture **real** native Studio/game screenshots with source SHA and platform/backend provenance; do not use fabricated renders as QA proof.
+- tests/ecs_aether_gas_test.cpp.
+
+## Handoffs and current verification
+- Read matching `docs/handoffs/world-processes-stage04-aether-2026-11-23.md` (some stage handoff names contain extra suffixes; search `docs/handoffs/world-processes-stage*` when needed).
+- The PR is **DRAFT**; latest source changes have **not** been verified by a completed full native build or end-to-end scene test. Do not infer production readiness from the presence of API/docs.
+
+## Cross-cutting contract
+- Read `AGENTS.md`, `docs/agents/ecs.md`, `docs/ecs-mechanic-composition.md`, and `skills/world/aiverse-world-processes/SKILL.md` only as necessary for system boundaries.
+- All live game state must be ECS-owned: `World` + `Simulation`. C++20, stable packed-generation `Entity` links in memory; map authoring stores only stable document ID strings. Never serialize ephemeral ECS slot numbers.
+- Integration is opt-in. For regular GameCore maps, compile `examples/native/world_processes/WorldProcessesModule.cpp`, enable `{"id":"world_processes"}` in the project's `rules.json` `nativeModules`, and use the existing `StudioSession` map component authoring. Actual adapter: `aiverselib/world/WorldProcessesNativeModule.h` consumes `GameCore::matchMap()` + `mapPlaced()`.
+- Shared standalone/linked map schemas: `aiverselib/world/WorldProcessesAuthoring.h`, `WorldProcessesLinkedAuthoring.h`, `WorldProcessesExtendedAuthoring.h`, `WorldProcessesExtendedLinks.h`. `WorldProcessesMapHydration.h` resolves live ECS owners with strict validation before installing/creating components.
+- In Studio use existing Add Component, reference picker, Scene gizmos and native `MapDoc` Undo/Redo. For live observation use `WorldProcessesInspector.h`/`WorldProcessesExtendedInspector.h`, never writable runtime clones.
+- After each implementation step add a new `docs/handoffs/world-processes-stage*.md` describing code paths, API, ownership, branch/commit, actual tests/results, missing features and exact next action. Update agent guidance; do not merge unverified code into main.
+- Current source is in draft PR #112 on `feature/world-processes-experimental`. New Stage11+ features are **source-only, not confirmed compiling or passing runtime tests**. The user deferred testing; do not describe old Stage05 successful tests as proof of these newer files.
+
+## Stage 86: active multi-species transport
+AETHER now uses shared `lib::worldprocess::diffuseSpecies<N>` in WorldProcesses.h. One stable directed-flow traversal handles smoke/toxin/oxygen, with lazy scratch allocation per species only when mass actually moves. Skip self/zero-cap/zero-transfer flows; start-of-tick mass, donor depletion, stable edge order, signed overflow checks, and atomic multi-field output are preserved. Optional DiffusionActivity counts directed/active flows, transfers and active species; only published on success. It is derived, not persistent. All cells still validate and receive their existing sampledTick; fluxes still run after diffusion and can wake a quiet network on the next tick. No camera-based skipping, persistent sleep flags, cross-tick index, or change to PHYSIS ownership. Previous scalar diffuse remains reference. See Stage86 handoff; tests authored, not run.
+
+## Stage 94: optional AETHER PHYSIS stratification
+`AetherPhysisStratification.h` provides `advanceWithStratification(world,surface,tick,settings)`. Native GameCore enables the alternative transport with `world_processes` config `{"aetherStratification":true}`; the legacy transport is not installed simultaneously. The existing ECS GasCell/GasDuct/GasFlux schemas stay unchanged. Each active duct endpoint needs canonical Transform, and PHYSIS gravity is sampled in simulation-space metres. Planets use existing Surface body identity; cross-body active ducts reject the staged tick. Zero-cap and disabled links remain inert. Effective buoyancy coefficients in permille default smoke +350, toxin -350, oxygen 0; they are gameplay coefficients, not molecular densities. Optional co-located PHYSIS Atmosphere temperature at both endpoints contributes mean-temperature buoyancy relative to 20 C, default 5 permille/degree. Missing temperature disables only the thermal correction. Gravity projection uses mean endpoint acceleration along the duct, bounded to +/-1 with 10 m/s² reference; zero gravity preserves concentration diffusion. Signed bias changes the single shared diffusion head, not a second transfer pass; reversed endpoints use exact opposite bias. Per-species duct cap, start-of-tick donor budget, stable order, mass conservation, atomic failure and flux-after-transport remain. Custom host calls the explicit API with deterministic settings, owns persistence/config identity and PHYSIS fields. This is a graph-based gameplay approximation, not pressure CFD, thermal energy transport or a full planetary atmosphere solver. Tests authored, not run. See Stage94 handoff.
+
+## Stage 110: planetary live AETHER gas and duct diagnostics
+
+During local Play current map, enable Live 3D overlay and select Smoke, Toxin or Oxygen in the independent AETHER layer. Scene renders actual body-local GasCell Transform positions as species-colored markers with logarithmic mass display size. Same-body enabled ducts are lines, colored arrows show the signed isolated-duct transfer potential from current completed-tick masses. They are not a measurement of previous-tick transfers; actual edge transfer history is not retained by the owner. Grey ducts have zero or unavailable potential. Markers/ducts are a point-and-link diagnostic, not a filled gas volume or a CFD rendering. Game-quantized equal-volume masses are not physical concentration units.
+
+The native host exposes a read-only copy of the loaded module configuration through NativeModules::loadedConfiguration; Studio identifies the stock world_processes diffusion or default PHYSIS stratification policy, with unknown policy disabling potential. AETHER's existing stratification solver and diagnostic reuse the exact same effectiveHead helper (including stable endpoint orientation, optional co-located temperature and gravity projection). Potential is the isolated half-head capped by configured duct rate and donor mass; reverse flow is blocked by one-way ducts. Competition among donors/ducts, later source/sink application and next-tick changes are not predicted. Configured source/sink rates are separate from actual cell mass. No extra simulation tick, mutation, persistence, forces or competing solver.
+
+Read-only snapshot bounds: owner component budgets, 256 sampled cells, 512 sampled ducts, max 1024 gravity components for stratified potential; full-generation IDs, stable order, local-body checks, stale/disabled/invalid or unplaced cells skipped, cross-body ducts counted but not drawn. Unknown policy or gravity cap preserves mass/topology readback without inventing potentials. Browser shows first eight sampled cells and ducts, full sampled counts, rejected/omitted counts, mode, source rate and signed species potentials/bias. Existing map/project/revision guards, local Play restriction and renderer reused; planar ecology unchanged.
+
+Source fixtures cover two bodies, equal-mass diffusion, opposing stratification tendencies, one-way suppression, configured sources, stale/unknown/cap and unchanged ECS. Build, CTest, TypeScript typecheck, interactive UI, real GPU screenshots and performance NOT RUN. Next: FRACTURE support, bond state and pending collapse events; actual stress and per-duct historical transfer telemetry require owner outputs. No main merge.

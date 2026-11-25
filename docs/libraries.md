@@ -180,3 +180,27 @@ Generic pieces that a city game used to keep in its own `native/` are packages n
 Tests: `tests/libraries/city_tests.cpp` (CTest `library_city`), `tools/rules/test_rules.py` (CTest `rules_files`).
 The traffic, pedestrian and driving code of `modules/rts` calls `trafficWideExit`, `trafficLocalDetour`,
 `sweptBoxCircle` and `polylineBounds` directly (no-genre stage C0a); the former Kingston copies are deleted.
+
+## Algorithms — noise roadmap
+
+- Stage 44: periodic integer value noise and cellular distances (implementation present; verification pending).
+- Stage 45 (implementation present; verification pending): periodic gradient noise, analytical fixed-point derivative samples, bounded normalized fractal composition (fBm, turbulence, ridged). Keep legacy GenNoise unchanged. Acceptance: seam equality for value and derivatives, deterministic seed, negative coordinates, bounded octaves and input rejection, C++20 standalone use, no allocation. Full native/platform gates pending.
+- Next: bounded domain warp and curl/vector fields; audit integration candidates without replacing existing owners.
+
+Noise package 0.2.0: include `<aiverselib/algorithms/Noise.h>` and link `AIVERSE::lib_noise`. Public functions accept signed Q16 coordinates and integer periods (zero is aperiodic); sample derivatives are signed Q16 per input lattice unit. The value-sample API preserves the original value kernel. Fractal composition uses bounded integer lacunarity and normalized Q16 weights; scaled bounds are checked before multiplication. The new pure APIs do not alter legacy generation, save formats, or ECS ownership. See [noise skill](../skills/core/aiverse-noise/SKILL.md) and `library_noise` CTest for example and checks. No platform acceptance claimed.
+
+- Stage 46 (implemented, verification pending): Billow, periodic vector/Jacobian, domain warp and curl; preserve Stage 44/45 samples. See [delivery record](handoffs/algorithms-stage46-delivery.md).
+
+Noise 0.3.0 adds signed Billow, vector samples, domain warp with chain-rule derivatives, and curl in two and three dimensions. All use the same `AIVERSE::lib_noise` target and integer periods, and reject invalid or exceeded bounds. No legacy generation or persistence change. See the skill for precise units and limits.
+
+- Stage 47 (implemented; isolated verification, full gate pending): deterministic Simplex 2D/3D, analytical derivatives, skew-lattice tiling and fractal composition. See [delivery plan](handoffs/algorithms-stage47-delivery.md).
+
+Noise 0.4.0 adds Cartesian `simplexNoiseSample` / `simplexNoise` and `simplexSkewNoiseSample` with exact skew-lattice periods. `NoiseBasis::Simplex` works in existing fractal, vector, warp and curl APIs only for aperiodic Cartesian inputs. Nonzero Cartesian periods fail closed. The fixed-point kernel evaluates N+1 vertices, with Q30 radial weights and Q16 public samples. Existing package dependencies and legacy GenNoise stay unchanged. Next: allocation-free batch sampling and SIMD parity/performance.
+
+- Stage 48 (implemented; isolated verification, full gate pending): allocation-free batch sampling with AoS/SoA input, typed caller-owned outputs and explicit invalid-element policies. See [delivery plan](handoffs/algorithms-stage48-delivery.md).
+
+Noise 0.5.0 provides `NoiseBatch.h` on `AIVERSE::lib_noise`: borrowed AoS/SoA points, typed contiguous caller outputs, exact scalar parity, Atomic (two-pass, all-or-nothing) and MarkInvalid (single pass, full byte mask, invalid results unchanged). Reject invalid shape/config/overlap without writes. See the skill for functions and examples. Scalar kernels and saved-world sequences unchanged. SIMD dispatch and measured throughput remain next stages.
+
+- Stage 49 (implemented; isolated x86 verification, full gate pending): SIMD Value Noise batch interpolation with explicit backend selection and scalar parity. See [delivery plan](handoffs/algorithms-stage49-delivery.md).
+
+Noise 0.6.0 provides optional SSE2/AVX2/NEON interpolation in Value-only `noiseBatchValues` (2D/3D) with automatic or explicit backend preference, scalar tails/fallback and executed-backend reporting. Lattice hash/fade are shared scalar preparation; derivatives and other kernels remain scalar. No throughput claim yet; SSE2/AVX2 and disabled-SIMD fallback verified on Linux x86, NEON execution pending. Next: reproducible throughput benchmarks, optimize remaining bottlenecks before expanding SIMD coverage.

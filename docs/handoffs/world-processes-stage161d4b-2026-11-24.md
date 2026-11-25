@@ -1,0 +1,15 @@
+# Stage 161D4b — completed-tick ARBOR meshes, exposed roots and physical log presentation
+Date 2026-11-24. Owner World Processes / Studio. Branch feature/world-processes-stage31-bidirectional-handles.
+Base a253438bb4d918bd991996cd741885aee70f1ae8; delivery scope 116d214062739c85f6965406ac492956a46ed26d; implementation 04db4000fea3a59595393b45b548eaec4195d9d8 and 935c4731973b0e3affa1f69380cc64ec40f1f47b.
+
+- apps/studio-native/StudioPlanetForestSnapshot.h: sample native plantAppearance, size/foliage, actual root exposure, habit and tangent east; dead trees suppress foliage. Completed tick and body identity maintained. Existing capsule pose remains authoritative.
+- apps/studio-native/StudioScene.h/.cpp: shared ARBOR prototype cache now requests live species (including recruited trees) from current sample, radial tangent transforms at historic plant anchors, flora/age/shrub scale, bark-only for dead/zero foliage, skip spent/harvested/fallen standing models. Live replaces authored standing meshes, no duplicate. Existing diagnostic gizmos still optional.
+- Exposed roots: reuse makeExposedRootModel with three existing depth tiers, default tree/shrub root profile, shared per species/habit/tier model, unscaled physical root dimensions. Generated only for owner-reported exposure. Root prototypes use existing fallback bark; not per-plant exact geometry.
+- Physical consequence: shared rendered cylindrical wood proxy using exact published capsule center, longitudinal axis and envelope radius/length; no invented motion, no physics modifications. Cylinder is a visual approximation, not exact capsule surface, textured fallen branches or simulation geometry. Retired logs suppressed.
+- Resource limits: shared conservative 192 MiB resident model estimate, 16 tree prototypes, 32 root prototypes and one log model; one attempted generation/upload per frame. Existing renderer invalidation and idle wait before release. Source-only, no measured instancing or GPU memory results. Active body, current saved local Play map and capped completed snapshot (128 maximum, lower with other live layers). Geometry of terrain itself remains authored preview, not full runtime deformation. No claim of all plants displayed.
+- apps/studio-web/src/types.ts and panels/PlanetForestPanel.tsx: additional snapshot fields and inspector values. Existing authoring/native APIs and persistence unchanged.
+- docs/devlog/systems.json: in-progress.
+
+Evidence: Git source changes committed, source inspection only. C++ build, TypeScript, CTest, Metal capture, actual root exposure/physical pose acceptance, budget/performance and MCP coverage NOT RUN; remote edits, no KINGSTON Mac environment. No main merge or release. No screenshots or production-ready claim.
+
+Next Stage 161D4c: actual PHYSIS wind/season owner routing for live plant presentation, texture refresh and better fallen bark representation as applicable; then integrated verification and MCP/feature gate. Partial foliage density, runtime terrain display parity, live per-body sampling, and continuous drag remain open. 
