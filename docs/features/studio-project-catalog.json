@@ -205,6 +205,8 @@
       "studio.mapPlayer",
       "studio.sceneBrush",
       "studio.mapArea",
+      "studio.mapRegions",
+      "studio.mapRegionName",
       "studio.playerStartPick",
       "studio.gameEntities",
       "studio.hierarchyGroups",

@@ -1628,6 +1628,61 @@ void Workspace::registerCoreOps() {
             note({Change::Map,0,0,-1,-1,-1,"Map area: "+name});
             return ok();
         });
+    const auto regionLetter = [this](const Json& params) {
+        if (map.data.worldSpace || map.data.planet()) throw std::runtime_error("Regions require a flat map");
+        const auto letter = params.getStr("letter");
+        if (letter.size() != 1 || letter.front() < 'A' || letter.front() > 'Z')
+            throw std::runtime_error("Choose a region letter from A to Z");
+        return letter.front();
+    };
+    add("region_list", "List region names and exact cell counts, with a bounded coverage map for the selected letter.",
+        R"({"properties":{"letter":{"type":"string"}},"required":["letter"]})",
+        [this, regionLetter](const Json& params) {
+            const char selected = regionLetter(params);
+            const auto& d = map.data;
+            if (d.w <= 0 || d.h <= 0 || d.regions.size() != size_t(d.w) * d.h)
+                throw std::runtime_error("Region grid is unavailable");
+            const int stride = std::max(1, (std::max(d.w, d.h) + 95) / 96);
+            std::vector<std::string> coverage((d.h + stride - 1) / stride, std::string((d.w + stride - 1) / stride, '.'));
+            int counts[26]{};
+            for (int y = 0; y < d.h; ++y) {
+                for (int x = 0; x < d.w; ++x) {
+                    const char c = d.regions[d.idx(x, y)];
+                    if (c >= 'A' && c <= 'Z') ++counts[c - 'A'];
+                    if (c == selected) coverage[y / stride][x / stride] = '#';
+                }
+            }
+            Json entries = Json::array(), rows = Json::array();
+            for (char c = 'A'; c <= 'Z'; ++c) {
+                Json entry = Json::object();
+                entry.set("letter", str(std::string(1, c)));
+                const auto name = d.regionNames.find(c);
+                entry.set("name", str(name == d.regionNames.end() ? "" : name->second));
+                entry.set("cells", num(counts[c - 'A']));
+                entries.push(std::move(entry));
+            }
+            for (const auto& row : coverage) rows.push(str(row));
+            Json result = ok();
+            result.set("regions", entries); result.set("coverage", rows);
+            result.set("stride", num(stride)); result.set("width", num(d.w)); result.set("height", num(d.h));
+            return result;
+        });
+    add("region_name", "Set the display name for a region. An empty name clears the label and keeps painted cells.",
+        R"({"properties":{"letter":{"type":"string"},"name":{"type":"string"}},"required":["letter","name"]})",
+        [this, regionLetter](const Json& params) {
+            const char c = regionLetter(params);
+            if (!params["name"].isString()) throw std::runtime_error("Expected a region display name");
+            const auto name = params.getStr("name");
+            if (name.size() > 256) throw std::runtime_error("Region name exceeds 256 bytes");
+            auto& names = map.data.regionNames;
+            auto previous = names.find(c);
+            if (previous == names.end() ? name.empty() : previous->second == name) return ok();
+            map.beginEdit();
+            if (name.empty()) names.erase(c);
+            else names[c] = name;
+            note({Change::Map,0,0,-1,-1,-1,std::string("Region name: ") + c});
+            return ok();
+        });
     add("region_paint", "Paint a region (Northgard-style territory) with a letter (A-Z, '.' erases); optional display name.",
         (std::string(R"({"properties": {"letter": {"type": "string"}, "name": {"type": "string"}, )") + kShapeSchema + R"(}, "required": ["letter"]})").c_str(),
         [this](const Json& p) {

@@ -11,7 +11,7 @@ inline const char* studioAgentHistoryPolicy(const std::string& op){
     static const std::set<std::string> reads={
         "studio_runtime_entities","studio_runtime_inspect","studio_runtime_regions","studio_play_review_preview",
         "mcp_registry","simulation_budget_plan","game_info","rules_get","rules_list",
-        "map_list","map_info","map_ascii","map_get","map_validate","entity_list","planet_forest_get",
+        "region_list","map_list","map_info","map_ascii","map_get","map_validate","entity_list","planet_forest_get",
         "studio_planet_forest_live","studio_planet_scene_get",
         "project_history_status","build_status","studio_asset_history","studio_asset_catalog",
         "studio_history_capabilities","studio_asset_move_preview",
@@ -22,7 +22,7 @@ inline const char* studioAgentHistoryPolicy(const std::string& op){
     };
     static const std::set<std::string> map={
         "map_set","map_area","map_heightfield","map_resize","map_mirror","terrain_paint","terrain_level",
-        "field_paint","region_paint","entity_place","entity_update","entity_delete",
+        "field_paint","region_name","region_paint","entity_place","entity_update","entity_delete",
         "road_toggle","player_set","player_remove","planet_forest_set","planet_forest_plant","planet_forest_move","planet_forest_remove"
     };
     static const std::set<std::string> project={"rules_set","rules_merge","rules_delete","set_manifest"};

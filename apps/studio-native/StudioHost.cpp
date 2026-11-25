@@ -83,7 +83,7 @@ bool finite(std::initializer_list<double> values) {
 const std::set<std::string>& documentChangingMethods() {
     static const std::set<std::string> methods = {
         "studio.openMap", "studio.newMap", "studio.entityCreate", "studio.entityDelete", "studio.entityDuplicate",
-        "studio.setProperty", "studio.save", "studio.undo", "studio.redo", "studio.nereidFlowSet",
+        "studio.mapRegionName", "studio.setProperty", "studio.save", "studio.undo", "studio.redo", "studio.nereidFlowSet",
         "studio.planetForestPlant", "studio.planetForestMove", "studio.planetForestSet", "studio.renderLightingSet", "studio.lightingSet", "studio.lightAdd", "studio.lightUpdate", "studio.lightDelete",
         "studio.materialPatch", "studio.materialCreate", "studio.buildingPublishMaterial", "studio.setProperties", "studio.componentAdd",
         "studio.componentRemove", "studio.entityMove", "studio.entitiesDelete", "studio.entitiesDuplicate",
@@ -3734,6 +3734,7 @@ void StudioHost::afterSessionReply(const Json& req, const Json& reply) {
         if(preview_)onScene([&]{preview_->setPlanetSceneBody("","","");});
         if(armed){Json out=Json::object();out.set("cancelled",Json::fromBool(true));sendEventPayload("planetForest.planted",out);}
     }
+    if(method=="studio.sceneBrush" && req["params"].size())sendEventPayload("brush.changed",reply["result"]);
     if (method == "studio.select" && platform_.hasFloatingWindows()) sendEvent("selection.changed", ""); // floats follow it
     if (preview_ && (method == "studio.openMap" || method == "studio.newMap")) {
         onScene([&] { preview_->resetCamera(); });

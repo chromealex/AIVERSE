@@ -23,6 +23,22 @@
 #include <chrono>
 
 namespace {
+void regionOverviewContract(){
+    using namespace aiverse;
+    editor::Workspace ws;
+    ws.map.reset(197,9);
+    auto& map=ws.map.data;
+    map.regions[map.idx(0,0)]='B';
+    map.regions[map.idx(196,8)]='B';
+    map.regions[map.idx(195,8)]='A';
+    const auto report=ws.call("region_list",Json::parse(R"({"letter":"B"})"));
+    AIVERSE_TEST_CHECK(report.getInt("stride")==3 && report["coverage"].size()==3);
+    AIVERSE_TEST_CHECK(report["coverage"][0].str().size()==66 && report["coverage"][0].str()[0]=='#');
+    AIVERSE_TEST_CHECK(report["coverage"][2].str().back()=='#');
+    AIVERSE_TEST_CHECK(report["regions"][0].getInt("cells")==1 && report["regions"][1].getInt("cells")==2);
+    AIVERSE_TEST_CHECK(ws.call("region_name",Json::parse(R"({"letter":".","name":"Sea"})")).has("error"));
+    AIVERSE_TEST_CHECK(!ws.map.canUndo());
+}
 void mapCompoundHistoryContract(){
     using namespace aiverse::editor;
     MapDoc map;map.reset(8,8);
@@ -1810,6 +1826,22 @@ void entityWorkflow() {
                 call("studio.undo");AIVERSE_TEST_CHECK(doc.toJson()==before);
                 call("studio.undo");doc.data.extra=savedExtra;
             }
+            {
+                auto& doc=session.workspace().map;
+                auto args=Json::parse(R"({"letter":"K","name":"Harbor ridge"})");
+                args.set("scope",call("studio.snapshot")["result"]["graphDocument"]);
+                const auto original=doc.data.regions;
+                AIVERSE_TEST_CHECK(!call("studio.mapRegionName",args).has("error"));
+                AIVERSE_TEST_CHECK(doc.data.regions==original && doc.data.regionNames.at('K')=="Harbor ridge");
+                AIVERSE_TEST_CHECK(call("studio.mapRegionName",args).has("error"));
+                args.set("scope",call("studio.snapshot")["result"]["graphDocument"]);
+                const auto depth=doc.undoDepth();
+                AIVERSE_TEST_CHECK(!call("studio.mapRegionName",args).has("error") && doc.undoDepth()==depth);
+                const auto result=call("studio.mapRegions",args)["result"];
+                AIVERSE_TEST_CHECK(result["regions"].size()==26 && result["regions"][10].getStr("name")=="Harbor ridge");
+                AIVERSE_TEST_CHECK(result["coverage"].size()<=96 && result["coverage"][0].str().size()<=96);
+                AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && !doc.data.regionNames.count('K'));
+            }
             const auto originalDoc=session.workspace().map.toJson();
             auto playerCall=[&](const Json& request){
                 Json scoped=request;
@@ -2256,7 +2288,7 @@ int main() {
     planetWorldProcessAuthoringWorkflow();
     authoredEntityWorkflow();
     entityWorkflow();
-    mapCompoundHistoryContract();mapHistoryPersistenceContract();projectFileEditContract();projectDocumentJournalContract();projectOwnerSaveContract();projectHistoryContract();projectHistoryPersistenceContract();projectHistoryBudgetContract();assetHistorySessionContract();agentScopedHistoryContract();projectFileRecoveryWorkflow();
+    regionOverviewContract();mapCompoundHistoryContract();mapHistoryPersistenceContract();projectFileEditContract();projectDocumentJournalContract();projectOwnerSaveContract();projectHistoryContract();projectHistoryPersistenceContract();projectHistoryBudgetContract();assetHistorySessionContract();agentScopedHistoryContract();projectFileRecoveryWorkflow();
     caveGraphCaptureWorkflow();
     std::cout << "studio session contract PASS\n";
 }

@@ -99,3 +99,7 @@
 .insp-areas__map rect{fill:var(--au-line-strong);stroke:var(--au-text-muted);vector-effect:non-scaling-stroke}
 .insp-areas__map .map-board{fill:var(--au-field);stroke:var(--au-line)}
 .insp-areas__map .is-selected{fill:var(--au-active);stroke:var(--au-accent);stroke-width:2}
+
+.insp-regions figure{margin:0}
+.insp-regions figure svg{display:block;width:100%;height:clamp(110px,25vh,230px);background:var(--studio-background);border:1px solid var(--au-line);border-radius:var(--au-radius-sm);box-sizing:border-box}
+.insp-regions figcaption{margin-top:5px;color:var(--au-text-muted);font-variant-numeric:tabular-nums}

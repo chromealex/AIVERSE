@@ -942,6 +942,7 @@ Json StudioSession::snapshot() const {
     if (!ws_.project.dir.empty()) result.set("graphDocument",graphDocumentScope());
     Json scene = Json::object();
     scene.set("name", str(ws_.map.data.name));
+    scene.set("mapRegions",Json::fromBool(!ws_.map.data.worldSpace && !ws_.map.data.planet() && !ws_.project.dir.empty()));
     scene.set("mapProperties",Json::fromBool(!ws_.map.data.worldSpace && !ws_.project.dir.empty()));
     Json rows = Json::array();
     const auto nodes = editor::enumerateDocumentSceneNodes(ws_.map);
@@ -2274,7 +2275,7 @@ std::string StudioSession::historyLabel(const std::string& method, const Json& p
         return key.empty() ? "Edit "+(comp.empty()?std::string("properties"):comp) : "Set "+key;
     }
     static const std::pair<const char*,const char*> names[]={
-        {"studio.mapArea","Edit map area"},{"studio.mapPlayer","Edit map players"},{"studio.mapPropertiesSet","Edit map properties"},{"studio.entityCreate","Create object"},{"studio.entityDelete","Delete"},{"studio.entitiesDelete","Delete"},
+        {"studio.mapRegionName","Rename map region"},{"studio.mapArea","Edit map area"},{"studio.mapPlayer","Edit map players"},{"studio.mapPropertiesSet","Edit map properties"},{"studio.entityCreate","Create object"},{"studio.entityDelete","Delete"},{"studio.entitiesDelete","Delete"},
         {"studio.entityDuplicate","Duplicate"},{"studio.entitiesDuplicate","Duplicate"},{"studio.entityMove","Reorder"},
         {"studio.assetPlace","Place asset"},{"studio.componentAdd","Add component"},{"studio.componentRemove","Remove component"},
         {"studio.lightAdd","Add light"},{"studio.lightUpdate","Edit light"},{"studio.lightDelete","Delete light"},
@@ -2374,7 +2375,7 @@ Json StudioSession::dispatch(const Json& request) {
     if(stroking_){
         // The stroke owns the MapDoc transaction across frames. Only explicit
         // observational requests can enter; other edits retry after release.
-        static const std::set<std::string> reads={"studio.snapshot","studio.mapProperties","studio.hierarchyGroups","studio.inspect","studio.propertiesFor","studio.history","studio.projectHistory","studio.assetHistory","studio.assetTrashList","studio.stats","studio.project","studio.agentInfo","studio.agentStop","studio.componentCatalog"};
+        static const std::set<std::string> reads={"studio.snapshot","studio.mapRegions","studio.mapProperties","studio.hierarchyGroups","studio.inspect","studio.propertiesFor","studio.history","studio.projectHistory","studio.assetHistory","studio.assetTrashList","studio.stats","studio.project","studio.agentInfo","studio.agentStop","studio.componentCatalog"};
         if(method=="studio.sceneBrush"&&request["params"].has("armed")&&!request["params"].getBool("armed",true))strokeCancel();
         else if(!reads.count(method)){
             Json reply=Json::object();reply.set("id",request["id"]);reply.set("error",str("Finish or cancel the active Scene stroke first"));return reply;
@@ -4139,6 +4140,13 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             ++graphDocumentEpoch_;
             clearSelection();hidden_.clear();locked_.clear();previewGraphTitle_.clear();previewGraphFactors_=Json();previewMaterialName_.clear();refreshMaterialPreview();
             reply.set("result",snapshot());
+        } else if(method=="studio.mapRegions" || method=="studio.mapRegionName"){
+            if(ws_.project.dir.empty() || !sameDocumentScope(params["scope"],graphDocumentScope()))
+                throw std::runtime_error("Map changed. Reload the region.");
+            const bool write=method=="studio.mapRegionName";
+            auto result=ws_.call(write?"region_name":"region_list",params,write?"studio":"editor");
+            if(result.has("error"))throw std::runtime_error(result.getStr("error"));
+            reply.set("result",write?snapshot():std::move(result));
         } else if(method=="studio.mapArea"){
             if(ws_.project.dir.empty() || !sameDocumentScope(params["scope"],graphDocumentScope()))
                 throw std::runtime_error("Map changed. Reload the area list.");
@@ -4503,6 +4511,8 @@ Json StudioSession::dispatchImplCore(const Json& request) {
         } else if (method == "studio.sceneBrush") {
             // Arm / disarm the Scene brush and set its tool and settings (session only).
             if(stroking_)throw std::runtime_error("Finish the active Scene stroke first");
+            if(params.has("scope") && !sameDocumentScope(params["scope"],graphDocumentScope()))
+                throw std::runtime_error("Map changed. Reload the region before painting.");
             auto next=brush_;auto& b=next;
             static const std::set<std::string> kinds={"terrain","paint","tiles","region","field","objects","road","river","caverns"};
             static const std::set<std::string> ops={"raise","lower","smooth","flatten","noise","erode"};
