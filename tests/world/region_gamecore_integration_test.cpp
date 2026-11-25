@@ -27,13 +27,23 @@ void io(Archive& archive,RegionWork& state) {
     archive(state.completed,state.assignment);
 }
 
+struct Links { std::vector<Entity> targets; };
+void io(Archive& archive,Links& links) { archive(links.targets); }
+
 class Native final:public g::NativeModule {
 public:
     void setup(g::GameCore&,Simulation& sim,g::NativeState& state,const Json&)const override {
         w::RegionDormancyController controller;
         if(!controller.registerComponent<RegionWork>("fixture.region_work",1))
             throw std::logic_error("region work codec registration");
-        w::RegionLifecycleRuntime::install(sim,std::move(controller),1);
+        auto admit=[](const Simulation&,w::Cell,std::span<const Entity>){return true;};
+        w::RegionLifecycleRuntime::GuardedPolicy guarded{{},admit,admit};
+        guarded.plan.addPaused<RegionWork>("fixture.region_work");
+        guarded.references.addComponent<Links>([](const Links& links,auto report) {
+            for(Entity entry:links.targets)report(entry);
+        });
+        w::RegionLifecycleRuntime::installGuarded(sim,std::move(controller),std::move(guarded),1);
+        sim.registerPersistentComponent<Links>("fixture.links",1);
         sim.registerPersistentComponent<RegionWork>("fixture.region_work",1);
 
         // Attach to a REAL spawned GameCore Unit, not a dummy GameModule.
@@ -234,7 +244,48 @@ static void blockedRequestDoesNotLoseActors() {
     AIVERSE_TEST_CHECK(ecs.has<fixture::RegionWork>(e));
 }
 
+static void externalLinksDelayWholeGroup() {
+    auto game=make(true);
+    auto& ecs=game->world();
+    const Entity first=target(*game);
+    const Entity second=ecs.create();
+    const Entity outsider=ecs.create();
+    const Transform transform=ecs.get<Transform>(first);
+    ecs.add<Transform>(second,transform);
+    AIVERSE_TEST_CHECK(w::RegionEcsBridge::bindNew(ecs,*ecs.resource<w::RegionEntityLedger>(),
+                                                   second,1002,region(*game)));
+    ecs.add<fixture::RegionWork>(second,fixture::RegionWork{7,"passenger"});
+    ecs.add<fixture::Links>(first,fixture::Links{{second}});
+    ecs.add<fixture::Links>(outsider,fixture::Links{{first}});
+    command(*game,1);
+    AIVERSE_TEST_CHECK(ecs.resourceConst<w::RegionColdStore>()->size()==0);
+    AIVERSE_TEST_CHECK(ecs.resourceConst<w::RegionActivationQueue>()->pending.size()==1);
+    auto peer=make(true);
+    std::string error;
+    AIVERSE_TEST_CHECK(peer->deserialize(game->serialize(),&error));
+    for(Simulation* sim:{game.get(),peer.get()}) {
+        auto& world=sim->world();
+        world.remove<fixture::Links>(outsider);
+        world.get<fixture::Links>(first).targets.push_back(outsider);
+        sim->step();
+        AIVERSE_TEST_CHECK(world.resourceConst<w::RegionColdStore>()->size()==0);
+        world.get<fixture::Links>(first).targets.pop_back();
+        sim->step();
+        AIVERSE_TEST_CHECK(world.resourceConst<w::RegionColdStore>()->size()==2);
+        AIVERSE_TEST_CHECK(world.resourceConst<w::RegionActivationQueue>()->pending.empty());
+    }
+    AIVERSE_TEST_CHECK(peer->checksum()==game->checksum());
+    auto fresh=make(true);
+    AIVERSE_TEST_CHECK(fresh->deserialize(game->serialize(),&error));
+    command(*fresh,2);
+    command(*game,2);
+    AIVERSE_TEST_CHECK(fresh->checksum()==game->checksum());
+    AIVERSE_TEST_CHECK(fresh->world().get<fixture::Links>(first).targets.front()==second);
+    AIVERSE_TEST_CHECK(fresh->world().get<fixture::RegionWork>(second).assignment=="passenger");
+}
+
 int main() {
+    externalLinksDelayWholeGroup();
     idleRegionSchedulerDoesNotCopyColdState();
     blockedRequestDoesNotLoseActors();
     verifyLiveGameCore();

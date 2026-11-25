@@ -388,3 +388,18 @@ write a transient blocked reason; its budget is capped at 16. Use only
 the guarded path for guarded hosts. No new save field or persistent clock,
 no default host installation, no arbitrary NPC/vehicle parking, no
 automatic region residency selector. Native acceptance NOT RUN.
+
+For cross-group links in live project components, register a read-only
+enumerator on the guarded policy before installation:
+
+```cpp
+guarded.references.addComponent<Party>([](const Party& party,auto report) {
+    for (Entity member : party.members) report(member);
+});
+```
+
+The parking barrier checks both ends using full live Entity handles. Internal
+links can park together. A crossing link keeps the queue head pending until
+the owner releases it. Enumerate every relevant type and field. Keep semantic
+IDs and resource-owned claims in mayPark. The scan runs only on attempted hot
+to cold transitions and costs one traversal per registered component type.

@@ -7,6 +7,8 @@
 #include <cstdint>
 #include <functional>
 #include <span>
+#include <set>
+#include <vector>
 #include <map>
 #include <memory>
 #include <stdexcept>
@@ -66,6 +68,38 @@ inline void io(Archive& archive,RegionActivationQueue& queue) {
     }
 }
 
+// Enumerators read the owning ECS component at the structural barrier. They
+// must report every relevant Entity field, including entries in collections.
+// Semantic IDs, resource-held pins and collision readiness belong to mayPark.
+class RegionReferenceAdmission {
+    using Members=std::set<uint64_t>;
+    std::vector<std::function<bool(const World&,const Members&)>> checks_;
+public:
+    template<class Component,class Visit>
+    void addComponent(Visit visit) {
+        checks_.emplace_back([visit=std::move(visit)](const World& world,const Members& group) {
+            bool closed=true;
+            world.eachExistingConst<Component>([&](Entity owner,const Component& component) {
+                if(!closed)return;
+                const bool ownerInside=group.contains(owner.packed());
+                visit(component,[&](Entity target) {
+                    if(target.valid() && world.alive(target) &&
+                       ownerInside!=group.contains(target.packed()))closed=false;
+                });
+            });
+            return closed;
+        });
+    }
+
+    bool allowsParking(const World& world,std::span<const Entity> members)const {
+        if(checks_.empty())return true;
+        Members group;
+        for(Entity member:members)group.insert(member.packed());
+        return std::all_of(checks_.begin(),checks_.end(),
+            [&](const auto& check){return check(world,group);});
+    }
+};
+
 class RegionLifecycleRuntime {
 public:
     // Immutable setup-time configuration, not another persisted resource.
@@ -76,6 +110,7 @@ public:
         RegionDormancyController::ColdAdvancePlan plan;
         Admission mayPark;
         Admission mayWake;
+        RegionReferenceAdmission references{};
     };
 
 private:
@@ -217,7 +252,8 @@ public:
             [&](World& world,const RegionEntityLedger& ledger,RegionColdStore& cold,
                 Cell region,bool active,std::string* why){
                 const auto admitPark=[&](const World&,Cell cell,std::span<const Entity> members){
-                    return guarded.mayPark(std::as_const(sim),cell,members);
+                    return guarded.mayPark(std::as_const(sim),cell,members) &&
+                           guarded.references.allowsParking(world,members);
                 };
                 const auto admitWake=[&](const World&,Cell cell,std::span<const Entity> members){
                     return guarded.mayWake(std::as_const(sim),cell,members);
