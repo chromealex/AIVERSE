@@ -67,9 +67,11 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "rules_get and rules_merge round-tripped the target height without losing the target model.",
+      "evidence": [
+        "docs/evidence/projectile-impact-height-authoring.json"
+      ]
     },
     "studio": {
       "status": "not_run",
@@ -82,9 +84,11 @@
       "evidence": []
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "A fresh native MCP process reopened the edited target and read the authored height.",
+      "evidence": [
+        "docs/evidence/projectile-impact-height-authoring.json"
+      ]
     },
     "graphs": {
       "status": "not_run",
@@ -107,9 +111,11 @@
       "evidence": []
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The demo ran ten seconds on the native headless host and fired seven times at seed 197.",
+      "evidence": [
+        "docs/evidence/projectile-impact-height-authoring.json"
+      ]
     },
     "examples": {
       "status": "pass",
@@ -158,6 +164,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/projectile-impact-height-studio.json"
+    "docs/evidence/projectile-impact-height-authoring.json"
   ]
 }
