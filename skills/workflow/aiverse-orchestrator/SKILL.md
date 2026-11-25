@@ -6,6 +6,8 @@ description: Find AIVERSE repository skills and select the smallest library set 
 For every game/world creation task, first follow `skills/workflow/aiverse-terra-first/SKILL.md`. Use native Terra capabilities before custom environment implementations; vegetation routing is `skills/world/aiverse-terra-vegetation/SKILL.md`.
 
 
+For an outdoor map sky, daylight or clouds (небо, облака), use [the native sky workflow](../../visuals/aiverse-physical-sky/SKILL.md).
+
 This is a workflow skill with no runtime library. The machine-readable index is
 `skills/catalog.json`; do not load every SKILL.md or the whole schema.
 

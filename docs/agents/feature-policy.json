@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "features": {
+    "native-sky-skill": {"requires": [], "roadmap": {"system": "prisma", "id": "native-sky-skill"}, "api_paths": []},
     "site-devlog-roadmap": {"requires": [], "roadmap": {"system": "build", "id": "site-devlog-roadmap"}, "api_paths": []},
     "encounter-phase-determinism": {"requires": [], "roadmap": {"system": "gameplay", "id": "encounter-phase-determinism"}, "api_paths": []},
     "native-simulation-checks": {"requires": [], "roadmap": {"system": "agents", "id": "native-simulation-checks"}, "api_paths": ["apps/editor/core/NativeBuildOps.h"]},
