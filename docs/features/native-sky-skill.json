@@ -22,6 +22,8 @@
     "docs/agent-handoffs/native-sky-skill-integration-2026-11-25.md",
     "docs/evidence/native-sky-discovery.json",
     "docs/evidence/native-sky-discovery.log.txt",
+    "docs/evidence/native-sky-main-59d4752d9.json",
+    "docs/evidence/native-sky-main-59d4752d9.log.txt",
     "docs/features/native-sky-skill.json"
   ],
   "traits": {
@@ -113,9 +115,9 @@
     },
     "tests": {
       "status": "pass",
-      "note": "Production catalog validates; realistic Russian and English queries rank the skill first and the client plan selects its recipe.",
+      "note": "Production catalog validates 303 skills; realistic Russian and English queries rank this skill first, the client plan selects its recipe, all nine README translations pass, and the site checks 72 entries with zero errors on the integration stage.",
       "evidence": [
-        "docs/evidence/native-sky-discovery.json"
+        "docs/evidence/native-sky-main-59d4752d9.json"
       ]
     },
     "handoff": {
@@ -147,6 +149,6 @@
     "studio_methods": []
   },
   "test_reports": [
-    "docs/evidence/native-sky-discovery.json"
+    "docs/evidence/native-sky-main-59d4752d9.json"
   ]
 }

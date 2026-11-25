@@ -1,0 +1,11 @@
+{
+  "sha": "59d4752d9dffe490aba31d736370dd49b335f8ff",
+  "argv": [
+    "python3.12",
+    "-c",
+    "import json,subprocess as s; commands=[[\"python3.12\",\"tools/skills/catalog.py\",\"check\"],[\"python3.12\",\"tools/skills/audit.py\",\"--strict\"],[\"python3.12\",\"tools/readme/check.py\"],[\"python3.12\",\"tools/site/build.py\",\"check\"]]; [s.run(c,check=True) for c in commands]; tool=[\"python3.12\",\"tools/skills/catalog.py\"]; queries=[\"\u043e\u0431\u044b\u0447\u043d\u043e\u0435 \u0434\u043d\u0435\u0432\u043d\u043e\u0435 \u043d\u0435\u0431\u043e\",\"outdoor sky clouds\"]; hits=[json.loads(s.check_output(tool+[\"search\",q]))[0][\"id\"] for q in queries]; assert hits==[\"aiverse-physical-sky\"]*2,hits; plan=s.check_output(tool+[\"plan\",\"--skills\",\"aiverse-physical-sky\",\"--side\",\"client\"]); assert b\"skills/visuals/aiverse-physical-sky/SKILL.md\" in plan; print(\"search\",list(zip(queries,hits)),\"plan PASS\")"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/native-sky-main-59d4752d9.log.txt",
+  "sha256": "6eeca009749a42365440df70f543e6b817ba256f5ae48ecc2302fe652dc689b0"
+}
