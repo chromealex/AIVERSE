@@ -1,6 +1,8 @@
 {
   "schema": 1,
   "features": {
+    "local-order-feedback": {"requires": [], "roadmap": {"system": "gameplay", "id": "local-order-feedback"}, "api_paths": ["engine/view/game/GameViewScript.h"]},
+    "structure-upgrade-appearance": {"requires": [], "roadmap": {"system": "gameplay", "id": "structure-upgrade-appearance"}, "api_paths": ["engine/view/game/GameView.h"]},
     "terraweave-meadow-grass": {
       "requires": [],
       "roadmap": {"system": "terraweave", "id": "terraweave-meadow-grass"},

@@ -59,7 +59,15 @@
         "Запрашивать деревья рядом из геймплея и запекать рельеф в карту редактора через MCP."
       ],
       "roadmap": [
-        {"id": "terraweave-meadow-grass", "status": "done", "title": "Виды луговой травы", "titleEn": "Meadow grass species", "text": "Густой луг с солнечными тенями, просвечиванием листьев и детализацией по расстоянию.", "textEn": "Dense meadow canopy with sun shadows, leaf transmission and distance LOD.", "date": "2026-11-25"},
+        {
+          "id": "terraweave-meadow-grass",
+          "status": "done",
+          "title": "Виды луговой травы",
+          "titleEn": "Meadow grass species",
+          "text": "Густой луг с солнечными тенями, просвечиванием листьев и детализацией по расстоянию.",
+          "textEn": "Dense meadow canopy with sun shadows, leaf transmission and distance LOD.",
+          "date": "2026-11-25"
+        },
         {
           "status": "done",
           "date": "2026-11-18",
@@ -3514,6 +3522,22 @@
           "titleEn": "Ledges, ladders and water in FPS maps",
           "text": "Метки в формате карты, чтобы хост сообщал эти режимы.",
           "textEn": "Map format tags so the host reports these modes."
+        },
+        {
+          "id": "local-order-feedback",
+          "status": "in-progress",
+          "title": "Маркеры приказов",
+          "titleEn": "Order markers",
+          "text": "События локального приказа для скриптов и оверлеев.",
+          "textEn": "Local order events for scripts and overlays."
+        },
+        {
+          "id": "structure-upgrade-appearance",
+          "status": "in-progress",
+          "title": "Вид здания при улучшении",
+          "titleEn": "Structure upgrade appearance",
+          "text": "Модель нового типа с прогрессом улучшения.",
+          "textEn": "Display the target model with upgrade progress."
         }
       ]
     }
