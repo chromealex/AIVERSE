@@ -5,6 +5,7 @@
   "changed_paths": [
     "CMakeLists.txt",
     "docs/agent-handoffs/quake3-bsp-initial.md",
+    "docs/agent-handoffs/quake3-bsp-patches.md",
     "docs/agent-handoffs/quake3-bsp-pvs.md",
     "docs/devlog/systems.json",
     "docs/features/quake3-bsp.json",
