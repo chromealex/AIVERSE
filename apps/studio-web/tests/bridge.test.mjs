@@ -4,10 +4,10 @@ import { stripTypeScriptTypes } from 'node:module';
 import vm from 'node:vm';
 import test from 'node:test';
 
-function bridge() {
+function bridge(range = 1) {
   const sent = [], timers = new Map();
   let timerId = 0;
-  const window = { webkit: { messageHandlers: { aiverse: {
+  const window = { crypto: { getRandomValues(array) { array[0]=range; return array; } }, webkit: { messageHandlers: { aiverse: {
     postMessage: request => sent.push(request)
   } } } };
   const context = { window,
@@ -41,6 +41,19 @@ test('slow native calls are logged, never failed, and late replies still resolve
   assert.match(b.sent[1].params.message, /studio.snapshot/);
   b.window.__aiverseReceive({ id: b.sent[0].id, result: { mode: 'edit' } });
   assert.equal((await result).mode, 'edit');
+});
+
+test('two WebViews with pending requests resolve only their own broadcast reply',async()=>{
+  const first=bridge(0xffffffff), second=bridge(8);
+  const atlas=first.invoke('studio.lightBakeAtlas',{}), snapshot=second.invoke('studio.snapshot',{});
+  const atlasId=first.sent[0].id, sceneId=second.sent[0].id;
+  assert.ok(Number.isSafeInteger(atlasId) && atlasId < 2**47);
+  assert.notEqual(atlasId,sceneId);
+  for(const web of [first,second])web.window.__aiverseReceive({id:atlasId,result:{png:'atlas'}});
+  assert.equal((await atlas).png,'atlas');
+  assert.equal(second.timers.size,1);
+  second.window.__aiverseReceive({id:sceneId,result:{mode:'edit'}});
+  assert.equal((await snapshot).mode,'edit');
 });
 
 test('native replies clear ordinary call timers', async () => {

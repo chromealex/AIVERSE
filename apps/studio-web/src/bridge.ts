@@ -19,16 +19,11 @@ const pending = new Map<number, {
 const listeners = new Set<(event: string, payload: unknown) => void>();
 // Floating panel windows share the native bridge, and asynchronous replies
 // reach every window, so each window draws request ids from its own range.
-function firstRequestId(): number {
-  try {
-    const panel = new URLSearchParams(window.location?.search ?? '').get('panel');
-    if (!panel) return 1;
-    let hash = 0;
-    for (const c of panel) hash = (hash * 31 + c.charCodeAt(0)) % 9000;
-    return (hash + 1) * 1_000_000 + 1;
-  } catch { return 1; }
-}
-let nextId = firstRequestId();
+// A fresh range per WebView load also isolates outstanding replies after redocking or reloading.
+const requestRange = window.crypto?.getRandomValues(new Uint32Array(1))[0] ??
+  Math.floor(Math.random() * 0x100000000);
+// Native dialog replies also round-trip IDs through the engine's Q48.16 JSON reader.
+let nextId = (requestRange % 0x4000000) * 0x100000 + 1;
 
 window.__aiverseReceive = (message: NativeReply) => {
   if (message && typeof message.event === 'string') {
