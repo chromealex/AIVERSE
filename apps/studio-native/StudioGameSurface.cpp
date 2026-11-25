@@ -117,7 +117,16 @@ void StudioGameSurface::frame(int w,int h,float pw,float ph,double dt,bool focus
         host_->frame(std::clamp(dt,0.0,0.1),{}, {},w,h,logical.first,logical.second,profile_.profile().touch,profile_.insets());
         device_->endFrame();
         const bool match=host_->inMatch();
-        if(match && !matchObserved_){++runtimeEpoch_;runtimeDebugEdited_=false;}
+        if(match && !matchObserved_){
+            ++runtimeEpoch_;runtimeDebugEdited_=false;
+            setupRefs_.clear();
+            if(auto* sim=liveSimulation()){
+                const auto entities=sim->world().entityState();
+                for(uint32_t i=0;i<entities.alive.size();++i)
+                    if(entities.alive[i])setupRefs_.push_back(editor::worldRef(Entity{i,entities.gens[i]}));
+                std::sort(setupRefs_.begin(),setupRefs_.end());
+            }
+        }
         if(!match&&matchObserved_)worldProcessDiagnostics_.reset();
         matchObserved_=match;
         if (host_->quitRequested()) stop();
@@ -408,8 +417,8 @@ Json StudioGameSurface::profile(const std::string& action,uint32_t steps) {
     out.set("totalMs",Json::number(totalMs,6));out.set("systemsMs",Json::number(systemsMs,6));
     return out;
 }
-Json StudioGameSurface::entities(int offset,int limit,const std::string& query) {
-    return inspector_.entities(liveSimulation(),std::to_string(runtimeEpoch_),offset,limit,query);
+Json StudioGameSurface::entities(int offset,int limit,const std::string& query,const StudioRuntimeInspect::GroupQuery& group) {
+    return inspector_.entities(liveSimulation(),std::to_string(runtimeEpoch_),offset,limit,query,group,setupRefs_);
 }
 void StudioGameSurface::selectEntity(const std::string& epoch,const std::string& ref) {
     inspector_.select(liveSimulation(),std::to_string(runtimeEpoch_),epoch,ref);

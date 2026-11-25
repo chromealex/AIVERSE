@@ -100,7 +100,7 @@ export interface StudioPanelContext {
 
 function PlayHierarchy({ ctx }: { ctx: StudioPanelContext }) {
   const { showLive } = useLivePlay();
-  return <LiveSwitch>{showLive ? <LiveHierarchy selection={ctx.liveSelection} onSelected={ctx.onLiveSelection} key={ctx.snapshot?.project.path} project={ctx.snapshot?.project.path}/> : <HierarchyPanel {...ctx}/>}</LiveSwitch>;
+  return <LiveSwitch>{showLive ? <LiveHierarchy groupings={ctx.snapshot?.scene.groupings} selection={ctx.liveSelection} onSelected={ctx.onLiveSelection} key={ctx.snapshot?.project.path} project={ctx.snapshot?.project.path}/> : <HierarchyPanel {...ctx}/>}</LiveSwitch>;
 }
 function PlayInspector({ ctx }: { ctx: StudioPanelContext }) {
   const { showLive } = useLivePlay();

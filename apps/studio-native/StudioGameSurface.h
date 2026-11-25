@@ -27,7 +27,7 @@ public:
     std::function<Json(uint64_t)> buildingGraphReader();
     Json regions() const;
     Json profile(const std::string& action,uint32_t steps);
-    Json entities(int offset,int limit,const std::string& query);
+    Json entities(int offset,int limit,const std::string& query,const StudioRuntimeInspect::GroupQuery& group);
     void selectEntity(const std::string& epoch,const std::string& ref);
     Json inspect(const std::string& epoch,const std::string& ref);
     Json editRuntime(const Json& params);
@@ -55,6 +55,7 @@ private:
     StudioGameDevice profile_;
     float inputScale_=1;
     StudioRuntimeInspect inspector_;
+    std::vector<uint64_t> setupRefs_;
     StudioWorldProcessDiagnostics worldProcessDiagnostics_;
     uint64_t runtimeEpoch_=0;
     bool matchObserved_=false;

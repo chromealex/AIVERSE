@@ -22,10 +22,12 @@ export function LiveSwitch({ children }: { children: ReactNode }) {
 
 const pageSize = 100;
 
-export function LiveHierarchy({project,selection,onSelected}:{project?:string;selection?:LiveRef|null;onSelected?:(state:StudioGameState)=>void}) {
+export function LiveHierarchy({project,groupings,selection,onSelected}:{project?:string;groupings?:string[];selection?:LiveRef|null;onSelected?:(state:StudioGameState)=>void}) {
   const [page, setPage] = useState<StudioRuntimePage | null>(null);
   const [query, setQuery] = useState('');
   const [offset, setOffset] = useState(0);
+  const [group, setGroup] = useState(-1);
+  const [path, setPath] = useState<string[]>([]);
   const epoch = useRef<string | null>(null);
   const [error, setError] = useState('');
   useEffect(() => {
@@ -34,12 +36,12 @@ export function LiveHierarchy({project,selection,onSelected}:{project?:string;se
     const poll = async () => {
       if (busy) return; busy = true;
       try {
-        const next = await invoke('studio.gameEntities', { offset, limit: pageSize, query, expectedProject:project });
+        const next = await invoke('studio.gameEntities', { offset, limit: pageSize, query, expectedProject:project, ...(group >= 0 ? {group,path} : {}) });
         if (!live) return;
         const changedEpoch = epoch.current !== null && epoch.current !== next.epoch;
         epoch.current = next.epoch;
-        if (changedEpoch && offset !== 0) { setOffset(0); return; }
-        const lastOffset = Math.floor(Math.max(0, next.total - 1) / pageSize) * pageSize;
+        if (changedEpoch && (offset || path.length)) { setOffset(0); setPath([]); return; }
+        const lastOffset = Math.floor(Math.max(0, (next.groupCount ?? next.total) - 1) / pageSize) * pageSize;
         if (offset > lastOffset) { setOffset(lastOffset); return; }
         setPage(next); setError('');
       }
@@ -48,13 +50,33 @@ export function LiveHierarchy({project,selection,onSelected}:{project?:string;se
     };
     void poll(); const t = window.setInterval(() => void poll(), 600);
     return () => { live = false; window.clearInterval(t); };
-  }, [query, offset, project]);
+  }, [query, offset, project, group, path]);
+  const count = page?.groupCount ?? page?.total ?? 0;
+  const shown = page?.groups?.length ?? page?.rows.length ?? 0;
+  const noun = page?.groups ? 'group' : 'entity';
+  const plural = page?.groups ? 'groups' : 'entities';
+  const navigate = (next:string[]) => {setPage(null);setOffset(0);setPath(next);};
   return <div className="live-hier">
     <label className="live-hier__search"><Search size={12} aria-hidden="true"/>
       <input value={query} onChange={e => {setQuery(e.target.value); setOffset(0);}} placeholder="Search live · t:type p:owner c:component #id" aria-label="Search live entities"/></label>
+    {!!groupings?.length && <label className="live-hier__grouping">Group by
+      <select value={group} onChange={e=>{setGroup(Number(e.target.value));navigate([]);}}>
+        <option value={-1}>All entities</option>
+        {groupings.map((name,index)=><option key={index} value={index}>{name}</option>)}
+      </select>
+    </label>}
+    {path.length>0 && <nav className="live-hier__path" aria-label="Live group path">
+      <button type="button" onClick={()=>navigate([])}>All groups</button>
+      {path.map((name,i)=><span key={i}> / {i===path.length-1 ? name :
+        <button type="button" onClick={()=>navigate(path.slice(0,i+1))}>{name}</button>}</span>)}
+    </nav>}
     {error && <div className="live__error" role="alert">{error}</div>}
     {!page ? (!error && <div className="live__empty">Reading live entities…</div>) : !page.active ? <div className="live__empty">The game is loading or in its menus.</div> :
-      <><div role="listbox" aria-label="Live entities" className="live-hier__rows">
+      <>{page.groups ? <div className="live-hier__rows" aria-label="Live entity groups">
+        {page.groups.map(g=><button key={g.name} type="button" className="live-hier__row live-hier__group"
+          onClick={()=>navigate([...path,g.name])}><ChevronRight size={13}/><b>{g.name}</b><small>{g.count}</small></button>)}
+        {!page.groups.length && <p className="live__empty">No matching groups.</p>}
+      </div> : <div role="listbox" aria-label="Live entities" className="live-hier__rows">
         {page.rows.map(row => <button key={row.ref} type="button" role="option" title={row.name + ' · ref:' + row.ref}
           aria-selected={selection?.ref === row.ref && selection.epoch === page.epoch}
           className={'live-hier__row' + (selection?.ref === row.ref && selection.epoch === page.epoch ? ' is-selected' : '')}
@@ -66,11 +88,11 @@ export function LiveHierarchy({project,selection,onSelected}:{project?:string;se
           <b>{row.name}</b><small>{row.kind}{row.health > 0 ? ' · ' + Math.round(row.health) + ' hp' : ''}</small>
         </button>)}
         {!page.rows.length && <p className="live__empty">{query ? 'No matching live entities.' : 'No live entities.'}</p>}
-      </div><footer className="live-hier__pager">
-        <span className="live__count">{page.total > pageSize ? `${offset + 1}–${offset + page.rows.length} of ${page.total}` : `${page.total} ${page.total === 1 ? 'entity' : 'entities'}`} · tick {page.tick}</span>
-        {page.total > pageSize && <nav aria-label="Live entity pages">
+      </div>}<footer className="live-hier__pager">
+        <span className="live__count">{count > pageSize ? `${offset + 1}–${offset + shown} of ${count} ${plural}` : `${count} ${count === 1 ? noun : plural}`} · tick {page.tick}</span>
+        {count > pageSize && <nav aria-label="Live entity pages">
           <StudioIconButton aria-label="Previous page" title="Previous page" icon={<ChevronLeft size={14}/>} disabled={offset === 0} onClick={() => setOffset(offset - pageSize)}/>
-          <StudioIconButton aria-label="Next page" title="Next page" icon={<ChevronRight size={14}/>} disabled={offset + pageSize >= page.total} onClick={() => setOffset(offset + pageSize)}/>
+          <StudioIconButton aria-label="Next page" title="Next page" icon={<ChevronRight size={14}/>} disabled={offset + pageSize >= count} onClick={() => setOffset(offset + pageSize)}/>
         </nav>}
       </footer></>}
   </div>;

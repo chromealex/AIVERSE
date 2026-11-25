@@ -3024,7 +3024,20 @@ Json StudioHost::localPlayOperation(const std::string& method, const Json& param
                 params["offset"].toDouble() < 0 || params["offset"].toDouble() > 10000000 ||
                 params["limit"].toDouble() < 1 || params["limit"].toDouble() > 100) throw std::runtime_error("Invalid runtime page");
             const auto offset = int(params["offset"].integer()), limit = int(params["limit"].integer());
-            if (game_) return game_->entities(offset, limit, params.getStr("query"));
+            StudioRuntimeInspect::GroupQuery group;
+            if(params.has("group")){
+                group.config=editor::parseWorldConfig(session_->workspace().project.manifest);
+                const int index=params.getInt("group",-1);
+                if(index<0 || size_t(index)>=group.config.groupings.size() || !params["path"].isArray())
+                    throw std::runtime_error("Unknown live hierarchy group");
+                group.keys=group.config.groupings[size_t(index)].by;
+                if(params["path"].size()>group.keys.size())throw std::runtime_error("Invalid live hierarchy depth");
+                for(const auto& part:params["path"].items()){
+                    if(!part.isString())throw std::runtime_error("Invalid live hierarchy path");
+                    group.path.push_back(part.str());
+                }
+            }
+            if (game_) return game_->entities(offset, limit, params.getStr("query"),group);
             StudioRuntimeInspect empty;
             return empty.entities(nullptr, "0", offset, limit, params.getStr("query"));
         }

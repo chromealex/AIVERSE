@@ -1,6 +1,8 @@
 #pragma once
 #include "apps/editor/core/WorldInspect.h"
 #include "engine/world/WorldPersistenceDiagnostics.h"
+#include "engine/game/Script.h"
+#include <map>
 #include <sstream>
 #include <charconv>
 #include <stdexcept>
@@ -79,7 +81,12 @@ public:
         if(!selectedRef_ || !sim || selectedEpoch_!=epoch || !sim->world().alive(editor::worldEntity(selectedRef_)))return {};
         return std::to_string(selectedRef_);
     }
-    Json entities(Simulation* sim,const std::string& epoch,int offset,int limit,const std::string& query) {
+    struct GroupQuery {
+        editor::WorldConfig config;
+        std::vector<std::string> keys, path;
+    };
+    Json entities(Simulation* sim,const std::string& epoch,int offset,int limit,const std::string& query,
+                  const GroupQuery& group={},const std::vector<uint64_t>& setupRefs={}) {
         if(offset<0 || limit<1 || limit>100 || query.size()>256)
             throw std::runtime_error("Invalid runtime query");
         Json out=Json::object(),rows=Json::array();int total=0;
@@ -87,14 +94,39 @@ public:
         out.set("active",Json::fromBool(mod!=nullptr));out.set("epoch",Json::string(epoch));
         out.set("tick",Json::number(int64_t(sim?sim->tick():0)));
         if(mod) {
-            editor::readWorld(*sim,*mod,{}, {},{},nullptr,model_,{false});
+            std::vector<uint64_t> links;
+            if(!group.keys.empty()){
+                for(const Entity e:mod->mapPlaced())links.push_back(e.valid()?editor::worldRef(e):0);
+            }
+            editor::readWorld(*sim,*mod,group.config,links,setupRefs,nullptr,model_,{false});
+            const bool scriptData=!group.keys.empty() && (!group.config.labelKey.empty() ||
+                std::any_of(group.keys.begin(),group.keys.end(),[](const auto& key){return key.starts_with("data:");}));
+            if(scriptData && mod->scripts()){
+                std::string blob;
+                for(auto& row:model_.rows)
+                    if(mod->scripts()->peekData(*sim,row.e,blob))editor::setWorldRowData(group.config,blob,row);
+            }
+            std::map<std::string,int> children;
+            const bool hasChildren=group.path.size()<group.keys.size();
             const World& w=sim->world();
             const auto* ledger=w.resourceConst<world::RegionEntityLedger>();
             const Filter filter(query);
             for(const auto& row:model_.rows) {
                 if(!filter.matches(w,ledger,row.e,row.ref)||
                    !editor::worldRowMatches(model_,mod->rules(),nullptr,row,filter.shared))continue;
+                bool matchesPath=true;
+                for(size_t depth=0;depth<group.path.size();++depth){
+                    if(editor::worldGroupValue(model_,mod->rules(),row,group.keys.at(depth))!=group.path[depth]){
+                        matchesPath=false;
+                        break;
+                    }
+                }
+                if(!matchesPath)continue;
                 const int i=total++;
+                if(hasChildren){
+                    ++children[editor::worldGroupValue(model_,mod->rules(),row,group.keys[group.path.size()])];
+                    continue;
+                }
                 if(i<offset || i>=offset+limit)continue;
                 Json item=Json::object();item.set("ref",Json::string(std::to_string(row.ref)));
                 item.set("name",Json::string(editor::worldRowName(model_,mod->rules(),nullptr,row)));
@@ -105,6 +137,20 @@ public:
                 item.set("ownership",ownership(w,ledger,row.e));
                 Json components=Json::array();row.eachComp([&](int c){components.push(Json::string(editor::worldComponents()[size_t(c)].id));});
                 item.set("components",std::move(components));rows.push(std::move(item));
+            }
+            if(hasChildren){
+                Json groups=Json::array();
+                int index=0;
+                for(const auto& [name,count]:children){
+                    if(index++<offset)continue;
+                    if(groups.size()>=size_t(limit))break;
+                    Json entry=Json::object();
+                    entry.set("name",Json::string(name));
+                    entry.set("count",Json::number(int64_t(count)));
+                    groups.push(std::move(entry));
+                }
+                out.set("groups",std::move(groups));
+                out.set("groupCount",Json::number(int64_t(children.size())));
             }
         }else model_={};
         out.set("rows",std::move(rows));out.set("total",Json::number(int64_t(total)));return out;

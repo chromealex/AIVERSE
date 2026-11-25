@@ -36,3 +36,10 @@
 .live-hier__pager nav{display:flex;gap:var(--au-space-1)}
 .live-hier__pager .au-button--icon{width:26px;height:26px;min-height:26px}
 .live-hier__row{flex:none}
+
+.live-hier__grouping{display:flex;align-items:center;gap:8px;padding:0 6px 6px;color:var(--au-text-muted);font-size:var(--au-font-sm)}
+.live-hier__grouping select{flex:1;height:26px}
+.live-hier__path{padding:5px 9px;overflow-wrap:anywhere;border-block:1px solid var(--au-line);font-size:var(--au-font-sm)}
+.live-hier__path button{padding:2px;border:0;background:none;color:var(--au-accent);cursor:pointer}
+.live-hier__group{min-height:30px}
+.live-hier__group b{overflow-wrap:anywhere;min-width:0}

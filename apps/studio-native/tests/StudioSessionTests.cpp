@@ -1891,6 +1891,17 @@ void entityWorkflow() {
             AIVERSE_TEST_CHECK(second["rows"][0].getStr("ref")!=ref);
             const auto filtered=inspector.entities(&live,"run-1",0,100,"ref:"+second["rows"][0].getStr("ref"));
             AIVERSE_TEST_CHECK(filtered["total"].integer()==1 && filtered["rows"][0]==second["rows"][0]);
+            studio::StudioRuntimeInspect::GroupQuery grouped;
+            grouped.keys={"type","origin"};
+            auto level=inspector.entities(&live,"run-1",0,1,"",grouped);
+            AIVERSE_TEST_CHECK(level.getInt("total")==page.getInt("total") && level["groups"].size()==1);
+            const auto type=level["groups"][0];
+            grouped.path.push_back(type.getStr("name"));
+            level=inspector.entities(&live,"run-1",0,1,"",grouped);
+            AIVERSE_TEST_CHECK(level.getInt("total")==type.getInt("count"));
+            grouped.path.push_back(level["groups"][0].getStr("name"));
+            level=inspector.entities(&live,"run-1",0,1,"",grouped);
+            AIVERSE_TEST_CHECK(level["rows"].size()==1 && !level.has("groups"));
             inspector.select(&live,"run-1","run-1",ref);
             AIVERSE_TEST_CHECK(inspector.selectedRef(&live,"run-1")==ref);
             AIVERSE_TEST_CHECK(inspector.selectedRef(&live,"run-2").empty());

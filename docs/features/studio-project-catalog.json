@@ -187,6 +187,7 @@
       "agent"
     ],
     "studio_methods": [
+      "studio.gameEntities",
       "studio.hierarchyGroups",
       "studio.gameSelectEntity",
       "studio.project",
