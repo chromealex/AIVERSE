@@ -203,7 +203,7 @@ public:
         auto compile=[&](const char* entry,const char* profile,ID3DBlob** result){
             ComPtr<ID3DBlob> messages;
             HRESULT hr=D3DCompile(src,std::strlen(src),d.label,nullptr,nullptr,entry,profile,
-                                    D3DCOMPILE_ENABLE_STRICTNESS,0,result,messages.GetAddressOf());
+                                    modern ? D3DCOMPILE_ENABLE_STRICTNESS : 0,0,result,messages.GetAddressOf());
             if(check(hr,entry))return true;
             if(messages)error.append(": ").append(static_cast<const char*>(messages->GetBufferPointer()),messages->GetBufferSize());
             return false;

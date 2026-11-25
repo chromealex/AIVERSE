@@ -37,7 +37,9 @@ int main(int argc,char** argv) {
         float4 ps_main(float4 rgba:COLOR0):COLOR0{return rgba*tex2D(image,float2(.8,.5));}
     )";
     ShaderDesc shader;shader.textureSlots=1;shader.hlsl11=sm4;shader.hlsl9=sm3;
-    PipelineDesc p;p.shader=device->createShader(shader);p.stride=32;p.attrCount=2;p.cull=CullMode::None;
+    PipelineDesc p;p.shader=device->createShader(shader);
+    if(!p.shader.valid()){std::fprintf(stderr,"%s\n",device->lastError().c_str());return 1;}
+    p.stride=32;p.attrCount=2;p.cull=CullMode::None;
     p.attrs[0]={0,VertexFormat::Float4,0};p.attrs[1]={1,VertexFormat::Float4,16};
     auto pipeline=device->createPipeline(p);
     if(!pipeline.valid()){std::fprintf(stderr,"%s\n",device->lastError().c_str());return 1;}
