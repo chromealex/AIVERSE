@@ -129,16 +129,17 @@
     },
     "tests": {
       "status": "pass",
-      "note": "On Git 2.33.0, a full publisher dry run checked 72 entries, built 152 pages in both languages and staged the complete generated tree without the temporary Git wrapper. The branch/clean-main preconditions were bypassed only to exercise the committed candidate; no remote push occurred in this check.",
+      "note": "Built both localized versions with 154 pages. Checked the import roadmap row and guide in both languages.",
       "evidence": [
-        "docs/evidence/site-devlog-roadmap-main203.json"
+        "docs/evidence/site-import-roadmap-audit.json"
       ]
     },
     "handoff": {
       "status": "pass",
       "note": "Records source and browser verification.",
       "evidence": [
-        "docs/agent-handoffs/site-devlog-roadmap-initial.md"
+        "docs/agent-handoffs/site-devlog-roadmap-initial.md",
+        "docs/agent-handoffs/import-roadmap-audit.md"
       ]
     },
     "documentation": {
@@ -166,6 +167,6 @@
     "studio_methods": []
   },
   "test_reports": [
-    "docs/evidence/site-publish-main-d73791202.json"
+    "docs/evidence/site-import-roadmap-audit.json"
   ]
 }
