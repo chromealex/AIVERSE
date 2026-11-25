@@ -289,6 +289,10 @@ if(AIVERSE_BUILD_TESTS)
     target_link_libraries(aiverse_studio_owner_history_tests PRIVATE aiverse_engine aiverse_pack)
     add_test(NAME studio_owner_history COMMAND aiverse_studio_owner_history_tests)
     set_tests_properties(studio_owner_history PROPERTIES LABELS "EDITOR")
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME studio_wizard_art_download
+            COMMAND "${Python3_EXECUTABLE}" -B "${PROJECT_SOURCE_DIR}/tests/wizard_art_download.py")
+    endif()
     if(TARGET aiversemcp AND Python3_Interpreter_FOUND)
         add_test(NAME studio_mcp_registry
             COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tools/mcp/audit_registry.py"

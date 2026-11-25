@@ -1,4 +1,5 @@
 #include "StudioGameWizard.h"
+#include "apps/editor/core/WizardOps.h"
 #include "engine/game/Script.h"
 #include "apps/editor/core/StudioPlayTools.h"
 #include "apps/studio-native/StudioHost.h"
@@ -3419,12 +3420,35 @@ bool StudioHost::handleHostMethod(const Json& req) {
             });
         return true;
     }
+    if (method == "studio.wizardFetchArt") {
+        const auto id = req["id"];
+        const std::string url = params.getStr("url");
+        if (url.empty() || url.size() > 8192) { sendError(id, "Enter an artwork link"); return true; }
+        auto dir = std::make_shared<std::string>();
+        auto error = std::make_shared<std::string>();
+        auto alive = alive_;
+        const auto sourceRequest = ++wizardArtRequest_;
+        platform_.runInBackground([engine = session_->workspace().engineDir, url, dir, error] {
+            try { *dir = editor::fetchWizardArt(engine, url, editor::wizardStagingDir(), error.get()); }
+            catch (const std::exception& e) { *error = e.what(); }
+        }, [this, alive, sourceRequest, id, dir, error] {
+            if (!*alive) return;
+            if (sourceRequest != wizardArtRequest_) { sendError(id, "Another artwork source was chosen"); return; }
+            if (dir->empty()) { sendError(id, error->empty() ? "Could not download artwork" : *error); return; }
+            session_->setWizardArtDir(*dir);
+            Json result = Json::object(); result.set("dir", Json::string(*dir));
+            Json reply = Json::object(); reply.set("id", id); reply.set("result", result); sendReply(reply);
+        });
+        return true;
+    }
     if (method == "studio.wizardArt") {
         const auto id = req["id"];
         auto alive = alive_;
+        const auto sourceRequest = ++wizardArtRequest_;
         platform_.chooseFolder("Choose a folder with artwork, models or audio", session_->wizardArtDir(),
-            [this, alive, id](std::string folder) {
+            [this, alive, id, sourceRequest](std::string folder) {
                 if (!*alive) return;
+                if (sourceRequest != wizardArtRequest_) { sendError(id, "Another artwork source was chosen"); return; }
                 if (!folder.empty()) session_->setWizardArtDir(folder);
                 Json result = Json::object(); result.set("dir", Json::string(folder));
                 Json reply = Json::object(); reply.set("id", id); reply.set("result", result); sendReply(reply);

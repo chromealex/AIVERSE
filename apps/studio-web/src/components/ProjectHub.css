@@ -66,3 +66,4 @@
 .wizard__pages button[aria-current] { color: var(--au-text); background: var(--au-hover); border-color: var(--au-line-strong); }
 .wizard__form .wizard__check { display: flex; align-items: center; gap: 8px; }
 .wizard__check input { width: auto; margin: 0; }
+.wizard__art label { margin-block: 10px 5px; }

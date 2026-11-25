@@ -812,9 +812,9 @@ void Editor::drawGameWizard() {
             W.fetched = false;
             if (W.fetcher.joinable()) W.fetcher.join();
             const std::string url = S.artUrl, dir = wizardStagingDir();
-            W.fetcher = std::thread([url, dir] {
+            W.fetcher = std::thread([engine = ws_.engineDir, url, dir] {
                 std::string err;
-                g_wiz.fetchDir = fetchWizardArt(url, dir, &err);
+                g_wiz.fetchDir = fetchWizardArt(engine, url, dir, &err);
                 g_wiz.fetchError = err;
                 g_wiz.fetched = true;
             });

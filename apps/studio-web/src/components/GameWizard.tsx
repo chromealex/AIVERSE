@@ -7,6 +7,9 @@ import { GameWizardSettings, wizardPages, type WizardPage } from './GameWizardSe
 
 export default function GameWizard({ onOpened, onBusy }: { onOpened: (snapshot: StudioSnapshot) => void; onBusy: (busy: boolean) => void }) {
   const [page, setPage] = useState<WizardPage>('Concept');
+  const [artUrl, setArtUrl] = useState('');
+  const [artName, setArtName] = useState('');
+  const [fetching, setFetching] = useState(false);
   const [creating, setCreating] = useState(false);
   const [options, setOptions] = useState<StudioResult['studio.wizardOptions']>();
   const [draft, setDraft] = useState<WizardPlanInput>();
@@ -39,8 +42,22 @@ export default function GameWizard({ onOpened, onBusy }: { onOpened: (snapshot: 
   async function chooseArtwork() {
     try {
       const { dir } = await invoke('studio.wizardArt', {});
-      if (dir) edit('artDir', dir);
+      if (dir) { setArtName(''); edit('artDir', dir); }
     } catch (e) { setError(String(e)); }
+  }
+  async function fetchArt() {
+    const url = artUrl.trim();
+    if (!url || fetching) return;
+    setFetching(true); onBusy(true); setError('');
+    try {
+      const { dir } = await invoke('studio.wizardFetchArt', { url });
+      edit('artDir', dir);
+      const source = new URL(url);
+      const file = source.pathname.split('/').pop();
+      setArtName(file ? file + ' · ' + source.hostname : source.hostname);
+      setArtUrl('');
+    } catch (e) { setError(String(e)); }
+    finally { setFetching(false); onBusy(false); }
   }
   async function create() {
     if (!draft || !plan || creating) return;
@@ -54,7 +71,7 @@ export default function GameWizard({ onOpened, onBusy }: { onOpened: (snapshot: 
   if (!draft || !options) return error ? <p role="alert">{error}</p> : <StudioLoader label="Loading game wizard…" size={18}/>;
   return <div className="hub__workspace wizard">
     <form className="wizard__form" onSubmit={event => { event.preventDefault(); void preview(); }}>
-      <fieldset className="wizard__fields" disabled={creating}>
+      <fieldset className="wizard__fields" disabled={creating || fetching}>
       <nav className="wizard__pages" aria-label="Game settings">{wizardPages.map(item =>
         <button key={item} type="button" aria-current={item === page ? 'page' : undefined}
           onClick={e => { if (e.currentTarget.form?.reportValidity()) setPage(item); }}>{item}</button>)}</nav>
@@ -62,9 +79,15 @@ export default function GameWizard({ onOpened, onBusy }: { onOpened: (snapshot: 
       <label>Game title<input className="au-input" required value={draft.title} onChange={e => edit('title', e.target.value)}/></label>
       <label>Game idea<textarea rows={3} placeholder="Describe what the player does" value={draft.idea} onChange={e => edit('idea', e.target.value)}/></label>
       <fieldset className="wizard__art"><legend>Artwork, models and audio</legend>
-        {draft.artDir && <p>{draft.artDir}</p>}
+        {draft.artDir && <p>{artName || draft.artDir}</p>}
         <button type="button" className="au-button au-button--sm" onClick={() => void chooseArtwork()}>Choose artwork folder…</button>
-        {draft.artDir && <button type="button" className="au-button au-button--sm" onClick={() => edit('artDir','')}>Clear folder</button>}
+        {draft.artDir && <button type="button" className="au-button au-button--sm" onClick={() => edit('artDir','')}>Clear source</button>}
+        <label>Artwork link<input type="text" inputMode="url" className="au-input" value={artUrl}
+          placeholder="Image or archive URL" onKeyDown={e => {
+            if (e.key === 'Enter') { e.preventDefault(); void fetchArt(); }
+          }} onChange={e => setArtUrl(e.target.value)}/></label>
+        <button type="button" className="au-button au-button--sm" disabled={!artUrl.trim() || fetching} onClick={() => void fetchArt()}>
+          {fetching && <StudioLoader size={14}/>}Download artwork</button>
       </fieldset>
       <label>Starting template<select value={draft.genre} onChange={e => edit('genre', e.target.value)}>
         <option value="auto">Match my idea and mechanics</option>
@@ -90,7 +113,7 @@ export default function GameWizard({ onOpened, onBusy }: { onOpened: (snapshot: 
       </dl>
       <label className="wizard__verify"><input type="checkbox" checked={draft.verifyLevels} disabled={creating}
         onChange={e => setDraft({ ...draft, verifyLevels: e.target.checked })}/>Verify levels with bots</label>
-      <button type="button" disabled={creating} className="au-button au-button--primary" onClick={() => void create()}>
+      <button type="button" disabled={creating || fetching} className="au-button au-button--primary" onClick={() => void create()}>
         {creating && <StudioLoader size={14}/>}Create game in folder…</button></> : <p>Preview the plan to see the matching template, tutorial and levels.</p>}
     </aside>
   </div>;

@@ -4,7 +4,7 @@
 //   game_make          makes the whole project (downloads an art link first) and opens it; returns the report
 #include "WizardOps.h"
 
-#include <ctime>
+#include <cstdlib>
 #include <filesystem>
 #include "GameWizard.h"
 #include "Projects.h"
@@ -46,10 +46,7 @@ const char* kSpecSchema = R"J({"properties": {
 std::string stagingDir() {
     const char* h = std::getenv("HOME");
     if (!h) h = std::getenv("USERPROFILE");
-    char b[32];
-    std::time_t t = std::time(nullptr);
-    std::strftime(b, sizeof b, "%Y%m%d-%H%M%S", std::localtime(&t));
-    return (fs::path(h ? h : ".") / ".aiverse" / "wizard" / b).string();
+    return (fs::path(h ? h : ".") / ".aiverse" / "wizard").string();
 }
 } // namespace
 
@@ -86,7 +83,7 @@ void registerWizardOps(Workspace& ws) {
             WizardSpec s = WizardSpec::fromJson(p);
             if (!s.artUrl.empty() && s.artDir.empty()) {
                 std::string err;
-                s.artDir = fetchWizardArt(s.artUrl, stagingDir(), &err);
+                s.artDir = fetchWizardArt(w->engineDir, s.artUrl, stagingDir(), &err);
                 if (s.artDir.empty()) throw std::runtime_error(err);
             }
             GameMaker maker(*w, s);

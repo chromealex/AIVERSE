@@ -8,5 +8,6 @@
 namespace aiverse::editor {
 // aiverse_pkg.py --json <args>; returns its "result" or throws std::runtime_error with its "error".
 // Python is AIVERSE_PYTHON, else python3 (python on Windows).
+Json runPythonJsonTool(const std::string& engineDir, const std::string& relativeScript, const std::vector<std::string>& args);
 Json runPackageTool(const std::string& engineDir, const std::vector<std::string>& args);
 }
