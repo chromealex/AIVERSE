@@ -1,0 +1,10 @@
+{
+  "sha": "761bebe432de9bff25eff904383da133ac3560a7",
+  "argv": [
+    "bash",
+    "/tmp/scene-road-ridge-qa.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-road-ridge.log.txt",
+  "sha256": "7b7296781958fe2154d5f0afe5ec49798a4449d66ffb1d0f5851a81816cec80b"
+}
