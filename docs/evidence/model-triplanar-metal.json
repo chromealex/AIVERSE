@@ -1,0 +1,14 @@
+{
+  "sha": "541870d278f8b4cd32cc8a72963c00cfd3f6cede",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/model-triplanar-20261125",
+    "-R",
+    "^(shader_graph|model_triplanar_frame)$",
+    "--verbose"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/model-triplanar-metal.log.txt",
+  "sha256": "aa8ad1566f63f3b3c96df23344b2b4535cf553cf848d438fedd1e7ffaec193eb"
+}

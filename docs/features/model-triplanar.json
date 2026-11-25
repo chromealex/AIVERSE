@@ -13,7 +13,13 @@
     "apps/studio-web/src/panels/materialSchema.ts",
     "apps/studio-web/src/types.ts",
     "docs/agent-handoffs/model-triplanar-initial.md",
+    "docs/agent-handoffs/model-triplanar-metal.md",
     "docs/devlog/systems.json",
+    "docs/evidence/model-triplanar-colour.png",
+    "docs/evidence/model-triplanar-metal.json",
+    "docs/evidence/model-triplanar-metal.log.txt",
+    "docs/evidence/model-triplanar-projected.png",
+    "docs/evidence/model-triplanar-repeat.png",
     "docs/features/model-triplanar.json",
     "docs/shader-graph.md",
     "engine/render/graph/TriplanarMaterial.h",
@@ -29,9 +35,14 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Metal renders an imported model with all-zero UVs and an exported Modeling subtract with three separately measured cut faces.",
+      "evidence": [
+        "docs/evidence/model-triplanar-metal.json",
+        "docs/evidence/model-triplanar-projected.png",
+        "docs/evidence/model-triplanar-colour.png",
+        "docs/evidence/model-triplanar-repeat.png"
+      ]
     },
     "architecture": {
       "status": "not_run",
@@ -39,14 +50,19 @@
       "evidence": []
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "makeTriplanarMaterial and the ordinary appearance binder rendered both sources.",
+      "evidence": [
+        "docs/evidence/model-triplanar-metal.log.txt",
+        "engine/render/graph/TriplanarMaterial.h"
+      ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Existing shader authoring skill describes the material workflow.",
+      "evidence": [
+        "skills/visuals/aiverse-shader-graph/SKILL.md"
+      ]
     },
     "mcp": {
       "status": "not_run",
@@ -69,9 +85,12 @@
       "evidence": []
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Shader Graph compiler verifies sample counts, texture dependencies, no mesh UV usage, native/GLSL source and persistence.",
+      "evidence": [
+        "docs/evidence/model-triplanar-metal.log.txt",
+        "tests/shader_graph/compiler.cpp"
+      ]
     },
     "performance": {
       "status": "not_run",
@@ -99,9 +118,11 @@
       "evidence": []
     },
     "tests": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Shader Graph and the Metal integration test passed.",
+      "evidence": [
+        "docs/evidence/model-triplanar-metal.json"
+      ]
     },
     "handoff": {
       "status": "not_run",
@@ -109,9 +130,11 @@
       "evidence": []
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Documented rendering space, sampler cost, texture colour space, normal convention, assignment and persistence.",
+      "evidence": [
+        "docs/shader-graph.md"
+      ]
     },
     "publishing": {
       "status": "not_run",
@@ -138,5 +161,7 @@
       "studio.save"
     ]
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/model-triplanar-metal.json"
+  ]
 }
