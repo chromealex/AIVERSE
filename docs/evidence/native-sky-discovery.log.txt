@@ -1,0 +1,27 @@
+Validated 303 skills and isolated library mappings
+['обычное дневное небо', 'outdoor sky clouds'] ['aiverse-physical-sky', 'aiverse-physical-sky'] {
+  "requested": [
+    "aiverse-physical-sky"
+  ],
+  "side": "client",
+  "read": [
+    "skills/visuals/aiverse-physical-sky/SKILL.md"
+  ],
+  "contentPackages": [],
+  "installPackages": [],
+  "selection": [
+    {
+      "id": "aiverse-physical-sky",
+      "side": "tools",
+      "runtime": "none",
+      "target": null,
+      "dependencies": [],
+      "requiresOwner": null
+    }
+  ],
+  "cmake": [],
+  "nativeCmake": [],
+  "serverModules": [],
+  "clientFeatures": []
+}
+

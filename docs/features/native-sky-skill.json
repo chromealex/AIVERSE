@@ -1,0 +1,140 @@
+{
+  "schema": 1,
+  "id": "native-sky-skill",
+  "owner": "prisma",
+  "changed_paths": [
+    "skills/catalog.json",
+    "skills/visuals/aiverse-physical-sky/SKILL.md",
+    "tools/skills/catalog.py",
+    "docs/devlog/systems.json",
+    "docs/agents/feature-policy.json",
+    "skills/workflow/aiverse-orchestrator/SKILL.md",
+    "docs/agent-handoffs/native-sky-skill-initial.md",
+    "docs/features/native-sky-skill.json"
+  ],
+  "traits": {
+    "editable": false,
+    "simulation": false,
+    "visible": false,
+    "runtime": false
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Bilingual catalog entry and orchestration route.",
+      "evidence": [
+        "skills/visuals/aiverse-physical-sky/SKILL.md"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Existing PRISMA owns the physical sky pass.",
+      "evidence": [
+        "skills/visuals/aiverse-physical-sky/SKILL.md"
+      ]
+    },
+    "native_api": {
+      "status": "not_applicable",
+      "note": "Discovery and authoring guidance only. This change adds no runtime or authoring API surface.",
+      "evidence": []
+    },
+    "skill": {
+      "status": "pass",
+      "note": "Dedicated registered authoring recipe.",
+      "evidence": [
+        "skills/visuals/aiverse-physical-sky/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "not_applicable",
+      "note": "Discovery and authoring guidance only. This change adds no runtime or authoring API surface.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_applicable",
+      "note": "Discovery and authoring guidance only. This change adds no runtime or authoring API surface.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_applicable",
+      "note": "Discovery and authoring guidance only. This change adds no runtime or authoring API surface.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_applicable",
+      "note": "Discovery and authoring guidance only. This change adds no runtime or authoring API surface.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "Discovery and authoring guidance only. This change adds no runtime or authoring API surface.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_applicable",
+      "note": "Discovery and authoring guidance only. This change adds no runtime or authoring API surface.",
+      "evidence": []
+    },
+    "platforms": {
+      "status": "not_applicable",
+      "note": "Discovery and authoring guidance only. This change adds no runtime or authoring API surface.",
+      "evidence": []
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Documentation and catalog discovery use existing dependencies.",
+      "evidence": [
+        "skills/visuals/aiverse-physical-sky/SKILL.md"
+      ]
+    },
+    "headless": {
+      "status": "not_applicable",
+      "note": "Discovery and authoring guidance only. This change adds no runtime or authoring API surface.",
+      "evidence": []
+    },
+    "examples": {
+      "status": "pass",
+      "note": "Uses the existing runnable sky configuration.",
+      "evidence": [
+        "examples/render/physical-sky.json"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Production catalog validates; realistic Russian and English queries rank the skill first and the client plan selects its recipe.",
+      "evidence": [
+        "docs/evidence/native-sky-discovery.json"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Scope and discovery checks recorded.",
+      "evidence": [
+        "docs/agent-handoffs/native-sky-skill-initial.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "Documents existing map and host setup.",
+      "evidence": [
+        "skills/visuals/aiverse-physical-sky/SKILL.md"
+      ]
+    },
+    "publishing": {
+      "status": "not_applicable",
+      "note": "Discovery and authoring guidance only. This change adds no runtime or authoring API surface.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-physical-sky"
+    ],
+    "mcp_tools": [],
+    "studio_panels": [],
+    "studio_methods": []
+  },
+  "test_reports": [
+    "docs/evidence/native-sky-discovery.json"
+  ]
+}

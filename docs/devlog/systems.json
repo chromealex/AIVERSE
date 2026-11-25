@@ -143,12 +143,12 @@
           "date": "2026-11-24"
         },
         {
-          "status": "in-progress",
-          "target": null,
+          "status": "done",
           "title": "Планетарный лес: MCP-редактирование",
           "titleEn": "Planetary forest: MCP authoring",
-          "text": "Stage 161D5c: общие операции Workspace, проверка ревизии, создание, перемещение и удаление растений, полная конфигурация и история.",
-          "textEn": "Stage 161D5c: shared Workspace operations, revision checks, plant create/move/remove, complete configuration and history."
+          "text": "Через MCP можно настроить лес, посадить, переместить и удалить растение. Проверены отклонение устаревшей ревизии, отмена, повтор и открытие сохранённой карты.",
+          "textEn": "MCP can configure the forest and plant, move or remove a tree. Tests cover stale revision rejection, undo, redo and reopening the saved map.",
+          "date": "2026-11-25"
         },
         {
           "status": "in-progress",
@@ -256,76 +256,76 @@
           "textEn": "Stage 161A: map authoring, shared profile/ecology validation, existing marker selection, live ECS diagnostics."
         },
         {
-          "status": "in-progress",
-          "target": null,
+          "status": "done",
           "title": "Планетарный лес: статические коллайдеры и завершение падений",
           "titleEn": "Planetary forest: static collision and pending fall lifecycle",
-          "text": "Stage 160: обновление коллайдеров роста, переход к динамическому телу, завершение истраченных событий.",
-          "textEn": "Stage 160: growth collision updates, dynamic handoff and spent pending receipts."
+          "text": "Коллизия стоящего дерева меняется с ростом. При падении статическая форма уступает место физическому стволу; исчерпанное дерево убирается и при отложенном падении.",
+          "textEn": "Standing collision follows tree growth. A falling trunk takes over from the static shape, and a spent tree is retired even when its fall is pending.",
+          "date": "2026-11-25"
         },
         {
-          "status": "in-progress",
-          "target": null,
+          "status": "done",
           "title": "Планетарный лес: коллайдеры из скелета ARBOR",
           "titleEn": "Planetary forest: ARBOR skeleton-derived collision",
-          "text": "Stage 159: точные вид и seed, размеры ствола, возраст и остаточная масса при падении.",
-          "textEn": "Stage 159: exact species and seed, trunk dimensions, age and remaining mass at fall."
+          "text": "Размеры коллизии ствола рассчитываются по профилю ARBOR, возрасту дерева и оставшейся массе древесины.",
+          "textEn": "Trunk collision dimensions follow the ARBOR profile, tree age and remaining wood mass.",
+          "date": "2026-11-25"
         },
         {
-          "status": "in-progress",
-          "target": null,
+          "status": "done",
           "title": "Планетарный лес: физический хост",
           "titleEn": "Planetary forest: physics host",
-          "text": "Stage 158: явный single-authority native host, отдельные сцены тел, существующие коллайдеры и checkpoint.",
-          "textEn": "Stage 158: explicit single-authority native host, body-scoped scenes, existing collision and checkpoint owners."
+          "text": "В нативной симуляции физические объекты привязаны к планете. Box3D выполняет один шаг на тик и восстанавливает положение объектов из контрольной точки.",
+          "textEn": "The native simulation binds physics objects to a planetary body. Box3D advances once per tick and restores object poses from a checkpoint.",
+          "date": "2026-11-25"
         },
         {
-          "status": "in-progress",
-          "target": null,
+          "status": "done",
           "title": "Планетарный лес: удаление разложившихся физических тел",
           "titleEn": "Planetary forest: spent physical body retirement",
-          "text": "Stage 157: удаление по нулевому остатку древесины и точной подтверждённой квитанции; сохранение баланса и rollback.",
-          "textEn": "Stage 157: retire on zero remaining wood and exact acknowledged receipt; preserve ledger and rollback."
+          "text": "Когда древесина исчерпана, физическое тело ствола удаляется. Повторное обновление и откат проверены в Box3D.",
+          "textEn": "A spent trunk releases its physics body. Repeated updates and rollback were checked in Box3D.",
+          "date": "2026-11-25"
         },
         {
-          "status": "in-progress",
-          "target": null,
+          "status": "done",
           "title": "Планетарный лес: падение после естественной гибели",
           "titleEn": "Planetary forest: natural mortality fall",
-          "text": "Stage 156: опциональный порог остатка древесины, существующий root fall outbox и PHYSIS, физический владелец принимает событие.",
-          "textEn": "Stage 156: optional remaining wood threshold, existing root fall outbox and PHYSIS; physical owner consumes the event."
+          "text": "При достижении настроенного порога остатка древесины дерево падает. Повторная обработка события сохраняет единственный физический ствол.",
+          "textEn": "A tree falls at its configured remaining-wood threshold. Reprocessing the event preserves a single physical trunk.",
+          "date": "2026-11-25"
         },
         {
-          "status": "in-progress",
-          "target": null,
+          "status": "done",
           "title": "Планетарный лес: интерполяция физических поз",
           "titleEn": "Planetary forest: physical pose interpolation",
-          "text": "Stage 155: последовательные подтверждённые позы, без экстраполяции и с учётом rollback и видимости.",
-          "textEn": "Stage 155: consecutive confirmed poses, no extrapolation, with rollback and visibility guards."
+          "text": "Положение ствола интерполируется между двумя подтверждёнными состояниями с учётом отката и видимости.",
+          "textEn": "Trunk poses interpolate between two confirmed states, respecting rollback and visibility.",
+          "date": "2026-11-25"
         },
         {
-          "status": "in-progress",
-          "target": null,
+          "status": "done",
           "title": "Планетарный лес: авторские виды ARBOR",
           "titleEn": "Planetary forest: authored ARBOR species",
-          "text": "Stage 154: общая схема видов TerraWeave, пользовательские профили и текстуры, привязка по ID.",
-          "textEn": "Stage 154: shared TerraWeave species schema, custom profiles and textures, binding by ID."
+          "text": "Породы леса задаются в карте по идентификатору, с профилем ARBOR и собственными текстурами.",
+          "textEn": "A map defines forest species by ID, with an ARBOR profile and custom textures.",
+          "date": "2026-11-25"
         },
         {
-          "status": "in-progress",
-          "target": null,
+          "status": "done",
           "title": "Планетарный лес: видимость по Fog of War",
           "titleEn": "Planetary forest: fog-of-war visibility",
-          "text": "Stage 153: отображать текущее состояние только в видимых ячейках, без истории и без раскрытия скрытых изменений через декоративные деревья.",
-          "textEn": "Stage 153: publish current state only in visible cells, without history or exposing hidden changes through decorative trees."
+          "text": "Стоящие и упавшие деревья показываются по текущей видимости ячейки. Декоративные деревья учитывают ту же границу видимости.",
+          "textEn": "Standing and fallen trees follow current cell visibility. Decorative trees respect the same visibility boundary.",
+          "date": "2026-11-25"
         },
         {
-          "status": "in-progress",
-          "target": null,
+          "status": "done",
           "title": "Планетарный лес: визуализация разложения и точная привязка падений",
           "titleEn": "Planetary forest: decay presentation and exact fall binding",
-          "text": "Stage 152: толщина древесины из текущего остатка, привязка физического тела к конкретной квитанции падения. Проверка сборки и GPU ещё требуется.",
-          "textEn": "Stage 152: wood thickness from remaining mass, physical body matched to the exact fall receipt. Build and GPU verification still required."
+          "text": "Толщина упавшего ствола зависит от остатка древесины. Видимая модель следует за физическим телом именно этого падения.",
+          "textEn": "A fallen trunk narrows as its remaining wood decreases. Its visible model follows the physics body for that specific fall.",
+          "date": "2026-11-25"
         }
       ],
       "taglineEn": "Procedural terrain and nature",
@@ -435,12 +435,12 @@
           "titleEn": "Journal and recovery after a server restart"
         },
         {
-          "status": "in-progress",
-          "target": null,
+          "status": "done",
           "title": "Сборка и тесты в CI",
-          "text": "Сборка и автотесты на всех платформах ещё впереди.",
+          "text": "В CI на macOS и Linux собраны и пройдены тесты PHYSIS, включая физическую сцену Box3D.",
           "titleEn": "Build and tests in CI",
-          "textEn": "Per the docs, compilation and CTest are not yet confirmed on this line."
+          "textEn": "PHYSIS built and passed its tests on macOS and Linux CI, including a Box3D physics scene.",
+          "date": "2026-11-25"
         },
         {
           "status": "done",
@@ -1424,7 +1424,8 @@
           "title": "Пользовательские цепочки проходов и временных текстур",
           "titleEn": "Author pass chains and intermediate render textures",
           "id": "prisma-authored-compositor"
-        }
+        },
+        {"id": "native-sky-skill", "status": "done", "date": "2026-11-25", "title": "Выбор штатного неба при оформлении карты", "titleEn": "Discover native sky when authoring a map"}
       ],
       "taglineEn": "Post-processing and atmosphere",
       "essenceEn": "HDR, exposure and tone mapping, bloom, DoF, motion blur, TAA, AO and reflections, lens effects, anti-aliasing and upscaling, colour grading and screen-space atmosphere with quality profiles.",
@@ -1943,11 +1944,12 @@
       "roadmap": [
         {
           "id": "fixed-spatial-algorithms",
-          "status": "in-progress",
+          "status": "done",
           "text": "Математика с фиксированной точкой, пространственные запросы и пакетный шум для систем симуляции.",
           "textEn": "Fixed-point math, spatial queries and batched noise for simulation systems.",
           "title": "Математика симуляции",
-          "titleEn": "Simulation math"
+          "titleEn": "Simulation math",
+          "date": "2026-11-25"
         }
       ]
     },
@@ -2286,32 +2288,36 @@
       "doc": "docs/city-planner.md",
       "roadmap": [
         {
-          "status": "in-progress",
+          "status": "done",
           "title": "Стили построек: здания в сеттинге из файла стиля (первый — sci-fi в духе RTS)",
           "titleEn": "Building styles: structures in a setting from a style file (sci-fi RTS look first)",
           "text": "Файл стиля задаёт облик построек: цельные бронированные корпуса с воротами, опорами и надстройками или фасады зданий с этажами.",
-          "textEn": "A style file sets how structures look: whole armoured hulls with gates, legs and towers, or facades on buildings with floors."
+          "textEn": "A style file sets how structures look: whole armoured hulls with gates, legs and towers, or facades on buildings with floors.",
+          "date": "2026-11-25"
         },
         {
-          "status": "in-progress",
+          "status": "done",
           "title": "Параметрическая композиция построек: модули, силосы, пилоны и порталы",
           "titleEn": "Parametric building compositions: modular wings, silos, pylons and gantries",
           "text": "Файл стиля описывает композиционные формы по относительным координатам и размерам, а генератор собирает различимые силуэты с детерминированным seed.",
-          "textEn": "Style data controls major forms at relative positions and sizes; the generator builds different silhouettes deterministically."
+          "textEn": "Style data controls major forms at relative positions and sizes; the generator builds different silhouettes deterministically.",
+          "date": "2026-11-25"
         },
         {
-          "status": "in-progress",
+          "status": "done",
           "title": "Генератор архитектуры: арки, купола, плавные корпуса и безопасные проёмы",
           "titleEn": "Architectural generator: arches, domes, swept hulls and clearance validation",
-          "text": "Добавить формы по данным стиля и проверки реальных проходных размеров после подгонки модели, не изменяя старые пресеты без явного выбора.",
-          "textEn": "Add authored architectural primitives and verify usable openings after bounding-box fit, preserving existing presets by default."
+          "text": "Файл стиля задаёт арки, купола и профили корпусов. При подгонке габаритов генератор проверяет высоту и ширину прохода.",
+          "textEn": "Style files define arches, domes and hull profiles. The generator validates passage clearance when fitting a building to its required dimensions.",
+          "date": "2026-11-25"
         },
         {
-          "status": "in-progress",
+          "status": "done",
           "title": "Конструктивная подгонка моделей под размеры без растяжения деталей",
           "titleEn": "Constructive fitting to requested building dimensions without stretching parts",
-          "text": "Подбирать габариты исходной архитектуры повторной генерацией; сохранять мировые размеры ворот, толщины мелких элементов и радиусы деталей, отклонять несовместимые габариты. Проверка точных габаритов малых зданий с двумя секциями крыши на серии из двадцати экспортов GLB.",
-          "textEn": "Fit the underlying construction dimensions through bounded regeneration; preserve doorways, detail thickness and radii, rejecting infeasible envelopes. Validate exact envelope fitting for compact twin-bay structures across the twenty-case GLB export batch."
+          "text": "Генератор подбирает размеры здания с сохранением размеров ворот, толщины деталей и радиусов. Несовместимые габариты отклоняются.",
+          "textEn": "The generator fits a building while preserving gate dimensions, detail thickness and radii. It rejects infeasible dimensions.",
+          "date": "2026-11-25"
         },
         {
           "status": "in-progress",
@@ -2329,18 +2335,20 @@
           "id": "building-graph-integration"
         },
         {
-          "status": "in-progress",
+          "status": "done",
           "title": "Жанронезависимые окна, помещения и этажи в Building StructureGraph",
           "titleEn": "Genre-independent windows, room grids and floors in Building StructureGraph",
-          "text": "Реальные окна и стекло, межэтажные перекрытия, внутренние перегородки с проходами. Вертикальная навигация — отдельный следующий этап.",
-          "textEn": "Real glazed apertures, floor slabs and room partitions with horizontal passages. Vertical navigation next."
+          "text": "Граф здания создаёт остеклённые проёмы, перекрытия и комнаты с проходами во внутренних перегородках.",
+          "textEn": "The building graph generates glazed openings, floor slabs and rooms with passages through interior partitions.",
+          "date": "2026-11-25"
         },
         {
-          "status": "in-progress",
+          "status": "done",
           "title": "Building StructureGraph: лестницы, лифтовые шахты и настоящие проёмы перекрытий",
           "titleEn": "Building StructureGraph: staircases, elevator shafts and real floor openings",
-          "text": "Лестничные марши, площадки, шахты без перекрытий и вертикальные связи комнат, полностью жанронезависимо. Требуется runtime/navmesh интеграция.",
-          "textEn": "Bounded stair flights, lift shaft with floor voids, and vertical room links; runtime/navmesh integration remains."
+          "text": "Лестницы и шахты лифтов соединяют этажи через проёмы в перекрытиях. Граф хранит вертикальные связи между комнатами.",
+          "textEn": "Stairs and elevator shafts connect storeys through openings in floor slabs. The graph records vertical connections between rooms.",
+          "date": "2026-11-25"
         },
         {
           "status": "in-progress",
@@ -2417,7 +2425,8 @@
           "titleEn": "Background world maintenance jobs",
           "text": "Очередь, фактический прогресс восстановления, безопасная отмена и подтверждение результата.",
           "textEn": "Bounded queue, actual recovery progress, safe cancellation and acknowledged results.",
-          "status": "in-progress"
+          "status": "done",
+          "date": "2026-11-25"
         },
         {
           "id": "world-persistence-tools",
@@ -2433,7 +2442,8 @@
           "titleEn": "Long-lived world compaction",
           "text": "Ограничение накопления удалённых объектов без повторного использования идентификаторов.",
           "textEn": "Bound retired-object accumulation without reusing persistent identities.",
-          "status": "in-progress"
+          "status": "done",
+          "date": "2026-11-25"
         },
         {
           "id": "world-streamed-persistence",
@@ -2441,7 +2451,8 @@
           "titleEn": "Streamed world persistence",
           "text": "Проверка SHA-256 внешних ресурсов и барьер готовности коллизий и навигации после восстановления.",
           "textEn": "SHA-256 external asset validation and collision/navigation readiness barrier after recovery.",
-          "status": "in-progress"
+          "status": "done",
+          "date": "2026-11-25"
         },
         {
           "id": "world-background-recovery",
@@ -2449,7 +2460,8 @@
           "titleEn": "Background world recovery",
           "text": "Чтение checkpoint, восстановление WAL и отменяемая публикация на границе владельца.",
           "textEn": "Checkpoint reading, WAL recovery and cancellable publication at the owner boundary.",
-          "status": "in-progress"
+          "status": "done",
+          "date": "2026-11-25"
         },
         {
           "id": "world-async-persistence",
@@ -2457,7 +2469,8 @@
           "titleEn": "Asynchronous world persistence",
           "text": "Ограниченная очередь дисковых операций, подтверждение после записи и барьер checkpoint.",
           "textEn": "Bounded disk operation queue, durable acknowledgement and checkpoint barrier.",
-          "status": "in-progress"
+          "status": "done",
+          "date": "2026-11-25"
         },
         {
           "id": "world-authority-runtime-persistence",
@@ -2465,7 +2478,8 @@
           "titleEn": "Authoritative server persistence",
           "text": "Создание и восстановление мира до сетевого запуска, запись подтверждённых тиков и блокировка публикации при ошибках.",
           "textEn": "Create and recover worlds before network startup, persist finalized ticks and refuse publication on failure.",
-          "status": "in-progress"
+          "status": "done",
+          "date": "2026-11-25"
         },
         {
           "id": "world-portable-projectile-race-state",
@@ -2473,7 +2487,8 @@
           "titleEn": "Active objects and race persistence",
           "text": "Восстановление активных снарядов и состояния гоночной сессии с постоянными ссылками.",
           "textEn": "Restore active projectiles and race session state with persistent references.",
-          "status": "in-progress"
+          "status": "done",
+          "date": "2026-11-25"
         },
         {
           "id": "world-portable-actor-components",
@@ -2481,7 +2496,8 @@
           "titleEn": "Restore gameplay object relationships",
           "text": "Контекстные кодеки компонентов и восстановление связей по постоянным идентификаторам.",
           "textEn": "Contextual component codecs and relationship restoration through persistent identities.",
-          "status": "in-progress"
+          "status": "done",
+          "date": "2026-11-25"
         },
         {
           "id": "world-stable-actor-identities",
@@ -2489,7 +2505,8 @@
           "titleEn": "Persistent world object identities",
           "text": "Независимые от ECS-индексов идентификаторы и адресация перемещений.",
           "textEn": "Entity-index-independent identities and movement addressing.",
-          "status": "in-progress"
+          "status": "done",
+          "date": "2026-11-25"
         },
         {
           "id": "world-native-restart-state",
@@ -2497,7 +2514,8 @@
           "titleEn": "Simulation restart state",
           "text": "Сохранение номера тика, генератора случайных чисел и очереди команд со стабильными ссылками.",
           "textEn": "Persist simulation tick, random generator and queued commands using stable references.",
-          "status": "in-progress"
+          "status": "done",
+          "date": "2026-11-25"
         },
         {
           "id": "world-native-finalized-wal",
@@ -2505,7 +2523,8 @@
           "titleEn": "Finalized world tick persistence",
           "text": "Точный захват изменений владения сущностями на подтверждённых тиках симуляции.",
           "textEn": "Capture exact entity ownership changes at finalized simulation ticks.",
-          "status": "in-progress"
+          "status": "done",
+          "date": "2026-11-25"
         },
         {
           "id": "world-unified-resource-wal",
@@ -2513,7 +2532,8 @@
           "titleEn": "World resource change log",
           "text": "Сохранение изменений выбранных ECS-ресурсов вместе с сущностями и компонентами.",
           "textEn": "Persist changes to selected ECS resources alongside entities and components.",
-          "status": "in-progress"
+          "status": "done",
+          "date": "2026-11-25"
         },
         {
           "id": "world-unified-backup-retention",
@@ -2521,7 +2541,8 @@
           "titleEn": "Safe world generation retention",
           "text": "Проверка резервных копий перед очисткой, защита активного поколения и управление через сессию мира.",
           "textEn": "Verify backups before cleanup, protect the active generation and manage through the world session.",
-          "status": "in-progress"
+          "status": "done",
+          "date": "2026-11-25"
         },
         {
           "id": "world-unified-backup-catalog",
@@ -2529,15 +2550,17 @@
           "titleEn": "World backup catalog",
           "text": "Перечисление поколений сохранений и проверка восстановления ECS и журнала изменений.",
           "textEn": "Enumerate save generations and validate ECS and change-log recovery.",
-          "status": "in-progress"
+          "status": "done",
+          "date": "2026-11-25"
         },
         {
           "id": "world-ecs-region-lifecycle",
           "title": "Жизненный цикл динамических сущностей регионов",
           "titleEn": "Dynamic region entity lifecycle",
-          "text": "Детерминированное владение сущностями по регионам, атомарный перенос групп и сохранение; следующий этап — реальные ECS-резиденция и стриминг.",
-          "textEn": "Deterministic region ownership, atomic group transfer and persistence; live ECS residency and streaming follow.",
-          "status": "in-progress"
+          "text": "Регион владеет сущностями по стабильным идентификаторам. Группа переносится целиком, а при восстановлении сохраняются связи между её участниками.",
+          "textEn": "Regions own entities by stable ID. Groups transfer atomically, and recovery preserves links between their members.",
+          "status": "done",
+          "date": "2026-11-25"
         }
       ],
       "core": true,
@@ -3017,11 +3040,12 @@
           "titleEn": "A mode without Vulkan on Windows"
         },
         {
-          "status": "in-progress",
+          "status": "done",
           "title": "Генератор зданий: панель сеттинга, стиля, функции, размеров и seed",
           "titleEn": "Building generator panel: setting, style, function, size and seed",
-          "text": "Генерация реальных GLB-моделей через нативный bridge с GUID в Assets; предпросмотр вариантов пока даёт параметры геометрии, 3D-вьюпорт на следующем этапе.",
-          "textEn": "Generate real GLB models through the native bridge into Assets with GUIDs; variant evaluation currently reports geometry stats, full 3D viewport preview follows. Stage 35D integration in progress: shared native candidate graph with exact captured request and source-feature navigation. Shared candidate graph and scoped source feature focus implemented in source; acceptance pending. Stage 35E in progress: native authored room connectivity report and shared topology inspector. Stage 35E native room topology and structural connectivity inspection implemented in source."
+          "text": "В Studio можно выбрать сеттинг, стиль, назначение, размеры и seed, посмотреть здание в 3D и экспортировать модель GLB в Assets.",
+          "textEn": "Studio lets you choose a setting, style, function, dimensions and seed, preview the building in 3D and export its GLB model to Assets.",
+          "date": "2026-11-25"
         },
         {
           "status": "in-progress",
@@ -3583,11 +3607,12 @@
       ],
       "roadmap": [
         {
-          "status": "in-progress",
+          "status": "done",
           "title": "Точная перезарядка оружия",
-          "text": "Положительный период оружия переносит остаток времени между выстрелами. Проверяем чтение прежних сохранений Arsenal.",
+          "text": "Между выстрелами сохраняется остаток времени перезарядки. Проверено чтение сохранённого таймера Arsenal прежнего формата.",
           "titleEn": "Fractional weapon cooldowns",
-          "textEn": "Positive weapon periods carry elapsed time between shots. Verify compatibility with existing Arsenal saves."
+          "textEn": "The cooldown carries fractional time between shots. Arsenal restores cooldown timers saved in the previous format.",
+          "date": "2026-11-25"
         },
         {
           "status": "done",
