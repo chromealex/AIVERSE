@@ -4,6 +4,7 @@ import { invoke } from '../bridge';
 import { StudioButton, StudioField, StudioSelect, StudioInput } from '../ui';
 import { graphV2, type SpectraGraphV2 } from './spectraDataInterfaceModel';
 import { connectionParams, moveGraphNode, nodePoint, visualEdges } from './spectraGraphCanvasModel';
+import './graphSurface.css';
 import './SpectraGraphCanvas.css';
 
 interface CatalogNode {type:string;group:string;ports:string[]}
@@ -118,26 +119,27 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
         onClick={()=>void execute({action:'addVolume',preset:volumePreset})}>Add volume branch</StudioButton>
       <StudioButton size="sm" disabled={disabled||working}
         onClick={()=>{if(window.confirm('Replace the current unsaved graph with a volume-only preset?'))void execute({action:'newVolume',preset:volumePreset});}}>New volume graph</StudioButton>
-      <span className="spectra-canvas__spacer"/>
-      <StudioButton size="sm" variant="ghost" onClick={()=>setZoom(z=>Math.max(0.5,z-0.1))}><ZoomOut size={14}/></StudioButton>
-      <span className="spectra-canvas__zoom">{Math.round(zoom*100)}%</span>
-      <StudioButton size="sm" variant="ghost" onClick={()=>setZoom(z=>Math.min(2,z+0.1))}><ZoomIn size={14}/></StudioButton>
-      <StudioButton size="sm" variant="ghost" onClick={()=>setZoom(1)} title="Reset zoom"><Maximize2 size={14}/></StudioButton>
+      <div className="spectra-canvas__zoom-tools" role="group" aria-label="Graph zoom">
+        <StudioButton size="sm" variant="ghost" aria-label="Zoom out" onClick={()=>setZoom(z=>Math.max(0.5,z-0.1))}><ZoomOut size={14}/></StudioButton>
+        <span className="spectra-canvas__zoom">{Math.round(zoom*100)}%</span>
+        <StudioButton size="sm" variant="ghost" aria-label="Zoom in" onClick={()=>setZoom(z=>Math.min(2,z+0.1))}><ZoomIn size={14}/></StudioButton>
+        <StudioButton size="sm" variant="ghost" onClick={()=>setZoom(1)} title="Reset zoom"><Maximize2 size={14}/></StudioButton>
+      </div>
     </div>
-    <div className="spectra-canvas__viewport" role="region" aria-label="SpectraFX graph topology and node arrangement">
+    <div className="spectra-canvas__viewport graph-surface" role="region" aria-label="SpectraFX graph topology and node arrangement">
       <div className="spectra-canvas__extent" style={{width:width*zoom,height:height*zoom}}>
         <div className="spectra-canvas__world" style={{width,height,transform:`scale(${zoom})`}}>
           <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} className="spectra-canvas__edges" aria-hidden="true">
             {edges.map(edge=><path key={edge.id} d={edge.path} fill="none"
-              stroke={edge.toPort?'var(--au-accent-secondary)':'var(--au-text-muted)'}
-              strokeWidth={edge.toPort?2:1.5} strokeLinecap="round"/>)}
+              className="graph-wire" data-kind={edge.toPort?'value':'execution'}
+              data-emphasis={chosen?(edge.from===chosen.id||edge.to===chosen.id?'active':'quiet'):undefined}/>)}
           </svg>
           {nodes.map((node,i)=>{
             const pos=nodePoint(node,i);
             return <div key={node.id}
               className={'spectra-canvas__node '+(node.id===selectedNode?'is-selected':'')}
               style={{left:pos.x,top:pos.y}}
-              role="button" tabIndex={0}
+              role="button" tabIndex={0} aria-pressed={node.id===selectedNode}
               aria-label={node.type+' node '+node.id}
               onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSelectedNode(node.id);}}}
               onClick={()=>setSelectedNode(node.id)}
@@ -156,14 +158,17 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
                 if(!edited.error)onEdit(edited.graph);
               }}
               onPointerUp={finishDrag} onPointerCancel={finishDrag}>
-              <div className="spectra-canvas__node-head"><GitBranch size={13}/>{node.type}</div>
-              <div className="spectra-canvas__node-id">{node.id}</div>
+              <div className="spectra-canvas__node-head"><GitBranch size={13}/><span title={node.type}>{node.type.replace(/([a-z0-9])([A-Z])/g,'$1 $2')}</span></div>
+              <div className="spectra-canvas__node-id" title={node.id}>{node.id}</div>
               {node.type==='DataInterface' && <div className="spectra-canvas__node-param">{String(node.properties?.name??'Unbound')}</div>}
             </div>;
           })}
         </div>
       </div>
     </div>
+    {edges.some(edge=>edge.toPort)&&<div className="graph-wire-key" aria-label="Connection styles">
+      <span>Execution</span><span data-kind="value">Value</span>
+    </div>}
     <div className="spectra-canvas__connect">
       <StudioField label="From" htmlFor="spectra-from">
         <StudioSelect id="spectra-from" value={from} onChange={e=>setFrom(e.target.value)}>

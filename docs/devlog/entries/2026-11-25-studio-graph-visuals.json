@@ -1,0 +1,38 @@
+{
+  "id": "2026-11-25-studio-graph-visuals",
+  "date": "2026-11-25",
+  "system": "studio",
+  "title": "Узлы и связи Shader Graph и SpectraFX",
+  "titleEn": "Nodes and connections in Shader Graph and SpectraFX",
+  "summary": "Выбор узла подсвечивает его связи. Карточки материала показывают значения констант, а в SpectraFX значения передаются по пунктирным линиям.",
+  "summaryEn": "Select a node to highlight its connections. Material nodes show their constants, and dashed wires identify SpectraFX value links.",
+  "body": [
+    "В Shader Graph входы расположены на границе карточки. Табуляция переводит фокус между узлами, Enter и пробел выделяют узел. Числа и образцы RGB можно прочитать прямо на холсте.",
+    "В SpectraFX холст расположен перед предпросмотром. Сплошные линии показывают ход исполнения, пунктир обозначает передачу значений."
+  ],
+  "bodyEn": [
+    "Shader Graph input sockets sit on the edge of each card. Tab moves focus between nodes and Enter or Space selects one. Numeric values and RGB swatches appear directly on the canvas.",
+    "The SpectraFX canvas appears above the preview. Solid wires trace execution and dashed wires carry values."
+  ],
+  "status": "done",
+  "branch": "studio-graph-visuals",
+  "commit": "dbfb3dcd7",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-graph-visuals/01.png",
+      "caption": "Карточки sg_brass показывают тип операции, значение константы и цвет tint.",
+      "captionEn": "The sg_brass cards show the operation, constant value and tint swatch."
+    },
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-graph-visuals/02.png",
+      "caption": "Граф SpectraFX с линиями исполнения и пунктирными связями значений.",
+      "captionEn": "SpectraFX execution paths and dashed value connections."
+    }
+  ],
+  "links": [],
+  "author": null,
+  "verified": "Нативные кадры Studio на Mac с графами sg_brass и runtime_math_connected_v2.",
+  "verifiedEn": "Native Studio captures on Mac show sg_brass and runtime_math_connected_v2.",
+  "limits": "Проверено на macOS и в Chrome. Нативная Windows-проверка ещё предстоит.",
+  "limitsEn": "Verified on macOS and in Chrome. Native Windows verification is pending."
+}
