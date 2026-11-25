@@ -51,6 +51,26 @@ std::string partitionedTriangle() {
     bytes[629] = 2;
     return bytes;
 }
+std::string curvedPatch() {
+    auto bytes = triangle();
+    bytes.resize(464 + 9*44);
+    lump(bytes, 10, 464, 9*44);
+    put(bytes, 368, 2);
+    put(bytes, 376, 9);
+    put(bytes, 384, 0);
+    put(bytes, 456, 3);
+    put(bytes, 460, 3);
+    for (int y = 0; y < 3; ++y) {
+        for (int x = 0; x < 3; ++x) {
+            size_t offset = 464 + size_t(3*y+x)*44;
+            put(bytes, offset, float(x));
+            put(bytes, offset+4, float(y));
+            put(bytes, offset+8, x == 1 && y == 1 ? 4.f : 0.f);
+            put(bytes, offset+36, 1.f);
+        }
+    }
+    return bytes;
+}
 auto load(const std::string& bytes) {
     return aiverse::render::loadModel("maps/test.bsp", [&](const std::string& path, std::string& data) {
         if (path != "maps/test.bsp") return false;
@@ -65,6 +85,13 @@ int main() {
     auto model = load(bytes);
     if (model->materials.at(0).name != "stone" || model->vertices.at(2).pos.y != 1.f ||
         model->indices != std::vector<uint32_t>{0, 2, 1}) return 1;
+    auto patch = curvedPatch();
+    auto curved = load(patch);
+    const auto& surface = curved->meshes.at(0).primitives.at(0);
+    if (surface.vertexCount != 25 || surface.indexCount != 96 ||
+        curved->vertices.at(surface.firstVertex+12).pos.y != 1.f) return 7;
+    put(patch, 456, 4);
+    try { load(patch); return 8; } catch (const std::runtime_error&) {}
     auto partitioned = partitionedTriangle();
     auto level = load(partitioned);
     const auto& both = *level->bspVisibility;

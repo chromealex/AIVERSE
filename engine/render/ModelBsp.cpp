@@ -2,9 +2,75 @@
 #include "ModelInterchange.h"
 #include <array>
 #include "BspVisibility.h"
+#include "LightmapUv.h"
 
 namespace aiverse::render {
 namespace {
+// A Quake III patch is a grid of overlapping quadratic Bezier spans.
+// Sample each shared boundary once so adjoining spans have identical vertices.
+void appendPatch(Model& model, Primitive& prim, size_t source, size_t width, size_t height,
+                 interchange::ByteReader& reader) {
+    constexpr size_t steps = 4;
+    if (width < 3 || height < 3 || !(width & 1) || !(height & 1) ||
+        width > 129 || height > 129 || width * height != prim.vertexCount)
+        reader.fail("invalid BSP patch grid");
+    const size_t columns = ((width - 1)/2) * steps + 1;
+    const size_t rows = ((height - 1)/2) * steps + 1;
+    const size_t triangles = (rows - 1) * (columns - 1) * 2;
+    if (model.vertices.size() + rows*columns > 0x200000 ||
+        model.indices.size() + triangles*3 > 0x600000)
+        reader.fail("BSP patch tessellation budget exceeded");
+    prim.firstVertex = uint32_t(model.vertices.size());
+    prim.vertexCount = uint32_t(rows * columns);
+    prim.indexCount = uint32_t(triangles * 3);
+    for (size_t y = 0; y < rows; ++y) {
+        const size_t spanY = std::min(y/steps, (height-3)/2);
+        const float v = float(y-spanY*steps)/steps;
+        const float wy[]{(1-v)*(1-v), 2*v*(1-v), v*v};
+        for (size_t x = 0; x < columns; ++x) {
+            const size_t spanX = std::min(x/steps, (width-3)/2);
+            const float u = float(x-spanX*steps)/steps;
+            const float wx[]{(1-u)*(1-u), 2*u*(1-u), u*u};
+            ModelVertex vertex{};
+            float rgba[4]{};
+            float2 lm{};
+            for (size_t j = 0; j < 3; ++j) {
+                for (size_t i = 0; i < 3; ++i) {
+                    const float w = wy[j]*wx[i];
+                    const auto& control = model.vertices[source+(2*spanY+j)*width+2*spanX+i];
+                    vertex.pos += control.pos*w;
+                    vertex.nrm += control.nrm*w;
+                    vertex.uv.x += control.uv.x*w;
+                    vertex.uv.y += control.uv.y*w;
+                    const float2 controlLm = lightmapUv(control);
+                    lm.x += controlLm.x*w;
+                    lm.y += controlLm.y*w;
+                    for (unsigned k = 0; k < 4; ++k)
+                        rgba[k] += float((control.color >> (8*k)) & 255)*w/255;
+                }
+            }
+            setLightmapUv(vertex, lm);
+            vertex.nrm = normalize(vertex.nrm);
+            vertex.color = interchange::packColor(rgba[0],rgba[1],rgba[2],rgba[3]);
+            model.vertices.push_back(vertex);
+        }
+    }
+    for (size_t y = 0; y+1 < rows; ++y) {
+        for (size_t x = 0; x+1 < columns; ++x) {
+            const uint32_t a = prim.firstVertex + uint32_t(y*columns+x);
+            const uint32_t b = a+1, c = a+uint32_t(columns), d = c+1;
+            // Match the orientation of the authored normals on either grid winding.
+            const auto& va = model.vertices[a];
+            const auto& vb = model.vertices[b];
+            const auto& vc = model.vertices[c];
+            if (dot(cross(vb.pos-va.pos,vc.pos-va.pos),va.nrm) >= 0)
+                model.indices.insert(model.indices.end(), {a,b,c,b,d,c});
+            else
+                model.indices.insert(model.indices.end(), {a,c,b,b,c,d});
+        }
+    }
+}
+
 struct Lump {
     size_t offset, length;
 };
@@ -50,7 +116,7 @@ std::unique_ptr<Model> loadBsp(const std::string& path, const std::string& bytes
         auto& vertex = model->vertices.emplace_back();
         vertex.pos = interchange::zUpToYUp({finiteFloat(reader), finiteFloat(reader), finiteFloat(reader)});
         vertex.uv = {finiteFloat(reader), finiteFloat(reader)};
-        reader.skip(8); // secondary UVs for baked lightmaps
+        setLightmapUv(vertex, {finiteFloat(reader), finiteFloat(reader)});
         vertex.nrm = interchange::zUpToYUp({finiteFloat(reader), finiteFloat(reader), finiteFloat(reader)});
         vertex.color = reader.u32();
     }
@@ -62,14 +128,14 @@ std::unique_ptr<Model> loadBsp(const std::string& path, const std::string& bytes
         const auto shader = reader.u32();
         reader.skip(4);
         const auto kind = reader.u32();
-        if (kind != 1 && kind != 3) { ++skipped; continue; }
+        if (kind != 1 && kind != 2 && kind != 3) { ++skipped; continue; }
         const auto firstVertex = reader.u32(), vertexCount = reader.u32();
         const auto firstIndex = reader.u32(), indexCount = reader.u32();
         requireSpan(reader, firstVertex, vertexCount, vertices);
         requireSpan(reader, firstIndex, indexCount, indices);
         if (shader >= shaders || indexCount % 3) reader.fail("invalid BSP triangle surface");
-        if (!indexCount) continue;
-        if (model->indices.size() + indexCount > 0x80000) reader.fail("BSP index budget exceeded");
+        if (kind != 2 && !indexCount) continue;
+        if (model->indices.size() + indexCount > 0x600000) reader.fail("BSP index budget exceeded");
         surfacePrimitive[i] = int32_t(mesh.primitives.size());
         auto& prim = mesh.primitives.emplace_back();
         prim.material = int(shader);
@@ -77,6 +143,15 @@ std::unique_ptr<Model> loadBsp(const std::string& path, const std::string& bytes
         prim.vertexCount = vertexCount;
         prim.firstIndex = uint32_t(model->indices.size());
         prim.indexCount = indexCount;
+        reader.seek(lumps[13].offset + i * 104 + 28);
+        const auto lightmapIndex = reader.le<int32_t>();
+        prim.lightmapUv = lightmapIndex >= 0 && size_t(lightmapIndex) < lumps[14].length / (128*128*3);
+        if (kind == 2) {
+            reader.seek(lumps[13].offset + i * 104 + 96);
+            const auto width = reader.u32(), height = reader.u32();
+            appendPatch(*model, prim, firstVertex, width, height, reader);
+            continue;
+        }
         reader.seek(lumps[11].offset + size_t(firstIndex) * 4);
         for (size_t j = 0; j < indexCount; j += 3) {
             const auto a = reader.u32(), b = reader.u32(), c = reader.u32();
