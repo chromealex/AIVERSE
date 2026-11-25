@@ -8,6 +8,7 @@
 #include "SpectraGpuParticles.h"
 #include "SpectraBatchWorld.h"
 #include "SpectraInstanceParameters.h"
+#include "SpectraDataInterfaces.h"
 #include <array>
 #include <cstdint>
 #include <deque>
@@ -21,18 +22,29 @@ struct GraphRuntimeOptions {
     fx::FxQuality quality = fx::FxQuality::High;
     ComputePreference preference = ComputePreference::Automatic;
     uint32_t capacity = 1024; // GPU-only slots; not a CPU EffectDef particle budget
-    bool gpuIndirect = false; // opt-in GPU-authored compaction/draw, Metal only
-    // Opt-in Stage-22 bounded Metal VM. Unsupported programs use exact CPU effects.
+    bool gpuIndirect = false;
+    VolumetricParticleMaterial volumeMaterial{};
+    bool proceduralBillboards = false;
+    bool gpuOwnedAllocation = false; // opt-in GPU-authored compaction/draw on capable Metal or Vulkan
+    // Opt-in bounded GPU VM. Unsupported programs use exact CPU effects.
     bool gpuProgram = false;
+    bool reportCollisionEvents=false;
+    bool routePoolCollisionChildren=false; // only GpuPoolWorld consumes this policy
     // Strict opt-in: only pure, bounded particle-domain shaderGraph nodes.
     // Arbitrary shader/material graphs remain on the original CPU backend.
     bool gpuMaterial = false;
+    bool gpuBirthRandom = false; // explicit GPU birth-random semantics
+    uint32_t gpuBirthSeed = 0;
     // Nonblocking checkpoint requests every N submitted GPU frames (0=off).
     uint32_t checkpointEveryFrames = 0;
     AdaptiveCheckpointPolicy adaptiveCheckpoint{};
     // Share one limiter across GraphRuntime instances using the same Device.
     // Optional, for compatibility with single-emitter users.
     std::shared_ptr<CheckpointReadbackBudget> checkpointBudget;
+    std::shared_ptr<GpuAllocationBudget> allocationBudget;
+    fx::SdfResourceReader sdfReader; // compile-time only; host owns bounded IO
+    fx::TextureLoader textureLoader; // optional presentation texture resolver for CPU graph sprites
+    std::shared_ptr<SharedSdfGpuCache> sharedSdfCache;
 };
 
 struct GraphGpuEligibility {
@@ -88,6 +100,19 @@ public:
     bool setNamedProgramParameter(const std::string& name,float value,
                                   bool affectExisting=false);
     const InstanceParameterTable& instanceParameters() const {return namedParams_;}
+    const DataInterfaceBindings& dataInterfaceBindings() const {return dataBindings_;}
+    // Non-owning, strictly presentation-thread registry. Call after initGraph,
+    // before burstAt(). Null restores optional fallbacks and makes required
+    // bindings reject a burst. The host owns the registry and its snapshots.
+    void setDataInterfaceRegistry(const DataInterfaceRegistry* registry) {
+        dataRegistry_=registry;
+    }
+    const DataInterfaceSampleStats& dataInterfaceStats() const {return dataStats_;}
+    // Shared runtimes use the host BatchWorld setter; GPU collision is not implied.
+    bool setSceneCollisionRegistry(std::shared_ptr<const fx::SceneCollisionRegistry> registry,uint32_t maxQueries=8192) {
+        if(!initialized_||sharedWorld_||useComputeWrapper_)return false;
+        cpu_.setSceneCollisionRegistry(std::move(registry),maxQueries);return true;
+    }
     bool burstAt(fx::float3 worldPosition,
                  fx::float3 direction = {0,1,0},
                  fx::float4 tint = {1,1,1,1});
@@ -96,12 +121,26 @@ public:
     void setView(const Camera& camera,const render::mat4& projection,int width,int height) {
         return setView(fx::SpectraFxView::fromCamera(camera,projection,width,height));
     }
+    bool stepWithVolume(float dt,volume::GpuGasGrid& gas,float drag,render::float3 deposit);
     bool step(float dt); // between beginFrame/endFrame, before scene render pass
+    bool setVolumeLight(render::float3 direction,render::float3 color){
+        return gpuActive()&&gpu_.setVolumeLight(direction,color);
+    }
+    bool prepareVolumeSort(){return gpuActive()&&gpu_.prepareVolumeSort();}
+    bool drawWithVolumeDepth(gfx::TextureHandle depth,const fx::FxFog& fog={}){
+        if(!gpuActive()||!gpu_.drawWithVolumeDepth(depth,fog)){reason_=gpu_.reason();return false;}
+        return true;
+    }
     void draw(const fx::FxFog& fog = {}); // during still-open render pass
     void clear();
+    // CPU-only deterministic reset. GPU/shared-world paths reject explicitly.
+    bool resetDeterministicSeed(uint32_t seed);
+    // Metal-only allocation seed. Not equivalent to CPU RNG seed.
+    bool resetGpuAllocationSeed(uint32_t seed);
+    bool resetGpuShaderSeed(uint32_t seed);
 
     ComputeBackend backend() const { return backend_; }
-    bool gpuActive() const { return initialized_ && backend_ == ComputeBackend::Metal && gpu_.gpuActive(); }
+    bool gpuActive() const { return initialized_ && backend_ != ComputeBackend::Cpu && gpu_.gpuActive(); }
     const std::string& reason() const { return reason_; }
     const std::vector<std::string>& errors() const { return errors_; }
     const fx::ParticleSystem& cpuFallback() const {
@@ -110,11 +149,15 @@ public:
     }
     bool usesSharedBatchWorld() const { return sharedWorld_ != nullptr; }
     const ComputeStats& gpuStats() const { return gpu_.stats(); }
+    uint32_t gpuAllocatedCapacity() const { return gpuActive()?gpu_.allocatedCapacity():0u; }
     // Diagnostic readback, only between completed Metal frames. Returns false
     // when GPU is unavailable; never treats missing results as zero errors.
     bool readGpuVmErrors(uint32_t& count) { return gpu_.readGpuVmErrors(count); }
     // Accepted async diagnostic requests callback on a later device frame.
     // Callbacks are cancelled if the GPU runtime shuts down beforehand.
+    bool requestGpuCollisionEvents(GpuCollisionCallback callback){
+        return useComputeWrapper_&&gpu_.requestGpuCollisionEvents(std::move(callback));
+    }
     bool requestGpuVmErrors(std::function<void(bool,uint32_t)> callback) {
         return useComputeWrapper_ &&
             gpu_.requestGpuVmErrors(std::move(callback));
@@ -124,6 +167,11 @@ public:
     bool captureGpuCheckpoint(GpuCheckpoint& out) {
         return useComputeWrapper_ && gpu_.captureGpuCheckpoint(out);
     }
+    bool exportRestoreCheckpoint(std::vector<uint8_t>& bytes) const {return !sharedWorld_&&useComputeWrapper_&&!restoreIdentity_.empty()&&gpu_.exportRestoreCheckpoint(restoreIdentity_,bytes);}
+    bool importRestoreCheckpoint(const std::vector<uint8_t>& bytes) {return !sharedWorld_&&useComputeWrapper_&&!restoreIdentity_.empty()&&gpu_.importRestoreCheckpoint(restoreIdentity_,bytes);}
+    bool retainFreshGpuCheckpoint() {return useComputeWrapper_&&gpu_.retainFreshGpuCheckpoint();}
+    std::vector<uint64_t> historicalGpuCheckpointIds() const {return useComputeWrapper_?gpu_.historicalGpuCheckpointIds():std::vector<uint64_t>{};}
+    bool restoreHistoricalGpuCheckpoint(uint64_t id) {return useComputeWrapper_&&gpu_.restoreHistoricalGpuCheckpoint(id);}
     GpuCheckpointStatus checkpointStatus() const {
         return useComputeWrapper_ ? gpu_.checkpointStatus() : GpuCheckpointStatus{};
     }
@@ -133,8 +181,10 @@ public:
     }
 private:
     bool initCpu(gfx::Device*, const fx::EffectDef&, fx::FxQuality);
+    bool applyDataInterfaces(fx::float3 position);
     bool initialized_ = false;
     bool useComputeWrapper_ = false;
+    std::string restoreIdentity_;
     BatchWorld* sharedWorld_ = nullptr;
     // Bounded history: on overflow an older handle is killed before reuse.
     // Use one GraphRuntime per logical effect source, not per burst.
@@ -143,6 +193,9 @@ private:
     std::array<float,8> paramValues_{};
     std::array<bool,8> paramSet_{};
     InstanceParameterTable namedParams_;
+    DataInterfaceBindings dataBindings_;
+    const DataInterfaceRegistry* dataRegistry_=nullptr;
+    DataInterfaceSampleStats dataStats_{};
     ComputeBackend backend_ = ComputeBackend::Cpu;
     fx::ParticleSystem cpu_;
     ComputeParticles gpu_;

@@ -233,6 +233,8 @@ void Editor::init(gfx::Device& dev) {
     fxTextures_.setGpuResourceRetirement(&gpuResourceRetirement_);
     gameFx_.setGpuResourceRetirement(&gpuResourceRetirement_);
     gameFx_.setQuality(fx::defaultQualityFor(dev, false));
+    modelEffectView_.setGpuDeviceLease(gpuDeviceLease());
+    modelEffectView_.setReader([this](const std::string& path,std::string& out) { return projectReader(ws_.project.dir)(path,out); });
     gameFx_.setFileReader([this](const std::string& path, std::string& out) { return projectReader(ws_.project.dir)(path, out); });
     gameFx_.setTextureLoader([this](const std::string& name, fx::FxTexture& out) {
         render::TextureRef r = fxTextures_.resolve(name, false, ws_.project.dir.empty() ? "" : ws_.project.dir + "/");
@@ -298,6 +300,7 @@ void Editor::shutdown() {
     // and stops its particles while gameFx_ is still alive.
     physisNaturePreview_.release(*dev_, gameFx_);
     sim_.reset();
+    modelEffectView_.shutdown(*dev_);
     gameFx_.shutdown();
     fxTextures_.shutdown();
     for(auto& window:windows_)window->shutdownAfterGpuIdle(*this);
@@ -386,6 +389,7 @@ void Editor::openGame(const std::string& idOrDir) {
 
 void Editor::reloadFx() {
     fxWarnings.clear();
+    if (dev_) modelEffectView_.shutdown(*dev_);
     gameFx_.reloadAll();
     if (dev_) { fxTextures_.shutdown(); fxTextures_.init(*dev_); }   // re-imported textures (fx_import_unity) show up
     gameFx_.clearErrors();
@@ -709,6 +713,7 @@ void Editor::fitScene() {
     // 2D games: projection and angle of game.json "camera" (zoom stays the editor's)
     render::CameraOverhead cs = render::overheadCameraFrom(ws_.project.manifest);
     sceneCam.ortho = cs.ortho;
+    sceneCam.designAspect = cs.designAspect;
     if (cs.present) { sceneCam.pitch = std::min(cs.pitch, 1.5707f); sceneCam.yaw = cs.yaw; sceneCam.fovY = cs.fovY; }
 }
 
@@ -1930,6 +1935,7 @@ void Editor::renderScene(Viewport& vp, const Camera& cam, bool editOverlays) {
     }();
     graph_gpu_profile::Scope graphSceneScope(*dev_,graphGpuProfile_,"scene-viewport-render",1ULL,measurePrismaViews);
     const bool sceneGpuScope=!graphSceneScope.active() && measurePrismaViews && dev_->beginGpuScope(1ULL);
+    modelEffectView_.submit(*dev_,r3d_,gameFx_);
     r3d_.render(pass, postEnabledForScene ? &prisma_ : nullptr);
     if (postActiveForScene) prismaSceneRendered_ = true;
     const auto afterRender = std::chrono::steady_clock::now();
@@ -2036,7 +2042,10 @@ void Editor::renderGame(Viewport& vp, const Camera& cam, uint64_t prismaViewId) 
     r3d_.beginScene(renderCam,renderW,renderH);
     r3d_.setSceneSelectionOutline(sceneView);
     setOverlayContext(vp, cam, true);
+    const bool previousOutline = view_.selectionOutline();
+    if (!sceneView) view_.setSelectionOutline(ws_.project.manifest.getBool("selectionOutline", previousOutline));
     view_.draw(r3d_, sc, time_, human_ ? &gs.vision[size_t(human_)] : nullptr, gs.grid);
+    view_.setSelectionOutline(previousOutline);
     if (const auto& oc = view_.overlays().context(); overlayPreviewType >= 0 && oc.placeType >= 0)
         view_.drawGhost(r3d_, uint16_t(oc.placeType), oc.placeAt, oc.placeOk, gs.grid, time_);
     nereidPreview_.draw(r3d_);
@@ -2053,6 +2062,7 @@ void Editor::renderGame(Viewport& vp, const Camera& cam, uint64_t prismaViewId) 
     }();
     graph_gpu_profile::Scope graphGameScope(*dev_,graphGpuProfile_,"play-viewport-render",prismaViewId,measureGameGpu);
     const bool gameGpuScope=!graphGameScope.active() && measureGameGpu && dev_->beginGpuScope(prismaViewId);
+    modelEffectView_.submit(*dev_,r3d_,gameFx_);
     r3d_.render(pass, &prisma_);
     if (postActiveForGame && prismaViewId == 1ULL) prismaSceneRendered_ = true;
     if (postActiveForGame && prismaViewId == 2ULL) prismaGameRendered_ = true;
@@ -2183,6 +2193,7 @@ void Editor::startPlay(int humanSlot) {
     gameFxBridge_.setHeightFn([this](float x, float z) { return sim_ ? view_.heightAt(simModule()->state(*sim_).grid, x, z) : 0.0f; });
     gameFxBridge_.setPlayerColorFn([](int p) { return game::GameView::playerColor(p); });
     gameFxBridge_.setAttackOriginFn([this](Entity e, fx::float3& pos, fx::float3& dir) { return view_.muzzleOf(e, pos, dir); });   // shots leave the model's muzzle
+    gameFxBridge_.setNodeFn([this](Entity e,const std::string& node,render::mat4& frame){return view_.effectNodeOf(e,node,frame);});
     gameFxBridge_.attach(*sim_, uint8_t(human_));
     fxTime_ = -1;
     bots_.clear();

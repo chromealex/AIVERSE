@@ -27,12 +27,24 @@ namespace aiverse {
 class Simulation;
 
 // Something that happened during a tick, for the presentation layer (sounds, VFX, UI).
+struct MatchMessage {
+    std::string text, style;
+    float duration = 2.5f;
+};
+
+struct ChainJumpPresentation { Vec3 origin; int16_t payload = -1; };
 struct SimEvent {
     uint16_t type = 0;      // module-defined
     uint8_t player = 0;
     Entity a = kNullEntity, b = kNullEntity;
     int64_t value = 0;
     Vec3 pos{};
+    uint16_t flags = 0;         // module-defined flags, do not overload value
+    uint16_t resource = UINT16_MAX;
+    uint16_t subjectType = UINT16_MAX, subjectOwner = UINT16_MAX;
+    uint64_t subjectKey = UINT64_MAX; // stable source-side entity identity even after despawn/mirroring
+    std::shared_ptr<const MatchMessage> message{};
+    std::shared_ptr<const ChainJumpPresentation> chain{};
 };
 
 struct PlayerInfo {
@@ -40,6 +52,7 @@ struct PlayerInfo {
     std::string name;
     uint8_t team = 0;       // players on the same team are allies
     bool alive = true;
+    SeatController controller = SeatController::Human;
 };
 
 class GameModule {
@@ -53,6 +66,7 @@ public:
     virtual void applyCommand(Simulation& sim, const Command& cmd) = 0;
     // Feed every piece of gameplay state into the hasher in a fixed order.
     virtual void hashState(Simulation& sim, Hasher& h) = 0;
+    virtual void hashArchivedState(Simulation& sim, Hasher& h, uint32_t) { hashState(sim, h); }
     // 0 while the game is running; winning team id (>0) when finished; -1 for a draw.
     virtual int result(Simulation& sim) = 0;
     // Save states: write / read the module's dynamic state (World pools and resources). The reading side runs
@@ -106,6 +120,17 @@ public:
     Simulation(SimConfig cfg, std::unique_ptr<GameModule> module);
 
     void setup(const Json& rules, const Json& map);
+    // Long-lived storage selection is independent of rollback registration.
+    auto persistentSchemas()const{return persistentEcs_.schemas();}
+    bool capturePersistentSchema(const std::string& id,PersistentEcsRegistry::LoadedHash::Chunk& out)const {
+        return persistentEcs_.captureSchema(world_,id,out);
+    }
+    // Offline staged World only; live simulation restoration must use the
+    // host's normal restore barrier and invalidate derived state.
+    bool restorePersistentSchemas(World& staged,const std::vector<PersistentEcsRegistry::LoadedHash::Chunk>& chunks)const {
+        if(&staged==&world_)return false;
+        return persistentEcs_.restoreSchemas(staged,chunks);
+    }
     template<class T> void registerPersistentComponent(std::string id,uint32_t version=1) {
         persistentEcs_.registerComponent<T>(world_,std::move(id),version);
     }
@@ -181,6 +206,11 @@ public:
     World& world() { return world_; }
     const World& world() const { return world_; }
     Random& rng() { return rng_; }
+    const Random& rng() const { return rng_; }
+    // Read-only restart metadata at a quiescent authoritative boundary.
+    // Durable adapters must translate Entity handles in pending commands.
+    const std::map<uint32_t,std::vector<Command>>& pendingCommands()const{return pending_;}
+    const std::map<uint8_t,uint32_t>& commandSequences()const{return seqByPlayer_;}
     GameModule& module() { return *module_; }
     const GameModule& module() const { return *module_; }
     uint32_t tick() const { return tick_; }
@@ -188,6 +218,7 @@ public:
     uint32_t tickRate() const { return tickRate_; }
     const SimConfig& config() const { return cfg_; }
     std::vector<PlayerInfo>& players() { return players_; }
+    const std::vector<PlayerInfo>& players() const { return players_; }
     PlayerInfo* player(uint8_t slot);
     bool allied(uint8_t a, uint8_t b);
     const std::vector<SimEvent>& events() const { return events_; }       // events of the last tick
@@ -195,6 +226,7 @@ public:
     int result() { return module_->result(*this); }
 
 private:
+    Hasher checksumHeader() const;
     struct System { std::string name; SystemFn fn; };
 
     SimConfig cfg_;

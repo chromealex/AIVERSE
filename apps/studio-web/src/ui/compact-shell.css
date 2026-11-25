@@ -70,3 +70,73 @@ html.studio-edge-ns, html.studio-edge-ns * {cursor:ns-resize !important}
 html.studio-edge-nwse, html.studio-edge-nwse * {cursor:nwse-resize !important}
 html.studio-edge-nesw, html.studio-edge-nesw * {cursor:nesw-resize !important}
 .header-game-controls{position:relative}.header-game-note{position:absolute;top:calc(100% + 6px);left:50%;transform:translateX(-50%);white-space:nowrap;padding:4px 9px;border-radius:7px;background:var(--au-panel-raised);border:1px solid var(--au-line-strong);color:var(--au-text);font-size:var(--au-font-xs);z-index:50;pointer-events:none}
+
+/* Keep dock commands reachable while the tab list scrolls independently. */
+.dock-tab-bar {
+  display: flex;
+  align-items: stretch;
+  flex: none;
+  min-width: 0;
+  background: var(--au-panel-raised);
+  border-bottom: 1px solid var(--au-line);
+}
+.compact-shell .dock-tab-bar .nested-tabs {
+  flex: 1;
+  min-width: 0;
+  border-bottom: 0;
+}
+.dock-tab-bar .nested-stack-menu {
+  width: 30px;
+  border-inline-start: 1px solid var(--au-line);
+}
+.nested-stack:focus-within > .dock-tab-bar { border-color: var(--au-accent); }
+
+/* Layout follows the dock, including a narrow pane inside a wide window. */
+.nested-stack[data-narrow] {
+  .console__bar, .ptp__edhead, .ptp__actions, .diff__summary,
+  .graph-summary, .materials-footer, .anim__transport { flex-wrap: wrap; }
+  .console__search:focus-within, .hier__search:focus-within { outline: 2px solid var(--au-accent); }
+  .console__search { flex: 1 1 9rem; }
+  .ptp__row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+  .ptp__row input, .ptp__row select { min-width: 0; max-width: 100%; }
+  .build, .ptp--split, .materials-main, .graph-columns, .anim__body { flex-direction: column; }
+  .build { overflow-y: auto; }
+  .build__side, .build__main { width: 100%; overflow: visible; flex: none; }
+  .build__cards { grid-template-columns: minmax(0, 1fr); }
+  .ptp__files, .materials-list, .graph-library {
+    width: 100%; max-width: none; min-height: 0; flex: 0 1 auto; max-height: 35%;
+    border-inline-end: 0; border-bottom: 1px solid var(--au-line);
+  }
+  .rules { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(64px, 30%) minmax(0, 1fr); }
+  .anim__preview { width: 100%; max-height: 160px; overflow: auto; }
+  .anim__channel { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .studio-assets-toolbar { flex-wrap: wrap; }
+  .studio-assets-breadcrumb { flex-basis: 100%; }
+  .studio-assets-layout { flex-direction: column; }
+  .studio-assets-folders {
+    width: 100% !important; max-height: 27%; flex: 0 1 auto;
+    border-inline-end: 0; border-bottom: 1px solid var(--au-line);
+  }
+  .studio-assets-splitter { display: none; }
+  .hub { padding: var(--au-space-3); }
+  .hub__cols { grid-template-columns: minmax(0, 1fr); }
+}
+.nested-stack[data-narrow] .viewport-toolbar {
+  height: auto;
+  padding: var(--au-space-1) var(--au-space-2);
+  flex-wrap: wrap;
+}
+.nested-stack[data-narrow] .viewport-tools,
+.nested-stack[data-narrow] .scene-toolbar { flex-wrap: wrap; }
+.nested-stack[data-narrow] .scene-toolbar { flex-basis: 100%; }
+.nested-stack[data-narrow] .scene-toolbar__marks { position: static; }
+.nested-stack[data-narrow] .viewport-toolbar { position: relative; }
+.nested-stack[data-narrow] .scene-toolbar__marks-menu { left: var(--au-space-1); }
+.nested-stack[data-narrow] .anim .ptp__meta { white-space: normal; overflow-wrap: anywhere; }
+
+.nested-tab:not(.nested-active):not(:hover):not(:focus-within) .nested-tab-close {
+  visibility: hidden;
+}
+.hier__row.is-primary { box-shadow: inset 2px 0 var(--au-accent); }
+.insp-comp__head { min-height: 29px; }
+.insp-comp__body { padding-block: var(--au-space-2); }

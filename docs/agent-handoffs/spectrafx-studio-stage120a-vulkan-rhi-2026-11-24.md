@@ -1,0 +1,5 @@
+# Stage 120A — Vulkan allocator RHI prerequisites
+
+Branch `feature/spectrafx-html5-data-interfaces-20261123`; parent `b038404eb0944ee4c668fba36018037c47ef6a97`; plan `de9315c2df34903e4943344b23e6456b1efe219a`; code `1e3f88e00a1661509e355d4443bb66284dfeadd2`. Main untouched.
+
+Added optional storage/uniform compute ABI with exact slot 8 uniform, capability checks for descriptor limits, expanded descriptor storage; existing texture and push-constant layouts retained. Vulkan indirect compute dispatch, checked immutable storage upload/copy with explicit ordering, ranged async and blocking buffer diagnostics, transient transfer budget on checked staging, real completion delivery. Files engine/gfx/Gfx.h, vulkan/VkApi.h, VkDevice.h, VkCompute.cpp, VkResources.cpp, GfxVulkan.cpp, docs/spectrafx.md. No SpectraFX backend selection change; GLSL/VM/culling/allocator migration and routing remain Stage 120B. Native compile, Vulkan validation, CTest, hardware and performance NOT RUN per user request. Source-only RHI change, no authored data or new editor operation.

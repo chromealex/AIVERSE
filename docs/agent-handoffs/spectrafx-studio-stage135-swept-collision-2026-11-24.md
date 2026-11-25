@@ -1,0 +1,12 @@
+# Stage 135 — swept CPU scene collision
+
+Branch: feature/spectrafx-html5-data-interfaces-20261123
+Plan: 8fb06f6af032acb764cc4a6ecb3f8f4d9f5316cb
+Implementation: 354502f238ee25c7cf8568b27b313c2882dba4af
+Graph example: de43a22995966b545401a2bfe1faf666acf515ac
+
+CollisionModule scene=true (default false) now opts in to the existing ParticleSystem's host-supplied SceneCollisionRegistry. It sweeps previous to integrated particle position, resolves earliest valid contact, corrects position and reflects inward velocity using the existing bounce/dampen parameters. Existing life-loss, collision VM stage, sub-emitter and kill-speed logic is reused. Up to eight providers, stable ID ordering for equal hit fractions, validated finite results, default 8192/max 65536 queries per update. Budget denial skips external collision; legacy ground/planes still execute. No remaining-time re-integration or multiple swept contacts in one step. SDF helper uses bounded 48-step conservative distance tracing plus gradient normal; uncovered samples and trace exhaustion return no hit. Radius supported by SDF. Optional engine/world/SpectraBox3DCollision.h wraps existing Scene::raycast for point particles only, explicit owner read phase; nonzero radius returns unavailable. No new physics world or authoritative writes.
+
+Native API on ParticleSystem, BatchWorld and direct CPU GraphRuntime; shared GraphRuntime uses its host BatchWorld. Registry snapshots are owned by shared pointer; host must keep any referenced Box3D Scene alive and stable during update, and explicitly rebind after shutdown or world changes. Probes use the current particle simulation space; host must convert if a Box3D scene uses different coordinates. Existing planar and spherical ground paths unchanged. Authoring via CollisionModule and serialized collision.scene, C++ module schema extended, example examples/spectrafx/scene_collision_v2.vfx.json and regression source in tests/vfx_graph_runtime_test.cpp. No new MCP method; existing graph authoring applies, visual Studio editor controls/live provider hookup not verified or completed.
+
+No compilation, CTest, GPU, performance or visual QA executed per user request. No main sync or merge. GPU depth and SDF, GPU feedback, Box3D sphere sweeps, automatic live terrain/physics provider publication, and Studio authoring remain open. Next: concrete scene provider integration and GPU collision backend subset, then remaining geometry/fluid/lighting/events/audio/cache/procedural matrix. Do not mark SpectraCollision complete.

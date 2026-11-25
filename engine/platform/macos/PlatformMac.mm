@@ -19,6 +19,7 @@ using aiverse::platform::detail::state;
 
 static std::unique_ptr<gfx::Device> g_device;
 static NSWindow* g_window = nil;
+static NSCursor* g_gameCursor = nil;
 static bool g_pointerLocked = false;
 // Strong owner of the app delegate: NSApp.delegate is weak, and once the timer is invalidated
 // nothing else retains it (a freed delegate crashed in -tick when the window closed).
@@ -73,6 +74,10 @@ static void updateSizes(NSView* view) {
 @end
 
 @implementation AiverseView
+- (void)resetCursorRects {
+    [super resetCursorRects];
+    if (g_gameCursor) [self addCursorRect:self.bounds cursor:g_gameCursor];
+}
 - (BOOL)isFlipped { return YES; }
 - (BOOL)acceptsFirstResponder { return YES; }
 - (BOOL)wantsUpdateLayer { return YES; }
@@ -318,6 +323,25 @@ static void updateMacSafeArea() {
 @end
 
 namespace aiverse::platform {
+bool setCursorImage(const uint8_t* pixels, int w, int h, int x, int y) {
+    if (!g_window) return false;
+    NSCursor* next = nil;
+    if (pixels) {
+        if (w < 1 || h < 1 || w > 256 || h > 256 || x < 0 || y < 0 || x >= w || y >= h) return false;
+        NSBitmapImageRep* rep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:nil pixelsWide:w pixelsHigh:h
+            bitsPerSample:8 samplesPerPixel:4 hasAlpha:YES isPlanar:NO colorSpaceName:NSDeviceRGBColorSpace
+            bitmapFormat:NSBitmapFormatAlphaNonpremultiplied bytesPerRow:4*w bitsPerPixel:32];
+        if (!rep.bitmapData) return false;
+        std::memcpy(rep.bitmapData, pixels, size_t(w)*h*4);
+        NSImage* image = [[NSImage alloc] initWithSize:NSMakeSize(w,h)];
+        [image addRepresentation:rep];
+        next = [[NSCursor alloc] initWithImage:image hotSpot:NSMakePoint(x,y)];
+    }
+    g_gameCursor = next;
+    [g_window invalidateCursorRectsForView:g_window.contentView];
+    [(next ?: [NSCursor arrowCursor]) set];
+    return true;
+}
 bool pointerLocked() { return g_pointerLocked; }
 bool setPointerLock(bool enabled) {
     if (enabled == g_pointerLocked) return true;

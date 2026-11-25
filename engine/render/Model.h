@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <map>
 #include <string>
 #include <vector>
 #include "../gfx/Gfx.h"
@@ -299,6 +300,7 @@ struct Model {
     std::vector<MeshDef> meshes;
     std::vector<Material> materials;   // never empty after loading (a default material is added)
     std::vector<Image> images;
+    std::map<std::string, int> imageAliases; // asset-authored names for texture and image references
     std::vector<Skin> skins;
     std::vector<AnimClip> clips;
     std::vector<std::string> variants; // KHR_materials_variants names
@@ -329,6 +331,7 @@ struct Model {
 
     int findNode(const std::string& name) const;
     int findClip(const std::string& name) const;     // exact, then case-insensitive
+    int findImage(const std::string& name) const;
     int findMaterial(const std::string& name) const;
     int findVariant(const std::string& name) const;
     bool skinned() const { return !skins.empty(); }

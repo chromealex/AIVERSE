@@ -190,6 +190,26 @@ bool GameView::placeObject(const SceneObject& o, int& body, float3& ground, floa
     return true;
 }
 
+bool GameView::planetFxObjectPose(const SceneObject& o,float3& position,float3& direction) const {
+    if(o.body!=planetCam_.body() || o.body<0 || dot(o.pos,o.pos)<=1e-10f)return false;
+    int body;float3 g,up,east,south;float lift;
+    if(!placeObject(o,body,g,up,east,south,lift))return false;
+    position=g+up*lift;
+    const float len=length(o.facing);
+    direction=std::isfinite(len)&&len>1e-5f?o.facing*(1.f/len):up;
+    return std::isfinite(position.x)&&std::isfinite(position.y)&&std::isfinite(position.z)&&
+           std::isfinite(direction.x)&&std::isfinite(direction.y)&&std::isfinite(direction.z);
+}
+bool GameView::planetFxTerrain(float3 local,float& relief,float& clearance,float3& up) const {
+    const auto* surface=planets_.surface(planetCam_.body());
+    const float radius=length(local);
+    if(!surface||!std::isfinite(radius)||radius<=1e-5f)return false;
+    up=local*(1.f/radius);
+    relief=surface->heightAt(up);
+    clearance=radius-surface->radius()-relief;
+    return std::isfinite(relief)&&std::isfinite(clearance);
+}
+
 bool GameView::planetPlacement(const SceneObject& o, mat4& m) const {
     int body; float3 g, up, east, south; float lift;
     if (!placeObject(o, body, g, up, east, south, lift)) return false;
@@ -360,12 +380,24 @@ void GameView::drawPlanets(Renderer3D& r, const GameScene& s, double time, const
         const float3 pv = place.transformPoint({0, 0, 0});
         if (o.isProjectile) {
             if (o.visible) {
-                ::aiverse::view::MeshObject packet;
-                packet.mesh=&projectile_;
-                packet.world=mat4::translate(place.transformPoint({0,0.3f,0}));
-                packet.color={1,0.95f,0.8f,1};
-                packet.flags=kDrawUnlit;
-                ::aiverse::View::submitMesh(r,packet);
+                const bool custom=o.shooterType<looks_.size() && o.shotWeapon>=0 &&
+                    size_t(o.shotWeapon)<looks_[o.shooterType].projectiles.size() &&
+                    looks_[o.shooterType].projectiles[size_t(o.shotWeapon)].model;
+                if(custom) {
+                    SceneObject shot=o;
+                    shot.pos=body>=0?bodyToView(body,o.pos):pv;
+                    shot.facing=pframe_.dirToView(o.facing);
+                    const float3 radial=body>=0?pframe_.dirToView(normalize(o.pos)):float3{0,1,0};
+                    if(body<0||!occluded(body,shot.pos))
+                        drawProjectile(r,key,shot,dt,radial,false);
+                } else {
+                    // Preserve the original planet-ball fallback transform.
+                    ::aiverse::view::MeshObject packet;
+                    packet.mesh=&projectile_;
+                    packet.world=mat4::translate(place.transformPoint({0,0.3f,0}));
+                    packet.color={1,0.95f,0.8f,1}; packet.flags=kDrawUnlit;
+                    ::aiverse::View::submitMesh(r,packet);
+                }
             }
             continue;
         }
@@ -507,7 +539,11 @@ void sceneFromSphere(Simulation& sim, GameCore& m, const Surface& S, GameScene& 
         if (!Surface::onSphere(t.pos)) return;
         SceneObject so;
         so.entity = e; so.isProjectile = true; so.source = pr.source;
-        if (auto* su = w.tryGet<Unit>(pr.source)) so.shooterType = su->type;
+        if(pr.sourceType<R.types.size())so.shooterType=pr.sourceType;
+        else if(auto* su=w.tryGet<Unit>(pr.source))so.shooterType=su->type;
+        so.shotWeapon=int8_t(view_adapter::projectileAppearanceSlot(R,pr));
+        const Vec3 delta=t.pos-t.prevPos;
+        so.facing=toF(delta.lengthSq().raw>0?delta:pr.aim-t.pos);
         int body;
         so.pos = local(t.prevPos, t.pos, body);
         so.body = int16_t(body);

@@ -32,7 +32,8 @@ int main(){
     CHECK(!gridCell(0,ConstructionGrid{0}));
     CHECK(!gridWorldMin(std::numeric_limits<std::int64_t>::max(),grid));
     int rotatedCells=0;
-    CHECK(checkPlacement(*snapped,[&](Cell c){++rotatedCells;CHECK(c.x>=-1&&c.x<2&&c.z>=2&&c.z<4);return CellInfo{true,snapped->owner,0,0};}));
+    CHECK(checkPlacement(*snapped,[&](Cell c){++rotatedCells;CHECK(c.x>=-1&&c.x<2&&c.z>=2&&c.z<4);return CellInfo{true,place.owner,0,0};}));
+    CHECK(checkPlacement(*snapped,[](Cell){return CellInfo{};}).reason==Reason::Territory);
     CHECK(rotatedCells==6);
     CHECK(checkPlacement(*snapped,[](Cell){return CellInfo{};}).reason==Reason::Territory);
     CHECK(checkPlacement(place,[&](Cell c){++cells;CHECK(c.x<3&&c.z<2);return CellInfo{true,1,3,0};}));CHECK(cells==6);

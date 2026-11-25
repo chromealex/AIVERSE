@@ -30,6 +30,30 @@ struct Command {
     bool operator==(const Command&) const = default;
 };
 
+enum class SeatController : uint8_t { Empty, Human, Computer };
+
+inline SeatController defaultController(uint8_t slot) {
+    return slot == 1 ? SeatController::Human : SeatController::Computer;
+}
+
+inline const char* controllerName(SeatController controller) {
+    switch (controller) {
+    case SeatController::Human: return "human";
+    case SeatController::Computer: return "computer";
+    default: return "empty";
+    }
+}
+
+// A server-owned command uses player zero. The target seat is separate from its issuer.
+inline constexpr uint16_t kSetSeatController = 0x7fff;
+inline Command seatControllerCommand(uint8_t slot, SeatController controller, bool initial = false) {
+    Command c;
+    c.type = kSetSeatController;
+    c.param = slot;
+    c.args = {int64_t(controller), int64_t(initial)};
+    return c;
+}
+
 // Binary little-endian (de)serialization shared by replays and network.
 class ByteWriter {
 public:

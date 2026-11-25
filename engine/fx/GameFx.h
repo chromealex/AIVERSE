@@ -22,6 +22,7 @@
 #include <array>
 #include <functional>
 #include <memory>
+#include <map>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -32,10 +33,11 @@
 namespace aiverse::game {
 
 struct SceneObject;
+struct ViewEffect;
 
 enum class FxCue : uint8_t {
     Attack, Hit, Miss, Died, Spawned, Ready, BuildPlaced, BuildDone, Gathered, Captured, LevelUp,
-    Ability, Upgraded, Sold, RegionClaimed, Wave, Trail, Damaged, Count
+    Ability, Upgraded, Sold, RegionClaimed, Wave, Trail, Damaged, ChainJump, Count
 };
 const char* fxCueName(FxCue c);
 
@@ -47,6 +49,12 @@ public:
         bool teamColor = false;
         bool upright = false;   // plays along +Y whatever the event direction (Unity AlignExplosionToWorldUp)
         bool clear = false;     // trail: its particles vanish with the projectile instead of fading out
+        bool beam = false;
+        float lifetime = .2f;
+        uint32_t beamColor = 0xffffe6b4;
+        std::string node;
+        fx::float3 offset{};
+        bool inheritRotation=false, inheritScale=false, targetNode=false;
         bool set = false;   // given in fx.json (an explicit null switches a fallback off)
         bool valid() const { return effect >= 0; }
     };
@@ -58,6 +66,8 @@ public:
 
     // Ground height for effect positions (GameView::heightAt) and team colours (GameView::playerColor).
     void setHeightFn(std::function<float(float x, float z)> fn) { height_ = std::move(fn); }
+    using NodeFn = std::function<bool(Entity,const std::string&,render::mat4&)>;
+    void setNodeFn(NodeFn fn) { node_=std::move(fn); }
     void setAttackOriginFn(std::function<bool(Entity,fx::float3&,fx::float3&)> fn) { attackOrigin_=std::move(fn); }
     void setPlayerColorFn(std::function<fx::float4(int player)> fn) { playerColor_ = std::move(fn); }
     // Curved worlds (planets), optional; unset = flat behaviour. place(simPos, lift, out, up): where an effect
@@ -78,6 +88,17 @@ public:
     // muzzle's height, like GameView draws the projectile.
     void update(Simulation& sim, const std::vector<SceneObject>* scene, float dt = 1.0f / 60);
 
+    struct ChainLink {
+        fx::float3 from, to;
+        float elapsed, lifetime, scale;
+        uint32_t color;
+        bool beam;
+        fx::FxHandle particles;
+    };
+    const std::vector<ChainLink>& chainLinks() const { return chains_; }
+    void updateViewAnchors(const std::vector<ViewEffect>& effects);
+
+    int64_t skippedCombatEvents() const { return skippedCombatEvents_; }
     int played() const { return played_; }
     int rejected() const { return rejected_; }   // curved worlds: events the place function did not show
 
@@ -96,7 +117,8 @@ private:
     Binding resolve(const Json& v, const std::string& where);
     const Binding& lookup(int type, FxCue c) const;
     const Binding& trailFor(int type, int weapon = -1) const;
-    bool playAt(const Binding& b, const Vec3& pos, int type, fx::float3 dir, int owner);
+    bool nodePlacement(const Binding& b, Entity entity, fx::float3& pos, fx::float3& dir, float& scale) const;
+    bool playAt(const Binding& b, const Vec3& pos, int type, fx::float3 dir, int owner, Entity anchor=kNullEntity);
     void handle(Simulation& sim, const SimEvent& ev);
 
     fx::ParticleSystem* ps_ = nullptr;
@@ -104,16 +126,29 @@ private:
     std::array<Binding, size_t(FxCue::Count)> global_{};
     std::array<std::array<Binding, 3>, size_t(FxCue::Count)> category_{};   // structure / air / unit
     std::vector<TypeFx> types_;
+    std::unordered_map<int, Binding> chainBindings_;
+    std::vector<ChainLink> chains_;
+    std::vector<Binding> statusBindings_;
+    std::map<std::pair<uint64_t, uint16_t>, Attached> statusLoops_;
     std::vector<std::string> warnings_;
     std::shared_ptr<Collector> collector_;
     std::function<float(float, float)> height_;
     std::function<bool(Entity,fx::float3&,fx::float3&)> attackOrigin_;
     std::function<fx::float4(int)> playerColor_;
     PlaceFn place_;
+    NodeFn node_;
     std::unordered_map<uint64_t, Attached> trails_, damaged_;
     std::unordered_map<uint64_t, uint8_t> lastWeapon_;   // shooter -> the weapon it fired last (its "hit" effect)
+    struct ViewAnchor {
+        std::string effect;
+        fx::FxHandle handle;
+        bool seen = false;
+    };
+    std::map<std::pair<uint64_t, size_t>, ViewAnchor> viewAnchors_;
     uint32_t frame_ = 0;
     uint8_t viewer_ = 0;
+    int combatLimit_ = 48;
+    int64_t skippedCombatEvents_ = 0;
     int played_ = 0, rejected_ = 0;
 };
 

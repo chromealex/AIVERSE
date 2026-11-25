@@ -9,6 +9,11 @@
 
 namespace aiverse::client {
 namespace {
+uint16_t appearanceType(const game::SceneObject& o,const game::Rules& rules) {
+    if(!o.isProjectile)return o.type;
+    return o.shooterType<rules.types.size() && rules.types[o.shooterType].view.has("projectiles") ?
+        o.shooterType : game::kNoType;
+}
 float visibleRadius(const render::Camera& camera) {
     const float w = float(platform::windowWidth()), h = float(platform::windowHeight());
     float radius = 8;
@@ -67,13 +72,20 @@ void GameClient::configureLoading() {
 
 void GameClient::updateBackgroundLoading() {
     if (initialAssetRadius_ > 0) {
-        for (const auto& o : scene_.objects) if (!o.isProjectile && !view_.typeLoaded(o.type) &&
-            std::find(backgroundTypes_.begin(), backgroundTypes_.end(), o.type) == backgroundTypes_.end()) backgroundTypes_.push_back(o.type);
+        for (const auto& o : scene_.objects) {
+            const auto type=appearanceType(o,rules_);
+            if(type<rules_.types.size() && !view_.typeLoaded(type) &&
+                std::find(backgroundTypes_.begin(), backgroundTypes_.end(), type)==backgroundTypes_.end())
+                backgroundTypes_.push_back(type);
+        }
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(2);
         while (!backgroundTypes_.empty()) {
             if (backgroundType_ < 0) {
                 std::vector<float> distance(rules_.types.size(), std::numeric_limits<float>::max());
-                for (const auto& o : scene_.objects) if (o.type < distance.size()) distance[o.type] = std::min(distance[o.type], assetDistance(o));
+                for (const auto& o : scene_.objects) {
+                    const auto type=appearanceType(o,rules_);
+                    if(type<distance.size())distance[type]=std::min(distance[type],assetDistance(o));
+                }
                 backgroundType_ = *std::min_element(backgroundTypes_.begin(), backgroundTypes_.end(), [&](auto a, auto b) { return distance[a] < distance[b]; });
             }
             const auto type = uint16_t(backgroundType_);
@@ -123,9 +135,11 @@ void GameClient::beginMapLoading() {
     backgroundTypes_.clear(); backgroundType_ = -1;
     view_.setStreamingTypes(initialAssetRadius_ > 0 && !planet());
     std::vector<bool> near(rules_.types.size(), false), present(rules_.types.size(), false);
-    for (const auto& o : scene_.objects) if (!o.isProjectile && o.type < near.size()) {
-        present[o.type] = true;
-        if (initialAssetRadius_ <= 0 || planet() || assetDistance(o) <= assetRadius()) near[o.type] = true;
+    for (const auto& o : scene_.objects) {
+        const auto type=appearanceType(o,rules_);
+        if(type>=near.size())continue;
+        present[type] = true;
+        if (initialAssetRadius_ <= 0 || planet() || assetDistance(o) <= assetRadius()) near[type] = true;
     }
     sim_->world().each<Unit>([&](Entity, Unit& u) { if (u.type < present.size()) present[u.type] = true; });
     // Types from nearby dynamic spawners must be ready before their first simulation tick.

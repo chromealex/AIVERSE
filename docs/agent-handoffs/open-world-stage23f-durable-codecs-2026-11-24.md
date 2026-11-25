@@ -1,0 +1,3 @@
+# W1.23f — durable component codecs
+
+DurableComponentCodecs.h adds explicit per-entity writer/reader registration by stable schema ID and version, exact legacy readers, stable owner resolution, bounded payload and staged restore. Reuses Archive and reference context; does not change rollback serialization. Caller must discard staged World on failure; callbacks must not publish external side effects. Schema registration matching is caller contract, not enforced yet. No automatic typed adapters, deletion records, WAL integration or native tests. Next typed adapters and atomic batch restore. PR #116 Draft; no main merge.

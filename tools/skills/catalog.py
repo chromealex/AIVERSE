@@ -20,6 +20,8 @@ def load_meta():
 
 # Search vocabulary is routing metadata, not another copy of skill instructions.
 ALIASES = {
+ 'aiverse-persistent-world':'persistence wal checkpoint recovery backup world fork сохранение восстановление',
+ 'aiverse-region-lifecycle':'region world streaming ledger ecs tombstone journal change tracking undo log dirty-only ownership diagnostics delta revision rollback hot cold регион стриминг',
  'aiverse-character-locomotion':'wallrun wall-run wall slide walljump dash air dash grapple hook glide glider one-way platform drop through parkour паркур бег по стене рывок крюк кошка планирование односторонн платформ locomotion movement jump coyote slope ledge ladder swim climb mantle vault движение прыжок склон уступ лестница плавание лазание',
  'aiverse-ecs-shared-static':'ecs shared static immutable configuration prefab interned dedup memory snapshot rollback staticref sharedref scene read-only component component storage game editor общие статические компоненты префаб память конфиг дедупликация снапшот откат',
  'aiverse-voxel-world':'voxel voxels block blocks chunk chunks minecraft dig mine place raycast region save воксел блок чанк майнкрафт копат ставит регион',
@@ -112,7 +114,7 @@ WORKFLOWS=[
  ('aiverse-look','Lighting, post effects with phone cost, materials, model view blocks, screenshots','docs/postfx.md'),
  ('aiverse-fx','Visual effects from templates or Unity prefabs, tuning, event binding, preview','docs/particles.md'),
  ('aiverse-niagara-vfx','Legacy Niagara-style discovery alias; use the official SpectraFX workflow','docs/spectrafx.md'),
- ('aiverse-spectrafx','SpectraFX universal graphs, particle assets and ECS presentation for native games','docs/spectrafx.md'),
+ ('aiverse-spectrafx','SpectraFX universal graphs, particle assets, GPU RNG, checkpoint rollback, replay, capture and Studio/MCP authoring for native games','docs/spectrafx.md'),
  ('aiverse-prisma','PRISMA universal HDR post-processing, screen effects, volumes, camera profiles and GPU quality','docs/prisma.md'),
  ('aiverse-animation-ecs','Legacy C++ presentation ECS animation API and fixed-point root-motion handoff','engine/animation/EcsAnimationSystems.h'),
  ('aiverse-view','Genre-independent scene View: appearance, layers, visibility, packets and rendering adapters','docs/view.md'),
@@ -303,6 +305,16 @@ def generate():
     entries.append(dict(id='aiverse-roads',package=None,path='skills/world/aiverse-roads/SKILL.md',domain='gameplay',
         summary='Spline roads: road types, map roadNetwork, editor tool and road_* ops, tiles, checks',
         side='tools',runtime='none',target=None,dependencies=[],backendDependencies=[],source='engine/roads/RoadNet.cpp'))
+    entries.append(dict(id='aiverse-persistent-world',package=None,
+        path='skills/world/aiverse-persistent-world/SKILL.md',domain='gameplay',
+        summary='Durable world ledger WAL, checkpoints, recovery, retention and backup forks',
+        side='simulation',runtime='none',target=None,dependencies=[],backendDependencies=[],
+        source='engine/world/PersistentWorldSession.h'))
+    entries.append(dict(id='aiverse-region-lifecycle',package=None,
+        path='skills/world/aiverse-region-lifecycle/SKILL.md',domain='gameplay',
+        summary='Shared deterministic region identity, atomic vehicle groups, ECS change journals, sparse undo transactions, admission and ownership diagnostics; authoritative decision LOD',
+        side='simulation',runtime='none',target=None,dependencies=[],backendDependencies=[],
+        source='engine/world/RegionEntityLedger.h'))
     # Native ECS opt-in engine feature, not a separately installed library.
     # Register it as a gameplay recipe (runtime=none) so skill routing reads
     # its native headers without inventing a duplicate CMake library target.

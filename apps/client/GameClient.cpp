@@ -16,6 +16,7 @@
 // Touch:  tap = select / command, drag = scroll (or send from your garrison building), pinch = zoom
 // F8:     RmlUi debugger. The UI itself is data: engine/assets/ui/*.rml (see ClientUi.cpp).
 #include <fstream>
+#include "engine/core/Hash.h"
 #include <cstdlib>
 #if defined(__ANDROID__)
 #include <android/log.h>
@@ -36,6 +37,7 @@
 #include "engine/render/TextureCache.h"
 #include "engine/render/GlobalGeometryPool.h"
 #include "ClientSplash.h"
+#include "NoticeEvents.h"
 #include "GameClient.h"
 #include "StartPlayers.h"
 #include "engine/view/game/EncounterDecals.h"   // boss encounters: ground marks
@@ -87,6 +89,8 @@ void GameClient::initStep(gfx::Device& dev, int step) {
         try {
             if (!platform::readContentFile("game.json", text)) throw std::runtime_error("game.json not found in content");
             manifest_ = Json::parse(text);
+            edgeScroll_ = render::CameraEdgeScroll::fromManifest(manifest_);
+            cursors_.load(manifest_["cursors"]);
             gameName_ = manifest_.getStr("name", gameName_);
             rulesJson_ = readComposedJson(manifest_.getStr("rules", "rules.json"), [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); });   // + includes / extends
             langs_ = i18n::readGameLanguages(manifest_);
@@ -171,6 +175,7 @@ void GameClient::initStep(gfx::Device& dev, int step) {
     case 2:
         view_.setGpuDeviceLease(gpuDeviceLease_);
         view_.init(dev, rules_);
+        view_.setSelectionOutline(manifest_.getBool("selectionOutline", true));
         break;     // models, textures, atlases of every type
     case 3:
         fx_.setGpuDeviceLease(gpuDeviceLease_);
@@ -223,10 +228,20 @@ void GameClient::saveAudioSettings() {
 }
 
 // After the simulation advanced: sounds of what happened, acknowledgements, listener at the camera.
+void GameClient::acknowledgeSelectionClick(Entity target) {
+    const auto* owner = sim_->world().alive(target) ? sim_->world().tryGet<Owner>(target) : nullptr;
+    if (!owner || owner->player != human_ || spectator_) {
+        sound_.resetSelectionClicks();
+        return;
+    }
+    if (sound_.onSelectionClick(*sim_, target)) heardSelection_ = selection_;
+}
+
 void GameClient::updateAudio(double dt) {
     if (sim_) {
         if (screen_ == Screen::Playing) sound_.update(*sim_, dt);
         if (selection_ != heardSelection_) { // a newly selected own unit answers
+            sound_.resetSelectionClicks();
             Entity first = selection_.empty() ? Entity{} : selection_[0];
             auto* own = first.valid() ? sim_->world().tryGet<Owner>(first) : nullptr;
             if (own && own->player == human_ && std::find(heardSelection_.begin(), heardSelection_.end(), first) == heardSelection_.end())
@@ -256,13 +271,21 @@ void GameClient::updateAudio(double dt) {
     audio_.update(dt);
 }
 
+void GameClient::pingMap(float3 point) {
+    pendingPings_.push_back({point, human_});
+    sound_.play(Cue::Ping);
+}
+
 void GameClient::toMenu() {
+    playback_.reset();
+    pendingPings_.clear();
     hostPaused_ = hostStep_ = false;
     mapLoading_ = false; loadingTypes_.clear(); loadingSplash_.shutdown();
     sound_.detach();
     natureStop();
     fx_.stopMatch();
     audio_.stopAll(0.2f, combatBuses());
+    noticeEvents_.reset();
     city_.reset(); sim_.reset();
     setScreen(Screen::Menu);
     menuMusic();
@@ -299,6 +322,11 @@ void GameClient::applyLanguage(const std::string& tag, bool save) {
 }
 
 void GameClient::shutdown() {
+    if (campaignCamera_) {
+        platform::setPointerLock(false);
+        campaignCamera_.reset();
+    }
+    cursors_.clear();
     // Preserve the MotionWeave device lease and shutdown contract.
     // The additional camera resources must retire before Renderer3D dies.
     // A failed GPU idle must not abort the rest of the shutdown (audio, net,
@@ -317,11 +345,14 @@ void GameClient::shutdown() {
     }
     loadingSplash_.shutdown();
     net_.reset(); // detaches from the simulation before it goes away
+    stopLan();
     fx_.shutdown();
     sound_.detach();
     audio_.shutdown();
     horizonFrameTiming_.detach(*dev_);
     if (worldScene_) { worldScene_->shutdown(*dev_); worldScene_.reset(); }
+    ui_.setDynamicTexture("portrait",{},portraitSize_,portraitSize_);
+    selectionPortrait_.shutdown();
     view_.shutdown(*dev_);
     prisma_.shutdown();
     r3d_.setBakedLighting(nullptr);
@@ -387,43 +418,154 @@ void GameClient::configurePrisma(const Json& map) {
     prisma_.setQuality(prismaBase_);
 }
 
-void GameClient::startMatch(size_t idx, const Json& initialVars) {
-    hostPaused_ = hostStep_ = false;
-    if (idx >= maps_.size() || netMatch_) return;
+std::vector<std::string> GameClient::matchFileList(bool replay) const {
+    return MatchFiles::list(std::filesystem::path(saveDir())/"matches", replay);
+}
+
+bool GameClient::writeMatchFile(const std::string& slot, bool replay) {
+    if (!sim_ || netMatch_ || city_ || playback_ || mapLoading_ || mapIndex_ >= maps_.size()) {
+        error_ = "A local match is required";
+        return false;
+    }
+    MatchFile file;
+    file.map = maps_[mapIndex_].file;
+    file.setup = matchSetup_.dump();
+    file.contentHash = matchContentHash_;
+    file.seed = sim_->config().seed;
+    if (replay) {
+        auto& timeline = file.replay;
+        timeline.module = sim_->module().name();
+        timeline.mapPath = file.map;
+        timeline.rulesPath = manifest_.getStr("rules","rules.json");
+        timeline.seed = file.seed;
+        timeline.dataHash = file.contentHash;
+        timeline.tickRate = sim_->tickRate();
+        timeline.inputDelay = sim_->config().inputDelayTicks;
+        timeline.endTick = sim_->tick();
+        timeline.finalChecksum = sim_->checksum();
+        timeline.commands = sim_->executedCommands();
+    } else {
+        file.simulation = sim_->serialize();
+        for (const auto& bot : bots_) file.bots.emplace_back(bot.player(),bot.saveState());
+    }
+    if (!MatchFiles::write(std::filesystem::path(saveDir())/"matches",slot,replay,file,error_)) return false;
+    platform::syncUserData();
+    slotsDirty_ = true;
+    error_.clear();
+    return true;
+}
+
+bool GameClient::openMatchFile(const std::string& slot, bool replay) {
+    if (netMatch_ || city_) { error_ = "Leave the network match first"; return false; }
+    MatchFile file;
+    if (!MatchFiles::read(std::filesystem::path(saveDir())/"matches",slot,replay,file,error_)) return false;
+    if (file.nativeReplay) {
+        describeNetMaps();
+        const auto recorded = std::filesystem::path(file.map).lexically_normal().generic_string();
+        const auto found = std::find_if(netMaps_.begin(),netMaps_.end(),[&](const auto& m) {
+            const auto suffix = "/" + m.file;
+            return m.dataHash == file.contentHash && (recorded == m.file ||
+                (recorded.size() >= suffix.size() && recorded.compare(recorded.size()-suffix.size(),suffix.size(),suffix)==0));
+        });
+        if (found == netMaps_.end()) { error_ = "Replay content does not match an installed map"; return false; }
+        file.map = found->file;
+    }
+    auto map = std::find_if(maps_.begin(),maps_.end(),[&](const auto& m){ return m.file == file.map; });
+    if (map == maps_.end()) { error_ = "Saved map is unavailable"; return false; }
+    if (replay && (file.replay.module != "game" || file.replay.tickRate == 0 || file.replay.tickRate > 1000 ||
+        file.replay.seed != file.seed || file.replay.dataHash != file.contentHash)) {
+        error_ = "Incompatible replay setup";
+        return false;
+    }
+    return startMatch(size_t(map-maps_.begin()),Json(),&file,replay);
+}
+
+bool GameClient::startMatch(size_t idx, const Json& initialVars, const MatchFile* file, bool playback) {
+    if (idx >= maps_.size() || netMatch_ || (file && city_)) return false;
     // A new map/game is a camera cut. Retire the old view's private
     // exposure + motion history without releasing shared render sizes.
     prisma_.retireView(3ULL);
     r3d_.retireObjectMotionView(3ULL,
         dev_ ? dev_->gpuSubmissionFence() : 0);
     std::string text;
-    if (!platform::readContentFile(maps_[idx].file, text)) { error_ = "map not found: " + maps_[idx].file; return; }
+    if (!platform::readContentFile(maps_[idx].file, text)) { error_ = "map not found: " + maps_[idx].file; return false; }
     Json map;
     try {
         map = Json::parse(text);
-        game::mergeInitialVars(map, initialVars);
-        mapCamera_ = map["camera"];   // per-map top-down framing (topDownConfigure)
-        {   // game.start {players = {...}, deck = {...}}: per-seat start data into players[slot - 1]
-            const Json players = startPlayers_, deck = startDeck_;
-            startPlayers_ = startDeck_ = Json();
-            if (std::string pe = mergeStartPlayers(map, players, human_, deck); !pe.empty()) throw std::runtime_error(pe);
+        Json setup = Json::object();
+        if (file) setup = Json::parse(file->setup);
+        else {
+            setup.set("vars",initialVars); setup.set("players",startPlayers_); setup.set("deck",startDeck_);
+            setup.set("human",Json::number(int64_t(human_))); setup.set("spectator",Json::fromBool(spectator_));
+            setup.set("difficulty",Json::number(int64_t(difficulty_)));
+            Json sets = Json::array();
+            for (const auto& id : startRuleSets_) sets.push(Json::string(id));
+            setup.set("ruleSets",std::move(sets));
         }
-        if (!startRuleSets_.empty()) {   // game.start {ruleSets}: only sets the rules define (agent-bw-meta)
+        const int human = int(setup.getInt("human",1));
+        if (human < 0 || human > 255) throw std::runtime_error("Invalid saved seat");
+        game::mergeInitialVars(map,setup["vars"]);
+        const auto playerError = mergeStartPlayers(map,setup["players"],human,setup["deck"]);
+        if (!playerError.empty()) throw std::runtime_error(playerError);
+        if (setup["ruleSets"].size()) {
             Json sets = map["ruleSets"].isArray() ? map["ruleSets"] : Json::array();
-            for (auto& id : startRuleSets_) if (rulesJson_["ruleSets"][id].isArray()) sets.push(Json::string(id));
-            if (sets.size()) map.set("ruleSets", sets);
-            startRuleSets_.clear();
+            for (const auto& id : setup["ruleSets"].items())
+                if (rulesJson_["ruleSets"][id.str()].isArray()) sets.push(id);
+            if (sets.size()) map.set("ruleSets",sets);
         }
         std::string terr; // 2D tile maps: the tileset decides cell kinds / levels / fields
         if (!applyTilesToMap(map, [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); }, &terr)) throw std::runtime_error(terr);
         SimConfig cfg;
         cfg.seed = uint64_t(std::time(nullptr));
         if (const char* sd = std::getenv("AIVERSE_SEED")) cfg.seed = uint64_t(std::strtoull(sd, nullptr, 10));   // testing: reproducible matches
-        city_.reset();
-        sim_ = std::make_unique<Simulation>(cfg, std::make_unique<GameCore>());
+        if (file) cfg.seed = file->seed;
+        if (playback) {
+            cfg.tickRate = file->replay.tickRate;
+            cfg.inputDelayTicks = file->replay.inputDelay;
+        }
+        auto candidate = std::make_unique<Simulation>(cfg, std::make_unique<GameCore>());
         Json rules = rulesJson_;
         if (!embedScripts(rules, map, [](const std::string& p, std::string& o) { return platform::readContentFile(p, o); }, &terr)) throw std::runtime_error(terr);
-        cityPrepare(rules, map);   // AIVERSE_CITY: a seat in a city on a server (ClientCity.cpp)
-        sim_->setup(rules, map);
+        if (!file) cityPrepare(rules, map);
+        Hasher content;
+        content.str(rules.dump()); content.str(map.dump());
+        if (file && !file->nativeReplay && content.value() != file->contentHash) throw std::runtime_error("Match rules or map changed");
+        candidate->setup(rules, map);
+        std::vector<ComputerPlayer> restoredBots;
+        if (file && !playback) {
+            if (!candidate->deserialize(file->simulation,&terr)) throw std::runtime_error(terr);
+            AIConfig ai;
+            const auto difficulty = setup.getInt("difficulty",1);
+            ai.thinkTicks = difficulty == 0 ? 30 : difficulty == 1 ? 15 : 8;
+            ai.firstAttackArmy = difficulty == 0 ? 12 : difficulty == 1 ? 8 : 6;
+            for (const auto& [seat,bytes] : file->bots) {
+                if (!candidate->player(seat)) throw std::runtime_error("Unknown saved bot seat");
+                restoredBots.emplace_back(seat,cfg.seed,ai);
+                if (!restoredBots.back().loadState(bytes) || restoredBots.back().player()!=seat)
+                    throw std::runtime_error("Invalid saved bot state");
+            }
+        }
+        if (playback) {
+            for (const auto& command : file->replay.commands) candidate->inject(command);
+            candidate->setCommandSink([](Command&&) -> uint32_t { return 0; });
+        }
+        sim_ = std::move(candidate);
+        if (!city_) { human_ = uint8_t(human); spectator_ = setup.getBool("spectator"); }
+        difficulty_ = int(setup.getInt("difficulty",1));
+        playback_ = playback ? std::optional<Replay>(file->replay) : std::nullopt;
+        playbackSpeed_ = 1; playbackPaused_ = false;
+        bots_ = std::move(restoredBots);
+        matchSetup_ = std::move(setup); matchContentHash_ = content.value();
+        mapCamera_ = map["camera"];
+        startPlayers_ = startDeck_ = Json(); startRuleSets_.clear();
+        hostPaused_ = hostStep_ = false;
+        if (!file && !city_) for (const auto& seat : sim_->players()) {
+            const auto& authored = map["players"][size_t(seat.slot - 1)];
+            const auto controller = authored.has("controller") ? seat.controller :
+                (seat.slot == human_ && !spectator_ ? SeatController::Human : SeatController::Computer);
+            if (seat.controller != controller) sim_->inject(seatControllerCommand(seat.slot, controller, true));
+        }
+        attachNoticeEvents(false);
         cityAttach();
         horizonFrameTiming_.detach(*dev_);
         if (worldScene_) { worldScene_->shutdown(*dev_); worldScene_.reset(); }
@@ -445,12 +587,12 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
         configureBakedLighting(maps_[idx].file);
         quality_.reset(int(r3d_.shadowQuality()), int(r3d_.lights.quality()));
     } catch (const std::exception& e) {
-        error_ = e.what(); city_.reset(); sim_.reset(); return;
+        error_ = e.what(); return false;
     }
     mapIndex_ = idx;
-    bots_.clear();
-    for (auto& p : sim_->players()) {
-        if (p.slot == human_ && !spectator_) continue;
+    if (!file) for (auto& p : sim_->players()) {
+        const auto& authored = map["players"][size_t(p.slot - 1)];
+        if (authored.has("controller") ? p.controller != SeatController::Computer : (p.slot == human_ && !spectator_)) continue;
         AIConfig c;
         c.thinkTicks = difficulty_ == 0 ? 30 : difficulty_ == 1 ? 15 : 8;
         c.firstAttackArmy = difficulty_ == 0 ? 12 : difficulty_ == 1 ? 8 : 6;
@@ -471,7 +613,7 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
     if (std::getenv("AIVERSE_SCRIPT_LOG") && mod().scripts())   // testing (screenshots, captures): script log lines on stdout
         mod().scripts()->onLog = [](const ScriptLogEntry& e) {
             std::printf("[script%s] t=%u %s\n", e.error ? " error" : "", unsigned(e.tick), e.text.c_str()); std::fflush(stdout); };
-    if (const char* ff = std::getenv("AIVERSE_FAST_FORWARD")) { // testing (screenshots): bots play N game seconds first
+    if (const char* ff = std::getenv("AIVERSE_FAST_FORWARD"); !file && ff) { // testing (screenshots): bots play N game seconds first
         const uint32_t ticks = uint32_t(std::max(0.0, std::atof(ff)) * sim_->tickRate());
         std::vector<ComputerPlayer> ffBots = bots_;   // the human slot is played by a bot too while fast-forwarding
         if (!spectator_) ffBots.emplace_back(human_, sim_->config().seed, AIConfig{});
@@ -480,8 +622,7 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
     }
     sceneFromSim(*sim_, scene_, 0, spectator_ ? 0 : human_);
     fitCamera();
-    if (planet()) minimap_.buildPlanet(*dev_, view_); else minimap_.build(*dev_, mod().state(*sim_), rules_);
-    ui_.setDynamicTexture("minimap", minimap_.texture(), minimap_.width(), minimap_.height());
+    buildMinimap(map);
     mode_ = Mode::Normal;
     setScreen(Screen::Playing);
     audio_.stopAll(0.1f, combatBuses());
@@ -490,6 +631,8 @@ void GameClient::startMatch(size_t idx, const Json& initialVars) {
     fx_.startMatch(*sim_, spectator_ ? 0 : human_, view_, mod().state(*sim_).grid);
     heardSelection_.clear();
     beginMapLoading();
+    error_.clear();
+    return true;
 }
 
 void GameClient::fitCamera() {
@@ -501,9 +644,11 @@ void GameClient::fitCamera() {
     cam_.target = {c.x, 0, c.z};
     cam_.pitch = 0.95f; cam_.yaw = 0;
     cam_.maxDistance = std::max(40.0f, float(std::max(g.w, g.h)) * 1.3f);
-    float aspect = platform::windowHeight() > 0 ? platform::windowWidth() / platform::windowHeight() : 1.6f;
-    cam_.distance = small ? std::max(g.w / aspect, float(g.h)) * 1.05f + 4 : 24.0f;
-    render::applyOverheadCamera(render::overheadCameraFrom(manifest_), cam_, float(platform::framebufferHeight())); // game.json "camera" (2D games)
+    const auto overhead = render::overheadCameraFrom(manifest_);
+    cam_.designAspect = overhead.designAspect;
+    const float viewportAspect = platform::windowHeight() > 0 ? platform::windowWidth() / platform::windowHeight() : 1.6f;
+    cam_.distance = small ? std::max(g.w / cam_.projectionAspect(viewportAspect), float(g.h)) * 1.05f + 4 : 24.0f;
+    render::applyOverheadCamera(overhead, cam_, float(platform::framebufferHeight())); // game.json "camera" (2D games)
     if (const char* e = std::getenv("AIVERSE_CAM")) { // testing (close-up screenshots): "x,z,distance[,pitchDeg[,yawDeg]]"
         float v[5] = {c.x, c.z, cam_.distance, cam_.pitch * 57.2958f, cam_.yaw * 57.2958f};
         int n = std::sscanf(e, "%f,%f,%f,%f,%f", &v[0], &v[1], &v[2], &v[3], &v[4]);
@@ -652,9 +797,16 @@ void GameClient::event(const Event& incoming) {
     if (mapLoading_) { if (e.type == EventType::KeyDown && e.key == Key::Escape) toMenu(); return; }
     if (!padInjecting_ && (e.type == EventType::MouseMove || e.type == EventType::MouseDown || e.type == EventType::TouchBegin))
         gamepad_.mouseUsed(e.x, e.y);   // a real pointer hides the pad cursor (ClientGamepad.cpp)
-    bool uiWants = ui_.handleEvent(e);
-    if (e.type == EventType::FocusLost)
+    const bool encounterPointer = campaignCamera_ && screen_ == Screen::Playing && !howtoOpen_ &&
+        (e.type == EventType::MouseMove || e.type == EventType::MouseDown || e.type == EventType::MouseUp ||
+         e.type == EventType::MouseWheel) && platform::pointerLocked();
+    if (encounterPointer && e.type == EventType::MouseWheel) return;
+    bool uiWants = !encounterPointer && ui_.handleEvent(e);
+    if (e.type == EventType::FocusLost) {
         std::fill_n(keys_,int(platform::Key::Count),false);
+        mouseX_ = mouseY_ = -1;
+        edgePointer_.reset();
+    }
     if(screen_!=Screen::Playing || e.type==EventType::FocusLost){entityActions_.cancel();entityPointer_=false;mapTapPending_=false;}
     if (e.type == EventType::KeyDown && e.key == Key::F8 && !e.repeat) ui_.toggleDebugger();
     // a press that started on the UI keeps the pointer until release (dragging out of a panel
@@ -684,6 +836,13 @@ void GameClient::event(const Event& incoming) {
             keys_[code]=e.type==EventType::KeyDown && allowed;
         }
     }
+    if (campaignCamera_ && screen_ == Screen::Playing && e.type == EventType::MouseMove && !howtoOpen_) {
+        if (platform::pointerLocked()) encounterLook_.motion(e.deltaX, e.deltaY);
+        else if (!uiWants && mouseX_ >= 0) encounterLook_.motion(e.x - mouseX_, e.y - mouseY_);
+        mouseX_ = e.x;
+        mouseY_ = e.y;
+        return;
+    }
     if (e.type == EventType::MouseMove || e.type == EventType::MouseDown) { mouseX_ = e.x; mouseY_ = e.y; }
     // A view script with ui.on("back", fn) owns Esc / Android Back (which arrives as Escape) during a match: the engine's
     // pause / resume / tool cancel are skipped; a true return cancels the pointer interaction in progress (docs/scripting.md)
@@ -697,6 +856,21 @@ void GameClient::event(const Event& incoming) {
             if (mode_ != Mode::Normal) mode_ = Mode::Normal;
         }
         return;
+    }
+    if (e.type == EventType::KeyDown && !e.repeat && e.key != Key::Unknown && sim_ &&
+        screen_ == Screen::Playing && !uiWants && !ui_.textInputFocused() && !howtoOpen_ &&
+        viewScripts_.hasUiHandler("keydown")) {
+        Json args = Json::object();
+        args.set("key", Json::string(ClientGamepad::keyName(e.key)));
+        args.set("shift", Json::fromBool(e.mods & platform::kModShift));
+        args.set("ctrl", Json::fromBool(e.mods & platform::kModCtrl));
+        args.set("alt", Json::fromBool(e.mods & platform::kModAlt));
+        args.set("super", Json::fromBool(e.mods & platform::kModSuper));
+        if (viewScripts_.uiEvent(*sim_, "keydown", args)) {
+            keys_[int(e.key)] = false;
+            inputShortcuts_.suppressKey(e.key);
+            return;
+        }
     }
     // Script HUD drags own their pointer from button press through release on the world.
     if(skillDragging_) {
@@ -736,6 +910,11 @@ void GameClient::event(const Event& incoming) {
     if (screen_ == Screen::Menu && !engineMenu_ && e.type == EventType::KeyDown && e.key == Key::Escape && !e.repeat) { luaEmit("back", Json()); return; }
     if (screen_ == Screen::Paused && e.type == EventType::KeyDown && e.key == Key::Escape && !uiWants) { setScreen(Screen::Playing); return; }
     if (screen_ != Screen::Playing || !sim_) return;
+    if (!planet() && !uiWants && e.type == EventType::MouseDown && e.button == 0 && (e.mods & platform::kModAlt)) {
+        float3 point;
+        if (groundAt(e.x, e.y, point)) pingMap(point);
+        return;
+    }
     if (planet() && planetCameraEvent(e, uiWants, inputActions)) return;   // orbit camera (ClientPlanet.cpp)
     if (regionEvent(e, uiWants)) return;
     if (topDownEvent(e, uiWants, inputActions)) return;   // top-down heroes: sticks, buttons, WASD + mouse aim (ClientTopDown.cpp)
@@ -749,6 +928,7 @@ void GameClient::event(const Event& incoming) {
             if (mode_ == Mode::Place) {
                 bool ok;
                 Vec3 c = placeCentre(e.x, e.y, ok);
+                if (!ok) sound_.play(Cue::Error);
                 if (ok && placeProducer_.valid()) {
                     Command cmd; cmd.type = kCmdPlace; cmd.units = {placeProducer_}; cmd.point = c;
                     issue(cmd);
@@ -804,6 +984,7 @@ void GameClient::event(const Event& incoming) {
                     if (!(e.mods & platform::kModShift)) selection_.clear();
                     selection_.push_back(t);
                 }
+                acknowledgeSelectionClick(t);
                 return;
             }
             if (t.valid() && selectionHasGarrison() && w.has<Garrison>(t)) { command(kCmdSmart, e.x, e.y, false); return; }
@@ -854,6 +1035,7 @@ void GameClient::event(const Event& incoming) {
                         if (!add) selection_.clear();
                         if (std::find(selection_.begin(), selection_.end(), t) == selection_.end()) selection_.push_back(t);
                     } else if (!add) selection_.clear();
+                    acknowledgeSelectionClick(t);
                     lastClickTime_ = time_;
                 }
             }
@@ -877,7 +1059,10 @@ void GameClient::event(const Event& incoming) {
             if (rectMode()) { rectDrag_ = true; rectX_ = e.x; rectY_ = e.y; sendDrag_ = false; break; }
             Entity t = pick(e.x, e.y);
             sendDrag_ = t.valid() && w.has<Garrison>(t) && w.get<Owner>(t).player == human_;
-            if (sendDrag_ && std::find(selection_.begin(), selection_.end(), t) == selection_.end()) selection_ = {t};
+            if (sendDrag_) {
+                if (std::find(selection_.begin(), selection_.end(), t) == selection_.end()) selection_ = {t};
+                acknowledgeSelectionClick(t);
+            }
         } else if (touches_.size() == 2) {
             sendDrag_ = false;
             auto it = touches_.begin(); auto a = it->second; auto b = (++it)->second;
@@ -953,12 +1138,14 @@ void GameClient::event(const Event& incoming) {
                     event(fake);
                 } else if (t.valid() && w.get<Owner>(t).player == human_ && !selectionHasGarrison()) {
                     if (time_ - lastClickTime_ < 0.3) selectSameType(t); else selection_ = {t};
+                    acknowledgeSelectionClick(t);
                     lastClickTime_ = time_;
                 } else if (!selection_.empty()) {
                     command(mode_ == Mode::AttackMove ? kCmdAttack : kCmdSmart, e.x, e.y, false);
                     mode_ = Mode::Normal;
                 } else if (t.valid() && w.get<Owner>(t).player == human_) {
                     selection_ = {t};
+                    acknowledgeSelectionClick(t);
                 }
             }
         }
@@ -969,17 +1156,30 @@ void GameClient::event(const Event& incoming) {
         if (uiWants) return;
         const bool ctrl = e.mods & (platform::kModCtrl | platform::kModSuper);
         if (e.key == Key::Escape && possessedUnit().valid() && mode_ == Mode::Normal) { Command c; c.type = kCmdPossess; issue(c); break; }
+        if (e.key == Key::Escape && mode_ == Mode::Normal && !cardPage_.empty()) {
+            const auto slash = cardPage_.rfind('/');
+            cardPage_ = slash == std::string::npos ? "" : cardPage_.substr(0,slash);
+            break;
+        }
         if (e.key == Key::Escape) { if (mode_ != Mode::Normal) { mode_ = Mode::Normal; rectDrag_ = false; } else setScreen(Screen::Paused); }
         if (possessedUnit().valid()) break;   // WASD steers the possessed creature
+        if(!ctrl && scriptCommandKey(e.key)) {
+            inputShortcuts_.suppressKey(e.key);
+            break; // authored script hotkeys still take precedence
+        }
+        if (!ctrl && selection_ == cardKeySelection_) {
+            const auto it = cardKeys_.find(e.key);
+            if (it != cardKeys_.end() && size_t(it->second) < actions_.size()) {
+                inputShortcuts_.suppressKey(e.key);
+                if (!e.repeat && actions_[size_t(it->second)]) actions_[size_t(it->second)]();
+                break;
+            }
+        }
         if (e.key >= Key::Num1 && e.key <= Key::Num9) {
             int gi = int(e.key) - int(Key::Num0);
             if (ctrl) groups_[size_t(gi)] = selection_;
             else if (selectionHasGarrison() && gi <= 4) sendPercent_ = gi * 25; // garrison games: 1-4 = 25..100%
             else if (!groups_[size_t(gi)].empty()) selection_ = groups_[size_t(gi)];
-        }
-        if(!ctrl && scriptCommandKey(e.key)) {
-            inputShortcuts_.suppressKey(e.key);
-            break; // authored script hotkeys still take precedence
         }
         applyRtsActions(inputActions,!ctrl);
         break;
@@ -1009,13 +1209,73 @@ void GameClient::applyRtsActions(const std::vector<std::string>& actions,bool al
     if(fired("FocusCamera"))fitCamera();
 }
 
+void GameClient::attachNoticeEvents(bool confirmedOnly) {
+    notices_.clear();
+    activeNoticeIndices_.clear();
+    messageLogOpen_ = false;
+    cardPage_.clear();
+    cameraShake_.clear();
+    shakeBindings_.clear();
+    std::unordered_set<uint16_t> events;
+    for (const auto& binding : manifest_["camera"]["shakes"].items()) {
+        const int kind = game::script::simEventType(binding.getStr("event"));
+        if (kind < 0) continue;
+        events.insert(uint16_t(kind));
+        shakeBindings_[uint16_t(kind)].push_back(binding);
+    }
+    noticeEvents_ = collectNoticeEvents(*sim_, confirmedOnly, std::move(events));
+}
+
+void GameClient::notice(const std::string& text, double duration, std::string style) {
+    if (style.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") != std::string::npos)
+        style.clear();
+    notices_.push_back({text, std::move(style), time_ + (std::isfinite(duration) ? std::max(0.0, duration) : 2.5)});
+    if (notices_.back().until > time_) activeNoticeIndices_.push_back(notices_.size() - 1);
+}
+
+void GameClient::noticeMissingResource(int64_t resource) {
+    if (resource >= 0 && size_t(resource) < rules_.resources.size())
+        notice(tr("notice.not_enough", Args().str("resource", rules_.resources[size_t(resource)].name)));
+}
+
 void GameClient::processEvents() {
-    for (auto& ev : sim_->events()) {
+    if (!noticeEvents_ || !sim_) return;
+    // Input can be confirmed before the corresponding tick is simulated.
+    const uint32_t confirmed = netMatch_ && net_ && net_->session()
+        ? std::min(sim_->tick(), net_->session()->confirmedNext()) : 0;
+    for (const auto& ev : noticeEvents_->drain(confirmed)) {
+        const auto shakes = shakeBindings_.find(ev.type);
+        if (shakes != shakeBindings_.end() && (spectator_ || ev.player == human_ || mod().isVisible(*sim_, human_, ev.pos))) {
+            const Unit* source = sim_->world().alive(ev.a) ? sim_->world().tryGet<Unit>(ev.a) : nullptr;
+            const int64_t type = ev.type == kEvDied ? ev.value : source ? source->type : -1;
+            for (const auto& binding : shakes->second) {
+                if (binding.has("type") && (type < 0 || size_t(type) >= rules_.types.size() ||
+                    rules_.types[size_t(type)].id != binding.getStr("type"))) continue;
+                if (binding.has("ability") && (ev.type != kEvAbility || !source || source->type >= rules_.types.size() ||
+                    ev.value < 0 || size_t(ev.value) >= rules_.types[source->type].abilities.size() ||
+                    rules_.types[source->type].abilities[size_t(ev.value)].id != binding.getStr("ability"))) continue;
+                cameraShake_.start(binding, float(ev.pos.x.toDouble()), float(ev.pos.z.toDouble()));
+            }
+        }
+        if (ev.type == kEvChat && ev.message) {
+            const auto* sender = sim_->player(ev.player);
+            if (sender) notice(sender->name + ": " + ev.message->text, 2.5, "chat");
+            continue;
+        }
+        if (ev.type == kEvMessage) {
+            if (ev.player != 0 && (ev.player != human_ || spectator_)) continue;
+            if (ev.message) notice(ev.message->text, ev.message->duration, ev.message->style);
+            else {
+                const auto& texts = mod().state(*sim_).trig.messages;
+                if (ev.value >= 0 && size_t(ev.value) < texts.size()) notice(texts[size_t(ev.value)]);
+            }
+            continue;
+        }
         if (ev.player != human_ || spectator_) continue;
         if (ev.type == kEvNotEnough) {
             if (ev.value == 255) notice(tr("notice.need_supply"));
             else if (ev.value == 254) notice(tr("notice.no_room"));
-            else if (ev.value >= 0 && size_t(ev.value) < rules_.resources.size()) notice(tr("notice.not_enough", Args().str("resource", rules_.resources[size_t(ev.value)].name)));
+            else noticeMissingResource(ev.value);
         } else if (ev.type == kEvBuildDone) notice(tr("notice.built", Args().str("name", rules_.types[size_t(ev.value)].name)));
         else if (ev.type == kEvReadyToPlace) notice(tr("notice.ready_to_place", Args().str("name", rules_.types[size_t(ev.value)].name)));
         else if (ev.type == kEvResearched) notice(tr("notice.researched", Args().str("name", rules_.techs[size_t(ev.value)].name)));
@@ -1050,6 +1310,9 @@ void GameClient::runViewScripts(float dt) {
         target.active=true;target.ability=source->abilityId;target.caster=source->entity.packed();
         float3 p{};target.overWorld=groundAt(mouseX_,mouseY_,p)&&!ui_.pointerOverUi();target.x=p.x;target.z=p.z;
     }
+    std::vector<Entity> visibleSelection;
+    for (Entity e : selection_) if (visibleSelectionUnit(e)) visibleSelection.push_back(e);
+    viewScripts_.setSelection(visibleSelection);
     viewScripts_.setTargeting(target);
     {   // view.camera(): zoom in the units of game.json "camera" (ortho: visible view-plane height)
         game::ViewCamera vc;
@@ -1090,8 +1353,11 @@ void GameClient::runViewScripts(float dt) {
     issueViewCommands();
     scriptUiFrame();
     for (auto& r : viewScripts_.takeRequests()) {
-        if (r.kind == game::ViewRequest::Notice) notice(r.text);
+        if (r.kind == game::ViewRequest::Notice) notice(r.text, r.duration, r.style);
         else if (r.kind == game::ViewRequest::Effect) fx_.playEffect(r.text, r.x, r.y, r.z);
+        else if (r.kind == game::ViewRequest::ShakeCamera)
+            cameraShake_.start(r.shake, float(r.shake["x"].toDouble(cam_.target.x)), float(r.shake["z"].toDouble(cam_.target.z)));
+        else if (r.kind != game::ViewRequest::Sound) fx_.scriptEffect(r);
         else {
             audio::PlayParams pp;
             pp.positional = r.positioned; pp.x = r.x; pp.z = r.z;
@@ -1161,7 +1427,58 @@ struct ClientStageProfile {
 } g_stages;
 } // namespace
 
+std::string GameClient::cursorState() {
+    if (ui_.pointerOverUi()) {
+        const auto name = ui_.pointerCursor();
+        return name.empty() ? "normal" : name;
+    }
+    if (!sim_ || screen_ != Screen::Playing) return "normal";
+    if (cursorEdge_.x != 0 || cursorEdge_.y != 0) {
+        std::string state = "edge";
+        if (cursorEdge_.y != 0) state += cursorEdge_.y > 0 ? "North" : "South";
+        if (cursorEdge_.x != 0) state += cursorEdge_.x > 0 ? "East" : "West";
+        return state;
+    }
+    auto& w = sim_->world();
+    const Entity hovered = pick(mouseX_, mouseY_);
+    const Unit* target = w.alive(hovered) ? w.tryGet<Unit>(hovered) : nullptr;
+    if (mode_ == Mode::Place && placeType_ >= 0) {
+        bool onMap = false;
+        const Vec3 centre = placeCentre(mouseX_, mouseY_, onMap);
+        return onMap && mod().canPlace(*sim_, human_, uint16_t(placeType_), centre) ? "place" : "invalid";
+    }
+    if (mode_ == Mode::AttackMove || mode_ == Mode::Ability || mode_ == Mode::Skill || entityPointer_) {
+        float3 ground;
+        if (!groundAt(mouseX_, mouseY_, ground)) return "invalid";
+        TargetKind kind = TargetKind::Point;
+        if (mode_ == Mode::Skill && abilityIndex_ >= 0 && size_t(abilityIndex_) < rules_.playerAbilities.size())
+            kind = mod().playerAbilityFor(*sim_, human_, abilityIndex_).target;
+        if (mode_ == Mode::Ability) {
+            for (Entity selected : selection_) {
+                auto* unit = w.alive(selected) ? w.tryGet<Unit>(selected) : nullptr;
+                if (!unit || abilityIndex_ < 0 || unit->type >= rules_.types.size()) continue;
+                const auto& abilities = rules_.types[unit->type].abilities;
+                if (size_t(abilityIndex_) < abilities.size()) { kind = mod().abilityFor(*sim_, selected, abilityIndex_).target; break; }
+            }
+        }
+        if ((kind == TargetKind::Unit || kind == TargetKind::Structure) && !target) return "invalid";
+        if (kind == TargetKind::Structure && (target->type >= rules_.types.size() || !rules_.types[target->type].structure)) return "invalid";
+        return mode_ == Mode::AttackMove ? "attack" : "ability";
+    }
+    if (target) if (const auto* owner = w.tryGet<Owner>(hovered)) {
+        if (mod().hostile(*sim_, human_, owner->player)) return "enemy";
+        if (sim_->allied(human_, owner->player)) return "ally";
+    }
+    return "normal";
+}
+
 void GameClient::frame(gfx::Device& dev, double dt) {
+    if (campaignCamera_ && (screen_ != Screen::Playing || !possessedUnit().valid() || !rules_.possession.firstPerson)) {
+        cam_ = *campaignCamera_;
+        campaignCamera_.reset();
+        platform::setPointerLock(false);
+    }
+    cursorEdge_ = {};
     g_stages.start();
     lensCameras_.collectRetiredTargets();
     const bool hostFrozen = hostCanControl() && hostPaused_;
@@ -1243,15 +1560,21 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         const float idleX=idle?idle->value.x:0.0f,idleY=idle?idle->value.y:0.0f;
         float W = platform::windowWidth(), H = platform::windowHeight();
         // edge scrolling only while the cursor is inside the window (macOS reports moves outside it too)
-        bool edges = !regionSwipe_.enabled && !platform::isTouchDevice() && std::string(platform::name()) != "web" && mouseX_ >= 0 && mouseY_ >= 0 && mouseX_ <= W && mouseY_ <= H;
-        bool noSel = selection_.empty();
-        if (!ui_.textInputFocused() && !possessedUnit().valid() && !topDownActive()) {
-            const float panY=arrowY+(noSel?idleY:0.0f)+
-                float(edges && mouseY_<3)-float(edges && mouseY_>H-3)-padPanY_;
-            const float panX=arrowX+(noSel?idleX:0.0f)+
-                float(edges && mouseX_>W-3)-float(edges && mouseX_<3)+padPanX_;
-            cam_.target += fwd*(speed*std::clamp(panY,-1.0f,1.0f));
-            cam_.target += right*(speed*std::clamp(panX,-1.0f,1.0f));
+        const bool panAllowed = !ui_.textInputFocused() && !possessedUnit().valid() && !topDownActive();
+        const bool edges = panAllowed && !regionSwipe_.enabled && !platform::isTouchDevice() &&
+                           std::string(platform::name()) != "web";
+        const auto edge = edgePointer_.sample(edgeScroll_, mouseX_, mouseY_, W, H, float(dt), edges);
+        cursorEdge_ = edge;
+        if (panAllowed) {
+            const bool noSel = selection_.empty();
+            auto combined = [](float controls, float pointer) {
+                const float limit = std::max(1.f, std::abs(pointer));
+                return std::clamp(controls + pointer, -limit, limit);
+            };
+            const float panY = combined(arrowY + (noSel ? idleY : 0.f) - padPanY_, edge.y);
+            const float panX = combined(arrowX + (noSel ? idleX : 0.f) + padPanX_, edge.x);
+            cam_.target += fwd * (speed * panY);
+            cam_.target += right * (speed * panX);
         }
         auto& g = mod().state(*sim_).grid;
         if (planet()) planetCameraKeys(dt);
@@ -1266,7 +1589,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
             cam_.target.x += (float(sc.x.toDouble()) - cam_.target.x) * k;
             cam_.target.z += (float(sc.z.toDouble()) - cam_.target.z) * k;
             const float sw = float(screenSize_.x.toDouble()), sh = float(screenSize_.y.toDouble());
-            const float t = std::tan(cam_.fovY * 0.5f), aspect = H > 0 ? W / H : 1.0f;
+            const float t = std::tan(cam_.fovY * 0.5f), aspect = cam_.projectionAspect(H > 0 ? W / H : 1.0f);
             const float s = std::max(0.2f, std::sin(cam_.pitch));
             const float d = std::max(sh * s / (2 * t), sw / (2 * t * std::max(aspect, 0.1f)));   // whole screen visible
             cam_.minDistance = std::min(cam_.minDistance, d); cam_.maxDistance = std::max(cam_.maxDistance, d);
@@ -1282,11 +1605,24 @@ void GameClient::frame(gfx::Device& dev, double dt) {
                 prisma_.setQuality(render::PrismaQuality(std::max(1, int(prismaBase_) - quality_.stepsDown())));
         }
 
-        if (!hostFrozen || singleStep) {
+        if (!playback_ && (!hostFrozen || singleStep)) {
             steerPossessed();
             topDownFrame(singleStep ? 1.0 / sim_->tickRate() : dt);
         }
         if (city_) alpha = cityFrame(dt);   // the city runs on a server: nothing is stepped here
+        else if (playback_) {
+            if (!playbackPaused_ && sim_->tick() < playback_->endTick) {
+                const auto remaining = playback_->endTick - sim_->tick();
+                sim_->advance(dt * playbackSpeed_,int(std::min<uint32_t>(remaining,64)));
+                alpha = float(sim_->alpha());
+                processEvents();
+            }
+            if (!playbackPaused_ && sim_->tick() == playback_->endTick) {
+                playbackPaused_ = true;
+                if (sim_->checksum() != playback_->finalChecksum) error_ = "Replay checksum mismatch";
+                setScreen(Screen::Over);
+            }
+        }
         else if (!netMatch_ && !topDownPaused() && (!hostFrozen || singleStep)) {   // single player: the escape preview pauses the match
             for (auto& b : bots_) b.update(*sim_);
             static const double simSpeed = [] { const char* v = std::getenv("AIVERSE_SIM_SPEED"); return v ? std::clamp(std::atof(v), 0.1, 16.0) : 1.0; }();
@@ -1340,6 +1676,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         regionTick_=sim_->tick();
     }
     updateUi();
+    renderSelectionPortrait();
     spine_.render(float(dt));   // Spine views into their textures (outside the main pass)
     g_stages.lap(2);   // ui update
     gfx::PassDesc pass;
@@ -1355,6 +1692,9 @@ void GameClient::frame(gfx::Device& dev, double dt) {
             cam_ = view_.updatePlanetCamera(scene_.seconds, float(dt), fbH());
             pass.clearColor[0] = pass.clearColor[1] = pass.clearColor[2] = 0.0f;
         }
+        // Apply view.set_camera before streaming, culling and drawing so the
+        // world and view.to_screen use the same camera in this frame.
+        runViewScripts(screen_ == Screen::Playing ? float(dt) : 0.0f);
         if (worldScene_ && !planet()) {   // load / unload chunks for where the camera looks (GPU uploads: before the scene pass)
             horizonFrameTiming_.begin(dev,worldScene_.get());
             const Vec3 focus{Fixed::fromInt(int64_t(cam_.target.x)), Fixed{}, Fixed::fromInt(int64_t(cam_.target.z))};
@@ -1405,11 +1745,16 @@ void GameClient::frame(gfx::Device& dev, double dt) {
                 cam_.yaw = v[4] / 57.2958f;
             }
         }
-        const render::Camera renderCam = prisma_.jitteredCamera(cam_,renderW,renderH);
+        const auto shakenCam = cameraShake_.sample(cam_, screen_ == Screen::Playing || screen_ == Screen::Over ? dt : 0.);
+        const render::Camera renderCam = prisma_.jitteredCamera(shakenCam,renderW,renderH);
         // SpectraFX GPU simulation is encoded before the scene pass.
         fx_.setPlanetView(planet() ? &view_ : nullptr);
+        const auto graphViewProj=renderCam.proj(float(renderW)/float(std::max(1,int(renderH))),
+                                              dev.info().clipDepthZeroToOne)*renderCam.view();
+        fx_.prepareGraphGpuFrame(*sim_,scene_,renderCam,graphViewProj,int(renderW),int(renderH),
+            screen_ == Screen::Playing || screen_ == Screen::Over ? float(dt) : 0.f);
         fx_.prepareGpuFrame(screen_ == Screen::Playing || screen_ == Screen::Over
-                                ? float(std::clamp(dt,0.0,0.1)) : 0.0f,cam_);
+                                ? float(std::clamp(dt,0.0,0.1)) : 0.0f,shakenCam);
         if (view_.strataDebugInset() && !mapLoading_) {
             if (!insetR3d_ || insetW_ != int(renderW) || insetH_ != int(renderH)) {
                 if (insetColor_.valid()) dev.destroyTexture(insetColor_);
@@ -1451,6 +1796,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
             static const char* kModes[] = {"normal", "attack", "patrol", "place", "rally", "ability", "claim"};
             OverlayContext oc;
             oc.sim = sim_.get();
+            oc.pings = &pendingPings_;
             oc.player = spectator_ ? 0 : human_;
             float3 g;
             if (groundAt(mouseX_, mouseY_, g)) { oc.hasCursor = true; oc.cursor = g; }
@@ -1497,13 +1843,15 @@ void GameClient::frame(gfx::Device& dev, double dt) {
             if (!shadowsSet && !geometryShadows) { r3d_.setShadowQuality(render::ShadowQuality::Off); shadowsSet = true; }
         }
         view_.draw(r3d_, scene_, time_, spectator_ ? nullptr : &gs.vision[human_], gs.grid);
+        pendingPings_.clear();
         g_stages.lap(3);   // view
         for (auto& fe : view_.fieldView().takeEffects()) fx_.playEffect(fe.name, fe.pos.x, fe.pos.y + 0.2f, fe.pos.z);   // grid field particles
         natureUpdate(screen_ == Screen::Playing || screen_ == Screen::Over ? float(dt) : 0.0f);
-        fx_.update(*sim_, scene_, cam_, r3d_.viewProj(),renderW,renderH,
+        fx_.update(*sim_, scene_, shakenCam, r3d_.viewProj(),renderW,renderH,
                    screen_ == Screen::Playing || screen_ == Screen::Over ? float(dt) : 0.0f);
+        fx_.drawModels(r3d_);
+        fx_.drawChainBeams(r3d_, shakenCam);
         fx_.addLights(r3d_.lights);   // particle lights ("light" module)
-        runViewScripts(screen_ == Screen::Playing ? float(dt) : 0.0f);
         if (auto* enc = mod().encounters(); enc && enc->active()) {   // telegraph decals + status rings (EncounterDecals.h)
             auto ground = groundCanvas_;
             game::appendEncounterDecals(*sim_, mod(), view_, spectator_ ? 0 : human_, ground);
@@ -1532,12 +1880,13 @@ void GameClient::frame(gfx::Device& dev, double dt) {
             r3d_.lighting.skyColor = r3d_.lighting.fogColor = {0.18f, 0.19f, 0.21f};
             r3d_.lighting.fogDensity = 0;
         }
+        fx_.contributeVolumes(prisma_);
         r3d_.render(pass, &prisma_);
         view_.noteRenderedFrame(r3d_.profile().cameraModelTriangles, r3d_.profile().triangles[0], r3d_.drawCalls());
         fx_.render(r3d_.lighting);
         // GPU billboards share this scene depth/pass; no separate pass and no
         // duplicate CPU draw of GPU-owned hybrid emitter instances.
-        fx_.renderGpu(r3d_.viewProj(),cam_);
+        fx_.renderGpu(r3d_.viewProj(),shakenCam);
         // PRISMA: current-frame particle alpha/depth coverage for MotionBlur.
         // Callback runs only when the HDR motion/reactive pass is active;
         // it reuses particle geometry already submitted by fx_.render().
@@ -1551,7 +1900,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         g_stages.lap(5);   // render
         prisma_.clearCameraVolumes();
         if (!geometryOnly) {
-            view_.drawOverlays(cam_, scene_, platform::windowWidth(), platform::windowHeight());
+            view_.drawOverlays(shakenCam, scene_, platform::windowWidth(), platform::windowHeight());
             view_.drawCanvas(canvas_);
         }
         if (static const bool hud = geometryOnly || std::getenv("AIVERSE_STRATA_DEBUG"); hud)
@@ -1568,6 +1917,8 @@ void GameClient::frame(gfx::Device& dev, double dt) {
     ui_.setTarget(hostColor_, hostDepth_);   // linear UI blending reopens this pass
     static const bool hideUi = [] { const char* e = std::getenv("AIVERSE_GEOMETRY_ONLY"); return e && *e && *e != '0'; }();
     if (!hideUi || !sim_) ui_.render();
+    if (cursors_.enabled() && !platform::isTouchDevice())
+        cursors_.show(platform::pointerLocked() ? std::string{} : cursorState(), time_);
     dev.endPass();
     g_stages.lap(6);   // hud
     g_stages.endFrame();

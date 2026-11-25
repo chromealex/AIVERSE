@@ -167,11 +167,17 @@ public:
               count/lanes>=policy.minimumPerLane));
         auto range=[&](size_t begin,size_t end) {
             AccessScope scope(*declaration); // install permissions on each worker
+            World::ComponentChangeBatch changes;
+            auto publish=[&] {world_.mergeComponentChanges<T>(changes);};
+            try {
             for(size_t i=begin;i<end;++i) {
                 Entity e=writePool->entityAt(i);
+                changes.record(e);
                 AccessScope::EntityScope owner(e);
                 fn(e,writePool->dataAt(i));
             }
+            } catch(...) {publish();throw;}
+            publish();
         };
         if(parallel)workers.parallelFor(count,range);
         else if(count>0)range(0,count);

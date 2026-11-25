@@ -497,7 +497,8 @@ class NativeHostBuildTest(unittest.TestCase):
                 'std::unique_ptr<NativeModule> (*create)(); };\n'
                 'struct NativeRegistrar { explicit NativeRegistrar(std::vector<NativeDefinition>); };\n'
                 'int count(); }\n')
-            (game / "Native.cpp").write_text(
+            (game / "Native.cpp").write_text("")
+            (game / "NativeRegistry.cpp").write_text(
                 '#include "Native.h"\nnamespace aiverse::game { static int n=0;\n'
                 'NativeRegistrar::NativeRegistrar(std::vector<NativeDefinition> defs) '
                 '{ n += int(defs.size()); } int count(){return n;} }\n')

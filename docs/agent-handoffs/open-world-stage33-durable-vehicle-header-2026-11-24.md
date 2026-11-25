@@ -1,0 +1,7 @@
+# W1.33 — durable vehicle codec header repair
+
+Owner branch `codex/open-world-acceptance-20261124`; code SHA `f22644383`. `engine/vehicles/DurableVehicleComponents.h` now directly includes the owning `engine/mechanics/VehiclePersistence.h` for `lm::io(VehicleState)` and `lm::io(VehicleSeatState)`. No runtime algorithm or save schema changed.
+
+Mac AppleClang 17 evidence: targeted W1 build of `aiverse_actor_region_position_test` initially FAIL with two missing `lm::io` overloads. After the include, `cmake --build /Volumes/KINGSTON/AIVERSE-builds/open-world-acceptance-20261124/quick --target aiverse_actor_region_position_test --parallel 4` PASS and `ctest --test-dir /Volumes/KINGSTON/AIVERSE-builds/open-world-acceptance-20261124/quick --output-on-failure -R '^actor_region_position_test$'` PASS, 1/1. Full quick gate on prior code stopped at unrelated camera/VIVID NativeRegistrar linkage; log `/Volumes/KINGSTON/AIVERSE-builds/open-world-acceptance-20261124/quick/test-reports/20261124-183725-660/build.log`. No full-suite PASS.
+
+Feature checklist for this bounded repair: implementation, architecture, native header and dependency PASS by focused native build; targeted test PASS. Broader W1 persistence, gameplay, MCP, Studio, Inspector, graph, performance, cross-platform, headless consumer, examples and publishing remain NOT RUN or not applicable to the header repair. Next: build remaining W1 fixtures, run their CTests, then reconcile the unrelated full-gate linker issue with its owner. Keep #135 Draft.

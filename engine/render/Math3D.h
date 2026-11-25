@@ -232,6 +232,10 @@ struct Camera {
     float3 position{};
     quat rotation{};
     float orthoHalfHeightOverride = 0.0f;
+    float designAspect = 0.0f;  // width/height of the authored frame, zero follows the viewport
+    float projectionAspect(float viewportAspect) const {
+        return designAspect > 0 && std::isfinite(designAspect) ? designAspect : viewportAspect;
+    }
     void setPose(float3 worldPosition, quat worldRotation) {
         usePose = true;
         position = worldPosition;
@@ -259,6 +263,7 @@ struct Camera {
         return mat4::lookAt(eye(), target, up);
     }
     mat4 proj(float aspect, bool zeroToOne) const {
+        aspect = projectionAspect(aspect);
         mat4 p;
         if (!ortho) {
             p = useFrustumTangents

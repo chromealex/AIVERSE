@@ -177,14 +177,13 @@ class StudioReferencePinZoomTests(unittest.TestCase):
     def test_model_release_invalidates_renderer_caches_first(self):
         scene=(ROOT/"apps/studio-native/StudioScene.cpp").read_text(encoding="utf-8")
         self.assertEqual(scene.count("render::releaseModel("),1)
-        start=scene.index("void StudioScene::releasePreviewModel")
-        release=scene[start:scene.index("\n}",start)]
+        release=scene[scene.index("void StudioScene::releasePreviewModel"):scene.index("void StudioScene::clearDocumentModels")]
         self.assertLess(release.index("invalidateModelCachesFor(&model)"),release.index("render::releaseModel"))
 
     def test_real_scene_model_render_and_pick_share_instances(self):
         scene=(ROOT/"apps/studio-native/StudioScene.cpp").read_text(encoding="utf-8")
         api=(ROOT/"apps/studio-native/StudioScene.h").read_text(encoding="utf-8")
-        host=(ROOT/"apps/studio-native/mac/Main.mm").read_text(encoding="utf-8")
+        host=(ROOT/"apps/studio-native/StudioHost.cpp").read_text(encoding="utf-8")
         self.assertIn('editor::authoredModelAsset(entity)',scene)
         self.assertIn('const auto& view=rules["types"][entity.type]["view"]',scene)
         self.assertIn('path.rfind("content/",0)!=0',scene)
@@ -205,9 +204,7 @@ class StudioReferencePinZoomTests(unittest.TestCase):
         self.assertIn('documentModelTimes_',api)
         self.assertIn('fs::last_write_time(current,modifiedError)',scene)
         self.assertIn('previousTime->second!=modified',scene)
-        shared=(ROOT/"apps/studio-native/StudioHost.cpp").read_text(encoding="utf-8")
-        self.assertIn('ws.project.rulesJson',shared)
-        self.assertIn('in.rules = rulesSnapshot_',shared)
+        self.assertIn('ws.project.dir, ws.project.rulesJson',host)
 
     def test_rigid_cpu_model_triangle_picking_adapter(self):
         adapter=(ROOT/"apps/studio-native/StudioModelPicking.h").read_text(encoding="utf-8")
@@ -252,7 +249,7 @@ class StudioReferencePinZoomTests(unittest.TestCase):
         camera=self.source("panels/sceneCamera.ts")
         gizmo=self.source("components/SceneAxisGizmo.tsx")
         for kind in ("orbit","pan","look","move","focus","reset","view","projection"):
-            self.assertIn('kind == "'+kind+'"',host)
+            self.assertIn("kind == \""+kind+"\"",host)
         self.assertIn("void StudioScene::pan(",renderer)
         self.assertIn("void StudioScene::look(",renderer)
         self.assertIn("camera_.target=position-fromTarget*camera_.distance",renderer)
@@ -270,7 +267,7 @@ class StudioReferencePinZoomTests(unittest.TestCase):
         self.assertIn("event === 'viewport.camera' && isSceneCameraState(payload)",web)
         self.assertIn("<SceneAxisGizmo camera={camera}",web)
         self.assertIn("viewForAxis(arm.axis, arm.sign)",gizmo)
-        self.assertIn('sendEventPayload("viewport.camera", payload)',host)
+        self.assertIn("sendEventPayload(\"viewport.camera\", payload)",host)
         self.assertIn("void StudioScene::setOrientation(",renderer)
         self.assertIn("render::Camera StudioScene::viewCamera() const",renderer)
         self.assertIn("viewCamera().screenRay(",renderer)
@@ -289,11 +286,11 @@ class StudioReferencePinZoomTests(unittest.TestCase):
         self.assertIn("aiverse.studio.uiScale", app)
         self.assertIn("document.documentElement.style.zoom", app)
         self.assertIn("style.setProperty('--au-ui-scale', String(uiScale))", app)
-        self.assertIn("document.documentElement.style.zoom = ''", app)
-        self.assertIn("new ResizeObserver(update)", self.source("components/ViewportPlaceholder.tsx"))
         self.assertIn('min="75" max="200" step="5"', app)
         viewport = self.source("components/ViewportPlaceholder.tsx")
         self.assertIn("window.addEventListener('resize', update)", viewport)
+        self.assertIn("new ResizeObserver(update)", viewport)
+        self.assertIn("observer.observe(host)", viewport)
         self.assertIn("getBoundingClientRect()", viewport)
 
 

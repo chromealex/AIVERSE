@@ -7,6 +7,7 @@
 // roundabouts). The "city" block of the result carries the road graph for traffic and for tools.
 #include "GenInternal.h"
 #include "engine/core/FixedMath.h"
+#include <cstdlib>
 #include <algorithm>
 
 namespace aiverse::gen {

@@ -331,7 +331,7 @@ bool VulkanDevice::waitIdle() {
     // The GPU is idle, so pending texture readbacks can be delivered on
     // the owner thread, before their staging allocations are released.
     for(auto& slot:slots_)completeTextureCaptures(slot,true);
-    collectGarbage();
+    deliverComputeReadbacks();collectGarbage();
     return true;
 }
 
@@ -632,6 +632,7 @@ void VulkanDevice::abandonRetirementTokenAfterIdle(uint64_t token) {
 }
 
 void VulkanDevice::prepareSlot() {
+    if(!healthy_)return;
     FrameSlot& s = slots_[size_t(slot_)];
     const VkResult waited=vkWaitForFences(device_,1,&s.fence,VK_TRUE,UINT64_MAX);
     if(waited!=VK_SUCCESS){healthy_=false;return;}
@@ -803,6 +804,7 @@ bool VulkanDevice::waitForSubmittedGpuWork() {
         return false;
     }
     if (serial_ > 0) completed_ = std::max(completed_,serial_-1);
+    deliverComputeReadbacks();
     collectGarbage(); // uses real GPU-idle confirmation, not CPU frame age
     return true;
 }
@@ -879,6 +881,7 @@ bool VulkanDevice::readTexturePixelAsync(TextureHandle texture,
 }
 
 void VulkanDevice::beginFrame(int w, int h) {
+    if(!healthy_)return;
     fbW_ = w; fbH_ = h;
     deliverTextureReads();
     deliverPixelReads(); // previous frame-slot fence proved completion
@@ -1068,8 +1071,10 @@ void VulkanDevice::endFrame() {
     VkBuffer readback = VK_NULL_HANDLE;
     Allocation readAlloc;
     const int cw = back_.width, ch = back_.height;
-    if (capture_) {
+    if (capture_ && cw>0 && ch>0 && back_.image) {
         createBufferObject(size_t(cw) * size_t(ch) * 4, VK_BUFFER_USAGE_TRANSFER_DST_BIT, true, readback, readAlloc);
+    }
+    if (capture_ && readback && readAlloc.mapped) {
         barrierImage(s.main, back_.image, false, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
         VkBufferImageCopy c{};
         c.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
@@ -1094,7 +1099,14 @@ void VulkanDevice::endFrame() {
     si.commandBufferCount = count;
     si.pCommandBuffers = cbs;
     vkResetFences(device_, 1, &s.fence);
-    if (vkQueueSubmit(queue_, 1, &si, s.fence) == VK_ERROR_DEVICE_LOST) healthy_ = false;
+    const VkResult submitResult=vkQueueSubmit(queue_, 1, &si, s.fence);
+    if(submitResult!=VK_SUCCESS){
+        healthy_=false;swapAcquired_=false;
+        if(readback)vkDestroyBuffer(device_,readback,nullptr);
+        memory_.release(readAlloc);
+        if(capture_){auto fn=std::move(capture_);capture_=nullptr;fn(0,0,{});}
+        return; // Fence was reset but no submission can signal it.
+    }
     s.serial = serial_;
     if (swapAcquired_) {
         auto pi = vkStruct<VkPresentInfoKHR>(VK_STRUCTURE_TYPE_PRESENT_INFO_KHR);
@@ -1105,16 +1117,16 @@ void VulkanDevice::endFrame() {
         swapAcquired_ = false;
     }
     if (capture_) {
-        vkWaitForFences(device_, 1, &s.fence, VK_TRUE, UINT64_MAX);
-        std::vector<uint8_t> px(size_t(cw) * size_t(ch) * 4);
+        const bool captureOk=submitResult==VK_SUCCESS&&vkWaitForFences(device_, 1, &s.fence, VK_TRUE, UINT64_MAX)==VK_SUCCESS&&readAlloc.mapped;
+        std::vector<uint8_t> px(captureOk?size_t(cw)*size_t(ch)*4:0);
         const size_t row = size_t(cw) * 4;
         const auto* src = static_cast<const uint8_t*>(readAlloc.mapped);
-        for (int y = 0; y < ch; ++y) std::memcpy(px.data() + size_t(y) * row, src + size_t(ch - 1 - y) * row, row);   // top-down
-        vkDestroyBuffer(device_, readback, nullptr);
+        if(captureOk)for (int y = 0; y < ch; ++y) std::memcpy(px.data() + size_t(y) * row, src + size_t(ch - 1 - y) * row, row);   // top-down
+        if(readback)vkDestroyBuffer(device_, readback, nullptr);
         memory_.release(readAlloc);
         auto fn = std::move(capture_);
         capture_ = nullptr;
-        fn(cw, ch, std::move(px));
+        fn(captureOk?cw:0, captureOk?ch:0, std::move(px));
     }
     ++serial_;
     slot_ = (slot_ + 1) % kFramesInFlight;

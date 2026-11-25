@@ -1,0 +1,5 @@
+# Match message log (#158)
+
+Scope: transient and history models, reopenable scrollable HUD, player-targeted and broadcast script messages, style and duration through the script API. Verify with the combined backlog.
+
+Local and lockstep implementation e30de84c9ce16572b6ca279aee18ed1a89b5d9d1, city transport 28ffaed4470728131e43a6e6143f4f0adb615eac, bounded toast updates and validation d797eabf73abded5dffdda08ec949e75b2016cfc. See apps/client/{ClientUi.cpp,GameClient.cpp,NoticeEvents.h,UiModel.h}, engine/assets/ui/{hud.rml,theme.rcss}, engine/game/ScriptApi.cpp, engine/view/game/GameViewScript.cpp and engine/net/city/{CityNet.h,CityNet.cpp,CityMirror.cpp}. Protocol 6 is required on both city endpoints. Wire text is capped at 8192 bytes, style at 64 bytes. Legacy custom HUDs retain the notices string list; the built-in HUD uses noticeRows plus the full match history. Verify local/online player targeting, rollback delivery, scrolling, style/lifetime and city transport in combined acceptance. No build, test or capture run for this stage.

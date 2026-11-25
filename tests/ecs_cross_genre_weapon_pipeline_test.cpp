@@ -70,6 +70,7 @@ public:
         require(gunState&&fire&&life&&queue&&summary,"missing authoritative ECS state");
         hash.i64(gunState->ammo);
         hash.u32(gunState->nextFireTick);
+        hash.fx(gunState->remainingCooldown);
         hash.u32(fire->requested?1:0);
         hash.i64(life->current);
         hash.u32(queue->nextShotId);
@@ -200,6 +201,42 @@ uint64_t exerciseCooldown(bool cow) {
     require(fireReady()==readyChecksum,"ready shot rollback/replay mismatch");
     return readyChecksum;
 }
+template<class Tag>
+uint64_t exerciseFractionalCadence(bool cow) {
+    auto module=std::make_unique<Host<Tag>>();
+    auto* host=module.get();
+    Simulation sim(SimConfig{31,8,0,true},std::move(module));
+    sim.setup(Json::object(),Json::object());
+    if(cow)sim.world().enableCowSnapshots(true);
+    auto* params=sim.world().tryGet<lg::WeaponParametersComponent>(host->gun);
+    auto* state=sim.world().tryGet<lg::WeaponStateComponent>(host->gun);
+    require(params&&state,"missing cadence fixture");
+    params->firePeriod=Fixed::fromRatio(1,32); // four shots per 1/8 second tick
+    state->ammo=8;
+    auto request=[&] {
+        sim.world().get<lg::FireIntentComponent>(host->gun).requested=true;
+        sim.step();
+    };
+    auto expect=[&](int ammo,uint32_t nextShot) {
+        require(sim.world().get<lg::WeaponStateComponent>(host->gun).ammo==ammo,"fractional ammo mismatch");
+        require(sim.world().resource<lg::ProjectileSpawnQueue>()->nextShotId==nextShot,"fractional shot ID mismatch");
+        require(!sim.world().get<lg::FireIntentComponent>(host->gun).requested,"intent not consumed");
+    };
+    request(); expect(7,2); // first request never gets idle credit
+    SimSnapshot snapshot;sim.saveState(snapshot);
+    auto replay=[&] {
+        request();expect(3,6); // four sub-tick shots
+        sim.step();expect(3,6); // no request: discard unused credit
+        request();expect(2,7); // no accumulated burst after idle
+        request();expect(0,9); // finite ammo bounds the burst
+        request();expect(0,9);
+        return sim.checksum();
+    };
+    auto expected=replay();
+    sim.loadState(snapshot);
+    require(replay()==expected,"fractional cadence rollback mismatch");
+    return expected;
+}
 int main(){
     const uint64_t expected=exercise<ShooterTag>(false);
     require(exercise<ArtilleryTag>(false)==expected,"artillery/shooter mismatch");
@@ -209,5 +246,9 @@ int main(){
     require(exerciseCooldown<ArtilleryTag>(false)==cooldown,"cooldown cross-host mismatch");
     require(exerciseCooldown<ShooterTag>(true)==cooldown,"cooldown COW mismatch");
     require(exerciseCooldown<ArtilleryTag>(true)==cooldown,"artillery cooldown COW mismatch");
+    const uint64_t fractional=exerciseFractionalCadence<ShooterTag>(false);
+    require(exerciseFractionalCadence<ArtilleryTag>(false)==fractional,"fractional cross-host mismatch");
+    require(exerciseFractionalCadence<ShooterTag>(true)==fractional,"fractional COW mismatch");
+    require(exerciseFractionalCadence<ArtilleryTag>(true)==fractional,"fractional artillery COW mismatch");
     std::cout<<"PASS reusable ECS launch/spawn/ballistics/impact/damage across RTS and FPS style hosts\n";
 }

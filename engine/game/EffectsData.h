@@ -23,6 +23,7 @@ struct EffectParser {
 
 private:
     void statusBody(const std::string& where, const Json& j, int idx);
+    StatMod timedStatMod(const std::string& where, const Json& j);
     void delivery(const std::string& where, const Json& j, DeliveryDef& d);
     void skillObjects(const std::string& where, const Json& j, DeliveryDef& d);
     int deliveredPayload(const std::string& where, const Json& aj, bool* channel);

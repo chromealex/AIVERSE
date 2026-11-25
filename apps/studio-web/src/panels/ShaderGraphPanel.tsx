@@ -73,6 +73,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  const compatibleOps=shaderNodeCatalog(operations,draft?.domain??'material',nodeQuery);
  const chosenOp=compatibleOps.find(op=>op.id===selectedOp)??compatibleOps[0];
  const activeNode=draft?.nodes?.find(n=>n.id===selectedNode);
+ const values=Array.isArray(activeNode?.value)?activeNode.value:[activeNode?.value];
  const selectedIds=selection.filter(id=>draft?.nodes?.some(n=>n.id===id));
  const copyNodes=()=>{if(draft&&selectedIds.length)setClipboard(copyShaderNodes(draft,selectedIds));};
  const pasteNodes=()=>{
@@ -220,7 +221,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
         </div>)}
         {['constant','parameter'].includes(activeNode.op)&&<div className="au-row">
          {['R','G','B','A'].map((label,i)=><StudioInput key={label} aria-label={label} type="number" step="any"
-          value={activeNode.value?.[i]??0} onChange={e=>{if(e.target.value.trim()==='')return;const v=Array.from({length:4},(_,j)=>activeNode.value?.[j]??0);v[i]=Number(e.target.value);editDraft(setShaderValue(draft,activeNode.id,v))}}/>)}
+          value={values[i]??0} onChange={e=>{if(e.target.value.trim()==='')return;const v=Array.from({length:4},(_,j)=>values[j]??0);v[i]=Number(e.target.value);editDraft(setShaderValue(draft,activeNode.id,v))}}/>)}
         </div>}
        </div>
       </StudioSection>}

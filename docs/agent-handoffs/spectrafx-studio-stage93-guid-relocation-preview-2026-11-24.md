@@ -1,0 +1,5 @@
+# Stage 93 — read-only GUID relocation preview
+
+Parent `629c2bca5eeffa85b367fe12bcdb80398a5774db`; branch `feature/spectrafx-html5-data-interfaces-20261123`.
+
+Adds Workspace/MCP fx_replay_preset_relocate_preview and HTML5 preview panel. Bounded read-only scan of existing authoritative content .meta sidecars (20k entries, 32 MiB metadata budget), no new GUIDs or SQLite database. Resolves recorded GUIDs, rejects duplicates and converging path mappings, verifies original content/meta fingerprints, rewrites exact authored content strings in an in-memory candidate and rechecks the entire versioned dependency closure. Only ready/matching plans expose a candidate. Nested relative resource changes that require editing a parent asset fail closed. Nothing on disk is modified by planning. Existing preset remains immutable. Regression sources cover relocation, candidate check, duplicate GUID and no mutation. Tests/build not executed. Explicit apply/save-as-new, relocation across projects and thumbnails remain future work. Main untouched.

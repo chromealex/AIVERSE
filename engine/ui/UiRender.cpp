@@ -26,7 +26,7 @@ layout(location = 2) in vec2 a_uv;
 layout(std140) uniform U0 { mat4 u_mvp; vec4 u_tr; };
 out vec2 v_uv;
 out vec4 v_col;
-void main() { v_uv = a_uv; v_col = a_col; gl_Position = u_mvp * vec4(a_pos + u_tr.xy, 0.0, 1.0); }
+void main() { v_uv = vec2(a_uv.x, u_tr.w > 0.5 ? 1.0 - a_uv.y : a_uv.y); v_col = a_col; gl_Position = u_mvp * vec4(a_pos + u_tr.xy, 0.0, 1.0); }
 )";
 const char* kFS = R"(
 uniform sampler2D tex0;
@@ -45,7 +45,7 @@ struct U0 { float4x4 mvp; float4 tr; };
 struct VIn { float2 pos [[attribute(0)]]; float4 col [[attribute(1)]]; float2 uv [[attribute(2)]]; };
 struct VOut { float4 pos [[position]]; float2 uv; float4 col; };
 vertex VOut vs_main(VIn in [[stage_in]], constant U0& u [[buffer(1)]]) {
-    VOut o; o.pos = u.mvp * float4(in.pos + u.tr.xy, 0.0, 1.0); o.uv = in.uv; o.col = in.col; return o;
+    VOut o; o.pos = u.mvp * float4(in.pos + u.tr.xy, 0.0, 1.0); o.uv = float2(in.uv.x, u.tr.w > 0.5 ? 1.0 - in.uv.y : in.uv.y); o.col = in.col; return o;
 }
 fragment float4 fs_main(VOut in [[stage_in]], texture2d<float> tex0 [[texture(0)]], sampler s0 [[sampler(0)]]) {
     float4 c = in.col * tex0.sample(s0, in.uv);
@@ -67,7 +67,7 @@ out vec2 v_uv;
 out vec4 v_col;
 vec3 toLinear(vec3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c)); }
 void main() {
-    v_uv = a_uv;
+    v_uv = vec2(a_uv.x, u_tr.w > 0.5 ? 1.0 - a_uv.y : a_uv.y);
     vec3 s = a_col.a > 0.0 ? clamp(a_col.rgb / a_col.a, 0.0, 1.0) : vec3(0.0);
     v_col = vec4(toLinear(s) * a_col.a, a_col.a);
     gl_Position = u_mvp * vec4(a_pos + u_tr.xy, 0.0, 1.0);
@@ -99,7 +99,7 @@ static float3 toLinear(float3 c) { return mix(c / 12.92, pow((c + 0.055) / 1.055
 vertex VOut vs_main(VIn in [[stage_in]], constant U0& u [[buffer(1)]]) {
     VOut o;
     o.pos = u.mvp * float4(in.pos + u.tr.xy, 0.0, 1.0);
-    o.uv = in.uv;
+    o.uv = float2(in.uv.x, u.tr.w > 0.5 ? 1.0 - in.uv.y : in.uv.y);
     float3 s = in.col.a > 0.0 ? clamp(in.col.rgb / in.col.a, 0.0, 1.0) : float3(0.0);
     o.col = float4(toLinear(s) * in.col.a, in.col.a);
     return o;
@@ -217,9 +217,14 @@ void UiRenderer::beginFrame(int fbW, int fbH) {
     dev_->setScissor({});
 }
 
-void UiRenderer::setDynamicTexture(const std::string& name, gfx::TextureHandle tex, int w, int h) {
-    dynamic_[name] = {tex, w, h};
-    for (auto& t : texs_) if (t.dynamicName == name) t.tex = tex; // already loaded by a document
+void UiRenderer::setDynamicTexture(const std::string& name, gfx::TextureHandle tex, int w, int h, bool renderTarget) {
+    const bool flip = renderTarget && !dev_->info().renderTargetFlipY;
+    dynamic_[name] = {tex, w, h, flip};
+    for (auto& t : texs_) if (t.dynamicName == name) { t.tex = tex; t.flipY = flip; } // already loaded by a document
+}
+
+bool UiRenderer::usesDynamicTexture(const std::string& name) const {
+    return std::any_of(texs_.begin(),texs_.end(),[&](const auto& t){ return t.dynamicName == name; });
 }
 
 Rml::CompiledGeometryHandle UiRenderer::CompileGeometry(Rml::Span<const Rml::Vertex> vertices, Rml::Span<const int> indices) {
@@ -252,6 +257,7 @@ void UiRenderer::RenderGeometry(Rml::CompiledGeometryHandle handle, Rml::Vector2
     else std::memcpy(u.mvp, proj_, sizeof u.mvp);
     u.tr[0] = translation.x; u.tr[1] = translation.y;
     u.tr[2] = linear_ && decode ? 1.0f : 0.0f;
+    u.tr[3] = texture && texture <= texs_.size() && texs_[texture-1].flipY ? 1.f : 0.f;
     ++draws_;
     dev_->setPipeline(linear_ ? linPipeline_ : pipeline_);
     dev_->setVertexBuffer(g.vb);
@@ -275,7 +281,7 @@ Rml::TextureHandle UiRenderer::LoadTexture(Rml::Vector2i& dims, const Rml::Strin
         Texture t;
         t.dynamicName = source.substr(1);
         auto it = dynamic_.find(t.dynamicName);
-        if (it != dynamic_.end()) { t.tex = it->second.tex; dims = {it->second.w, it->second.h}; }
+        if (it != dynamic_.end()) { t.tex = it->second.tex; t.flipY = it->second.flipY; dims = {it->second.w, it->second.h}; }
         else dims = {1, 1};
         return put(texs_, freeTexs_, t);
     }

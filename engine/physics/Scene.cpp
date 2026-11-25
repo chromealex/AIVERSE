@@ -479,6 +479,28 @@ RayHit Scene::raycast(b3Vec3 origin, b3Vec3 translation, const QueryFilter& filt
     return best;
 }
 
+RayHit Scene::sphereCast(b3Vec3 origin,b3Vec3 translation,float radius,const QueryFilter& filter) const {
+    if(radius==0.f)return raycast(origin,translation,filter);
+    RayHit best;
+    if(!finite(origin,kMaxCoord)||!finite(translation,2*kMaxCoord)||
+       !inRange(radius,0,10000)||dot(translation,translation)<=0)return best;
+    const b3Vec3 center{0,0,0};
+    const b3ShapeProxy proxy{&center,1,radius};
+    struct Ctx {const Scene* scene;const QueryFilter* filter;RayHit* best;} ctx{this,&filter,&best};
+    auto fcn=[](b3ShapeId shape,b3Pos point,b3Vec3 normal,float fraction,uint64_t,int,int,void* data)->float {
+        auto* x=static_cast<Ctx*>(data);
+        if(!x->scene->acceptShape(shape,*x->filter)||
+           !inRange(fraction,0,1)||!finite(normal,2)||dot(normal,normal)<1e-10f)return -1;
+        const auto h=x->scene->bodyOfShape(shape);
+        if(x->best->body==kNoBody||fraction<x->best->fraction||
+           (fraction==x->best->fraction&&h<x->best->body))
+            *x->best={h,point,normal,fraction};
+        return x->best->fraction;
+    };
+    b3World_CastShape(world_,origin,&proxy,translation,queryFilter(filter.mask),fcn,&ctx);
+    return best;
+}
+
 std::vector<RayHit> Scene::raycastAll(b3Vec3 origin, b3Vec3 translation, const QueryFilter& filter) const {
     std::vector<RayHit> hits;
     if (!finite(origin, kMaxCoord) || !finite(translation, 2 * kMaxCoord) || dot(translation, translation) <= 0) return hits;

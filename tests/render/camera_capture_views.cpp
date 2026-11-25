@@ -6,6 +6,7 @@ using namespace aiverse;
 static void check(bool ok){if(!ok)throw std::runtime_error("capture views");}
 int main() {
     render::Camera main;
+    main.designAspect=4.f/3.f;
     main.setPose({0,0,0},{});
     const std::array<uint64_t,6> keys{1,2,3,4,5,6};
     auto cube=render::makeCubemapCameraViews(main,keys,256);
@@ -13,6 +14,8 @@ int main() {
     for(const auto& face:cube)
         check(face.width==256&&face.height==256&&
               std::abs(face.camera.fovY-render::cameraPi*.5f)<.0001f);
+    const auto cubeProjection=cube[0].camera.proj(1.f,false);
+    check(std::abs(cubeProjection.at(0,0)-cubeProjection.at(1,1))<.0001f);
     check(cube[0].camera.rotation.rotate({0,0,-1}).x>.9f);
     // All faces share one light frustum around the capture point.
     for(const auto& face:cube)

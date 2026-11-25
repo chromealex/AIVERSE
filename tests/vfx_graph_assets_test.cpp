@@ -25,8 +25,10 @@ int main() {
     ps.setQuality(fx::FxQuality::High);
     check(ps.init(nullptr),"init CPU backend");
     int readCount=0;
+    std::string binary;
     spectra::GraphAssets assets(ps,[&](const std::string& path,std::string& contents) {
         ++readCount;
+        if(path=="content/test.sdfbin"){contents=binary;return !binary.empty();}
         if(path!="fx/graphs/smoke.vfx.json")return false;
         contents=file;
         return true;
@@ -60,6 +62,29 @@ int main() {
     check(fallback.fallback && fallback.effect==a.effect && !fallback.errors.empty(),"invalid graph should preserve last good effect");
     check(ps.def(a.effect)->emitters[0].burst==9,"bad hot reload destroyed old effect");
     check(assets.load("../other").effect<0,"unsafe traversal name accepted");
+    file=R"JSON({"version":2,"nodes":[{"id":"spawn","type":"Spawn","properties":{"burst":1}},
+      {"id":"init","type":"Initialize","properties":{"life":1,"speed":0}},
+      {"id":"collision","type":"CollisionModule","properties":{"ground":false,"staticSdf":"content/test.sdfbin"}},
+      {"id":"out","type":"SpriteOutput","properties":{"texture":"builtin:soft"}}],
+      "links":[{"from":"spawn","to":"init"},{"from":"init","to":"collision"},{"from":"collision","to":"out"}],"outputs":["out"]})JSON";
+    fx::StaticSdfVolume sdf;sdf.dimension=3;sdf.samples.assign(27,-.25f);
+    check(fx::encodeSdfBinary(sdf,binary),"external SDF fixture");
+    auto first=assets.load("smoke");
+    check(first.effect>=0&&first.recompiled&&!first.fallback,"external SDF graph load");
+    check(ps.def(first.effect)->emitters[0].collision.staticSdf.samples[0]==-.25f,"external SDF resolved");
+    check(!assets.load("smoke").recompiled,"unchanged SDF cached");
+    sdf.samples.assign(27,.5f);check(fx::encodeSdfBinary(sdf,binary),"changed SDF fixture");
+    auto changed=assets.load("smoke");
+    check(changed.effect==first.effect&&changed.recompiled,"dependency-only reload");
+    check(ps.def(changed.effect)->emitters[0].collision.staticSdf.samples[0]==.5f,"updated SDF samples");
+    binary[40]^=1;
+    check(assets.load("smoke").fallback&&ps.def(first.effect)->emitters[0].collision.staticSdf.samples[0]==.5f,
+          "bad external SDF preserves last good");
+    binary.clear();
+    check(assets.load("smoke").fallback,"missing external SDF preserves last good");
+    check(!fx::validSdfResourcePath("content/../test.sdfbin"),"unsafe SDF path");
+    fx::EffectDef noReader;std::vector<std::string> errors;
+    check(!spectra::compileGraph(Json::parse(file),noReader,errors),"explicit reader required");
     assets.invalidate("smoke");
     check(assets.variants()==0,"invalidate should clear named variants");
     std::cout<<"PASS vfx_graph_assets_test (load, cache, override, hot reload, fallback, name validation)\n";

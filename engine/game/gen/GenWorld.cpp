@@ -8,6 +8,7 @@
 #include "engine/core/FixedMath.h"
 #include "engine/sim/Simulation.h"
 #include "engine/game/GameCore.h"
+#include <cstdlib>
 #include <map>
 #include <queue>
 

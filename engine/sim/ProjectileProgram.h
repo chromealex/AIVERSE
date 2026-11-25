@@ -42,6 +42,34 @@ inline void initialize(State& s,Fixed& speed,const ProjectileFlight& f,Vec3 dire
     for(const auto& m:f.modifiers)s.remaining.push_back(m.count);
     bake(s,speed,f);
 }
+// Shared target-fitted arc policy: the host owns its aim point, terrain and sweeps.
+struct FittedArc { Fixed duration{}, peak{}; };
+inline FittedArc fitTargetArc(const ProjectileFlight& f, Fixed distance, Fixed speed) {
+    if (!f.arc || speed.raw <= 0) return {};
+    return {fxMax(Fixed::fromRatio(1,10), distance/speed),
+            fxClamp(f.arcHeight + distance*f.arcHeightPerDistance, Fixed{}, 128_fx)};
+}
+inline Fixed arcOffset(FittedArc arc, Fixed age) {
+    if (arc.duration.raw <= 0) return {};
+    const Fixed t=fxClamp(age/arc.duration,Fixed{},1_fx);
+    return arc.peak*4*t*(1_fx-t);
+}
+// Advance the remaining baseline toward the latest aim without teleporting
+// the projectile when the target moves. The last slice lands exactly at aim.
+struct FittedArcStep { Fixed fraction{}, heightCorrection{}; };
+inline FittedArcStep targetArcStep(FittedArc arc,Fixed age,Fixed elapsed) {
+    const Fixed left=arc.duration-age;
+    if (left.raw<=0 || elapsed>=left) return {1_fx,Fixed{}};
+    const Fixed fraction=fxClamp(elapsed/left,Fixed{},1_fx);
+    return {fraction,arcOffset(arc,age+elapsed)-arcOffset(arc,age)*(1_fx-fraction)};
+}
+inline void initializeArcBallisticFallback(State& s,FittedArc arc,Fixed age={}) {
+    // Branches use the existing raw ballistic continuation after contact/split.
+    const Fixed duration=fxMax(Fixed::fromRatio(1,10),arc.duration);
+    s.gravity=fxMin(200000_fx,8_fx*arc.peak/(duration*duration));
+    s.verticalSpeed=4_fx*arc.peak/duration-s.gravity*age;
+    s.ballistic=true;
+}
 // Rotation around local up preserves elevation, including a purely vertical launch.
 inline Vec3 fan(Vec3 v,Vec3 up,Fixed turns) {
     const Fixed c=fxCosTurns(turns),s=fxSinTurns(turns);

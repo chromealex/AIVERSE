@@ -16,7 +16,8 @@ public:
     bool init(gfx::Device& dev, int size = 256);
     void shutdown();
     // Renders `type` of `owner` at animation time `time` (idle clip, slowly turning when yaw < 0).
-    void render(GameView& view, uint16_t type, uint8_t owner, double time, float yaw = -1);
+    void render(GameView& view, uint16_t type, uint8_t owner, double time, float yaw = -1, float zoom = 1, float focusHeight = .45f);
+    void clear();
     // A material (library name or override object, docs/models.md) on a sphere (shape 0) or a box
     // (shape 1), slowly turning; textures resolve like in rules.json.
     void renderPose(const render::Model&, const render::Pose&, float yaw=0.5f);

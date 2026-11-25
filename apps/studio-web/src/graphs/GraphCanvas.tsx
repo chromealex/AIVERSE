@@ -96,7 +96,7 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
     const b=box.current;if(b?.pointer===event.pointerId)setRect(selectionRect(b.origin,p));
     const d=drag.current;if(d?.pointer===event.pointerId)setPreview(moveGroup(d.nodes,p.x-d.origin.x,p.y-d.origin.y));
    }} onPointerUp={e=>end(e,true)} onPointerCancel={e=>end(e,false)} onLostPointerCapture={e=>end(e,false)}>
-   {geometry.wires.map(edge=><path key={edge.id} d={curve(edge.x1,edge.y1,edge.x2,edge.y2)} fill="none" stroke="var(--au-accent)" strokeWidth="2" pointerEvents="none"/>)}
+   {geometry.wires.map(edge=><path key={edge.id} opacity={ids.length&&!ids.includes(edge.from)&&!ids.includes(edge.to)?0.3:1} d={curve(edge.x1,edge.y1,edge.x2,edge.y2)} fill="none" stroke="var(--au-accent)" strokeWidth="2" pointerEvents="none"/>)}
    {pending&&cursor&&<path d={curve(pending.x,pending.y,cursor.x,cursor.y)} fill="none" stroke="var(--au-accent)" strokeDasharray="4 3" pointerEvents="none"/>}
    {geometry.nodes.map(node=>{
     const height=node.height;
@@ -118,7 +118,12 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
     {heat&&Number.isFinite(heat[node.id])&&heat[node.id]>0&&<rect x="1.5" y="1.5" width="127" height={height-3} rx="6" fill="var(--au-accent)" opacity={0.1+0.55*Math.min(1,heat[node.id])} pointerEvents="none"/>}
     {highlighted?.includes(node.id)&&<text x="118" y="15" textAnchor="end" fill="var(--au-text)" fontSize="10">●</text>}
     <text x="10" y="15" fill="var(--au-text)" fontSize="11">{node.id}</text>
-    <text x="10" y={height-5} fill="var(--au-text-soft)" fontSize="10">{node.label}</text>
+    <text x="10" y={height-(node.values?.length?23:5)} fill="var(--au-text-soft)" fontSize="10">{node.label}</text>
+    {!!node.values?.length&&<g>
+     {node.values.length>=3&&<rect x="10" y={height-15} width="11" height="11" rx="2"
+      fill={'rgb('+node.values.slice(0,3).map(v=>100*Math.min(1,Math.max(0,v))+'%').join(' ')+')'}/>}
+     <text x={node.values.length>=3?26:10} y={height-5} fill="var(--au-text)" fontSize="10">{node.values.map(v=>Number(v.toPrecision(3))).join('  ')}</text>
+    </g>}
     {geometry.ports.filter(p=>p.node===node.id).map(p=><circle key={p.direction+':'+p.port}
      cx={p.x-node.x} cy={p.y-node.y} r="5" role={p.direction==='output'?(onOutput?'button':undefined):(onInput?'button':undefined)} tabIndex={disabled||readOnly||!(p.direction==='output'?onOutput:onInput)?-1:0}
      aria-label={node.id+' '+p.direction+' '+p.port+' '+p.type}

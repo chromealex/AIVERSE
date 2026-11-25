@@ -1,0 +1,3 @@
+# W1.22h — persistent world session
+
+PersistentWorldSession.h composes lifetime lock, archive loader, WAL finality, create/open, finalized callback transactions and checkpoint generation rotation. Session owns ledger and exposes const view; no reentrant calls or external side effects in callbacks. Caller must establish actual tick finality. Failed rotation or ambiguous append stops readiness; close and recover. Existing generations retained. WAL identity binding beyond sequence/revision, full ECS persistence, host wiring and native validation remain outstanding. No tests run. PR #116 Draft; no main merge. Next bind WAL generation identity and update skill/catalog before extending persistence.

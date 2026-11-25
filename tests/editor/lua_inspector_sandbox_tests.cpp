@@ -2,7 +2,7 @@
 // Hostile inspector scripts must not abort, hang or exhaust memory of the editor:
 // metatables on returned tables / _G, __gc finalizers, huge allocations, endless
 // loops, self-referencing result tables, deep values.
-// The inspector's helpers are private; a named friend test harness exercises them.
+// A narrowly scoped friend fixture exercises the real private sandbox helpers.
 #include "apps/editor/Editor.h"
 #include "apps/editor/windows/StudioContextMenus.h"
 #include "apps/editor/EditorUtil.h"
@@ -27,7 +27,7 @@ using namespace aiverse::editor;
 
 namespace aiverse::editor {
 struct LuaCustomInspectorSandboxTest {
-inline static std::filesystem::path dir;
+    static inline std::filesystem::path dir;
 
 static void load(LuaCustomInspector& ins, const std::string& source) {
     static int n = 0;

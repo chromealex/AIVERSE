@@ -15,6 +15,13 @@ The status of every capability area is `docs/genre-implementation.json` (`planne
 - **Main gate:** nothing enters `main` without a green `./run-tests.sh --quick` on the Mac
   (`--build-dir /Volumes/KINGSTON/AIVERSE-builds/<branch>`) on the merged tree; the handoff records the SHA, the
   pass count and every failure with its owner. A failure inherited from `main` is named, not hidden.
+- **Squash into `main`:** after resolving conflicts and passing the main gate on the exact combined tree,
+  integrate each completed feature or integration branch as one commit in `main` (`git merge --squash` followed
+  by a commit, or GitHub's **Squash and merge**). Include all intended code, tests, docs and handoffs in that
+  commit. Do not use a regular merge or fast-forward that imports the branch's stage-by-stage history into
+  `main`. Keep the source branch's separate implementation and handoff commits unchanged; do not rebase or
+  force-push a shared branch merely to squash it. For multiple source branches, preserve the approved
+  integration order and make one final `main` commit per completed branch.
 - Moving code: no compatibility headers or mirrors (see NO GENRE SPLIT); `tools/layers/check_layers.py` and
   `tools/genre/check_registry.py` must pass.
 
