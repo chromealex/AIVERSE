@@ -1,0 +1,5 @@
+# Texture Graph integration with Building and Caverns
+
+PR 133 now includes parent Feature Gate commit 460ce965c and main 8511f3094. Tested integration code 1b155c42529b73bc8e9be0785711685a5a4b6566. Preserved both sets of CTest registrations, the Building panel's independent renderer and cleanup, Caverns teardown, Texture Graph cancel/retirement, the SDF and GPU resident regression fixtures, all dock homes, typed graph ports and thumbnails, and the parent graph node value presentation. Changes span CMakeLists.txt, StudioHost.cpp, StudioScene.cpp, GraphCanvas.tsx, graphGeometry.ts, nestedDock.ts, tests/vfx_graph_ops_test.cpp and the graph delivery/roadmap records.
+
+macOS arm64: npm run typecheck passed. npm run test:web passed 267/267 with zero skips. Earlier 261/261 on the previous combined tree and 2/2 strict Mesa Vulkan on d1f94b517 are separate results. Rebuilds for the native Studio/Metal, Vulkan and Mac quick suites are in progress. PR 120 remains the separately owned prerequisite for squash integration into main.
