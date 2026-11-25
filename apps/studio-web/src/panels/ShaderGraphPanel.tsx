@@ -16,6 +16,13 @@ import {DraftHistory} from '../graphs/graphFramework';
 import {StudioButton,StudioInput,StudioSelect,StudioSection} from '../ui';
 import './ShaderGraphPanel.css';
 
+// Each Studio window keeps the most recent unsaved shader for each project.
+const projectDrafts=new Map<string,{
+ name:string;
+ baseline:StudioShaderGraphDocument;
+ history:DraftHistory<StudioShaderGraphDocument['graph']>;
+}>();
+
 export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{projectPath:string;documentEpoch?:string;mapPath?:string}) {
  const [names,setNames]=useState<string[]>([]);
  const [operations,setOperations]=useState<StudioShaderGraphOp[]>([]);
@@ -25,7 +32,7 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
  const setSelectedNode=(id:string)=>setSelection(id?[id]:[]);
  const [clipboard,setClipboard]=useState<ShaderClipboard|null>(null);
  const [pendingName,setPendingName]=useState('');
- const [selected,setSelected]=useState('');
+ const [selected,setSelected]=useState(()=>projectDrafts.get(projectPath)?.name??'');
  const saveScope=useRef({projectPath,selected});
  saveScope.current={projectPath,selected};
  const [document,setDocument]=useState<StudioShaderGraphDocument|null>(null);
@@ -90,18 +97,23 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
     .finally(()=>{if(!closed)setBusy(false)});
   return ()=>{closed=true};
  },[connected,projectPath,nonce]);
- useEffect(()=>{setSelected('');setDocument(null);resetDraft(null);setPendingName('');},[projectPath]);
  useEffect(()=>{
   let closed=false;
   setDocument(null);resetDraft(null);setMessage('');setSelectedNode('');
   if(!selected)return;
+  const retained=projectDrafts.get(projectPath);
+  if(retained?.name===selected){
+   setDocument(retained.baseline);history.current=retained.history;
+   setDraft(retained.history.current());setMessage('Unsaved shader draft restored.');
+   return;
+  }
   setBusy(true);setError('');
   void invoke('studio.shaderGraphGet',{name:selected})
     .then(result=>{if(!closed){setDocument(result);resetDraft(structuredClone(result.graph));}})
     .catch(e=>{if(!closed)setError(String(e))})
     .finally(()=>{if(!closed)setBusy(false)});
   return ()=>{closed=true};
- },[selected]);
+ },[projectPath,selected]);
  const view=useMemo(()=>shaderProjection(draft??document?.graph??{},operations),[draft,document,operations]);
  const inspected=draft?.nodes?.find(node=>node.id===selectedNode);
  const selectedValue=inspected&&draft?effectiveShaderValue(draft,inspected):undefined;
@@ -112,6 +124,11 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
  };
  const sourceOptions=draft?.nodes?.map(node=><option key={node.id} value={node.id}>{node.id} · {node.op}</option>);
  const dirty=!!document&&!!draft&&JSON.stringify(draft)!==JSON.stringify(document.graph);
+ useEffect(()=>{
+  if(!projectPath||!document||!history.current)return;
+  if(dirty)projectDrafts.set(projectPath,{name:selected,baseline:document,history:history.current});
+  else if(projectDrafts.get(projectPath)?.baseline===document)projectDrafts.delete(projectPath);
+ },[projectPath,selected,document,draft,dirty]);
  const compatibleOps=shaderNodeCatalog(operations,draft?.domain??'material',nodeQuery);
  const chosenOp=compatibleOps.find(op=>op.id===selectedOp)??compatibleOps[0];
  const activeNode=draft?.nodes?.find(n=>n.id===selectedNode);
@@ -144,7 +161,7 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
   setSelected(name);
  };
  const discardAndSwitch=()=>{
-  if(pendingName){setSelected(pendingName);setPendingName('');}
+  if(pendingName){projectDrafts.delete(projectPath);resetDraft(null);setSelected(pendingName);setPendingName('');}
  };
  const createNode=()=>{
   if(!draft||busy||!chosenOp)return;
@@ -197,6 +214,8 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
   try{
    if(dirty){
     saved=await invoke('studio.shaderGraphSave',{name:selected,graph:draft,expected:document.originalJson??document.graph,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch});
+    const retained=projectDrafts.get(projectPath);
+    if(retained?.baseline===document&&retained.history.current()===draft)projectDrafts.delete(projectPath);
     if(saveScope.current.projectPath!==projectPath||saveScope.current.selected!==selected)return;
     setDocument(saved);resetDraft(structuredClone(saved.graph));
    }

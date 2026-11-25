@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/panels/ShaderGraphPanel.tsx",
     "skills/world/aiverse-map-build/SKILL.md",
     "apps/studio-native/StudioAgentHistoryPolicy.h",
     "apps/editor/core/Workspace.cpp",
