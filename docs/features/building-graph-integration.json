@@ -410,10 +410,11 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "An offline browser demo, two captured frames and a bilingual devlog entry are staged on PR #190. Site publication awaits main integration.",
+      "status": "pass",
+      "note": "The reproducible browser package uses the C++ owners. Browser captures and a bilingual entry are in main via #190. The integrated replay exercised all thirteen styles and Caverns Carve, Fill and reset. The generated offline bundle is ready for the main integrator to deploy.",
       "evidence": [
-        "docs/evidence/building-caverns-web-a2119fb21.json",
+        "docs/agent-handoffs/building-caverns-integration-stage31-2026-11-25.md",
+        "docs/evidence/building-caverns-integrated-web.log.txt",
         "docs/devlog/entries/2026-11-25-world-building-caverns-web.json"
       ]
     }

@@ -144,10 +144,12 @@
       "evidence": []
     },
     "performance": {
-      "status": "not_run",
-      "note": "Shared native-module host build wiring changes; cross-platform and runtime acceptance pending. The 10-manifest workload generated a 314959-byte report in 2.02 seconds with 66666496 bytes peak RSS on Mac. GUI rendering and host build performance remain open.",
+      "status": "pass",
+      "note": "Measured full policy reporting for ten features (2.02 s, peak RSS 66666496 bytes), the native project selection/cache regression (8.34 s, peak RSS 39813120 bytes), and ten filter/restore cycles in the production native Studio readiness panel (6–15 ms per pair). Report rendering uses bounded pages.",
       "evidence": [
-        "docs/evidence/integration-1209eaa44-policy.log.txt"
+        "docs/agent-handoffs/feature-gate-planet-readiness-workloads-2026-11-25.md",
+        "docs/evidence/integration-1209eaa44-policy.log.txt",
+        "docs/evidence/studio-building-budget/readiness-dependencies.png"
       ]
     },
     "platforms": {
