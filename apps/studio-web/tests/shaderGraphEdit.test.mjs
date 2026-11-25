@@ -66,3 +66,18 @@ test('editing an overridden scalar splats the original across the other componen
  assert.equal(graph.parameters.tint,0.5);
  assert.equal(setShaderComponent(graph,'p',0,NaN),graph);
 });
+
+import {emptyShaderHistory,shaderHistory} from '../src/panels/shaderGraphHistory.ts';
+test('graph undo groups pointer moves, survives save and drops redo on a new edit',()=>{
+ const start={nodes:[]},a={nodes:[{id:'a'}]},b={nodes:[{id:'b'}]},c={nodes:[{id:'c'}]};
+ let h=shaderHistory(emptyShaderHistory,{type:'load',graph:start});
+ for(const graph of [a,b,c])h=shaderHistory(h,{type:'move',graph});
+ h=shaderHistory(h,{type:'drop'});
+ assert.deepEqual(h.past,[start]);
+ h=shaderHistory(h,{type:'saved',graph:c});
+ h=shaderHistory(h,{type:'undo'});assert.equal(h.graph,start);
+ h=shaderHistory(h,{type:'redo'});assert.equal(h.graph,c);
+ h=shaderHistory(h,{type:'undo'});
+ h=shaderHistory(h,{type:'edit',graph:b});assert.equal(h.future.length,0);
+ h=shaderHistory(h,{type:'load',graph:a});assert.equal(h.past.length,0);
+});

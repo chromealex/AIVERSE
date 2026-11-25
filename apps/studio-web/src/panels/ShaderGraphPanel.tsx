@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { GitBranch, RefreshCw, Save, Search, RotateCcw, CheckCircle2 } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import type { StudioShaderGraphDocument, StudioShaderGraphOp } from '../types';
 import { layoutShaderGraph, moveShaderGraphNode, addShaderGraphNode, removeShaderGraphNode, setShaderInput, setShaderOutput, shaderOutputNames, effectiveShaderValue, setShaderComponent } from './shaderGraphLayout';
+import {emptyShaderHistory,shaderHistory} from './shaderGraphHistory';
 import './graphSurface.css';
 import './ShaderGraphPanel.css';
 
@@ -14,7 +15,10 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  const [pendingName,setPendingName]=useState('');
  const [selected,setSelected]=useState('');
  const [document,setDocument]=useState<StudioShaderGraphDocument|null>(null);
- const [draft,setDraft]=useState<StudioShaderGraphDocument['graph']|null>(null);
+ const [history,dispatch]=useReducer(shaderHistory,emptyShaderHistory);
+ const draft=history.graph;
+ const setDraft=(graph:StudioShaderGraphDocument['graph'])=>dispatch({type:'edit',graph});
+ const finishDrag=()=>{drag.current=null;dispatch({type:'drop'});};
  const drag=useRef<{id:string; x:number; y:number; originalX:number; originalY:number}|null>(null);
  const [message,setMessage]=useState('');
  const [search,setSearch]=useState('');
@@ -25,7 +29,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  useEffect(()=>onNativeEvent(event=>{if(event==='workspace.changed')setNonce(n=>n+1)}),[]);
  useEffect(()=>{
   let closed=false;
-  setSelected('');setDocument(null);setDraft(null);setError('');setMessage('');
+  setSelected('');setDocument(null);dispatch({type:'load',graph:null});setError('');setMessage('');
   setPendingName('');setOperations([]);setSelectedOp('');
   if(connected&&!projectPath){setNames([]);return;}
   setBusy(true);
@@ -39,11 +43,11 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  },[connected,projectPath,nonce]);
  useEffect(()=>{
   let closed=false;
-  setDocument(null);setDraft(null);setMessage('');setSelectedNode('');
+  setDocument(null);dispatch({type:'load',graph:null});setMessage('');setSelectedNode('');
   if(!selected)return;
   setBusy(true);setError('');
   void invoke('studio.shaderGraphGet',{name:selected})
-    .then(result=>{if(!closed){setDocument(result);setDraft(structuredClone(result.graph));}})
+    .then(result=>{if(!closed){setDocument(result);dispatch({type:'load',graph:result.graph});}})
     .catch(e=>{if(!closed)setError(String(e))})
     .finally(()=>{if(!closed)setBusy(false)});
   return ()=>{closed=true};
@@ -99,7 +103,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
   setBusy(true);setError('');setMessage('');
   try{
    const result=await invoke('studio.shaderGraphSave',{name:selected,graph:draft});
-   setDocument(result);setDraft(structuredClone(result.graph));
+   setDocument(result);dispatch({type:'saved',graph:result.graph});
    setMessage('Graph saved to shaders/'+selected+'.json. MapDoc Undo does not apply.');
   }catch(e){setError(e instanceof Error?e.message:String(e));}
   finally{setBusy(false);}
@@ -108,7 +112,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  return <section className="studio-shader-graphs">
   <header className="graph-heading"><span><GitBranch size={16}/> Shader Graphs</span>
    <button className="icon-button" aria-label="Reload Shader Graphs"
-    disabled={busy} onClick={()=>setNonce(n=>n+1)}><RefreshCw size={15}/></button>
+    disabled={busy||dirty} title={dirty?'Save or discard changes before reloading':'Reload Shader Graphs'} onClick={()=>setNonce(n=>n+1)}><RefreshCw size={15}/></button>
   </header>
   <p className="graph-readonly">Select a node to edit its inputs. Drag nodes to arrange the graph.</p>
   {error&&<p className="graph-error" role="alert">{error}</p>}
@@ -140,7 +144,9 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
          {compatibleOps.map(op=><option key={op.id} value={op.id}>{op.id}</option>)}
        </select>
        <button disabled={!draft||busy||!chosenOp} onClick={createNode}>+ Node</button>
-       <button disabled={!selectedNode||busy} onClick={deleteNode}>Delete node</button>
+       <button disabled={!inspected||busy} onClick={deleteNode}>Delete node</button>
+       <button disabled={!history.past.length||busy} onClick={()=>{dispatch({type:'undo'});setError('');setMessage('');}}>Undo edit</button>
+       <button disabled={!history.future.length||busy} onClick={()=>{dispatch({type:'redo'});setError('');setMessage('');}}>Redo edit</button>
        <button disabled={!draft||busy} onClick={()=>void validate()}><CheckCircle2 size={13}/> Validate</button>
        <button disabled={!dirty||busy} onClick={discard}><RotateCcw size={13}/> Discard</button>
        <button disabled={!dirty||busy} onClick={()=>void save()}><Save size={13}/> Save graph</button>
@@ -156,10 +162,11 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
           const zoom=Number(window.document.documentElement.style.zoom)||1;
           const x=current.originalX+(event.clientX-current.x)/zoom;
           const y=current.originalY+(event.clientY-current.y)/zoom;
-          setDraft(previous=>previous?moveShaderGraphNode(previous,current.id,x,y):previous);
+          if(event.clientX!==current.x||event.clientY!==current.y||history.dragging)
+            dispatch({type:'move',graph:moveShaderGraphNode(draft,current.id,x,y)});
         }}
-        onPointerUp={()=>{drag.current=null;}}
-        onPointerCancel={()=>{drag.current=null;}}>
+        onPointerUp={finishDrag}
+        onPointerCancel={finishDrag}>
         {diagram.edges.map(edge=><path key={edge.key} d={'M '+edge.x1+' '+edge.y1+
           ' C '+(edge.x1+55)+' '+edge.y1+', '+(edge.x2-55)+' '+edge.y2+', '+edge.x2+' '+edge.y2}
           className="graph-wire" data-emphasis={selectedNode?(edge.from===selectedNode||edge.to===selectedNode?'active':'quiet'):undefined}/>)}
@@ -175,7 +182,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
             event.currentTarget.setPointerCapture(event.pointerId);
           }}
           onPointerUp={event=>{
-            drag.current=null;
+            finishDrag();
             if(event.currentTarget.hasPointerCapture(event.pointerId))
               event.currentTarget.releasePointerCapture(event.pointerId);
           }}>
