@@ -1,0 +1,31 @@
+{
+  "id": "2026-11-25-studio-region-borders",
+  "date": "2026-11-25",
+  "system": "studio",
+  "status": "in-progress",
+  "branch": "studio-only-editor",
+  "commit": "a73088f94",
+  "author": null,
+  "links": [],
+  "title": "Границы регионов в Scene",
+  "titleEn": "Region boundaries in Scene",
+  "summary": "Границы клеток региона видны прямо на карте.",
+  "summaryEn": "Territory outlines follow the authored map cells.",
+  "body": [
+    "В Inspector откройте Regions и включите Show borders in Scene. Кисть региона показывает границы автоматически."
+  ],
+  "bodyEn": [
+    "Open Regions in Inspector and enable Show borders in Scene. Painting a region also displays the outlines."
+  ],
+  "verified": "На macOS мазок расширил регион с 91 до 175 клеток. Undo восстановил исходный контур.",
+  "verifiedEn": "A macOS brush drag expanded a region from 91 to 175 cells. Undo restored the original outline.",
+  "limits": "На очень плотной карте при отдалении часть линий пропускается. Проверка Windows предстоит.",
+  "limitsEn": "Dense zoomed-out views skip some grid lines. Windows verification is pending.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-region-borders/scene-regions.png",
+      "caption": "Границы двух соседних территорий",
+      "captionEn": "Outlines of adjacent territories"
+    }
+  ]
+}
