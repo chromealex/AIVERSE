@@ -3032,6 +3032,17 @@ Json StudioHost::localPlayOperation(const std::string& method, const Json& param
                 if(index<0 || size_t(index)>=group.config.groupings.size() || !params["path"].isArray())
                     throw std::runtime_error("Unknown live hierarchy group");
                 group.keys=group.config.groupings[size_t(index)].by;
+                if(group.keys==std::vector<std::string>{"parent"}){
+                    if(params["path"].size())throw std::runtime_error("Invalid nesting path");
+                    if(params.has("collapsed") && !params["collapsed"].isArray())throw std::runtime_error("Invalid collapsed entities");
+                    for(const auto& value:params["collapsed"].items()){
+                        uint64_t ref=0;
+                        const auto text=value.str();
+                        auto [end,error]=std::from_chars(text.data(),text.data()+text.size(),ref);
+                        if(error!=std::errc{} || end!=text.data()+text.size() || !ref)throw std::runtime_error("Invalid collapsed entity");
+                        group.collapsed.insert(ref);
+                    }
+                }
                 if(params["path"].size()>group.keys.size())throw std::runtime_error("Invalid live hierarchy depth");
                 for(const auto& part:params["path"].items()){
                     if(!part.isString())throw std::runtime_error("Invalid live hierarchy path");

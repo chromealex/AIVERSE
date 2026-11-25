@@ -1927,6 +1927,25 @@ void entityWorkflow() {
             AIVERSE_TEST_CHECK(live.checksum()==before);
             bool stale=false;try {inspector.inspect(&live,"run-2","run-1",ref);}catch(...){stale=true;}
             AIVERSE_TEST_CHECK(stale);
+            const auto childRef=second["rows"][0].getStr("ref");
+            const auto parentEntity=editor::worldEntity(std::stoull(ref));
+            const auto childEntity=editor::worldEntity(std::stoull(childRef));
+            live.world().add<Parent>(childEntity,Parent{parentEntity});
+            grouped.keys={"parent"};grouped.path.clear();
+            const auto nested=inspector.entities(&live,"run-1",0,100,"",grouped);
+            auto rowFor=[](const Json& result,const std::string& id){
+                for(const auto& row:result["rows"].items())if(row.getStr("ref")==id)return row;
+                return Json{};
+            };
+            AIVERSE_TEST_CHECK(rowFor(nested,ref).getInt("children")==1 && rowFor(nested,childRef).getInt("depth")==1);
+            grouped.collapsed.insert(std::stoull(ref));
+            AIVERSE_TEST_CHECK(rowFor(inspector.entities(&live,"run-1",0,100,"",grouped),childRef).isNull());
+            const auto orphan=inspector.entities(&live,"run-1",0,1,"ref:"+childRef,grouped);
+            AIVERSE_TEST_CHECK(orphan["rows"][0].getStr("ref")==childRef && orphan["rows"][0].getInt("depth")==0);
+            grouped.collapsed.clear();
+            live.world().add<Parent>(parentEntity,Parent{childEntity});
+            const auto cycle=inspector.entities(&live,"run-1",0,100,"",grouped);
+            AIVERSE_TEST_CHECK(cycle.getInt("total")==nested.getInt("total"));
             live.world().destroy(editor::worldEntity(std::stoull(ref)));
             AIVERSE_TEST_CHECK(inspector.selectedRef(&live,"run-1").empty());
             AIVERSE_TEST_CHECK(inspector.entities(nullptr,"run-2",0,100,"")["rows"].size()==0);

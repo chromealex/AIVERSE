@@ -1,4 +1,5 @@
 #include "StudioHierarchyGroups.h"
+#include "StudioEntityNesting.h"
 #include "aiverselib/world/EvolveAreaScaleMath.h"
 #include <regex>
 #include "apps/editor/core/GraphAssetTransaction.h"
@@ -755,6 +756,22 @@ Json StudioSession::hierarchyGroups(const Json& params) {
     if(!sim || !module || !hierarchyPreview_.error().empty())throw std::runtime_error("Hierarchy preview: "+hierarchyPreview_.error());
     editor::WorldModel world;
     editor::readWorld(*sim,*module,config,hierarchyPreview_.links(),hierarchyPreview_.setupRefs(),&ws_.map.data,world);
+    if(config.groupings[size_t(index)].by==std::vector<std::string>{"parent"}){
+        std::vector<const editor::WorldRow*> matched;
+        std::unordered_map<uint64_t,std::string> ids;
+        for(const auto& node:editor::enumerateDocumentSceneNodes(ws_.map)){
+            if(node.ref.source!=editor::DocumentEntityRef::Source::MapEntity)continue;
+            if(const auto* row=world.findDoc(int(node.ref.index))){
+                matched.push_back(row);
+                ids.emplace(row->ref,nodeId(ws_.map,node.ref));
+            }
+        }
+        Json parents=Json::object();
+        for(const auto& row:nestedEntities(matched,sim->world()))
+            if(row.parent)parents.set(ids.at(row.entity->ref),str(ids.at(row.parent)));
+        result.set("parents",std::move(parents));
+        return result;
+    }
     Json paths=Json::object();
     for(const auto& node:editor::enumerateDocumentSceneNodes(ws_.map)){
         if(node.ref.source!=editor::DocumentEntityRef::Source::MapEntity)continue;

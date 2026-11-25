@@ -1,5 +1,6 @@
 #pragma once
 #include "StudioHierarchyGroups.h"
+#include "StudioEntityNesting.h"
 #include "apps/editor/core/WorldInspect.h"
 #include "engine/world/WorldPersistenceDiagnostics.h"
 #include "engine/game/Script.h"
@@ -85,6 +86,7 @@ public:
     struct GroupQuery {
         editor::WorldConfig config;
         std::vector<std::string> keys, path;
+        std::unordered_set<uint64_t> collapsed;
     };
     Json entities(Simulation* sim,const std::string& epoch,int offset,int limit,const std::string& query,
                   const GroupQuery& group={},const std::vector<uint64_t>& setupRefs={}) {
@@ -108,13 +110,23 @@ public:
                     if(mod->scripts()->peekData(*sim,row.e,blob))editor::setWorldRowData(group.config,blob,row);
             }
             std::map<std::string,int> children;
-            const bool hasChildren=group.path.size()<group.keys.size();
+            const bool nesting=group.keys==std::vector<std::string>{"parent"};
+            const bool hasChildren=!nesting && group.path.size()<group.keys.size();
             const World& w=sim->world();
             const auto* ledger=w.resourceConst<world::RegionEntityLedger>();
             const Filter filter(query);
-            for(const auto& row:model_.rows) {
-                if(!filter.matches(w,ledger,row.e,row.ref)||
-                   !editor::worldRowMatches(model_,mod->rules(),nullptr,row,filter.shared))continue;
+            auto matches=[&](const editor::WorldRow& row){
+                return filter.matches(w,ledger,row.e,row.ref) && editor::worldRowMatches(model_,mod->rules(),nullptr,row,filter.shared);
+            };
+            std::vector<NestedEntityRow> nested;
+            if(nesting){
+                std::vector<const editor::WorldRow*> matched;
+                for(const auto& row:model_.rows)if(matches(row))matched.push_back(&row);
+                nested=nestedEntities(matched,w,group.collapsed);
+            }
+            for(size_t index=0;index<(nesting?nested.size():model_.rows.size());++index){
+                const auto& row=nesting?*nested[index].entity:model_.rows[index];
+                if(!nesting && !matches(row))continue;
                 bool matchesPath=true;
                 for(size_t depth=0;depth<group.path.size();++depth){
                     bool inGroup=false;
@@ -139,6 +151,10 @@ public:
                 item.set("kind",Json::string(editor::worldKindId(row.kind)));
                 item.set("owner",Json::number(int64_t(row.owner)));
                 item.set("parent",Json::string(row.parent?std::to_string(row.parent):""));
+                if(nesting){
+                    item.set("depth",Json::number(int64_t(nested[index].depth)));
+                    item.set("children",Json::number(int64_t(nested[index].children)));
+                }
                 item.set("health",Json::number(double(row.hp)));
                 item.set("ownership",ownership(w,ledger,row.e));
                 Json components=Json::array();row.eachComp([&](int c){components.push(Json::string(editor::worldComponents()[size_t(c)].id));});

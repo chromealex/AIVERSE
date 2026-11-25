@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { shortcutKey } from '../keyboard';
 import { Box, ChevronDown, ChevronRight, Copy, Eye, EyeOff, Focus, Lightbulb, Lock, LockOpen, Plus, Search, Shield, Trash2, User, X } from 'lucide-react';
-import { groupedHierarchy, matchesHierarchy, parseHierarchyFilter, rangeIds, type HierarchyGrouping } from '../hierarchyFilter';
+import { nestedDocumentRows, groupedHierarchy, matchesHierarchy, parseHierarchyFilter, rangeIds, type HierarchyGrouping } from '../hierarchyFilter';
 import { invoke } from '../bridge';
 import type { StudioEntity, StudioEntityCatalog, StudioSnapshot, StudioHierarchyPaths } from '../types';
 import { StudioButton, StudioContextMenu, StudioIconButton, StudioSelect, type StudioMenuItem } from '../ui';
@@ -17,6 +17,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
   rows, select, selectIds, hoverId, updateSnapshot, setBusy }: StudioPanelContext) {
   const [grouping, setGrouping] = useState<HierarchyGrouping>('scene');
   const [paths,setPaths]=useState<StudioHierarchyPaths>();
+  const [parents,setParents]=useState<Record<string,string>>();
   const [refresh,refreshGroups]=useState(0);
   const refreshSeen=useRef(0);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -52,7 +53,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
   const scope=snapshot?.graphDocument;
   const group=grouping.startsWith('project:')?Number(grouping.slice(8)):-1;
   useEffect(()=>{
-    setPaths(undefined);
+    setPaths(undefined);setParents(undefined);
     if(group<0 || !project || !scope)return;
     let active=true,timer:number|undefined;
     const load=async(force:boolean)=>{
@@ -60,7 +61,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
         const result=await invoke('studio.hierarchyGroups',{expectedProject:project,scope,group,refresh:force});
         if(!active)return;
         if(result.pending)timer=window.setTimeout(()=>void load(false),120);
-        else {setPaths(result.paths??{});setError('');}
+        else {setParents(result.parents);setPaths(result.paths??{});setError('');}
       }catch(e){if(active)setError(String(e));}
     };
     const force=refreshSeen.current!==refresh;
@@ -68,7 +69,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     void load(force);
     return ()=>{active=false;window.clearTimeout(timer);};
   },[project,scope?.mapPath,scope?.epoch,scope?.revision,snapshot?.project.historyVersion,group,refresh]);
-  const display = useMemo(() => group>=0 && !paths ? [] : groupedHierarchy(matches, grouping, collapsed,paths), [matches, grouping, collapsed,paths,group]);
+  const display = useMemo(() => group>=0 && !paths ? [] : group>=0 && parents ? nestedDocumentRows(matches,parents,collapsed) : groupedHierarchy(matches, grouping, collapsed,paths), [matches, grouping, collapsed,paths,group,parents]);
   const visible = useMemo(() => display.flatMap(row => 'node' in row ? [row] : []), [display]);
   const occurrenceKeys = useMemo(() => visible.map(r => r.occurrence ?? r.node.id), [visible]);
   const idsByOccurrence = useMemo(() => new Map(visible.map(r => [r.occurrence ?? r.node.id, r.node.id])), [visible]);
@@ -251,6 +252,11 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
           onMouseEnter={() => hover(node.id)}
           onDoubleClick={() => void focus(node.id)}
           onContextMenu={event => { event.preventDefault(); if (!selectedSet.has(node.id)) void select(node.id); setMenu({ x: event.clientX, y: event.clientY, id: node.id }); }}>
+          {!!row.children && <button type="button" className="hier__disclosure" aria-expanded={!collapsed.has(node.id)}
+            aria-label={(collapsed.has(node.id)?'Expand ':'Collapse ')+node.name}
+            onClick={event=>{event.stopPropagation();setCollapsed(current=>{
+              const next=new Set(current);if(next.has(node.id))next.delete(node.id);else next.add(node.id);return next;
+            });}}>{collapsed.has(node.id)?<ChevronRight size={13}/>:<ChevronDown size={13}/>}</button>}
           <Icon size={12} className="hier__icon"/>
           <span className="hier__name" title={node.name}>{node.name}</span>
           {node.kind && node.kind !== node.name && <span className="hier__kind">{node.kind}</span>}

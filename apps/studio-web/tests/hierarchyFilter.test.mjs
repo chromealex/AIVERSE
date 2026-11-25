@@ -59,3 +59,13 @@ test('one object can belong to multiple component groups under the same parent',
   const hidden=groupedHierarchy(rows,'project:1',new Set([view[2].key]),paths);
   assert.deepEqual(hidden.filter(r=>r.node).map(r=>r.node.id),['a']);
 });
+
+test('nesting uses document identity and promotes filtered orphans', async () => {
+  const {nestedDocumentRows}=await import('../src/hierarchyFilter.ts');
+  const rows=['a','b','c','d'].map(id=>({node:e(id,'Oak','Unit'),depth:0}));
+  const parents={b:'a',c:'b'};
+  const show=(items,closed=[])=>nestedDocumentRows(items,parents,new Set(closed)).map(r=>[r.node.id,r.depth,r.children]);
+  assert.deepEqual(show(rows),[['a',0,1],['b',1,1],['c',2,0],['d',0,0]]);
+  assert.deepEqual(show(rows,['a']),[['a',0,1],['d',0,0]]);
+  assert.deepEqual(show(rows.slice(1)),[['b',0,1],['c',1,0],['d',0,0]]);
+});

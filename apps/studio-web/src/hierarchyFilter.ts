@@ -36,7 +36,7 @@ export function rangeIds(order: string[], anchor: string, target: string): strin
 }
 
 export type HierarchyGrouping = 'scene' | 'type' | 'owner-type' | `project:${number}`;
-type ObjectRow = {node:StudioEntity; depth:number; occurrence?:string};
+type ObjectRow = {node:StudioEntity; depth:number; occurrence?:string; children?:number};
 type GroupRow = {key:string; label:string; depth:number; members:string[]; collapsed:boolean};
 export function groupedHierarchy(rows:ObjectRow[], mode:HierarchyGrouping, toggled:ReadonlySet<string>, paths?:StudioHierarchyPaths):(ObjectRow|GroupRow)[] {
   if(mode==='scene') return rows;
@@ -66,4 +66,26 @@ export function groupedHierarchy(rows:ObjectRow[], mode:HierarchyGrouping, toggl
   }
   append(rows,[],mode==='owner-type');
   return display;
+}
+
+// The native snapshot supplies cycle-free document links. Filtering promotes a
+// child when its parent is absent, so a matching object is always reachable.
+export function nestedDocumentRows(rows:ObjectRow[], parents:Record<string,string>, collapsed:ReadonlySet<string>):ObjectRow[] {
+  const present=new Set(rows.map(row=>row.node.id));
+  const children=new Map<string,ObjectRow[]>();
+  for(const row of rows){
+    const parent=present.has(parents[row.node.id]) ? parents[row.node.id] : '';
+    const siblings=children.get(parent);
+    if(siblings)siblings.push(row); else children.set(parent,[row]);
+  }
+  const stack=(children.get('')??[]).map(row=>({...row,depth:0})).reverse();
+  const visible:ObjectRow[]=[];
+  while(stack.length){
+    const row=stack.pop()!;
+    const nested=children.get(row.node.id)??[];
+    visible.push({...row,children:nested.length});
+    if(!collapsed.has(row.node.id))
+      for(let i=nested.length-1;i>=0;i--)stack.push({...nested[i],depth:row.depth+1});
+  }
+  return visible;
 }

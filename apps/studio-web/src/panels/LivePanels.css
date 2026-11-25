@@ -43,3 +43,6 @@
 .live-hier__path button{padding:2px;border:0;background:none;color:var(--au-accent);cursor:pointer}
 .live-hier__group{min-height:30px}
 .live-hier__group b{overflow-wrap:anywhere;min-width:0}
+.live-hier__entry{display:flex;align-items:center;flex:none}
+.live-hier__entry>.live-hier__row{flex:1;min-width:0}
+.live-hier__entry>.hier__disclosure[aria-expanded="true"] svg{transform:rotate(90deg)}

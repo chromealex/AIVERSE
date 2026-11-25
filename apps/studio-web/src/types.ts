@@ -122,7 +122,7 @@ export type ProjectRuleGroup = 'types'|'resources'|'techs'|'factions';
 export interface StudioProjectState { groups?:Record<ProjectRuleGroup,{id:string;name:string}[]>; rulesError?:string; maps: Array<{file: string; title: string}>; currentMap: string; canCreateMap: boolean; maxMapSize: number }
 export interface StudioRuntimeOwnership {state:'untracked'|'invalid-tag'|'ledger-unavailable'|'missing-record'|'retired'|'live-record'; stableId?:string; cell?:[number,number,number];revision?:string;dormantMarker:boolean}
 export type StudioHierarchyPaths = Record<string,(string|string[])[]>;
-export interface StudioRuntimeRow {ref:string; name:string; kind:string; owner:number; parent:string; health:number; components:string[];ownership?:StudioRuntimeOwnership}
+export interface StudioRuntimeRow {ref:string; name:string; kind:string; owner:number; parent:string; depth?:number; children?:number; health:number; components:string[];ownership?:StudioRuntimeOwnership}
 export interface StudioRuntimePage {active:boolean; epoch:string; tick:number; rows:StudioRuntimeRow[]; total:number; groups?:{name:string; count:number}[]; groupCount?:number}
 export interface StudioRuntimeEditField {id:'hp'|'energy';title:string;raw:string;value:number;min:number;max:number}
 export interface StudioRuntimeEntity {ref:string; epoch:string; tick:number; components:Record<string,unknown>; stats?:Record<string,unknown>;ownership?:StudioRuntimeOwnership;componentSchemas?:Record<string,unknown>;runtimeEditAvailable?:boolean;runtimeFields?:StudioRuntimeEditField[];runtimeDebugEdited?:boolean}
@@ -488,7 +488,7 @@ export interface StudioParams {
   'studio.gameState': { scriptErrors?: boolean };
   'studio.gameProfile': {expectedProject:string;action:'status'|'start'|'stop';steps?:number};
   'studio.gameRegions': {expectedProject:string};
-  'studio.gameEntities': {offset:number;limit:number;query:string;expectedProject?:string;group?:number;path?:string[]};
+  'studio.gameEntities': {offset:number;limit:number;query:string;expectedProject?:string;group?:number;path?:string[];collapsed?:string[]};
   'studio.gameSelectEntity': {epoch:string;ref:string;expectedProject:string};
   'studio.gameInspect': {epoch:string;ref:string;expectedProject?:string};
   'studio.gameEdit': {expectedProject:string;epoch:string;ref:string;expectedTick:number;field:StudioRuntimeEditField['id'];expectedRaw:string;value:string};
@@ -739,7 +739,7 @@ export interface StudioResult {
   'studio.newMap': StudioSnapshot;
   'studio.openMap': StudioSnapshot;
   'studio.saveAs': StudioSnapshot;
-  'studio.hierarchyGroups': {pending:boolean;paths?:StudioHierarchyPaths};
+  'studio.hierarchyGroups': {pending:boolean;paths?:StudioHierarchyPaths;parents?:Record<string,string>};
   'studio.entityCatalog': StudioEntityCatalog;
   'studio.entityCreate': StudioSnapshot;
   'studio.entityDelete': StudioSnapshot;

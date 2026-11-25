@@ -9,7 +9,8 @@ inline editor::WorldConfig studioHierarchyConfig(const Json& manifest) {
     for (const editor::WorldConfig::Grouping& builtin : {
              editor::WorldConfig::Grouping{"Category → type", {"category", "type"}},
              editor::WorldConfig::Grouping{"Component", {"component"}},
-             editor::WorldConfig::Grouping{"Origin → type", {"origin", "type"}}}) {
+             editor::WorldConfig::Grouping{"Origin → type", {"origin", "type"}},
+             editor::WorldConfig::Grouping{"Nesting", {"parent"}}}) {
         if (std::none_of(config.groupings.begin(), config.groupings.end(),
                          [&](const auto& group) { return group.by == builtin.by; }))
             config.groupings.push_back(builtin);
