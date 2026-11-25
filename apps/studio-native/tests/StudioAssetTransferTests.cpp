@@ -1546,6 +1546,7 @@ int main(){
             undo.documents.push_back({materials,*recorded->materialsAfter,*recorded->materialsBefore});
             studioApplyHistoryBatch(p,undo.relocations,undo.documents,undo.movingResources,&next,&previous);
             AIVERSE_TEST_CHECK(fs::exists(source)&&read(materials)==originalMaterials&&read(model)==originalModel);
+            AIVERSE_TEST_CHECK(read(glaze)==glazeBytes);
             AIVERSE_TEST_CHECK(studioLoadAssetHistoryCheckpoint(p).position()==0);
             // Rename uses the same staged path and updates both owners.
             auto rename=StudioTransferPlan::rename(p,"A/Paint.png","Tint.png");

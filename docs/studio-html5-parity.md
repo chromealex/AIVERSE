@@ -223,3 +223,5 @@ Animation preview ground height and solver diagnostics run in the owning panel. 
 Rig vector parameters appear as draggable targets in the skeleton view. Keep controls applies modified values to the selected graph scope as one undoable edit. On macOS a physical drag moved the solved wrist, and Save graph persisted the target while preserving its third component and the pole. Independent skinned mesh rendering remains open.
 
 Skinned preview stage: publish the evaluated native pose and draw its imported model on dedicated Graph and Rig GPU surfaces. Verify an actual weighted mesh in two poses.
+
+Animation Graph and Animation Rig now render the selected skinned model in their own native drawables beside the evaluated skeleton in wide panels. In bundled Mac Studio the weighted arm followed the wrist through 15 frame steps to 0.50 s, with Scene hidden. Both windows were separately opened and captured. Windows runtime and the independent attachment authoring preview remain open.

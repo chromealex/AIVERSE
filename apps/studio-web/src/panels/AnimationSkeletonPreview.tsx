@@ -87,7 +87,7 @@ export default function AnimationSkeletonPreview({projectPath,graph,scope,panel,
  const edits=Object.fromEntries(Object.entries(inputs).filter(([name,value])=>
   JSON.stringify(value)!==JSON.stringify(opened?.inputs[name])));
  const area=bounds(fit,plane),points=frame?.points.map(p=>project(p,plane))??[],radius=area.width*.014;
- return <div className="motion-preview">
+ return <div className={showMesh&&opened?'motion-preview motion-preview--model':'motion-preview'}>
   <div className="motion-preview-toolbar">
    <label>Pose source<select value={bind?'bind':'graph'} onChange={e=>setBind(e.target.value==='bind')}><option value="graph">Graph output</option><option value="bind">Model bind pose</option></select></label>
    <label>View<select value={plane} onChange={e=>setPlane(e.target.value as Plane)}>{['Front','Side','Top'].map(x=><option key={x}>{x}</option>)}</select></label>
