@@ -1,0 +1,31 @@
+{
+  "id": "2026-11-25-studio-oriented-collider",
+  "date": "2026-11-25",
+  "system": "studio",
+  "status": "in-progress",
+  "branch": "studio-only-editor",
+  "commit": "a2f22d3a4",
+  "author": null,
+  "links": [],
+  "title": "Повёрнутые коллайдеры в Inspector",
+  "titleEn": "Oriented colliders in Inspector",
+  "summary": "В Inspector доступны угол поворота коллайдера и его размеры по трём осям.",
+  "summaryEn": "Inspector exposes collider yaw and full dimensions on all three axes.",
+  "body": [
+    "Укажите центр в Transform, затем задайте угол в градусах и размеры в Oriented Box Collider. Undo отменяет правку, Save сохраняет карту."
+  ],
+  "bodyEn": [
+    "Set the center in Transform and adjust yaw in degrees and full dimensions in Oriented Box Collider. Undo reverts an edit and Save writes the map."
+  ],
+  "verified": "На macOS проверены угол 135°, размер Z 8, центр X 7, отмена и повтор изменения. Сохранённая карта сверена целиком.",
+  "verifiedEn": "On macOS, verified a 135-degree yaw, Z size of 8, X center of 7, Undo, Redo and the complete saved map.",
+  "limits": "Визуальная проверка Windows предстоит.",
+  "limitsEn": "Windows visual verification remains pending.",
+  "media": [
+    {
+      "src": "docs/devlog/media/2026-11-25-studio-oriented-collider/oriented-collider.png",
+      "caption": "Inspector повёрнутого коллайдера",
+      "captionEn": "Oriented collider Inspector"
+    }
+  ]
+}
