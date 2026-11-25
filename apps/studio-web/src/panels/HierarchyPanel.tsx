@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { shortcutKey } from '../keyboard';
-import { Box, ChevronDown, ChevronRight, Copy, Eye, EyeOff, Focus, Lightbulb, Lock, LockOpen, Plus, Search, Shield, Trash2, User, X } from 'lucide-react';
+import { Box, ChevronDown, ChevronRight, Copy, Eye, EyeOff, Focus, Lightbulb, Lock, LockOpen, Plus, RefreshCw, Search, Shield, Trash2, User, X } from 'lucide-react';
 import { nestedDocumentRows, groupedHierarchy, matchesHierarchy, parseHierarchyFilter, rangeIds, type HierarchyGrouping } from '../hierarchyFilter';
 import { HierarchyPreviewRow } from './HierarchyPreviewRow';
 import { invoke } from '../bridge';
@@ -196,18 +196,17 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
         icon={<Plus size={14}/>} disabled={busy || !canCreate} aria-expanded={creating}
         onClick={() => setCreating(value => !value)}/>
     </div>
-    {project && <label className="hier__grouping">Group by
+    {project && <div className="hier__grouping"><span>Group by</span>
       <StudioSelect value={grouping} aria-label="Group scene objects by" onChange={event => {
         setGrouping(event.target.value as HierarchyGrouping); setCollapsed(new Set()); anchor.current = null; setDrop(null);
       }}>
         <option value="scene">Scene order</option><option value="type">Type</option><option value="owner-type">Owner → type</option>
         {snapshot?.scene.groupings?.map((title,i)=><option key={i} value={'project:'+i}>{title}</option>)}
       </StudioSelect>
-    </label>}
-    {(group>=0 || preview.length>0) && <div className="hier__create">
-      <StudioButton size="sm" onClick={()=>refreshGroups(v=>v+1)}>Refresh preview</StudioButton>
-      {!paths&&!error&&<span role="status">Reading preview…</span>}
+      {mapEntities && <StudioIconButton className="hier__tool" aria-label="Refresh preview" title="Refresh preview from project files"
+        icon={<RefreshCw size={13}/>} onClick={()=>refreshGroups(v=>v+1)}/>}
     </div>}
+    {group>=0&&!paths&&!error&&<div className="hier__create" role="status">Reading preview…</div>}
     {creating && <form className="hier__create" onSubmit={event => { event.preventDefault(); create(); }}>
       <StudioSelect aria-label="Entity type" value={type} disabled={busy} onChange={event => setType(event.target.value)}>
         {catalog?.types.map(item => <option key={item.id} value={item.id}>{item.name || item.id}</option>)}
@@ -242,7 +241,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
         const dragging = editable(node.id) && canReorder;
         const occurrence=row.occurrence ?? node.id;
         if(node.preview)return <HierarchyPreviewRow key={occurrence} node={node} depth={depth}
-          hasChildren={!!row.children} collapsed={collapsed.has(node.id)} toggle={()=>toggleCollapsed(node.id)}/>;
+          childCount={row.children} collapsed={collapsed.has(node.id)} toggle={()=>toggleCollapsed(node.id)}/>;
         return <div key={occurrence} data-occurrence={occurrence} data-id={node.id} data-nested-leaf={row.children===0 || undefined} role="option" aria-selected={selected} tabIndex={selected ? 0 : -1}
           className={'hier__row' + (selected ? ' is-selected' : '') + (node.id === selectedId ? ' is-primary' : '') +
             (node.id === hoverId ? ' is-hover' : '') + (hidden ? ' is-hidden' : '') +

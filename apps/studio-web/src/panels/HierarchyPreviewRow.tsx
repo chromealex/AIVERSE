@@ -4,14 +4,14 @@ import type { StudioEntity } from '../types';
 interface Props {
   node:StudioEntity;
   depth:number;
-  hasChildren:boolean;
+  childCount?:number;
   collapsed:boolean;
   toggle:()=>void;
 }
 
-export function HierarchyPreviewRow({node,depth,hasChildren,collapsed,toggle}:Props){
+export function HierarchyPreviewRow({node,depth,childCount,collapsed,toggle}:Props){
   const details=node.preview!;
-  return <div className="hier-preview" style={{paddingInlineStart:6+depth*12}} data-preview-id={node.id}
+  return <div className="hier-preview" style={{paddingInlineStart:6+depth*12}} data-preview-id={node.id} data-nested-leaf={childCount===0 || undefined}
     onKeyDown={event=>{
       // A focused preview must not dispatch map deletion or duplication shortcuts.
       if(['Delete','Backspace'].includes(event.key) || ((event.metaKey||event.ctrlKey) && event.key.toLowerCase()==='d')){
@@ -19,7 +19,7 @@ export function HierarchyPreviewRow({node,depth,hasChildren,collapsed,toggle}:Pr
       }
       if(['Enter',' ','ArrowUp','ArrowDown'].includes(event.key))event.stopPropagation();
     }}>
-    {hasChildren && <button type="button" className="hier__disclosure" aria-expanded={!collapsed}
+    {!!childCount && <button type="button" className="hier__disclosure" aria-expanded={!collapsed}
       aria-label={(collapsed?'Expand ':'Collapse ')+node.name} onClick={toggle}>
       {collapsed?<ChevronRight size={13}/>:<ChevronDown size={13}/>}
     </button>}
