@@ -12,6 +12,8 @@
     "demos/projectile-impact-height/game.json",
     "demos/projectile-impact-height/maps/range.json",
     "demos/projectile-impact-height/models/launcher.obj",
+    "demos/projectile-impact-height/models/range.mtl",
+    "demos/projectile-impact-height/models/tall-target.obj",
     "demos/projectile-impact-height/models/target.obj",
     "demos/projectile-impact-height/rules.json",
     "docs/agent-handoffs/projectile-impact-height-initial.md",

@@ -9,5 +9,16 @@
       "file": "maps/range.json",
       "title": "Choose a target"
     }
-  ]
+  ],
+  "camera": {
+    "projection": "ortho",
+    "pitch": 24,
+    "yaw": 0,
+    "pixelsPerCell": 36,
+    "rotate": true
+  },
+  "selectionShortcut": {
+    "type": "launcher",
+    "label": "Select launcher"
+  }
 }

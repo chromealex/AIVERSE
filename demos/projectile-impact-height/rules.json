@@ -59,7 +59,7 @@
         "max": 10000
       },
       "view": {
-        "model": "models/target.obj",
+        "model": "models/tall-target.obj",
         "height": 4,
         "impactHeight": 3.5
       }
