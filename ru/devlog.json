@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-25T01:31:53+00:00",
+ "generated": "2026-11-25T09:41:13+00:00",
  "lang": "ru",
  "repo": "https://github.com/chromealex/AIVERSE",
  "systems": [
@@ -121,6 +121,90 @@
   }
  ],
  "entries": [
+  {
+   "id": "2026-11-25-world-building-caverns-web",
+   "date": "2026-11-25",
+   "system": "world",
+   "branch": "integration/building-caverns-20261124",
+   "commit": "a2119fb21",
+   "author": "world",
+   "title": "Архитектурные стили и редактирование пещер в браузере",
+   "summary": "Соберите здание в одном из 13 стилей или измените стенку подземной камеры сферическим штампом.",
+   "body": [
+    "В Building Graph можно выбрать габариты и планировку, проверить расположение проёмов и забрать модель GLB вместе с рецептом. В Caverns радиус штампа меняет размер выемки или заполненной области."
+   ],
+   "verified": "В Chrome без сети сгенерированы жилой дом, склад и функциональное здание в стиле стимпанк. В той же сборке проверены оба режима штампа.",
+   "limits": "Планетарный маршрут с сохранением и восстановлением запускается в отдельном нативном примере.",
+   "links": [
+    {
+     "title": "Building Graph / Caverns · source",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/examples/world/building-caverns-web/README.md"
+    }
+   ],
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-world-building-caverns-web/building.png",
+     "caption": "Жилой дом шириной 28 м в современном стиле"
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-world-building-caverns-web/cave.png",
+     "caption": "Полость после заполнения части стенки сферическим штампом"
+    }
+   ],
+   "status": "in-progress"
+  },
+  {
+   "id": "2026-11-25-terraweave-meadow-light",
+   "date": "2026-11-25",
+   "system": "terraweave",
+   "title": "Луговая трава при дневном и низком солнце",
+   "summary": "У основания высоких травинок растут короткие листья. Они заполняют просветы между пучками и отбрасывают тени на землю.",
+   "body": [
+    "На общем плане луг тянется до дальнего склона. Вблизи видны отдельные листья, сквозь которые проходит солнечный свет. На третьем кадре камера возвращается к общему плану, чтобы показать тот же участок при низком солнце."
+   ],
+   "status": "in-progress",
+   "verified": "Три кадра сняты в редакторе AIVERSE на Mac с рендерингом Metal.",
+   "limits": "Предпросмотр пресета meadow из ветки разработки.",
+   "branch": "integration/meadow-grass-20261124",
+   "commit": "8d2ce8dc6",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-terraweave-meadow-light/lit-mid.jpg",
+     "caption": "Густой луг при дневном свете"
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-terraweave-meadow-light/lit-close.jpg",
+     "caption": "У основания пучков видны короткие листья и тени"
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-terraweave-meadow-light/lit-low-sun.jpg",
+     "caption": "Тот же луг при низком солнце"
+    }
+   ]
+  },
+  {
+   "id": "2026-11-25-terraweave-fallen-arbor",
+   "date": "2026-11-25",
+   "system": "terraweave",
+   "title": "Ветви упавшего дерева в Studio",
+   "summary": "После естественного падения дерева Studio показывает его ствол и ветви в положении, рассчитанном физикой.",
+   "body": [
+    "В примере Planet and Moon включите физику леса и задайте виду дерева рецепт fromArbor. В панели Rules откройте Planet forest и включите Show live forest in Scene. Цветной контур показывает капсулу столкновения. По нему можно проверить, как ствол лежит на поверхности планеты."
+   ],
+   "status": "in-progress",
+   "verified": "Кадр получен на тике 831 в нативной Studio на macOS с Metal. На Terra инспектор показал одно упавшее дерево с физической капсулой. Центр ствола и его оси взяты из того же тика.",
+   "limits": "Ветви используют позу общей капсулы ствола. Физика рассчитывает столкновение целого дерева. Просмотр этой сцены доступен в нативном редакторе Studio.",
+   "branch": "integrate/pr124-current-main-20261125",
+   "commit": "cbca316c2",
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-25-terraweave-fallen-arbor/01.png",
+     "caption": "Ствол и ветви лежат на поверхности Terra. Оранжевая линия показывает границу физической капсулы."
+    }
+   ],
+   "links": [],
+   "author": "TerraWeave"
+  },
   {
    "id": "2026-11-25-studio-workspace-redesign",
    "date": "2026-11-25",
@@ -385,6 +469,43 @@
     }
    ],
    "author": "SpectraFX"
+  },
+  {
+   "id": "2026-11-22-world-building-styles",
+   "date": "2026-11-22",
+   "system": "world",
+   "title": "Стили построек: sci-fi база из файла стиля",
+   "summary": "Постройки в сеттинге собираются из файла стиля: первый стиль — sci-fi в духе RTS с казармами, командным центром, заводом и складом.",
+   "body": [
+    "Каждая постройка — цельный бронированный корпус со скошенными углами и наклонными стенами, бронеплитами (часть в цвет команды), боковыми модулями, надстройкой с освещённой смотровой щелью, воротами с полосами опасности и пандусом, посадочными опорами, дюзами и машинерией на крыше: трубами, баками, радаром.",
+    "Облик задаёт файл engine/assets/building-styles/scifi.json: материалы, палитры и виды построек с размерами и набором деталей. Новый сеттинг — новый файл стиля, а сид даёт вариации одного вида. Вместе с сеткой постройка отдаёт коллизию и точки перед воротами; аиverse_building_export выгружает её в .glb."
+   ],
+   "status": "in-progress",
+   "verified": "Кадры сняты просмотрщиком моделей движка на Linux (OpenGL, тени high): казармы, командный центр и завод, сид 3.",
+   "limits": "Поверхности пока одноцветные, без текстур; стили ещё не подключены к картам и рендеру в игре; на Metal и телефонах не проверено.",
+   "branch": "feature/aiv20261122_building_styles",
+   "commit": null,
+   "media": [
+    {
+     "src": "../media/docs/devlog/media/2026-11-22-world-building-styles/scifi-barracks.png",
+     "caption": "Казармы: ворота с полосами опасности, опоры, надстройка"
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-22-world-building-styles/scifi-command.png",
+     "caption": "Командный центр: двое ворот, боковые модули, радар"
+    },
+    {
+     "src": "../media/docs/devlog/media/2026-11-22-world-building-styles/scifi-factory.png",
+     "caption": "Завод: широкий корпус, двое ворот, дымовые трубы"
+    }
+   ],
+   "links": [
+    {
+     "title": "docs/building-style.md",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/building-style.md"
+    }
+   ],
+   "author": "world"
   },
   {
    "id": "2026-11-22-vulkan-spirv-optimizer",
