@@ -59,7 +59,7 @@
         "Запрашивать деревья рядом из геймплея и запекать рельеф в карту редактора через MCP."
       ],
       "roadmap": [
-        {"status": "done", "title": "Виды луговой травы", "titleEn": "Meadow grass species", "text": "Густой луг с солнечными тенями, просвечиванием листьев и детализацией по расстоянию.", "textEn": "Dense meadow canopy with sun shadows, leaf transmission and distance LOD.", "date": "2026-11-25"},
+        {"id": "terraweave-meadow-grass", "status": "done", "title": "Виды луговой травы", "titleEn": "Meadow grass species", "text": "Густой луг с солнечными тенями, просвечиванием листьев и детализацией по расстоянию.", "textEn": "Dense meadow canopy with sun shadows, leaf transmission and distance LOD.", "date": "2026-11-25"},
         {
           "status": "done",
           "date": "2026-11-18",
