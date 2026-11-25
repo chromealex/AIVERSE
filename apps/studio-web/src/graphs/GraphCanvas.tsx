@@ -153,7 +153,7 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
        <title>{'Shader outputs: '+node.outputChannels.join(', ')}</title>
        <path d={`M0 ${height-20} H108`} stroke="var(--au-line)"/>
        <text y={height-6} fill="var(--au-accent-ink)" fontSize="10">
-        {'→ '+node.outputChannels[0]+(node.outputChannels.length>1?'  +'+(node.outputChannels.length-1):'')}
+        {'→ '+(node.outputChannels.length===1||node.outputChannels.join(', ').length<=17 ? node.outputChannels.join(', ') : node.outputChannels[0]+'  +'+(node.outputChannels.length-1))}
        </text>
       </g>}
      </svg>

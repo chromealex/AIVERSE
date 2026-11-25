@@ -265,10 +265,11 @@ export default function ShaderGraphPanel({projectPath,documentEpoch}:{projectPat
        <StudioButton size="sm" disabled={!history.current?.canRedo()||busy} onClick={()=>{if(history.current)setDraft(history.current.redo());setPendingOutput(null)}}>Redo</StudioButton>
        <button disabled={!selectedNode||busy} onClick={deleteNode}>Delete node</button>
        <button disabled={!draft||busy} onClick={()=>void validate()}><CheckCircle2 size={13}/> Validate</button>
+       <StudioButton size="sm" disabled={busy||!draft} onClick={()=>void previewDraft()}>Preview draft</StudioButton>
        <button disabled={!dirty||busy} onClick={discard}><RotateCcw size={13}/> Discard</button>
        <button disabled={!dirty||busy} onClick={()=>void save()}><Save size={13}/> Save graph</button>
       </div>
-      <button disabled={busy||!draft} onClick={()=>void previewDraft()}>Preview draft</button>
+
       <GraphCanvas view={view} selected={selectedNode} label={'Editable node layout for '+selected}
        disabled={!draft||busy} onSelect={setSelectedNode} selection={selectedIds} onSelection={setSelection}
        onMoveGroup={positions=>{if(draft)editDraft(moveShaderNodes(draft,positions))}} pendingOutput={pendingOutput}
