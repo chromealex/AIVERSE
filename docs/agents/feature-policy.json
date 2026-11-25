@@ -155,6 +155,16 @@
         "apps/studio-native/StudioWorldProcessesEditing.h",
         "libraries/include/aiverselib/world/WorldProcessesNativeModule.h"
       ]
+    },
+    "model-triplanar": {
+      "requires": [],
+      "roadmap": {
+        "system": "render",
+        "id": "model-triplanar"
+      },
+      "api_paths": [
+        "engine/render/graph/TriplanarMaterial.h"
+      ]
     }
   },
   "claims": []
