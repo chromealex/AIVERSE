@@ -11,6 +11,7 @@
       "name": "Launcher",
       "key": true,
       "stance": "hold",
+      "move": {"speed": 1},
       "health": {
         "max": 10000
       },

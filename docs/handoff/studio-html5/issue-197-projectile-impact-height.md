@@ -1,6 +1,6 @@
 # Projectile impact height in Rules
 
-Feature branch feature/aiv197_projectile_height, implementation 9c280af93708b77c8fbfb1961d9b4c746b82e50c, current range content ea3f3150d00774ac5c17ac98e991729084fd6a1a.
+Feature branch feature/aiv197_projectile_height, implementation 9c280af93708b77c8fbfb1961d9b4c746b82e50c, range geometry ea3f3150d00774ac5c17ac98e991729084fd6a1a, launcher order support 27ff5b374f89743c1d6b08dc3f686373852532b6.
 
 The Rules panel renders the target unit's optional view.impactHeight in Appearance. The Inspector's existing Edit type in Rules command opens the same form. It uses RuleRow and studio.rulesSet. Clearing an explicit height deletes the property and allows an inherited value. No additional bridge method or native file writer is required.
 
@@ -12,3 +12,5 @@ The Rules panel renders the target unit's optional view.impactHeight in Appearan
 - The optimized arm64 interpolation probe processed one million varying projectiles in 0.001518 seconds on this machine. Process peak RSS was 1,277,952 bytes. This measures the pure allocation-free projection, excluding model draws, scene extraction, particle updates and GPU cost.
 
 The TypeScript schema was verified against real native save/undo/redo semantics independently of the renderer. The main handoff tracks native/Web frame evidence and integration.
+
+The full Studio web test suite passed. In desktop Chrome the production frontend exposed the numeric control “Projectile impact height · world units above target base” in the Rules form. The capture is /Volumes/KINGSTON/AIVERSE-builds/projectile-197-mac/studio-range-field.png.
