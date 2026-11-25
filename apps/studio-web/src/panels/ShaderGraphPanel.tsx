@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { GitBranch, RefreshCw, Save, Search, RotateCcw, CheckCircle2 } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import type { StudioShaderGraphDocument, StudioShaderGraphOp } from '../types';
-import { addShaderGraphNode, removeShaderGraphNode, shaderNodeCatalog, connectShaderInput, disconnectShaderInput, setShaderValue, duplicateShaderNode, copyShaderNodes, pasteShaderNodes, moveShaderNodes, arrangeShaderNodes, shaderTintTemplate, setShaderOutput } from './shaderGraphLayout';
+import { addShaderGraphNode, removeShaderGraphNode, shaderNodeCatalog, connectShaderInput, disconnectShaderInput, shaderValueComponents,setShaderValue, duplicateShaderNode, copyShaderNodes, pasteShaderNodes, moveShaderNodes, arrangeShaderNodes, shaderTintTemplate, setShaderOutput } from './shaderGraphLayout';
 import type {ShaderClipboard} from './shaderGraphLayout';
 import GraphCanvas from '../graphs/GraphCanvas';
 import GraphGpuProfilePanel from '../graphs/GraphGpuProfilePanel';
@@ -24,6 +24,8 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  const [clipboard,setClipboard]=useState<ShaderClipboard|null>(null);
  const [pendingName,setPendingName]=useState('');
  const [selected,setSelected]=useState('');
+ const saveScope=useRef({projectPath,selected});
+ saveScope.current={projectPath,selected};
  const [document,setDocument]=useState<StudioShaderGraphDocument|null>(null);
  const [draft,setDraft]=useState<StudioShaderGraphDocument['graph']|null>(null);
  const history=useRef<DraftHistory<StudioShaderGraphDocument['graph']>|null>(null);
@@ -73,7 +75,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
  const compatibleOps=shaderNodeCatalog(operations,draft?.domain??'material',nodeQuery);
  const chosenOp=compatibleOps.find(op=>op.id===selectedOp)??compatibleOps[0];
  const activeNode=draft?.nodes?.find(n=>n.id===selectedNode);
- const values=Array.isArray(activeNode?.value)?activeNode.value:[activeNode?.value];
+ const activeValue=shaderValueComponents(activeNode?.value);
  const selectedIds=selection.filter(id=>draft?.nodes?.some(n=>n.id===id));
  const copyNodes=()=>{if(draft&&selectedIds.length)setClipboard(copyShaderNodes(draft,selectedIds));};
  const pasteNodes=()=>{
@@ -132,10 +134,11 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
   finally{setBusy(false);}
  };
  const save=async()=>{
-  if(!draft||!selected||busy||!dirty)return;
+  if(!draft||!document||!selected||busy||!dirty)return;
   setBusy(true);setError('');setMessage('');
   try{
-   const result=await invoke('studio.shaderGraphSave',{name:selected,graph:draft});
+   const result=await invoke('studio.shaderGraphSave',{name:selected,graph:draft,expected:document.graph,expectedProject:projectPath});
+   if(saveScope.current.projectPath!==projectPath||saveScope.current.selected!==selected)return;
    setDocument(result);resetDraft(structuredClone(result.graph));
    setMessage('Graph saved to shaders/'+selected+'.json. MapDoc Undo does not apply.');
   }catch(e){setError(e instanceof Error?e.message:String(e));}
@@ -172,7 +175,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
      document ? <>
       <div className="graph-summary"><strong>{selected}</strong><span>{document.graph.domain??'Unknown domain'}</span>
        <span>{draft?.nodes?.length??document.nodes} nodes · {document.samples} saved texture samples</span>
-       <span>{dirty?'● Unsaved graph draft':'Saved'}</span>
+       <span>{dirty?'Unsaved changes':'Saved'}</span>
        <StudioInput aria-label="Search node catalog" placeholder="Find node…" value={nodeQuery} onChange={e=>setNodeQuery(e.target.value)}/>
        <select className="graph-add-select" aria-label="Graph node operation"
          value={chosenOp?.id??''} onChange={event=>setSelectedOp(event.target.value)}>
@@ -221,7 +224,7 @@ export default function ShaderGraphPanel({projectPath}:{projectPath:string}) {
         </div>)}
         {['constant','parameter'].includes(activeNode.op)&&<div className="au-row">
          {['R','G','B','A'].map((label,i)=><StudioInput key={label} aria-label={label} type="number" step="any"
-          value={values[i]??0} onChange={e=>{if(e.target.value.trim()==='')return;const v=Array.from({length:4},(_,j)=>values[j]??0);v[i]=Number(e.target.value);editDraft(setShaderValue(draft,activeNode.id,v))}}/>)}
+          value={activeValue[i]??0} onChange={e=>{if(e.target.value.trim()==='')return;const v=Array.from({length:4},(_,j)=>activeValue[j]??0);v[i]=Number(e.target.value);editDraft(setShaderValue(draft,activeNode.id,v))}}/>)}
         </div>}
        </div>
       </StudioSection>}

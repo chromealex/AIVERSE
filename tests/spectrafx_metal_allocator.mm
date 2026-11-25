@@ -187,7 +187,17 @@ void checkpoint(gfx::Device& d,bool procedural){
     require(p.exportRestoreCheckpoint("owned-fixture",file),"owned v2 export");
     require(p.retainFreshGpuCheckpoint(),"owned retain");
     auto ids=p.historicalGpuCheckpointIds();
+    require(decodeRestoreCheckpoint(file,"owned-fixture",snapshot),"decode exported slot values");
+    const uint32_t slot=snapshot.aliveSlotOrder.front();
+    auto& expected=snapshot.slots[slot];
+    expected.programParams={1,2,3,4,5,6,7,8};
+    expected.attributes={-1,-2,-3,-4,-5,-6,-7,-8};
+    require(encodeRestoreCheckpoint(snapshot,"owned-fixture",file),"encode distinct slot values");
     {Frame frame(d);require(p.tryClear(),"clear before restore");require(p.importRestoreCheckpoint("owned-fixture",file),"owned v2 import");require(p.step(0),"owned restore redraw");}
+    GpuCheckpoint restored;
+    require(p.captureGpuCheckpoint(restored)&&slot<restored.slots.size(),"capture restored slot");
+    require(restored.slots[slot].programParams==expected.programParams&&
+            restored.slots[slot].attributes==expected.attributes,"owned restore preserves all VM lanes");
     auto after=audit(d,p,320);
     require(after.capacity==before.capacity&&after.liveOwners==before.liveOwners,"owned restore physical partition");
     {Frame frame(d);require(p.tryClear(),"clear before history");require(p.restoreHistoricalGpuCheckpoint(ids.back())&&p.step(0),"owned history restore");}

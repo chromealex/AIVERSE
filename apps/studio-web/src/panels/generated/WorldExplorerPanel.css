@@ -1,0 +1,9 @@
+/* Geometry only; palette and controls use the Studio UI kit. */
+.world-explorer { min-width:0; overflow-wrap:anywhere; }
+.world-explorer-map { display:block; width:100%; max-height:320px; background:var(--au-canvas); border:1px solid var(--au-line); }
+.world-explorer-cell { fill:var(--au-accent); cursor:pointer; }
+.world-explorer-cell.is-selected { stroke:var(--au-text); stroke-width:1; }
+.world-explorer-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,100px),1fr)); gap:var(--au-space-2); margin:0; }
+.world-explorer-stats dt { color:var(--au-text-muted); }
+.world-explorer-stats dd { margin:0; font-variant-numeric:tabular-nums; }
+.world-explorer-rows { max-height:240px; overflow:auto; min-width:0; }

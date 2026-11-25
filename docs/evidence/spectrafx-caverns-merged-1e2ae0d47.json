@@ -1,0 +1,11 @@
+{
+  "sha": "1e2ae0d479a2de0a40cf7733ec4823444156af61",
+  "argv": [
+    "python3.12",
+    "-c",
+    "import copy,json,os,shutil,subprocess,tempfile\nfrom pathlib import Path\nbinary='/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/aiversemcp'\nwith tempfile.TemporaryDirectory() as space:\n    project=Path(space)/'probe'\n    shutil.copytree('examples/projectiles',project)\n    graph={'version':1,'nodes':[{'id':'spawn','type':'Spawn','properties':{'burst':9}},{'id':'init','type':'Initialize','properties':{'life':1,'speed':0}},{'id':'out','type':'SpriteOutput','properties':{'texture':'builtin:smoke'}}],'links':[{'from':'spawn','to':'init'},{'from':'init','to':'out'}],'outputs':['out']}\n    updated=copy.deepcopy(graph);updated['nodes'][0]['properties']['burst']=11\n    name='studio_merge_probe'\n    requests=[('open_game',{'game':str(project)}),('fx_graph_set',dict(name=name,graph=graph)),('fx_graph_set',dict(name=name,graph=updated)),('fx_graph_set',dict(name=name,graph=updated,expected=dict(reversed(list(graph.items()))))),('fx_graph_set',dict(name=name,graph=graph,expected=graph)),('fx_graph_get',dict(name=name))]\n    rows=[dict(jsonrpc='2.0',id=0,method='initialize',params={})]+[dict(jsonrpc='2.0',id=i+1,method='tools/call',params=dict(name=k,arguments=v)) for i,(k,v) in enumerate(requests)]\n    out=subprocess.run([binary,'--no-editor','--port','0','--engine',os.getcwd()],input=''.join(json.dumps(r)+'\\n' for r in rows),text=True,capture_output=True,timeout=45,check=True)\n    replies={r['id']:r for r in map(json.loads,out.stdout.splitlines()) if 'id' in r}\n    for i in (1,2,4,6):\n        assert not replies[i].get('error') and not replies[i]['result'].get('isError'),replies[i]\n    for i in (3,5):\n        assert replies[i].get('error') or replies[i]['result'].get('isError'),replies[i]\n    loaded=json.loads(replies[6]['result']['content'][0]['text'])\n    assert loaded['graph']==updated,loaded.keys()\n    print('PASS SpectraFX native create, blind-write rejection, reordered expected graph, stale-write rejection and final readback')"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/spectrafx-caverns-merged-1e2ae0d47.log.txt",
+  "sha256": "953767db3d7fef7b4c3dae99a0b64d3069e71ee6d7e00ab097f28a9f0a1a7763"
+}

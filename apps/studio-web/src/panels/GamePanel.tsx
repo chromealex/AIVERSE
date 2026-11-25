@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { dockDragActive, watchDockDrag, watchOverlays, viewportRectChanged, forgetViewportRect, visibleViewport } from '../nativeOverlay';
 import { Menu, RotateCcw } from 'lucide-react';
 import { invoke } from '../bridge';
-import type { StudioGameState, StudioGameDevice, StudioGameDeviceOption } from '../types';
+import type { StudioGameState, StudioGameDevice, StudioGameDeviceOption, StudioPlayReview } from '../types';
 import type { StudioPanelContext } from './StudioPanelRenderer';
 import { StudioPanel, StudioButton, StudioAlert, StudioEmptyState, StudioBadge, StudioSelect, StudioField, StudioCheckbox } from '../ui';
 import './GamePanel.css';
@@ -11,6 +11,11 @@ import { gameViewportSize } from './gameViewport';
 export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelContext) {
   const [state,setState]=useState<StudioGameState|null>(null);
   const [error,setError]=useState('');
+  const [reviewOpen,setReviewOpen]=useState(false),[review,setReview]=useState<StudioPlayReview|null>(null);
+  const [positions,setPositions]=useState(true),[amounts,setAmounts]=useState(true),[removeDead,setRemoveDead]=useState(false);
+  const [kept,setKept]=useState('');
+  const projectPath=snapshot?.project.path??'';
+  useEffect(()=>{setReview(null);setReviewOpen(false);setKept('');},[projectPath,state?.epoch]);
   const [devices,setDevices]=useState<StudioGameDeviceOption[]>([]);
   const [areaSize,setAreaSize]=useState({width:0,height:0});
   const area=useRef<HTMLDivElement>(null);
@@ -82,6 +87,7 @@ export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelC
     finally{setBusy(false);}
   };
   const control=async(action:'pause'|'resume'|'step'|'restart')=>{
+    setReview(null);setReviewOpen(false);
     if(busy)return;setBusy(true);setError('');
     try{setState(await invoke('studio.gameControl',{action}));}
     catch(e){setError(e instanceof Error?e.message:String(e));}
@@ -93,11 +99,26 @@ export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelC
     catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   };
+  useEffect(()=>{if(!state?.canReviewPlayChanges)setReview(null);},[state?.canReviewPlayChanges]);
+  const captureReview=async()=>{
+    if(busy||!state?.canReviewPlayChanges||!(positions||amounts||removeDead))return;
+    setBusy(true);setReview(null);setError('');setKept('');
+    try{setReview(await invoke('studio.previewPlayChanges',{expectedProject:projectPath,positions,amounts,removeDead}));}
+    catch(e){setError(e instanceof Error?e.message:String(e));}finally{setBusy(false);}
+  };
+  const applyReview=async()=>{
+    if(!review||busy||!state?.canReviewPlayChanges)return;
+    const token=review.token;setReview(null);setBusy(true);setError('');
+    try{const r=await invoke('studio.keepPlayChanges',{expectedProject:projectPath,token});
+      setKept('Kept '+r.moved+' positions, '+r.amounts+' amounts, '+r.removed+' removals in one Undo step.');
+    }catch(e){setError(e instanceof Error?e.message:String(e));}finally{setBusy(false);}
+  };
   return <StudioPanel title="Game" className="studio-game" flush
     actions={<>
       {/* Play / Pause / Step / Stop live in the title bar (⌘P); only what it lacks is here. */}
       <StudioButton disabled={!loaded||busy||!!state?.active} onClick={()=>void act('menu')} title="Start from the project's own menus"><Menu size={14}/>Project menu</StudioButton>
       <StudioButton disabled={!state?.active||busy} onClick={()=>void control('restart')}><RotateCcw size={14}/>Restart</StudioButton>
+      <StudioButton disabled={!state?.active||busy} onClick={()=>{setReviewOpen(v=>!v);setReview(null)}}>Review changes</StudioButton>
     </>}
     footer={<><StudioBadge>{state?.active?(state.loading?`Loading ${Math.round(state.progress*100)}%`:state.inMatch?`${state.paused?'Paused':'Running'} · tick ${state.tick}`:'Project menu'):'Stopped'}</StudioBadge><span>Native game client · click the viewport to focus input</span></>}>
     {(error||state?.error) && <StudioAlert tone="danger">{error||state?.error}</StudioAlert>}
@@ -110,6 +131,22 @@ export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelC
       <StudioCheckbox label="Safe area" checked={device?.safeArea??true} disabled={!device?.width||busy} onChange={e=>void configure({safeArea:e.target.checked})}/>
       {!!device?.width && <StudioBadge>{device.width} × {device.height} · {device.touch?'Touch':'Mouse'}</StudioBadge>}
     </div>
+    {state?.runtimeDebugEdited&&<StudioAlert tone="warning">Local debug edits are outside command replay; Stop/Restart discards this runtime session.</StudioAlert>}
+    {reviewOpen&&<div className="studio-game__review au-stack">
+      <StudioAlert>Pause the local saved-map game. Only an unchanged launch map can receive changes. Stop or Restart does not copy anything automatically.</StudioAlert>
+      <div className="studio-game__review-options">
+        <StudioCheckbox label="Positions" checked={positions} disabled={busy} onChange={e=>{setPositions(e.target.checked);setReview(null)}}/>
+        <StudioCheckbox label="Resource amounts" checked={amounts} disabled={busy} onChange={e=>{setAmounts(e.target.checked);setReview(null)}}/>
+        <StudioCheckbox label="Remove destroyed objects" checked={removeDead} disabled={busy} onChange={e=>{setRemoveDead(e.target.checked);setReview(null)}}/>
+        <StudioButton disabled={busy||!state?.canReviewPlayChanges||!(positions||amounts||removeDead)} onClick={()=>void captureReview()}>Preview</StudioButton>
+      </div>
+      {review&&<>
+        <StudioBadge>Tick {review.tick} · {review.moved} moves · {review.amounts} amounts · {review.removed} removals · {review.skipped} skipped</StudioBadge>
+        {review.removed>0&&<StudioAlert tone="warning">Destroyed map objects will be removed. The authoring edit is undoable.</StudioAlert>}
+        <StudioButton variant={review.removed?'danger':'primary'} disabled={busy||!state?.canReviewPlayChanges||!(review.moved+review.amounts+review.removed)} onClick={()=>void applyReview()}>Apply reviewed changes</StudioButton>
+      </>}
+    </div>}
+    {kept&&<StudioAlert>{kept}</StudioAlert>}
     <div ref={area} className="studio-game__area">
     <div style={surfaceStyle} ref={surface} className={'studio-game__surface'+(framed?' studio-game__surface--device':'')}
       data-orientation={device?.landscape?'landscape':'portrait'} aria-label="Native Game viewport">

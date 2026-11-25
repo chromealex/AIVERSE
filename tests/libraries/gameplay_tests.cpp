@@ -35,7 +35,6 @@ int main(){
     CHECK(checkPlacement(*snapped,[&](Cell c){++rotatedCells;CHECK(c.x>=-1&&c.x<2&&c.z>=2&&c.z<4);return CellInfo{true,place.owner,0,0};}));
     CHECK(checkPlacement(*snapped,[](Cell){return CellInfo{};}).reason==Reason::Territory);
     CHECK(rotatedCells==6);
-    CHECK(checkPlacement(*snapped,[](Cell){return CellInfo{};}).reason==Reason::Territory);
     CHECK(checkPlacement(place,[&](Cell c){++cells;CHECK(c.x<3&&c.z<2);return CellInfo{true,1,3,0};}));CHECK(cells==6);
     CHECK(checkPlacement(place,[](Cell){return CellInfo{false,1,0,42};}).subject==42);
     CHECK(checkPlacement(place,[](Cell){return CellInfo{true,2,0,0};}).reason==Reason::Territory);

@@ -21,11 +21,13 @@ struct StudioToolGroup { const char* panel; std::vector<const char*> ops; };
 
 inline const std::vector<StudioToolGroup>& studioToolGroups() {
     static const std::vector<StudioToolGroup> groups = {
+        {"building_generator", {"building_graph_diagnostics"}},
         {"feature_readiness", {"feature_readiness_get", "feature_readiness_query", "feature_readiness_status_get", "feature_readiness_refresh"}},
         {"terrain", {"map_info", "terrain_sculpt", "terrain_level", "terrain_height", "terrain_heights", "terrain_paint",
                      "terrain_paint_material", "terrain_material", "terrain_detail", "heightmap_import", "heightmap_export"}},
+        {"caverns", {"terraweave_caverns_paint","terraweave_caverns_pick"}},
         {"water", {"water_types", "water_network", "water_set", "water_delete", "water_shores", "water_bake", "nereid_water_state"}},
-        {"roads", {"road_types", "road_network", "road_add", "road_delete", "road_node_set", "road_edge_set", "road_split",
+        {"roads", {"simulation_budget_plan", "road_types", "road_network", "road_add", "road_delete", "road_node_set", "road_edge_set", "road_split",
                    "road_toggle", "road_type_set", "road_stop_set", "road_driveway_set"}},
         {"tiles", {"tileset_list", "tile_info", "tiles_init", "tile_paint", "tiles_remove"}},
         {"fog", {"rules_get", "rules_merge", "rules_delete"}},
@@ -84,9 +86,11 @@ inline bool studioToolAllowed(const std::string& op) {
 // Ops that never change the project or the map: the panel runs them without an undo step or a
 // document refresh.
 inline bool studioToolReadOnly(const std::string& op) {
+    if(op=="building_graph_diagnostics")return true;
     if (op == "feature_readiness_query" || op == "feature_readiness_refresh") return true; // engine report only, no project mutation
     if (op == "texture_graph_preview" || op == "texture_graph_catalog" || op == "texture_graph_templates" || op == "texture_graph_cache") return true;
     if (op == "strata_capabilities" || op == "graph_diagnostics" || op == "graph_dependencies" || op == "graph_property_schema" || op == "graph_asset_dependencies" || op == "graph_runtime_capabilities" || op == "graph_runtime_probe" || op == "graph_live_snapshot" || op == "graph_live_watch" || op == "graph_live_profile" || op == "graph_gpu_profile" || op == "graph_debug_session") return true;
+    if(op=="simulation_budget_plan"||op=="terraweave_caverns_pick")return true;
     if(op=="world_save_page"||op=="world_save_backups"||op=="world_save_retention_preview"||op=="world_job_status"||op=="world_simulation_lod_get"||op=="world_simulation_lod_validate")return true;
     static const char* suffixes[] = {"_get", "_list", "_info", "_types", "_network", "_catalog", "_templates",
                                      "_presets", "_validate", "_ascii", "_estimate", "_api", "_read", "_check",

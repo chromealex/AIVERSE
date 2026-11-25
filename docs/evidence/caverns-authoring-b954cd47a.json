@@ -1,0 +1,11 @@
+{
+  "sha": "b954cd47aceffd107f0dcc52f544d39bdb862b29",
+  "argv": [
+    "python3.12",
+    "-c",
+    "import json, os, shutil, subprocess, tempfile\nfrom pathlib import Path\nserver='/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/aiversemcp'\ndef session(calls):\n    requests=[('initialize',{'protocolVersion':'2024-11-05','capabilities':{},'clientInfo':{'name':'caverns-roundtrip','version':'1'}})]\n    requests += [('tools/call',{'name':name,'arguments':args}) for name,args in calls]\n    payload=''.join(json.dumps(dict(jsonrpc='2.0',id=i,method=m,params=p))+'\\n' for i,(m,p) in enumerate(requests))\n    result=subprocess.run([server,'--no-editor','--engine',os.getcwd(),'--port','0'],input=payload,text=True,capture_output=True,timeout=45,check=True)\n    rows={r['id']:r for r in map(json.loads,result.stdout.splitlines()) if 'id' in r}\n    values=[]\n    for i in range(1,len(requests)):\n        r=rows[i]['result']\n        assert not r.get('isError'),(calls[i-1][0],r)\n        values.append(json.loads(r['content'][0]['text']))\n    return values\nwith tempfile.TemporaryDirectory() as folder:\n    project=Path(folder)/'sample'\n    shutil.copytree('examples/projectiles',project)\n    open_game=('open_game',{'game':str(project)})\n    op='terraweave_caverns_paint'\n    get=(op,{'mode':'get'})\n    carve=(op,dict(mode='carve',xCm=-750,yCm=-2000,zCm=800,radiusCm=400))\n    fill=(op,dict(mode='fill',xCm=-750,yCm=-2000,zCm=800,radiusCm=200))\n    r=session([open_game,get,carve,fill,('undo',{}),get,('redo',{}),get,('map_save',{})])\n    n=r[1]['stampCount']\n    assert [r[i]['stampCount'] for i in (2,3,5,7)]==[n+1,n+2,n+1,n+2]\n    reopened=session([open_game,get])[1]\n    assert reopened['snapshot']==r[7]['snapshot'] and reopened['stampIds']==r[7]['stampIds']\n    print('PASS real native MCP carve/fill, undo and redo, map save, fresh process reopen and full snapshot equality')"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/caverns-authoring-b954cd47a.log.txt",
+  "sha256": "c100eb64db02b64f4c1bf7df731e2c124a98b7c11a60f1bdf8dc6046861aa8f5"
+}

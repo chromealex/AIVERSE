@@ -1,0 +1,5 @@
+# Strict Building consumer compilation
+
+On the merged SpectraFX source, the real standalone MCP server passed independent Shader Graph and SpectraFX tests. Both created a graph, rejected blind and stale updates, accepted a reordered expected document and returned the winning graph. The two protocol reports record `1e2ae0d47`. MinGW GCC 16.2 cross-compiled the Building exporter and Caverns test into Windows x86-64 executables on the same source. This is compiler and linker evidence; neither executable ran on Windows.
+
+The focused Building CI treats warnings as errors. Its independent runtime test failed four Clang checks because positional aggregate initializers omitted new request fields. Commit `98c3c3a05` sets the tested request properties explicitly in `tests/libraries/building_runtime_tests.cpp` and retains the four expected rejection results. All ten C++ entry points in the focused workflow passed a C++20 Clang syntax check with its Wall, Wextra, Werror and pedantic flags. The complete merged Studio web tests and production TypeScript/Vite build passed. Mac quick and native Studio execution on the integrated code remain under verification.

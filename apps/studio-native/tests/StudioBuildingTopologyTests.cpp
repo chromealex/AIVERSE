@@ -1,0 +1,117 @@
+#include "apps/studio-native/StudioBuildingTopology.h"
+#include "apps/studio-native/StudioBuildingGeneration.h"
+#include "tests/TestCheck.h"
+#include <iostream>
+#include <stdexcept>
+using namespace aiverse;
+using namespace aiverse::lib::systems;
+int main(int argc,char** argv){
+    AIVERSE_TEST_CHECK(argc==2);
+    const auto catalog=studio::studioBuildingCatalog(argv[1]);
+    AIVERSE_TEST_CHECK(catalog["styles"].size()>=13);
+    bool distinctSpace=false;
+    for(const auto& style:catalog["styles"].items()){
+        if(style.getStr("id")=="scifi-space")distinctSpace=style.getStr("setting")=="scifi-space";
+        if(style.getStr("id")=="underwater")AIVERSE_TEST_CHECK(style.getStr("recommendedRoof")=="dome");
+        if(style.getStr("id")!="scifi")AIVERSE_TEST_CHECK(style["functions"].size()>=8);
+        for(const auto& slot:style["materials"].items()){
+            AIVERSE_TEST_CHECK(!style["surfaces"][slot.str()].getStr("pattern").empty());
+        }
+    }
+    AIVERSE_TEST_CHECK(distinctSpace);
+    const auto binding=studio::buildingStudioDetail::request(Json::parse(R"({"style":"scifi","function":"factory","width":24,"height":12,"depth":18,"seed":42,"materialBindings":{"hazardY":"YellowPaint"}})"));
+    AIVERSE_TEST_CHECK(binding.materialBindings.at("hazardY")=="YellowPaint");
+    const auto request=Json::parse(R"({"style":"scifi","slot":"hull"})");
+    const auto surface=studio::studioBuildingSurfacePreview(argv[1],request);
+    AIVERSE_TEST_CHECK(surface.getStr("style")=="scifi"&&surface.getStr("slot")=="hull");
+    AIVERSE_TEST_CHECK(surface["maps"].size()==4);
+    AIVERSE_TEST_CHECK(surface["maps"][size_t(3)].getStr("channel")=="occlusion");
+    AIVERSE_TEST_CHECK(surface.getInt("resolution")==128);
+    const auto detailed=studio::studioBuildingSurfacePreview(argv[1],Json::parse(R"({"style":"scifi","slot":"hull","resolution":256})"));
+    AIVERSE_TEST_CHECK(detailed.getInt("resolution")==256&&detailed["maps"].size()==4);
+    AIVERSE_TEST_CHECK(detailed["maps"][size_t(0)].getStr("url").size()>surface["maps"][size_t(0)].getStr("url").size());
+    AIVERSE_TEST_CHECK(surface==studio::studioBuildingSurfacePreview(argv[1],request));
+    for(const auto& map:surface["maps"].items())
+        AIVERSE_TEST_CHECK(map.getStr("url").rfind("data:image/png;base64,iVBORw0KGgo",0)==0);
+    bool invalidSurface=false;
+    try{(void)studio::studioBuildingSurfacePreview(argv[1],Json::parse(R"({"style":"scifi","slot":"missing"})"));}
+    catch(const std::exception&){invalidSurface=true;}
+    AIVERSE_TEST_CHECK(invalidSurface);
+
+    FunctionalBuildingRecipe recipe;
+    recipe.width=16;recipe.height=8;recipe.depth=12;
+    recipe.floors=2;recipe.roomsX=2;recipe.roomsZ=1;
+    auto graph=buildFunctionalStructureGraph(recipe);
+    AIVERSE_TEST_CHECK(bool(graph));
+    const auto separated=studio::studioBuildingTopology(graph);
+    AIVERSE_TEST_CHECK(separated["rooms"].size()==4 && separated["connections"].size()==2);
+    AIVERSE_TEST_CHECK(separated.getInt("components")==2 && separated.getInt("withoutElevatorsComponents")==2);
+    BuildingFeature lift;
+    lift.kind=BuildingFeatureKind::Elevator;lift.width=2;lift.depth=2;
+    recipe.features.push_back(lift);
+    graph=buildFunctionalStructureGraph(recipe);
+    AIVERSE_TEST_CHECK(bool(graph));
+    const auto connected=studio::studioBuildingTopology(graph);
+    AIVERSE_TEST_CHECK(connected.getInt("components")==1 && connected.getInt("withoutElevatorsComponents")==2);
+    bool foundLift=false;
+    for(const auto& edge:connected["connections"].items()){
+        if(edge.getStr("kind")!="elevator")continue;
+        foundLift=true;
+        AIVERSE_TEST_CHECK(edge.getStr("socketId")=="lift/0/0");
+        AIVERSE_TEST_CHECK(edge.getStr("from")=="room/0/0/0" && edge.getStr("to")=="room/1/0/0");
+    }
+    AIVERSE_TEST_CHECK(foundLift);
+    Json query=Json::object();
+    query.set("start",Json::string("room/1/0/0"));query.set("goal",Json::string("room/0/0/0"));
+    query.set("allowStairs",Json::fromBool(false));query.set("allowElevators",Json::fromBool(true));
+    const auto liftRoute=studio::studioBuildingRoute(graph,query);
+    AIVERSE_TEST_CHECK(liftRoute.getBool("reachable") && liftRoute["steps"].size()==1);
+    AIVERSE_TEST_CHECK(liftRoute["steps"].items().front().getStr("edgeId")=="vertical/0/0");
+    query.set("allowElevators",Json::fromBool(false));
+    AIVERSE_TEST_CHECK(!studio::studioBuildingRoute(graph,query).getBool("reachable"));
+    BuildingFeature stair;
+    stair.kind=BuildingFeatureKind::Stairs;stair.width=2.6f;stair.depth=6.6f;
+    recipe.features={stair};
+    graph=buildFunctionalStructureGraph(recipe);
+    AIVERSE_TEST_CHECK(bool(graph));
+    const auto withStairs=studio::studioBuildingTopology(graph);
+    AIVERSE_TEST_CHECK(withStairs.getInt("components")==1 && withStairs.getInt("withoutElevatorsComponents")==1);
+    bool foundStair=false;
+    for(const auto& edge:withStairs["connections"].items()){
+        if(edge.getStr("kind")!="stair")continue;
+        foundStair=true;
+        AIVERSE_TEST_CHECK(edge.getStr("socketId")=="stairs/0/0");
+    }
+    AIVERSE_TEST_CHECK(foundStair);
+    query.set("allowStairs",Json::fromBool(true));
+    AIVERSE_TEST_CHECK(studio::studioBuildingRoute(graph,query).getBool("reachable"));
+    query.set("allowStairs",Json::fromBool(false));
+    AIVERSE_TEST_CHECK(!studio::studioBuildingRoute(graph,query).getBool("reachable"));
+    BuildingFeature gate;
+    gate.kind=BuildingFeatureKind::SmallGate;gate.width=4;gate.height=2.4f;
+    gate.position=8;gate.open=1;
+    recipe.features={gate};
+    graph=buildFunctionalStructureGraph(recipe);
+    AIVERSE_TEST_CHECK(bool(graph));
+    AIVERSE_TEST_CHECK(graph.exteriorApertures.size()==2);
+    AIVERSE_TEST_CHECK(graph.exteriorApertures[0].roomId=="room/0/0/0");
+    AIVERSE_TEST_CHECK(graph.exteriorApertures[1].roomId=="room/0/1/0");
+    AIVERSE_TEST_CHECK(graph.exteriorApertures[0].end==8.f && graph.exteriorApertures[1].start==8.f);
+    const auto exterior=studio::studioBuildingTopology(graph);
+    AIVERSE_TEST_CHECK(exterior["exteriorApertures"].size()==2);
+    AIVERSE_TEST_CHECK(exterior.getInt("components")==2);
+    query.set("start",Json::string("room/0/1/0"));query.set("goal",Json::string("room/0/0/0"));
+    const auto passageRoute=studio::studioBuildingRoute(graph,query);
+    AIVERSE_TEST_CHECK(passageRoute.getBool("reachable") && passageRoute["steps"].size()==1);
+    query.set("goal",Json::string("room/0/1/0"));
+    AIVERSE_TEST_CHECK(studio::studioBuildingRoute(graph,query).getBool("reachable"));
+    query.set("goal",Json::string("missing"));
+    bool routeRefused=false;
+    try{(void)studio::studioBuildingRoute(graph,query);}catch(const std::runtime_error&){routeRefused=true;}
+    AIVERSE_TEST_CHECK(routeRefused);
+    graph.connections.front().to="missing";
+    bool refused=false;
+    try{(void)studio::studioBuildingTopology(graph);}catch(const std::runtime_error&){refused=true;}
+    AIVERSE_TEST_CHECK(refused);
+    std::cout<<"Studio building topology PASS\n";
+}

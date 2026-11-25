@@ -1,0 +1,178 @@
+#pragma once
+// Read-only DTO for the native authored room graph. No gameplay state or new route solver.
+#include <engine/systems/BuildingCirculationRuntime.h>
+#include "engine/data/Json.h"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <set>
+#include <stdexcept>
+#include <string>
+#include <vector>
+#include <utility>
+
+namespace aiverse::studio {
+namespace buildingTopologyDetail {
+using namespace aiverse::lib::systems;
+inline Json point(float x,float y,float z){
+    Json out=Json::array();
+    for(float v:{x,y,z}){
+        if(!std::isfinite(v)||v<0.f||v>160.f)
+            throw std::runtime_error("Invalid authored room coordinate");
+        out.push(Json::number(double(v),3));
+    }
+    return out;
+}
+inline const char* kindName(BuildingConnectionKind kind){
+    switch(kind){
+        case BuildingConnectionKind::Passage:return "passage";
+        case BuildingConnectionKind::Stair:return "stair";
+        case BuildingConnectionKind::Elevator:return "elevator";
+    }
+    throw std::runtime_error("Invalid room connection kind");
+}
+struct Components {std::vector<int> labels;int count=0;};
+inline Components components(const BuildingStructureGraph& graph,bool allowElevators){
+    Components result;
+    result.labels.assign(graph.rooms.size(),-1);
+    BuildingRoutePolicy policy;
+    policy.allowElevators=allowElevators;
+    policy.requireAvailableLift=false; // authored topology only, no live controller claim
+    for(size_t i=0;i<graph.rooms.size();++i){
+        if(result.labels[i]>=0)continue;
+        const int group=result.count++;
+        result.labels[i]=group;
+        for(size_t j=i+1;j<graph.rooms.size();++j){
+            if(result.labels[j]>=0)continue;
+            // Reuse the canonical native room planner; do not add another BFS.
+            const auto route=planBuildingRoomRoute(graph,graph.rooms[i].id,graph.rooms[j].id,policy);
+            if(route.reachable)result.labels[j]=group;
+        }
+    }
+    return result;
+}
+inline std::string verticalSocket(const BuildingStructureGraph& graph,const BuildingGraphConnection& edge){
+    if(edge.kind==BuildingConnectionKind::Passage)return {};
+    // Same stable token emitted by the native functional graph generator for both records.
+    if(edge.id.rfind("vertical/",0)!=0)throw std::runtime_error("Invalid vertical edge identity");
+    const bool stair=edge.kind==BuildingConnectionKind::Stair;
+    const auto socketId=std::string(stair?"stairs/":"lift/")+edge.id.substr(9);
+    const auto it=std::find_if(graph.sockets.begin(),graph.sockets.end(),[&](const auto& socket){
+        return socket.id==socketId&&socket.repeatIndex==edge.floor&&
+               socket.kind==(stair?BuildingFeatureKind::Stairs:BuildingFeatureKind::Elevator);
+    });
+    if(it==graph.sockets.end())throw std::runtime_error("Missing native vertical socket");
+    return it->id;
+}
+} // namespace buildingTopologyDetail
+
+inline Json studioBuildingTopology(const lib::systems::BuildingStructureGraph& graph){
+    using namespace buildingTopologyDetail;
+    if(!graph||graph.rooms.empty()||graph.rooms.size()>128||
+       graph.connections.size()>512||graph.sockets.size()>256)
+        throw std::runtime_error("Invalid or oversized authored room graph");
+    std::set<std::string> roomIds,edgeIds,socketIds;
+    for(const auto& room:graph.rooms)
+        if(room.id.empty()||!roomIds.insert(room.id).second)
+            throw std::runtime_error("Duplicate or empty room ID");
+    for(const auto& socket:graph.sockets)
+        if(socket.id.empty()||!socketIds.insert(socket.id).second)
+            throw std::runtime_error("Duplicate or empty socket ID");
+    for(const auto& edge:graph.connections){
+        if(edge.id.empty()||!edgeIds.insert(edge.id).second||
+           edge.from==edge.to||!roomIds.count(edge.from)||!roomIds.count(edge.to))
+            throw std::runtime_error("Invalid room connection identity");
+        (void)kindName(edge.kind);
+        if(!std::isfinite(edge.width)||!std::isfinite(edge.height)||
+           edge.width<0.001f||edge.height<0.001f||edge.width>160.f||edge.height>160.f)
+            throw std::runtime_error("Invalid room connection extent");
+    }
+    const auto all=components(graph,true),without=components(graph,false);
+    Json result=Json::object(),rooms=Json::array(),edges=Json::array();
+    result.set("version",Json::number(int64_t(1)));
+    result.set("components",Json::number(int64_t(all.count)));
+    result.set("withoutElevatorsComponents",Json::number(int64_t(without.count)));
+    for(size_t i=0;i<graph.rooms.size();++i){
+        const auto& r=graph.rooms[i];
+        if(!(r.x0<r.x1&&r.y0<r.y1&&r.z0<r.z1))
+            throw std::runtime_error("Invalid room bounds");
+        Json row=Json::object();
+        row.set("id",Json::string(r.id));
+        row.set("floor",Json::number(int64_t(r.floor)));
+        row.set("x",Json::number(int64_t(r.x)));
+        row.set("z",Json::number(int64_t(r.z)));
+        row.set("min",point(r.x0,r.y0,r.z0));
+        row.set("max",point(r.x1,r.y1,r.z1));
+        row.set("component",Json::number(int64_t(all.labels[i])));
+        row.set("withoutElevatorsComponent",Json::number(int64_t(without.labels[i])));
+        rooms.push(std::move(row));
+    }
+    for(const auto& e:graph.connections){
+        Json row=Json::object();
+        row.set("id",Json::string(e.id));
+        row.set("from",Json::string(e.from));
+        row.set("to",Json::string(e.to));
+        row.set("floor",Json::number(int64_t(e.floor)));
+        row.set("kind",Json::string(kindName(e.kind)));
+        row.set("position",point(e.x,e.y,e.z));
+        row.set("width",Json::number(double(e.width),3));
+        row.set("height",Json::number(double(e.height),3));
+        const auto socket=verticalSocket(graph,e);
+        if(!socket.empty())row.set("socketId",Json::string(socket));
+        edges.push(std::move(row));
+    }
+    Json exterior=Json::array();
+    std::set<std::pair<std::string,std::string>> apertureIds;
+    if(graph.exteriorApertures.size()>4096)throw std::runtime_error("Too many exterior apertures");
+    for(const auto& a:graph.exteriorApertures){
+        const auto socket=std::find_if(graph.sockets.begin(),graph.sockets.end(),[&](const auto& s){return s.id==a.socketId;});
+        const auto room=std::find_if(graph.rooms.begin(),graph.rooms.end(),[&](const auto& r){return r.id==a.roomId;});
+        if(socket==graph.sockets.end()||room==graph.rooms.end()||room->floor!=0||
+           (socket->kind!=BuildingFeatureKind::PersonnelDoor&&socket->kind!=BuildingFeatureKind::SmallGate&&socket->kind!=BuildingFeatureKind::LargeGate)||
+           !apertureIds.emplace(a.socketId,a.roomId).second||
+           !std::isfinite(a.start)||!std::isfinite(a.end)||a.start<0||a.end>160||a.end-a.start<=0.001f)
+            throw std::runtime_error("Invalid exterior aperture");
+        Json row=Json::object();
+        row.set("socketId",Json::string(a.socketId));
+        row.set("roomId",Json::string(a.roomId));
+        row.set("start",Json::number(double(a.start),6));
+        row.set("end",Json::number(double(a.end),6));
+        exterior.push(std::move(row));
+    }
+    result.set("exteriorApertures",std::move(exterior));
+    result.set("rooms",std::move(rooms));
+    result.set("connections",std::move(edges));
+    return result;
+}
+// Explicit authored route, independent of live lift state and physical clearance.
+inline Json studioBuildingRoute(const lib::systems::BuildingStructureGraph& graph,const Json& query){
+    using namespace buildingTopologyDetail;
+    if(!graph||graph.rooms.size()>128||graph.connections.size()>512||
+       !query.isObject()||!query["start"].isString()||!query["goal"].isString()||
+       query["allowStairs"].type()!=Json::Type::Bool||query["allowElevators"].type()!=Json::Type::Bool)
+        throw std::runtime_error("Invalid building route query");
+    const auto start=query.getStr("start"),goal=query.getStr("goal");
+    const auto exists=[&](const std::string& id){
+        return !id.empty()&&id.size()<=128&&std::any_of(graph.rooms.begin(),graph.rooms.end(),[&](const auto& r){return r.id==id;});
+    };
+    if(!exists(start)||!exists(goal))throw std::runtime_error("Unknown building route room");
+    BuildingRoutePolicy policy;
+    policy.allowStairs=query.getBool("allowStairs");
+    policy.allowElevators=query.getBool("allowElevators");
+    policy.requireAvailableLift=false;
+    const auto route=planBuildingRoomRoute(graph,start,goal,policy);
+    Json result=Json::object(),steps=Json::array();
+    result.set("start",Json::string(start));result.set("goal",Json::string(goal));
+    result.set("allowStairs",Json::fromBool(policy.allowStairs));
+    result.set("allowElevators",Json::fromBool(policy.allowElevators));
+    result.set("reachable",Json::fromBool(route.reachable));
+    for(const auto& step:route.steps){
+        Json row=Json::object();
+        row.set("edgeId",Json::string(step.edgeId));
+        row.set("from",Json::string(step.fromRoom));row.set("to",Json::string(step.toRoom));
+        steps.push(std::move(row));
+    }
+    result.set("steps",std::move(steps));
+    return result;
+}
+} // namespace aiverse::studio

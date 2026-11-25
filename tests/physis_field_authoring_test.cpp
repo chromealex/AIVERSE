@@ -340,5 +340,22 @@ void testFpsAndDuplicateIds() {
     CHECK(fps.revision==revision);
 }
 }
-int main(){testOneDragOneUndo();testRadiusResizeAndSnapping();testGroupOperations();testGroupFpsMap();testGroupRotationAndScale();testPivotAndGizmoGeometry();testTransformFromFrozenBaseline();testFpsAndDuplicateIds();
+void testMalformedTransformStorage() {
+    for (bool worldSpace : {false, true}) {
+        MapDoc doc; doc.reset(8,8);
+        std::string error, wind;
+        CHECK(apply(doc, defaultConfig(), &error));
+        CHECK(addField(doc, physis::AuthoredFieldKind::Wind, 0,0,0,wind,&error));
+        const Json baseline = read(doc);
+        doc.data.worldSpace = worldSpace;
+        doc.data.extra = Json::array();
+        const auto before = doc.data.extra;
+        const auto rev = doc.revision;
+        CHECK(!transformFields(doc,{wind},0,0,0,0,2,&error,&baseline,true));
+        CHECK(!error.empty());
+        CHECK(doc.data.extra == before && doc.revision == rev);
+    }
+}
+
+int main(){testMalformedTransformStorage();testOneDragOneUndo();testRadiusResizeAndSnapping();testGroupOperations();testGroupFpsMap();testGroupRotationAndScale();testPivotAndGizmoGeometry();testTransformFromFrozenBaseline();testFpsAndDuplicateIds();
 std::printf("PHYSIS Field Authoring: %s\n",failures?"FAIL":"PASS");return failures?1:0;}

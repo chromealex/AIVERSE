@@ -1,0 +1,11 @@
+{
+  "sha": "b954cd47aceffd107f0dcc52f544d39bdb862b29",
+  "argv": [
+    "bash",
+    "-ec",
+    "native=/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-source\ngit diff --exit-code HEAD \"$(git -C \"$native\" rev-parse HEAD)\" -- apps/studio-web tools/studio\nnpm --prefix \"$native/apps/studio-web\" run test:web\nexport AIVERSE_STUDIO_WEB_DIST=/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage37-studio/web\npython3.12 -m unittest discover -s tools/studio -p \"test_*.py\" -v"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-web-b954cd47a.log.txt",
+  "sha256": "93d0e70a3c6cdd4b9155a501f4fa5319174d340a8dbb35b9ebf5982d84043f0d"
+}

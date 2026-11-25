@@ -1,0 +1,11 @@
+{
+  "sha": "b1bb899495038c32e67a486ba337ec025342046b",
+  "argv": [
+    "python3.12",
+    "-c",
+    "from pathlib import Path;import subprocess;root=Path(\"/Volumes/KINGSTON/AIVERSE-builds/caverns-stage59/0f4394d81d798f28bfdf6b5e43991057a9e7636b\");subprocess.run([root/\"aiverse_runtime_library_tests\"],check=True);subprocess.run([root/\"aiverse_tests\",\"traffic_population_recurring_budget_and_restore\"],check=True);subprocess.run([root/\"aiverse_tests\",\"traffic_population_determinism_and_saves\"],check=True)"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/recurring-budget-native-b1bb89949.log.txt",
+  "sha256": "5cc52f80e6626de055063cb1a17754ebb8cbc647a8505045b56616a808d20b88"
+}

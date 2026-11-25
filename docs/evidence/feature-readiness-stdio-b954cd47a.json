@@ -1,0 +1,11 @@
+{
+  "sha": "b954cd47aceffd107f0dcc52f544d39bdb862b29",
+  "argv": [
+    "python3.12",
+    "-c",
+    "import json, os, subprocess, sys, time\nfrom pathlib import Path\nroot=Path('/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-source')\nbinary=root.parent/'building-caverns-gate-build/aiversemcp'\nenv=dict(os.environ,AIVERSE_PYTHON=sys.executable)\nwith subprocess.Popen([binary,'--engine',root,'--no-editor','--port','0'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True,env=env) as proc:\n    def send(ident,method,params):\n        proc.stdin.write(json.dumps(dict(id=ident,jsonrpc='2.0',method=method,params=params))+'\\n')\n        proc.stdin.flush()\n        row=json.loads(proc.stdout.readline())\n        assert row['id']==ident and 'error' not in row,row\n        return row['result']\n    def call(ident,name,args=None):\n        r=send(ident,'tools/call',dict(name='feature_readiness_'+name,arguments=args or {}))\n        assert not r.get('isError'),r\n        return json.loads(r['content'][0]['text'])\n    send(1,'initialize',{})\n    before=call(2,'status_get')\n    start=call(3,'refresh')\n    for i in range(4,124):\n        result=call(i,'status_get')\n        if not result['busy'] and result['runCount']>before['runCount']:break\n        time.sleep(.5)\n    assert not result['busy'] and result['exitCode']==0,result\n    snap=call(130,'get')\n    sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()\n    assert snap['snapshotOnly'] and snap['sha']==sha\n    page=call(131,'query',dict(section='features',offset=1,limit=2))\n    assert page['sha']==sha and page['total']>=10 and len(page['items'])==2,page\n    print('PASS native stdio report generation, job completion, snapshot SHA and paginated feature query')\n    proc.stdin.close()"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/feature-readiness-stdio-b954cd47a.log.txt",
+  "sha256": "73c305a6c6df0a49c61a85062251b2b91ad0ed5c2ed690a186a2ba570a717ea2"
+}

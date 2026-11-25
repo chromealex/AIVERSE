@@ -1,0 +1,75 @@
+..........warning: LF will be replaced by CRLF in source.py.
+The file will have its original line endings in your working directory
+warning: LF will be replaced by CRLF in source.py.
+The file will have its original line endings in your working directory
+warning: LF will be replaced by CRLF in source.py.
+The file will have its original line endings in your working directory
+..........
+----------------------------------------------------------------------
+Ran 20 tests in 3.577s
+
+OK
+Feature gate: 1 manifest(s), 0 error(s)
+Feature gate: 1 manifest(s), 0 error(s)
+Agent contract routing: 0 error(s)
+Validated 287 skills and isolated library mappings
+test_mac_build_script_has_valid_shell_syntax (test_build_config.StudioBuildConfigTests.test_mac_build_script_has_valid_shell_syntax) ... ok
+test_objective_cpp_enabled_by_root_before_targets (test_build_config.StudioBuildConfigTests.test_objective_cpp_enabled_by_root_before_targets) ... ok
+test_single_studio_ctest_invocation_with_quoted_regex (test_build_config.StudioBuildConfigTests.test_single_studio_ctest_invocation_with_quoted_regex) ... ok
+test_working_studio_build_is_optimized_by_default (test_build_config.StudioBuildConfigTests.test_working_studio_build_is_optimized_by_default) ... ok
+test_content_is_not_a_new_project_manifest_schema (test_content_layout.ContentProjectLayoutTests.test_content_is_not_a_new_project_manifest_schema) ... ok
+test_existing_project_opens_ensure_directory_in_studio (test_content_layout.ContentProjectLayoutTests.test_existing_project_opens_ensure_directory_in_studio) ... ok
+test_new_projects_create_content_directory_after_template_copy (test_content_layout.ContentProjectLayoutTests.test_new_projects_create_content_directory_after_template_copy) ... ok
+test_approved_first_cinematic_design_is_documented (test_design_system.StudioDesignSystemTests.test_approved_first_cinematic_design_is_documented) ... ok
+test_components_and_css_classes_are_exported (test_design_system.StudioDesignSystemTests.test_components_and_css_classes_are_exported) ... ok
+test_graph_module_resolution_is_case_insensitive_safe (test_design_system.StudioDesignSystemTests.test_graph_module_resolution_is_case_insensitive_safe) ... ok
+test_loaded_once_and_barrel_exported (test_design_system.StudioDesignSystemTests.test_loaded_once_and_barrel_exported) ... ok
+test_native_gpu_surface_selectors_not_modified_by_shared_css (test_design_system.StudioDesignSystemTests.test_native_gpu_surface_selectors_not_modified_by_shared_css) ... ok
+test_new_screen_style_rules_are_documented_for_agents (test_design_system.StudioDesignSystemTests.test_new_screen_style_rules_are_documented_for_agents) ... ok
+test_root_agent_discovery_and_skill (test_design_system.StudioDesignSystemTests.test_root_agent_discovery_and_skill) ... ok
+test_shared_tokens_and_legacy_compatibility (test_design_system.StudioDesignSystemTests.test_shared_tokens_and_legacy_compatibility) ... ok
+test_native_ownership_and_references (test_entity_debugger.EntityDebuggerTest.test_native_ownership_and_references) ... ok
+test_panel_uses_lossless_refs (test_entity_debugger.EntityDebuggerTest.test_panel_uses_lossless_refs) ... ok
+test_counts_only_legacy_ui_and_tracks_native_boundary (test_migration_audit.StudioMigrationAuditTests.test_counts_only_legacy_ui_and_tracks_native_boundary) ... ok
+test_empty_project (test_migration_audit.StudioMigrationAuditTests.test_empty_project) ... ok
+test_dry_run_does_not_modify_tree (test_new_panel.GeneratorTests.test_dry_run_does_not_modify_tree) ... ok
+test_duplicate_is_rejected_before_any_mutation (test_new_panel.GeneratorTests.test_duplicate_is_rejected_before_any_mutation) ... ok
+test_escapes_title_in_ts_string_literal (test_new_panel.GeneratorTests.test_escapes_title_in_ts_string_literal) ... ok
+test_generator_creates_registered_component_and_styles (test_new_panel.GeneratorTests.test_generator_creates_registered_component_and_styles) ... ok
+test_multiple_panels_preserve_insertion_marker (test_new_panel.GeneratorTests.test_multiple_panels_preserve_insertion_marker) ... ok
+test_refuses_invalid_name_and_preserves_files (test_new_panel.GeneratorTests.test_refuses_invalid_name_and_preserves_files) ... ok
+test_asset_moves_repair_material_paths_using_guid (test_reference_pin_zoom.StudioReferencePinZoomTests.test_asset_moves_repair_material_paths_using_guid) ... ok
+test_asset_picker_reuses_native_catalog_and_existing_drag_mime (test_reference_pin_zoom.StudioReferencePinZoomTests.test_asset_picker_reuses_native_catalog_and_existing_drag_mime) ... ok
+test_clearing_texture_reference_does_not_validate_empty_game_path (test_reference_pin_zoom.StudioReferencePinZoomTests.test_clearing_texture_reference_does_not_validate_empty_game_path) ... ok
+test_global_zoom_persists_and_resizes_native_viewport (test_reference_pin_zoom.StudioReferencePinZoomTests.test_global_zoom_persists_and_resizes_native_viewport) ... ok
+test_import_settings_lock_preserves_asset_context (test_reference_pin_zoom.StudioReferencePinZoomTests.test_import_settings_lock_preserves_asset_context) ... ok
+test_internal_move_rolls_back_file_and_meta_before_commit (test_reference_pin_zoom.StudioReferencePinZoomTests.test_internal_move_rolls_back_file_and_meta_before_commit) ... ok
+test_model_release_invalidates_renderer_caches_first (test_reference_pin_zoom.StudioReferencePinZoomTests.test_model_release_invalidates_renderer_caches_first) ... ok
+test_move_preview_marks_readonly_dependencies_and_guards_commit (test_reference_pin_zoom.StudioReferencePinZoomTests.test_move_preview_marks_readonly_dependencies_and_guards_commit) ... ok
+test_native_material_reference_slots_validate_guid_and_importer (test_reference_pin_zoom.StudioReferencePinZoomTests.test_native_material_reference_slots_validate_guid_and_importer) ... ok
+test_native_move_recovery_integration_targets_exist (test_reference_pin_zoom.StudioReferencePinZoomTests.test_native_move_recovery_integration_targets_exist) ... ok
+test_pinned_inspector_does_not_write_to_global_selection (test_reference_pin_zoom.StudioReferencePinZoomTests.test_pinned_inspector_does_not_write_to_global_selection) ... ok
+test_real_scene_model_render_and_pick_share_instances (test_reference_pin_zoom.StudioReferencePinZoomTests.test_real_scene_model_render_and_pick_share_instances) ... ok
+test_reference_fields_are_schema_typed (test_reference_pin_zoom.StudioReferencePinZoomTests.test_reference_fields_are_schema_typed) ... ok
+test_rigid_cpu_model_triangle_picking_adapter (test_reference_pin_zoom.StudioReferencePinZoomTests.test_rigid_cpu_model_triangle_picking_adapter) ... ok
+test_scene_camera_navigation_is_editor_only (test_reference_pin_zoom.StudioReferencePinZoomTests.test_scene_camera_navigation_is_editor_only) ... ok
+test_scene_selection_hits_rendered_oriented_proxy_not_aabb (test_reference_pin_zoom.StudioReferencePinZoomTests.test_scene_selection_hits_rendered_oriented_proxy_not_aabb) ... ok
+test_shader_graph_pointer_drag_accounts_for_editor_zoom (test_reference_pin_zoom.StudioReferencePinZoomTests.test_shader_graph_pointer_drag_accounts_for_editor_zoom) ... ok
+test_shared_reference_registry_inventory_and_usage_panel (test_reference_pin_zoom.StudioReferencePinZoomTests.test_shared_reference_registry_inventory_and_usage_panel) ... ok
+test_host_keys_and_commit (test_scene_tools.SceneToolsContract.test_host_keys_and_commit) ... ok
+test_native_tools (test_scene_tools.SceneToolsContract.test_native_tools) ... ok
+test_web_toolbar (test_scene_tools.SceneToolsContract.test_web_toolbar) ... ok
+test_panels_have_error_boundary (test_scene_tools.WebRobustnessContract.test_panels_have_error_boundary) ... ok
+test_property_field_hooks_before_early_returns (test_scene_tools.WebRobustnessContract.test_property_field_hooks_before_early_returns) ... ok
+test_bundled_es_modules_resolve_to_local_files (test_web_bundle.StudioBundleTests.test_bundled_es_modules_resolve_to_local_files) ... skipped 'Vite dist unavailable in source-only CI; native build script validates it'
+test_source_has_registered_bundled_scheme (test_web_bundle.StudioBundleTests.test_source_has_registered_bundled_scheme) ... ok
+test_host_uses_shared_runtime_diagnostics (test_world_explorer.WorldExplorerTests.test_host_uses_shared_runtime_diagnostics) ... ok
+test_panel_registered_and_truthful (test_world_explorer.WorldExplorerTests.test_panel_registered_and_truthful) ... ok
+test_background_job_contract (test_world_persistence_panel.WorldPersistencePanelTests.test_background_job_contract) ... ok
+test_confirmation_and_truthful_diagnostics (test_world_persistence_panel.WorldPersistencePanelTests.test_confirmation_and_truthful_diagnostics) ... ok
+test_registered_and_native_guarded (test_world_persistence_panel.WorldPersistencePanelTests.test_registered_and_native_guarded) ... ok
+
+----------------------------------------------------------------------
+Ran 55 tests in 0.062s
+
+OK (skipped=1)

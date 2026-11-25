@@ -119,6 +119,23 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
     // Demo cannot inspect an actual project's materials/rules.
     return [];
   }
+  if (method === 'studio.buildingSurfacePreview') throw Error('Native procedural texture preview unavailable in mock');
+  if (method === 'studio.buildingCatalog') return {styles: []} as StudioResult['studio.buildingCatalog'];
+  if (method === 'studio.buildingRecipes')
+    return {recipes: []} as StudioResult['studio.buildingRecipes'];
+  if (method === 'studio.buildingReadRecipe')
+    throw new Error('Opening project building recipes requires native AIVERSE Studio');
+  if (method === 'studio.buildingStaleMaterials')
+    return {stale: []} as StudioResult['studio.buildingStaleMaterials'];
+  if (method === 'studio.buildingPreview' ||
+      method === 'studio.buildingPreviewStop' || method === 'studio.buildingPreviewView')
+    throw new Error('Interactive building 3D preview requires native AIVERSE Studio');
+  if (method === 'studio.buildingRegenerate')
+    throw new Error('Regenerating building assets requires native AIVERSE Studio');
+  if (method === 'studio.buildingGraphOverlay') throw Error('Native graph overlay unavailable in mock');
+  if (method === 'studio.buildingTextureProvenance') throw Error('Native texture provenance unavailable in mock');
+  if (method === 'studio.buildingInspect' || method === 'studio.buildingGenerate')
+    throw new Error('Generated building meshes require native AIVERSE Studio');
   if (method === 'studio.assets') {
     // Empty DEMO catalog: never imply that mock file names exist in the user project.
     return { files: [], folders: [], root: 'content' };

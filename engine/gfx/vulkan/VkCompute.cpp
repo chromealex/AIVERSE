@@ -433,7 +433,7 @@ bool VulkanDevice::readBufferRangeAsync(BufferHandle handle,size_t offset,size_t
                          VK_PIPELINE_STAGE_TRANSFER_BIT,
                          VK_PIPELINE_STAGE_TRANSFER_BIT,0,
                          1,&before,0,nullptr,0,nullptr);
-    VkBufferCopy region{offset,0,size};
+    VkBufferCopy region{VkDeviceSize(offset),0,VkDeviceSize(size)};
     vkCmdCopyBuffer(cb,source,pending.buffer,1,&region);
     auto after=vkStruct<VkMemoryBarrier>(VK_STRUCTURE_TYPE_MEMORY_BARRIER);
     after.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;

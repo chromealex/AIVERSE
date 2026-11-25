@@ -1,0 +1,244 @@
+name: Building Style Focused
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/building-style-focused.yml'
+      - 'engine/systems/Building*.h'
+      - 'engine/systems/RuntimeBuildingGenerator.h'
+      - 'engine/systems/BuildingFeatureGenerator.h'
+      - 'engine/assets/building-recipes/*.json'
+      - 'tests/libraries/building_feature_tests.cpp'
+      - 'tests/libraries/building_structure_graph_tests.cpp'
+      - 'tests/render/runtime_building_model_compile.cpp'
+      - 'engine/assets/building-styles/*.json'
+      - 'tools/buildings/**'
+      - 'tests/libraries/building*'
+      - 'tools/buildings/verify_setting_glb.py'
+      - 'tests/libraries/building_surface_pattern_tests.cpp'
+      - 'tests/studio/BuildingGenerationTests.cpp'
+      - 'engine/buildings/**'
+      - 'engine/sim/Simulation.*'
+      - 'examples/world/runtime-building/**'
+      - 'CMakeLists.txt'
+      - 'apps/studio-native/StudioBuildingGeneration.h'
+      - 'apps/studio-native/StudioBuildingTopology.h'
+      - 'apps/studio-native/tests/StudioBuildingTopologyTests.cpp'
+      - 'engine/nav/NavMesh.h'
+      - 'engine/game/MapGrid.*'
+      - 'engine/game/MapHpa.cpp'
+      - 'engine/game/FlowField.cpp'
+      - 'tests/studio/BuildingGenerationTests.cpp'
+  workflow_dispatch:
+
+# A single focused run per PR revision. The project-wide CI also runs on this
+# PR; prevent duplicate queued push + pull_request jobs from starving it.
+concurrency:
+  group: building-style-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  model-preview-export:
+    name: Export real procedural building models for visual QA
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile standalone C++ building exporter
+        shell: bash
+        run: |
+          set -euo pipefail
+          g++ -std=c++20 -O1 -Wno-misleading-indentation -I. -Ilibraries/include \
+            tools/buildings/building_style_export.cpp engine/core/Fixed.cpp engine/data/Json.cpp \
+            -o /tmp/aiverse_building_export
+      - name: Generate real sci-fi GLB models, two deterministic seeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/building-preview
+          for kind in barracks command factory depot; do
+            for seed in 3 7; do
+              /tmp/aiverse_building_export --style engine/assets/building-styles/scifi.json \
+                --structure "$kind" --seed "$seed" \
+                --out "build/building-preview/${kind}-seed${seed}.glb"
+            done
+          done
+          # Functional property recipes are independent of architectural setting.
+          for style in scifi modern; do
+            /tmp/aiverse_building_export --style "engine/assets/building-styles/${style}.json" \
+              --recipe engine/assets/building-recipes/multiuse-open.json \
+              --out "build/building-preview/${style}-multiuse-open.glb"
+            /tmp/aiverse_building_export --style "engine/assets/building-styles/${style}.json" \
+              --recipe engine/assets/building-recipes/two-floor-workshop.json \
+              --out "build/building-preview/${style}-two-floor-workshop.glb"
+            /tmp/aiverse_building_export --style "engine/assets/building-styles/${style}.json" \
+              --recipe engine/assets/building-recipes/vertical-circulation.json \
+              --out "build/building-preview/${style}-vertical-circulation.glb"
+          done
+          # Validate the new constructive W/H/D solver separately without
+          # losing default-model screenshots if it still fails some settings.
+          for kind in barracks command factory depot; do
+            if /tmp/aiverse_building_export --style engine/assets/building-styles/scifi.json \
+               --structure "$kind" --size 28 15 24 --seed 42 \
+               --out "build/building-preview/${kind}-28x15x24.glb"; then
+              echo "sized ${kind}: OK"
+            else
+              echo "sized ${kind}: FAILED (constructive fit needs investigation)"
+            fi
+          done
+          find build/building-preview -name '*.glb' -printf '%f %s bytes\n'
+      - name: Real 20-building parametric size and seed QA
+        shell: bash
+        run: |
+          python3 tools/buildings/qa_batch_20.py --root . \
+            --exporter /tmp/aiverse_building_export \
+            --out build/building-preview/batch-20 --allow-failures
+      - name: Preserve 20-building meshes and structured QA reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiverse-building-batch-20
+          path: |
+            build/building-preview/batch-20/*.glb
+            build/building-preview/batch-20/report.csv
+            build/building-preview/batch-20/report.json
+            build/building-preview/batch-20/view-*.command
+          if-no-files-found: error
+          retention-days: 7
+      - name: Preserve raw GLB models for review and actual screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiverse-sci-fi-building-glb
+          path: build/building-preview/*.glb
+          if-no-files-found: error
+          retention-days: 7
+  focused-building:
+    name: Building style generator and GLB export
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile engine-owned building headers without library includes
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Match the engine runtime's dependency direction, not the broader
+          # gameplay-native include search path. Compile each header alone so
+          # earlier includes cannot hide a missing dependency.
+          for header in \
+            engine/systems/BuildingGen.h \
+            engine/systems/BuildingStyle.h \
+            engine/systems/BuildingSurfacePattern.h \
+            engine/systems/BuildingStructure.h \
+            engine/systems/BuildingStructureGraph.h \
+            engine/systems/BuildingFeatureGenerator.h \
+            engine/systems/RuntimeBuildingGenerator.h \
+            engine/systems/BuildingCirculationRuntime.h \
+            engine/systems/BuildingRouteExecutor.h \
+            engine/buildings/BuildingNavMeshBridge.h; do
+            echo "Checking $header (engine include root only)"
+            printf '#include "%s"\n' "$header" | g++ -std=c++20 -I. -x c++ -fsyntax-only -
+          done
+      - name: Compile only the building generator tests and exporter
+        shell: bash
+        run: |
+          set -euo pipefail
+          FLAGS="-std=c++20 -O1 -Wall -Wextra -Werror -Wno-misleading-indentation -pedantic -I. -Ilibraries/include"
+          g++ $FLAGS tests/libraries/building_tests.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_tests
+          g++ $FLAGS tests/libraries/building_style_tests.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_style_tests
+          g++ $FLAGS tools/buildings/building_style_export.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_export
+          g++ $FLAGS tests/libraries/building_runtime_tests.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_runtime_tests
+          g++ -std=c++20 -O1 -Wall -Wextra -Werror -I. \
+            tests/libraries/building_surface_pattern_tests.cpp -o /tmp/aiverse_building_surface_pattern_tests
+          g++ $FLAGS tests/libraries/building_feature_tests.cpp engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_building_feature_tests
+          # Independent of any engine object/library linkage:
+          g++ -std=c++20 -O1 -Wall -Wextra -Werror -I. \
+            tests/libraries/building_structure_graph_tests.cpp -o /tmp/aiverse_building_structure_graph_tests
+          # Compile the Renderer3D adapter even without a live GPU in CI.
+          g++ $FLAGS tests/libraries/building_dual_leaf_restore_tests.cpp \
+            engine/world/SpatialWorld.cpp engine/core/Fixed.cpp engine/data/Json.cpp \
+            -o /tmp/aiverse_building_dual_leaf_restore_tests
+          g++ $FLAGS apps/studio-native/tests/StudioBuildingTopologyTests.cpp \
+            engine/core/Fixed.cpp engine/data/Json.cpp -o /tmp/aiverse_studio_building_topology_tests
+          g++ $FLAGS -fsyntax-only tests/render/runtime_building_model_compile.cpp
+          g++ $FLAGS -fsyntax-only examples/world/runtime-building/main.cpp
+      - name: Run genre-neutral building regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/aiverse_building_tests
+          /tmp/aiverse_building_style_tests "$GITHUB_WORKSPACE"
+          /tmp/aiverse_building_runtime_tests "$GITHUB_WORKSPACE"
+          /tmp/aiverse_building_feature_tests "$GITHUB_WORKSPACE"
+          /tmp/aiverse_building_structure_graph_tests
+          /tmp/aiverse_building_surface_pattern_tests
+          /tmp/aiverse_building_dual_leaf_restore_tests
+          /tmp/aiverse_studio_building_topology_tests
+      - name: Export all twelve procedural architectural PBR styles
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/building-settings-qa
+          for id in medieval-fantasy dark-fantasy steampunk cyberpunk scifi-space alien-civilization post-apocalypse modern ancient-civilizations asian-historical solarpunk underwater; do
+            /tmp/aiverse_building_export --style "engine/assets/building-styles/$id.json" \
+              --structure residence --seed 17 \
+              --out "build/building-settings-qa/$id.glb"
+          done
+      - name: Verify actual GLB2 image buffers and embedded PBR PNG channels
+        shell: bash
+        run: python3 tools/buildings/verify_setting_glb.py build/building-settings-qa
+      - name: Preserve generated setting GLBs for offline renderer review
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiverse-twelve-building-settings-pbr
+          path: build/building-settings-qa/*.glb
+          if-no-files-found: error
+          retention-days: 7
+      - name: Compile native Studio asset generation contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          FLAGS="-std=c++20 -O1 -Wall -Wextra -Werror -Wno-misleading-indentation -pedantic -I. -Ilibraries/include"
+          g++ $FLAGS tests/studio/BuildingGenerationTests.cpp apps/studio-native/StudioAssetCatalog.cpp \
+            engine/core/Fixed.cpp engine/data/Json.cpp -lsqlite3 \
+            -o /tmp/aiverse_studio_building_tests
+      - name: Run native Studio content/GUID acceptance
+        shell: bash
+        run: /tmp/aiverse_studio_building_tests "$GITHUB_WORKSPACE"
+      - name: Export four sci-fi functions at the requested exact envelope
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/aiverse-buildings
+          for kind in barracks command factory depot; do
+            /tmp/aiverse_building_export --style engine/assets/building-styles/scifi.json \
+              --structure "$kind" --size 28 15 24 --seed 42 \
+              --out "/tmp/aiverse-buildings/$kind.glb"
+          done
+      - name: Check GLB header, mesh bounds and distinct silhouettes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, struct
+          meshes = []
+          for path in sorted(pathlib.Path('/tmp/aiverse-buildings').glob('*.glb')):
+              data = path.read_bytes()
+              magic, version, length = struct.unpack_from('<III', data)
+              assert magic == 0x46546c67 and version == 2 and length == len(data), path
+              count, kind = struct.unpack_from('<II', data, 12)
+              assert kind == 0x4e4f534a
+              doc = json.loads(data[20:20+count])
+              assert doc['meshes'] and doc['accessors'], path
+              bounds = [a for a in doc['accessors'] if a.get('type') == 'VEC3' and 'min' in a and 'max' in a]
+              assert bounds, path
+              lo,hi = bounds[0]['min'],bounds[0]['max']
+              assert all(abs(lo[i]) < .002 for i in range(3)), (path, lo)
+              assert all(abs(hi[i]-[28.,15.,24.][i]) < .002 for i in range(3)), (path, hi)
+              triangles = sum(a['count']//3 for a in doc['accessors'] if a.get('type') == 'SCALAR' and a.get('componentType') == 5125)
+              assert 0 < triangles < 20000, (path, triangles)
+              meshes.append((path.stem, triangles))
+          assert len(meshes) == 4
+          print('building focused GLB export:', meshes)
+          PY

@@ -1,0 +1,12 @@
+{
+  "sha": "b730fc08d77641c44c19285a8677364391fe8dec",
+  "argv": [
+    "/bin/bash",
+    "-e",
+    "-c",
+    "\nroot=/Volumes/KINGSTON/AIVERSE-builds/caverns-stage59\nlinux=\"$root/stage30-linux\"\ncompiler=\"$linux/aarch64-unknown-linux-gnu/bin/aarch64-unknown-linux-gnu-g++\"\n\"$compiler\" --version\n\"$compiler\" -std=c++20 -Werror=class-memaccess -I. -Iengine -Ilibraries/include -c engine/fx/SpectraGpuParticles.cpp -o \"$linux/SpectraGpuParticles.o\"\nfile \"$linux/SpectraGpuParticles.o\"\nbuild=\"$root/0f4394d81d798f28bfdf6b5e43991057a9e7636b\"\ntest \"$(git -C /private/tmp/aiverse-building-caverns-integration rev-parse HEAD)\" = \"$(git rev-parse HEAD)\"\ncmake --build \"$build\" --target aiverse_spectrafx_metal_allocator_test -j 6\nctest --test-dir \"$build\" --no-tests=error -V -R \"^spectrafx_metal_allocator$\" > \"$root/stage30-metal-test.log\"\ncat \"$root/stage30-metal-test.log\"\nrg -q \"PASS owned checkpoint procedural=0\" \"$root/stage30-metal-test.log\"\nrg -q \"PASS owned checkpoint procedural=1\" \"$root/stage30-metal-test.log\"\n"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/spectrafx-gcc-checkpoint-b730fc08d.log.txt",
+  "sha256": "01d0044e72a54ab28f67a38f17e905eb62f6a5e2d69324c8e8eb3c659669ac59"
+}

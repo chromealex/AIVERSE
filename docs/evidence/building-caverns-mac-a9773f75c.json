@@ -1,0 +1,16 @@
+{
+  "sha": "a9773f75c9ea21ff4255609d3701d941f4bc2e13",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/caverns-stage59/0f4394d81d798f28bfdf6b5e43991057a9e7636b",
+    "-R",
+    "caverns|^vfx_graph_ops$|^terraweave_native_micro|^editor_lua_inspector_sandbox$",
+    "--output-on-failure",
+    "-j",
+    "4"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/building-caverns-mac-a9773f75c.log.txt",
+  "sha256": "8dc99c99b0132dda957e3b449ee225cd8c7eb9ce340a2509564f10874afc8bff"
+}

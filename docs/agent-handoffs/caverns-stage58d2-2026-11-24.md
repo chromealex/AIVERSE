@@ -1,0 +1,11 @@
+# Caverns Stage58d2 — orbit and floating-origin presentation
+
+Date: 2026-11-24. Branch `integration/caverns-studio-stage54c-20261124`. Start 7f56befd5c9a4beef00e562266f2f8a15d6be4dd; roadmap d5d9706deb2d8d5ef761fdd9d778d7366738d821; implementation ef287385190e27d78d21fc14c8f3a3e9efe97c33.
+
+- `PlanetCavernsDemo.cpp`: real star/planet Surface orbit hierarchy (planet index 1), simulation body anchor remains fixed. Optional `--moving-view` every 30 simulation ticks publishes a frozen orbit time, body-following LENS view origin and alternating bounded local translation/rotation. Existing host reprojects actual GI geometry, publishes the body-attached lamp and star direction, and uses the same frame/time in planet/cave rendering, camera and probe focus. Checks ECS checksum, Box3D tick and SpatialWorld mutation identity unchanged by rebase. Bounded smoke requires a rebase as well as arrival. Stops/quarantines on inconsistent publication.
+- `TerraWeaveCavernsPlanetGiViewFrame.h`: exact canonical unleased GI baseline remap from original fixed vertices, rejects ambiguous projected identities, missing chunks/vertices and nonfinite data. No accumulation of inverse float transform drift; leased cave geometry continues to use existing exact body sources. Existing collision fixture source adds exact remap/refusal checks.
+- Updated registered skill, area docs and native README. No core persistent or editor schema changes, no new geometry/physics owner.
+
+Evidence: source commits only. No compilation/link, actual orbital presentation, GI frame comparison, full scenario execution, CTest, CPU/GPU/Metal, headless, save/restore, performance, Studio/MCP or Mac acceptance. No mounted KINGSTON Mac build environment. Rebase is discrete, bounded and fully invalidates CPU GI history; not continuous scrolling, arbitrary-size floating origin or production orbit performance evidence. The demo contains one local planet patch and a star; star lighting is directional, not a star mesh GI producer. No confirmed runtime arrival or rebase. Default client and main unchanged.
+
+Next Stage58d3: synchronized native snapshot save/restore scenario, including actual actor proxy position/velocity/orientation, route/travel/swim state, canonical lease invalidation and frame regeneration. Then build and exercise all scenarios, fix real failures before claiming completion.

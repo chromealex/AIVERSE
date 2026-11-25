@@ -1,0 +1,1 @@
+PASS SpectraFX MCP graph CRUD, validation, variants, bake, path safety and old-effect isolation

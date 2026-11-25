@@ -1,0 +1,7 @@
+# Caverns two-sided seam regeneration and Studio verification
+
+Code commit `095717ccc` updates `engine/world/TerraWeaveCavernsSeamGate.h` to dispatch the oldest requested repair first. A requeued chunk can otherwise starve its neighbor with a single worker. Tests in `tests/terraweave_caverns_{seam_gate,async_rebuild,snapshot_workers,mixed_shard,shard_gpu_host}_test.cpp` cover both a stitchable subdivision and divergent contours, asynchronous completion of both requests, and interior shard geometry. The five regressions plus the native editor case passed on macOS in 9.11 seconds.
+
+All six rebuilt native demo scenarios passed after Stage 13 in 81.76 seconds. The full automated Building acceptance runner exited 0 on `f8e433eb2`, including 9 native tests. Report lives in `/Volumes/KINGSTON/AIVERSE-builds/building-caverns-gate-build/stage37-studio/reports/20261124T211603Z-96469`.
+
+Native Studio on that Building commit opened an isolated copy of boss_arena at `/private/tmp/aiverse-building-ui.wx1xEt/Building-QA`. Preview showed the generated building in the side panel alongside the original Scene. Generate GLB exported 16,848,632 bytes, 16 materials, 64 embedded images and a recipe. Evaluate 3 seeds showed one room, four exterior entrances and one connected group. The Caverns panel's Read current map incorrectly reported a changed document. Next verify document identity across the WKWebView bridge, rerun the full Caverns suite, and resolve integration scope before main.
