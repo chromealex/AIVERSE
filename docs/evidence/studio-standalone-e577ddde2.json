@@ -1,0 +1,12 @@
+{
+  "sha": "e577ddde2a078977a414a4112d553840f03bdf1b",
+  "argv": [
+    "python3",
+    "-B",
+    "apps/studio-native/tests/standalone_bundle.py",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/standalone-acceptance/AiverseStudioHTML5.app"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-standalone-e577ddde2.log.txt",
+  "sha256": "1c7032858c955f0012c58eef43768d1505667e3de35b9d3ca04b4201b7744db6"
+}
