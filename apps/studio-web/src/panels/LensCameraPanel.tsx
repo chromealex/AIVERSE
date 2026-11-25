@@ -1,6 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Camera, Plus, Save, Trash2 } from 'lucide-react';
-import { invoke } from '../bridge';
+import { invoke, onNativeEvent } from '../bridge';
+import SpectraDockViewport from './SpectraDockViewport';
 import './LensCameraPanel.css';
 
 const optics = [
@@ -16,6 +17,7 @@ interface CameraRecord {
   id: number;
   name?: string;
   position?: number[];
+  rotation?: number[];
   lens?: Lens;
   rig?: {mode?:number;enabled?:boolean;trackTarget?:boolean;offset?:number[];distance?:number;yaw?:number;pitch?:number;smoothing?:number};
   update?: {mode?:number;everyNFrames?:number;rateHz?:number};
@@ -93,11 +95,13 @@ export default function LensCameraPanel({project, operations}:{project:string; o
       </div>
       {(error||notice)&&<p className={'lens-message '+(error?'is-error':'')} role={error?'alert':'status'}>{error||notice}</p>}
       <div className="lens-layout">
+        {scene&&scene.cameras.length>0&&<label className="lens-camera-picker">Selected camera<select className="au-input" value={selected??''} onChange={e=>setSelected(Number(e.target.value))}>{scene.cameras.map(item=><option key={item.id} value={item.id}>{item.name||'Camera '+item.id}</option>)}</select></label>}
         <aside aria-label="Project cameras">{scene?.cameras.map(item=><button type="button" key={item.id} aria-label={item.name||'Camera '+item.id} aria-pressed={selected===item.id} onClick={()=>setSelected(item.id)}><Camera size={15}/><span>{item.name||'Camera '+item.id}</span><small>#{item.id}</small></button>)}</aside>
         <form id="lens-camera-form" onSubmit={event=>{event.preventDefault();if(dirty&&!busy)void refresh(true);}}>
           {!camera?<p>{busy?'Loading cameras…':scene?'Create a camera to configure its view and output.':'Camera scene unavailable.'}</p>:<fieldset disabled={busy}>
             <div className="lens-title"><label>Camera name<input className="au-input" value={camera.name??''} onChange={e=>update({name:e.target.value})}/></label>
               <button type="button" aria-label="Remove selected camera" title="Remove selected camera" className="au-button au-button--icon" onClick={remove}><Trash2 size={15}/></button></div>
+            <CameraPreview key={camera.id} project={project} scene={scene!} camera={camera} onChange={update}/>
             <h4>View</h4>
             <div className="lens-fields"><label>Projection<select className="au-input" value={view.projection??'perspective'} onChange={e=>viewField({projection:e.target.value})}><option value="perspective">Perspective</option><option value="ortho">Orthographic</option></select></label>
             {view.projection==='ortho'?<NumberField label="Orthographic half-height" value={view.orthographicHalfHeight??10} onValue={v=>viewField({orthographicHalfHeight:v})}/>:<NumberField label="Vertical FOV (degrees)" value={+(180*(view.fov??.75)/Math.PI).toFixed(4)} onValue={v=>viewField({fov:v*Math.PI/180})}/>}
@@ -153,4 +157,57 @@ function CameraOptions({camera,normalized,onChange}:{camera:CameraRecord;normali
       {viewport.enabled&&<div className="lens-fields">{([['x','Viewport X',0],['y','Viewport Y',0],['width','Viewport width',1],['height','Viewport height',1]] as const).map(([key,label,base])=><NumberField key={key} label={label} value={viewport[key]??base} onValue={v=>onChange({viewport:{...camera.viewport,[key]:v}})}/>)}</div>}
     </details>
   </>;
+}
+
+function CameraPreview({project,scene,camera,onChange}:{project:string;scene:CameraScene;camera:CameraRecord;onChange:(patch:Partial<CameraRecord>)=>void}) {
+  const [visible,setVisible]=useState(false);
+  const [publishedCamera,setPublishedCamera]=useState('');
+  const draftSignature=useMemo(()=>JSON.stringify(camera),[camera]);
+  const published=!!publishedCamera;
+  const needsUpdate=published&&publishedCamera!==draftSignature;
+  const [capturing,setCapturing]=useState(false);
+  const [saved,setSaved]=useState('');
+  const mounted=useRef(true);
+  const preview=useRef<HTMLElement>(null);
+  useLayoutEffect(()=>{if(published)preview.current?.scrollIntoView({block:'nearest'});},[published]);
+  const [message,setMessage]=useState('');
+  const [busy,setBusy]=useState(false);
+  useEffect(()=>{
+    mounted.current=true;
+    const stop=onNativeEvent((event,payload)=>{
+      if(event==='lens.previewError'){setVisible(false);setPublishedCamera('');setCapturing(false);setMessage(typeof payload==='string'?payload:(payload as {message?:string})?.message??'Camera preview failed');}
+      if(event==='lens.capture'){
+        const result=payload as {id:number;project:string;path?:string;error?:string};
+        if(result?.id===camera.id&&result.project===project){setCapturing(false);setSaved(result.path??'');setMessage(result.error??'');}
+      }
+    });
+    return ()=>{mounted.current=false;stop();void invoke('studio.lensPreview',{project,close:true}).catch(()=>{});};
+  },[project]);
+  async function publish() {
+    setVisible(true);setBusy(true);setMessage('');
+    try {await invoke('studio.lensPreview',{project,document:scene,id:camera.id});setPublishedCamera(draftSignature);}
+    catch(e){if(!published)setVisible(false);setMessage(e instanceof Error?e.message:String(e));}
+    finally{setBusy(false);}
+  }
+  async function capture(){
+    setCapturing(true);setSaved('');setMessage('');
+    try{await invoke('studio.lensPreview',{project,capture:true,id:camera.id});}
+    catch(e){setCapturing(false);setMessage(e instanceof Error?e.message:String(e));}
+  }
+  async function copyView(){
+    setBusy(true);setMessage('');
+    try{
+      const pose=await invoke('studio.lensPreview',{project,copyScene:true});
+      if(mounted.current&&pose.position&&pose.rotation)onChange({position:pose.position,rotation:pose.rotation});
+    }catch(e){setMessage(e instanceof Error?e.message:String(e));}finally{setBusy(false);}
+  }
+  return <section ref={preview} className="lens-model-preview"><div className="lens-flags">
+    <button className="au-button au-button--sm" type="button" disabled={busy||capturing} onClick={()=>void publish()}>{published?'Update preview':'Preview camera'}</button>
+    <button className="au-button au-button--sm" type="button" disabled={busy} onClick={()=>void copyView()}>Copy Scene pose</button>
+    {published&&<button className="au-button au-button--sm" type="button" disabled={busy||capturing||needsUpdate} title={needsUpdate?'Update the preview to capture your changes':'Save the displayed camera frame to captures/lens'} onClick={()=>void capture()}>{capturing?'Capturing…':'Capture PNG'}</button>}</div>
+    {needsUpdate&&<p className="lens-message" role="status">Camera settings changed. Update the preview to capture this view.</p>}
+    {saved&&!needsUpdate&&<p className="lens-message" role="status">{saved}</p>}
+    {message&&<p className="lens-message is-error" role="alert">{message}</p>}
+    {visible&&<SpectraDockViewport id="lensCamera" label="Selected camera preview"/>}
+  </section>;
 }

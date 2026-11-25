@@ -74,6 +74,12 @@ The sections below retain the original design and staged implementation
 history. Their older “planned / NOT RUN” labels describe those checkpoints;
 use the dated validation handoff for the current tested status.
 
+## Cameras in HTML5 Studio
+
+Open **Actors & Cameras → Cameras**. The project camera list becomes a picker in a narrow dock. Edit a camera's projection, clipping planes, position, optics, rig, refresh policy and output. **Save cameras** validates the draft using the LENS loader and checks the revision of `cameras.json`. **Discard edits** restores the loaded document.
+
+**Preview camera** draws the selected view of the current map inside the camera panel. **Copy Scene pose** copies the position and orientation of an initialized Scene camera into the draft. After changing settings, click **Update preview**, then **Capture PNG**. The capture has the dimensions of the displayed preview. Studio shows the resulting project-relative path under `captures/lens/`.
+
 ## Engine skills and MCP authoring
 
 Use [LENS authoring](../skills/visuals/aiverse-lens/SKILL.md) for project data and

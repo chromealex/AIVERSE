@@ -992,6 +992,14 @@
           "titleEn": "Third-person camera for characters",
           "text": "Камера-штанга с плечом, обходом препятствий и стеком профилей становится телом LENS и включается в FPS-клиенте; прицел из камеры сводится к лучу персонажа.",
           "textEn": "The boom camera with a shoulder, obstacle avoidance and a profile stack becomes a LENS body and runs in the FPS client; the camera crosshair converges on the character's ray."
+        },
+        {
+          "status": "in-progress",
+          "target": "3.1.0",
+          "title": "Камеры в HTML5 Studio",
+          "titleEn": "Cameras in HTML5 Studio",
+          "text": "Редактирование cameras.json, отдельное превью камеры и захват кадров в окне Actors & Cameras.",
+          "textEn": "Edit cameras.json, preview the selected camera and capture its output in Actors & Cameras."
         }
       ],
       "taglineEn": "Cameras and cinematic frames",

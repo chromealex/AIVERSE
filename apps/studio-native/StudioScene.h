@@ -416,6 +416,9 @@ public:
     // Scene brush ring under the cursor (radius in world units); hidden when visible=false.
     // Texture Resources / Frame Capture panels: live GPU textures (format-based size estimate) and draw calls.
     Json textureResources() const;
+    Json lensViewPose() const;
+    Json configureLensCamera(const Json& params);
+    bool lensCameraReady() const {return lensCamera_.has_value();}
     Json attachmentCommand(const std::string& project,const Json& params);
     void drawAttachments(int width,int height);
     void drawAnimationPose(int width,int height,const std::shared_ptr<const render::Model>& source,
@@ -669,6 +672,7 @@ private:
     render::PostFx antialiasing_;
     bool spectraDockHdr_=false;
     render::Camera camera_;
+    std::optional<render::Camera> lensCamera_;
     render::AdaptiveShadowResolution shadowResolution_;
     bool cameraInitialized_ = false;
     // Short eased transition for focus / axis snaps; any direct input cancels it.

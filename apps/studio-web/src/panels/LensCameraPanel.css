@@ -15,3 +15,6 @@
 @container studio-page (min-width:560px){.lens-layout{grid-template-columns:minmax(135px,.6fr) minmax(0,2fr)}}
 .lens-optics{margin-top:12px;padding:8px;border:1px solid var(--au-line);border-radius:5px}.lens-optics summary{cursor:pointer;color:var(--au-text-soft)}.lens-optics .lens-fields{margin-top:10px}.lens-flags{display:flex;gap:14px;flex-wrap:wrap}
 .lens-fields{align-items:end}.lens-fields .au-input{min-height:30px}.lens-layout aside{align-self:start}
+.lens-model-preview{margin-top:10px}.lens-model-preview .asset-native-surface{margin-top:8px;height:clamp(150px,27vh,285px);border-radius:6px}
+.lens-layout .lens-camera-picker{display:none}
+@container studio-page (max-width:559px){.lens-layout .lens-camera-picker{display:grid}.lens-layout aside{display:none}.lens-layout{gap:8px}}

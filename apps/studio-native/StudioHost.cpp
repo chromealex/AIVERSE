@@ -10,6 +10,8 @@
 #include "apps/studio-native/StudioBuildingPanelPreview.h"
 #include "apps/studio-native/StudioTerrainGeometry.h"
 #include "apps/editor/core/BrandingOps.h"
+#include "apps/editor/core/GraphAssetTransaction.h"
+#include <chrono>
 #include "apps/editor/core/BuildTool.h"
 #include "apps/editor/core/Projects.h"
 #include <algorithm>
@@ -130,7 +132,7 @@ void StudioHost::shutdown() {
     game_.reset(); // hosted client and its device retire before the native surface
     if (renderThread_) {
         // The Scene and its GPU resources are released on their owner thread, then the thread stops.
-        try { renderThread_->invoke([&] { attachmentSurface_.renderer.reset(); animationGraphSurface_.renderer.reset(); animationRigSurface_.renderer.reset(); appearanceSurface_.renderer.reset(); characterSurface_.renderer.reset(); facialRigSurface_.renderer.reset(); materialSurface_.renderer.reset(); shaderSurface_.renderer.reset(); fxPreview_.reset(); preview_.reset(); }); } catch (const std::exception&) {}
+        try { renderThread_->invoke([&] { lensSurface_.renderer.reset(); attachmentSurface_.renderer.reset(); animationGraphSurface_.renderer.reset(); animationRigSurface_.renderer.reset(); appearanceSurface_.renderer.reset(); characterSurface_.renderer.reset(); facialRigSurface_.renderer.reset(); materialSurface_.renderer.reset(); shaderSurface_.renderer.reset(); fxPreview_.reset(); preview_.reset(); }); } catch (const std::exception&) {}
         renderThread_->stop();
         renderThread_.reset();
     }
@@ -384,6 +386,43 @@ void StudioHost::tickGame() {
     }
     session_->setBuildingGraphReader(game_->buildingGraphReader());
 }
+void StudioHost::captureLensFrame(int64_t cameraId) {
+    if (!lensSurface_.renderer || lensCameraId_!=cameraId || !lensSurface_.placement.visible)
+        throw std::runtime_error("Open this camera preview to capture a frame");
+    if (lensShot_) throw std::runtime_error("A camera capture is already pending");
+    auto shot = std::make_shared<AgentShot>();
+    onScene([&] { lensSurface_.renderer->captureNextFrame([shot](int w,int h,std::vector<uint8_t> pixels) {
+        try {
+            if (w>0 && h>0 && int64_t(w)*h<=16*1024*1024 && size_t(w)*size_t(h)*4==pixels.size()) {
+                for (size_t i=3;i<pixels.size();i+=4) pixels[i]=255;
+                shot->png=encodePng(pixels,w,h);
+            }
+        } catch (const std::exception&) {}
+        shot->done.store(true);
+    }); });
+    lensShot_=std::move(shot);
+    lensCaptureStarted_=platform_.now();
+}
+void StudioHost::finishLensCapture() {
+    if (!lensShot_) return;
+    if (lensProject_!=session_->workspace().project.dir) {lensShot_.reset();return;}
+    if (!lensShot_->done.load() && platform_.now()-lensCaptureStarted_<12) return;
+    auto shot=std::move(lensShot_);
+    Json status=Json::object();
+    status.set("id",Json::number(lensCameraId_));
+    status.set("project",Json::string(lensProject_));
+    try {
+        if (!shot->done.load() || shot->png.empty()) throw std::runtime_error("Camera frame readback failed");
+        const auto stamp=std::chrono::system_clock::now().time_since_epoch().count();
+        const auto relative=fs::path("captures")/"lens"/("camera-"+std::to_string(lensCameraId_)+"-"+std::to_string(stamp)+".png");
+        const auto file=fs::path(lensProject_)/relative;
+        editor::graph_asset::Transaction transaction(file,lensProject_);
+        if(fs::exists(transaction.target()))throw std::runtime_error("Capture file already exists");
+        transaction.replace(shot->png,80*1024*1024);
+        status.set("path",Json::string(relative.generic_string()));
+    }catch(const std::exception& e){status.set("error",Json::string(e.what()));}
+    sendEventPayload("lens.capture",status);
+}
 void StudioHost::tickAgentScreenshot() {
     if (agentShot_) {
         // The capture callback may run on a GPU completion thread; it encodes there and flags done.
@@ -453,6 +492,7 @@ void StudioHost::pollAgentRequests() {
 }
 StudioHost::AssetSurface& StudioHost::assetSurface(StudioSurface surface) {
     switch(surface){
+    case StudioSurface::LensCamera:return lensSurface_;
     case StudioSurface::Attachments:return attachmentSurface_;
     case StudioSurface::AnimationGraph:return animationGraphSurface_;
     case StudioSurface::AnimationRig:return animationRigSurface_;
@@ -743,6 +783,22 @@ void StudioHost::tick() {
     }
     tickAgentScreenshot();
     pollAgentRequests();
+    finishLensCapture();
+    if(lensSurface_.renderer && lensProject_!=session_->workspace().project.dir) surfaceDetached(StudioSurface::LensCamera);
+    if(lensSurface_.renderer && lensSurface_.placement.visible && platform_.surfaceDrawable(StudioSurface::LensCamera)) {
+        try {
+            onScene([&] { platform_.sceneThreadScope([&] {
+                if(!lensSurface_.renderer->lensCameraReady())return;
+                const auto& ws=session_->workspace();
+                lensSurface_.renderer->frame(lensSurface_.placement.pixelsW,lensSurface_.placement.pixelsH,
+                    ws.map,ws.map.data.worldSpace,"","",Json{},0,float(ws.project.rules.levelHeight.toDouble()),
+                    ws.project.dir,ws.project.rulesJson);
+            }); });
+        } catch(const std::exception& e) {
+            sendEvent("lens.previewError",e.what());
+            surfaceDetached(StudioSurface::LensCamera);
+        }
+    }
     if(attachmentSurface_.renderer&&attachmentProject_!=session_->workspace().project.dir)surfaceDetached(StudioSurface::Attachments);
     if(attachmentSurface_.renderer&&attachmentSurface_.placement.visible&&platform_.surfaceDrawable(StudioSurface::Attachments)){
         try{onScene([&]{platform_.sceneThreadScope([&]{attachmentSurface_.renderer->drawAttachments(attachmentSurface_.placement.pixelsW,attachmentSurface_.placement.pixelsH);});});}
@@ -2708,13 +2764,13 @@ void StudioHost::applyViewport(const Json& params) {
         else if (game_) game_->suspend();
         return;
     }
-    if(id=="shader"||id=="material"||id=="facialRig"||id=="character"||id=="appearance"||id=="animationGraph"||id=="animationRig"||id=="attachments") {
-        const auto surface=id=="attachments"?StudioSurface::Attachments:id=="animationRig"?StudioSurface::AnimationRig:id=="animationGraph"?StudioSurface::AnimationGraph:id=="character"?StudioSurface::Character:id=="appearance"?StudioSurface::Appearance:id=="facialRig"?StudioSurface::FacialRig:id=="shader"?StudioSurface::Shader:StudioSurface::Material;
+    if(id=="shader"||id=="material"||id=="facialRig"||id=="character"||id=="appearance"||id=="animationGraph"||id=="animationRig"||id=="attachments"||id=="lensCamera") {
+        const auto surface=id=="lensCamera"?StudioSurface::LensCamera:id=="attachments"?StudioSurface::Attachments:id=="animationRig"?StudioSurface::AnimationRig:id=="animationGraph"?StudioSurface::AnimationGraph:id=="character"?StudioSurface::Character:id=="appearance"?StudioSurface::Appearance:id=="facialRig"?StudioSurface::FacialRig:id=="shader"?StudioSurface::Shader:StudioSurface::Material;
         auto& asset=assetSurface(surface);
         NativeViewportPlacement placed;
         if(platform_.placeSurface(surface,rect,placed)){
             asset.placement=placed;
-            if(!placed.visible){asset.error.clear();if(surface!=StudioSurface::Attachments&&asset.renderer)onScene([&]{asset.renderer.reset();});}
+            if(!placed.visible){asset.error.clear();if(surface!=StudioSurface::LensCamera&&surface!=StudioSurface::Attachments&&asset.renderer)onScene([&]{asset.renderer.reset();});}
         }
         return;
     }
@@ -3530,15 +3586,25 @@ void StudioHost::handleMessage(const std::string& json) {
                 if (req["params"].getBool("textures")) result.set("gpu", onScene([&] { return preview_->textureResources(); }));
             } else result.set("error", Json::string("The Scene panel is not visible"));
             reply.set("result", std::move(result));
-        } else if (method == "studio.attachmentsPreview") {
+        } else if (method == "studio.attachmentsPreview" || method == "studio.lensPreview") {
+            const bool lens = method == "studio.lensPreview";
+            const auto surface = lens ? StudioSurface::LensCamera : StudioSurface::Attachments;
+            auto& asset = assetSurface(surface);
+            auto& ownerProject = lens ? lensProject_ : attachmentProject_;
             const auto& params = req["params"];
             const auto& project = session_->workspace().project.dir;
             if (project.empty() || params.getStr("project") != project)
                 throw std::runtime_error("Project changed");
             Json result = Json::object();
-            if (params.getBool("close")) {
-                onScene([&] { attachmentSurface_.renderer.reset(); });
-                attachmentProject_.clear();
+            if (lens && params.getBool("capture")) {
+                captureLensFrame(params.getInt("id"));
+            } else if (lens && params.getBool("copyScene")) {
+                if (!preview_) throw std::runtime_error("Open Scene to copy its camera");
+                result = onScene([&] { return preview_->lensViewPose(); });
+            } else if (params.getBool("close")) {
+                onScene([&] { asset.renderer.reset(); });
+                if(lens){lensShot_.reset();lensCameraId_=0;}
+                ownerProject.clear();
             } else {
                 const bool publishing = params["document"].isObject();
                 if (!renderThread_) {
@@ -3549,12 +3615,17 @@ void StudioHost::handleMessage(const std::string& json) {
                 }
                 onScene([&] {
                     platform_.sceneThreadScope([&] {
-                        if (!attachmentSurface_.renderer || attachmentProject_ != project) {
+                        if (!asset.renderer || ownerProject != project) {
                             if (!publishing) throw std::runtime_error("Open the attachment preview first");
-                            attachmentSurface_.renderer = std::make_unique<StudioScene>(platform_.createDevice(StudioSurface::Attachments));
-                            attachmentProject_ = project;
+                            asset.renderer = std::make_unique<StudioScene>(platform_.createDevice(surface));
+                            if(lens)asset.renderer->setContinuousRedraw(false);
+                            ownerProject = project;
                         }
-                        result = attachmentSurface_.renderer->attachmentCommand(project, params);
+                        if (lens) {
+                            if(lensShot_)throw std::runtime_error("Wait for the camera capture");
+                            result=asset.renderer->configureLensCamera(params);
+                            lensCameraId_=params.getInt("id");
+                        } else result=asset.renderer->attachmentCommand(project,params);
                     });
                 });
             }

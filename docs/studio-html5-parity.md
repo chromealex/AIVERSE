@@ -187,7 +187,7 @@ Derived from actual AIVERSE_EDITOR_WINDOW registrations in apps/editor/windows. 
 | `tools` | `apps/editor/windows/ToolsWindow.cpp` | Scene toolbar (Q/W/E/R, snap, pivot, bookmarks) and brushes |
 | `water` | `apps/editor/windows/WaterWindow.cpp` | Op panel (Workspace ops, schema forms, History steps; stage 108/110) + Scene river drawing (111) |
 | `static-geometry` | `apps/editor/windows/StaticGeometryWindow.cpp` | Static Geometry lists the configured scene and writes per-instance Auto/STRATA/LOD (47396ae81). Independent native processes verified saving all three modes to a custom scene path and reloading. Live renderer counters and selection decisions remain outstanding. |
-| `lens_cameras` | `apps/editor/windows/StudioCamerasWindow.cpp` | Partial. Actors & Cameras exposes lens scene and camera operations. Dedicated camera preview, capture and recorder need equivalent interactive acceptance. |
+| `lens_cameras` | `apps/editor/windows/StudioCamerasWindow.cpp` | Actors & Cameras edits camera records and captures its own native preview to PNG. Mac docked and wide captures verified at two field-of-view settings. Follow presets, Use in Scene and Windows acceptance remain open. |
 
 **2026-11-25 inventory check.** The original table covered 49 C++ registration files. Scanning apps/editor/windows for lines beginning with AIVERSE_EDITOR_WINDOW found 51, including the two rows above. HTML panel counts measure a different inventory: the workspace redesign checked 59 registered HTML panels at desktop and narrow widths. The acceptance gallery verifies opening and layout. See [workspace verification](handoff/studio-html5/workspace-redesign-2026-11-25.md) for fixture and platform limits.
 

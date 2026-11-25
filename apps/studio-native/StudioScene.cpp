@@ -4,6 +4,10 @@
 #include "apps/editor/AuthoringWater.h"
 #include "apps/studio-native/StudioScene.h"
 #include "apps/studio-native/StudioAttachmentPreview.h"
+#include "engine/render/CameraCaptureViews.h"
+#include "engine/render/EcsCameraRender.h"
+#include "engine/render/CameraRig.h"
+#include "engine/sim/CameraSceneAsset.h"
 #include "apps/editor/core/TextureGraphGpuPreview.h"
 #include "engine/view/AppearanceAssetRegistry.h"
 #include "apps/studio-native/StudioPlanetLiveBudget.h"
@@ -1992,6 +1996,7 @@ void StudioScene::frameAll(const editor::MapDoc& map,bool fpsProject) {
     startTween((lo+hi)*.5f,std::clamp(std::max({size.x,size.y,size.z,1.0f})*1.2f,2.0f,100000.0f),camera_.yaw,camera_.pitch);
 }
 render::Camera StudioScene::viewCamera() const {
+    if(lensCamera_)return *lensCamera_;
     render::Camera view=camera_;
     view.zNear=std::clamp(camera_.distance*0.002f,0.05f,0.5f);
     view.zFar=std::max(1000.0f,camera_.distance*6.0f);
@@ -2784,6 +2789,43 @@ void StudioScene::finishReplayTransaction() {
         const auto reason=state.getStr("error");
         rollbackReplayTransaction("failed",reason.empty()?"Replay candidate failed":reason);
     }
+}
+Json StudioScene::lensViewPose() const {
+    if (!cameraInitialized_) throw std::runtime_error("Open Scene to copy its camera");
+    const auto view = viewCamera();
+    const auto eye = view.eye();
+    const auto rotation = render::cameraPoseRotation(view);
+    auto array = [](std::initializer_list<float> values) {
+        Json result = Json::array();
+        for (float value : values) result.push(Json::number(double(value)));
+        return result;
+    };
+    Json result = Json::object();
+    result.set("position", array({eye.x, eye.y, eye.z}));
+    result.set("rotation", array({rotation.x, rotation.y, rotation.z, rotation.w}));
+    return result;
+}
+Json StudioScene::configureLensCamera(const Json& params) {
+    World world;
+    SceneHierarchy hierarchy;
+    std::vector<Entity> entities;
+    std::string error;
+    if (!loadCameraScene(world, hierarchy, params["document"], &entities, &error)) throw std::runtime_error(error);
+    hierarchy.update(world);
+    for (Entity entity : entities) {
+        auto* name = world.tryGetConst<CameraNameComponent>(entity);
+        if (!name || int64_t(name->stableId) != params.getInt("id")) continue;
+        render::EcsCameraView selected;
+        if (!render::resolveEcsCamera(world,entity,selected)) throw std::runtime_error("Enable the camera to preview its view");
+        const auto* lens = world.tryGetConst<CameraLensComponent>(entity);
+        if (lens && lens->physicalFov && render::validCameraLens(*lens))
+            selected.camera.fovY = 2.f * std::atan(float(lens->sensorHeightMm.toDouble()/(2.*lens->focalLengthMm.toDouble())));
+        lensCamera_ = selected.camera;
+        lastFrameSignature_ = 0;
+        sceneCacheValid_ = false;
+        return Json::object();
+    }
+    throw std::runtime_error("Select an existing camera");
 }
 Json StudioScene::attachmentCommand(const std::string& project,const Json& params){
     if(!attachmentPreview_)attachmentPreview_=std::make_unique<StudioAttachmentPreview>(*device_,renderer_,deviceLifetime_->lease());

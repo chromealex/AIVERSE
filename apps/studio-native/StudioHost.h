@@ -23,7 +23,7 @@
 
 namespace aiverse::studio {
 
-enum class StudioSurface { Scene, Game, Fx, Material, Shader, FacialRig, Character, Appearance, AnimationGraph, AnimationRig, Attachments, Count };
+enum class StudioSurface { Scene, Game, Fx, Material, Shader, FacialRig, Character, Appearance, AnimationGraph, AnimationRig, Attachments, LensCamera, Count };
 
 // What a shell provides. Called on the main (UI) thread only, except runInBackground's work.
 class StudioHostPlatform {
@@ -248,8 +248,8 @@ private:
         std::string error;
         NativeViewportPlacement placement;
         std::unique_ptr<StudioScene> renderer;
-    } materialSurface_, shaderSurface_, facialRigSurface_, characterSurface_, appearanceSurface_, animationGraphSurface_, animationRigSurface_, attachmentSurface_;
-    std::string attachmentProject_;
+    } materialSurface_, shaderSurface_, facialRigSurface_, characterSurface_, appearanceSurface_, animationGraphSurface_, animationRigSurface_, attachmentSurface_, lensSurface_;
+    std::string attachmentProject_, lensProject_;
     AssetSurface& assetSurface(StudioSurface surface);
     std::unique_ptr<StudioScene> fxPreview_;           // separate GPU drawable + isolated camera; same owner render thread
     std::unique_ptr<StudioRenderThread> renderThread_;
@@ -274,6 +274,11 @@ private:
     bool fxSurfaceVisible_=false;
     double gameFrameTime_ = 0;
     struct AgentShot { std::string png; int w = 0, h = 0; std::atomic<bool> done{false}; };
+    std::shared_ptr<AgentShot> lensShot_;
+    int64_t lensCameraId_ = 0;
+    double lensCaptureStarted_ = 0;
+    void captureLensFrame(int64_t cameraId);
+    void finishLensCapture();
     std::shared_ptr<AgentShot> agentShot_; // agent view_screenshot capture on its way
     struct FxShot {
         uint64_t id=0;
