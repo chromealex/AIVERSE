@@ -1,0 +1,14 @@
+{
+  "sha": "89304fe208ae86b6bd93b175009bcfdf1bfc27ff",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^studio_session$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-wizard-settings-89304fe20.log.txt",
+  "sha256": "357a4a13f342a3e3315c66697f329ffc9d73e52211f1978e933f058af15f0f87"
+}
