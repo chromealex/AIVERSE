@@ -184,6 +184,8 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integrated-graph-2a56cbf39.json"
+    "docs/evidence/feature-gate-ad5786f5a-contracts.json",
+    "docs/evidence/feature-gate-ad5786f5a-catalog.json",
+    "docs/evidence/feature-gate-ad5786f5a-skill-audit.json"
   ]
 }

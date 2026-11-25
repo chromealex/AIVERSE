@@ -159,8 +159,8 @@
       "evidence": [
         "skills/workflow/aiverse-graph-authoring/SKILL.md",
         "docs/agent-handoffs/feature-gate-stage44-integration-2026-11-24.md",
-        "docs/evidence/feature-gate-460ce965c-catalog.log.txt",
-        "docs/evidence/feature-gate-460ce965c-skill-audit.log.txt",
+        "docs/evidence/feature-gate-ad5786f5a-catalog.log.txt",
+        "docs/evidence/feature-gate-ad5786f5a-skill-audit.log.txt",
         "skills/workflow/aiverse-graph-authoring/SKILL.md"
       ]
     },
@@ -174,9 +174,9 @@
       "note": "Pending implementation or actual verification. Native Studio on Mac generated a building GLB and displayed its independent preview and authored room graph. The Caverns inspector was verified after a document identity fix. At 460ce965c the Studio TypeScript check, 256 web cases and 55 Python contract cases (one skipped) passed. Live native acceptance is tracked separately.",
       "evidence": [
         "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md",
-        "docs/evidence/feature-gate-460ce965c-typecheck.log.txt",
-        "docs/evidence/feature-gate-460ce965c-web.log.txt",
-        "docs/evidence/feature-gate-460ce965c-studio-contracts.log.txt"
+        "docs/evidence/feature-gate-ad5786f5a-typecheck.log.txt",
+        "docs/evidence/feature-gate-ad5786f5a-web.log.txt",
+        "docs/evidence/feature-gate-ad5786f5a-studio-contracts.log.txt"
       ]
     },
     "inspector": {
@@ -201,9 +201,11 @@
     },
     "platforms": {
       "status": "not_run",
-      "note": "Pending implementation or actual verification. SpectraFX GPU checkpoint restore compiled with GCC 13.3 for GNU/Linux AArch64 and round-tripped distinct parameter and attribute lanes on Metal. Full platform acceptance is still open. Linux ARM64 with GNU ld exposed an undeclared decoder dependency during the VFX graph test link. Repeat the native link and runtime cases after repair.",
+      "note": "Pending implementation or actual verification. SpectraFX GPU checkpoint restore compiled with GCC 13.3 for GNU/Linux AArch64 and round-tripped distinct parameter and attribute lanes on Metal. Full platform acceptance is still open. Linux ARM64 with GNU ld exposed an undeclared decoder dependency during the VFX graph test link. Repeat the native link and runtime cases after repair. After the fix, GNU ld linked both binaries and eight Linux ARM64 native cases passed.",
       "evidence": [
-        "docs/evidence/spectrafx-gcc-checkpoint-b730fc08d.json"
+        "docs/evidence/spectrafx-gcc-checkpoint-b730fc08d.json",
+        "docs/evidence/integration-ad5786f5a-linux-link.log.txt",
+        "docs/evidence/integration-ad5786f5a-linux.log.txt"
       ]
     },
     "dependencies": {
@@ -351,12 +353,13 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integrated-graph-2a56cbf39.json",
-    "docs/evidence/spectrafx-gcc-checkpoint-b730fc08d.json",
-    "docs/evidence/feature-gate-460ce965c-typecheck.json",
-    "docs/evidence/feature-gate-460ce965c-web.json",
-    "docs/evidence/feature-gate-460ce965c-studio-contracts.json",
-    "docs/evidence/feature-gate-460ce965c-catalog.json",
-    "docs/evidence/feature-gate-460ce965c-skill-audit.json"
+    "docs/evidence/feature-gate-ad5786f5a-contracts.json",
+    "docs/evidence/feature-gate-ad5786f5a-catalog.json",
+    "docs/evidence/feature-gate-ad5786f5a-skill-audit.json",
+    "docs/evidence/feature-gate-ad5786f5a-feature-suite.json",
+    "docs/evidence/feature-gate-ad5786f5a-native-project.json",
+    "docs/evidence/feature-gate-ad5786f5a-web.json",
+    "docs/evidence/feature-gate-ad5786f5a-studio-contracts.json",
+    "docs/evidence/feature-gate-ad5786f5a-typecheck.json"
   ]
 }

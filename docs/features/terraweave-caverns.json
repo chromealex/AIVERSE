@@ -255,7 +255,8 @@
       "note": "Native stdio carved and filled a map, undid and redid edits, saved it, and read the identical snapshot and stable IDs in a fresh MCP process.",
       "evidence": [
         "docs/evidence/caverns-authoring-b954cd47a.json",
-        "docs/evidence/integration-tools-b954cd47a.json"
+        "docs/evidence/integration-tools-b954cd47a.json",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt"
       ]
     },
     "studio": {
@@ -299,9 +300,10 @@
     },
     "platforms": {
       "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification. Linux ARM64 native focused tests passed on ad5786f5a. Windows execution remains open.",
       "evidence": [
-        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md"
+        "docs/agent-handoffs/building-caverns-integration-stage17-2026-11-25.md",
+        "docs/evidence/integration-ad5786f5a-linux.log.txt"
       ]
     },
     "dependencies": {
@@ -375,6 +377,8 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integrated-graph-2a56cbf39.json"
+    "docs/evidence/feature-gate-ad5786f5a-contracts.json",
+    "docs/evidence/feature-gate-ad5786f5a-catalog.json",
+    "docs/evidence/feature-gate-ad5786f5a-skill-audit.json"
   ]
 }

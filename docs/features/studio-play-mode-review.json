@@ -90,10 +90,11 @@
       ]
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "not_applicable",
+      "note": "This panel operates on the current hosted simulation. It does not own or edit a graph document.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/agent-handoffs/feature-gate-native-integration-2026-11-25.md",
+        "apps/studio-native/StudioHost.cpp"
       ]
     },
     "performance": {
@@ -118,10 +119,12 @@
       ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "The standalone MCP registry advertised the typed schema and rejected calls requiring a connected local Studio. Both native registries listed the feature tools.",
       "evidence": [
-        "docs/handoff/studio-html5/s5-play-mode-review-2026-11-24.md"
+        "docs/evidence/integration-ad5786f5a-headless.log.txt",
+        "docs/evidence/integration-ad5786f5a-graphs.log.txt",
+        "docs/evidence/integration-ad5786f5a-linux.log.txt"
       ]
     },
     "examples": {
@@ -177,6 +180,9 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/integrated-graph-2a56cbf39.json"
+    "docs/evidence/feature-gate-ad5786f5a-studio-contracts.json",
+    "docs/evidence/feature-gate-ad5786f5a-web.json",
+    "docs/evidence/feature-gate-ad5786f5a-typecheck.json",
+    "docs/evidence/feature-gate-ad5786f5a-skill-audit.json"
   ]
 }
