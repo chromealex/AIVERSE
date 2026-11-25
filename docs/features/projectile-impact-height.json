@@ -20,6 +20,7 @@
     "docs/agents/feature-policy.json",
     "docs/devlog/systems.json",
     "docs/features/projectile-impact-height.json",
+    "docs/handoff/studio-html5/issue-197-projectile-impact-height.md",
     "docs/models.md",
     "engine/fx/GameFx.cpp",
     "engine/fx/GameFx.h",
@@ -74,14 +75,19 @@
       ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Rules form TypeScript/Vite compiled; native StudioSession wrote the scalar and undo/redo/reopen retained the correct values.",
+      "evidence": [
+        "docs/handoff/studio-html5/issue-197-projectile-impact-height.md"
+      ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Edit type in Rules uses the existing typed Rules inspector and the field supports write, reset and inheritance. Verified by schema tests and native session history.",
+      "evidence": [
+        "docs/handoff/studio-html5/issue-197-projectile-impact-height.md",
+        "apps/studio-web/src/panels/RulesPanel.tsx"
+      ]
     },
     "persistence": {
       "status": "pass",
@@ -91,14 +97,19 @@
       ]
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "Target height is a scalar in the existing unit view. The trail consumes the displayed point regardless of its effect asset; no graph topology or nodes are authored.",
+      "evidence": [
+        "engine/fx/GameFx.cpp"
+      ]
     },
     "performance": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "One million optimized arm64 projections took 0.001518 s. Position interpolation allocates no heap memory and adds no draw passes. Timing excludes draw and particle submission.",
+      "evidence": [
+        "docs/handoff/studio-html5/issue-197-projectile-impact-height.md",
+        "engine/view/game/ProjectileAppearance.h"
+      ]
     },
     "platforms": {
       "status": "not_run",
@@ -106,9 +117,12 @@
       "evidence": []
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Extends existing Game View, GameFx and Studio Rules. Both native simulation smoke and frontend production build ran with existing dependencies.",
+      "evidence": [
+        "docs/handoff/studio-html5/issue-197-projectile-impact-height.md",
+        "docs/evidence/projectile-impact-height-authoring.json"
+      ]
     },
     "headless": {
       "status": "pass",
@@ -131,9 +145,12 @@
       "evidence": []
     },
     "handoff": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Stage records include exact code SHAs, ownership, targeted checks, remaining gates and repro scene.",
+      "evidence": [
+        "docs/handoff/studio-html5/issue-197-projectile-impact-height.md",
+        "docs/agent-handoffs/projectile-impact-height-initial.md"
+      ]
     },
     "documentation": {
       "status": "pass",
