@@ -505,11 +505,16 @@ int main() {
     const auto textureCatalog=call("texture_graph_catalog",Json::object());
     requireGraphTest(textureCatalog.getBool("ok")&&textureCatalog["outputTypes"].getStr("normal")=="normal","texture output catalog missing types");
     const auto textureTemplates=call("texture_graph_templates",Json::object());
-    requireGraphTest(textureTemplates.getBool("ok")&&textureTemplates["templates"].size()==6,"texture starter library missing");
+    requireGraphTest(textureTemplates.getBool("ok"),"texture starter library unavailable");
+    std::set<std::string> templateNames;
     for(const auto& row:textureTemplates["templates"].items()){
+        const auto name=row.getStr("name");
+        requireGraphTest(!name.empty()&&templateNames.insert(name).second,"invalid or duplicate texture template name");
         Json args=Json::object();args.set("graph",row["graph"]);
         requireGraphTest(call("texture_graph_validate",args).getBool("ok"),"invalid texture template");
     }
+    for(const char* name : {"metal", "stone", "wood", "brick", "earth", "fabric", "ceramic_tiles", "metal_panels", "sci_fi_hex", "scales", "rubber", "dotted_surface", "striped_surface", "hdr_studio_environment"})
+        requireGraphTest(templateNames.contains(name),"expected texture template missing");
     tex.set("textureName",Json::string("fixture_set"));
     const auto bakedSet=call("texture_graph_bake_set",tex);
     requireGraphTest(bakedSet.getBool("ok")&&bakedSet["files"].size()==2,"PBR set bake failed");
