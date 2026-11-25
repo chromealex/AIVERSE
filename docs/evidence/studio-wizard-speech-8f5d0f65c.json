@@ -1,0 +1,14 @@
+{
+  "sha": "8f5d0f65c321e83bf0c7a1e7d17dc87be23bf139",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^studio_wizard_dictation$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-wizard-speech-8f5d0f65c.log.txt",
+  "sha256": "2361b3a66ebf387f2ed50e92f07e51a45a011aaebe500fda278ce0f9d31c3004"
+}
