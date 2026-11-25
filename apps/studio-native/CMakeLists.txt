@@ -82,7 +82,7 @@ if(AIVERSE_BUILD_TESTS AND APPLE)
     add_test(NAME studio_building_preview COMMAND aiverse_studio_building_preview_tests "${PROJECT_SOURCE_DIR}")
     set_tests_properties(studio_building_preview PROPERTIES LABELS "EDITOR;GPU;Metal" TIMEOUT 90)
     add_executable(aiverse_studio_metal_lighting_tests tests/StudioMetalLightingTests.mm StudioScene.cpp StudioFacialGpuPreview.cpp StudioAssetCatalog.cpp)
-    target_include_directories(aiverse_studio_metal_lighting_tests PRIVATE "${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/third_party/box3d/include")
+    target_include_directories(aiverse_studio_metal_lighting_tests PRIVATE "${PROJECT_SOURCE_DIR}")
     target_link_libraries(aiverse_studio_metal_lighting_tests PRIVATE SQLite::SQLite3 aiverse_editor_core aiverse_runtime aiverse_fx aiverse_game_view AIVERSE::libraries "-framework Cocoa")
     target_sources(aiverse_studio_metal_lighting_tests PRIVATE $<TARGET_OBJECTS:aiverse_runtime>)
     add_test(NAME studio_metal_lighting COMMAND aiverse_studio_metal_lighting_tests "${CMAKE_CURRENT_BINARY_DIR}/metal-lighting-captures")
@@ -93,7 +93,7 @@ if(AIVERSE_BUILD_TESTS AND APPLE)
         tests/StudioSpectraPreviewTests.mm StudioScene.cpp
         StudioFacialGpuPreview.cpp StudioAssetCatalog.cpp)
     target_include_directories(aiverse_studio_spectrafx_preview_tests
-        PRIVATE "${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/third_party/box3d/include")
+        PRIVATE "${PROJECT_SOURCE_DIR}")
     target_link_libraries(aiverse_studio_spectrafx_preview_tests PRIVATE
         SQLite::SQLite3 aiverse_editor_core aiverse_runtime aiverse_fx
         aiverse_game_view AIVERSE::vivid_human AIVERSE::libraries "-framework Cocoa")
