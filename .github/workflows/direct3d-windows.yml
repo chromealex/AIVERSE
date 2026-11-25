@@ -9,6 +9,9 @@ on:
       - 'CMakeLists.txt'
       - 'engine/gfx/**'
       - 'tests/render/direct3d*.cpp'
+      - 'tests/render/thumbnail_workload.py'
+      - 'apps/modelview/**'
+      - 'docs/devlog/entries/*-render-backend-thumbnails.json'
 
 permissions:
   contents: read
@@ -26,16 +29,20 @@ jobs:
       - name: Configure x64 native tests
         run: cmake --preset windows-msvc -DAIVERSE_FETCH_TEMPLATES=OFF -DAIVERSE_ASSIMP=OFF -DAIVERSE_BUILD_STUDIO_HTML5=OFF
       - name: Build Direct3D test executables
-        run: cmake --build build/windows-msvc --config Release --target aiverse_direct3d_device_tests aiverse_direct3d_rhi_tests --parallel 4
+        run: cmake --build build/windows-msvc --config Release --target aiverse_direct3d_device_tests aiverse_direct3d_rhi_tests aiverse_cpu_capture --parallel 4
       - name: Exercise WARP, HAL and windowed resize
         run: |
           $inventory = ctest --test-dir build/windows-msvc -C Release -N -R '^render_direct3d'
           $inventory
           if (!($inventory -match 'Total Tests: 6$')) { throw 'Expected six registered Direct3D cases' }
-          python tools/agents/evidence.py --id direct3d-windows-native -- ctest --test-dir build/windows-msvc -C Release --verbose --output-on-failure --no-tests=error -R '^render_direct3d' --output-junit "${{ runner.temp }}/d3d-results.xml"
+          python tools/agents/evidence.py --id direct3d-windows-${{ github.run_id }} -- ctest --test-dir build/windows-msvc -C Release --verbose --output-on-failure --no-tests=error -R '^render_direct3d' --output-junit "${{ runner.temp }}/d3d-results.xml"
           $result = $LASTEXITCODE
-          Get-Content docs/evidence/direct3d-windows-native.log.txt
+          Get-Content docs/evidence/direct3d-windows-${{ github.run_id }}.log.txt
           exit $result
+      - name: Measure desktop thumbnail capture
+        env:
+          PYTHONDONTWRITEBYTECODE: 1
+        run: python tests/render/thumbnail_workload.py build/windows-msvc/Release/aiverse_cpu_capture.exe "${{ runner.temp }}/thumbnails" cpu d3d9 d3d11-warp
       - name: Save CTest results and native process output
         if: always()
         uses: actions/upload-artifact@v4
@@ -43,6 +50,8 @@ jobs:
           name: direct3d-windows-results
           path: |
             build/windows-msvc/Testing/Temporary/LastTest.log
-            docs/evidence/direct3d-windows-native*
+            docs/evidence/direct3d-windows-${{ github.run_id }}*
+            ${{ runner.temp }}/thumbnails/*.png
+            ${{ runner.temp }}/thumbnails/results.json
             ${{ runner.temp }}/d3d-results.xml
           if-no-files-found: warn
