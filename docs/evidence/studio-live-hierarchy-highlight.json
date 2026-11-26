@@ -1,0 +1,10 @@
+{
+  "sha": "7dc435cf2de83710140ce22a30469db7269c0987",
+  "argv": [
+    "bash",
+    "/tmp/live-highlight.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-live-hierarchy-highlight.log.txt",
+  "sha256": "7186f601a01e79af6a2f303a1903e3b9366cb271549e91e1321d97f4a633e83c"
+}
