@@ -107,3 +107,6 @@
 .effects-files .au-alert { white-space:pre-wrap; }
 .effects-files details { margin-block-start:12px; }
 .effects-files summary { cursor:pointer; }
+.effects-playback { display:grid; gap:8px; margin-block:10px; }
+.effects-playback-options { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+.effects-playback-options label:has([type=checkbox]) { display:flex; align-items:center; }

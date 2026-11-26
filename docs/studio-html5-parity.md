@@ -322,3 +322,5 @@ Generate transfer: bake a map, increment its seed, and enable or remove match-st
 Project Import transfer: scan an external project, carry its source into a background import, open the emitted destination and prepare an editable Agent brief. Verify a real conversion and existing drafts.
 
 Effects authoring stage: select a project particle effect or event bindings, edit the source with native validation and guard saves against stale files. GPU particle playback remains open.
+
+Effects playback stage: drive the engine ParticleSystem from the current effect source in a dedicated Effects surface, with replay, motion, looping, quality and playback speed.

@@ -1,4 +1,5 @@
 import {useEffect, useState, type ReactNode} from 'react';
+import EffectPlayback from './EffectPlayback';
 import {invoke} from '../bridge';
 import {StudioAlert, StudioButton, StudioSection, StudioSelect, StudioTextarea} from '../ui';
 
@@ -61,6 +62,7 @@ export default function EffectsPanel({project, tools}:{project:string; tools:Rea
         <option value="fx">Event bindings · fx/fx.json</option>
         {files.map(id => <option key={id} value={id}>{'fx/'+id+'.json'}</option>)}
       </StudioSelect></label>
+      {name!=='fx' && original!==undefined && <EffectPlayback key={name} project={project} source={draft}/>}
       <StudioTextarea aria-label="Effect source" rows={14} spellCheck={false} value={draft}
         disabled={busy || original === undefined} onChange={e=>{edit(e.target.value);setNotice('');}}/>
       <div className="au-row">

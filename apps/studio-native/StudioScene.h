@@ -432,6 +432,8 @@ public:
     Json configureLensCamera(const Json& params);
     bool lensCameraReady() const {return lensCamera_.has_value();}
     Json attachmentCommand(const std::string& project,const Json& params);
+    Json effectFileCommand(const std::string& project,const Json& params);
+    void drawEffectFile(int width,int height);
     void drawAttachments(int width,int height);
     void drawAnimationPose(int width,int height,const std::shared_ptr<const render::Model>& source,
                            const render::Pose& pose,float yaw);
@@ -613,6 +615,7 @@ private:
     std::string planetChartIdentity_;
     std::string sparseTerrainError_;
     bool terrainWasShown_=false,terrainCavernsAuthored_=false;
+    std::unique_ptr<class StudioEffectPlayback> effectFile_;
     std::unique_ptr<class StudioAttachmentPreview> attachmentPreview_;
     std::shared_ptr<const render::Model> animationSource_;
     std::unique_ptr<render::Model> animationModel_;

@@ -8,6 +8,7 @@
 #include "apps/editor/AuthoringWater.h"
 #include "apps/studio-native/StudioScene.h"
 #include "apps/studio-native/StudioAttachmentPreview.h"
+#include "apps/studio-native/StudioEffectPlayback.h"
 #include "engine/render/CameraCaptureViews.h"
 #include "engine/render/EcsCameraRender.h"
 #include "engine/render/CameraRig.h"
@@ -1986,6 +1987,7 @@ StudioScene::~StudioScene() {
     attachmentPreview_.reset();
     if (device_) {
         const bool idle=device_->waitForResourceIdle();
+        effectFile_.reset();
         if(textureGraph_){
             if(idle||!device_->gpuHealthy())textureGraph_->shutdownAfterIdle(*device_);
             else std::fprintf(stderr,"Studio Texture Graph: idle barrier failed; GPU pools left to device teardown\n");
@@ -3041,6 +3043,16 @@ Json StudioScene::attachmentCommand(const std::string& project,const Json& param
         Json result=Json::object();result.set("time",Json::number(double(attachmentPreview_->time()),4));return result;
     }
     attachmentPreview_->controls(params);return Json::object();
+}
+Json StudioScene::effectFileCommand(const std::string& project,const Json& params){
+    if(!effectFile_)effectFile_=std::make_unique<StudioEffectPlayback>(*device_,deviceLifetime_->lease(),project);
+    return effectFile_->command(params);
+}
+void StudioScene::drawEffectFile(int width,int height){
+    if(!effectFile_ || width<2 || height<2)return;
+    device_->beginFrame(width,height);
+    StudioFrameScope frame{*device_};
+    effectFile_->draw(renderer_,width,height);
 }
 void StudioScene::drawAttachments(int width,int height){
     if(!attachmentPreview_||!attachmentPreview_->ready()||width<2||height<2)return;

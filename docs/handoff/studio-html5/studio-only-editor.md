@@ -663,3 +663,5 @@ Verified Project Import on e6e287eca (implementation 47fc85553). Both macOS desk
 Effects authoring stage: select a project particle effect or event bindings, edit the source with native validation and guard saves against stale files. GPU particle playback remains open.
 
 Effects file authoring verified at e4bdee2f5. TypeScript, Vite, 299 web tests and native macOS build passed. The packaged app created missing bindings, rejected invalid JSON and a stale write, reloaded concurrent edits, saved source comments and reopened both files after restart. Scene map bytes remained identical. See docs/evidence/studio-effects-files-desktop.json and docs/evidence/studio-project-catalog/effects-source-editor.png. Next: independent particle system preview for fx/*.json assets with replay and speed.
+
+Effects playback stage: drive the engine ParticleSystem from the current effect source in a dedicated Effects surface, with replay, motion, looping, quality and playback speed.

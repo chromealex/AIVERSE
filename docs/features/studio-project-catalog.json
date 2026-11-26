@@ -3,6 +3,8 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-native/StudioEffectPlayback.h",
+    "apps/studio-web/src/panels/EffectPlayback.tsx",
     "apps/editor/core/FxOps.cpp",
     "apps/studio-web/src/panels/EffectsPanel.tsx",
     "tools/importers/port/aiverse_port.py",
