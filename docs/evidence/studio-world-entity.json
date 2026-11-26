@@ -1,0 +1,10 @@
+{
+  "sha": "1389bd2488bf682c33d1fa36415e824df00fbfe8",
+  "argv": [
+    "bash",
+    "/tmp/world-inspect.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-world-entity.log.txt",
+  "sha256": "3a9e6fbd8bdd1a3a02d8ccb4a100c1eb428d8809db5cf7087fce84882d8ed963"
+}
