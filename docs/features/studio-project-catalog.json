@@ -592,6 +592,7 @@
     "docs/evidence/studio-standalone-pose-canvas.json",
     "docs/evidence/studio-pose-pointer-capture.json",
     "docs/evidence/studio-animation-scoped-state-edit.json",
-    "docs/evidence/studio-state-page-layout.json"
+    "docs/evidence/studio-state-page-layout.json",
+    "docs/evidence/studio-scene-diagnostic-layers.json"
   ]
 }

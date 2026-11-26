@@ -1,0 +1,10 @@
+{
+  "sha": "dc278e3ff84e30dd05913e1075800f41a97066e6",
+  "argv": [
+    "bash",
+    "/tmp/studio-scene-layers.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-scene-diagnostic-layers.log.txt",
+  "sha256": "4f78ffd6d0d7066b134730d61675b48dbce15f67b08a12dc3670e137c5aaf509"
+}
