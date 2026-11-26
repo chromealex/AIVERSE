@@ -731,7 +731,10 @@ void StudioScene::syncStaticGeometry(const std::string& project,const std::strin
     if(!staticScenery_)staticScenery_=std::make_unique<StaticScenery>();
     auto& state=*staticScenery_;
     state.scene.collectRetired(*device_);
-    const bool moved=state.project!=project || state.file!=file;
+    const bool capture=natureLayers_.strataWire || natureLayers_.strataFill;
+    const bool captureChanged=capture!=state.scene.strataDebugGeometryCaptureEnabled();
+    state.scene.setStrataDebugGeometryCaptureEnabled(capture);
+    const bool moved=captureChanged || state.project!=project || state.file!=file;
     if(moved){
         state.scene.clear(*device_);
         state.project=project;state.file=file;state.inputs.clear();
@@ -4365,7 +4368,19 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     if(lightingRuntime_.indirect || lightingRuntime_.direct)lightingStatus_=lightingRuntime_.status();
 
     if(staticScenery_ && staticScenery_->loaded && !cavernsPreview_.isolate() && !planetaryChart)
-        staticScenery_->scene.draw(renderer_);
+    {
+        auto& scene=staticScenery_->scene;
+        render::strata::DebugViewOptions debug;
+        debug.color=static_cast<render::strata::DebugColorMode>(natureLayers_.strataColor);
+        debug.clusterBounds=natureLayers_.strataBounds;
+        debug.clusterWireframe=natureLayers_.strataWire;
+        debug.clusterFill=natureLayers_.strataFill;
+        debug.instanceBounds=natureLayers_.strataRoutes;
+        debug.enabled=debug.clusterBounds || debug.clusterWireframe || debug.clusterFill || debug.instanceBounds;
+        scene.setStrataDebugView(debug);
+        scene.setStrataDebugSuppressed(cleanMapOutput());
+        scene.draw(renderer_);
+    }
     // Real map dimensions and positions from the active native Workspace.
     // Temporary primitive preview (NOT legacy editor terrain, animation or materials).
     const float w = float(std::max(map.w, 1));
@@ -5867,7 +5882,7 @@ uint64_t StudioScene::frameSignature(int width,int height,const editor::MapDoc& 
     vec(camera_.target);value(camera_.distance);value(camera_.pitch);value(camera_.yaw);value(camera_.fovY);
     value(camera_.ortho);value(autoIso_);value(tween_.active);
     ids(selection_);ids(hidden_);text(hover_);
-    value(erosionHighlight_);value(natureLayers_.erosionZones);value(natureLayers_.terraTreeWind);value(natureLayers_.terraSlope);value(natureLayers_.terraSlopeAtTarget);value(natureLayers_.nereidFlow);value(natureLayers_.nereidAllWater);value(tool_);value(localSpace_);value(gizmosVisible_);value(natureLayers_.radius);value(natureLayers_.spacing);value(natureLayers_.physisWind);value(natureLayers_.physisFire);value(natureFrame_.get());value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
+    value(natureLayers_.strataColor);value(natureLayers_.strataBounds);value(natureLayers_.strataWire);value(natureLayers_.strataFill);value(natureLayers_.strataRoutes);value(erosionHighlight_);value(natureLayers_.erosionZones);value(natureLayers_.terraTreeWind);value(natureLayers_.terraSlope);value(natureLayers_.terraSlopeAtTarget);value(natureLayers_.nereidFlow);value(natureLayers_.nereidAllWater);value(tool_);value(localSpace_);value(gizmosVisible_);value(natureLayers_.radius);value(natureLayers_.spacing);value(natureLayers_.physisWind);value(natureLayers_.physisFire);value(natureFrame_.get());value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
     value(drag_.axis);value(drag_.tool);text(drag_.id);vec(drag_.moveOffset);value(drag_.value);
     value(drag_.accumulated);value(drag_.lastAngle);value(drag_.snapping);
     value(marquee_.on);value(marquee_.x0);value(marquee_.y0);value(marquee_.x1);value(marquee_.y1);

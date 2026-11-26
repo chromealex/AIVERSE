@@ -1725,12 +1725,12 @@ void StudioHost::renderSceneFrame() {
         platform_.sceneThreadScope([&] {
             preview_->setEditorState(std::move(in.selection), std::move(in.hidden), std::move(in.locked), std::move(in.hover));
             if(!in.brushArmed)preview_->setBrushCursor(false,{},0);
+            preview_->setNatureLayers(in.natureLayers);
             preview_->syncStaticGeometry(in.project,in.geometryFile);
             preview_->setPlanetTerrainLook(in.planetLook);
             preview_->setBaseTerrainView(in.editBaseTerrain);
             preview_->setRegionBorders(in.regionBorderLetter);
             preview_->setErosionHighlight(in.erosionHighlight);
-            preview_->setNatureLayers(in.natureLayers);
             preview_->setNatureFrame(in.nature);
             preview_->setWindPreview(in.wind);
             preview_->setPostPreview(in.project,*in.gamePost,in.map->data.extra["postfx"],in.postQuality,in.postVisible);

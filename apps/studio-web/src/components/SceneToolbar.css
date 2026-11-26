@@ -38,3 +38,6 @@
 .scene-toolbar__sampling input {grid-column:1/-1;width:100%;margin:0}
 
 .scene-toolbar__zone select{min-width:0;flex:1;width:0}
+.scene-toolbar__layers fieldset{min-inline-size:0;border:0;border-block-start:1px solid var(--au-line);margin:5px 0;padding:4px}
+.scene-toolbar__layers legend{color:var(--au-text-muted);font-weight:600;padding-inline:5px}
+.scene-toolbar__layers select{flex:1;min-width:0}

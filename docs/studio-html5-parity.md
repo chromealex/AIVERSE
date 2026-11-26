@@ -637,3 +637,5 @@ Expose geometry_stats from the rendered Scene and its completed GPU queries thro
 Share STRATA selection, refusal, cache, upload and preparation statistics between geometry_stats and static geometry reports.
 
 Share the game terrain water-cell layout builder with HTML Scene so sheet, connected-body and shore levels come from one implementation.
+
+Expose Scene debug views directly in the toolbar: STRATA clusters and routes, model wind diagnostics, PHYSIS, TerraWeave and NEREID.

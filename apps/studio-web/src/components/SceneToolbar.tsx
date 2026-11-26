@@ -3,13 +3,14 @@ import { Bookmark, Expand, Globe2, Hand, Magnet, Maximize, Mountain, Move3d, Rot
 import { CAMERA_SLOTS, importBookmarks, readBookmarks, removeBookmark, saveBookmark, type CameraBookmark } from './sceneBookmarks';
 import { invoke, onNativeEvent } from '../bridge';
 import ErosionZoneHighlight from './ErosionZoneHighlight';
-import type { StudioGraphDocumentScope } from '../types';
+import { StudioSelect } from '../ui';
+import type { WindDebugView, StudioGraphDocumentScope } from '../types';
 import './SceneToolbar.css';
 
 export type SceneTool = 'view' | 'move' | 'rotate' | 'scale';
-export interface SceneToolState { tool: SceneTool; local: boolean; snap: boolean; snapMove: number; snapRotate: number; snapScale: number; gizmos: boolean; natureRadius:number; natureSpacing:number; erosionZones:boolean; terraTreeWind:boolean; terraSlope:boolean; terraSlopeAtTarget:boolean; nereidFlow:boolean; nereidAllWater:boolean; natureWind:boolean; natureFire:boolean; worldAxes:boolean; objectBounds:boolean; selectionBox:boolean; surface: boolean }
+export interface SceneToolState { tool: SceneTool; local: boolean; snap: boolean; snapMove: number; snapRotate: number; snapScale: number; gizmos: boolean; strataColor:number; strataBounds:boolean; strataWire:boolean; strataFill:boolean; strataRoutes:boolean; natureRadius:number; natureSpacing:number; erosionZones:boolean; terraTreeWind:boolean; terraSlope:boolean; terraSlopeAtTarget:boolean; nereidFlow:boolean; nereidAllWater:boolean; natureWind:boolean; natureFire:boolean; worldAxes:boolean; objectBounds:boolean; selectionBox:boolean; surface: boolean }
 const KEY = 'aiverse.studio.sceneTools';
-const DEFAULTS: SceneToolState = { tool: 'move', local: false, snap: false, snapMove: 1, snapRotate: 15, snapScale: 0.1, gizmos: true, natureRadius:48, natureSpacing:6, erosionZones:true, terraTreeWind:true, terraSlope:true, terraSlopeAtTarget:false, nereidFlow:true, nereidAllWater:false, natureWind:false, natureFire:false, worldAxes:false, objectBounds:false, selectionBox:true, surface: false };
+const DEFAULTS: SceneToolState = { tool: 'move', local: false, snap: false, snapMove: 1, snapRotate: 15, snapScale: 0.1, gizmos: true, strataColor:0, strataBounds:false, strataWire:false, strataFill:false, strataRoutes:false, natureRadius:48, natureSpacing:6, erosionZones:true, terraTreeWind:true, terraSlope:true, terraSlopeAtTarget:false, nereidFlow:true, nereidAllWater:false, natureWind:false, natureFire:false, worldAxes:false, objectBounds:false, selectionBox:true, surface: false };
 const TOOLS: Array<{ id: SceneTool; key: string; label: string; icon: typeof Hand }> = [
   { id: 'view', key: 'Q', label: 'Hand — drag to pan', icon: Hand },
   { id: 'move', key: 'W', label: 'Move', icon: Move3d },
@@ -25,7 +26,7 @@ export function readSceneTools(): SceneToolState {
     const v = JSON.parse(window.localStorage.getItem(KEY) ?? '{}') as Partial<SceneToolState>;
     const tool = TOOLS.some(t => t.id === v.tool) ? v.tool as SceneTool : DEFAULTS.tool;
     const num = (x: unknown, d: number) => typeof x === 'number' && Number.isFinite(x) && x > 0 ? x : d;
-    return { tool, local: v.local === true, snap: v.snap === true, gizmos: v.gizmos !== false, natureRadius:Math.min(200,Math.max(8,num(v.natureRadius,48))), natureSpacing:Math.min(32,Math.max(2,num(v.natureSpacing,6))), erosionZones:v.erosionZones!==false, terraTreeWind:v.terraTreeWind!==false, terraSlope:v.terraSlope!==false, terraSlopeAtTarget:v.terraSlopeAtTarget===true, nereidFlow:v.nereidFlow!==false, nereidAllWater:v.nereidAllWater===true, natureWind:v.natureWind===true, natureFire:v.natureFire===true, worldAxes:v.worldAxes===true, objectBounds:v.objectBounds===true, selectionBox:v.selectionBox!==false, surface: v.surface === true,
+    return { tool, local: v.local === true, snap: v.snap === true, gizmos: v.gizmos !== false, strataColor:[0,1,2,3].includes(v.strataColor??-1)?v.strataColor!:0, strataBounds:v.strataBounds===true, strataWire:v.strataWire===true, strataFill:v.strataFill===true, strataRoutes:v.strataRoutes===true, natureRadius:Math.min(200,Math.max(8,num(v.natureRadius,48))), natureSpacing:Math.min(32,Math.max(2,num(v.natureSpacing,6))), erosionZones:v.erosionZones!==false, terraTreeWind:v.terraTreeWind!==false, terraSlope:v.terraSlope!==false, terraSlopeAtTarget:v.terraSlopeAtTarget===true, nereidFlow:v.nereidFlow!==false, nereidAllWater:v.nereidAllWater===true, natureWind:v.natureWind===true, natureFire:v.natureFire===true, worldAxes:v.worldAxes===true, objectBounds:v.objectBounds===true, selectionBox:v.selectionBox!==false, surface: v.surface === true,
       snapMove: num(v.snapMove, 1), snapRotate: num(v.snapRotate, 15), snapScale: num(v.snapScale, 0.1) };
   } catch { return DEFAULTS; }
 }
@@ -35,6 +36,15 @@ export default function SceneToolbar({ enabled, projectPath = '', documentScope 
   const [state, setState] = useState<SceneToolState>(readSceneTools);
   const [marks, setMarks] = useState<CameraBookmark[]>(() => readBookmarks(projectPath));
   const [layersOpen,setLayersOpen]=useState(false);
+  const [windDebug,setWindDebug]=useState<WindDebugView>('off');
+  const [windError,setWindError]=useState('');
+  useEffect(()=>{
+    if (!layersOpen || !enabled) return;
+    let active=true;
+    void invoke('studio.wind',{}).then(result=>{if(active){setWindDebug(result.settings.debug);setWindError('');}})
+      .catch(error=>{if(active)setWindError(String(error));});
+    return ()=>{active=false;};
+  },[layersOpen,enabled,projectPath]);
   const [marksOpen, setMarksOpen] = useState(false);
   const [legacyViews, setLegacyViews] = useState<CameraBookmark[]>([]);
   useEffect(() => {
@@ -100,7 +110,7 @@ export default function SceneToolbar({ enabled, projectPath = '', documentScope 
     const off = onNativeEvent((event, payload) => {
       if (event === 'viewport.natureLayers' && payload && typeof payload === 'object') {
         const patch:Partial<SceneToolState>={};
-        for (const key of ['natureWind','natureFire','nereidFlow','nereidAllWater','terraSlope','terraSlopeAtTarget','terraTreeWind','erosionZones'] as const) {
+        for (const key of ['strataBounds','strataWire','strataFill','strataRoutes','natureWind','natureFire','nereidFlow','nereidAllWater','terraSlope','terraSlopeAtTarget','terraTreeWind','erosionZones'] as const) {
           const value=(payload as Record<string,unknown>)[key];
           if(typeof value==='boolean')patch[key]=value;
         }
@@ -155,13 +165,29 @@ export default function SceneToolbar({ enabled, projectPath = '', documentScope 
     <div className="scene-toolbar__marks" onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))setLayersOpen(false);}}
       onKeyDown={e=>{if(e.key==='Escape'){e.currentTarget.querySelector('button')?.focus();setLayersOpen(false);}}}>
       <button type="button" className="scene-toolbar__toggle" aria-label="Scene overlays" title="Scene overlays"
-        disabled={!enabled} aria-expanded={layersOpen} onClick={()=>{setMarksOpen(false);setLayersOpen(v=>!v);}}><Layers size={13}/></button>
+        disabled={!enabled} aria-expanded={layersOpen} onClick={()=>{setMarksOpen(false);setLayersOpen(v=>!v);}}><Layers size={13}/> Debug</button>
       {layersOpen&&<div className="scene-toolbar__marks-menu scene-toolbar__layers" data-native-overlay role="group" aria-label="Scene overlays">
-       {([['worldAxes','World axes'],['objectBounds','Object bounds'],['selectionBox','Selection box'],['natureWind','Play-test wind'],['natureFire','Play-test fire spread'],['terraTreeWind','Wind at selected tree'],['erosionZones','Erosion zones']] as const).map(([key,label])=>
-        <label key={key}><input type="checkbox" checked={state[key]} onChange={e=>set({[key]:e.target.checked})}/>{label}</label>)}
+       {([
+         ['Scene',[['worldAxes','World axes'],['objectBounds','Object bounds'],['selectionBox','Selection box']]],
+         ['STRATA',[['strataBounds','Cluster bounds'],['strataWire','Cluster wireframe'],['strataFill','Cluster fill'],['strataRoutes','Instance routes']]],
+         ['PHYSIS · play-test',[['natureWind','Wind field'],['natureFire','Fire spread']]],
+         ['TerraWeave',[['terraTreeWind','Wind at selected tree'],['erosionZones','Erosion zones']]],
+       ] as const).map(([name,items])=><fieldset key={name}><legend>{name}</legend>{items.map(([key,label])=>
+         <label key={key}><input type="checkbox" checked={state[key]} onChange={e=>set({[key]:e.target.checked})}/>{label}</label>)}{name==='STRATA'&&<label>Color by
+           <StudioSelect value={state.strataColor} onChange={e=>set({strataColor:Number(e.currentTarget.value)})}>
+             {['Cluster','LOD depth','Geometric error','Material'].map((label,value)=><option key={label} value={value}>{label}</option>)}
+           </StudioSelect></label>}</fieldset>)}
+       <fieldset><legend>Wind rig</legend><label>Display
+        <StudioSelect value={windDebug} onChange={e=>{
+          const debug=e.currentTarget.value as WindDebugView;
+          void invoke('studio.windSet',{debug}).then(result=>{setWindDebug(result.settings.debug);setWindError('');})
+            .catch(error=>setWindError(String(error)));
+        }}>
+         {(['off','parts','depth','weight','skeleton'] as const).map((value,i)=><option key={value} value={value}>{['Off','Parts','Hierarchy depth','Sway weight','Skeleton'][i]}</option>)}
+        </StudioSelect></label>{windError&&<small role="alert">{windError}</small>}</fieldset>
        {state.erosionZones && documentScope && <ErosionZoneHighlight key={JSON.stringify([documentScope.projectPath,documentScope.mapPath,documentScope.epoch,documentScope.revision])} scope={documentScope}/>}
-       <label><input type="checkbox" checked={state.nereidFlow} onChange={e=>set({nereidFlow:e.target.checked})}/>River flow</label>
-       {state.nereidFlow&&<label><input type="checkbox" checked={state.nereidAllWater} onChange={e=>set({nereidAllWater:e.target.checked})}/>Show all rivers</label>}
+       <fieldset><legend>NEREID</legend><label><input type="checkbox" checked={state.nereidFlow} onChange={e=>set({nereidFlow:e.target.checked})}/>River flow</label>
+       {state.nereidFlow&&<label><input type="checkbox" checked={state.nereidAllWater} onChange={e=>set({nereidAllWater:e.target.checked})}/>Show all rivers</label>}</fieldset>
        <label><input type="checkbox" checked={state.terraSlope} onChange={e=>set({terraSlope:e.target.checked})}/>Slope at selected tile</label>
        <label><input type="checkbox" checked={state.terraSlopeAtTarget} onChange={e=>set({terraSlopeAtTarget:e.target.checked})}/>Slope at camera target</label>
        {(state.natureWind||state.natureFire||state.terraSlope||state.terraSlopeAtTarget)&&<fieldset className="scene-toolbar__sampling"><legend>Field sampling</legend>
