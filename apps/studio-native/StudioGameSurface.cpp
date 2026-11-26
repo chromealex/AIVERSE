@@ -476,6 +476,25 @@ Json StudioGameSurface::profile(const std::string& action,uint32_t steps) {
 Json StudioGameSurface::entities(int offset,int limit,const std::string& query,const StudioRuntimeInspect::GroupQuery& group) {
     return inspector_.entities(liveSimulation(),std::to_string(runtimeEpoch_),offset,limit,query,group,setupRefs_);
 }
+size_t StudioGameSurface::selectEntities(const Json& docs,const Json& refs,const std::string& epoch) {
+    auto* sim=liveSimulation();
+    auto* mod=sim?dynamic_cast<game::GameCore*>(&sim->module()):nullptr;
+    if(!mod)throw std::runtime_error("No inspectable game is running");
+    std::vector<std::string> selection;
+    for(const auto& value:docs.items()){
+        const double index=value.toDouble(-1);
+        if(!value.isNumber() || !(index>=0 && index<mod->mapPlaced().size() && std::floor(index)==index))
+            throw std::runtime_error("Unknown live map entity index");
+        selection.push_back(std::to_string(editor::worldRef(mod->mapPlaced()[size_t(index)])));
+    }
+    for(const auto& value:refs.items()){
+        if(value.isString())selection.push_back(value.str());
+        else if(value.isNumber() && value.toDouble()>0 && value.toDouble()<=9007199254740991.0 && std::floor(value.toDouble())==value.toDouble())
+            selection.push_back(std::to_string(value.integer()));
+        else throw std::runtime_error("Expected an exact world reference");
+    }
+    return inspector_.selectMany(sim,std::to_string(runtimeEpoch_),epoch,selection);
+}
 void StudioGameSurface::selectEntity(const std::string& epoch,const std::string& ref) {
     inspector_.select(liveSimulation(),std::to_string(runtimeEpoch_),epoch,ref);
 }
@@ -606,8 +625,13 @@ Json StudioGameSurface::state(bool includeScriptErrors) const {
         else out.set("roleLabel",Json::string("Bots vs bots"));
     }
     out.set("tick",Json::number(int64_t(sim?sim->tick():0)));
-    const auto selected=inspector_.selectedRef(sim,std::to_string(runtimeEpoch_));
-    if(!selected.empty())out.set("selectedLiveRef",Json::string(selected));
+    const auto selected=inspector_.selectedRefs(sim,std::to_string(runtimeEpoch_));
+    if(!selected.empty()){
+        out.set("selectedLiveRef",Json::string(selected.front()));
+        Json refs=Json::array();
+        for(const auto& ref:selected)refs.push(Json::string(ref));
+        out.set("selectedLiveRefs",std::move(refs));
+    }
     if (includeScriptErrors) out.set("scriptErrors", scriptLog(true));
     return out;
 }

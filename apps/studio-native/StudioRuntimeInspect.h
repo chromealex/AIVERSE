@@ -13,7 +13,7 @@ namespace aiverse::studio {
 // UI projection of the hosted world's real entities; never an editable mirror.
 class StudioRuntimeInspect {
     editor::WorldModel model_;
-    uint64_t selectedRef_=0;
+    std::vector<uint64_t> selection_;
     std::string selectedEpoch_;
     struct Filter {
         std::string shared;
@@ -76,12 +76,29 @@ class StudioRuntimeInspect {
     }
 public:
     void select(Simulation* sim,const std::string& currentEpoch,const std::string& epoch,const std::string& ref) {
-        selectedRef_=checkedRef(sim,currentEpoch,epoch,ref);
+        selectMany(sim,currentEpoch,epoch,{ref});
+    }
+    size_t selectMany(Simulation* sim,const std::string& currentEpoch,const std::string& epoch,const std::vector<std::string>& refs) {
+        if(epoch!=currentEpoch)throw std::runtime_error("Runtime session changed");
+        std::vector<uint64_t> selected;
+        std::unordered_set<uint64_t> seen;
+        for(const auto& ref:refs){
+            const auto id=checkedRef(sim,currentEpoch,epoch,ref);
+            if(seen.insert(id).second)selected.push_back(id);
+        }
+        selection_=std::move(selected);
         selectedEpoch_=epoch;
+        return selection_.size();
     }
     std::string selectedRef(Simulation* sim,const std::string& epoch) const {
-        if(!selectedRef_ || !sim || selectedEpoch_!=epoch || !sim->world().alive(editor::worldEntity(selectedRef_)))return {};
-        return std::to_string(selectedRef_);
+        const auto refs=selectedRefs(sim,epoch);
+        return refs.empty()?std::string{}:refs.front();
+    }
+    std::vector<std::string> selectedRefs(Simulation* sim,const std::string& epoch) const {
+        std::vector<std::string> refs;
+        if(sim && epoch==selectedEpoch_)
+            for(auto id:selection_)if(sim->world().alive(editor::worldEntity(id)))refs.push_back(std::to_string(id));
+        return refs;
     }
     struct GroupQuery {
         editor::WorldConfig config;

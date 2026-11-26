@@ -156,17 +156,25 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
             return Json::parse(R"({"ok":true,"summary":"Тест остановлен"})");
         },true});
     session_->workspace().registerOp({"editor_select","Select map entities by docs with optional focus, inspect a project rule by key, the map, a named area, a region letter, a zero-based entity or a one-based player, or clear selection.",
-        Json::parse(R"({"properties":{"docs":{"type":"array","items":{"type":"integer","minimum":0}},"focus":{"type":"boolean"},"kind":{"type":"string","enum":["entity","player","area","region","type","resource","tech","faction","map","none"]},"key":{"type":"string"},"index":{"type":"integer","minimum":0}}})"),[this](const Json& input){
+        Json::parse(R"({"properties":{"docs":{"type":"array","items":{"type":"integer","minimum":0}},"refs":{"type":"array","items":{"type":["integer","string"]}},"epoch":{"type":"string"},"focus":{"type":"boolean"},"kind":{"type":"string","enum":["entity","player","area","region","type","resource","tech","faction","map","none"]},"key":{"type":"string"},"index":{"type":"integer","minimum":0}}})"),[this](const Json& input){
             const auto kind=input.getStr("kind");
             const auto& map=session_->workspace().map;
             Json selection=Json::object();
             if (!input.has("kind") || input.has("docs") || input.has("refs")) {
                 if (input.has("kind")) throw std::runtime_error("Choose either kind or a selection list");
-                if (input.has("refs") && (!input["refs"].isArray() || input["refs"].size()))
-                    throw std::runtime_error("Live world reference selection is unavailable");
+                if (input.has("refs") && (!input["refs"].isArray() || input["refs"].size()>100000))
+                    throw std::runtime_error("Expected an array of world references");
                 const auto& docs=input["docs"];
                 if (input.has("docs") && (!docs.isArray() || docs.size()>100000))
                     throw std::runtime_error("Expected an array of map entity indices");
+                if(game_ && game_->active() && gameState().getBool("inMatch")){
+                    const auto epoch=input.getStr("epoch",std::to_string(game_->runtimeEpoch()));
+                    const auto count=game_->selectEntities(docs,input["refs"],epoch);
+                    Json result=Json::object();
+                    result.set("selected",Json::number(int64_t(count)));
+                    return result;
+                }
+                if(input["refs"].size() || input.has("epoch"))throw std::runtime_error("No inspectable game is running");
                 Json ids=Json::array();
                 std::string first;
                 for (const auto& value:docs.items()) {

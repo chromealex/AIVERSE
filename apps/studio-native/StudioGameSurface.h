@@ -33,6 +33,7 @@ public:
     Json regions() const;
     Json profile(const std::string& action,uint32_t steps);
     Json entities(int offset,int limit,const std::string& query,const StudioRuntimeInspect::GroupQuery& group);
+    size_t selectEntities(const Json& docs,const Json& refs,const std::string& epoch);
     void selectEntity(const std::string& epoch,const std::string& ref);
     Json inspect(const std::string& epoch,const std::string& ref);
     Json editRuntime(const Json& params);

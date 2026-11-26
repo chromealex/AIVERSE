@@ -77,7 +77,7 @@ export function LiveHierarchy({project,groupings,selection,onSelected}:{project?
         {page.groups.map(g=><button key={g.name} type="button" className="live-hier__row live-hier__group"
           onClick={()=>navigate([...path,g.name])}><ChevronRight size={13}/><b>{g.name}</b><small>{g.count}</small></button>)}
         {!page.groups.length && <p className="live__empty">No matching groups.</p>}
-      </div> : <div role="listbox" aria-label="Live entities" className="live-hier__rows">
+      </div> : <div role="listbox" aria-multiselectable="true" aria-label="Live entities" className="live-hier__rows">
         {page.rows.map(row => <div key={row.ref} role="presentation" className="live-hier__entry" data-depth={row.depth}
           style={row.depth===undefined?undefined:{paddingInlineStart:Math.min(row.depth,16)*12}}>
           {!!row.children && <button type="button" className="hier__disclosure" aria-expanded={!collapsed.includes(row.ref)}
@@ -85,8 +85,8 @@ export function LiveHierarchy({project,groupings,selection,onSelected}:{project?
             onClick={()=>setCollapsed(current=>current.includes(row.ref)?current.filter(ref=>ref!==row.ref):[...current,row.ref])}>
             <ChevronRight size={13}/></button>}
           <button type="button" role="option" title={row.name + ' · ref:' + row.ref}
-          aria-selected={selection?.ref === row.ref && selection.epoch === page.epoch}
-          className={'live-hier__row' + (selection?.ref === row.ref && selection.epoch === page.epoch ? ' is-selected' : '')}
+          aria-selected={selection?.epoch === page.epoch && !!selection && (selection.refs?.includes(row.ref) ?? selection.ref===row.ref)}
+          className={'live-hier__row' + (selection?.epoch === page.epoch && !!selection && (selection.refs?.includes(row.ref) ?? selection.ref===row.ref) ? ' is-selected' : '')}
           onClick={() => {
             if(project) void invoke('studio.gameSelectEntity',{expectedProject:project,epoch:page.epoch,ref:row.ref})
               .then(onSelected).catch(e=>setError(String(e)));

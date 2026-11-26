@@ -420,7 +420,7 @@ export default function App() {
     scriptLocation: scriptLocation?.project === snapshot?.project.path ? scriptLocation : null,
     openScript: (path,line) => { setScriptLocation({project:snapshot?.project.path ?? '',path,line}); showPanel('scripts'); },
     consumeScriptLocation: () => setScriptLocation(null),
-    liveSelection: game?.epoch && game.selectedLiveRef ? {epoch:game.epoch,ref:game.selectedLiveRef} : null,
+    liveSelection: game?.epoch && game.selectedLiveRef ? {epoch:game.epoch,ref:game.selectedLiveRef,refs:game.selectedLiveRefs} : null,
     onLiveSelection: setGame, scriptErrors: game?.scriptErrors, playing: !!game?.active
   })}</PanelErrorBoundary>;
 

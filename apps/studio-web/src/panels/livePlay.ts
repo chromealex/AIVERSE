@@ -1,7 +1,7 @@
 /** Scene/Live view preference for panels in this window. The game session owns the selected entity. */
 import { useEffect, useState } from 'react';
 
-export interface LiveRef { epoch: string; ref: string }
+export interface LiveRef { epoch: string; ref: string; refs?: string[] }
 let showLive = true;
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach(l => l());

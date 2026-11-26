@@ -218,7 +218,7 @@ export interface StaticGeometryReport {
   enabled:boolean; instances:number; autoStrataSources:number; autoLodSources:number;
   cookedSources:number; cookStaleSources:number; select:string[];
 }
-export interface StudioGameState { geometrySource?:"Scene"; geometry?:StaticGeometryReport|null; roleLabel?:string; simulationSpeed?:number; selectedLiveRef?:string; scriptErrors?: StudioScriptMessage[]; device:StudioGameDevice; epoch?:string;canReviewPlayChanges?:boolean;runtimeDebugEdited?:boolean; paused: boolean; canControl: boolean; canStep: boolean; active: boolean; loading: boolean; progress: number; inMatch: boolean; tick: number; error: string }
+export interface StudioGameState { geometrySource?:"Scene"; geometry?:StaticGeometryReport|null; roleLabel?:string; simulationSpeed?:number; selectedLiveRef?:string; selectedLiveRefs?:string[]; scriptErrors?: StudioScriptMessage[]; device:StudioGameDevice; epoch?:string;canReviewPlayChanges?:boolean;runtimeDebugEdited?:boolean; paused: boolean; canControl: boolean; canStep: boolean; active: boolean; loading: boolean; progress: number; inMatch: boolean; tick: number; error: string }
 export interface RuntimeAnimationRow {
   entityId:string;entity:number;climbing:boolean;attached:boolean;stanceFeet:number;steppingFeet:number;
   footError:number;penetration:number;bodyPosition:number[];surfaceNormal:number[];error:string;
