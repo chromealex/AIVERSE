@@ -1,0 +1,10 @@
+{
+  "sha": "dad0aafcd494180db46d3c406a43d231c62b3844",
+  "argv": [
+    "bash",
+    "/tmp/scene-debug-test.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-scene-debug-menu.log.txt",
+  "sha256": "900c7f8b61f7c79dd116906229ea5c0a5761632a8fd59b2a9e1994b657711074"
+}
