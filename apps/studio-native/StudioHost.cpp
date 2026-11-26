@@ -157,7 +157,7 @@ void StudioHost::shutdown() {
     game_.reset(); // hosted client and its device retire before the native surface
     if (renderThread_) {
         // The Scene and its GPU resources are released on their owner thread, then the thread stops.
-        try { renderThread_->invoke([&] { effectFileSurface_.renderer.reset(); lightingSurface_.renderer.reset(); lensSurface_.renderer.reset(); attachmentSurface_.renderer.reset(); animationGraphSurface_.renderer.reset(); animationRigSurface_.renderer.reset(); appearanceSurface_.renderer.reset(); characterSurface_.renderer.reset(); facialRigSurface_.renderer.reset(); materialSurface_.renderer.reset(); shaderSurface_.renderer.reset(); fxPreview_.reset(); preview_.reset(); }); } catch (const std::exception&) {}
+        try { renderThread_->invoke([&] { gpuEmitterSurface_.renderer.reset(); effectFileSurface_.renderer.reset(); lightingSurface_.renderer.reset(); lensSurface_.renderer.reset(); attachmentSurface_.renderer.reset(); animationGraphSurface_.renderer.reset(); animationRigSurface_.renderer.reset(); appearanceSurface_.renderer.reset(); characterSurface_.renderer.reset(); facialRigSurface_.renderer.reset(); materialSurface_.renderer.reset(); shaderSurface_.renderer.reset(); fxPreview_.reset(); preview_.reset(); }); } catch (const std::exception&) {}
         renderThread_->stop();
         renderThread_.reset();
     }
@@ -575,6 +575,7 @@ void StudioHost::pollAgentRequests() {
 }
 StudioHost::AssetSurface& StudioHost::assetSurface(StudioSurface surface) {
     switch(surface){
+    case StudioSurface::GpuEmitter:return gpuEmitterSurface_;
     case StudioSurface::EffectFile:return effectFileSurface_;
     case StudioSurface::Lighting:return lightingSurface_;
     case StudioSurface::LensCamera:return lensSurface_;
@@ -811,11 +812,13 @@ void StudioHost::tickFx() {
 }
 void StudioHost::fxCameraOrbit(StudioSurface surface,double dx,double dy) {
     if(!finite({dx,dy})||std::abs(dx)>250||std::abs(dy)>250)return;
-    if(surface==StudioSurface::EffectFile){
-        if(projectLoading_||!effectFileSurface_.renderer||!effectFileSurface_.placement.visible)return;
+    if(surface==StudioSurface::EffectFile || surface==StudioSurface::GpuEmitter){
+        auto& asset=assetSurface(surface);
+        if(projectLoading_||!asset.renderer||!asset.placement.visible)return;
         Json input=Json::object();
         input.set("orbitX",Json::number(dx));input.set("orbitY",Json::number(dy));
-        onScene([&]{effectFileSurface_.renderer->effectFileCommand(effectFileProject_,input);});
+        onScene([&]{if(surface==StudioSurface::GpuEmitter)asset.renderer->gpuEmitterCommand(gpuEmitterProject_,input);
+            else asset.renderer->effectFileCommand(effectFileProject_,input);});
         return;
     }
     if(surface!=StudioSurface::Fx||!fxPreview_ || !fxPlacement_.visible)return;
@@ -826,11 +829,13 @@ void StudioHost::fxCameraOrbit(StudioSurface surface,double dx,double dy) {
 }
 void StudioHost::fxCameraZoom(StudioSurface surface,double wheel) {
     if(!std::isfinite(wheel)||std::abs(wheel)>250)return;
-    if(surface==StudioSurface::EffectFile){
-        if(projectLoading_||!effectFileSurface_.renderer||!effectFileSurface_.placement.visible)return;
+    if(surface==StudioSurface::EffectFile || surface==StudioSurface::GpuEmitter){
+        auto& asset=assetSurface(surface);
+        if(projectLoading_||!asset.renderer||!asset.placement.visible)return;
         Json input=Json::object();
         input.set("zoom",Json::number(wheel));
-        onScene([&]{effectFileSurface_.renderer->effectFileCommand(effectFileProject_,input);});
+        onScene([&]{if(surface==StudioSurface::GpuEmitter)asset.renderer->gpuEmitterCommand(gpuEmitterProject_,input);
+            else asset.renderer->effectFileCommand(effectFileProject_,input);});
         return;
     }
     if(surface!=StudioSurface::Fx||!fxPreview_ || !fxPlacement_.visible)return;
@@ -1026,6 +1031,14 @@ void StudioHost::tick() {
     tickAgentScreenshot();
     pollAgentRequests();
     finishLensCapture();
+    if(gpuEmitterSurface_.renderer && gpuEmitterProject_!=session_->workspace().project.dir)
+        surfaceDetached(StudioSurface::GpuEmitter);
+    if(gpuEmitterSurface_.renderer && gpuEmitterSurface_.placement.visible && platform_.surfaceDrawable(StudioSurface::GpuEmitter)){
+        try { onScene([&]{platform_.sceneThreadScope([&]{
+            const auto& rect=gpuEmitterSurface_.placement;
+            gpuEmitterSurface_.renderer->drawGpuEmitter(rect.pixelsW,rect.pixelsH);
+        });}); } catch(const std::exception& e){sendEvent("gpuEmitter.previewError",e.what());surfaceDetached(StudioSurface::GpuEmitter);}
+    }
     if(effectFileSurface_.renderer && effectFileProject_!=session_->workspace().project.dir)
         surfaceDetached(StudioSurface::EffectFile);
     if(effectFileSurface_.renderer && effectFileSurface_.placement.visible && platform_.surfaceDrawable(StudioSurface::EffectFile)){
@@ -3198,13 +3211,13 @@ void StudioHost::applyViewport(const Json& params) {
         else if (game_) game_->suspend();
         return;
     }
-    if(id=="effectFile"||id=="lighting"||id=="shader"||id=="material"||id=="facialRig"||id=="character"||id=="appearance"||id=="animationGraph"||id=="animationRig"||id=="attachments"||id=="lensCamera") {
-        const auto surface=id=="effectFile"?StudioSurface::EffectFile:id=="lighting"?StudioSurface::Lighting:id=="lensCamera"?StudioSurface::LensCamera:id=="attachments"?StudioSurface::Attachments:id=="animationRig"?StudioSurface::AnimationRig:id=="animationGraph"?StudioSurface::AnimationGraph:id=="character"?StudioSurface::Character:id=="appearance"?StudioSurface::Appearance:id=="facialRig"?StudioSurface::FacialRig:id=="shader"?StudioSurface::Shader:StudioSurface::Material;
+    if(id=="gpuEmitter"||id=="effectFile"||id=="lighting"||id=="shader"||id=="material"||id=="facialRig"||id=="character"||id=="appearance"||id=="animationGraph"||id=="animationRig"||id=="attachments"||id=="lensCamera") {
+        const auto surface=id=="gpuEmitter"?StudioSurface::GpuEmitter:id=="effectFile"?StudioSurface::EffectFile:id=="lighting"?StudioSurface::Lighting:id=="lensCamera"?StudioSurface::LensCamera:id=="attachments"?StudioSurface::Attachments:id=="animationRig"?StudioSurface::AnimationRig:id=="animationGraph"?StudioSurface::AnimationGraph:id=="character"?StudioSurface::Character:id=="appearance"?StudioSurface::Appearance:id=="facialRig"?StudioSurface::FacialRig:id=="shader"?StudioSurface::Shader:StudioSurface::Material;
         auto& asset=assetSurface(surface);
         NativeViewportPlacement placed;
         if(platform_.placeSurface(surface,rect,placed)){
             asset.placement=placed;
-            if(!placed.visible){asset.error.clear();if(surface!=StudioSurface::EffectFile&&surface!=StudioSurface::LensCamera&&surface!=StudioSurface::Attachments&&asset.renderer)onScene([&]{asset.renderer.reset();});}
+            if(!placed.visible){asset.error.clear();if(surface!=StudioSurface::GpuEmitter&&surface!=StudioSurface::EffectFile&&surface!=StudioSurface::LensCamera&&surface!=StudioSurface::Attachments&&asset.renderer)onScene([&]{asset.renderer.reset();});}
         }
         return;
     }
@@ -4439,12 +4452,13 @@ void StudioHost::handleMessage(const std::string& json) {
                 if (req["params"].getBool("textures")) result.set("gpu", onScene([&] { return preview_->textureResources(); }));
             } else result.set("error", Json::string("The Scene panel is not visible"));
             reply.set("result", std::move(result));
-        } else if (method == "studio.effectFilePreview" || method == "studio.attachmentsPreview" || method == "studio.lensPreview") {
+        } else if (method == "studio.gpuEmitterPreview" || method == "studio.effectFilePreview" || method == "studio.attachmentsPreview" || method == "studio.lensPreview") {
             const bool lens = method == "studio.lensPreview";
+            const bool gpuEmitter = method == "studio.gpuEmitterPreview";
             const bool effectFile = method == "studio.effectFilePreview";
-            const auto surface = effectFile ? StudioSurface::EffectFile : lens ? StudioSurface::LensCamera : StudioSurface::Attachments;
+            const auto surface = gpuEmitter ? StudioSurface::GpuEmitter : effectFile ? StudioSurface::EffectFile : lens ? StudioSurface::LensCamera : StudioSurface::Attachments;
             auto& asset = assetSurface(surface);
-            auto& ownerProject = effectFile ? effectFileProject_ : lens ? lensProject_ : attachmentProject_;
+            auto& ownerProject = gpuEmitter ? gpuEmitterProject_ : effectFile ? effectFileProject_ : lens ? lensProject_ : attachmentProject_;
             const auto& params = req["params"];
             const auto& project = session_->workspace().project.dir;
             if (project.empty() || params.getStr("project") != project)
@@ -4463,7 +4477,7 @@ void StudioHost::handleMessage(const std::string& json) {
                 if(lens){lensShot_.reset();lensCameraId_=0;}
                 ownerProject.clear();
             } else {
-                const bool publishing = effectFile ? params["source"].isString() : params["document"].isObject();
+                const bool publishing = (gpuEmitter || effectFile) ? params["source"].isString() : params["document"].isObject();
                 if (!renderThread_) {
                     if (!publishing) throw std::runtime_error("Open the attachment preview first");
                     const char* threaded = std::getenv("AIVERSE_STUDIO_RENDER_THREAD");
@@ -4482,7 +4496,8 @@ void StudioHost::handleMessage(const std::string& json) {
                             if(lensShot_)throw std::runtime_error("Wait for the camera capture");
                             result=asset.renderer->configureLensCamera(params);
                             lensCameraId_=params.getInt("id");
-                        } else if(effectFile) result=asset.renderer->effectFileCommand(project,params);
+                        } else if(gpuEmitter) result=asset.renderer->gpuEmitterCommand(project,params);
+                        else if(effectFile) result=asset.renderer->effectFileCommand(project,params);
                         else result=asset.renderer->attachmentCommand(project,params);
                     });
                 });

@@ -1,3 +1,4 @@
+import GpuEmitterPreview from './GpuEmitterPreview';
 import SpectraGpuSettings from './SpectraGpuSettings';
 import './SpectraGpuFiles.css';import {useEffect, useState, type ReactNode} from 'react';
 import {applyEdits, modify, parse, type ParseError} from 'jsonc-parser';
@@ -64,6 +65,7 @@ export default function SpectraGpuFiles({project,tools}:{project:string;tools:Re
       </StudioSelect></StudioField>
       <div className="au-row"><StudioInput aria-label="New emitter name" placeholder="Emitter name" value={newName} onChange={e=>setNewName(e.target.value)}/>
         <StudioButton disabled={dirty||!/^[A-Za-z0-9_-]{1,64}$/.test(newName)||files.includes(newName)} onClick={()=>{select(newName);setNewName('');}}>New emitter</StudioButton></div>
+      {name!==routesFile&&source!==undefined&&<GpuEmitterPreview key={name} project={project} source={draft}/>}
       {source!==undefined&&!issues.length&&doc&&typeof doc==='object'&&!Array.isArray(doc)&&
         <SpectraGpuSettings routes={name===routesFile} doc={doc} change={(field,value)=>patch([field],value)}/>}
       {routes&&<StudioSection title="Event routes" actions={<StudioButton disabled={routes.length>=64} onClick={()=>{

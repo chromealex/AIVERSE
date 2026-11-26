@@ -10,6 +10,7 @@
 #include "apps/editor/AuthoringWater.h"
 #include "apps/studio-native/StudioScene.h"
 #include "apps/studio-native/StudioAttachmentPreview.h"
+#include "apps/studio-native/StudioGpuEmitterPlayback.h"
 #include "apps/studio-native/StudioEffectPlayback.h"
 #include "engine/render/CameraCaptureViews.h"
 #include "engine/render/EcsCameraRender.h"
@@ -2059,6 +2060,7 @@ StudioScene::~StudioScene() {
                 (void)staticScenery_.release(); // Quarantine owners while submitted work is unresolved.
             }
         }
+        gpuEmitter_.reset();
         effectFile_.reset();
         if(textureGraph_){
             if(idle||!device_->gpuHealthy())textureGraph_->shutdownAfterIdle(*device_);
@@ -3137,6 +3139,15 @@ Json StudioScene::attachmentCommand(const std::string& project,const Json& param
         Json result=Json::object();result.set("time",Json::number(double(attachmentPreview_->time()),4));return result;
     }
     attachmentPreview_->controls(params);return Json::object();
+}
+Json StudioScene::gpuEmitterCommand(const std::string& project,const Json& params){
+    if(!gpuEmitter_)gpuEmitter_=std::make_unique<StudioGpuEmitterPlayback>(*device_,project);
+    return gpuEmitter_->command(params);
+}
+void StudioScene::drawGpuEmitter(int width,int height){
+    if(!gpuEmitter_||width<2||height<2)return;
+    device_->beginFrame(width,height);StudioFrameScope frame{*device_};
+    gpuEmitter_->draw(renderer_,width,height);
 }
 Json StudioScene::effectFileCommand(const std::string& project,const Json& params){
     if(!effectFile_)effectFile_=std::make_unique<StudioEffectPlayback>(*device_,deviceLifetime_->lease(),project);

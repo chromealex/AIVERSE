@@ -762,9 +762,10 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
         positioned:(htmlComposite_?NSWindowBelow:NSWindowAbove) relativeTo:web_];
     for(int i=0;i<int(studio::StudioSurface::Count)-int(studio::StudioSurface::Material);++i){
         NSView* view;
-        if(i==int(studio::StudioSurface::EffectFile)-int(studio::StudioSurface::Material)){
+        const auto surface=static_cast<studio::StudioSurface>(i+int(studio::StudioSurface::Material));
+        if(surface==studio::StudioSurface::GpuEmitter||surface==studio::StudioSurface::EffectFile){
             StudioFxView* effect=[[StudioFxView alloc] initWithFrame:NSZeroRect];
-            effect.surface=studio::StudioSurface::EffectFile;effect.shell=self;view=effect;
+            effect.surface=surface;effect.shell=self;view=effect;
         }else view=i>=3&&i<=4?[[StudioCharacterSurface alloc] initWithFrame:NSZeroRect]:[[NSView alloc] initWithFrame:NSZeroRect];
         view.wantsLayer=YES;view.layer=[CAMetalLayer layer];view.hidden=YES;
         if(i>=3&&i<=4){

@@ -394,3 +394,5 @@ Finish selectable file rows, keyboard copy and folder context actions in the HTM
 GPU asset authoring: expose project-scoped list/read/validate/save of fx/gpu emitters and event routes through canonical SpectraFX codecs. Preserve raw source, reject stale saves and edit in the HTML GPU functions window.
 
 GPU files: expose emitter execution, capacity, alpha and fallback policies and route quality/budget as editable fields.
+
+GPU emitter playback: give the authoring panel its own native surface and hybrid runtime instance. Verify draft execution mode changes, pause, step, restart and camera with Scene closed.

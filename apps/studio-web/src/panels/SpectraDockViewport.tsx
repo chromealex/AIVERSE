@@ -11,7 +11,7 @@ import './SpectraDockViewport.css';
  * No fake browser pixels, WebGL duplicate or bitmap transport.
  */
 export default function SpectraDockViewport({id='fx',label='Native GPU particle preview',onRect}:{
-  id?:'fx'|'shader'|'material'|'facialRig'|'character'|'appearance'|'animationGraph'|'animationRig'|'attachments'|'lensCamera'|'lighting'|'effectFile';label?:string;onRect?:(rect:{x:number;y:number;width:number;height:number})=>void
+  id?:'fx'|'shader'|'material'|'facialRig'|'character'|'appearance'|'animationGraph'|'animationRig'|'attachments'|'lensCamera'|'lighting'|'effectFile'|'gpuEmitter';label?:string;onRect?:(rect:{x:number;y:number;width:number;height:number})=>void
 }={}){
   const ref=useRef<HTMLDivElement>(null);
   const native=nativeConnected();

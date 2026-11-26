@@ -3,6 +3,8 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-native/StudioGpuEmitterPlayback.h",
+    "apps/studio-web/src/panels/GpuEmitterPreview.tsx",
     "apps/editor/core/SpectraGpuFileOps.cpp",
     "apps/studio-web/src/panels/SpectraGpuFiles.tsx",
     "apps/studio-web/src/panels/SpectraGpuFiles.css",

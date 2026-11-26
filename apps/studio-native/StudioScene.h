@@ -448,6 +448,8 @@ public:
     Json configureLensCamera(const Json& params);
     bool lensCameraReady() const {return lensCamera_.has_value();}
     Json attachmentCommand(const std::string& project,const Json& params);
+    Json gpuEmitterCommand(const std::string& project,const Json& params);
+    void drawGpuEmitter(int width,int height);
     Json effectFileCommand(const std::string& project,const Json& params);
     void drawEffectFile(int width,int height);
     void drawAttachments(int width,int height);
@@ -636,6 +638,7 @@ private:
     std::shared_ptr<const game::TerrainLook> planetTerrainLook_;
     bool baseTerrainView_=false;
     bool terrainWasShown_=false,terrainCavernsAuthored_=false;
+    std::unique_ptr<class StudioGpuEmitterPlayback> gpuEmitter_;
     std::unique_ptr<class StudioEffectPlayback> effectFile_;
     std::unique_ptr<class StudioAttachmentPreview> attachmentPreview_;
     std::shared_ptr<const render::Model> animationSource_;

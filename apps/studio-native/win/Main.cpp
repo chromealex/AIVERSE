@@ -590,7 +590,7 @@ public:
         if (s && s->core_) {
             const int which = int(GetWindowLongPtrW(h, GWLP_USERDATA));
             if(which==int(studio::StudioSurface::Character)||which==int(studio::StudioSurface::Appearance))return s->characterInput(h,msg,wp,lp,static_cast<studio::StudioSurface>(which));
-            if(which>=3 && which!=int(studio::StudioSurface::EffectFile))return DefWindowProcW(h,msg,wp,lp);
+            if(which>=3 && which!=int(studio::StudioSurface::EffectFile) && which!=int(studio::StudioSurface::GpuEmitter))return DefWindowProcW(h,msg,wp,lp);
             const LRESULT handled = which==0?s->sceneInput(h,msg,wp,lp):
                 which==1?s->gameInput(h,msg,wp,lp):
                 s->fxInput(h,msg,wp,lp,static_cast<studio::StudioSurface>(which));
