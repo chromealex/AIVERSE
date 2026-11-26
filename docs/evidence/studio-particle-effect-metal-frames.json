@@ -1,0 +1,10 @@
+{
+  "sha": "ad02d6bc5b799f557a8a90447e8525ef6ea14a11",
+  "argv": [
+    "bash",
+    "/tmp/fx-play-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-particle-effect-metal-frames.log.txt",
+  "sha256": "8f4bdd0e630c46aea2d659c7d731b910243d864397751d1c5a9f79990dc913f7"
+}
