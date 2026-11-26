@@ -1,6 +1,7 @@
 import {useEffect,useId,useState} from 'react';
 import {invoke,onNativeEvent} from '../bridge';
 import {StudioAlert,StudioButton,StudioInput,StudioSection,StudioSelect} from '../ui';
+import './SourceModelPreview.css';
 import SpectraDockViewport from './SpectraDockViewport';
 
 export default function SourceModelPreview({project}:{project:string}){
@@ -47,6 +48,7 @@ export default function SourceModelPreview({project}:{project:string}){
     void invoke('studio.sourceModelPreview',{project,[axis]:value}).catch(e=>setError(String(e)));
   }
   return <StudioSection title="Model preview">
+    <div className={'source-model'+(active?' has-preview':'')}>
     <form className="au-stack" onSubmit={e=>{e.preventDefault();if(path.trim()&&!busy)void open();}}>
       {!!sources.length&&<label>Game type<StudioSelect aria-label="Original model game type" value={sourceType}
         onChange={e=>{const type=e.target.value;setSourceType(type);setPath(sources.find(row=>row.type===type)?.path??'');}}>
@@ -60,10 +62,10 @@ export default function SourceModelPreview({project}:{project:string}){
         <StudioButton type="submit" disabled={!path.trim()||busy}>Preview original</StudioButton>
       </div>
     </form>
-    {error&&<StudioAlert tone="danger">{error}</StudioAlert>}
-    {active&&<div className="au-stack">
+    {active&&<div className="source-model__viewer">
       <strong>{active}</strong>
       <SpectraDockViewport id="sourceModel" label={configured?'Configured game type':'Original imported model'}/>
+      <div className="source-model__controls">
       {configured&&<div className="au-row">
         <label>Player<StudioSelect aria-label="Preview player" value={owner} onChange={e=>{
           const value=Number(e.target.value);setOwner(value);
@@ -77,6 +79,9 @@ export default function SourceModelPreview({project}:{project:string}){
         value={yaw} onChange={e=>orbit('yaw',e.target.valueAsNumber)}/></label>
       <label>Elevation<StudioInput aria-label="Original model elevation" type="range" min={-.9} max={1.4} step={.01}
         value={pitch} onChange={e=>orbit('pitch',e.target.valueAsNumber)}/></label>
+      </div>
     </div>}
+    </div>
+    {error&&<StudioAlert tone="danger">{error}</StudioAlert>}
   </StudioSection>;
 }
