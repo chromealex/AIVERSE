@@ -144,7 +144,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'actor': return <LensCameraPanel actorSession={!!snapshot?.project.actorSession} openScene={()=>ctx.showPanel('scene')} key={snapshot?.project.path} project={snapshot?.project.path??''} operations={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
       case 'anim_graph': case 'anim_rig': return <AnimationGraphPanel key={panel+snapshot?.project.path} rigMode={panel==='anim_rig'} projectPath={snapshot?.project.path??''} tools={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
       case 'fx_library': return <SpectraLibraryPanel key={snapshot?.project.path ?? ''} projectPath={snapshot?.project.path ?? ''} showPanel={ctx.showPanel}/>;
-      case 'fx_graph': return <SpectraDataInterfacesPanel projectPath={snapshot?.project.path ?? ''}
+      case 'fx_graph': return <SpectraDataInterfacesPanel key={snapshot?.project.path} projectPath={snapshot?.project.path ?? ''}
         onSaved={()=>void invoke('studio.snapshot',{}).then(ctx.commitSnapshot).catch(()=>{})}/>;
       case 'fog': return <FogPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'scripts': return <ScriptsPanel key={snapshot?.project.path} location={ctx.scriptLocation} consumeLocation={ctx.consumeScriptLocation} playing={!!ctx.playing} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;

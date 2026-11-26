@@ -3661,7 +3661,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             if(op=="shader_graph_apply" && input.getStr("scope")=="map" && params.has("expectedMap") &&
                (!params["expectedMap"].isString() || params.getStr("expectedMap")!=ws_.map.path))
                 throw std::runtime_error("Map changed before shader application; check the current map and retry.");
-            const bool graphWrite=op=="fx_graph_set" || op=="texture_graph_set" || op=="animation_graph_set";
+            const bool graphWrite=op=="fx_graph_set" || op=="fx_graph_draft_set" || op=="texture_graph_set" || op=="animation_graph_set";
             if(graphWrite && input["expected"].isString())
                 input.set("expected",graphOriginal(input["expected"]));
             if(op=="terraweave_caverns_paint" && input.getStr("mode")!="get" &&
@@ -3671,9 +3671,11 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             const bool wasDirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
             const size_t depth=ws_.map.undoDepth(),entityCount=ws_.map.data.entities.size();
             Json result=ws_.call(op,input,"studio");
-            const bool graphRead=op=="fx_graph_get" || op=="texture_graph_get" || op=="animation_graph_get";
+            const bool graphRead=op=="fx_graph_get" || op=="fx_graph_draft_get" || op=="texture_graph_get" || op=="animation_graph_get";
             if((graphRead || graphWrite) && result["graph"].isObject())
                 result.set("originalJson",str(result["graph"].dump()));
+            if((op=="fx_graph_set" || op=="fx_graph_draft_set") && result.getBool("ok") && input["graph"].isObject() && !input.has("text"))
+                result.set("originalJson",str(input["graph"].dump()));
             if(op=="terraweave_caverns_paint"&&!result.has("error"))result.set("mapRevisionText",str(std::to_string(ws_.map.revision)));
             if (result.has("error")) throw std::runtime_error(result.getStr("error"));
             const bool dirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
