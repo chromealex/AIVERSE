@@ -127,19 +127,22 @@ jobs:
         run: cmake --build build/studio-windows-ci --config Release --target aiverse_studio aiversemcp aiverse_studio_owner_history_tests aiverse_studio_session_tests aiverse_studio_asset_transfer_tests aiverse_studio_move_journal_tests --parallel 4
       - name: Studio session contract (Windows)
         run: ctest --test-dir build/studio-windows-ci -C Release --output-on-failure --no-tests=error -R "^studio_(session|asset_transfers|move_journal|owner_history|mcp_registry)$"
-      - name: Check the package (exe, WebView2 loader, UI)
-        shell: bash
+      - name: Launch the staged Studio distribution and open a project
+        shell: pwsh
+        timeout-minutes: 4
         run: |
-          OUT=build/studio-windows-ci/apps/studio-native/Release
-          ls -la "$OUT"
-          test -f "$OUT/AiverseStudio.exe" && test -f "$OUT/WebView2Loader.dll" && test -f "$OUT/studio-web/index.html"
+          $out = 'build/studio-windows-ci/apps/studio-native/Release'
+          $stage = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP 'Studio distribution')
+          foreach ($file in 'AiverseStudio.exe','aiversemcp.exe','WebView2Loader.dll','studio-web','engine') {
+            Copy-Item (Join-Path $out $file) $stage.FullName -Recurse
+          }
+          python -B apps/studio-native/tests/standalone_bundle.py $stage.FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $project = Join-Path $env:RUNNER_TEMP 'Studio launch project'
+          Copy-Item demos/order-upgrade $project -Recurse
+          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--force-renderer-accessibility'
+          ./apps/studio-native/tests/windows_project_launch.ps1 -Package $stage.FullName -Project $project
       - uses: actions/upload-artifact@v4
         with:
           name: aiverse-studio-windows
-          path: |
-            build/studio-windows-ci/apps/studio-native/Release/AiverseStudio.exe
-            build/studio-windows-ci/apps/studio-native/Release/WebView2Loader.dll
-            build/studio-windows-ci/apps/studio-native/Release/studio-web/
-            build/studio-windows-ci/apps/studio-native/Release/aiversemcp.exe
-            build/studio-windows-ci/apps/studio-native/Release/engine/fonts/
-            build/studio-windows-ci/apps/studio-native/Release/engine/fx/physis/
+          path: ${{ runner.temp }}/Studio distribution/
