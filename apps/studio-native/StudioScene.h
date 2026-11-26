@@ -377,6 +377,7 @@ public:
     void setBaseTerrainView(bool base){
         if(baseTerrainView_==base)return;
         baseTerrainView_=base;
+        planetRevision_=std::numeric_limits<uint64_t>::max();
         terrainRevision_=std::numeric_limits<uint64_t>::max();
         lightingRevision_=std::numeric_limits<uint64_t>::max();
         lastFrameSignature_=0;

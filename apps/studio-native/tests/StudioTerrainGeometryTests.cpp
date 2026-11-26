@@ -238,6 +238,18 @@ int main() {
     globe.data.entities.push_back(e);
     const auto preview=StudioPlanetPreview::build(globe,0);
     AIVERSE_TEST_CHECK(preview&&preview->mesh.indices().size()==6*8*8*6);
+    {
+        auto& surface=globe.data.bodies.front();
+        surface.detailScale=4;surface.detail.assign(6*33*33,0);
+        surface.detail[surface.detailIndex(0,9,13)]=3*256;
+        const auto refined=StudioPlanetPreview::build(globe,0);
+        const auto base=StudioPlanetPreview::build(globe,0,true);
+        AIVERSE_TEST_CHECK(refined && base && refined->mesh.indices().size()==6*32*32*6);
+        AIVERSE_TEST_CHECK(std::abs(refined->extent-67.f)<.01f && std::abs(base->extent-64.f)<.01f);
+        AIVERSE_TEST_CHECK(StudioPlanetPreview::height(surface,0,2.25f,3.25f)==3.f);
+        AIVERSE_TEST_CHECK(StudioPlanetPreview::height(surface,0,2.25f,3.25f,true)==0.f);
+        surface.detail.clear();surface.detailScale=0;
+    }
     Json grid=Json::parse(R"({"body":"terra","faceSize":8,"radius":64,"step":2,"side":5})");
     Json coarse=Json::array();for(int i=0;i<6*25;++i)coarse.push(Json::number(int64_t(0)));grid.set("corners",coarse);
     const auto low=buildStudioLivePlanetTerrain(grid,body,*preview);

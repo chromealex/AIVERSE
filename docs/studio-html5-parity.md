@@ -374,3 +374,5 @@ Terrain grid transfer: choose automatic, base-cell or detail-sample routing for 
 Terrain base-surface inspection: show and pick the editable corner surface while an explicit base brush is armed in the map Scene. Check return to detail on disarm and that inspection never rewrites either layer.
 
 Planetary Terrain transfer: pick the visible body mesh, route sculpt and cell materials through the shared spherical operations, and keep one body per undoable stroke. Verify body isolation, radial height sampling and real macOS Scene input.
+
+Planetary sub-cell surface transfer: display explicit per-face detail heights, preserve the selectable base grid and sample the displayed layer. Verify a sub-cell peak on an otherwise flat planet.

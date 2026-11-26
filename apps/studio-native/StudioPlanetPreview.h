@@ -3,6 +3,7 @@
 #pragma once
 #include "apps/studio-native/StudioVisualPicking.h"
 #include "engine/game/Sphere.h"
+#include "engine/view/game/GamePlanet.h"
 #include "apps/studio-native/StudioModelPicking.h"
 #include <optional>
 #include <array>
@@ -24,11 +25,20 @@ struct StudioPlanetPreview {
     std::vector<Link> links;
     static render::float3 f3(Vec3 v){return {float(v.x.toDouble()),float(v.y.toDouble()),float(v.z.toDouble())};}
     static Fixed fixed(float v){return Fixed::fromRaw(int64_t(std::llround(double(v)*Fixed::kOne)));}
-    static float height(const editor::DocBody& body,int face,float a,float b){
-        const int n=body.faceSize;
+    static int detailScale(const editor::DocBody& body){
+        if(body.faceSize<1 || body.faceSize>512 || body.detailScale<1 || body.detailScale>16)return 0;
+        const size_t width=size_t(body.detailSide())+1;
+        return body.detail.size()==6*width*width ? body.detailScale : 0;
+    }
+    static float height(const editor::DocBody& body,int face,float a,float b,bool baseGrid=false){
+        const int detail=baseGrid?0:detailScale(body);
+        const int scale=std::max(1,detail),n=body.faceSize*scale;
+        a=std::clamp(a*scale,0.f,float(n));b=std::clamp(b*scale,0.f,float(n));
         const int x=std::min(n-1,int(std::floor(a))),y=std::min(n-1,int(std::floor(b)));
         const float u=a-x,v=b-y;
-        const auto h=[&](int i,int j){return float(body.corners[body.cornerIndex(face,i,j)])/16.f;};
+        const auto h=[&](int i,int j){
+            if(detail)return float(body.detail[body.detailIndex(face,i,j)])/game::kPlanetDetailUnit;
+            return float(body.corners[body.cornerIndex(face,i,j)])/16.f;};
         return (h(x,y)*(1-u)+h(x+1,y)*u)*(1-v)+(h(x,y+1)*(1-u)+h(x+1,y+1)*u)*v;
     }
     // Surface yaw about radial up. The model basis must be orthonormal:
@@ -58,7 +68,7 @@ struct StudioPlanetPreview {
         }
         return render::mat4::translate(ground)*basis*local;
     }
-    static std::optional<StudioPlanetPreview> build(const editor::MapDoc& doc,int bi){
+    static std::optional<StudioPlanetPreview> build(const editor::MapDoc& doc,int bi,bool baseGrid=false){
         if(bi<0||size_t(bi)>=doc.data.bodies.size())return {};
         const auto& body=doc.data.bodies[size_t(bi)];
         const int n=body.faceSize;
@@ -68,24 +78,30 @@ struct StudioPlanetPreview {
         StudioPlanetPreview out;out.bodyId=body.id;out.faceSize=n;out.radius=float(r);out.extent=out.radius;
         game::CubeSphere cube(n);
         // Coarse authoring preview, same face boundaries on all sides.
-        const int step=std::max(1,(n+63)/64);
+        const int detail=baseGrid?0:detailScale(body);
+        const int scale=std::max(1,detail),side=n*scale;
+        const int budget=detail?128:64;
+        const int step=std::max(1,(side+budget-1)/budget);
         const auto point=[&](int face,float x,float y){
             const auto dir=f3(cube.dirFromFace(face,fixed(x),fixed(y)));
-            return dir*(out.radius+height(body,face,x,y));
+            return dir*(out.radius+height(body,face,x,y,baseGrid));
         };
-        for(int f=0;f<6;++f)for(int y=0;y<n;y+=step)for(int x=0;x<n;x+=step){
-            const int xx=std::min(n,x+step),yy=std::min(n,y+step);
-            std::array<render::float3,4> p{point(f,float(x),float(y)),point(f,float(xx),float(y)),point(f,float(xx),float(yy)),point(f,float(x),float(yy))};
+        for(int f=0;f<6;++f)for(int sy=0;sy<side;sy+=step)for(int sx=0;sx<side;sx+=step){
+            const float x=float(sx)/scale,y=float(sy)/scale;
+            const float xx=float(std::min(side,sx+step))/scale,yy=float(std::min(side,sy+step))/scale;
+            std::array<render::float3,4> p{point(f,x,y),point(f,xx,y),point(f,xx,yy),point(f,x,yy)};
             auto normal=render::cross(p[1]-p[0],p[2]-p[0]);
-            if(render::dot(normal,p[0])<0)std::swap(p[1],p[3]);
+            if(render::dot(normal,p[0])<0){std::swap(p[1],p[3]);normal=normal*-1.f;}
+            const auto slope=detail && render::dot(normal,normal)>1e-12f ?
+                render::normalize(normal)-render::normalize(p[0]+p[1]+p[2]+p[3]) : render::float3{};
             const auto offset=uint32_t(out.mesh.vertexCount());
-            const size_t ci=body.cellIndex(f,x,y);
+            const size_t ci=body.cellIndex(f,sx/scale,sy/scale);
             const auto color=terrainPreviewColor(ci<body.cells.size()?body.cells[ci]:'.');
             for(const auto& v:p){
                 const float length=std::sqrt(render::dot(v,v));
                 if(!std::isfinite(length)||length<.01f)return {};
                 out.extent=std::max(out.extent,length);
-                out.mesh.addVertex(v,v*(1.f/length),color);
+                out.mesh.addVertex(v,render::normalize(v*(1.f/length)+slope),color);
             }
             out.mesh.addTriangle(offset,offset+1,offset+2);
             out.mesh.addTriangle(offset,offset+2,offset+3);

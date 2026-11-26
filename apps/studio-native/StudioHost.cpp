@@ -1126,7 +1126,7 @@ void StudioHost::tickScene() {
     in.map = mapSnapshot_; in.rules = rulesSnapshot_;
     const auto& brush=session_->sceneBrush();
     in.brushArmed=brush.armed;
-    in.editBaseTerrain=brush.editsBaseGrid() && !map.data.worldSpace && !map.data.planet();
+    in.editBaseTerrain=brush.editsBaseGrid() && !map.data.worldSpace;
     if(brush.armed && brush.kind=="region")in.regionBorderLetter=brush.regionLetter.front();
     else if(brush.regionBorders)in.regionBorderLetter='.';
     in.fps = ws.map.data.worldSpace;
@@ -1424,7 +1424,7 @@ bool StudioHost::resolveBrushPoint(double x,double y,double w,double h,render::f
     const auto& map=session_->workspace().map;
     if(map.data.planet() && (brush.kind=="terrain" || brush.kind=="paint")){
         std::string body;double height=0;
-        if(!onScene([&]{return preview_->planetBrushPoint(x,y,w,h,map,at,body,height);}))return false;
+        if(!onScene([&]{return preview_->baseTerrainView()==brush.editsBaseGrid() && preview_->planetBrushPoint(x,y,w,h,map,at,body,height);}))return false;
         if(planetBody)*planetBody=body;
         if(elevation)*elevation=height;
         return true;

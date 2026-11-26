@@ -2144,7 +2144,7 @@ bool StudioScene::planetBrushPoint(double x,double y,double w,double h,const edi
     game::CubeSphere cube(planetPreview_->faceSize);
     int face;Fixed a,b;
     cube.faceFromDir({StudioPlanetPreview::fixed(unit.x),StudioPlanetPreview::fixed(unit.y),StudioPlanetPreview::fixed(unit.z)},face,a,b);
-    elevation=StudioPlanetPreview::height(doc.data.bodies[size_t(index)],face,float(a.toDouble()),float(b.toDouble()));
+    elevation=StudioPlanetPreview::height(doc.data.bodies[size_t(index)],face,float(a.toDouble()),float(b.toDouble()),baseTerrainView_);
     return true;
 }
 std::optional<Json> StudioScene::forestGroundPlacement(float x,float y,float w,float h,const std::string& path,uint64_t revision)const{
@@ -4313,7 +4313,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     if(changedDocument){
         if(!device_->waitForResourceIdle())return;
         clearLivePlanetTerrain();
-        auto next=StudioPlanetPreview::build(doc,body);
+        auto next=StudioPlanetPreview::build(doc,body,baseTerrainView_);
         Mesh replacement;
         if(next)replacement=next->mesh.upload(*device_);
         if(!changedBody && planetRevision_!=doc.revision)clearTransformPreview();
@@ -4497,7 +4497,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                         int canonical;Fixed ca,cb;cube.faceFromDir(dir,canonical,ca,cb);
                         Vec3 east,south;game::CubeSphere::faceTangents(canonical,dir,east,south);
                         const auto& bodyDoc=doc.data.bodies[size_t(body)];
-                        const float height=StudioPlanetPreview::height(bodyDoc,face,float(x.toDouble()),float(y.toDouble()));
+                        const float height=StudioPlanetPreview::height(bodyDoc,face,float(x.toDouble()),float(y.toDouble()),baseTerrainView_);
                         const auto position=StudioPlanetPreview::f3(dir)*(planetPreview_->radius+height);
                         const auto frame=studioForestFrame(position,StudioPlanetPreview::f3(dir),StudioPlanetPreview::f3(east));
                         const render::float3 col{plant.world.at(0,0),plant.world.at(1,0),plant.world.at(2,0)};
@@ -5121,7 +5121,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
             const auto dir=up*std::cos(angle)+(east*std::cos(phase)+north*std::sin(phase))*std::sin(angle);
             int face;Fixed a,b;
             cube.faceFromDir({StudioPlanetPreview::fixed(dir.x),StudioPlanetPreview::fixed(dir.y),StudioPlanetPreview::fixed(dir.z)},face,a,b);
-            const auto point=dir*(planetPreview_->radius+StudioPlanetPreview::height(body,face,float(a.toDouble()),float(b.toDouble()))+.05f);
+            const auto point=dir*(planetPreview_->radius+StudioPlanetPreview::height(body,face,float(a.toDouble()),float(b.toDouble()),baseTerrainView_)+.05f);
             if(i)renderer_.line(previous,point,rgba(120,200,255,230));
             previous=point;
         }
