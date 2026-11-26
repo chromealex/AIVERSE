@@ -1,0 +1,10 @@
+{
+  "sha": "b31fcc2ec0013f2af3a8ef39c28055483d425f69",
+  "argv": [
+    "bash",
+    "/tmp/grid-surface-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-terrain-base-surface.log.txt",
+  "sha256": "2f46123916684a878e199d379aa8a5480a62bc1b77ca67f9b7bd98e45ba05da5"
+}
