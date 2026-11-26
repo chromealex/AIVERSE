@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import TileAtlasPicker from './TileAtlasPicker';
 import { Brush, Spline } from 'lucide-react';
 import { invoke, onNativeEvent } from '../bridge';
 import { WorldProcessDiagnostics } from '../components/WorldProcessDiagnostics';
@@ -199,11 +200,11 @@ export function EcologyLayerPicker(){
 }
 export interface BrushField { id:string; perPlayer:boolean; layers:number; type:string; min?:number; max?:number; resolution:number; kernels:string[]; effects:string[] }
 const EMPTY_FIELDS: BrushField[] = [];
-export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS }: { kinds: BrushKind[]; fields?: BrushField[] }) {
+export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS, tileCatalog, project }: { kinds: BrushKind[]; project:string; tileCatalog?: {mapTileset?:string;tilesets?:{path:string;terrains?:{id:string}[]}[]}; fields?: BrushField[] }) {
   const [brush, setBrush] = useState<StudioSceneBrush | null>(null);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
-  const [options, setOptions] = useState<{ tiles: string[]; types: string[]; roads: string[] }>({ tiles: [], types: [], roads: [] });
+  const [options, setOptions] = useState<{ types: string[]; roads: string[] }>({ types: [], roads: [] });
   const set = (patch: Partial<StudioSceneBrush>) =>
     void invoke('studio.sceneBrush', patch).then(b => { setBrush(b); setError(''); }).catch(e => setError(message(e)));
   useEffect(() => {
@@ -216,15 +217,14 @@ export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS }: { kinds: B
   const kind = brush && kinds.includes(brush.kind) ? brush.kind : kinds[0];
   useEffect(() => {
     // Choices for the active tool, from the same ops the panels use.
-    if (kind === 'tiles') void op('tileset_list').then(r => setOptions(o => ({ ...o,
-      tiles: (r.tilesets ?? []).filter((t: any) => !r.mapTileset || t.name === r.mapTileset || t.path?.includes(r.mapTileset)).flatMap((t: any) => (t.terrains ?? []).map((x: any) => x.id)) }))).catch(() => {});
     if (kind === 'road') void op('road_types').then(r => setOptions(o => ({ ...o, roads: (r.types ?? []).map((t: any) => t.id ?? t.name).filter(Boolean) }))).catch(() => {});
     if (kind === 'objects') void invoke('studio.rules', {}).then((r: any) => setOptions(o => ({ ...o, types: Object.keys(r.types ?? {}).sort() }))).catch(() => {});
   }, [kind]);
+  const tileset = tileCatalog?.tilesets?.find(t => t.path === tileCatalog.mapTileset);
   // A tool with nothing chosen yet takes the first choice, so a stroke never fails on an empty setting.
   useEffect(() => {
     if (!brush) return;
-    if (kind === 'tiles' && !brush.tile && options.tiles[0]) set({ tile: options.tiles[0] });
+    if (kind === 'tiles' && tileset?.terrains?.length && !tileset.terrains.some(t => t.id === brush.tile)) set({ tile: tileset.terrains[0].id });
     if (kind === 'field' && fields.length) {
       const selected = fields.find(f => f.id === brush.field);
       if (!selected) set({ field: fields[0].id });
@@ -232,14 +232,14 @@ export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS }: { kinds: B
     }
     if (kind === 'road' && !brush.roadType && options.roads[0]) set({ roadType: options.roads[0] });
     if (kind === 'objects' && !brush.type && options.types[0]) set({ type: options.types.find(t => /tree|rock|stone/i.test(t)) ?? options.types[0] });
-  }, [kind, fields, options, brush?.fieldPlayer, brush?.tile, brush?.field, brush?.roadType, brush?.type]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [kind, fields, tileset, options, brush?.fieldPlayer, brush?.tile, brush?.field, brush?.roadType, brush?.type]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!brush) return null;
   const field = fields.find(f => f.id === brush.field);
   const continuous = kind === 'terrain' || kind === 'paint' || kind === 'tiles' || kind === 'region' || kind === 'field' || kind === 'objects';
   return <div className={'tbrush' + (brush.armed ? ' is-armed' : '')}>
     {kind !== 'field' && !kinds.includes('region') && <EcologyLayerPicker/>}
     <div className="tbrush__row">
-      <button type="button" className={'au-button au-button--sm' + (brush.armed ? ' au-button--primary' : '')} aria-pressed={brush.armed} disabled={!brush.armed && kind === 'field' && (!field || (field.perPlayer && field.layers <= 1))}
+      <button type="button" className={'au-button au-button--sm' + (brush.armed ? ' au-button--primary' : '')} aria-pressed={brush.armed} disabled={!brush.armed && ((kind === 'tiles' && !tileset?.terrains?.length) || (kind === 'field' && (!field || (field.perPlayer && field.layers <= 1))))}
         onClick={() => { set({ armed: !brush.armed, kind }); if (!brush.armed) setEditing(false); }} title="Drag in the Scene (Alt+drag orbits, [ ] size, Esc stops)">
         <Brush size={13}/>{brush.armed ? 'Brush on' : 'Brush'}</button>
       {(kind === 'road' || kind === 'river') && <button type="button" className={'au-button au-button--sm' + (editing ? ' au-button--primary' : '')}
@@ -259,7 +259,11 @@ export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS }: { kinds: B
         {Array.from('ABCDEFGHIJKLMNOPQRSTUVWXYZ', letter => <option key={letter}>{letter}</option>)}
         <option value=".">Erase region</option>
       </select></label>}
-    {kind === 'tiles' && <Choice label="Terrain" value={brush.tile} options={options.tiles} onChange={v => set({ tile: v })}/>}
+    {kind === 'tiles' && <>
+      <Choice label="Terrain" value={brush.tile} options={tileset?.terrains?.map(t => t.id) ?? []} onChange={v => set({ tile: v })}/>
+      {tileset && <TileAtlasPicker key={project + '/' + tileset.path} project={project} tileset={tileset.path}
+        tile={brush.fixedTile} select={fixedTile => set({fixedTile})}/>}
+    </>}
     {kind === 'field' && <>
       <Choice label="Field" value={brush.field} options={fields.map(f => f.id)} onChange={v => set({ field: v })}/>
       {field && <small>{field.type === 'fixed' ? 'Fractional' : 'Integer'} · {field.resolution} × {field.resolution} map cells per field cell

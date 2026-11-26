@@ -1,5 +1,6 @@
 #include "StudioHierarchyGroups.h"
 #include "StudioOverlayPlan.h"
+#include "engine/game/Tiles.h"
 #include "StudioPlacementGhost.h"
 #include "apps/editor/core/LightBakeOps.h"
 #include "StudioDocumentIds.h"
@@ -3847,6 +3848,35 @@ bool StudioHost::handleHostMethod(const Json& req) {
             views.push(std::move(view));
         }
         return views;
+    });
+    if (method == "studio.tileAtlas") return answer([&] {
+        if(projectLoading_)throw std::runtime_error("Wait for the project to open");
+        const auto& ws=session_->workspace();
+        const auto path=ws.map.data.extra["tiles"].getStr("tileset");
+        if(ws.project.dir.empty() || params.getStr("tileset")!=path ||
+           params.getStr("project")!=ws.project.dir)throw std::runtime_error("The map tileset changed");
+        std::string definition;
+        if(!readStudioOverlayAsset(ws.project.dir,path,definition))throw std::runtime_error("Tileset file unavailable");
+        const auto ts=game::loadTileset(Json::parse(definition));
+        const auto read=[&](const std::string& name,std::string& bytes){return readStudioOverlayAsset(ws.project.dir,name,bytes);};
+        const auto decode=[](const std::string& bytes,atlas::Image& image){
+            return render::decodeImage(bytes,image.width,image.height,image.rgba);
+        };
+        atlas::ImageSource packed(read,decode);
+        atlas::Image source;
+        if(!packed.load(ts.atlas,source)){
+            std::string bytes;
+            if(!read(ts.atlas,bytes)||!decode(bytes,source))throw std::runtime_error("Cannot load tile atlas: "+ts.atlas);
+        }
+        if(ts.columns>source.width/ts.tileW || ts.tileH>source.height)throw std::runtime_error("Tile layout exceeds atlas dimensions");
+        int width=0,height=0;
+        auto pixels=fitImage(source.rgba,source.width,source.height,768,width,height);
+        Json out=Json::object();
+        out.set("width",Json::number(int64_t(source.width)));out.set("height",Json::number(int64_t(source.height)));
+        out.set("tileWidth",Json::number(int64_t(ts.tileW)));out.set("tileHeight",Json::number(int64_t(ts.tileH)));
+        out.set("columns",Json::number(int64_t(ts.columns)));
+        out.set("url",Json::string("data:image/png;base64,"+editor::base64Encode(encodePng(pixels,width,height))));
+        return out;
     });
     if (method == "studio.viewportInput") return answer([&] { return viewportInput(params); });
     if (method == "studio.gameSelectEntity" || method == "studio.gameEntities" || method == "studio.gameInspect" || method == "studio.gameRegions" ||

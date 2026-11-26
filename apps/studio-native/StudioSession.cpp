@@ -1147,7 +1147,7 @@ Json StudioSession::saveMapAs(const std::string& path) {
 }
 Json StudioSession::openProject(const std::string& path) {
     if(agentRun_.running())throw std::runtime_error("Stop the running agent before opening a project");
-    strokeCancel();brush_.armed=false;brush_.regionBorders=false;
+    strokeCancel();brush_.armed=false;brush_.fixedTile=-1;brush_.regionBorders=false;
     agentHistoryUnsafe_=true;agentBatchFenced_=true;
     if (path.empty()) throw std::runtime_error("Project path is empty");
     const auto directory=recoveredProjectDir(ws_,path);
@@ -1707,7 +1707,7 @@ Json StudioSession::sceneBrushJson() const {
     Json o=Json::object();
     o.set("armed",Json::fromBool(b.armed));o.set("kind",str(b.kind));o.set("op",str(b.op));
     o.set("radius",Json::number(b.radius,3));o.set("strength",Json::number(b.strength,3));
-    o.set("layer",num(int64_t(b.layer)));o.set("tile",str(b.tile));o.set("field",str(b.field));o.set("fieldMode",str(b.fieldMode));o.set("fieldPlayer",num(int64_t(b.fieldPlayer)));
+    o.set("layer",num(int64_t(b.layer)));o.set("tile",str(b.tile));o.set("fixedTile",num(int64_t(b.fixedTile)));o.set("field",str(b.field));o.set("fieldMode",str(b.fieldMode));o.set("fieldPlayer",num(int64_t(b.fieldPlayer)));
     o.set("regionBorders",Json::fromBool(b.regionBorders));
     o.set("regionLetter",str(b.regionLetter));
     o.set("value",Json::number(b.value,3));o.set("type",str(b.type));o.set("owner",num(int64_t(b.owner)));
@@ -1797,7 +1797,7 @@ bool StudioSession::strokeDabImpl(double x, double z, std::string* error,double 
         circle.push(num(int64_t(x)));circle.push(num(int64_t(z)));circle.push(num(int64_t(b.radius)));
         p.set("circle",std::move(circle));p.set("letter",str(b.regionLetter));
     }
-    else if(b.kind=="tiles"){op="tile_paint";p.set("terrain",str(b.tile));p.set("x",num(int64_t(std::floor(x))));p.set("y",num(int64_t(std::floor(z))));
+    else if(b.kind=="tiles"){op="tile_paint";p.set("tile",num(int64_t(b.fixedTile)));p.set("terrain",str(b.tile));p.set("x",num(int64_t(std::floor(x))));p.set("y",num(int64_t(std::floor(z))));
         p.set("radius",num(int64_t(std::lround(b.radius))));}
     else if(b.kind=="field"){op="field_paint";p.set("id",str(b.field));p.set("x",num(int64_t(std::floor(x))));p.set("z",num(int64_t(std::floor(z))));
         p.set("radius",num(int64_t(std::lround(b.radius))));p.set("value",Json::number(b.value,3));p.set("mode",str(shift?"erase":b.fieldMode));p.set("player",num(int64_t(b.fieldPlayer)));}
@@ -2450,7 +2450,7 @@ Json StudioSession::assetHistoryJson() const {
 Json StudioSession::dispatch(const Json& request) {
     const std::string method=request.getStr("method");
     const bool switching=method=="studio.openProject"||method=="studio.openMap"||method=="studio.newMap"||method=="studio.hubOpen"||method=="studio.hubCreate";
-    if(switching){strokeCancel();brush_.armed=false;brush_.regionBorders=false;agentHistoryUnsafe_=true;agentBatchFenced_=true;}
+    if(switching){strokeCancel();brush_.fixedTile=-1;brush_.armed=false;brush_.regionBorders=false;agentHistoryUnsafe_=true;agentBatchFenced_=true;}
     if(stroking_){
         // The stroke owns the MapDoc transaction across frames. Only explicit
         // observational requests can enter; other edits retry after release.
@@ -4732,6 +4732,11 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             if (params.has("radius")) b.radius=number("radius",0.25,64);
             if (params.has("strength")) b.strength=number("strength",0,20);
             if (params.has("layer")) b.layer=int(number("layer",0,15));
+            if (params.has("fixedTile")) {
+                const double tile=number("fixedTile",-1,INT32_MAX);
+                if(std::floor(tile)!=tile)throw std::runtime_error("Choose a whole atlas tile number");
+                b.fixedTile=int(tile);
+            }
             if (params.has("tile")) b.tile=text("tile");
             if (params.has("field")) b.field=text("field");
             if(params.has("regionBorders")){

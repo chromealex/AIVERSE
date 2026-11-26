@@ -312,3 +312,5 @@ Windows Game device chrome: layer a click-through hardware mask and safe-area gu
 Game transfer: expose local first-person map play in the Game panel and verify actor pause, step and restart on the selected map.
 
 Fields transfer: expose the selected player layer in the Scene brush and apply Shift erase per dab. Verify layer isolation and Undo.
+
+Tiles transfer: browse the authored atlas, paint a fixed tile, and return to autotiling through the Scene brush. Verify saved map overrides and Undo.
