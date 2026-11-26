@@ -1,0 +1,10 @@
+{
+  "sha": "3df3f14ceaacc39df3340de53a5db84fb46e978a",
+  "argv": [
+    "bash",
+    "../build-page.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-build-atlas-page-override.log.txt",
+  "sha256": "dc4026ab3f1835caa5abc4d95f7d3964ab6def12f5b40da47aed7828f9c4b2a8"
+}
