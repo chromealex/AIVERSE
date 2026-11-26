@@ -1,0 +1,99 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+      Start 351: physis_core
+ 1/40 Test #351: physis_core ......................   Passed    0.03 sec
+      Start 352: physis_climate
+ 2/40 Test #352: physis_climate ...................   Passed    0.02 sec
+      Start 353: physis_environment
+ 3/40 Test #353: physis_environment ...............   Passed    0.02 sec
+      Start 354: physis_disasters
+ 4/40 Test #354: physis_disasters .................   Passed    0.02 sec
+      Start 355: physis_integration
+ 5/40 Test #355: physis_integration ...............   Passed    0.03 sec
+      Start 356: physis_nereid_contacts
+ 6/40 Test #356: physis_nereid_contacts ...........   Passed    0.03 sec
+      Start 357: physis_nature_stress
+ 7/40 Test #357: physis_nature_stress .............   Passed    0.03 sec
+      Start 358: physis_fracture_outbox
+ 8/40 Test #358: physis_fracture_outbox ...........   Passed    0.03 sec
+      Start 359: physis_nature_fall_host
+ 9/40 Test #359: physis_nature_fall_host ..........   Passed    0.03 sec
+      Start 360: physis_wind
+10/40 Test #360: physis_wind ......................   Passed    0.02 sec
+      Start 361: physis_gravity
+11/40 Test #361: physis_gravity ...................   Passed    0.02 sec
+      Start 362: physis_storm
+12/40 Test #362: physis_storm .....................   Passed    0.02 sec
+      Start 363: physis_forces
+13/40 Test #363: physis_forces ....................   Passed    0.02 sec
+      Start 364: physis_presentation
+14/40 Test #364: physis_presentation ..............   Passed    0.03 sec
+      Start 365: physis_nature_presentation
+15/40 Test #365: physis_nature_presentation .......   Passed    0.04 sec
+      Start 366: physis_parallel
+16/40 Test #366: physis_parallel ..................   Passed    0.83 sec
+      Start 367: physis_streaming
+17/40 Test #367: physis_streaming .................   Passed    0.26 sec
+      Start 368: physis_nature_runtime
+18/40 Test #368: physis_nature_runtime ............   Passed    0.03 sec
+      Start 369: physis_tornado
+19/40 Test #369: physis_tornado ...................   Passed    0.15 sec
+      Start 370: physis_firestorm
+20/40 Test #370: physis_firestorm .................   Passed    0.40 sec
+      Start 371: physis_nature_cues
+21/40 Test #371: physis_nature_cues ...............   Passed    0.04 sec
+      Start 372: physis_tornado_cues
+22/40 Test #372: physis_tornado_cues ..............   Passed    0.05 sec
+      Start 373: physis_diagnostics
+23/40 Test #373: physis_diagnostics ...............   Passed    0.03 sec
+      Start 374: physis_spatial_index
+24/40 Test #374: physis_spatial_index .............   Passed    0.03 sec
+      Start 375: physis_editor_view
+25/40 Test #375: physis_editor_view ...............   Passed    0.02 sec
+      Start 376: physis_scene_geometry
+26/40 Test #376: physis_scene_geometry ............   Passed    0.02 sec
+      Start 377: physis_project_config
+27/40 Test #377: physis_project_config ............   Passed    0.03 sec
+      Start 378: physis_authoring
+28/40 Test #378: physis_authoring .................   Passed    1.70 sec
+      Start 379: physis_nature_preview
+29/40 Test #379: physis_nature_preview ............   Passed    1.56 sec
+      Start 380: physis_mcp
+30/40 Test #380: physis_mcp .......................   Passed    1.69 sec
+      Start 381: physis_journal_posix_io
+31/40 Test #381: physis_journal_posix_io ..........   Passed    0.03 sec
+      Start 382: physis_journal_locked_io
+32/40 Test #382: physis_journal_locked_io .........   Passed    0.03 sec
+      Start 383: physis_journal_crash_recovery
+33/40 Test #383: physis_journal_crash_recovery ....   Passed    0.03 sec
+      Start 384: physis_admin_journal
+34/40 Test #384: physis_admin_journal .............   Passed    0.05 sec
+      Start 385: physis_remote_edit
+35/40 Test #385: physis_remote_edit ...............   Passed    0.03 sec
+      Start 386: physis_live_edit
+36/40 Test #386: physis_live_edit .................   Passed    0.03 sec
+      Start 387: physis_field_runtime
+37/40 Test #387: physis_field_runtime .............   Passed    0.03 sec
+      Start 388: physis_field_assets
+38/40 Test #388: physis_field_assets ..............   Passed    0.03 sec
+      Start 389: physis_field_authoring
+39/40 Test #389: physis_field_authoring ...........   Passed    1.51 sec
+      Start 412: physis_sky
+40/40 Test #412: physis_sky .......................   Passed    0.02 sec
+
+100% tests passed, 0 tests failed out of 40
+
+Label Time Summary:
+AUDIO          =   0.09 sec*proc (2 tests)
+ECS            =   0.10 sec*proc (4 tests)
+EDITOR         =   6.49 sec*proc (5 tests)
+MCP            =   1.69 sec*proc (1 test)
+NEREID         =   0.06 sec*proc (2 tests)
+NETWORK        =   0.08 sec*proc (2 tests)
+PERSISTENCE    =   1.00 sec*proc (9 tests)
+PHYSIS         =   8.99 sec*proc (39 tests)
+SECURITY       =   0.09 sec*proc (3 tests)
+TERRAWEAVE     =   0.07 sec*proc (2 tests)
+VFX            =   1.65 sec*proc (3 tests)
+
+Total Test time (real) =   9.10 sec
