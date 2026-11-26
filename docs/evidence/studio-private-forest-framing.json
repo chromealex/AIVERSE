@@ -1,0 +1,10 @@
+{
+  "sha": "243572ff12a88513b177c3d376cd76d2fb52ae9f",
+  "argv": [
+    "bash",
+    "/tmp/forest-panel-ui.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-private-forest-framing.log.txt",
+  "sha256": "2e55eb686d910a1746b6aab73aa18fe8b92ccac642f6e29924505198403f51de"
+}
