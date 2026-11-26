@@ -625,6 +625,7 @@
     "docs/evidence/studio-physis-surface-capture.json",
     "docs/evidence/studio-physis-full-viewport-capture.json",
     "docs/evidence/studio-physis-live-nature.json",
-    "docs/evidence/studio-physis-local-field-edit.json"
+    "docs/evidence/studio-physis-local-field-edit.json",
+    "docs/evidence/studio-physis-remote-field-edit.json"
   ]
 }
