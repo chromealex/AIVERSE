@@ -44,6 +44,9 @@ public:
     std::shared_ptr<const world::NaturePresentationFrame> natureFrame(float x,float z,float radius);
     Json physisFieldEdit(const editor::Workspace& ws,const Json& request,bool apply);
     const World* localPhysisWorld() const;
+    bool active() const { return actor_ || host_->active(); }
+    const StudioGameDevice& deviceProfile() const { return profile_; }
+    void captureNextFrame(gfx::Device::CaptureFn callback) { device_->captureNextFrame(std::move(callback)); }
     uint64_t runtimeEpoch() const { return runtimeEpoch_; }
     std::optional<uint64_t> physisTick() const;
     Json physisFrame(const Json& params) const;

@@ -1502,12 +1502,21 @@ bool StudioSession::pollAgentLink() {
         if(name=="view_screenshot"){
             // Answered by the host with the Scene's next frame (finishAgentScreenshot).
             if(!agentShots_.empty()){agentServer_.send(m.client,reply(id,error("another screenshot is pending; retry after its reply")).dump(-1));continue;}
-            const bool nature=args.getStr("window")=="physis";
+            const auto window=args.getStr("window",args.has("device")?"game":"scene");
+            const bool nature=window=="physis";
+            if (window=="game") {
+                if ((args.has("device") && (!args["device"].isString() || args.getStr("device").empty())) ||
+                    (args.has("clean") && (args["clean"].type()!=Json::Type::Bool || args.getBool("clean"))) ||
+                    args.size()!=size_t(args.has("window")+args.has("device")+args.has("clean"))) {
+                    agentServer_.send(m.client,reply(id,error("Game capture accepts the device preset and current Game viewport only")).dump(-1));
+                    continue;
+                }
+            }
             if(nature && args.size()!=1){
                 agentServer_.send(m.client,reply(id,error("PHYSIS capture uses the panel camera and current viewport size")).dump(-1));
                 continue;
             }
-            agentShots_.push_back({m.client,id,nature});
+            agentShots_.push_back({m.client,id,window,args.getStr("device")});
             agentLines_.push_back("→ view_screenshot");
             continue;
         }
@@ -1940,7 +1949,7 @@ void StudioSession::finishAgentScreenshot(const std::string& pngBase64, int widt
         else {
             result.set("png_base64",str(pngBase64));
             result.set("width",num(int64_t(width)));result.set("height",num(int64_t(height)));
-            result.set("view",str(shot.nature?"PHYSIS 3D nature viewport":"Studio Scene panel as the user sees it (camera unchanged)"));
+            result.set("view",str(shot.window=="game"?"Studio Game viewport":shot.window=="physis"?"PHYSIS 3D nature viewport":"Studio Scene panel as the user sees it (camera unchanged)"));
         }
         r.set("id",shot.id);r.set("result",std::move(result));
         agentServer_.send(shot.client,r.dump(-1));

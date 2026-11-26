@@ -592,7 +592,9 @@ void StudioHost::captureLensFrame(int64_t cameraId) {
             }
         } catch (const std::exception&) {}
         shot->done.store(true);
-    }); });
+    };
+    if (game) game_->captureNextFrame(std::move(capture));
+    else onScene([&]{renderer->captureNextFrame(std::move(capture));});
     lensShot_=std::move(shot);
     lensCaptureStarted_=platform_.now();
 }
@@ -618,6 +620,39 @@ void StudioHost::finishLensCapture() {
 }
 void StudioHost::tickAgentScreenshot() {
     const bool nature=session_->agentNatureScreenshotPending();
+    const bool game=session_->agentGameScreenshotPending();
+    if (game) {
+        const auto fail=[&](const std::string& message){
+            session_->finishAgentScreenshot("",0,0,message);
+            gameShotDeadline_=0;
+            agentShot_.reset();
+        };
+        if (!game_ || !game_->active() || !gamePlacement_.visible || !platform_.surfaceDrawable(StudioSurface::Game)) {
+            fail("Start a play-test and show the Game viewport to capture its frame.");
+            return;
+        }
+        const auto& device=session_->agentScreenshotDevice();
+        if (!gameShotDeadline_) {
+            gameShotEpoch_=game_->runtimeEpoch();
+            gameShotDeadline_=platform_.now()+5;
+            if (!device.empty() && game_->deviceProfile().id!=device) {
+                auto profile=game_->deviceProfile();profile.id=device;
+                try {game_->setDevice(profile);}
+                catch (const std::exception& e) {fail(e.what());return;}
+                platform_.gameDeviceChanged(gameState());
+                return;
+            }
+        }
+        if (gameShotEpoch_!=game_->runtimeEpoch() || platform_.now()>=gameShotDeadline_ ||
+            (!device.empty() && game_->deviceProfile().id!=device)) {
+            fail("Game viewport changed or capture expired. Retry with the current play-test.");
+            return;
+        }
+        if (!device.empty() && device!="none") {
+            const auto [width,height]=game_->deviceProfile().size(0,0);
+            if (std::abs(gamePlacement_.width*height-gamePlacement_.height*width)>2*std::max(width,height)) return;
+        }
+    }
     if (nature) {
         if (!natureShotDeadline_) {
             natureShotDeadline_=platform_.now()+4;
@@ -635,21 +670,21 @@ void StudioHost::tickAgentScreenshot() {
     if (agentShot_) {
         // The capture callback may run on a GPU completion thread; it encodes there and flags done.
         if (!agentShot_->done.load()) return;
-        if (agentShot_->png.empty()) session_->finishAgentScreenshot("", 0, 0, nature?"PHYSIS capture failed":"Scene capture failed");
+        if (agentShot_->png.empty()) session_->finishAgentScreenshot("", 0, 0, game?"Game capture failed":nature?"PHYSIS capture failed":"Scene capture failed");
         else session_->finishAgentScreenshot(editor::base64Encode(agentShot_->png), agentShot_->w, agentShot_->h, "");
-        natureShotDeadline_=0;agentShot_.reset();
+        natureShotDeadline_=0;gameShotDeadline_=0;agentShot_.reset();
         return;
     }
     if (!session_->agentScreenshotPending()) return;
     auto* renderer=nature?natureSurface_.renderer.get():preview_.get();
     if (nature && (!renderer || !natureSurface_.placement.visible || !platform_.surfaceDrawable(StudioSurface::Nature))) return;
-    if (!nature && (!renderer || !placement_.visible)) {
+    if (!game && !nature && (!renderer || !placement_.visible)) {
         session_->finishAgentScreenshot("", 0, 0, "The Scene panel is not visible in Studio; ask the user to show it");
         return;
     }
     auto shot = std::make_shared<AgentShot>();
     agentShot_ = shot;
-    onScene([&] { renderer->captureNextFrame([shot](int w, int h, std::vector<uint8_t> rgba) {
+    auto capture=[shot](int w, int h, std::vector<uint8_t> rgba) {
         if (w > 0 && h > 0 && rgba.size() >= size_t(w) * size_t(h) * 4) {
             // At most 1280 px wide: enough for the agent, small for the MCP answer.
             const int ow = std::min(w, 1280), oh = std::max(1, int(int64_t(h) * ow / w));

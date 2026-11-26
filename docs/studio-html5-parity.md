@@ -552,3 +552,5 @@ Packaged macOS PHYSIS preview lifecycle verified on both world sources in [the l
 Share the legacy PHYSIS camera-centered diagnostic sampler with HTML Studio and draw the selected field in the dedicated nature viewport.
 
 Transfer PRISMA view_postfx to HTML Studio, including runtime quality for the hosted Game and Scene-only visibility, without changing project files.
+
+Route MCP Game screenshots to the active Game drawable and preserve device selection, source lifetime and hidden/stopped errors.

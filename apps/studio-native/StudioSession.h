@@ -105,7 +105,9 @@ public:
     // Scene overlay shapes from editor/extensions.lua scene_gizmos(ctx) (empty without a project or script).
     Json extensionGizmos() { return ws_.project.dir.empty() ? Json::array() : lua_.gizmos(ws_.project.dir,luaContext()); }
     bool agentScreenshotPending() const { return !agentShots_.empty(); }
-    bool agentNatureScreenshotPending() const { return !agentShots_.empty() && agentShots_.front().nature; }
+    bool agentNatureScreenshotPending() const { return agentScreenshotPending() && agentShots_.front().window=="physis"; }
+    bool agentGameScreenshotPending() const { return agentScreenshotPending() && agentShots_.front().window=="game"; }
+    const std::string& agentScreenshotDevice() const { return agentShots_.front().device; }
     void finishAgentScreenshot(const std::string& pngBase64, int width, int height, const std::string& error);
     // Host-provided material slot names of a loaded content model (the native
     // Scene owns model loading). Without it, slots come from authored overrides.
@@ -203,7 +205,7 @@ private:
     std::string batchOwnerVersion() const;
     Json agentBatchPreview(bool redo) const;
     void applyAgentBatch(bool redo,const std::string& expectedToken);
-    struct AgentShot { int client; Json id; bool nature; };
+    struct AgentShot { int client; Json id; std::string window,device; };
     std::vector<AgentShot> agentShots_;
     SceneBrush brush_;
     std::string splineEdit_;
