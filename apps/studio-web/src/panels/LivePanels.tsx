@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, Radio, Search } from 'lucide-react';
 import { StudioIconButton } from '../ui';
 import { invoke } from '../bridge';
-import type { StudioRuntimeEntity, StudioRuntimePage, StudioGameState } from '../types';
+import type { StudioRuntimeEntity, StudioRuntimePage, StudioGameState, StudioSnapshot } from '../types';
 import { type LiveRef, setShowLive, useLivePlay } from './livePlay';
 import './LivePanels.css';
 
@@ -136,10 +136,20 @@ export function LiveInspector({project,selection}:{project?:string;selection?:Li
   if (!selection) return <div className="live__empty">{error || 'Select a live entity in the Hierarchy.'}</div>;
   if (error) return <p className="live__error" role="alert">{error}</p>;
   if (!detail || detail.ref!==selection.ref || detail.epoch!==selection.epoch) return <div className="live__empty">Reading entity…</div>;
+  return <EntityDetails detail={detail} title={'Entity '+detail.ref} subtitle={'tick '+detail.tick}/>;
+}
+
+export function PreviewInspector({detail}:{detail:NonNullable<StudioSnapshot['previewInspector']>}) {
+  return <EntityDetails detail={detail} title={detail.row.name} subtitle={'Preview · '+detail.row.ref}/>;
+}
+
+function EntityDetails({detail,title,subtitle}:{detail:Pick<StudioRuntimeEntity,'components'|'stats'> & {rules?:unknown;data?:unknown};title:string;subtitle:string}){
   return <div className="live-insp">
-    <header><b>Entity {detail.ref}</b><small>tick {detail.tick}</small></header>
+    <header><b>{title}</b><small>{subtitle}</small></header>
     {Object.entries(detail.components).map(([name, value]) => <details key={name} open className="live-insp__comp">
       <summary>{name}</summary><Value value={value}/></details>)}
+    {detail.rules!=null && <details className="live-insp__comp"><summary>Type rules</summary><Value value={detail.rules}/></details>}
+    {detail.data!=null && <details className="live-insp__comp"><summary>Script data</summary><Value value={detail.data}/></details>}
     {detail.stats && <details open className="live-insp__comp"><summary>Effective stats</summary><Value value={detail.stats}/></details>}
   </div>;
 }

@@ -52,7 +52,7 @@ import AttachmentsPanel from './AttachmentsPanel';
 import { FrameCapturePanel, SnapshotDiffPanel, StatsPanel, TextureResourcesPanel } from './InsightPanels';
 import { AuditPanel, FogPanel, InputPanel, ScriptsPanel } from './ProjectToolPanels';
 import HistoryPanel from './HistoryPanel';
-import { LiveHierarchy, LiveInspector, LiveSwitch } from './LivePanels';
+import { LiveHierarchy, LiveInspector, PreviewInspector, LiveSwitch } from './LivePanels';
 import { useLivePlay } from './livePlay';
 
 import NereidFlowPanel from './generated/NereidFlowPanel';
@@ -116,9 +116,13 @@ function PlayHierarchy({ ctx }: { ctx: StudioPanelContext }) {
   const { showLive } = useLivePlay();
   return <LiveSwitch>{showLive ? <LiveHierarchy groupings={ctx.snapshot?.scene.groupings} selection={ctx.liveSelection} onSelected={ctx.onLiveSelection} key={ctx.snapshot?.project.path} project={ctx.snapshot?.project.path}/> : <HierarchyPanel {...ctx}/>}</LiveSwitch>;
 }
+function EditInspector({ctx}:{ctx:StudioPanelContext}) {
+  const detail=ctx.snapshot?.previewInspector;
+  return detail && !ctx.inspectorPinned ? <PreviewInspector detail={detail}/> : <InspectorPanel {...ctx}/>;
+}
 function PlayInspector({ ctx }: { ctx: StudioPanelContext }) {
   const { showLive } = useLivePlay();
-  return <LiveSwitch>{showLive ? <LiveInspector selection={ctx.liveSelection} key={ctx.snapshot?.project.path} project={ctx.snapshot?.project.path}/> : <InspectorPanel {...ctx}/>}</LiveSwitch>;
+  return <LiveSwitch>{showLive ? <LiveInspector selection={ctx.liveSelection} key={ctx.snapshot?.project.path} project={ctx.snapshot?.project.path}/> : <EditInspector ctx={ctx}/>}</LiveSwitch>;
 }
 
 export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): ReactNode {
@@ -130,7 +134,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'assets':
         return <AssetsPanel projectPath={snapshot?.project.path ?? ''}/>;
       case 'inspector':
-        return ctx.playing ? <PlayInspector ctx={ctx}/> : <InspectorPanel {...ctx}/>;
+        return ctx.playing ? <PlayInspector ctx={ctx}/> : <EditInspector ctx={ctx}/>;
       case 'postfx': return <PostFxPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'lightbake': return <LightBakePanel key={snapshot?.graphDocument?.epoch} scope={snapshot?.graphDocument}/>;
       case 'roads': return <RoadsPanel key={snapshot?.graphDocument?.epoch} scope={snapshot?.graphDocument} advanced={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;

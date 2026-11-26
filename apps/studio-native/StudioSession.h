@@ -133,7 +133,7 @@ public:
     Json previewExternalAssets(const std::vector<std::filesystem::path>& files,
                                const std::string& destination); // native picker ONLY
     Json resolvePreviewRefs(const Json& refs);
-    void setPreviewSelection(Json ids) { selectedPreviewIds_=std::move(ids); }
+    void setPreviewSelection(Json ids,Json detail) { selectedPreviewIds_=std::move(ids); previewInspector_=std::move(detail); }
     Json queryEditWorld(const Json& params,bool list);
     Json graphDocumentScope() const;
 private:
@@ -145,7 +145,7 @@ private:
     Json hierarchyGroups(const Json& params);
     editor::WorldPreview hierarchyPreview_;
     std::string hierarchyPreviewVersion_;
-    Json selectedPreviewIds_;
+    Json selectedPreviewIds_,previewInspector_;
     uint64_t graphDocumentEpoch_=1;
     Json buildRequest(const std::string& method, const Json& params);
     Json dispatchImpl(const Json& request);

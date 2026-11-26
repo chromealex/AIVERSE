@@ -209,11 +209,13 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
                         else generated.push(row["id"]);
                     }
                 }
+                Json detail;
+                if(primary.getInt("doc",0)<0)detail=session_->queryEditWorld(primary,false);
                 selection.set("ids",std::move(ids));
                 const auto reply=request("studio.select",selection);
                 if (reply.has("error")) throw std::runtime_error(reply.getStr("error","Selection failed"));
                 const auto generatedCount=generated.size();
-                session_->setPreviewSelection(std::move(generated));
+                session_->setPreviewSelection(std::move(generated),std::move(detail));
                 if(input.getBool("focus") && primary.has("x") && preview_ && !projectLoading_)
                     onScene([&]{const auto camera=preview_->cameraState();preview_->tweenCamera(
                         {float(primary["x"].toDouble()),float(primary["y"].toDouble()),float(primary["z"].toDouble())},18.f,camera.yaw,camera.pitch);});

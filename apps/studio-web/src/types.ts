@@ -134,6 +134,7 @@ export interface StudioSnapshot {
   /** Whole selection, primary (selectedId) last. */
   selectedIds?: string[];
   selectedPreviewIds?: string[];
+  previewInspector?: Pick<StudioRuntimeEntity,'components'|'stats'> & {row:{ref:number;name:string}; rules?:unknown;data?:unknown};
   selectedRoad?: boolean;
   canScaleEvolveRegions?: boolean;
   properties: StudioProperty[];

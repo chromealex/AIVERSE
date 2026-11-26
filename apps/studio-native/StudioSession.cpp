@@ -955,6 +955,7 @@ Json StudioSession::resolvePreviewRefs(const Json& refs) {
         if(!row)throw std::runtime_error("Unknown preview reference");
         if(!seen.insert(ref).second)continue;
         Json item=Json::object();
+        item.set("ref",num(int64_t(row->ref)));
         item.set("doc",num(int64_t(row->doc)));
         item.set("id",str(row->doc>=0?nodeId(ws_.map,editor::DocumentEntityRef::mapEntity(size_t(row->doc))):"preview:"+std::to_string(ref)));
         if(row->hasPos){item.set("x",Json::number(double(row->x)));item.set("y",Json::number(double(row->y)));item.set("z",Json::number(double(row->z)));}
@@ -1116,7 +1117,10 @@ Json StudioSession::snapshot() const {
     Json ids = Json::array();
     for (const auto& id : selectedIds) ids.push(str(id));
     result.set("selectedIds", std::move(ids));
-    if(selectedPreviewIds_.size() && hierarchyPreviewVersion_==graphDocumentScope().dump(-1)+"|"+ws_.project.historyVersion())result.set("selectedPreviewIds",selectedPreviewIds_);
+    if(selectedPreviewIds_.size() && hierarchyPreviewVersion_==graphDocumentScope().dump(-1)+"|"+ws_.project.historyVersion()){
+        result.set("selectedPreviewIds",selectedPreviewIds_);
+        if(previewInspector_.isObject())result.set("previewInspector",previewInspector_);
+    }
     if (!ws_.map.data.planet() && selectedIds.size() >= 2 && selectedIds.size() <= 256 &&
         std::all_of(selectedIds.begin(), selectedIds.end(), [&](const auto& id) {
             if (!id.starts_with("entity:@") || locked_.contains(id) || hidden_.contains(id)) return false;
