@@ -4070,6 +4070,19 @@ bool StudioHost::handleHostMethod(const Json& req) {
         if (action=="playback") naturePreview_->commandPlaying=false;
         return naturePreview_->apply(action,params);
     });
+    if(method=="studio.physisFieldEdit")return answer([&] {
+        const auto& ws=session_->workspace();
+        if(projectLoading_ || ws.project.dir.empty() || params.getStr("expectedProject")!=ws.project.dir ||
+            params.getStr("expectedDocumentEpoch")!=session_->graphDocumentScope().getStr("epoch"))
+            throw std::runtime_error("The map changed. Reopen Map zones.");
+        const auto action=params.getStr("action");
+        if(action!="status" && action!="apply")throw std::runtime_error("Unknown PHYSIS field edit action.");
+        if(game_)return game_->physisFieldEdit(ws,params,action=="apply");
+        if(action=="apply")throw std::runtime_error("Start a local play-test of this map.");
+        Json out=Json::object();out.set("available",Json::fromBool(false));
+        out.set("status",Json::string("Offline"));out.set("message",Json::string("Start a local play-test of this map."));
+        return out;
+    });
     if(method=="studio.physisLive")return answer([&] {
         const auto& project=session_->workspace().project.dir;
         if(project.empty() || projectLoading_ || params.getStr("expectedProject")!=project)

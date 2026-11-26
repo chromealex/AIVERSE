@@ -165,6 +165,13 @@ std::shared_ptr<const world::NaturePresentationFrame> StudioGameSurface::natureF
     natureCache_={runtimeEpoch_,uint64_t(sim->tick()),x,z,radius,frame};
     return frame;
 }
+Json StudioGameSurface::physisFieldEdit(const editor::Workspace& ws,const Json& request,bool apply) {
+    // Field edits intentionally accept authored changes since launch, on the same map only.
+    auto* sim=canControl() && launchedMapCurrent() && launch_.project==ws.project.dir &&
+        launch_.sourceMap==ws.map.path ? liveSimulation():nullptr;
+    const auto map=apply?ws.map.toJson():Json{};
+    return physisFields_.inspectOrApply(sim,runtimeEpoch_,ws.map.revision,request,apply?&map:nullptr);
+}
 const World* StudioGameSurface::localPhysisWorld() const {
     const auto* sim=canControl()?liveSimulation():nullptr;
     return sim && sim->tick()>0 && sim->world().resourceConst<physis::State>()?&sim->world():nullptr;

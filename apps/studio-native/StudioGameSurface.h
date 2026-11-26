@@ -1,4 +1,5 @@
 #pragma once
+#include "StudioPhysisFieldEdit.h"
 #include "apps/fps/HostedActorClient.h"
 #include "apps/client/HostedClient.h"
 #include "apps/studio-native/StudioGameLaunch.h"
@@ -40,6 +41,7 @@ public:
     Json staticGeometryReport(const editor::Workspace& ws) const;
     Json prismaFrameReports() const { return host_ ? host_->prismaFrameReports() : Json::array(); }
     std::shared_ptr<const world::NaturePresentationFrame> natureFrame(float x,float z,float radius);
+    Json physisFieldEdit(const editor::Workspace& ws,const Json& request,bool apply);
     const World* localPhysisWorld() const;
     std::optional<uint64_t> physisTick() const;
     Json physisFrame(const Json& params) const;
@@ -53,6 +55,7 @@ public:
 private:
     std::unique_ptr<gfx::Device> device_;
     std::unique_ptr<render::RenderDeviceLifetime> lifetime_;
+    StudioPhysisFieldEdit physisFields_;
     Simulation* liveSimulation() const;
     bool paused() const;
     bool canControl() const;

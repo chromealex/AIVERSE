@@ -1,4 +1,4 @@
-#include "apps/editor/PhysisLiveEdit.h"
+#include "apps/studio-native/StudioPhysisFieldEdit.h"
 #include <algorithm>
 #include <cstdio>
 #include <memory>
@@ -102,6 +102,32 @@ void statusAndRollback() {
     state.observe(nullptr);
     CHECK(state.status==EditStatus::Unavailable);
 }
+void studioApply() {
+    auto sim=make();
+    studio::StudioPhysisFieldEdit panel;
+    const auto map=mapWithWind(22);
+    const auto read=[&]{return panel.inspectOrApply(sim.get(),7,12,Json{},nullptr);};
+    const auto initial=read();
+    CHECK(initial.getBool("available"));
+    for (const char* key:{"runtimeEpoch","mapRevision","fieldRevision"}) {
+        auto stale=initial;stale.set(key,Json::string("stale"));
+        bool refused=false;
+        try{panel.inspectOrApply(sim.get(),7,12,stale,&map);}catch(const std::runtime_error&){refused=true;}
+        CHECK(refused);
+    }
+    const auto pending=panel.inspectOrApply(sim.get(),7,12,initial,&map);
+    CHECK(!pending.getBool("available") && pending.has("scheduledTick"));
+    bool duplicate=false;
+    try{panel.inspectOrApply(sim.get(),7,12,initial,&map);}catch(const std::runtime_error&){duplicate=true;}
+    CHECK(duplicate && read().getStr("fieldRevision")=="0");
+    toTickAfter(*sim,uint32_t(pending.getInt("scheduledTick")));
+    const auto applied=read();
+    CHECK(applied.getBool("available") && applied.getStr("fieldRevision")=="1" &&
+        applied.getStr("status")==statusName(EditStatus::Applied));
+    const auto* runtime=sim->world().resourceConst<FieldRuntimeState>();
+    CHECK(sim->world().get<WindZone>(runtime->byId.at("wind-1").entity).velocity.x==Fixed::fromInt(22));
+    CHECK(panel.inspectOrApply(sim.get(),8,12,Json{},nullptr).getStr("status")==statusName(EditStatus::Idle));
+}
 void permissionsAndNoHandler() {
     auto forbidden=make(false);
     FieldEditSession noPermission;
@@ -188,6 +214,7 @@ void serverIngress() {
 }
 }
 int main(){
+    studioApply();
     statusAndRollback();
     permissionsAndNoHandler();
     conflictingEdits();

@@ -162,6 +162,7 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
     if ((params as StudioParams['studio.physisNature']).action === 'view') return {active:false};
     throw new Error('Open desktop Studio to simulate the current map.');
   }
+  if (method === 'studio.physisFieldEdit') return {available:false,status:'Offline',message:'Open the map in desktop Studio to apply fields.'};
   if (method === 'studio.physisLive') return {active:false};
   if (method === 'studio.planetForestLive') return {active:false};
   if (method === 'studio.planetForestArm' || method === 'studio.planetForestPlant' || method === 'studio.planetForestMove') throw new Error('Scene planting requires native Studio');
