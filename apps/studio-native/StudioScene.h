@@ -551,6 +551,11 @@ private:
     void syncSceneBake(const std::string& project,const std::string& mapPath);
 
     world::NereidManifestHost nereid_;
+    world::NereidManifestHost mapWater_;
+    std::string mapWaterRefusal_;
+    std::shared_ptr<const game::TerrainLook> appliedWaterLook_;
+    bool mapWaterBaseGrid_ = false;
+    void syncMapWater(const editor::MapData& map, float levelHeight, bool visible);
     double underwaterFrameTime_=0;
     std::string prismaReportProject_, prismaReportMap_;
     render::Prisma post_;

@@ -767,6 +767,29 @@ void StudioScene::syncStaticGeometry(const std::string& project,const std::strin
     lastFrameSignature_=0;
 }
 
+void StudioScene::syncMapWater(const editor::MapData& map, float levelHeight, bool visible) {
+    appliedWaterLook_ = planetTerrainLook_;
+    mapWaterBaseGrid_ = baseTerrainView_;
+    mapWaterRefusal_.clear();
+    Json document = Json::object();
+    if (visible && appliedWaterLook_ && appliedWaterLook_->waterRenderer == game::TerrainLook::WaterRenderer::Nereid &&
+        map.w > 0 && map.h > 0 && map.cells.size() == size_t(map.w) * size_t(map.h)) {
+        game::MapGrid grid;
+        grid.w = map.w;
+        grid.h = map.h;
+        grid.flags.reserve(map.cells.size());
+        for (const char cell : map.cells) grid.flags.push_back(game::cellFlagsFromChar(cell));
+        const auto groundAt = [&](float x, float z) { return terrainPreviewHeight(map,x,z,levelHeight,baseTerrainView_); };
+        const auto layout = game::mapWaterLayout(grid,*appliedWaterLook_,!map.corners.empty(),
+            !baseTerrainView_ && terrainDetailScale(map)>0,groundAt,
+            [&](int x,int z) { return terrainPreviewCorner(map,x,z,levelHeight); });
+        auto converted = game::legacyWaterToNereidManifest(layout,appliedWaterLook_->waterColor,
+            appliedWaterLook_->nereid,groundAt,&mapWaterRefusal_);
+        if (converted) document = std::move(*converted);
+    }
+    mapWater_.configure(document);
+}
+
 Json StudioScene::geometryStats() const {
         const auto& s = renderer_.geometryStats(); Json r=Json::object();
         r.set("clustersTested",Json::number(int64_t(s.clustersTested)));
@@ -782,6 +805,9 @@ Json StudioScene::geometryStats() const {
         r.set("nereidConfiguredSurfaces",Json::number(int64_t(nereid_.configuredSurfaces())));
         r.set("nereidWaterDraws",Json::number(int64_t(nereid_.scene().drawStats().draws)));
         r.set("nereidWaterTriangles",Json::number(int64_t(nereid_.scene().drawStats().triangles)));
+        r.set("nereidMapWaterDraws",Json::number(int64_t(mapWater_.scene().drawStats().draws)));
+        r.set("nereidMapWaterTriangles",Json::number(int64_t(mapWater_.scene().drawStats().triangles)));
+        if (!mapWaterRefusal_.empty()) r.set("nereidWaterRefused",Json::string(mapWaterRefusal_));
         r.set("sunShadowModelTriangles",Json::number(int64_t(renderer_.profile().triangles[0])));
         if (staticScenery_) r.set("strata",render::staticGeometryReport(staticScenery_->scene));
         const double frameGpu=device_?device_->gpuFrameMs():0;
@@ -2227,6 +2253,7 @@ StudioScene::~StudioScene() {
         if (idle && captureDepth_.valid()) device_->destroyTexture(captureDepth_);
         if (thumbColor_.valid()) device_->destroyTexture(thumbColor_);
         if (thumbDepth_.valid()) device_->destroyTexture(thumbDepth_);
+        mapWater_.shutdown(*device_);
         nereid_.shutdown(*device_);
         antialiasing_.shutdown();
         renderer_.shutdown();
@@ -4072,6 +4099,9 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         // (hot reload), every frame only while models are still streaming in.
         const SceneCacheKey key{&doc,doc.revision,fpsProject,levelHeight,projectPath,&rules};
         const bool documentChanged=!sceneCacheValid_ || !(key==sceneKey_);
+        if (documentChanged || appliedWaterLook_ != planetTerrainLook_ || mapWaterBaseGrid_ != baseTerrainView_)
+            syncMapWater(map,levelHeight,!fpsProject && !map.worldSpace && !map.planet() &&
+                rules["terrain"].getBool("render",true) && map.extra.getStr("terrainPresentation","legacy")!="entities");
         if(documentChanged || modelsPending_ || now>=nextFileCheck_) {
             // The periodic pass also catches document changes that did not bump the
             // revision (direct loads) and rules edits, within a second.
@@ -4255,7 +4285,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         const uint64_t signature=frameSignature(framebufferWidth,framebufferHeight,doc,fpsProject,selectedId);
         // Pending Assets thumbnails render inside a drawn frame (one per frame).
         const bool animated=continuousRedraw_ || tween_.active || modelsPending_ || cavernsPreview_.needsFrame() || sparseTerrain || !thumbJobs_.empty() ||
-            lightingRevision_!=doc.revision || nereid_.configuredSurfaces()>0 ||
+            lightingRevision_!=doc.revision || nereid_.configuredSurfaces()>0 || mapWater_.configuredSurfaces()>0 ||
             (wind_.enabled && riggedInstances_>0) || day.clouds>0 || lodDiagnostics_ ||
             (lightingRuntime_.indirect && !lightingRuntime_.indirect->converged) ||
             !thumbJobs_.empty() || spectraPreview_->needsFrame() || spectraSources_.animated(); // native FX playback forces draw
@@ -4309,6 +4339,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         const auto viewProj=view.proj(aspect,device_->info().clipDepthZeroToOne)*view.view();
         spectraSources_.prepare(fx::SpectraFxView::fromCamera(view,viewProj,framebufferWidth,framebufferHeight),1.f/60.f);
     }
+    mapWater_.prepare(*device_,view.eye());
     nereid_.prepare(*device_,view.eye());
     const double opticalNow=std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
     nereid_.updateUnderwater(post_,underwaterFrameTime_>0?float(opticalNow-underwaterFrameTime_):1.f/60.f);
@@ -4497,7 +4528,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             }
         }
     }
-    if(!planetaryChart)nereid_.draw(renderer_);
+    if(!planetaryChart){mapWater_.draw(renderer_);nereid_.draw(renderer_);}
     // Editor gizmos for authored lights; actual light contribution is passed through
     // Renderer3D::lights, not faked with an overlay screenshot.
     if(!cleanMapOutput()) {
