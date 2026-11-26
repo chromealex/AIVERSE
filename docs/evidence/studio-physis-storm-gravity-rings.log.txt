@@ -1,0 +1,4 @@
+2026-11-26 13:37:27.773 AiverseStudioHTML5[10249:84810153] [studio-web] JS: CROSS main DONE_1
+2026-11-26 13:37:27.773 AiverseStudioHTML5[10249:84810153] [studio-web] JS: CROSS main VERIFIED three field outlines on paused tick 4, future storm excluded; identical 64 field tiles after disabling outlines.
+Paused PHYSIS native capture 499 405 changed by at least 10 channel levels in 713 pixels
+Changed gold storm pixels 124 and violet gravity pixels 90
