@@ -4092,6 +4092,15 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         const bool dragged=!drag_.id.empty() && entity.id==drag_.id;
         const mat4 preview=dragged?dragPreview():mat4{};
         const float3 offset=dragged&&drag_.tool==TransformTool::Move?drag_.moveOffset:float3{};
+        if(objectBounds_){
+            const auto lo=entity.boundsMin,hi=entity.boundsMax;
+            float3 corners[8];
+            for(int i=0;i<8;++i)
+                corners[i]=preview.transformPoint({i&1?hi.x:lo.x,i&2?hi.y:lo.y,i&4?hi.z:lo.z});
+            for(int axis:{1,2,4})
+                for(int i=0;i<8;++i)if(!(i&axis))
+                    renderer_.line(corners[i],corners[i|axis],rgba(72,195,213));
+        }
         if(entity.id==selectedId) {
             selectedOrientedCollider_=entity.orientedCollider;
             selectedPivot_=(entity.light||entity.orientedCollider)?entity.center:float3{entity.center.x,entity.boundsMin.y,entity.center.z};
@@ -4205,7 +4214,12 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             renderer_.line(edge.a,edge.b,color);
         }
     }
-    if(gizmosVisible_)drawSelectionBox(view,framebufferWidth,framebufferHeight);
+    if(worldAxes_&&!planetaryChart){
+        renderer_.line({0,0,0},{4,0,0},rgba(234,96,96));
+        renderer_.line({0,0,0},{0,4,0},rgba(105,206,119));
+        renderer_.line({0,0,0},{0,0,4},rgba(105,154,239));
+    }
+    if(gizmosVisible_&&selectionBoxVisible_)drawSelectionBox(view,framebufferWidth,framebufferHeight);
     drawBrushCursor(view,framebufferWidth,framebufferHeight);
     drawTransformGizmo(view,framebufferWidth,framebufferHeight);
     if(orientationGizmo_&&gizmosVisible_)drawOrientationGizmo(view,framebufferWidth,framebufferHeight);
@@ -5358,7 +5372,7 @@ uint64_t StudioScene::frameSignature(int width,int height,const editor::MapDoc& 
     vec(camera_.target);value(camera_.distance);value(camera_.pitch);value(camera_.yaw);value(camera_.fovY);
     value(camera_.ortho);value(autoIso_);value(tween_.active);
     ids(selection_);ids(hidden_);text(hover_);
-    value(tool_);value(localSpace_);value(gizmosVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
+    value(tool_);value(localSpace_);value(gizmosVisible_);value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
     value(drag_.axis);value(drag_.tool);text(drag_.id);vec(drag_.moveOffset);value(drag_.value);
     value(drag_.accumulated);value(drag_.lastAngle);value(drag_.snapping);
     value(marquee_.on);value(marquee_.x0);value(marquee_.y0);value(marquee_.x1);value(marquee_.y1);

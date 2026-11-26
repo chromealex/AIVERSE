@@ -3,6 +3,8 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/components/SceneToolbar.tsx",
+    "apps/studio-web/src/components/SceneToolbar.css",
     "apps/editor/core/AnimationDocument.cpp",
     "apps/editor/core/AnimationDocument.h",
     "apps/studio-web/src/panels/AnimationPoseCanvas.tsx",

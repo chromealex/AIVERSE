@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Bookmark, Expand, Globe2, Hand, Magnet, Maximize, Mountain, Move3d, Rotate3d, Shapes, Box } from 'lucide-react';
+import { Bookmark, Expand, Globe2, Hand, Magnet, Maximize, Mountain, Move3d, Rotate3d, Shapes, Layers, Box } from 'lucide-react';
 import { CAMERA_SLOTS, importBookmarks, readBookmarks, removeBookmark, saveBookmark, type CameraBookmark } from './sceneBookmarks';
 import { invoke, onNativeEvent } from '../bridge';
 import './SceneToolbar.css';
 
 export type SceneTool = 'view' | 'move' | 'rotate' | 'scale';
-export interface SceneToolState { tool: SceneTool; local: boolean; snap: boolean; snapMove: number; snapRotate: number; snapScale: number; gizmos: boolean; surface: boolean }
+export interface SceneToolState { tool: SceneTool; local: boolean; snap: boolean; snapMove: number; snapRotate: number; snapScale: number; gizmos: boolean; worldAxes:boolean; objectBounds:boolean; selectionBox:boolean; surface: boolean }
 const KEY = 'aiverse.studio.sceneTools';
-const DEFAULTS: SceneToolState = { tool: 'move', local: false, snap: false, snapMove: 1, snapRotate: 15, snapScale: 0.1, gizmos: true, surface: false };
+const DEFAULTS: SceneToolState = { tool: 'move', local: false, snap: false, snapMove: 1, snapRotate: 15, snapScale: 0.1, gizmos: true, worldAxes:false, objectBounds:false, selectionBox:true, surface: false };
 const TOOLS: Array<{ id: SceneTool; key: string; label: string; icon: typeof Hand }> = [
   { id: 'view', key: 'Q', label: 'Hand — drag to pan', icon: Hand },
   { id: 'move', key: 'W', label: 'Move', icon: Move3d },
@@ -23,7 +23,7 @@ export function readSceneTools(): SceneToolState {
     const v = JSON.parse(window.localStorage.getItem(KEY) ?? '{}') as Partial<SceneToolState>;
     const tool = TOOLS.some(t => t.id === v.tool) ? v.tool as SceneTool : DEFAULTS.tool;
     const num = (x: unknown, d: number) => typeof x === 'number' && Number.isFinite(x) && x > 0 ? x : d;
-    return { tool, local: v.local === true, snap: v.snap === true, gizmos: v.gizmos !== false, surface: v.surface === true,
+    return { tool, local: v.local === true, snap: v.snap === true, gizmos: v.gizmos !== false, worldAxes:v.worldAxes===true, objectBounds:v.objectBounds===true, selectionBox:v.selectionBox!==false, surface: v.surface === true,
       snapMove: num(v.snapMove, 1), snapRotate: num(v.snapRotate, 15), snapScale: num(v.snapScale, 0.1) };
   } catch { return DEFAULTS; }
 }
@@ -32,6 +32,7 @@ export function readSceneTools(): SceneToolState {
 export default function SceneToolbar({ enabled, projectPath = '' }: { enabled: boolean; projectPath?: string }) {
   const [state, setState] = useState<SceneToolState>(readSceneTools);
   const [marks, setMarks] = useState<CameraBookmark[]>(() => readBookmarks(projectPath));
+  const [layersOpen,setLayersOpen]=useState(false);
   const [marksOpen, setMarksOpen] = useState(false);
   const [legacyViews, setLegacyViews] = useState<CameraBookmark[]>([]);
   useEffect(() => {
@@ -132,6 +133,15 @@ export default function SceneToolbar({ enabled, projectPath = '' }: { enabled: b
       onClick={() => set({ surface: !state.surface })}><Mountain size={13}/></button>
     <button type="button" className={'scene-toolbar__toggle' + (state.gizmos ? ' is-on' : '')} disabled={!enabled} aria-pressed={state.gizmos}
       title="Show handles, selection box and the orientation gizmo" onClick={() => set({ gizmos: !state.gizmos })}><Shapes size={13}/></button>
+    <div className="scene-toolbar__marks" onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))setLayersOpen(false);}}
+      onKeyDown={e=>{if(e.key==='Escape'){e.currentTarget.querySelector('button')?.focus();setLayersOpen(false);}}}>
+      <button type="button" className="scene-toolbar__toggle" aria-label="Scene overlays" title="Scene overlays"
+        disabled={!enabled} aria-expanded={layersOpen} onClick={()=>{setMarksOpen(false);setLayersOpen(v=>!v);}}><Layers size={13}/></button>
+      {layersOpen&&<div className="scene-toolbar__marks-menu scene-toolbar__layers" data-native-overlay role="group" aria-label="Scene overlays">
+       {([['worldAxes','World axes'],['objectBounds','Object bounds'],['selectionBox','Selection box']] as const).map(([key,label])=>
+        <label key={key}><input type="checkbox" checked={state[key]} onChange={e=>set({[key]:e.target.checked})}/>{label}</label>)}
+      </div>}
+    </div>
     <button type="button" className="scene-toolbar__toggle" disabled={!enabled} title="Frame all objects (⇧F)"
       onClick={() => void invoke('studio.viewportInput', { kind: 'frameAll' }).catch(() => {})}><Maximize size={13}/></button>
     <div className="scene-toolbar__marks">

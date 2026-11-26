@@ -470,3 +470,5 @@ Standalone States inspector: rename and remove verified in the packaged Mac host
 Redesign the States pane around state selection, state-specific transition editing and graph-wide controls. Check narrow and wide panel layouts, including authoring a self transition with one state.
 
 States layout and one-state transition authoring verified in docked and maximized macOS Studio. Screenshots and the native validation receipt accompany the feature manifest.
+
+Port flat Scene world axes, object bounds and separate selection-box visibility from the legacy diagnostics menu. Use the existing document proxy data and Scene tool preferences. Compare actual native frames with layers disabled and enabled.

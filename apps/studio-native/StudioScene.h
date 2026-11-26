@@ -390,6 +390,9 @@ public:
     void setRegionBorders(char letter) {
         if(regionBorderLetter_!=letter){regionBorderLetter_=letter;regionBordersDirty_=true;}
     }
+    void setWorldAxes(bool visible) { worldAxes_ = visible; }
+    void setObjectBounds(bool visible) { objectBounds_ = visible; }
+    void setSelectionBox(bool visible) { selectionBoxVisible_ = visible; }
     void setGizmosVisible(bool visible) { gizmosVisible_ = visible; }
     // Hold V while moving: the object's pivot snaps to the nearest other object's pivot on screen.
     void setPivotSnap(bool on) { pivotSnap_ = on; }
@@ -754,6 +757,7 @@ private:
     StudioRegionBorders regionBorders_;
     char regionBorderLetter_=0;
     bool regionBordersDirty_=true;
+    bool worldAxes_ = false, objectBounds_ = false, selectionBoxVisible_ = true;
     bool localSpace_ = false, gizmosVisible_ = true, snapEnabled_ = false;
     float snapMove_ = 1.0f, snapRotate_ = 15.0f, snapScale_ = 0.1f;
     struct TransformDrag {

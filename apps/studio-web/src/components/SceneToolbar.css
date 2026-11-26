@@ -27,3 +27,6 @@
 .viewport-tools:has(.road-pick-guide){flex-wrap:wrap}
 .viewport-toolbar:has(.road-pick-guide) .render-badge{display:none}
 .road-pick-guide{order:1;color:var(--au-text-soft);font-size:var(--au-font-xs)}
+
+.scene-toolbar__layers{min-width:150px;left:auto;right:0}
+.scene-toolbar__layers label{display:flex;align-items:center;gap:8px;padding:5px 8px;color:var(--au-text);cursor:pointer}
