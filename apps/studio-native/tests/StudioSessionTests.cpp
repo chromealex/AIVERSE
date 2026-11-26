@@ -1696,6 +1696,24 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"Fixture co
        std::string shot;client.recv(shot,1000);
        AIVERSE_TEST_CHECK(!shot.empty() && Json::parse(shot)["result"].getStr("png_base64")=="iVBORw0KGgo=" && !session.agentScreenshotPending());
        AIVERSE_TEST_CHECK(Json::parse(shot)["result"].getStr("view")=="HTML Studio window");
+       auto sceneRequest=[](const char* options){
+           return std::string(R"({"id":4,"method":"call","params":{"name":"view_screenshot","arguments":{"window":"scene",)")+options+"}}}";
+       };
+       for(const char* invalid:{R"("width":512)",R"("width":4096,"height":4096)",R"("width":256.5,"height":256)",
+               R"("x":1)",R"("yaw":"90")",R"("y":1000001)",R"("clean":false,"width":256,"height":256)",R"("device":"none")"}){
+           AIVERSE_TEST_CHECK(roundTrip(sceneRequest(invalid))["result"].has("error") && !session.agentScreenshotPending());
+       }
+       client.send(sceneRequest(R"("x":1,"z":3,"distance":100000,"pitch":100,"yaw":90,"width":2048,"height":4096)"));
+       for(int i=0;i<100 && !session.agentScreenshotPending();++i){session.pollAgentLink();std::this_thread::sleep_for(std::chrono::milliseconds(5));}
+       AIVERSE_TEST_CHECK(session.agentScreenshotPending());
+       const auto& options=session.agentSceneScreenshotOptions();
+       render::Camera base;base.target.y=42;
+       const auto camera=options.camera(base);
+       AIVERSE_TEST_CHECK(options.clean && options.width==2048 && options.height==4096 && camera.target.x==1 &&
+           camera.target.y==0 && camera.target.z==3 && base.target.y==42 && camera.distance==base.maxDistance &&
+           std::abs(camera.pitch-1.55334f)<.0001f && std::abs(camera.yaw-1.5708f)<.0001f);
+       session.finishAgentScreenshot("",0,0,"fixture finished");
+       client.recv(shot,1000);
        client.close();
        AIVERSE_TEST_CHECK(call("studio.agentStart",R"({"prompt":""})").has("error"));
    }

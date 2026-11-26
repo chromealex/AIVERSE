@@ -13,6 +13,7 @@
 #include "apps/studio-native/StudioFacialPreviewBinding.h"
 #include "engine/character/vivid/HumanCreatorWorkbench.h"
 #include "apps/editor/core/Workspace.h"
+#include "apps/editor/core/SceneScreenshotOptions.h"
 #include "apps/editor/core/WorldInspect.h"
 #include "apps/studio-native/StudioWindPreview.h"
 #include "apps/editor/core/Net.h"
@@ -109,6 +110,7 @@ public:
     bool agentWindowScreenshotPending() const { return agentScreenshotPending() && agentShots_.front().window=="all"; }
     bool agentGameScreenshotPending() const { return agentScreenshotPending() && agentShots_.front().window=="game"; }
     const std::string& agentScreenshotDevice() const { return agentShots_.front().device; }
+    const editor::SceneScreenshotOptions& agentSceneScreenshotOptions() const { return agentShots_.front().scene; }
     void finishAgentScreenshot(const std::string& pngBase64, int width, int height, const std::string& error);
     // Host-provided material slot names of a loaded content model (the native
     // Scene owns model loading). Without it, slots come from authored overrides.
@@ -206,7 +208,7 @@ private:
     std::string batchOwnerVersion() const;
     Json agentBatchPreview(bool redo) const;
     void applyAgentBatch(bool redo,const std::string& expectedToken);
-    struct AgentShot { int client; Json id; std::string window,device; };
+    struct AgentShot { int client; Json id; std::string window,device; editor::SceneScreenshotOptions scene; };
     std::vector<AgentShot> agentShots_;
     SceneBrush brush_;
     std::string splineEdit_;

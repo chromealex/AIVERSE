@@ -560,3 +560,5 @@ Packaged macOS Game capture now uses the Game drawable through linked MCP. With 
 Restore whole-window MCP capture in HTML Studio, including simultaneous browser controls and native viewports, with Scene closed.
 
 An explicit all or default view_screenshot now captures the main HTML Studio window. Packaged macOS included WKWebView controls and a live Metal Game layer. Switching to Console replaced the game region while retaining the Post FX panel. [Whole-window verification](evidence/studio-full-window-screenshot.json).
+
+Transfer clean Scene screenshot dimensions and camera arguments through a shared request parser before wiring the isolated render target.

@@ -9,6 +9,7 @@
 #include <filesystem>
 #include "Devices.h"
 #include "Editor.h"
+#include "apps/editor/core/SceneScreenshotOptions.h"
 #include "NatureGizmos.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -51,13 +52,6 @@ Json reply(const Json& id, Json result) {
     r.set("id", id);
     r.set("result", std::move(result));
     return r;
-}
-float cameraNumber(const Json& args,const char* key,float fallback) {
-    if(!args.has(key))return fallback;
-    const double value=args[key].toDouble();
-    if(!args[key].isNumber()||!std::isfinite(value)||std::abs(value)>1000000.0)
-        throw std::runtime_error(std::string("camera ")+key+" must be a finite number within +/-1000000");
-    return float(value);
 }
 } // namespace
 
@@ -105,47 +99,23 @@ void Editor::pollAgentLink() {
             if(!shots_.empty() || captureArmed_) {
                 server_.send(m.client,reply(id,Json::parse(R"({"error":"another screenshot is pending; retry after its reply"})")).dump(-1));continue;
             }
-            auto camera=sceneCam;
+            SceneScreenshotOptions options;
             const auto window=args.getStr("window",args.has("device")?"game":"all");
-            const bool clean=args.getBool("clean",window=="scene");
-            int requestedWidth=0,requestedHeight=0;
-            bool positioned=false;
             try {
                 if((args.has("window")&&!args["window"].isString()) ||
                    (window!="all" && window!="scene" && window!="game"))throw std::runtime_error("window must be all|scene|game");
-                if(args.has("clean") && args["clean"].type()!=Json::Type::Bool)throw std::runtime_error("clean must be boolean");
-                if(clean && window!="scene")throw std::runtime_error("clean capture requires window scene");
-                if(args.has("width")!=args.has("height"))throw std::runtime_error("capture width and height must be supplied together");
-                if(args.has("width")) {
-                    if(!clean)throw std::runtime_error("capture dimensions require a clean scene capture");
-                    if(!args["width"].isNumber() || !args["height"].isNumber())throw std::runtime_error("capture dimensions must be numbers");
-                    const auto width=args["width"].toDouble(),height=args["height"].toDouble();
-                    if(!std::isfinite(width) || !std::isfinite(height) || width<256 || height<256 || width>4096 || height>4096 ||
-                        width!=std::floor(width) || height!=std::floor(height) || double(width)*height>8388608)
-                        throw std::runtime_error("capture dimensions must be integer256..4096 and at most8 megapixels");
-                    requestedWidth=int(width);requestedHeight=int(height);
-                }
-                if(args.has("x")!=args.has("z"))throw std::runtime_error("camera x and z must be supplied together");
-                if(args.has("x")) {
-                    camera.target={cameraNumber(args,"x",0),cameraNumber(args,"y",0),cameraNumber(args,"z",0)};
-                    positioned=true;
-                } else if(args.has("y")) {
-                    camera.target.y=cameraNumber(args,"y",camera.target.y);positioned=true;
-                }
-                if(args.has("distance"))camera.distance=std::clamp(cameraNumber(args,"distance",camera.distance),camera.minDistance,camera.maxDistance);
-                if(args.has("pitch"))camera.pitch=std::clamp(cameraNumber(args,"pitch",0),-89.0f,89.0f)*0.0174533f;
-                if(args.has("yaw"))camera.yaw=cameraNumber(args,"yaw",0)*0.0174533f;
+                options=SceneScreenshotOptions::parse(args,window=="scene");
             } catch(const std::exception& error) {
                 Json result=Json::object();result.set("error",Json::string(error.what()));
                 server_.send(m.client,reply(id,std::move(result)).dump(-1));continue;
             }
             // Apply only after the entire request validates. Camera inspection
             // never edits entity transforms or marks the document dirty.
-            sceneCam=camera;
-            if(positioned)sceneFlying_=false;
+            sceneCam=options.camera(sceneCam);
+            if(options.x || options.y)sceneFlying_=false;
             if (args.has("device")) gameDevice = args.getStr("device");
             Json metadata=Json::object();
-            if(clean){metadata.set("clean",Json::fromBool(true));metadata.set("requested_width",Json::number(int64_t(requestedWidth)));metadata.set("requested_height",Json::number(int64_t(requestedHeight)));}
+            if(options.clean){metadata.set("clean",Json::fromBool(true));metadata.set("requested_width",Json::number(int64_t(options.width)));metadata.set("requested_height",Json::number(int64_t(options.height)));}
             shots_.push_back({m.client,id.integer(),window,std::move(metadata)});
             // Do not put a notification over the requested scene/game image.
             if(args.getStr("window","all")=="all")ws_.log("agent", "Скриншот редактора");

@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/editor/core/SceneScreenshotOptions.h",
     "apps/studio-web/src/panels/PrismaPreviewControls.tsx",
     "apps/editor/core/PhysisOverlayTiles.h",
     "apps/studio-native/StudioPhysisRemoteFields.h",
