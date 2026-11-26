@@ -144,3 +144,18 @@ html.studio-edge-nesw, html.studio-edge-nesw * {cursor:nesw-resize !important}
 .hier__row.is-primary { box-shadow: inset 2px 0 var(--au-accent); }
 .insp-comp__head { min-height: 29px; }
 .insp-comp__body { padding-block: var(--au-space-2); }
+
+:root[data-theme="light"] .project-breadcrumb b,
+:root[data-theme="light"] .log-row { color: var(--au-text); }
+:root[data-theme="light"] .log-warning,
+:root[data-theme="light"] .studio-statusbar__warn,
+:root[data-theme="light"] .studio-statusbar__dirty,
+:root[data-theme="light"] .studio-statusbar__action { color: var(--au-warning); }
+:root[data-theme="light"] .log-error { color: var(--au-danger); }
+:root[data-theme="light"] .studio-statusbar { color: var(--au-text-muted); }
+:root[data-theme="light"] .nested-tab { color: var(--au-text-soft); border-color: var(--au-line); }
+:root[data-theme="light"] .nested-tab:hover { color: var(--au-text); background: var(--au-hover); }
+:root[data-theme="light"] .nested-tab.nested-active {
+  color: var(--au-text);
+  background: var(--au-selection-gradient);
+}
