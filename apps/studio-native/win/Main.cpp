@@ -180,7 +180,7 @@ WinShell* gShell = nullptr;
 
 class WinShell final : public studio::StudioHostPlatform {
 public:
-    WinShell(std::string project, bool dev) : project_(std::move(project)), dev_(dev) {}
+    WinShell(std::string project, bool dev, int listenPort) : project_(std::move(project)), dev_(dev), listenPort_(listenPort) {}
 
     int run() {
         HINSTANCE instance = GetModuleHandleW(nullptr);
@@ -236,6 +236,8 @@ public:
         const std::string root = AIVERSE_STUDIO_SOURCE_DIR;
         aiverse::platform::setEngineAssetsDir(narrow((exeDir() / L"engine").c_str()));
         core_ = std::make_unique<studio::StudioHost>(*this, root, false);
+        if (listenPort_ && !core_->session().listenForAgent(listenPort_))
+            throw std::runtime_error("Could not start the authenticated Studio agent listener");
         const std::string exe = exeDir().string();
 #ifdef AIVERSE_STUDIO_BUILD_TOOL
         core_->session().setBuildTool(AIVERSE_STUDIO_BUILD_TOOL);
@@ -1381,6 +1383,7 @@ private:
 
     std::string project_;
     bool dev_ = false;
+    int listenPort_ = 0;
     studio::GameDeviceOverlay gameChrome_;
     HWND main_ = nullptr;
     HWND surfaces_[int(studio::StudioSurface::Count)] = {}; // Scene, Game, FX
@@ -1419,22 +1422,27 @@ int aiverseMain(int argc, char** argv) {
     std::string project;
     bool dev = false;
     // The UTF-8 code page manifest makes argv UTF-8; read the wide command line anyway (older Windows).
+    int listenPort = 0;
     int wargc = 0;
     LPWSTR* wargv = CommandLineToArgvW(GetCommandLineW(), &wargc);
     for (int i = 1; i < wargc; ++i) {
         const std::wstring arg = wargv[i];
         if (arg == L"--dev") dev = true;
+        else if (arg == L"--listen" && i + 1 < wargc) {
+            listenPort = aiverse::editor::net::parseListenPort(narrow(wargv[++i]));
+            if (!listenPort) { LocalFree(wargv); return 2; }
+        }
         else if (arg == L"--project" && i + 1 < wargc) project = narrow(wargv[++i]);
         else {
             LocalFree(wargv);
-            MessageBoxW(nullptr, L"Usage: AiverseStudio.exe [--dev] [--project <folder>]", L"AIVERSE Studio", MB_OK);
+            MessageBoxW(nullptr, L"Usage: AiverseStudio.exe [--dev] [--listen PORT] [--project <folder>]", L"AIVERSE Studio", MB_OK);
             return 2;
         }
     }
     LocalFree(wargv);
     (void)argc; (void)argv;
     try {
-        WinShell shell(project, dev);
+        WinShell shell(project, dev, listenPort);
         gShell = &shell;
         const int code = shell.run();
         gShell = nullptr;

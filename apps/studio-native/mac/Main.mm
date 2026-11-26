@@ -147,7 +147,7 @@ namespace studio = aiverse::studio;
     NSTimer* dockWatch_;            // a floating window is being dragged: dock it when dropped over the main window
     BOOL dockHover_;
 }
-- (instancetype)initWithProject:(const std::string&)project dev:(BOOL)dev composite:(BOOL)composite;
+- (instancetype)initWithProject:(const std::string&)project dev:(BOOL)dev composite:(BOOL)composite listenPort:(int)listenPort;
 - (studio::StudioHost*)core;
 - (WKWebView*)makeWebViewWithFrame:(NSRect)frame;
 - (void)evaluateInAllWebs:(NSString*)js;
@@ -745,7 +745,7 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
 @end
 
 @implementation StudioShell
-- (instancetype)initWithProject:(const std::string&)project dev:(BOOL)dev composite:(BOOL)composite {
+- (instancetype)initWithProject:(const std::string&)project dev:(BOOL)dev composite:(BOOL)composite listenPort:(int)listenPort {
     if ((self=[super init])) {
         // The Metal-under-HTML path requires WebKit to leave its page canvas unpainted.
         htmlComposite_=composite && [WKWebView instancesRespondToSelector:NSSelectorFromString(@"_setDrawsBackground:")];
@@ -754,6 +754,8 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
         aiverse::platform::setEngineAssetsDir([[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:@"engine"].UTF8String);
         platform_=std::make_unique<MacPlatform>(self);
         core_=std::make_unique<studio::StudioHost>(*platform_,root,htmlComposite_);
+        if (listenPort && !core_->session().listenForAgent(listenPort))
+            throw std::runtime_error("Could not start the authenticated Studio agent listener");
         const std::string exeDir=[[[NSBundle mainBundle] executablePath] stringByDeletingLastPathComponent].UTF8String;
 #ifdef AIVERSE_STUDIO_BUILD_TOOL
         core_->session().setBuildTool(AIVERSE_STUDIO_BUILD_TOOL);
@@ -1348,12 +1350,17 @@ int aiverseMain(int argc,char** argv) {
     @autoreleasepool {
         std::string project;
         bool dev=false, composite=false;
+        int listenPort=0;
         for(int i=1;i<argc;++i) {
             std::string arg(argv[i]);
             if(arg=="--dev")dev=true;
             else if(arg=="--html-composite")composite=true;
+            else if(arg=="--listen" && i+1<argc) {
+                listenPort=aiverse::editor::net::parseListenPort(argv[++i]);
+                if(!listenPort){std::fprintf(stderr,"Invalid --listen port\n");return 2;}
+            }
             else if(arg=="--project"&&i+1<argc)project=argv[++i];
-            else { std::fprintf(stderr,"Usage: AiverseStudioHTML5 [--dev] [--html-composite] [--project /path/to/project]\n"); return 2; }
+            else { std::fprintf(stderr,"Usage: AiverseStudioHTML5 [--dev] [--html-composite] [--listen PORT] [--project /path/to/project]\n"); return 2; }
         }
         // Without --project, reopen the last project chosen in the Open panel.
         if(project.empty()) {
@@ -1367,7 +1374,7 @@ int aiverseMain(int argc,char** argv) {
         try {
             [NSApplication sharedApplication];
             [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
-            StudioShell* shell=[[StudioShell alloc] initWithProject:project dev:dev composite:composite];
+            StudioShell* shell=[[StudioShell alloc] initWithProject:project dev:dev composite:composite listenPort:listenPort];
             [NSApp setDelegate:shell];
             [NSApp run];
         } catch(const std::exception& e) {

@@ -27,6 +27,9 @@ public:
     void setWizardArtDir(const std::string& dir) { wizardArtDir_ = dir; }
     const std::string& wizardArtDir() const { return wizardArtDir_; }
     explicit StudioSession(const std::string& engineRoot, const std::string& project = {});
+    bool listenForAgent(int port) {
+        return agentServer_.listen(port) && agentServer_.tokenPublished();
+    }
     Json dispatch(const Json& request);   // labels undo steps for the History panel, then dispatchImpl
     editor::Workspace& workspace() { return ws_; }
     const editor::Workspace& workspace() const { return ws_; }

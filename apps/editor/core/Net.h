@@ -1,6 +1,8 @@
 // Minimal localhost TCP with newline-delimited JSON messages: the running editor listens, the MCP
 // server connects. Non-blocking server side so the editor polls it once per frame on the UI thread.
 #pragma once
+#include <charconv>
+#include <string_view>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -10,6 +12,13 @@
 namespace aiverse::editor::net {
 
 constexpr int kDefaultPort = 47321;
+inline int parseListenPort(std::string_view value) {
+    if (value.empty()) return 0;
+    int port = 0;
+    const auto end = value.data() + value.size();
+    const auto parsed = std::from_chars(value.data(), end, port);
+    return parsed.ec == std::errc{} && parsed.ptr == end && port > 0 && port <= 65535 ? port : 0;
+}
 constexpr size_t kMaxLineBytes = size_t(4) << 20;   // a longer line (or unterminated buffer) drops the client
 
 // Agent-link session token (protocol 2, docs/mcp-agent-link.md): the editor writes a random
