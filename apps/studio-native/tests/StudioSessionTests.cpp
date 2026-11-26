@@ -8,6 +8,7 @@
 #include "apps/studio-native/StudioGameLaunch.h"
 #include "apps/studio-native/StudioNetworkPlay.h"
 #include "engine/actor/Project.h"
+#include "engine/game/gen/MapGen.h"
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/studio-native/StudioGameDevice.h"
 #include "apps/studio-native/StudioDeviceMask.h"
@@ -2443,6 +2444,15 @@ int main() {
     using namespace aiverse;
     aiverse::studio::StudioSession session(".");
     actorProjectMapSelection();
+    // Fixed map seeds round-trip independently of the match seed and the fixed-point coordinate range.
+    gen::GenRequest generated;
+    std::string seedError;
+    AIVERSE_TEST_CHECK(gen::parseRequest(Json::parse(R"({"seed":9007199254740993})"),42,2,generated,&seedError));
+    AIVERSE_TEST_CHECK(generated.seed==9007199254740993ULL);
+    AIVERSE_TEST_CHECK(gen::parseRequest(Json::parse(R"({"seed":9223372036854775807})"),42,2,generated,&seedError));
+    AIVERSE_TEST_CHECK(generated.seed==9223372036854775807ULL);
+    AIVERSE_TEST_CHECK(gen::parseRequest(Json::parse(R"({"seed":"match"})"),42,2,generated,&seedError));
+    AIVERSE_TEST_CHECK(generated.seed==42);
     worldSceneInspectorProperties();
     localPlayToolContracts(session.workspace());
     bool playRejected=false;
