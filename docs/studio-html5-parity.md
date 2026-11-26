@@ -450,3 +450,5 @@ Graph and Rig authoring: restore rule-type model selection, explicit save and ap
 Packaged Mac Studio verified applying an animation to a child type with an inherited model, rejecting a missing model before asset save and rejecting an externally changed graph before apply. Authored child settings, base type and sibling type were checked on disk. Attachments opens from the Rig header.
 
 Standalone Graph/Rig subgraphs: create named children in the draft, open child scopes, connect a subgraph node to a child and expose its parameter bindings. Keep graph history and reject recursive links before applying them.
+
+Packaged Mac HTML Studio verified creating and undoing a named child, restoring it with Redo, binding its scalar input to a parent control, saving, reopening, validating and stepping the nested preview. Duplicate creation and indirect recursive linking were rejected. Evidence: docs/evidence/studio-animation-subgraph-authoring.json.
