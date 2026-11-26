@@ -155,6 +155,15 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
             stopGame();
             return Json::parse(R"({"ok":true,"summary":"Тест остановлен"})");
         },true});
+    session_->workspace().registerOp({"editor_theme","Set Studio theme and accent.",
+        Json::parse(R"({"properties":{"mode":{"type":"string","enum":["dark","light"]},"accent":{"type":"string","enum":["blue","violet","teal","orange"]}}})"),[this](const Json& params){
+            const auto mode=params.getStr("mode"),accent=params.getStr("accent");
+            if (params.has("mode") && mode!="light" && mode!="dark") throw std::runtime_error("unknown theme mode");
+            if (params.has("accent") && accent!="blue" && accent!="violet" && accent!="teal" && accent!="orange")
+                throw std::runtime_error("unknown theme accent");
+            sendEventPayload("appearance.command",params);
+            return Json::parse(R"({"ok":true,"summary":"Theme requested"})");
+        },true});
     session_->workspace().registerOp({"editor_window","Open or close a panel, switch workspace or restore the layout.",
         Json::parse(R"({"properties":{"id":{"type":"string"},"open":{"type":"boolean"},"resetLayout":{"type":"boolean"},"workspace":{"type":"string","enum":["scene","world","look","animate","character","logic","publish"]}}})"),[this](const Json& params){
             if (!panelInventory_.isObject()) throw std::runtime_error("Studio layout is loading");

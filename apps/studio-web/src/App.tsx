@@ -60,11 +60,27 @@ function hierarchyRows(nodes: StudioEntity[], parentId?: string, depth = 0):
     .flatMap(node => [{ node, depth }, ...hierarchyRows(nodes, node.id, depth + 1)]);
 }
 
+import { modes, accents, readAppearance, applyAppearance, saveAppearance, observeAppearance, type Appearance } from './theme/appearance';
+
 export default function App() {
   const [snapshot, setSnapshot] = useState<StudioSnapshot | null>(null);
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [appearance, setAppearance] = useState(readAppearance);
+  const changeAppearance = (patch: Partial<Appearance>) => {
+    const next = {...readAppearance(), ...patch};
+    saveAppearance(next);
+    setAppearance(next);
+  };
+  useEffect(() => observeAppearance(setAppearance), []);
+  useEffect(() => applyAppearance(appearance), [appearance]);
+  useEffect(() => onNativeEvent((event, payload) => {
+    if (event !== 'appearance.command' || FLOAT) return;
+    const mode = modes.find(value => value === field(payload, 'mode'));
+    const accent = accents.find(value => value === field(payload, 'accent'));
+    changeAppearance({...mode && {mode}, ...accent && {accent}});
+  }), []);
   const [workspace, setWorkspace] = useState<StudioWorkspace>(readActiveWorkspace);
   const [dock, setDock] = useState(() => FLOAT ? readFloatTree(FLOAT.key, FLOAT.panels) : readWorkspaceDock(readActiveWorkspace()));
   const [floating, setFloating] = useState<FloatingWindow[]>(() => FLOAT ? [] : readFloating());
@@ -554,6 +570,12 @@ export default function App() {
       { id: 'find-window', label: 'Find Window…', onSelect: () => setPalette('/ ') },
       ...openPanels.map(panel => ({ id: 'panel-' + panel, label: STUDIO_PANEL_TITLES[panel],
         onSelect: () => showPanel(panel) })),
+      { id: 'appearance', label: 'Appearance', onSelect: () => {}, children: [
+        ...modes.map(mode => ({id: mode, label: mode === 'light' ? 'Light theme' : 'Dark theme',
+          checked: appearance.mode === mode, onSelect: () => changeAppearance({mode})})),
+        ...accents.map((accent, i) => ({id: accent, label: accent[0].toUpperCase() + accent.slice(1) + ' accent',
+          separator: i === 0, checked: appearance.accent === accent, onSelect: () => changeAppearance({accent})})),
+      ] },
       { id: 'ws', label: 'Workspaces', separator: true, onSelect: () => {}, children:
         WORKSPACES.map(id => ({ id: 'ws-' + id, label: WORKSPACE_INFO[id].title, shortcut: menuShortcut(WORKSPACE_INFO[id].key),
           checked: workspace === id, onSelect: () => switchWorkspace(id) })) },

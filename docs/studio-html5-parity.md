@@ -629,3 +629,5 @@ Route legacy play_start arguments to the shared HTML Studio Game launch path and
 Publish the live HTML dock and floating panel inventory to editor_windows using the same panel registry as the Window menu. Verify actual open-state changes.
 
 Route editor_window panel, workspace and reset requests to HTML Studio layout owners, including detached tabs.
+
+Restore editor_theme using shared HTML theme preferences, Window menu controls and linked MCP updates.
