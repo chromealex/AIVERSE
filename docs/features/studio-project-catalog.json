@@ -3,6 +3,8 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "engine/view/game/GameTerrainLook.cpp",
+    "engine/view/game/GameTerrainRender.h",
     "engine/view/game/GameTerrainRender.cpp",
     "engine/view/game/GamePlanetRender.cpp",
     "apps/studio-native/StudioTerrainGeometry.h",
@@ -500,6 +502,7 @@
     "docs/evidence/studio-terrain-grid-routing.json",
     "docs/evidence/studio-terrain-base-surface-cursor.json",
     "docs/evidence/studio-planet-terrain-body-edit.json",
-    "docs/evidence/studio-planet-detail-seams.json"
+    "docs/evidence/studio-planet-detail-seams.json",
+    "docs/evidence/studio-planet-material-tint.json"
   ]
 }

@@ -18,6 +18,7 @@
 #include "apps/editor/core/TerraWeavePlanetCavernsDoc.h"
 #include "engine/world/NereidFlowAuthoring.h"
 #include "apps/editor/core/ProjectFile.h"
+#include "engine/view/game/GameTerrainRender.h"
 #include "apps/editor/core/Projects.h"
 #include "StudioGameWizard.h"
 #include "engine/game/MapGrid.h"
@@ -1709,6 +1710,14 @@ Json StudioSession::sceneBrushJson() const {
     o.set("radius",Json::number(b.radius,3));o.set("strength",Json::number(b.kind=="terrain" && b.op=="stamp"?b.stampHeight:b.strength,3));
     const auto& sparse=ws_.map.data.extra["terraweaveSparse"];
     o.set("planet",Json::fromBool(ws_.map.data.planet()));
+    if(b.kind=="paint"){
+        game::TerrainLook look;
+        game::applyTerrainLook(look,ws_.project.rulesJson["terrain"]);
+        game::applyTerrainLook(look,ws_.project.manifest["terrain"]);
+        Json names=Json::array();
+        for(const auto& layer:look.layers)names.push(str(layer.id));
+        o.set("layerNames",std::move(names));
+    }
     o.set("terrainGrid",str(b.terrainGrid));
     o.set("detailScale",num(int64_t(ws_.map.data.detailScale)));
     o.set("targetHeight",Json::number(b.targetHeight,6));o.set("pickHeight",Json::fromBool(b.pickHeight));

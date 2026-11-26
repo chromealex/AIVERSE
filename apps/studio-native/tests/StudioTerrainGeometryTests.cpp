@@ -269,6 +269,18 @@ int main() {
         AIVERSE_TEST_CHECK(boundaries.size()==12*63+8);
         for(const auto& item:boundaries)AIVERSE_TEST_CHECK(item.second>=2);
     }
+    {
+        game::TerrainLook look;
+        game::applyTerrainLook(look,Json::parse(R"({"layers":[{"id":"grass","tint":[0,1,0]},{"id":"clay","tint":[1,0,0]}],"cells":{"grass":"grass"}})"));
+        auto& surface=globe.data.bodies.front();
+        surface.faceExtra.resize(6,Json::object());
+        surface.faceExtra.front().set("material",Json::parse(R"(["1."])"));
+        const auto painted=StudioPlanetPreview::build(globe,0,false,&look);
+        AIVERSE_TEST_CHECK(painted && painted->mesh.vertices()[0].rgba==rgba(255,0,0));
+        AIVERSE_TEST_CHECK(painted->mesh.vertices()[4].rgba==rgba(0,255,0));
+        AIVERSE_TEST_CHECK(painted->mesh.vertices()[8*8*4].rgba==rgba(0,255,0));
+        surface.faceExtra.clear();
+    }
     Json grid=Json::parse(R"({"body":"terra","faceSize":8,"radius":64,"step":2,"side":5})");
     Json coarse=Json::array();for(int i=0;i<6*25;++i)coarse.push(Json::number(int64_t(0)));grid.set("corners",coarse);
     const auto low=buildStudioLivePlanetTerrain(grid,body,*preview);

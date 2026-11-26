@@ -308,7 +308,10 @@ export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS, tileCatalog,
       value={brush.hardness} onCommit={hardness=>set({hardness})}/>}
     {brush.planet && (kind==='paint' || kind==='terrain') && <small>Paint the visible body in Scene. Radius is measured in surface cells.</small>}
     {kind==='paint' && !usesDetail && <small>Hold Shift while painting to restore the cell material.</small>}
-    {kind === 'paint' && <Slider label="Layer" value={brush.layer} min={0} max={3} step={1} onCommit={v => set({ layer: v })}/>}
+    {kind === 'paint' && <label className="ptp__row"><span>Layer</span>
+      <select className="au-input" value={brush.layer} onChange={e=>set({layer:Number(e.target.value)})}>
+        {[0,1,2,3].map(i=><option key={i} value={i}>{brush.layerNames?.[i] ?? `Layer ${i}`}</option>)}
+      </select></label>}
     {kind === 'region' && <label className="ptp__row"><span>Region</span>
       <select value={brush.regionLetter} onChange={e => set({ regionLetter: e.target.value })}>
         {Array.from('ABCDEFGHIJKLMNOPQRSTUVWXYZ', letter => <option key={letter}>{letter}</option>)}
