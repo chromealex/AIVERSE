@@ -1,0 +1,10 @@
+{
+  "sha": "d5d1aea9643dc3c7bed2cb2f8339374ceaa5b817",
+  "argv": [
+    "bash",
+    "/tmp/studio-imported.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-imported-clip-playback.log.txt",
+  "sha256": "bfa03da60bbd9849a53352350c60c51091b7ad263757dbf3b865ce412406b7ea"
+}
