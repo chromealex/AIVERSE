@@ -1,0 +1,10 @@
+{
+  "sha": "3cc94121987fcbb7cdd15f5e2ae548bb717e7d5d",
+  "argv": [
+    "bash",
+    "/tmp/preview-insp.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-preview-object-inspector.log.txt",
+  "sha256": "ae689b6d3fcc85b07f1688812b6473a52b4cd475d09f89d69d6fdbcf1722d97c"
+}
