@@ -1,0 +1,10 @@
+{
+  "sha": "a48224ca29a989b274c4d92608883f345de15c42",
+  "argv": [
+    "bash",
+    "../build-fixes.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-build-atlas-size-fixes-rebuilt.log.txt",
+  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}
