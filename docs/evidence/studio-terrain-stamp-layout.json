@@ -1,0 +1,10 @@
+{
+  "sha": "4b7815087442a4dc3c1ec3f8bf4a649f8e4b6968",
+  "argv": [
+    "bash",
+    "/tmp/terrain-stamp-layout-gate.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-terrain-stamp-layout.log.txt",
+  "sha256": "a799db48318ba078027e6a18274f7c2542dcc8783f9af698aa93b07adf136f5c"
+}
