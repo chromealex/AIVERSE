@@ -346,9 +346,10 @@ std::vector<GameOverlays::PlanPrimitive> GameOverlays::groundPlan(const GameScen
             if (set_.defs[index].enabled) gather(set_.defs[index], index, set_.defs[index].style.space == OvSpace::Screen);
     }
     prepare(scene, time, nullptr, grid, float(std::max(grid.w, grid.h)));
+    marks_.clear();
     for (uint16_t index : worldDefs_) {
         const auto& def = set_.defs[index];
-        if (!def.enabled || def.style.space != OvSpace::Ground || !gather(def, index, false)) continue;
+        if (!def.enabled || (def.style.space != OvSpace::Ground && def.style.space != OvSpace::Minimap) || !gather(def, index, false)) continue;
         for (const auto& instance : insts_) emit(def, index, instance);
     }
     if (screen) {

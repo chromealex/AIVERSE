@@ -3,6 +3,8 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "engine/view/game/PlanarMinimap.h",
+    "apps/client/Minimap.cpp",
     "apps/studio-web/src/panels/overlayScreen.ts",
     "apps/editor/core/OverlayOps.h",
     "apps/studio-web/tests/nested-dock.mjs",

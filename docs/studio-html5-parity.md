@@ -290,3 +290,5 @@ Overlays transfer: draw selected ground overlays on an independent plan using Ga
 Overlays transfer: bind the legacy overlay_preview command to document-scoped HTML panel state, including partial changes, off and linked MCP calls.
 
 Overlays transfer: emit screen anchors and resolved text, bars, circles and rectangles from the game renderer for the independent HTML Studio plan.
+
+Overlays transfer: render an independent minimap using the game terrain, object and mark rasterizer. Verify project backgrounds, ring/disc coverage and map coordinates in desktop Studio.

@@ -299,3 +299,23 @@
     outline-offset: 2px;
   }
 }
+
+.overlay-plan-with-minimap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(128px, 192px);
+  align-items: start;
+  gap: 12px;
+}
+.overlay-minimap {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--au-line);
+  border-radius: 8px;
+  background: var(--au-surface);
+}
+.overlay-minimap figcaption { margin-bottom: 8px; font-weight: 600; }
+.overlay-minimap img { display: block; width: 100%; image-rendering: pixelated; }
+@container (max-width: 520px) {
+  .overlay-plan-with-minimap { grid-template-columns: minmax(0, 1fr); }
+  .overlay-minimap { width: min(100%, 192px); box-sizing: border-box; }
+}

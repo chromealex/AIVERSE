@@ -587,3 +587,5 @@ cc566cf2ea8e8f87e184d8084d77cd4bd0559e12 and layout fix 205cc34c98e052c5fb730866
 Overlays transfer: emit screen anchors and resolved text, bars, circles and rectangles from the game renderer for the independent HTML Studio plan.
 
 692bcd8161fc554e806842a6b5d23d78054b5d5f. GameOverlaysDraw.cpp shares screen anchor traversal and resolved primitive values with StudioOverlayPlan.h. OverlayPlan.tsx and overlayScreen.ts draw an independent HTML canvas. Mac WKWebView verified right-edge HUD text after resizing, project shape colors, selected entity bars and formatted counts, a closed Scene and unchanged map bytes. Linked MCP accepted a screen-only selection. Native build, TypeScript and 299 web tests passed. Evidence docs/evidence/studio-screen-overlay-plan.json and docs/evidence/studio-project-catalog/screen-overlay-plan.png. Next: textured icons and 3D placement ghost; Windows acceptance remains open.
+
+Overlays transfer: render an independent minimap using the game terrain, object and mark rasterizer. Verify project backgrounds, ring/disc coverage and map coordinates in desktop Studio.

@@ -1,5 +1,7 @@
 """Exercise the ground overlay panel in macOS Studio. Pass a built app and a scratch directory."""
 import argparse
+import struct
+import zlib
 import json
 import re
 import sys
@@ -33,6 +35,12 @@ with tempfile.TemporaryDirectory(dir=args.scratch) as temp:
     map_data = json.loads(map_file.read_text())
     rows = map_data["terrain"]["rows"]
     rows[4] = rows[4][:3] + "~~" + rows[4][5:]
+    def chunk(kind, data):
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+    background = project / "minimap.png"
+    background.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0)) +
+                           chunk(b"IDAT", zlib.compress(bytes([0,26,53,65,128]))) + chunk(b"IEND", b""))
+    map_data["minimapBackground"] = background.name
     original = json.dumps(map_data)
     map_file.write_text(original)
     (map_file.parent / "second.json").write_text(original)
@@ -43,6 +51,12 @@ with tempfile.TemporaryDirectory(dir=args.scratch) as temp:
              style=dict(color="#16eaafff", thickness=.15, fadeIn=.4)),
         dict(id="build_site", anchor="ghost", shape=dict(type="footprint", predicate="ok"),
              style=dict(fill=True, outline=False, fadeIn=.4, colors={"true": "#f6bf4aff", "false": "#db3854ff"})),
+        dict(id="patrol_signal", anchor=dict(type="point", at=[5,9]), shape=dict(type="ring", radius=2),
+             style=dict(space="minimap", color="#ffbd59ff")),
+        dict(id="patrol_zone", anchor=dict(type="point", at=[16,3]), shape=dict(type="rect", size=[2,4]),
+             style=dict(space="minimap", color="#68cfdeff")),
+        dict(id="cursor_ping", anchor="cursor", shape=dict(type="circle", radius=1),
+             style=dict(space="minimap", color="#e879a1ff")),
         dict(id="map_marker", anchor=dict(type="screen", at=[15,18]), shape=dict(type="circle", radius=6),
              style=dict(color="#8ac97dff", segments=8)),
         dict(id="map_badge", anchor=dict(type="screen", at=[32,18]), shape=dict(type="rect", size=[12,8]),

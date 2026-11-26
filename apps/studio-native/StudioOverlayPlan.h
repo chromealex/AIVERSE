@@ -5,12 +5,18 @@
 #include "StudioSession.h"
 #include "apps/editor/core/OverlayPreviewTerritory.h"
 #include "engine/view/game/GameView.h"
+#include "engine/view/game/PlanarMinimap.h"
+#include "engine/world/WorldAssets.h"
+#include "apps/editor/core/ProjectFileEdits.h"
+#include "apps/editor/core/BrandingOps.h"
+#include "apps/editor/core/PrismaOps.h"
 #include <set>
 
 namespace aiverse::studio {
 
 inline bool studioPlanShape(const game::OverlayDef& def) {
     using game::OvShape;
+    if (def.style.space == game::OvSpace::Minimap) return true;
     if (def.style.space == game::OvSpace::Screen)
         return def.shape == OvShape::Text || def.shape == OvShape::Bar || def.shape == OvShape::Circle ||
                def.shape == OvShape::Ring || def.shape == OvShape::Rect;
@@ -93,7 +99,7 @@ inline void registerStudioOverlayPlan(StudioSession& session, std::function<void
             notify(state, patch.getBool("reveal", true) && !patch.getBool("off"));
             return state;
         }, true});
-    ws.registerOp({"overlay_plan_preview", "Preview ground and screen overlay definitions in project draw order on the map plan.",
+    ws.registerOp({"overlay_plan_preview", "Preview ground, screen and minimap overlay definitions in project draw order on the map plan.",
         Json::parse(R"({"properties":{"ids":{"type":"array","items":{"type":"string"}},"placeType":{"type":"string"},"x":{"type":"number"},"z":{"type":"number"}}})"),
         [&ws, &session](const Json& args) {
             const auto& map = ws.map.data;
@@ -168,6 +174,9 @@ inline void registerStudioOverlayPlan(StudioSession& session, std::function<void
                 objects.push(point);
             }
             if (hovered < scene.objects.size()) scene.objects[hovered].hovered = true;
+            const bool minimap = std::any_of(selected.defs.begin(), selected.defs.end(), [](const auto& def) {
+                return def.style.space == game::OvSpace::Minimap;
+            });
             game::GameOverlays overlays;
             overlays.initPrepared(rules, std::move(selected), ws.project.dir);
             overlays.setContext(context);
@@ -189,6 +198,30 @@ inline void registerStudioOverlayPlan(StudioSession& session, std::function<void
                 std::string row;
                 for (int x = 0; x < map.w; x += stride) row += map.cells[size_t(z * map.w + x)];
                 terrain.push(Json::string(row));
+            }
+            if (minimap) {
+                const auto background = map.extra.getStr("minimapBackground", project.manifest.getStr("minimapBackground"));
+                std::string bytes;
+                if (world::safeAssetPath(background)) {
+                    namespace fs = std::filesystem;
+                    const auto root = fs::weakly_canonical(project.dir);
+                    const auto file = fs::weakly_canonical(root / background);
+                    const auto local = file.lexically_relative(root);
+                    if (!local.empty() && *local.begin() != ".." && fs::is_regular_file(file))
+                        bytes = editor::readProjectFileBytes(file);
+                }
+                int width, height;
+                float cellsPerPixel;
+                std::vector<uint32_t> base, pixels;
+                game::minimap::build(grid, bytes, width, height, cellsPerPixel, base);
+                game::minimap::rasterize(grid, rules, scene, nullptr, &overlays.minimapMarks(),
+                                        width, height, cellsPerPixel, base, pixels);
+                std::vector<uint8_t> rgba;
+                rgba.reserve(pixels.size()*4);
+                for (auto pixel : pixels)
+                    for (int shift : {0, 8, 16, 24}) rgba.push_back(uint8_t(pixel >> shift));
+                result.set("minimap", Json::string("data:image/png;base64," +
+                    editor::base64Encode(editor::encodePngRgba(width, height, rgba))));
             }
             result.set("terrain", terrain);
             result.set("screen", std::move(screen));

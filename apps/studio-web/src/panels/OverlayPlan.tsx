@@ -5,7 +5,7 @@ import { StudioAlert, StudioSection } from '../ui';
 
 import { drawScreenOverlays, type ScreenOverlay } from './overlayScreen';
 
-type Plan = {catalog:string[]; terrain:string[]; stride:number; width:number; height:number; objects:number[][]; screen:ScreenOverlay[]; primitives:number[][]};
+type Plan = {catalog:string[]; terrain:string[]; stride:number; width:number; height:number; objects:number[][]; minimap?:string; screen:ScreenOverlay[]; primitives:number[][]};
 
 type PickPosition = (x:number,z:number)=>void;
 
@@ -97,6 +97,15 @@ export default function OverlayPlan({scope,placeType,x,z,pick,selectionKey,ids,s
         onChange={e=>setVisible(id,e.target.checked)}/> {id}</label>)}
     </div>
     {error && <StudioAlert tone="danger">{error}</StudioAlert>}
-    {plan && <><PlanCanvas plan={plan} pick={pick}/>{!plan.primitives.length && !plan.screen.length && <p>No visible geometry at this position.</p>}</>}
+    {plan && <>
+      <div className={plan.minimap ? 'overlay-plan-with-minimap' : undefined}>
+        <PlanCanvas plan={plan} pick={pick}/>
+        {plan.minimap && <figure className="overlay-minimap">
+          <figcaption>Minimap</figcaption>
+          <img src={plan.minimap} alt="Minimap with project overlays"/>
+        </figure>}
+      </div>
+      {!plan.minimap && !plan.primitives.length && !plan.screen.length && <p>No visible geometry at this position.</p>}
+    </>}
   </StudioSection>;
 }

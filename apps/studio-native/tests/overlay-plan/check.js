@@ -79,6 +79,23 @@
     await wait(()=>canvas.width===Math.round(canvas.clientWidth*devicePixelRatio) && hudAtRightEdge(),'HUD follows resized panel');
     canvas.style.width='100%';
     await wait(()=>canvas.width===Math.round(canvas.clientWidth*devicePixelRatio) && hudAtRightEdge(),'HUD follows restored panel');
+    const minimapIds=['patrol_signal','patrol_zone','cursor_ping'];
+    for (const id of minimapIds) {
+      checkbox(id).click();
+      await wait(()=>checkbox(id).checked,id+' enabled');
+    }
+    function miniPixel(x,y,color) {
+      const image=document.querySelector('img[alt="Minimap with project overlays"]');
+      if(!image?.complete || image.naturalWidth!==192 || image.naturalHeight!==128)return false;
+      const sample=document.createElement('canvas');
+      sample.width=1; sample.height=1;
+      const ctx=sample.getContext('2d');
+      ctx.drawImage(image,x,y,1,1,0,0,1,1);
+      return [...ctx.getImageData(0,0,1,1).data].slice(0,3).join(',')===color;
+    }
+    await wait(()=>miniPixel(55,72,'255,189,89') && miniPixel(40,72,'43,72,58') &&
+      miniPixel(128,24,'104,207,222') && miniPixel(144,24,'43,72,58') &&
+      miniPixel(26,35,'38,76,107'),'minimap ring, disc, painted ground and water');
     await sleep(1800);
     log('SHOT_plan');
     await sleep(1600);
@@ -87,6 +104,12 @@
     canvas.dispatchEvent(new MouseEvent('click',{bubbles:true,
       clientX:rect.left+(rect.width-24*scale)/2+4.1*scale, clientY:rect.top+(rect.height-16*scale)/2+4.1*scale}));
     await wait(() => hasColor(219,56,84), 'red ghost at water');
+    await wait(()=>miniPixel(33,33,'232,121,161'),'cursor ping follows map click');
+    for(const id of minimapIds) {
+      checkbox(id).click();
+      await wait(()=>!checkbox(id).checked,id+' disabled');
+    }
+    await wait(()=>!document.querySelector('img[alt="Minimap with project overlays"]'),'minimap released');
     checkbox('sensor_radius').click();
     await wait(() => !hasColor(22,234,175) && hasColor(219,56,84), 'single overlay remaining');
     let rejected = false;
@@ -111,7 +134,7 @@
     try { await rpc('studio.op',{op:'overlay_preview',params:{ids:['sensor_radius']},expectedDocumentEpoch:before.epoch}); }
     catch { stale=true; }
     if(!stale)throw Error('Stale UI overlay command accepted');
-    log('VERIFIED map isolation and stale command rejection; screen HUD resizing, selection text, health bars, circle, rectangle, project colors, forced rings, concurrent overlays, water click, deselection and Hierarchy selection');
+    log('VERIFIED minimap terrain/background, ring/disc pixels, cursor ping and release; map isolation and stale command rejection; screen HUD resizing, selection text, health bars, circle, rectangle, project colors, forced rings, concurrent overlays, water click, deselection and Hierarchy selection');
     log('DONE_1');
   } catch (error) { log('FAIL '+error.message); }
 })();
