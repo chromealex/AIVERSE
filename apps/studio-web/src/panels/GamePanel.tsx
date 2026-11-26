@@ -45,7 +45,7 @@ export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelC
     finally{setBusy(false);}
   }
   const device=state?.device;
-  const insets=device?.safeArea && device.width ? device.chrome?.insets : undefined;
+  const insets=device?.width ? device.chrome?.insets : undefined;
   // A device preview is drawn as the device (legacy Game window): a bezel around the screen; the native
   // view draws the rounded screen corners, the camera cut-out and the safe area over the game.
   const framed=!!device?.width;
@@ -144,7 +144,7 @@ export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelC
       <StudioCheckbox label="Safe area" checked={device?.safeArea??true} disabled={!device?.width||busy} onChange={e=>void configure({safeArea:e.target.checked})}/>
       {!!device?.width && <StudioBadge>{device.width} × {device.height} · {device.touch?'Touch':'Mouse'}</StudioBadge>}
       {insets && Object.values(insets).some(value=>value>0) ?
-        <dl className="studio-game__insets" aria-label="Safe area in logical points">
+        <dl className="studio-game__insets" data-enabled={device?.safeArea} aria-label="Device safe area in logical points">
           {(['top','right','bottom','left'] as const).map(edge=><div key={edge}><dt>{edge}</dt><dd>{insets[edge]} pt</dd></div>)}
         </dl> : null}
     </div>
