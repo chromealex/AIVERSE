@@ -1,0 +1,10 @@
+{
+  "sha": "034323b1e46cdd8c408c1f91f709f3e3f5cfbd26",
+  "argv": [
+    "bash",
+    "/tmp/studio-animation-route.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-linked-animation-startup.log.txt",
+  "sha256": "7d285960fccfe813f4832cc8f1884e3edd6878f082c4883eeaf70b4c62bc364f"
+}
