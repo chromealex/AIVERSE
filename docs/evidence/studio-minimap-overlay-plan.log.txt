@@ -1,0 +1,9 @@
+
+> @aiverse/studio-web@0.1.0 typecheck
+> tsc --noEmit
+
+299 web tests passed
+MCP discovery, panel reveal, shared UI selection, atomic failure, partial update and off passed
+2026-11-26 03:10:27.670 AiverseStudioHTML5[99449:82470217] [studio-web] JS: CROSS main VERIFIED minimap terrain/background, ring/disc pixels, cursor ping and release; map isolation and stale command rejection; screen HUD resizing, selection text, health bars, circle, rectangle, project colors, forced rings, concurrent overlays, water click, deselection and Hierarchy selection
+2026-11-26 03:10:34.842 AiverseStudioHTML5[99768:82471847] [studio-web] JS: CROSS main DONE_1
+2026-11-26 03:10:34.842 AiverseStudioHTML5[99768:82471847] [studio-web] JS: CROSS main VERIFIED native placement on ground, water and map boundary; rejects invalid coordinates; no Scene; revision unchanged
