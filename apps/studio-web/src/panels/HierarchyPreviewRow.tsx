@@ -5,12 +5,13 @@ interface Props {
   node:StudioEntity;
   depth:number;
   selected?:boolean;
+  onSelect:()=>void;
   childCount?:number;
   collapsed:boolean;
   toggle:()=>void;
 }
 
-export function HierarchyPreviewRow({node,depth,selected,childCount,collapsed,toggle}:Props){
+export function HierarchyPreviewRow({node,depth,selected,onSelect,childCount,collapsed,toggle}:Props){
   const details=node.preview!;
   return <div className="hier-preview" data-selected={selected || undefined} style={{paddingInlineStart:6+depth*12}} data-preview-id={node.id} data-nested-leaf={childCount===0 || undefined}
     onKeyDown={event=>{
@@ -25,7 +26,7 @@ export function HierarchyPreviewRow({node,depth,selected,childCount,collapsed,to
       {collapsed?<ChevronRight size={13}/>:<ChevronDown size={13}/>}
     </button>}
     <details open={selected || undefined}>
-      <summary><Eye size={12} aria-hidden="true"/><span>{node.name}</span><small>Preview</small></summary>
+      <summary onClick={onSelect}><Eye size={12} aria-hidden="true"/><span>{node.name}</span><small>Preview</small></summary>
       <dl>
         <dt>Type</dt><dd>{node.kind}</dd>
         <dt>Owner</dt><dd>{node.owner}</dd>

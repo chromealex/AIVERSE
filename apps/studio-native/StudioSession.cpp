@@ -4229,6 +4229,18 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             item.set("bytes",Json::number(entry->bytes));
             item.set("settings",entry->settings);
             reply.set("result",std::move(item));
+        } else if (method == "studio.select" && params.has("previewRef")) {
+            if(!sameDocumentScope(params["scope"],graphDocumentScope()) ||
+               params.getStr("historyVersion")!=ws_.project.historyVersion())throw std::runtime_error("Hierarchy preview changed");
+            Json refs=Json::array();
+            refs.push(params["previewRef"]);
+            const auto row=resolvePreviewRefs(refs)[0];
+            if(row.getInt("doc",0)>=0)throw std::runtime_error("Select the authored entity in the Hierarchy");
+            auto detail=queryEditWorld(row,false);
+            Json ids=Json::array();ids.push(row["id"]);
+            clearSelection();
+            setPreviewSelection(std::move(ids),std::move(detail));
+            reply.set("result",snapshot());
         } else if (method == "studio.select") {
             // mode: replace (default) | add | toggle; `ids` selects several at once (marquee).
             const std::string mode=params.getStr("mode","replace");

@@ -54,6 +54,13 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     return allRows.filter(({node}) => matchesHierarchy(node, filter, selectedSet));
   }, [allRows, search, selectedSet]);
   const scope=snapshot?.graphDocument;
+  const selectPreview=async(id:string)=>{
+    if(!scope || !snapshot || busy)return;
+    try {
+      updateSnapshot(await invoke('studio.select',{previewRef:id.slice('preview:'.length),scope,historyVersion:snapshot.project.historyVersion ?? ''}));
+      setError('');
+    }catch(e){setError(String(e));}
+  };
   const group=grouping.startsWith('project:')?Number(grouping.slice(8)):-1;
   useEffect(()=>{
     setPaths(undefined);setParents(undefined);setPreview([]);
@@ -240,7 +247,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
         const hidden = node.visible === false;
         const dragging = editable(node.id) && canReorder;
         const occurrence=row.occurrence ?? node.id;
-        if(node.preview)return <HierarchyPreviewRow key={occurrence} selected={snapshot?.selectedPreviewIds?.includes(node.id)} node={node} depth={depth}
+        if(node.preview)return <HierarchyPreviewRow key={occurrence} onSelect={()=>void selectPreview(node.id)} selected={snapshot?.selectedPreviewIds?.includes(node.id)} node={node} depth={depth}
           childCount={row.children} collapsed={collapsed.has(node.id)} toggle={()=>toggleCollapsed(node.id)}/>;
         return <div key={occurrence} data-occurrence={occurrence} data-id={node.id} data-nested-leaf={row.children===0 || undefined} role="option" aria-selected={selected} tabIndex={selected ? 0 : -1}
           className={'hier__row' + (selected ? ' is-selected' : '') + (node.id === selectedId ? ' is-primary' : '') +
