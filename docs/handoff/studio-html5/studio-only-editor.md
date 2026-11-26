@@ -1121,3 +1121,5 @@ ddaae7f98cf4f297823953c3dc88d6b8d2b7add7 implements scoped Scene camera/output i
 Scope Scene capture to the map accepted by the agent link and its matching render snapshot. Transfer linked view_focus for world coordinates and current planetary face cells.
 
 f491f087a8691edcfcaf47be21a3015e8d4ed5a6 passed flat-map linked camera focus, unchanged orbit, default height, retained distance, hidden Scene errors and same-poll export cancellation on map reopen/change. The planetary fixture found the correct face 2 but a radial ray through a mesh vertex missed the near triangles and hit the opposite hemisphere. Receipt docs/evidence/studio-scene-focus-and-reopen.json records the failed planetary stage. Next correct radial surface targeting and repeat the exact linked camera reads.
+
+510b5e227 switches the coordinate focus ray to the forward radial hemisphere and tolerates floating-point barycentric error at shared triangle edges. During source review the terrain regression fixture had a duplicate local CubeSphere variable; reuse the same fixture sphere for both tests before building. The patched GPU and packaged acceptance are still outstanding at this point.

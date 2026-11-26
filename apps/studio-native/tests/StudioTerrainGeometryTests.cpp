@@ -325,7 +325,6 @@ int main() {
     AIVERSE_TEST_CHECK(regionLines==64&&gravityLines>0);
     PlanetRegionChart chart;chart.owner="entity:@front";chart.body="terra";
     chart.radius=Fixed::fromInt(64);
-    game::CubeSphere sphere(8);
     chart.up=sphere.dirFromFace(0,Fixed::fromInt(7),Fixed::fromInt(3));
     game::CubeSphere::faceTangents(0,chart.up,chart.east,chart.south);
     chart.area={100,-200,300,200,true};
