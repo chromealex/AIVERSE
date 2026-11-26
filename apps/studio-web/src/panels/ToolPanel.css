@@ -121,3 +121,7 @@
 .effects-key-list { min-width:0; border:1px solid var(--au-line); border-radius:var(--au-radius-sm); margin:8px 0; padding:8px; }
 .effects-key-row { display:grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) auto; gap:8px; align-items:end; margin-bottom:6px; }
 .effects-key-plot { display:block; width:100%; height:56px; margin-bottom:8px; background:var(--au-field); border-radius:var(--au-radius-sm); }
+.effects-force-fields>fieldset { margin:8px 0; padding:10px; min-width:0; border:1px solid var(--au-line); border-radius:var(--au-radius-sm); }
+.effects-force-fields p { margin:0 0 8px; color:var(--au-text-muted); }
+.effects-vector { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; min-width:0; border:0; padding:0; margin:12px 0 0; }
+.effects-vector legend { padding:0 0 4px; font-weight:600; }

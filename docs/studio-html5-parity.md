@@ -330,3 +330,5 @@ Effect camera stage: route drag and wheel input on the Effects native layer to i
 Effect emitter stage: edit emission settings and add, duplicate or remove emitters in the current source draft; preserve other modules and comments. Verify persistence and the engine limit.
 
 Effect ranges: inspect nine emitter parameters, edit constant and random bounds and curve keys in existing source drafts. Verify native validation, source preservation and reopened values.
+
+Effects force fields: edit effect-space field geometry and forces in the draft and the selected emitter’s external force multiplier. Verify add/remove, bounds, save/reopen and preserved unrelated source.

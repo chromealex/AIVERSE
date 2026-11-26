@@ -1,6 +1,7 @@
 import {useMemo,useState} from 'react';
-import {applyEdits,createScanner,findNodeAtLocation,getNodeValue,modify,parseTree,type ParseError} from 'jsonc-parser';
-import EffectRangeEditor from './EffectRangeEditor';
+import {applyEdits,createScanner,findNodeAtLocation,getNodeValue,modify,parseTree,type Node,type ParseError} from 'jsonc-parser';
+import EffectForceFields from './EffectForceFields';
+import EffectRangeEditor,{EffectNumber} from './EffectRangeEditor';
 import {StudioAlert,StudioButton,StudioInput,StudioSelect} from '../ui';
 
 const emitterLimit=16;
@@ -35,10 +36,11 @@ export default function EffectEmitters({source,edit,busy}:{source:string;edit:(d
     edit(source.slice(0,node.offset)+raw+','+newline+indent+source.slice(node.offset));
     select(index+1);
   }
-  function remove(){
+  function removeEntry(entries:Node[],position:number){
     // Remove only the node and one separator; comments on neighbouring entries survive.
-    const previous=nodes[index-1];
-    const before=index===nodes.length-1;
+    const node=entries[position];
+    const previous=entries[position-1];
+    const before=position===entries.length-1;
     const anchor=before?previous:node;
     const scanner=createScanner(source,true);
     scanner.setPosition(anchor.offset+anchor.length);
@@ -46,9 +48,10 @@ export default function EffectEmitters({source,edit,busy}:{source:string;edit:(d
     const comma=scanner.getTokenOffset();
     if(source[comma]!==',')return;
     edit(applyEdits(source,[{offset:node.offset,length:node.length,content:''},{offset:comma,length:1,content:''}]));
-    select(Math.min(index,nodes.length-2));
+
   }
-  return <fieldset className="effects-emitters" disabled={busy}>
+  const fields=findNodeAtLocation(root,['forceFields']);
+  return <><fieldset className="effects-emitters" disabled={busy}>
     <legend>Emitters</legend>
     <div className="au-row">
       {nodes.length>0&&<StudioSelect aria-label="Selected emitter" value={index} onChange={e=>select(Number(e.target.value))}>
@@ -61,7 +64,7 @@ export default function EffectEmitters({source,edit,busy}:{source:string;edit:(d
         patch(array?['emitters',nodes.length]:['emitters'],array?{burst:10}:[{burst:10}]);select(nodes.length);
       }}>Add emitter</StudioButton>
       <StudioButton disabled={!emitter||nodes.length>=emitterLimit} onClick={duplicate}>Duplicate</StudioButton>
-      <StudioButton disabled={nodes.length<=1} onClick={remove}>Remove</StudioButton>
+      <StudioButton disabled={nodes.length<=1} onClick={()=>{removeEntry(nodes,index);select(Math.min(index,nodes.length-2));}}>Remove</StudioButton>
     </div>
     {emitter&&<div className="effects-emitter-fields">
       {choices.map(({key,label,options,fallback})=><label key={key}>{label}
@@ -73,8 +76,16 @@ export default function EffectEmitters({source,edit,busy}:{source:string;edit:(d
         const count=e.target.valueAsNumber;
         if(Number.isInteger(count)&&count>=0&&count<=2000)patch(['emitters',index,'burst'],count);
       }}/></label>
+      <EffectNumber label="External force multiplier" value={emitter.externalForces??0} min={0} max={100}
+        change={value=>patch(['emitters',index,'externalForces'],value)}/>
       <label className="effects-emitter-loop"><input type="checkbox" checked={emitter.loop===true} onChange={e=>patch(['emitters',index,'loop'],e.target.checked)}/>Loop emission</label>
     </div>}
     {emitter&&<EffectRangeEditor key={index} emitter={emitter} patch={(path,value)=>patch(['emitters',index,...path],value)}/>}
-  </fieldset>;
+  </fieldset>
+    <EffectForceFields fields={fields} busy={busy} patch={patch} remove={position=>{
+      const entries=fields?.children??[];
+      if(entries.length===1)patch(['forceFields'],[]);
+      else removeEntry(entries,position);
+    }}/>
+  </>;
 }

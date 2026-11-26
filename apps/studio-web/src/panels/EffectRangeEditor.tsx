@@ -18,7 +18,7 @@ const numeric=(v:unknown):v is number=>typeof v==='number'&&Number.isFinite(v);
 const pair=(v:unknown):v is [number,number]=>Array.isArray(v)&&v.length===2&&v.every(numeric);
 const keys=(v:unknown):v is [number,number][]=>Array.isArray(v)&&v.length>0&&v.every(pair);
 
-function NumberBox({label,value,min,max,change}:{label:string;value:number;min:number;max:number;change:(v:number)=>void}){
+export function EffectNumber({label,value,min,max,change}:{label:string;value:number;min:number;max:number;change:(v:number)=>void}){
   const [typing,setTyping]=useState<string|null>(null);
   return <label>{label}<StudioInput type="number" step="any" min={min} max={max} value={typing??value}
     onChange={e=>{
@@ -48,8 +48,8 @@ function CurveKeys({label,curve,path,min,max,patch}:{label:string;curve:unknown;
       {rows.map(row=><circle key={row.index} cx={Math.max(0,Math.min(1,row.time))*300} cy={y(row.value)} r="2" fill="var(--au-text)"/>)}
     </svg>
     {rows.map(({time:t,value:v,index:i},order)=><div className="effects-key-row" key={i}>
-      <NumberBox label={'Time '+(order+1)} value={t} min={0} max={1} change={n=>setPoint(i,0,n)}/>
-      <NumberBox label={'Value '+(order+1)} value={v} min={min} max={max} change={n=>setPoint(i,1,n)}/>
+      <EffectNumber label={'Time '+(order+1)} value={t} min={0} max={1} change={n=>setPoint(i,0,n)}/>
+      <EffectNumber label={'Value '+(order+1)} value={v} min={min} max={max} change={n=>setPoint(i,1,n)}/>
       <StudioButton disabled={points.length<2} aria-label={'Remove key '+(order+1)} onClick={()=>{
         if(numeric(curve))patch(path,points.filter((_,j)=>j!==i));else patch([...path,i],undefined);
       }}>Remove</StudioButton>
@@ -97,10 +97,10 @@ export default function EffectRangeEditor({emitter,patch}:{emitter:Record<string
       </StudioSelect></label>
     </div>
     <div className="effects-emitter-fields" key={p.key+mode}>
-      {numeric(raw)&&<NumberBox label="Value" value={raw} min={p.min} max={p.max} change={v=>patch([p.key],v)}/>}
+      {numeric(raw)&&<EffectNumber label="Value" value={raw} min={p.min} max={p.max} change={v=>patch([p.key],v)}/>}
       {pair(raw)&&<>
-        <NumberBox label="Minimum" value={raw[lowIndex]} min={p.min} max={raw[highIndex]} change={v=>editBound(lowIndex,v)}/>
-        <NumberBox label="Maximum" value={raw[highIndex]} min={raw[lowIndex]} max={p.max} change={v=>editBound(highIndex,v)}/>
+        <EffectNumber label="Minimum" value={raw[lowIndex]} min={p.min} max={raw[highIndex]} change={v=>editBound(lowIndex,v)}/>
+        <EffectNumber label="Maximum" value={raw[highIndex]} min={raw[lowIndex]} max={p.max} change={v=>editBound(highIndex,v)}/>
       </>}
     </div>
     {mode==='curve'&&<>
