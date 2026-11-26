@@ -1,0 +1,10 @@
+{
+  "sha": "693d647b411fb12cd7e02e1ad186c7a444c5b104",
+  "argv": [
+    "bash",
+    "/tmp/physis-apply-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-physis-local-field-edit.log.txt",
+  "sha256": "e96b473ba38a11b2a8b5fc97ed1118411e5f621b4eafcb0a72e8fa91dd0369f2"
+}
