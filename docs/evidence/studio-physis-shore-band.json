@@ -1,0 +1,10 @@
+{
+  "sha": "c0827893e195d639fed52ca32bb07bb3116741ed",
+  "argv": [
+    "bash",
+    "/tmp/physis-shore-ui.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-physis-shore-band.log.txt",
+  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}
