@@ -382,3 +382,5 @@ Planetary material transfer: resolve face material overrides and inherited cell 
 Static Geometry diagnostics: show the active Game renderer’s STRATA/LOD decisions and cooked-source counts in HTML. Verify model selection and stop clearing on macOS.
 
 Authoring static geometry: load project scenery in the native map Scene, update routing after saved mode changes and expose renderer decisions before Play. Verify edited routing and drawn models in packaged Studio.
+
+Static Geometry document scope: resolve world-space map geometry from the map, show and edit that file in the current document, and reject stale map/file writes. Keep project-scoped operations compatible.

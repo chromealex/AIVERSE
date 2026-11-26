@@ -208,7 +208,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'terraweave_generator': return <TerraweaveGeneratorPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'building_generator': return <BuildingGeneratorPanel snapshot={snapshot} showPanel={ctx.showPanel} commitSnapshot={ctx.commitSnapshot}/>;
       case 'catalog': return <CatalogPanel snapshot={snapshot}/>;
-      case 'static_geometry': return <StaticGeometryPanel key={snapshot?.project.path} projectPath={snapshot?.project.path ?? ''}/>;
+      case 'static_geometry': return <StaticGeometryPanel key={JSON.stringify([snapshot?.project.path,snapshot?.graphDocument?.epoch])} projectPath={snapshot?.project.path ?? ''} document={snapshot?.graphDocument}/>;
       case 'feature_readiness': return <FeatureReadinessPanel connected={connected}/>;
       case 'world_explorer': return <WorldExplorerPanel snapshot={snapshot}/>;
       case 'simulation_profiler': return <SimulationProfilerPanel snapshot={snapshot}/>;

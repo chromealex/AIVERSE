@@ -22,6 +22,17 @@ fs::path projectPath(const Workspace& ws,const std::string& relative){
 render::FileReader reader(const Workspace& ws){return [&ws](const std::string& file,std::string& out){const auto path=projectPath(ws,file);std::ifstream f(path,std::ios::binary);if(!f)return false;std::ostringstream s;s<<f.rdbuf();out=s.str();return true;};}
 Json ok(){Json j=Json::object();j.set("ok",Json::fromBool(true));return j;}
 }
+std::string configuredGeometryScene(const Workspace& ws){
+    if(ws.map.data.planet())return {};
+    return ws.map.data.worldSpace ? ws.map.data.extra.getStr("geometryScene") : ws.project.manifest.getStr("geometryScene");
+}
+
+static std::string geometryFileForOperation(const Workspace& ws,const Json& params){
+    if(params.getStr("scope","project")=="project")return ws.project.manifest.getStr("geometryScene","geometry.json");
+    if(params.getStr("scope")!="document")throw std::runtime_error("Unknown geometry scope");
+    if(!ws.map.data.worldSpace && !ws.map.data.planet())return ws.project.manifest.getStr("geometryScene","geometry.json");
+    return configuredGeometryScene(ws);
+}
 void registerSurfaceProxyOps(Workspace& ws);
 void registerGeometryOps(Workspace& ws){
     registerSurfaceProxyOps(ws);
@@ -124,13 +135,14 @@ void registerGeometryOps(Workspace& ws){
     // named by game.json "geometryScene", geometry.json by default):
     // "auto" (the model's automatic choice), "strata" (force STRATA) or "lod"
     // (force the ordinary LOD path). Writes the scene atomically and reloads.
-    ws.registerOp({"geometry_instances_list","List static scene objects and their configured rendering modes.",Json::object(),[&ws](const Json&){
-        const auto relative=ws.project.manifest.getStr("geometryScene","geometry.json");
-        const auto file=projectPath(ws,relative);
+    ws.registerOp({"geometry_instances_list","List static scene objects and their configured rendering modes.",Json::parse(R"({"type":"object","properties":{"scope":{"type":"string","enum":["project","document"]}}})"),[&ws](const Json& p){
+        const auto relative=geometryFileForOperation(ws,p);
         auto result=ok();
         result.set("file",Json::string(relative));
+        result.set("source",Json::string(p.getStr("scope")=="document" && ws.map.data.worldSpace ? "map" : "project"));
         Json rows=Json::array();
-        if(fs::exists(file)){
+        if(!relative.empty() && fs::exists(projectPath(ws,relative))){
+            const auto file=projectPath(ws,relative);
             const Json scene=Json::parseFile(file.string());
             for(const auto& instance:scene["instances"].items()){
                 Json row=Json::object();
@@ -144,9 +156,11 @@ void registerGeometryOps(Workspace& ws){
         result.set("instances",std::move(rows));
         return result;
     }});
-    Json strataSchema=Json::parse(R"({"type":"object","properties":{"id":{"type":"string","description":"instance id"},"mode":{"type":"string","enum":["auto","strata","lod"]}},"required":["id","mode"]})");
+    Json strataSchema=Json::parse(R"({"type":"object","properties":{"scope":{"type":"string","enum":["project","document"]},"expectedFile":{"type":"string"},"id":{"type":"string","description":"instance id"},"mode":{"type":"string","enum":["auto","strata","lod"]}},"required":["id","mode"]})");
     ws.registerOp({"geometry_strata_set","Force STRATA, force the LOD path or return to auto for one object (instance id) of the static geometry scene.",strataSchema,[&ws](const Json& p){
-        const std::string rel=ws.project.manifest.getStr("geometryScene","geometry.json");
+        const std::string rel=geometryFileForOperation(ws,p);
+        if(rel.empty())throw std::runtime_error("No static geometry file configured for this document");
+        if(p.has("expectedFile")&&p.getStr("expectedFile")!=rel)throw std::runtime_error("Static geometry file changed; reload the panel");
         const auto file=projectPath(ws,rel);
         Json scene=Json::parseFile(file.string());
         const std::string id=p.getStr("id"),mode=p.getStr("mode");

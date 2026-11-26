@@ -3,6 +3,7 @@
 #include "engine/game/Tiles.h"
 #include "StudioPlacementGhost.h"
 #include "apps/editor/core/LightBakeOps.h"
+#include "apps/editor/core/GeometryOps.h"
 #include "StudioDocumentIds.h"
 #include "engine/view/game/GameLights.h"
 #include "StudioFpsLightingDocument.h"
@@ -1138,8 +1139,7 @@ void StudioHost::tickScene() {
     if(brush.armed && brush.kind=="region")in.regionBorderLetter=brush.regionLetter.front();
     else if(brush.regionBorders)in.regionBorderLetter='.';
     in.fps = ws.map.data.worldSpace;
-    if(!ws.map.data.planet())
-        in.geometryFile=in.fps ? ws.map.data.extra.getStr("geometryScene") : ws.project.manifest.getStr("geometryScene");
+    in.geometryFile=editor::configuredGeometryScene(ws);
     in.selected = session_->selectedObjectId();
     in.levelHeight = float(ws.project.rules.levelHeight.toDouble());
     in.project = ws.project.dir;
@@ -4032,8 +4032,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
             if (game_ && game_->launchPlan().project == project)
                 state.set("geometry", game_->staticGeometryReport());
             if (preview_ && placement_.visible && state["geometry"].isNull()) {
-                const auto& map=session_->workspace().map.data;
-                const auto file=map.planet()?std::string{}:map.worldSpace?map.extra.getStr("geometryScene"):session_->workspace().project.manifest.getStr("geometryScene");
+                const auto file=editor::configuredGeometryScene(session_->workspace());
                 auto authored=onScene([&]{return preview_->staticGeometryReport(project,file);});
                 if(!authored.isNull()) {
                     state.set("geometrySource",Json::string("Scene"));
