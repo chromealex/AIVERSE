@@ -665,3 +665,5 @@ Effects authoring stage: select a project particle effect or event bindings, edi
 Effects file authoring verified at e4bdee2f5. TypeScript, Vite, 299 web tests and native macOS build passed. The packaged app created missing bindings, rejected invalid JSON and a stale write, reloaded concurrent edits, saved source comments and reopened both files after restart. Scene map bytes remained identical. See docs/evidence/studio-effects-files-desktop.json and docs/evidence/studio-project-catalog/effects-source-editor.png. Next: independent particle system preview for fx/*.json assets with replay and speed.
 
 Effects playback stage: drive the engine ParticleSystem from the current effect source in a dedicated Effects surface, with replay, motion, looping, quality and playback speed.
+
+Playback stage at 62a584d74: TypeScript/Vite and 299 web tests passed. Native build failed in StudioEffectPlayback.h clamping the 64-bit quality index with int bounds. Next: rebuild with matching integer types and verify GPU playback on desktop.

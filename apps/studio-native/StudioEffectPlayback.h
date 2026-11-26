@@ -69,7 +69,7 @@ public:
             time_=restartAt_=0;played_=false;instance_={};last_={};
         }
         if(p.has("speed"))speed_=float(std::clamp(p["speed"].toDouble(1),.1,2.));
-        if(p.has("quality"))particles_.setQuality(fx::FxQuality(std::clamp(p.getInt("quality"),0,3)));
+        if(p.has("quality"))particles_.setQuality(fx::FxQuality(std::clamp<int64_t>(p.getInt("quality"),0,3)));
         if(p.has("loop"))loop_=p.getBool("loop");
         if(p.has("moving"))moving_=p.getBool("moving");
         Json result=Json::object();
