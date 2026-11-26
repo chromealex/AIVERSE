@@ -1,0 +1,11 @@
+{
+  "sha": "3fa45fc5b1c75b570329832d9f608873f4aa5a12",
+  "argv": [
+    "bash",
+    "-c",
+    "ctest --test-dir /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native --output-on-failure -R \"^studio_(owner_history|terrain_geometry)$\" && bash /tmp/scene-gizmo-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-linked-view-gizmos.log.txt",
+  "sha256": "8ffa8ba8c33c1ef95395bf374a5f39b59747c435ed9236a00dcbacaa36bd636b"
+}
