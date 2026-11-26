@@ -3304,6 +3304,8 @@ Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,con
     stats.set("pitch",Json::number(double(camera.pitch)));
     stats.set("distance",Json::number(double(camera.distance)));
     stats.set("patches",Json::number(int64_t(view.display.grassPatches())));
+    stats.set("grassBladeLimit",Json::number(int64_t(view.display.grassBladeLimit())));
+    stats.set("masterVolume",Json::number(double(view.display.masterVolume())));
     stats.set("particles",Json::number(int64_t(particles.stats().particles)));
     stats.set("voices",Json::number(int64_t(view.display.voices())));
     return stats;

@@ -20,7 +20,7 @@ export default function SpectraDockViewport({id='fx',label='Native GPU particle 
     const element=ref.current;
     if(!element)return;
     // These surfaces are presented by their own native host even when WebKit throttles the document.
-    const nativeVisibility=id==='gpuEmitter'||id==='attachments'||id==='sourceModel'||id==='importedClip';
+    const nativeVisibility=id==='nature'||id==='gpuEmitter'||id==='attachments'||id==='sourceModel'||id==='importedClip';
     let disposed=false,frame=0;
     const measure=()=>{
       frame=0;

@@ -30,6 +30,8 @@ struct StudioNaturePreview {
         auto frame=editor::readPhysisGameFrame(preview.previewWorld(),params);
         auto status=presentation;
         status.set("igniteOnClick",Json::fromBool(preview.settings.igniteOnClick));
+        status.set("quality",Json::number(int64_t(preview.settings.grassQuality)));
+        status.set("volume",Json::number(double(preview.settings.volume)));
         status.set("grass",Json::fromBool(preview.settings.grass));
         status.set("flames",Json::fromBool(preview.settings.flames));
         status.set("sound",Json::fromBool(preview.settings.sound));
@@ -79,6 +81,14 @@ struct StudioNaturePreview {
             for (const char* key:{"grass","flames","sound","igniteOnClick"})
                 if (params.has(key) && params[key].type()!=Json::Type::Bool)
                     throw std::runtime_error("Invalid nature presentation setting");
+            const double quality=params["quality"].toDouble(preview.settings.grassQuality);
+            const double volume=params["volume"].toDouble(preview.settings.volume);
+            if ((params.has("quality") && !params["quality"].isNumber()) || !std::isfinite(quality) ||
+                quality!=std::floor(quality) || quality<0 || quality>2 ||
+                (params.has("volume") && !params["volume"].isNumber()) || !std::isfinite(volume) || volume<0 || volume>1)
+                throw std::runtime_error("Invalid grass quality or preview volume.");
+            preview.settings.grassQuality=int(quality);
+            preview.settings.volume=float(volume);
             if (params.has("igniteOnClick")) preview.settings.igniteOnClick=params.getBool("igniteOnClick");
             if (params.has("grass")) preview.settings.grass=params.getBool("grass");
             if (params.has("flames")) preview.settings.flames=params.getBool("flames");

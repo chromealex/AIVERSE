@@ -4,6 +4,7 @@ import {invoke,onNativeEvent} from '../bridge';
 import {StudioAlert,StudioButton,StudioInput,StudioSelect} from '../ui';
 import SpectraDockViewport from './SpectraDockViewport';
 import PhysisPreviewGrid from './PhysisPreviewGrid';
+import PhysisDisplaySettings from './PhysisDisplaySettings';
 import PhysisPreviewWind from './PhysisPreviewWind';
 import PhysisCellReading from './PhysisCellReading';
 import './PhysisDiagnosticsPanel.css';
@@ -65,7 +66,7 @@ function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:strin
   const requestId=useRef(0), pending=useRef(false);
   const [playing,setPlaying]=useState(false),[speed,setSpeed]=useState(1);
   const workspace=useRef<HTMLFieldSetElement>(null);
-  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback'|'grid'|'presentation',next:View,selection:number|{cellX:number;cellZ:number}|undefined=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}|{cellMeters:number;humidity:number}|{igniteOnClick?:boolean;grass?:boolean;flames?:boolean;sound?:boolean}){
+  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback'|'grid'|'presentation',next:View,selection:number|{cellX:number;cellZ:number}|undefined=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}|{cellMeters:number;humidity:number}|{quality?:number;volume?:number;igniteOnClick?:boolean;grass?:boolean;flames?:boolean;sound?:boolean}){
     const id=++requestId.current;
     const sameArea=next.size===view.size&&next.stride===view.stride&&next.centerX===view.centerX&&next.centerZ===view.centerZ;
     const rebuild=action==='reset'||action==='grid';
@@ -142,7 +143,10 @@ function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:strin
             {([['igniteOnClick','Ignite on click'],['grass','Grass'],['flames','Fire and smoke'],['sound','Sound']] as const).map(([key,label])=>
               <label key={key}><input type="checkbox" checked={frame.presentation![key]}
                 onChange={event=>void request('presentation',view,cell,{[key]:event.target.checked})}/>{label}</label>)}
-          </div>}<p>Drag to orbit · Scroll to zoom</p></>:<FieldMap key={[view.centerX,view.centerZ,view.size,view.stride].join('/')} frame={frame} cell={cell} pick={live||map?index=>void request('view',view,index):pick} contours={contours} label={layers[view.layer]}/>}</div>
+          </div>}{frame.presentation&&<PhysisDisplaySettings
+            key={frame.presentation.quality+'/'+frame.presentation.volume+'/'+frame.presentation.grass+'/'+frame.presentation.sound}
+            settings={frame.presentation} apply={(quality,volume)=>void request('presentation',view,cell,{quality,volume})}/>}
+          <p>Drag to orbit · Scroll to zoom</p></>:<FieldMap key={[view.centerX,view.centerZ,view.size,view.stride].join('/')} frame={frame} cell={cell} pick={live||map?index=>void request('view',view,index):pick} contours={contours} label={layers[view.layer]}/>}</div>
         <div className="physis-options">{map&&<label className="physis-playback-speed">Playback speed · {speed.toFixed(1)}×
           <input type="range" name="playbackSpeed" min="0.1" max="6" step="0.1" value={speed}
             onChange={event=>setSpeed(event.currentTarget.valueAsNumber)}/>

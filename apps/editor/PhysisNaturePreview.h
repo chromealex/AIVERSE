@@ -78,6 +78,8 @@ public:
     std::size_t flames() const { return fxHost_.activeFlames(); }
     std::size_t smoke() const { return fxHost_.activeSmoke(); }
     std::size_t voices() const { return audioHost_.voices(); }
+    unsigned grassBladeLimit() const { return grass_.quality().maxBladesPerPatch; }
+    float masterVolume() const { return audio_ ? audio_->masterVolume() : 0.f; }
     std::size_t grassPatches() const { return grass_.residentPatches(); }
     float burningArea() const { return frame_ ? frame_->burningArea : 0; }
     float cellMeters() const { return frame_ ? frame_->cellSize : 0; }
