@@ -639,3 +639,5 @@ Tiles transfer: browse the authored atlas, paint a fixed tile, and return to aut
 Water transfer: list the selected body’s shore segments by bank and edit their types from the project catalog. Verify rebake, reset, Undo and saved-map reopen.
 
 bdcc31f94. The first panel build and typecheck passed; toolSchema failed its Water panel catalog invariant after removing its default state and open operation. Restore the existing catalog entries, retain the scoped shoreline UI and rerun the complete desktop check. Evidence docs/evidence/studio-water-shore-segments.json.
+
+3d211b2f5d8d51c1f89eb5e5a87fb9c1a577c548. WKWebView verified a left-bank stone embankment survived rebake and reopen while the opposite bank and second body retained their shore records. Reset, Undo/Redo and automatic save/reopen passed. Typecheck, build and 299 web tests passed. Evidence docs/evidence/studio-water-bank-edit.json. Final layout follow-up: fold technical operation forms below the brush and rerun the same desktop workflow.

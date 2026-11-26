@@ -1,0 +1,10 @@
+{
+  "sha": "3d211b2f5d8d51c1f89eb5e5a87fb9c1a577c548",
+  "argv": [
+    "bash",
+    "/tmp/water-shore-check.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-water-bank-edit.log.txt",
+  "sha256": "ff19ce31555a0277dc318040fd576265b4de9055b8cb6b02bc0dbf3017ce6a2c"
+}
