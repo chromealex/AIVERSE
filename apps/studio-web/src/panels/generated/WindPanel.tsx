@@ -21,7 +21,7 @@ export default function WindPanel({snapshot}:{snapshot:StudioSnapshot|null}){
   const projectLoaded=Boolean(snapshot?.project.path);
   const reload=useCallback(async()=>{try{setState(await invoke('studio.wind',{}));setError('');}catch(e){setError(String(e));}},[]);
   useEffect(()=>{void reload();},[reload,snapshot?.project.path,snapshot?.scene.name]);
-  useEffect(()=>onNativeEvent(event=>{if(event==='document.changed'||event==='workspace.changed')void reload();}),[reload]);
+  useEffect(()=>onNativeEvent(event=>{if(event==='wind.changed'||event==='document.changed'||event==='workspace.changed')void reload();}),[reload]);
   const apply=async(patch:Partial<WindSettings>)=>{
     if(Object.values(patch).some(v=>typeof v==='number'&&!Number.isFinite(v)))return;
     setBusy(true);

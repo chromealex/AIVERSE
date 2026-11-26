@@ -5106,6 +5106,7 @@ void StudioHost::afterSessionReply(const Json& req, const Json& reply) {
         if(preview_)onScene([&]{preview_->setPlanetSceneBody("","","");});
         if(armed){Json out=Json::object();out.set("cancelled",Json::fromBool(true));sendEventPayload("planetForest.planted",out);}
     }
+    if(method=="studio.windSet")sendEvent("wind.changed","");
     if(method=="studio.sceneBrush" && req["params"].size())sendEventPayload("brush.changed",reply["result"]);
     if (method == "studio.select" && platform_.hasFloatingWindows()) sendEvent("selection.changed", ""); // floats follow it
     if (preview_ && (method == "studio.openMap" || method == "studio.newMap")) {

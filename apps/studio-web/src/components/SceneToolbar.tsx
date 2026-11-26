@@ -41,9 +41,11 @@ export default function SceneToolbar({ enabled, projectPath = '', documentScope 
   useEffect(()=>{
     if (!layersOpen || !enabled) return;
     let active=true;
-    void invoke('studio.wind',{}).then(result=>{if(active){setWindDebug(result.settings.debug);setWindError('');}})
+    const refresh=()=>invoke('studio.wind',{}).then(result=>{if(active){setWindDebug(result.settings.debug);setWindError('');}})
       .catch(error=>{if(active)setWindError(String(error));});
-    return ()=>{active=false;};
+    void refresh();
+    const off=onNativeEvent(event=>{if(event==='wind.changed')void refresh();});
+    return ()=>{active=false;off();};
   },[layersOpen,enabled,projectPath]);
   const [marksOpen, setMarksOpen] = useState(false);
   const [legacyViews, setLegacyViews] = useState<CameraBookmark[]>([]);
@@ -114,6 +116,8 @@ export default function SceneToolbar({ enabled, projectPath = '', documentScope 
           const value=(payload as Record<string,unknown>)[key];
           if(typeof value==='boolean')patch[key]=value;
         }
+        const color=(payload as Record<string,unknown>).strataColor;
+        if(typeof color==='number' && [0,1,2,3].includes(color))patch.strataColor=color;
         for(const key of ['natureRadius','natureSpacing'] as const){
           const value=(payload as Record<string,unknown>)[key];
           if(typeof value==='number' && Number.isFinite(value))patch[key]=value;
