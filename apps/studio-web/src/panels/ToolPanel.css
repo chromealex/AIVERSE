@@ -99,3 +99,11 @@
 .port-counts dt { color:var(--au-text-muted); font-size:.9em; }
 .port-counts dd { margin:0; font-variant-numeric:tabular-nums; }
 .project-port summary { cursor:pointer; }
+
+.effects-files { box-sizing:border-box; height:100%; overflow:auto; padding:12px; }
+.effects-files label { display:grid; gap:4px; }
+.effects-files textarea { width:100%; box-sizing:border-box; font-family:var(--studio-mono, monospace); margin-block:8px; }
+.effects-files .au-row { flex-wrap:wrap; gap:6px; }
+.effects-files .au-alert { white-space:pre-wrap; }
+.effects-files details { margin-block-start:12px; }
+.effects-files summary { cursor:pointer; }

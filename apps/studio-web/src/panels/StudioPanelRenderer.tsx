@@ -40,6 +40,7 @@ import ToolPanel from './ToolPanel';
 import OverlayPlacement from './OverlayPlacement';
 import SpectraDataInterfacesPanel from './SpectraDataInterfacesPanel';
 import SpectraLibraryPanel from './SpectraLibraryPanel';
+import EffectsPanel from './EffectsPanel';
 import ProjectImportPanel from './ProjectImportPanel';
 import AgentPanel from './AgentPanel';
 import AnimationTimeline from './AnimationTimeline';
@@ -127,10 +128,12 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'roads': return <RoadsPanel key={snapshot?.graphDocument?.epoch} scope={snapshot?.graphDocument} advanced={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
       case 'overlays': return <OverlayPlacement selectionKey={JSON.stringify([snapshot?.selectedIds,snapshot?.scene.entities.filter(e=>e.visible===false).map(e=>e.id),snapshot?.project.historyVersion])} key={snapshot?.graphDocument?.epoch} scope={snapshot?.graphDocument} tools={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
       case 'terrain': case 'water': case 'tiles': case 'generate':
-      case 'effects': case 'models':
+      case 'models':
       case 'fields': case 'physis': case 'raid': case 'balance': case 'fx_functions': case 'modeling':
       case 'model_anim':
         return <ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
+      case 'effects': return <EffectsPanel key={snapshot?.project.path} project={snapshot?.project.path ?? ''}
+        tools={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
       case 'project_import': return <ProjectImportPanel commitSnapshot={ctx.commitSnapshot} showAgent={()=>ctx.showPanel('agent')}
         tools={snapshot?.project.path && <ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
       case 'branding': return <BrandingPanel key={snapshot?.project.path} project={snapshot?.project.path ?? ''} advanced={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;

@@ -320,3 +320,5 @@ Water transfer: list the selected body’s shore segments by bank and edit their
 Generate transfer: bake a map, increment its seed, and enable or remove match-start generation without replacing the baked terrain. Verify Undo, persistence and native seed precision.
 
 Project Import transfer: scan an external project, carry its source into a background import, open the emitted destination and prepare an editable Agent brief. Verify a real conversion and existing drafts.
+
+Effects authoring stage: select a project particle effect or event bindings, edit the source with native validation and guard saves against stale files. GPU particle playback remains open.
