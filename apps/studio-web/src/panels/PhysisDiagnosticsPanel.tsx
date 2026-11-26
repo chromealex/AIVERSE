@@ -81,7 +81,7 @@ function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:strin
     finally{if(id===requestId.current){pending.current=false;setBusy(false);}}
   }
   useEffect(()=>{void request('view',initial);return ()=>{requestId.current++;};},[projectPath]);
-  const advance=useRef((elapsed:number)=>{});
+  const advance=useRef<(elapsed:number)=>void>(()=>{});
   useEffect(()=>{
     advance.current=elapsed=>{if(!pending.current)void request('playback',view,cell,{speed,elapsed});};
   });
