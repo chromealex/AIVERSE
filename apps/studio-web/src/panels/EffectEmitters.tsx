@@ -1,5 +1,6 @@
 import {useMemo,useState} from 'react';
 import {applyEdits,createScanner,findNodeAtLocation,getNodeValue,modify,parseTree,type ParseError} from 'jsonc-parser';
+import EffectRangeEditor from './EffectRangeEditor';
 import {StudioAlert,StudioButton,StudioInput,StudioSelect} from '../ui';
 
 const emitterLimit=16;
@@ -74,5 +75,6 @@ export default function EffectEmitters({source,edit,busy}:{source:string;edit:(d
       }}/></label>
       <label className="effects-emitter-loop"><input type="checkbox" checked={emitter.loop===true} onChange={e=>patch(['emitters',index,'loop'],e.target.checked)}/>Loop emission</label>
     </div>}
+    {emitter&&<EffectRangeEditor key={index} emitter={emitter} patch={(path,value)=>patch(['emitters',index,...path],value)}/>}
   </fieldset>;
 }

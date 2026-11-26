@@ -681,3 +681,5 @@ Effect camera implementation 65db9a692 verified on a1fe7b380. Packaged Mac deskt
 Effect emitter stage: edit emission settings and add, duplicate or remove emitters in the current source draft; preserve other modules and comments. Verify persistence and the engine limit.
 
 Effect emitter editing verified at e5b245f43 in the packaged Mac app. Created, duplicated with internal comment, removed first/last, checked 1–16 UI limits, read original bytes before explicit save, reopened two emitters after restart and discarded a deletion. TypeScript/Vite and 299 frontend tests passed. Evidence docs/evidence/studio-effect-emitter-authoring.json and docs/evidence/studio-project-catalog/effect-emitters.png. Next: emission ranges and remaining effect modules.
+
+Effect ranges: inspect nine emitter parameters, edit constant and random bounds and curve keys in existing source drafts. Verify native validation, source preservation and reopened values.
