@@ -1,0 +1,6 @@
+2026-11-26 12:58:22.184 AiverseStudioHTML5[88562:84676219] [studio-web] JS: CROSS wmwxdqfzy3dby DONE_1
+2026-11-26 12:58:17.289 AiverseStudioHTML5[88562:84676219] [studio-web] JS: CROSS main VERIFIED closed dock opened into active 3D preview at tick 13; status read left it closed
+2026-11-26 12:58:20.738 AiverseStudioHTML5[88562:84676219] [studio-web] JS: CROSS wmwxdqfzy3dby VERIFIED existing detached PHYSIS returned from Map zones into its 3D viewport at tick 19
+MCP PNG from detached nature GPU at paused tick 19, dimensions 370 43
+MCP opened closed PHYSIS, then activated detached owner, preserving its world and the main layout.
+Layer toggle changed 128 of 1860 sampled pixels at fixed tick
