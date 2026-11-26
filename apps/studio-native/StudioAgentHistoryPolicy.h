@@ -5,7 +5,7 @@
 #include <set>
 namespace aiverse::studio {
 inline bool studioSceneViewAgentOperation(const std::string& op){
-    return op=="view_ground"||op=="view_pick"||op=="view_focus"||op=="studio_planet_forest_live"||op=="studio_planet_scene_get"||op=="studio_planet_scene_body_set"||op=="studio_planet_scene_camera_set";
+    return op=="view_gizmos"||op=="view_ground"||op=="view_pick"||op=="view_focus"||op=="studio_planet_forest_live"||op=="studio_planet_scene_get"||op=="studio_planet_scene_body_set"||op=="studio_planet_scene_camera_set";
 }
 inline const char* studioAgentHistoryPolicy(const std::string& op){
     static const std::set<std::string> reads={

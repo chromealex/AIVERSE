@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-native/StudioNatureLayers.h",
     "apps/studio-native/StudioCaptionFont.h",
     "apps/studio-web/src/components/ErosionZoneHighlight.tsx",
     "apps/editor/core/ErosionZoneGizmo.h",

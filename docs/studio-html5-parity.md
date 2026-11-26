@@ -602,3 +602,5 @@ Packaged macOS Studio verified highlighting one or all authored erosion zones an
 Render UTF-8 erosion zone captions using the packaged engine UI font. Verify distinct Cyrillic names in exported Scene images and preserve clean exports.
 
 Packaged macOS Studio rendered the Russian zone names Скала and Берег with the bundled UI font. Switching to a map with different equal-length Cyrillic names changed both captions, with clean exports retaining zero zone-coloured changes. [Cyrillic caption verification](evidence/studio-erosion-cyrillic-captions.json).
+
+Route linked view_gizmos to the same Scene layer state as the HTML toolbar. Verify entity selection, all flags, distance limits, invalid request atomicity and changes from both entry points.

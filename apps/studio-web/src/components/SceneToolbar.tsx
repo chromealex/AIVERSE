@@ -98,6 +98,23 @@ export default function SceneToolbar({ enabled, projectPath = '', documentScope 
     };
     window.addEventListener('studio:scene-tool', fromWeb);
     const off = onNativeEvent((event, payload) => {
+      if (event === 'viewport.natureLayers' && payload && typeof payload === 'object') {
+        const patch:Partial<SceneToolState>={};
+        for (const key of ['natureWind','natureFire','nereidFlow','nereidAllWater','terraSlope','terraSlopeAtTarget','terraTreeWind','erosionZones'] as const) {
+          const value=(payload as Record<string,unknown>)[key];
+          if(typeof value==='boolean')patch[key]=value;
+        }
+        for(const key of ['natureRadius','natureSpacing'] as const){
+          const value=(payload as Record<string,unknown>)[key];
+          if(typeof value==='number' && Number.isFinite(value))patch[key]=value;
+        }
+        setState(current=>{
+          const next={...current,...patch};
+          try { window.localStorage.setItem(KEY,JSON.stringify(next)); } catch { /* optional */ }
+          return next;
+        });
+        return;
+      }
       if (event !== 'viewport.tool') return;
       const tool = payload && typeof payload === 'object' && 'message' in payload ? String(payload.message) : '';
       if (TOOLS.some(t => t.id === tool)) setState(current => {

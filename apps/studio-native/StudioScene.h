@@ -4,6 +4,7 @@
 // No ImGui, no CPU texture readback, no dependency on UI component hierarchy.
 #pragma once
 #include "apps/studio-native/StudioMapAreaBounds.h"
+#include "apps/studio-native/StudioNatureLayers.h"
 #include "apps/studio-native/StudioSceneDocument.h"
 #include "engine/fx/SpectraSdfFileIO.h"
 #include <chrono>
@@ -402,16 +403,8 @@ public:
         if(regionBorderLetter_!=letter){regionBorderLetter_=letter;regionBordersDirty_=true;}
     }
     void setNatureFrame(std::shared_ptr<const world::NaturePresentationFrame> frame) { natureFrame_=std::move(frame); }
-    void setNatureLayers(bool wind,bool fire,float radius,float spacing) {
-        natureWind_=wind;natureFire_=fire;natureRadius_=radius;natureSpacing_=spacing;
-    }
+    void setNatureLayers(const StudioNatureLayers& layers){natureLayers_=layers;}
     void setErosionHighlight(int index){erosionHighlight_=index;}
-    void setErosionZonesVisible(bool value){erosionZonesVisible_=value;}
-    void setTreeWindVisible(bool value){treeWindVisible_=value;}
-    void setTileSlope(bool value){tileSlope_=value;}
-    void setCameraSlope(bool value){cameraSlope_=value;}
-    void setRiverFlowVisible(bool value){riverFlowVisible_=value;}
-    void setAllRiverFlows(bool value){allRiverFlows_=value;}
     void setWorldAxes(bool visible) { worldAxes_ = visible; }
     void setObjectBounds(bool visible) { objectBounds_ = visible; }
     void setSelectionBox(bool visible) { selectionBoxVisible_ = visible; }
@@ -799,14 +792,9 @@ private:
     char regionBorderLetter_=0;
     bool regionBordersDirty_=true;
     std::shared_ptr<const world::NaturePresentationFrame> natureFrame_;
-    float natureRadius_=48.f,natureSpacing_=6.f;
+    StudioNatureLayers natureLayers_;
     const editor::TerrainTileSurface* groundTiles(const editor::MapDoc& map,std::optional<editor::TerrainTileSurface>& dragSurface);
     int erosionHighlight_=-2;
-    bool erosionZonesVisible_=true;
-    bool treeWindVisible_=true;
-    bool tileSlope_=true,cameraSlope_=false;
-    bool riverFlowVisible_=true,allRiverFlows_=false;
-    bool natureWind_=false,natureFire_=false;
     bool worldAxes_ = false, objectBounds_ = false, selectionBoxVisible_ = true;
     bool localSpace_ = false, gizmosVisible_ = true, snapEnabled_ = false;
     float snapMove_ = 1.0f, snapRotate_ = 15.0f, snapScale_ = 0.1f;

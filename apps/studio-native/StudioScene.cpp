@@ -4480,7 +4480,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                 renderer_.line(edge.a,edge.b,color);
             }
         }
-        if(!planetaryChart && erosionZonesVisible_ && map.extra["erosionZones"].isArray() && map.extra["erosionZones"].size()){
+        if(!planetaryChart && natureLayers_.erosionZones && map.extra["erosionZones"].isArray() && map.extra["erosionZones"].size()){
             Overlay2D overlay{renderer_,view,float(framebufferWidth),float(framebufferHeight),view.ortho?.5f:view.zNear*1.4f};
             std::optional<editor::TerrainTileSurface> dragSurface;
             const auto* tiles=groundTiles(doc,dragSurface);
@@ -4519,7 +4519,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                 });
             }
         }
-        if(!planetaryChart && treeWindVisible_ && !selectedId.empty() && !hidden_.count(selectedId)){
+        if(!planetaryChart && natureLayers_.terraTreeWind && !selectedId.empty() && !hidden_.count(selectedId)){
             const int index=studioMapEntityIndex(selectedId,doc);
             if(index>=0 && editor::isWindGizmoTree(map.entities[size_t(index)])){
                 Overlay2D overlay{renderer_,view,float(framebufferWidth),float(framebufferHeight),view.ortho?.5f:view.zNear*1.4f};
@@ -4548,11 +4548,11 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                 });
             }
         }
-        if(!planetaryChart && (tileSlope_ || cameraSlope_)){
+        if(!planetaryChart && (natureLayers_.terraSlope || natureLayers_.terraSlopeAtTarget)){
             const int selected=studioMapEntityIndex(selectedId,doc);
-            const auto* tile=tileSlope_ && selected>=0 && !hidden_.count(selectedId) &&
+            const auto* tile=natureLayers_.terraSlope && selected>=0 && !hidden_.count(selectedId) &&
                 editor::isTerrainTile(map.entities[size_t(selected)])?&map.entities[size_t(selected)]:nullptr;
-            if(tile || cameraSlope_){
+            if(tile || natureLayers_.terraSlopeAtTarget){
                 std::optional<editor::TerrainTileSurface> dragSurface;
                 const auto* tiles=groundTiles(doc,dragSurface);
                 const auto height=[&](float x,float z){
@@ -4561,16 +4561,16 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                 };
                 Overlay2D overlay{renderer_,view,float(framebufferWidth),float(framebufferHeight),view.ortho?.5f:view.zNear*1.4f};
                 editor::terrainSlopeArrows(tile?tile->x:view.target.x,tile?tile->z:view.target.z,
-                    natureRadius_,natureSpacing_,height,[&](float3 a,float3 b,float strength){
+                    natureLayers_.radius,natureLayers_.spacing,height,[&](float3 a,float3 b,float strength){
                         overlay.arrow(a,b,1.8f,rgba(int(120+135*strength),int(220-150*strength),80,210));
                     });
             }
         }
-        if(riverFlowVisible_ && !planetaryChart){
+        if(natureLayers_.nereidFlow && !planetaryChart){
             const int selectedRiver=studioMapEntityIndex(selectedId,doc);
             Overlay2D overlay{renderer_,view,float(framebufferWidth),float(framebufferHeight),view.ortho?.5f:view.zNear*1.4f};
-            const size_t first=allRiverFlows_?0:selectedRiver<0?map.entities.size():size_t(selectedRiver);
-            const size_t end=allRiverFlows_?map.entities.size():std::min(first+1,map.entities.size());
+            const size_t first=natureLayers_.nereidAllWater?0:selectedRiver<0?map.entities.size():size_t(selectedRiver);
+            const size_t end=natureLayers_.nereidAllWater?map.entities.size():std::min(first+1,map.entities.size());
             for(size_t i=first;i<end;++i){
                 const auto& e=map.entities[i];
                 const bool picked=int(i)==selectedRiver;
@@ -4589,9 +4589,9 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             }
         }
         if(natureFrame_&&!planetaryChart){
-            const float step=natureSpacing_;
+            const float step=natureLayers_.spacing;
             editor::natureFieldArrows(*natureFrame_,std::floor(view.target.x/step)*step,std::floor(view.target.z/step)*step,
-                natureRadius_,step,natureWind_,natureFire_,[&](float x,float z,float dx,float dz,bool fire,float strength){
+                natureLayers_.radius,step,natureLayers_.physisWind,natureLayers_.physisFire,[&](float x,float z,float dx,float dz,bool fire,float strength){
                     if(!map.worldSpace&&(x<0||z<0||x>=map.w||z>=map.h))return;
                     const float y=(showTerrain?terrainPreviewHeight(map,x,z,levelHeight):0.f)+(fire?1.8f:1.2f);
                     const uint32_t color=fire?rgba(255,int(150-110*strength),40):rgba(80+175*strength,210,255-130*strength);
@@ -5784,7 +5784,7 @@ uint64_t StudioScene::frameSignature(int width,int height,const editor::MapDoc& 
     vec(camera_.target);value(camera_.distance);value(camera_.pitch);value(camera_.yaw);value(camera_.fovY);
     value(camera_.ortho);value(autoIso_);value(tween_.active);
     ids(selection_);ids(hidden_);text(hover_);
-    value(erosionHighlight_);value(erosionZonesVisible_);value(treeWindVisible_);value(tileSlope_);value(cameraSlope_);value(riverFlowVisible_);value(allRiverFlows_);value(tool_);value(localSpace_);value(gizmosVisible_);value(natureRadius_);value(natureSpacing_);value(natureWind_);value(natureFire_);value(natureFrame_.get());value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
+    value(erosionHighlight_);value(natureLayers_.erosionZones);value(natureLayers_.terraTreeWind);value(natureLayers_.terraSlope);value(natureLayers_.terraSlopeAtTarget);value(natureLayers_.nereidFlow);value(natureLayers_.nereidAllWater);value(tool_);value(localSpace_);value(gizmosVisible_);value(natureLayers_.radius);value(natureLayers_.spacing);value(natureLayers_.physisWind);value(natureLayers_.physisFire);value(natureFrame_.get());value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
     value(drag_.axis);value(drag_.tool);text(drag_.id);vec(drag_.moveOffset);value(drag_.value);
     value(drag_.accumulated);value(drag_.lastAngle);value(drag_.snapping);
     value(marquee_.on);value(marquee_.x0);value(marquee_.y0);value(marquee_.x1);value(marquee_.y1);

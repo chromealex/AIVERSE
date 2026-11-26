@@ -43,7 +43,7 @@ int main(){
         AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy(op))=="map");
     for(const auto* op:{"view_ground","view_pick","studio_planet_forest_live","studio_planet_scene_get"})
         AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy(op))=="read"&&aiverse::studio::studioSceneViewAgentOperation(op));
-    for(const auto* op:{"view_focus","studio_planet_scene_body_set","studio_planet_scene_camera_set"})
+    for(const auto* op:{"view_gizmos","view_focus","studio_planet_scene_body_set","studio_planet_scene_camera_set"})
         AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy(op))=="view"&&aiverse::studio::studioSceneViewAgentOperation(op));
     AIVERSE_TEST_CHECK(!aiverse::studio::studioSceneViewAgentOperation("studio.planetForestSet"));
     std::cout<<"PASS explicit agent policy\n";

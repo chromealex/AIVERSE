@@ -1528,6 +1528,7 @@ void StudioHost::tickScene() {
     in.postQuality=postQuality_;in.postVisible=postInScene_;
     in.width = placement_.pixelsW; in.height = placement_.pixelsH;
     if(erosionHighlightDocument_ && *erosionHighlightDocument_==document)in.erosionHighlight=erosionHighlight_;
+    in.natureLayers=natureLayers_;
     in.document=mapSnapshotDocument_;in.map = mapSnapshot_; in.rules = rulesSnapshot_;in.planetLook=planetLookSnapshot_;
     const auto& brush=session_->sceneBrush();
     in.brushArmed=brush.armed;
@@ -1542,10 +1543,10 @@ void StudioHost::tickScene() {
     const auto ids = session_->selectedObjectIds();
     in.selection = std::set<std::string>(ids.begin(), ids.end());
     in.hidden = session_->hiddenIds(); in.locked = session_->lockedIds(); in.hover = hoverId_;
-    if((natureWind_||natureFire_)&&game_&&!map.data.planet()&&game_->launchedMapCurrent()&&studioPlaySourceMatches(game_->launchPlan(),ws)){
+    if((natureLayers_.physisWind||natureLayers_.physisFire)&&game_&&!map.data.planet()&&game_->launchedMapCurrent()&&studioPlaySourceMatches(game_->launchPlan(),ws)){
         if(now>=nextNatureSample_){
             const auto camera=onScene([&]{return preview_->cameraState();});
-            natureFrame_=game_->natureFrame(std::floor(camera.target.x/natureSpacing_)*natureSpacing_,std::floor(camera.target.z/natureSpacing_)*natureSpacing_,natureRadius_);
+            natureFrame_=game_->natureFrame(std::floor(camera.target.x/natureLayers_.spacing)*natureLayers_.spacing,std::floor(camera.target.z/natureLayers_.spacing)*natureLayers_.spacing,natureLayers_.radius);
             nextNatureSample_=now+.25;
         }
         in.nature=natureFrame_;
@@ -1583,6 +1584,7 @@ void StudioHost::renderSceneFrame() {
             preview_->setBaseTerrainView(in.editBaseTerrain);
             preview_->setRegionBorders(in.regionBorderLetter);
             preview_->setErosionHighlight(in.erosionHighlight);
+            preview_->setNatureLayers(in.natureLayers);
             preview_->setNatureFrame(in.nature);
             preview_->setWindPreview(in.wind);
             preview_->setPostPreview(in.project,*in.gamePost,in.map->data.extra["postfx"],in.postQuality,in.postVisible);
@@ -1945,6 +1947,34 @@ Json StudioHost::planetForestLiveRequest(){
 Json StudioHost::sceneViewAgentRequest(const std::string& name,const Json& params){
     if(projectLoading_||!session_||!preview_)throw std::runtime_error("Native Scene unavailable");
     const auto& ws=session_->workspace();
+    if(name=="view_gizmos"){
+        const auto document=session_->sceneDocument();
+        if(!placement_.visible || !platform_.surfaceDrawable(StudioSurface::Scene) ||
+           !onScene([&]{return renderedSceneDocument_ && *renderedSceneDocument_==document;}))
+            throw std::runtime_error("Show the current map in Scene before changing overlays");
+        const auto next=natureLayers_.patched(params,true);
+        Json result=Json::object();
+        if(params.has("select")){
+            const auto& id=params["select"];
+            const int index=id.isString() && !id.str().empty()?ws.map.findEntity(id.str()):-1;
+            if(index<0)throw std::runtime_error("No map entity with that id");
+            Json selection=Json::object();
+            selection.set("id",Json::string(studioDocumentId(ws.map,editor::DocumentEntityRef::mapEntity(size_t(index)))));
+            const auto reply=request("studio.select",std::move(selection));
+            if(reply.has("error"))throw std::runtime_error(reply.getStr("error","Selection failed"));
+            result.set("selected",Json::number(int64_t(index)));
+            sendEvent("selection.changed","");
+        }
+        if(next!=natureLayers_){
+            natureLayers_=next;nextNatureSample_=0;
+            onScene([&]{preview_->setNatureLayers(next);});
+            sendEventPayload("viewport.natureLayers",next.json(false));
+        }
+        result.set("ok",Json::fromBool(true));
+        result.set("layers",next.json(true));
+        result.set("summary",Json::string("Scene overlays updated"));
+        return result;
+    }
     if(name=="view_pick" || name=="view_focus" || name=="view_ground"){
         const auto width=placement_.pixelsW,height=placement_.pixelsH;
         if(!placement_.visible || !platform_.surfaceDrawable(StudioSurface::Scene) || width<2 || height<2)
@@ -3802,28 +3832,13 @@ Json StudioHost::viewportInput(const Json& input) {
         // Scene toolbar: tool, Global/Local, snapping, gizmo visibility.
         static const char* names[4] = {"view", "move", "rotate", "scale"};
         const std::string t = input.getStr("tool");
-        auto fieldDistance=[&](const char* key,float current,float low,float high){
-            if(!input.has(key))return current;
-            const double v=input[key].toDouble();
-            if(!input[key].isNumber()||!std::isfinite(v)||v<low||v>high)
-                throw std::runtime_error(std::string("Invalid Scene field distance: ")+key);
-            return float(v);
-        };
-        const float radius=fieldDistance("natureRadius",natureRadius_,8,200);
-        const float spacing=fieldDistance("natureSpacing",natureSpacing_,2,32);
-        if(radius!=natureRadius_||spacing!=natureSpacing_){natureRadius_=radius;natureSpacing_=spacing;nextNatureSample_=0;}
-        if(realBool("natureWind"))natureWind_=input["natureWind"].boolean();
-        if(realBool("natureFire"))natureFire_=input["natureFire"].boolean();
+        const auto next=natureLayers_.patched(input,false);
+        if(next!=natureLayers_)nextNatureSample_=0;
+        natureLayers_=next;
         onScene([&] {
             for (int i = 0; i < 4; ++i) if (t == names[i]) preview_->setTransformTool(StudioScene::TransformTool(i));
             if (realBool("local")) preview_->setLocalSpace(input["local"].boolean());
-            preview_->setNatureLayers(natureWind_,natureFire_,natureRadius_,natureSpacing_);
-            if(realBool("erosionZones"))preview_->setErosionZonesVisible(input["erosionZones"].boolean());
-            if(realBool("terraTreeWind"))preview_->setTreeWindVisible(input["terraTreeWind"].boolean());
-            if(realBool("terraSlope"))preview_->setTileSlope(input["terraSlope"].boolean());
-            if(realBool("terraSlopeAtTarget"))preview_->setCameraSlope(input["terraSlopeAtTarget"].boolean());
-            if(realBool("nereidFlow"))preview_->setRiverFlowVisible(input["nereidFlow"].boolean());
-            if(realBool("nereidAllWater"))preview_->setAllRiverFlows(input["nereidAllWater"].boolean());
+            preview_->setNatureLayers(natureLayers_);
             if (realBool("worldAxes")) preview_->setWorldAxes(input["worldAxes"].boolean());
             if (realBool("objectBounds")) preview_->setObjectBounds(input["objectBounds"].boolean());
             if (realBool("selectionBox")) preview_->setSelectionBox(input["selectionBox"].boolean());
