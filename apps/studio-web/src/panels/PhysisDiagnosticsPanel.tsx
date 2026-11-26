@@ -66,7 +66,7 @@ function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:strin
   const requestId=useRef(0), pending=useRef(false);
   const [playing,setPlaying]=useState(false),[speed,setSpeed]=useState(1);
   const workspace=useRef<HTMLFieldSetElement>(null);
-  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback'|'grid'|'presentation',next:View,selection:number|{cellX:number;cellZ:number}|undefined=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}|{cellMeters:number;humidity:number}|{quality?:number;volume?:number;igniteOnClick?:boolean;grass?:boolean;flames?:boolean;sound?:boolean}){
+  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback'|'grid'|'presentation',next:View,selection:number|{cellX:number;cellZ:number}|undefined=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}|{cellMeters:number;humidity:number;shoreSand:number}|{quality?:number;volume?:number;igniteOnClick?:boolean;grass?:boolean;flames?:boolean;sound?:boolean}){
     const id=++requestId.current;
     const sameArea=next.size===view.size&&next.stride===view.stride&&next.centerX===view.centerX&&next.centerZ===view.centerZ;
     const rebuild=action==='reset'||action==='grid';
@@ -159,8 +159,8 @@ function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:strin
             <StudioInput type="number" name={k} defaultValue={view[k]} min={min} max={max} step={1} required/></label>)}
           <StudioButton type="submit">Apply area</StudioButton>
         </form></details>
-        {map&&frame.previewGrid&&<PhysisPreviewGrid key={frame.previewGrid.requestedMeters+'/'+frame.previewGrid.humidity}
-          grid={frame.previewGrid} apply={(cellMeters,humidity)=>void request('grid',view,undefined,{cellMeters,humidity})}/>}
+        {map&&frame.previewGrid&&<PhysisPreviewGrid key={frame.previewGrid.requestedMeters+'/'+frame.previewGrid.humidity+'/'+frame.previewGrid.shoreSand}
+          grid={frame.previewGrid} apply={(cellMeters,humidity,shoreSand)=>void request('grid',view,undefined,{cellMeters,humidity,shoreSand})}/>}
         {map&&frame.previewWind&&<PhysisPreviewWind key={frame.previewWind.speed+'/'+frame.previewWind.direction}
           wind={frame.previewWind} apply={(windSpeed,windDirection)=>void request('wind',view,cell,{windSpeed,windDirection})}/>}
         {cell!==undefined&&<PhysisCellReading key={[frame.tick,cell,frame.originX,frame.originZ,frame.stride].join('/')}

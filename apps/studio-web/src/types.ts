@@ -1,5 +1,5 @@
 type Ring={kind:string;x:number;z:number;radius:number};
-export type StudioPhysisGrid={requestedMeters:number;humidity:number;mapAvailable:boolean;meters:number;width:number;height:number;baseHumidity:number};
+export type StudioPhysisGrid={requestedMeters:number;shoreSand:number;humidity:number;mapAvailable:boolean;meters:number;width:number;height:number;baseHumidity:number};
 export type StudioPhysisFrame={active:true;tick:number;width:number;height:number;stride:number;originX:number;originZ:number;available:number;values:(number|null)[];colors:number[];rings:Ring[];presentation?:{quality:number;volume:number;igniteOnClick:boolean;grass:boolean;flames:boolean;sound:boolean;tick?:number;patches?:number;particles?:number;voices?:number};previewGrid?:StudioPhysisGrid;previewWind?:{speed:number;direction:number};cell?:StudioPhysisCell};
 export type StudioPhysisCell={active:boolean;available:boolean;tick:number;wind:number[];gravity:number[]};
 export interface NereidFlowSurface {id:number;kind?:string;shape?:string;flow?:number[];grade?:{automaticCurrent?:boolean;slopeDegrees?:number;downhillHeadingDegrees?:number;responseSeconds?:number;maxSpeed?:number;origin?:number[]}}

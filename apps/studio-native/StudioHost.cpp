@@ -3915,11 +3915,18 @@ bool StudioHost::handleHostMethod(const Json& req) {
                 const auto& humidity=params["humidity"];
                 const double meters=size.toDouble(), fraction=humidity.toDouble();
                 if (!size.isNumber() || !std::isfinite(meters) || meters!=std::floor(meters) ||
-                    meters<0 || meters>16 || !humidity.isNumber() || !std::isfinite(fraction) ||
+                    meters<0 || meters>64 || !humidity.isNumber() || !std::isfinite(fraction) ||
                     fraction<0 || fraction>1)
-                    throw std::runtime_error("Choose a cell size of 1–16 m or the map grid, and humidity from 0 to 100%.");
+                    throw std::runtime_error("Choose a cell size of 1–64 m or the map grid, and humidity from 0 to 100%.");
                 if (meters==0 && !naturePreview_->preview.hasAuthoredGrid())
                     throw std::runtime_error("The current map has no enabled PHYSIS grid.");
+                if (params.has("shoreSand")) {
+                    const auto& value=params["shoreSand"];
+                    const double sand=value.toDouble();
+                    if (!value.isNumber() || !std::isfinite(sand) || sand<0 || sand>40)
+                        throw std::runtime_error("Choose a bare shore width from 0 to 40 m.");
+                    settings.shoreSandMeters=float(sand);
+                }
                 settings.previewCellMeters=int(meters);
                 settings.humidity=float(fraction);
             }

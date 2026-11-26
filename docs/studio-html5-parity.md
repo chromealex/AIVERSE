@@ -510,3 +510,5 @@ b7406df0366e348d38d0a4748579061043c6816b verified paused native ignition updates
 76d80d3a7eb1aaff0ad0afb570082ee88324ed6e verified in packaged macOS Studio. PhysisDiagnosticsPanel.tsx requested the exact cell and moved its field map from (900,900) to (3,2) after native terrain ignition. The inspector showed Fire 1.0000 on tick zero and the white selection persisted when returning to the field map. Scene stayed closed and the map file stayed byte-identical. Evidence docs/evidence/studio-physis-pointer-recenter.json. TypeScript, Vite, native build, 299 web checks passed. Next transfer native preview grass quality and master volume, then verify the detached PHYSIS window. Legacy retirement and Windows checks are still pending.
 
 Transfer nature-preview grass quality and sound volume, then verify the settings reach the renderer and audio engine in a detached HTML panel.
+
+Legacy nature MCP reconciliation: bring the full 1-64 m detail grid and adjustable 0-40 m bare shore band to the private Studio simulation before wiring legacy automation to it.

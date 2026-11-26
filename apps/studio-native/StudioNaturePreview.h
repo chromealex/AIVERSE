@@ -43,6 +43,7 @@ struct StudioNaturePreview {
         const auto& config=preview.previewWorld()->resourceConst<physis::State>()->settings;
         Json grid=Json::object();
         grid.set("requestedMeters",Json::number(int64_t(preview.settings.previewCellMeters)));
+        grid.set("shoreSand",Json::number(double(preview.settings.shoreSandMeters)));
         grid.set("humidity",Json::number(double(preview.settings.humidity)));
         grid.set("mapAvailable",Json::fromBool(preview.hasAuthoredGrid()));
         grid.set("meters",Json::number(int64_t(config.cellSizeMeters)));

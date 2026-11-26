@@ -268,7 +268,7 @@
   "checks": {
     "implementation": {
       "status": "pass",
-      "note": "Project catalog implementation or observed Mac desktop result.",
+      "note": "Project catalog and HTML Studio parity, including private PHYSIS grid and shoreline rebuilds.",
       "evidence": [
         "apps/studio-web/src/panels/generated/ProjectPanel.tsx"
       ]
