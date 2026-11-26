@@ -1,3 +1,4 @@
+#include "apps/editor/core/RiverFlowGizmos.h"
 #include "apps/editor/core/TerrainTileSurface.h"
 #include "apps/studio-native/StudioTerrainGeometry.h"
 #include "apps/studio-native/StudioPlanetGlobe.h"
@@ -19,6 +20,19 @@ using namespace aiverse::render;
 #include "apps/studio-native/StudioMapAreaBounds.h"
 
 int main() {
+    {
+        editor::DocEntity river;
+        river.x=4;river.z=8;
+        river.extra=Json::parse(R"({"components":{"Transform":{"y":3},"NereidWater":{"surfaceY":1,"points":[[0,0,1],[0,0,2],[8,0,3]],"flow":[-3,0,0],"currentField":{"nodes":[[0],[2],[4]]}}})");
+        std::vector<std::pair<float3,float3>> banks,arrows;
+        float localSpeed=0;
+        editor::riverFlowGizmos(river,[&](float3 a,float3 b){banks.emplace_back(a,b);},
+            [&](float3 a,float3 b,float speed){arrows.emplace_back(a,b);localSpeed=speed;});
+        AIVERSE_TEST_CHECK(banks.size()==2 && arrows.size()==1);
+        AIVERSE_TEST_CHECK(banks[0].first.z==10 && banks[0].second.z==11);
+        AIVERSE_TEST_CHECK(banks[1].first.z==6 && banks[1].second.z==5);
+        AIVERSE_TEST_CHECK(arrows[0].first.x>arrows[0].second.x && arrows[0].first.y==4.25f && localSpeed==.5f);
+    }
     {
         Model model;
         model.vertices.resize(3);

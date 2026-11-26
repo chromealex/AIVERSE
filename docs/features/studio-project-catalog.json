@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/editor/core/RiverFlowGizmos.h",
     "apps/studio-native/tests/StudioTerrainGeometryTests.cpp",
     "apps/editor/Editor.cpp",
     "apps/editor/Editor.h",

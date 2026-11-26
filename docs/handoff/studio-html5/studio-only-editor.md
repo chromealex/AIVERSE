@@ -1137,3 +1137,5 @@ Implementation 8d4b36f0e, packaged proof docs/evidence/studio-linked-view-pick-d
 Next stage shares the terrain tile height sampler with HTML Scene and registers the linked ground query.
 
 862fb615b3f7d2ff1361058acfb93ca9f6b74a16 transferred view_ground through StudioHost/StudioScene using apps/editor/core/TerrainTileSurface.h shared with Editor.cpp. StudioTerrainGeometry.h samples the drawn heightfield triangles at the preview mesh resolution. Packaged macOS Studio returned 5.25 m on the upper tile, 2.25 m after hiding it and 5.25 m after restoration. An overlapping prop was ignored and the uncovered point returned 1 m. Empty/invalid batches, history and unchanged game/map files were checked. studio_terrain_geometry and studio_owner_history passed. Evidence docs/evidence/studio-linked-ground-height.json. Next address view_gizmos (Scene-only PHYSIS, NEREID and TERRA controls and selection). Windows and merged-tree acceptance remain pending.
+
+Implement the NEREID layer of view_gizmos first. Share segment geometry between legacy and HTML Scene and verify visibility and selection from the packaged toolbar.

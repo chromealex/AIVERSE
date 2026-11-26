@@ -1,4 +1,5 @@
 #include "apps/editor/core/NatureFieldArrows.h"
+#include "apps/editor/core/RiverFlowGizmos.h"
 #include "apps/studio-native/StudioDocumentIds.h"
 #include "engine/render/BakedLighting.h"
 #include "engine/render/PrismaReportJson.h"
@@ -4457,6 +4458,36 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                 renderer_.line(edge.a,edge.b,color);
             }
         }
+        if(riverFlowVisible_ && !planetaryChart){
+            const int selectedRiver=studioMapEntityIndex(selectedId,doc);
+            Overlay2D overlay{renderer_,view,float(framebufferWidth),float(framebufferHeight),view.ortho?.5f:view.zNear*1.4f};
+            const size_t first=allRiverFlows_?0:selectedRiver<0?map.entities.size():size_t(selectedRiver);
+            const size_t end=allRiverFlows_?map.entities.size():std::min(first+1,map.entities.size());
+            for(size_t i=first;i<end;++i){
+                const auto& e=map.entities[i];
+                const bool picked=int(i)==selectedRiver;
+                if(!e.extra["components"].has("NereidWater"))continue;
+                if(hidden_.count(studioDocumentId(doc,editor::DocumentEntityRef::mapEntity(i))))continue;
+                const auto project=[&](float3 p,float2& pixel){
+                    return view.worldToScreen(p,overlay.W,overlay.H,pixel) && std::isfinite(pixel.x) && std::isfinite(pixel.y);
+                };
+                editor::riverFlowGizmos(e,[&](float3 a,float3 b){
+                    float2 start,end;
+                    if(project(a,start) && project(b,end))
+                        overlay.segment(start.x,start.y,end.x,end.y,picked?2:1,rgba(120,210,255,picked?200:90));
+                },[&](float3 a,float3 b,float speed){
+                    float2 start,end;
+                    if(!project(a,start) || !project(b,end))return;
+                    const float dx=end.x-start.x,dy=end.y-start.y,length=std::hypot(dx,dy);
+                    if(length<3)return;
+                    const float head=std::clamp(length*.35f,5.f,14.f),ux=dx/length,uy=dy/length;
+                    const auto color=rgba(60,int(170+85*speed),255,picked?240:120);
+                    overlay.segment(start.x,start.y,end.x,end.y,picked?2.5f:1.5f,color);
+                    overlay.tri(end.x,end.y,end.x-head*(ux+.55f*uy),end.y-head*(uy-.55f*ux),
+                                end.x-head*(ux-.55f*uy),end.y-head*(uy+.55f*ux),color);
+                });
+            }
+        }
         if(natureFrame_&&!planetaryChart){
             const float step=natureSpacing_;
             editor::natureFieldArrows(*natureFrame_,std::floor(view.target.x/step)*step,std::floor(view.target.z/step)*step,
@@ -5653,7 +5684,7 @@ uint64_t StudioScene::frameSignature(int width,int height,const editor::MapDoc& 
     vec(camera_.target);value(camera_.distance);value(camera_.pitch);value(camera_.yaw);value(camera_.fovY);
     value(camera_.ortho);value(autoIso_);value(tween_.active);
     ids(selection_);ids(hidden_);text(hover_);
-    value(tool_);value(localSpace_);value(gizmosVisible_);value(natureRadius_);value(natureSpacing_);value(natureWind_);value(natureFire_);value(natureFrame_.get());value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
+    value(riverFlowVisible_);value(allRiverFlows_);value(tool_);value(localSpace_);value(gizmosVisible_);value(natureRadius_);value(natureSpacing_);value(natureWind_);value(natureFire_);value(natureFrame_.get());value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
     value(drag_.axis);value(drag_.tool);text(drag_.id);vec(drag_.moveOffset);value(drag_.value);
     value(drag_.accumulated);value(drag_.lastAngle);value(drag_.snapping);
     value(marquee_.on);value(marquee_.x0);value(marquee_.y0);value(marquee_.x1);value(marquee_.y1);

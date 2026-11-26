@@ -405,6 +405,8 @@ public:
     void setNatureLayers(bool wind,bool fire,float radius,float spacing) {
         natureWind_=wind;natureFire_=fire;natureRadius_=radius;natureSpacing_=spacing;
     }
+    void setRiverFlowVisible(bool value){riverFlowVisible_=value;}
+    void setAllRiverFlows(bool value){allRiverFlows_=value;}
     void setWorldAxes(bool visible) { worldAxes_ = visible; }
     void setObjectBounds(bool visible) { objectBounds_ = visible; }
     void setSelectionBox(bool visible) { selectionBoxVisible_ = visible; }
@@ -793,6 +795,7 @@ private:
     bool regionBordersDirty_=true;
     std::shared_ptr<const world::NaturePresentationFrame> natureFrame_;
     float natureRadius_=48.f,natureSpacing_=6.f;
+    bool riverFlowVisible_=true,allRiverFlows_=false;
     bool natureWind_=false,natureFire_=false;
     bool worldAxes_ = false, objectBounds_ = false, selectionBoxVisible_ = true;
     bool localSpace_ = false, gizmosVisible_ = true, snapEnabled_ = false;
