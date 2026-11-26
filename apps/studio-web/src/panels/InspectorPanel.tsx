@@ -6,7 +6,7 @@ import {
   Box, ChevronDown, ChevronRight, Info, Lightbulb, Lock, LockOpen, MoreVertical, Move3d, Puzzle, Search, Shield, User
 } from 'lucide-react';
 import type { StudioComponentCatalogItem, StudioInspectorComponent, StudioProperty } from '../types';
-import { invoke } from '../bridge';
+import { invoke, onNativeEvent } from '../bridge';
 import PropertyField from '../components/PropertyField';
 import GranularGridEditor from '../components/GranularGridEditor';
 import { StudioButton, StudioContextMenu, StudioEmptyState, StudioIconButton, StudioLoader, type StudioMenuItem } from '../ui';
@@ -230,6 +230,10 @@ export default function InspectorPanel({ inspector: primary, selected, busy, ins
     icon={inspectorPinned ? <Lock size={12}/> : <LockOpen size={12}/>}/>;
   const [mapView,setMapView]=useState<"object"|"map"|"players"|"areas"|"regions">("object");
   useEffect(()=>setMapView("object"),[selected?.id,snapshot?.graphDocument?.epoch]);
+  useEffect(()=>onNativeEvent((event,payload)=>{
+    if(event==='inspector.selection')setMapView(payload && typeof payload==='object' && 'message' in payload &&
+      payload.message==='map' ? 'map' : 'object');
+  }),[]);
   const mapScope=snapshot?.scene.mapProperties && snapshot.graphDocument;
   const showMap=mapScope && (mapView!=="object" || (!inspectorPinned && !selected && !inspector));
   return <div className="insp">

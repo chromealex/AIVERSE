@@ -273,6 +273,8 @@ export default function App() {
       } else if (!FLOAT && (event === 'ui.showPanel' || event === 'ui.dockPanel')) {
         const panel = field(payload, 'panel');
         if (knownPanel(panel)) window.dispatchEvent(new CustomEvent(event === 'ui.dockPanel' ? 'studio:dock-panel' : 'studio:show-panel', { detail: panel }));
+      } else if (event === 'inspector.selection') {
+        setInspectorPin(null);
       } else if (event === 'workspace.changed' || event === 'selection.changed' ||
                  event === 'document.changed') void refresh();
     });
