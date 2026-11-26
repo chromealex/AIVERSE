@@ -560,6 +560,7 @@
     "docs/evidence/studio-configured-model-preview.json",
     "docs/evidence/studio-models-responsive-preview.json",
     "docs/evidence/studio-imported-clip-playback.json",
-    "docs/evidence/studio-panel-maximize-native.json"
+    "docs/evidence/studio-panel-maximize-native.json",
+    "docs/evidence/studio-linked-animation-graph.json"
   ]
 }
