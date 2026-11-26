@@ -1,0 +1,18 @@
+
+> @aiverse/studio-web@0.1.0 typecheck
+> tsc --noEmit
+
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+299 web tests, 0 failed
+2026-11-26 04:46:50.523 AiverseStudioHTML5[65600:82781872] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/water-shore-ui-Hyl06F/Catalog.app/Contents/Resources/studio-web
+2026-11-26 04:46:50.649 AiverseStudioHTML5[65600:82781872] [studio-web] served index.html (8111 bytes)
+2026-11-26 04:46:50.654 AiverseStudioHTML5[65600:82781872] [studio-web] served assets/index-B7mc0mxR.js (1555943 bytes)
+2026-11-26 04:46:50.684 AiverseStudioHTML5[65600:82781872] [studio-web] JS: CROSS main boot
+2026-11-26 04:46:50.692 AiverseStudioHTML5[65600:82781872] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 04:46:50.925 AiverseStudioHTML5[65600:82781872] [studio-web] JS: CROSS main brush.changed {"armed":false,"kind":"river","op":"raise","radius":4,"strength":1,"layer":0,"tile":"","fixedTile":-1,"field":"","fieldMode":"add","fieldPlayer":1,"regionBorders":false,"regionLetter":"A","value":1,"type":"","owner":0,"count":1,"spread":1,"roadType":"","width":6,"caveMode":"carve","caveY":-5,"caveSu
+2026-11-26 04:46:52.257 AiverseStudioHTML5[65600:82781872] [studio-web] JS: CROSS main FAIL @aiverse-studio://shell/index.html:73:298
+global code@aiverse-studio://shell/index.html:1:51 Error: Viewport input unavailable
