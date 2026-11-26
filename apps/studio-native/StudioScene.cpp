@@ -4538,8 +4538,13 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                 std::vector<render::wind::WindDebugLine> lines;
                 const auto params=render::wind::windRigParamsForDraw(wind_.sceneWind(windSeconds),draw.world);
                 render::wind::windRigDebugLines(*rig,draw.world,params,lines,6,1024);
-                for(const auto& l:lines)
-                    renderer_.line({l.a.x,l.a.y,l.a.z},{l.b.x,l.b.y,l.b.z},l.rgba);
+                Overlay2D overlay{renderer_,view,float(framebufferWidth),float(framebufferHeight),view.ortho?.5f:view.zNear*1.4f};
+                for(const auto& line:lines){
+                    float2 start,end;
+                    if(!view.worldToScreen(line.a,overlay.W,overlay.H,start) ||
+                       !view.worldToScreen(line.b,overlay.W,overlay.H,end))continue;
+                    overlay.segment(start.x,start.y,end.x,end.y,2.f,line.rgba);
+                }
             }
         }
     }
