@@ -484,3 +484,5 @@ Field sampling controls on the Scene menu were verified at a frozen game tick in
 PHYSIS Diagnostics: migrate the private map simulation, single and 60-tick stepping, cell ignition and reset into the panel. Verify with Scene and Game closed.
 
 7f5ebdbfd6a7261faf70b42de01088298f643852 added StudioNaturePreview.h and the Current map preview source in PhysisDiagnosticsPanel.tsx. Packaged macOS Studio with only PHYSIS open verified authored wind contours, field values after cell ignition, ticks 0/1/61, stale document rejection, deterministic reset, independent demo state and unchanged map bytes. Receipt docs/evidence/studio-private-map-nature-preview.json and screenshot docs/evidence/studio-project-catalog/private-map-nature.png. TypeScript, Vite, 299 web tests and physis_nature_preview passed. Next migrate the private nature playback and wind settings; grass/FX/audio presentation, old-editor retirement, Windows and merged-tree acceptance remain open.
+
+Migrate private prevailing-wind speed and direction. Verify field measurements after advancing, bounds, reset and map isolation.

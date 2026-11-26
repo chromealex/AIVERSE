@@ -1,5 +1,5 @@
 type Ring={kind:string;x:number;z:number;radius:number};
-export type StudioPhysisFrame={active:true;tick:number;width:number;height:number;stride:number;originX:number;originZ:number;available:number;values:(number|null)[];colors:number[];rings:Ring[];cell?:StudioPhysisCell};
+export type StudioPhysisFrame={active:true;tick:number;width:number;height:number;stride:number;originX:number;originZ:number;available:number;values:(number|null)[];colors:number[];rings:Ring[];previewWind?:{speed:number;direction:number};cell?:StudioPhysisCell};
 export type StudioPhysisCell={active:boolean;available:boolean;tick:number;wind:number[];gravity:number[]};
 export interface NereidFlowSurface {id:number;kind?:string;shape?:string;flow?:number[];grade?:{automaticCurrent?:boolean;slopeDegrees?:number;downhillHeadingDegrees?:number;responseSeconds?:number;maxSpeed?:number;origin?:number[]}}
 export type WindDebugView = 'off'|'parts'|'depth'|'weight'|'skeleton';
@@ -632,7 +632,7 @@ export interface StudioParams {
   'studio.planetForestPlant': {mapPath:string;expectedRevision:string;species:number;habit:'tree'|'shrub';at:{body:string;face:number;x:number;y:number}};
   'studio.planetForest': Record<string, never>;
   'studio.planetForestSet': {mapPath:string;expectedRevision:string;forest:unknown;catalog:unknown};
-  'studio.physisNature': StudioParams['studio.physisLive'] & {action:'view'|'reset'|'step'|'step60'|'ignite';expectedDocumentEpoch:string};
+  'studio.physisNature': StudioParams['studio.physisLive'] & {action:'view'|'reset'|'step'|'step60'|'ignite'|'wind';windSpeed?:number;windDirection?:number;expectedDocumentEpoch:string};
   'studio.physisLive': {expectedProject:string;layer:number;palette:number;size:number;stride:number;centerX:number;centerZ:number;cellX?:number;cellZ?:number};
   'studio.planetForestLive': Record<string, never>;
   'studio.rules': Record<string, never>;

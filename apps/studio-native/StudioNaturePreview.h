@@ -11,8 +11,10 @@ struct StudioNaturePreview {
     fx::ParticleSystem particles;
     editor::PhysisNaturePreview preview;
 
-    StudioNaturePreview(std::string scope, const editor::MapDoc& map, float levelHeight)
+    StudioNaturePreview(std::string scope, const editor::MapDoc& map, float levelHeight,
+                       editor::PhysisNaturePreviewSettings settings)
         : epoch(std::move(scope)), revision(map.revision) {
+        preview.settings=settings;
         preview.settings.enabled=true;
         preview.setWater(editor::AuthoredWaterQuery::fromDoc(map));
         preview.prepareSource(particles,map,nullptr,[&](float x,float z) {
@@ -21,7 +23,12 @@ struct StudioNaturePreview {
     }
 
     Json read(const Json& params) const {
-        return editor::readPhysisGameFrame(preview.previewWorld(),params);
+        auto frame=editor::readPhysisGameFrame(preview.previewWorld(),params);
+        Json wind=Json::object();
+        wind.set("speed",Json::number(double(preview.settings.windSpeed)));
+        wind.set("direction",Json::number(double(preview.settings.windDirectionDeg)));
+        frame.set("previewWind",std::move(wind));
+        return frame;
     }
 
     Json apply(const std::string& action,const Json& params) {
@@ -29,6 +36,16 @@ struct StudioNaturePreview {
         if (action=="view") return frame;
         if (action=="step" || action=="step60") {
             preview.advance(action=="step"?1:60);
+        } else if (action=="wind") {
+            const auto& speed=params["windSpeed"];
+            const auto& direction=params["windDirection"];
+            const double s=speed.toDouble(), d=direction.toDouble();
+            if (!speed.isNumber() || !direction.isNumber() || !std::isfinite(s) || !std::isfinite(d) ||
+                s<0 || s>30 || d<-180 || d>180)
+                throw std::runtime_error("Wind requires a speed of 0–30 m/s and a direction of −180° to 180°.");
+            preview.settings.windSpeed=float(s);
+            preview.settings.windDirectionDeg=float(d);
+            preview.applyWindSettings();
         } else if (action=="ignite") {
             if (!frame["cell"].getBool("available")) throw std::runtime_error("Select a PHYSIS cell first.");
             const auto* state=preview.previewWorld()->resourceConst<physis::State>();

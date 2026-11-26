@@ -2,6 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import type {StudioPhysisFrame as Frame} from '../types';
 import {invoke} from '../bridge';
 import {StudioAlert,StudioButton,StudioInput,StudioSelect} from '../ui';
+import PhysisPreviewWind from './PhysisPreviewWind';
 import PhysisCellReading from './PhysisCellReading';
 import './PhysisDiagnosticsPanel.css';
 
@@ -59,14 +60,14 @@ function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:strin
   const [busy,setBusy]=useState(true),[error,setError]=useState(''),[contours,showContours]=useState(true);
   const [cell,pick]=useState<number>();
   const requestId=useRef(0);
-  async function request(action:'view'|'step'|'step60'|'reset'|'ignite',next:View,selection=cell){
+  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind',next:View,selection=cell,wind?:{windSpeed:number;windDirection:number}){
     const id=++requestId.current;
     const sameArea=next.size===view.size&&next.stride===view.stride&&next.centerX===view.centerX&&next.centerZ===view.centerZ;
     const selected=sameArea&&action!=='reset'?selection:undefined;
     const coords=frame&&selected!==undefined?{cellX:frame.originX+(selected%frame.width)*frame.stride,cellZ:frame.originZ+Math.floor(selected/frame.width)*frame.stride}:{};
     setBusy(true);setError('');
     try{
-      const result=map?await invoke('studio.physisNature',{...next,...coords,action,expectedProject:projectPath,expectedDocumentEpoch:epoch}):live?await invoke('studio.physisLive',{...next,...coords,expectedProject:projectPath}):
+      const result=map?await invoke('studio.physisNature',{...next,...coords,...wind,action,expectedProject:projectPath,expectedDocumentEpoch:epoch}):live?await invoke('studio.physisLive',{...next,...coords,expectedProject:projectPath}):
         (await invoke('studio.op',{op:'physis_demo',params:{action,...next},expectedProject:projectPath})).result as Frame|{active:false};
       if(id!==requestId.current)return;
       pick(result.active?selected:undefined);
@@ -97,6 +98,8 @@ function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:strin
             <StudioInput type="number" name={k} defaultValue={view[k]} min={min} max={max} step={1} required/></label>)}
           <StudioButton type="submit">Apply area</StudioButton>
         </form></details>
+        {map&&frame.previewWind&&<PhysisPreviewWind key={frame.previewWind.speed+'/'+frame.previewWind.direction}
+          wind={frame.previewWind} apply={(windSpeed,windDirection)=>void request('wind',view,cell,{windSpeed,windDirection})}/>}
         {cell!==undefined&&<PhysisCellReading key={[frame.tick,cell,frame.originX,frame.originZ,frame.stride].join('/')}
           captured={live||map?frame.cell:undefined} projectPath={projectPath} x={frame.originX+(cell%frame.width)*frame.stride} z={frame.originZ+Math.floor(cell/frame.width)*frame.stride}
           tick={frame.tick} label={layers[view.layer]} value={frame.values[cell]} refresh={()=>void request('view',view)}/>}

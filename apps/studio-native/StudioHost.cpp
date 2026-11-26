@@ -3850,7 +3850,8 @@ bool StudioHost::handleHostMethod(const Json& req) {
         const auto action=params.getStr("action");
         if (action=="reset") {
             if (ws.map.data.planet()) throw std::runtime_error("Nature preview requires a terrain map.");
-            auto next=std::make_shared<StudioNaturePreview>(epoch,ws.map,float(ws.project.rules.levelHeight.toDouble()));
+            const auto settings=naturePreview_?naturePreview_->preview.settings:editor::PhysisNaturePreviewSettings{};
+            auto next=std::make_shared<StudioNaturePreview>(epoch,ws.map,float(ws.project.rules.levelHeight.toDouble()),settings);
             auto frame=next->read(params);
             naturePreview_=std::move(next);
             return frame;
