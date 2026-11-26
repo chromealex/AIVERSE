@@ -1,0 +1,10 @@
+{
+  "sha": "e49415fb4403dc9dedcafa2517514482c9a205f8",
+  "argv": [
+    "python3",
+    "../rig-compare.py"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-wind-rig-pixel-check.log.txt",
+  "sha256": "54e2c83c13b0549e594b7522623207a77d16cf7fc71925468d1c3e52496ec416"
+}
