@@ -494,6 +494,7 @@
     "docs/evidence/studio-network-udp-490b393fa.json",
     "docs/evidence/studio-rules-actor-navigation-final.json",
     "docs/evidence/studio-terrain-open-world.json",
-    "docs/evidence/studio-terrain-target-height.json"
+    "docs/evidence/studio-terrain-target-height.json",
+    "docs/evidence/studio-terrain-grid-routing.json"
   ]
 }
