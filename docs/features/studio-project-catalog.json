@@ -3,6 +3,9 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/panels/StaticGeometryPanel.tsx",
+    "apps/fps/client.cpp",
+    "apps/editor/core/GeometryOps.cpp",
     "apps/fps/HostedActorClient.h",
     "apps/editor/core/GeometryOps.h",
     "engine/render/StaticGeometryReport.h",
@@ -512,6 +515,7 @@
     "docs/evidence/studio-static-geometry-game.json",
     "docs/evidence/studio-static-geometry-authoring.json",
     "docs/evidence/studio-static-geometry-game-source.json",
-    "docs/evidence/studio-static-geometry-world-files.json"
+    "docs/evidence/studio-static-geometry-world-files.json",
+    "docs/evidence/studio-static-geometry-source-final.json"
   ]
 }

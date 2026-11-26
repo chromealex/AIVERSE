@@ -1,0 +1,10 @@
+{
+  "sha": "39b304c2d2e5e354b1e98dcab812a2cb41ca3c25",
+  "argv": [
+    "bash",
+    "/tmp/geometry-scope-final.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-static-geometry-source-final.log.txt",
+  "sha256": "71798afa13988fcbd9ae93760b1e6d3e611ae50b41696f683e9105afef784079"
+}
