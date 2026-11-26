@@ -1,0 +1,10 @@
+{
+  "sha": "52ea57571a1e342ed9b6fdabec939f35842e03f3",
+  "argv": [
+    "bash",
+    "/tmp/float-layout.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-linked-window-detached.log.txt",
+  "sha256": "8ea1a0fe19d271ce4b6622b4f640698613bc0daf58cbc9e8869d9a05dbaba612"
+}
