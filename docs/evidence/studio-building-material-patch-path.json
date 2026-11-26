@@ -1,0 +1,10 @@
+{
+  "sha": "4bfdd082a7ad9955db4a44489c0d87bc3230f9db",
+  "argv": [
+    "bash",
+    "../building-path.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-building-material-patch-path.log.txt",
+  "sha256": "98e85c75841701ab55fafa20fd5b497fcb3e587a96c1b2d927130b25e929b1fa"
+}
