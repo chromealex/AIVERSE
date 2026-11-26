@@ -132,6 +132,8 @@ public:
     void setSceneViewAgentProvider(SceneViewAgentProvider provider){sceneViewAgent_=std::move(provider);}
     Json previewExternalAssets(const std::vector<std::filesystem::path>& files,
                                const std::string& destination); // native picker ONLY
+    Json resolvePreviewRefs(const Json& refs);
+    void setPreviewSelection(Json ids) { selectedPreviewIds_=std::move(ids); }
     Json queryEditWorld(const Json& params,bool list);
     Json graphDocumentScope() const;
 private:
@@ -143,6 +145,7 @@ private:
     Json hierarchyGroups(const Json& params);
     editor::WorldPreview hierarchyPreview_;
     std::string hierarchyPreviewVersion_;
+    Json selectedPreviewIds_;
     uint64_t graphDocumentEpoch_=1;
     Json buildRequest(const std::string& method, const Json& params);
     Json dispatchImpl(const Json& request);
@@ -169,7 +172,7 @@ private:
     std::set<std::string> hidden_, locked_;
     void selectOnly(const std::string& id) { selected_=id; selection_.clear(); }
     bool selectedRoad(const std::vector<std::string>& ids, int& a, int& b, bool& linked) const;
-    void clearSelection() { selected_.clear(); selection_.clear(); }
+    void clearSelection() { selected_.clear(); selection_.clear();selectedPreviewIds_=Json(); }
     bool documentHas(const std::string& id) const;
     void dropOrdinalFlags(); // positional ids shift after structural edits
     StudioFacialPreviewBinding facialPreview_, rigPreview_;

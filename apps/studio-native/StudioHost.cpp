@@ -189,7 +189,7 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
                     result.set("selected",Json::number(int64_t(count)));
                     return result;
                 }
-                if(input["refs"].size() || input.has("epoch"))throw std::runtime_error("No inspectable game is running");
+                if(input.has("epoch"))throw std::runtime_error("No inspectable game is running");
                 Json ids=Json::array();
                 std::string first;
                 for (const auto& value:docs.items()) {
@@ -200,15 +200,29 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
                     if (first.empty()) first=id;
                     ids.push(Json::string(id));
                 }
+                Json generated=Json::array(), primary;
+                if(input["refs"].size()){
+                    const auto rows=session_->resolvePreviewRefs(input["refs"]);
+                    if(first.empty() && rows.size())primary=rows[0];
+                    for(const auto& row:rows.items()){
+                        if(row.getInt("doc",-1)>=0)ids.push(row["id"]);
+                        else generated.push(row["id"]);
+                    }
+                }
                 selection.set("ids",std::move(ids));
                 const auto reply=request("studio.select",selection);
                 if (reply.has("error")) throw std::runtime_error(reply.getStr("error","Selection failed"));
+                const auto generatedCount=generated.size();
+                session_->setPreviewSelection(std::move(generated));
+                if(input.getBool("focus") && primary.has("x") && preview_ && !projectLoading_)
+                    onScene([&]{const auto camera=preview_->cameraState();preview_->tweenCamera(
+                        {float(primary["x"].toDouble()),float(primary["y"].toDouble()),float(primary["z"].toDouble())},18.f,camera.yaw,camera.pitch);});
                 if (input.getBool("focus") && !first.empty() && preview_ && !projectLoading_)
                     onScene([&]{preview_->focusSelected(map,map.data.worldSpace,first);});
                 sendEventPayload("inspector.selection",Json::object());
                 sendEvent("selection.changed","");
                 Json result=Json::object();
-                result.set("selected",Json::number(int64_t(session_->selectedObjectIds().size())));
+                result.set("selected",Json::number(int64_t(session_->selectedObjectIds().size()+generatedCount)));
                 return result;
             }
             if (kind=="type" || kind=="resource" || kind=="tech" || kind=="faction") {

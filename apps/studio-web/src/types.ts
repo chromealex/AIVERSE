@@ -133,6 +133,7 @@ export interface StudioSnapshot {
   selectedId: string | null;
   /** Whole selection, primary (selectedId) last. */
   selectedIds?: string[];
+  selectedPreviewIds?: string[];
   selectedRoad?: boolean;
   canScaleEvolveRegions?: boolean;
   properties: StudioProperty[];

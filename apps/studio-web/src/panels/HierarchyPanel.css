@@ -58,3 +58,5 @@
 .hier-preview summary small{margin-left:auto;color:var(--au-text-faint)}
 .hier-preview dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 10px;margin:0 0 8px;padding:8px;border-left:2px solid var(--au-accent);background:var(--au-field)}
 .hier-preview dd{margin:0;color:var(--au-text);overflow-wrap:anywhere}
+
+.hier-preview[data-selected]{background:var(--au-field);box-shadow:inset 2px 0 var(--au-accent);color:var(--au-text)}

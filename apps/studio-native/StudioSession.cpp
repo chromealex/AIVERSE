@@ -57,6 +57,7 @@
 #include <algorithm>
 #include "apps/editor/core/MaterialOps.h"
 #include "apps/editor/core/DocumentWorldPreview.h"
+#include <charconv>
 #include "libraries/include/aiverselib/mechanics/SpectraSourceDocument.h"
 #include <cctype>
 #include <cmath>
@@ -923,6 +924,7 @@ bool StudioSession::prepareHierarchyPreview(const editor::WorldConfig& config,bo
     const auto version=graphDocumentScope().dump(-1)+"|"+ws_.project.historyVersion();
     if(version!=hierarchyPreviewVersion_ || refresh){
         editor::startDocumentWorldPreview(hierarchyPreview_,ws_.map,ws_.project,config);
+        selectedPreviewIds_=Json();
         hierarchyPreviewVersion_=version;
     }
     hierarchyPreview_.poll();
@@ -931,6 +933,34 @@ bool StudioSession::prepareHierarchyPreview(const editor::WorldConfig& config,bo
     auto* module=hierarchyPreview_.module();
     if(!sim || !module || !hierarchyPreview_.error().empty())throw std::runtime_error("Hierarchy preview: "+hierarchyPreview_.error());
     return true;
+}
+Json StudioSession::resolvePreviewRefs(const Json& refs) {
+    const auto config=studioHierarchyConfig(ws_.project.manifest);
+    if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
+    if(!prepareHierarchyPreview(config,false))throw std::runtime_error("Hierarchy preview is loading; retry");
+    editor::WorldModel world;
+    editor::readWorld(*hierarchyPreview_.sim(),*hierarchyPreview_.module(),config,hierarchyPreview_.links(),
+                      hierarchyPreview_.setupRefs(),&ws_.map.data,world,{false});
+    Json rows=Json::array();
+    std::unordered_set<uint64_t> seen;
+    for(const auto& value:refs.items()){
+        uint64_t ref=0;
+        if(value.isString()){
+            const auto text=value.str();
+            auto [end,error]=std::from_chars(text.data(),text.data()+text.size(),ref);
+            if(error!=std::errc{} || end!=text.data()+text.size())throw std::runtime_error("Invalid preview reference");
+        }else if(value.isNumber() && value.toDouble()>0 && value.toDouble()<=9007199254740991. && value.toDouble()==std::floor(value.toDouble()))
+            ref=uint64_t(value.integer());
+        const auto* row=world.find(ref);
+        if(!row)throw std::runtime_error("Unknown preview reference");
+        if(!seen.insert(ref).second)continue;
+        Json item=Json::object();
+        item.set("doc",num(int64_t(row->doc)));
+        item.set("id",str(row->doc>=0?nodeId(ws_.map,editor::DocumentEntityRef::mapEntity(size_t(row->doc))):"preview:"+std::to_string(ref)));
+        if(row->hasPos){item.set("x",Json::number(double(row->x)));item.set("y",Json::number(double(row->y)));item.set("z",Json::number(double(row->z)));}
+        rows.push(std::move(item));
+    }
+    return rows;
 }
 Json StudioSession::queryEditWorld(const Json& params,bool list) {
     if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
@@ -1086,6 +1116,7 @@ Json StudioSession::snapshot() const {
     Json ids = Json::array();
     for (const auto& id : selectedIds) ids.push(str(id));
     result.set("selectedIds", std::move(ids));
+    if(selectedPreviewIds_.size() && hierarchyPreviewVersion_==graphDocumentScope().dump(-1)+"|"+ws_.project.historyVersion())result.set("selectedPreviewIds",selectedPreviewIds_);
     if (!ws_.map.data.planet() && selectedIds.size() >= 2 && selectedIds.size() <= 256 &&
         std::all_of(selectedIds.begin(), selectedIds.end(), [&](const auto& id) {
             if (!id.starts_with("entity:@") || locked_.contains(id) || hidden_.contains(id)) return false;
@@ -4215,6 +4246,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 if(at!=current.end())current.erase(at);
                 current.push_back(id); // last = primary
             }
+            selectedPreviewIds_=Json();
             if(current.empty())clearSelection();
             else {selected_=current.back();current.pop_back();selection_=std::move(current);}
             reply.set("result", snapshot());
