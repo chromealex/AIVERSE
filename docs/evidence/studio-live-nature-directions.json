@@ -1,0 +1,10 @@
+{
+  "sha": "1aafee84c8c219e24a20604e6b21457c680f7c89",
+  "argv": [
+    "bash",
+    "/tmp/studio-nature.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-live-nature-directions.log.txt",
+  "sha256": "531316e997e3d7d373b6869db4689ada119278035ac51107f3d8bd10e1f355af"
+}

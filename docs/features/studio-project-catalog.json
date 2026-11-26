@@ -596,6 +596,7 @@
     "docs/evidence/studio-animation-scoped-state-edit.json",
     "docs/evidence/studio-state-page-layout.json",
     "docs/evidence/studio-scene-diagnostic-layers.json",
-    "docs/evidence/studio-flat-scene-marquee-handlers.json"
+    "docs/evidence/studio-flat-scene-marquee-handlers.json",
+    "docs/evidence/studio-live-nature-directions.json"
   ]
 }

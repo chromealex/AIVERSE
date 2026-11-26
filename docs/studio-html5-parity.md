@@ -474,3 +474,5 @@ States layout and one-state transition authoring verified in docked and maximize
 Port flat Scene world axes, object bounds and separate selection-box visibility from the legacy diagnostics menu. Use the existing document proxy data and Scene tool preferences. Compare actual native frames with layers disabled and enabled.
 
 Port live flat-map PHYSIS wind and fire direction overlays. Share the legacy field sampling rules and read completed game ECS frames only for the matching authored map. Verify the rendered Scene and clearing on stop.
+
+The Scene overlays menu shows PHYSIS wind and fire direction from a running local flat-map play-test. The native Mac comparison used a paused game with 64 PHYSIS cells and an authored wind field and ignition. The source map remained byte-identical after stop. A standalone edit-mode nature preview, authored radius/spacing controls and Windows visual acceptance remain open.
