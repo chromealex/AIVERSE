@@ -168,7 +168,7 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot, openAttachm
       {panel==='physis'&&<><div className="physis-zone-nav" role="group" aria-label="PHYSIS views">
         <button className="au-button" aria-pressed={!zoneMode} onClick={()=>setZoneMode(false)}>Field diagnostics</button>
         <button className="au-button" aria-pressed={zoneMode} onClick={()=>setZoneMode(true)}>Map zones</button></div>
-        {zoneMode&&snapshot?.graphDocument?<><PhysisZonesPanel key={snapshot.graphDocument.epoch} scope={snapshot.graphDocument} onChanged={()=>done(true)}/><PhysisLiveFields key={snapshot.graphDocument.epoch} project={projectPath} epoch={snapshot.graphDocument.epoch}/></>:
+        {zoneMode&&snapshot?.graphDocument?<><PhysisZonesPanel key={snapshot.graphDocument.epoch} scope={snapshot.graphDocument} onChanged={()=>done(true)}/><PhysisLiveFields key={snapshot.graphDocument.epoch} project={projectPath} epoch={snapshot.graphDocument.epoch}/><PhysisLiveFields remote key={'remote:'+snapshot.graphDocument.epoch} project={projectPath} epoch={snapshot.graphDocument.epoch}/></>:
           <PhysisDiagnosticsPanel route={natureRoute} epoch={snapshot?.graphDocument?.epoch??''} key={snapshot?.graphDocument?.epoch??projectPath} projectPath={projectPath}/>}</>}
       {panel==='raid' && snapshot?.graphDocument && <RaidPanel key={snapshot.graphDocument.epoch} scope={snapshot.graphDocument} info={state.raid_info as RaidInfo | undefined} onChanged={()=>done(true)}/>}
       {panel==='water' && snapshot?.graphDocument && <WaterShorePanel key={snapshot.graphDocument.epoch} scope={snapshot.graphDocument} onChanged={()=>done(true)}/>}

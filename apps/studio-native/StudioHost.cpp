@@ -43,6 +43,7 @@
 #include "apps/studio-native/StudioStbCodecs.h"
 
 #include "StudioNaturePreview.h"
+#include "StudioPhysisRemoteFields.h"
 #include "apps/editor/core/PhysisNatureCommandSchema.h"
 
 namespace aiverse::studio {
@@ -388,6 +389,10 @@ void StudioHost::openProject(const std::string& path, int64_t requestId) {
     retireBuildingPanelPreview();
     buildingGraphOverlayScene_=0;rebuildOverlay();
     session_->setBuildingGraphReader({});
+    if(!session_->workspace().project.dir.empty() && session_->workspace().project.dir!=path) {
+        auto& remote=editor::physis_remote::link();
+        if(remote.attached() || remote.authenticating())remote.disconnect();
+    }
     projectLoading_ = true;
     ++packageProjectEpoch_;
     cancelSpectraCapture(); // invalidate old project callbacks before opening
@@ -1285,6 +1290,7 @@ void StudioHost::tick() {
         else if (session_->splineEdit().empty()) splineCache_ = Json();
         rebuildOverlay();
     }
+    editor::physis_remote::link().poll(::aiverse::net::nowMs());
     tickAgentScreenshot();
     pollAgentRequests();
     finishLensCapture();
@@ -4069,6 +4075,15 @@ bool StudioHost::handleHostMethod(const Json& req) {
         if (!naturePreview_->preview.settings.enabled && action!="view") throw std::runtime_error("Enable the map preview first.");
         if (action=="playback") naturePreview_->commandPlaying=false;
         return naturePreview_->apply(action,params);
+    });
+    if(method=="studio.physisRemoteFields")return answer([&] {
+        const auto& ws=session_->workspace();
+        if(projectLoading_ || ws.project.dir.empty() || params.getStr("expectedProject")!=ws.project.dir ||
+           params.getStr("expectedDocumentEpoch")!=session_->graphDocumentScope().getStr("epoch"))
+            throw std::runtime_error("The map changed. Reopen Map zones.");
+        const bool apply=params.getStr("action")=="apply";
+        const auto map=apply?ws.map.toJson():Json{};
+        return studioPhysisRemoteFields(editor::physis_remote::link(),params,ws.map.revision,apply?&map:nullptr);
     });
     if(method=="studio.physisFieldEdit")return answer([&] {
         const auto& ws=session_->workspace();
