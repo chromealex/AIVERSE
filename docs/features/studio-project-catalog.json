@@ -534,6 +534,7 @@
     "docs/evidence/studio-gpu-files.json",
     "docs/evidence/studio-gpu-settings.json",
     "docs/evidence/studio-emitter-step-backends.json",
-    "docs/evidence/studio-emitter-window-placement.json"
+    "docs/evidence/studio-emitter-window-placement.json",
+    "docs/evidence/studio-spectra-v1-roundtrip.json"
   ]
 }
