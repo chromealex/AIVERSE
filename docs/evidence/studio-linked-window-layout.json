@@ -1,0 +1,10 @@
+{
+  "sha": "68dbe545ac419942c8764b249f6c5f9ba5dc4715",
+  "argv": [
+    "bash",
+    "/tmp/window-layout.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-linked-window-layout.log.txt",
+  "sha256": "32c9e5084746c49c2c4eb843f6338cda37e48f05e2f2f8e1754a55ff7c588b08"
+}
