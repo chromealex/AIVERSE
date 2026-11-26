@@ -640,6 +640,7 @@
     "docs/evidence/studio-game-viewport-screenshot.json",
     "docs/evidence/studio-full-window-screenshot.json",
     "docs/evidence/studio-clean-scene-export.json",
-    "docs/evidence/studio-scene-scoped-focus-verified.json"
+    "docs/evidence/studio-scene-scoped-focus-verified.json",
+    "docs/evidence/studio-rendered-document-gpu.json"
   ]
 }
