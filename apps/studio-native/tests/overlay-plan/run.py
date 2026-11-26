@@ -40,6 +40,20 @@ with tempfile.TemporaryDirectory(dir=args.scratch) as temp:
     background = project / "minimap.png"
     background.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0)) +
                            chunk(b"IDAT", zlib.compress(bytes([0,26,53,65,128]))) + chunk(b"IEND", b""))
+    def badge(x, y):
+        if abs(x-5.5)+abs(y-5.5)>7: return bytes(4)
+        return bytes([200,96,42,255] if x<6 else [50,172,220,255])
+    def badge_png(size, inset):
+        scanlines = b"".join(b"\0"+b"".join(badge(x+inset,y+inset) for x in range(size)) for y in range(size))
+        return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", size,size,8,6,0,0,0))
+                + chunk(b"IDAT", zlib.compress(scanlines)) + chunk(b"IEND", b""))
+    (project / "beacon.png").write_bytes(badge_png(12,0))
+    atlas_dir = project / "_atlas"
+    atlas_dir.mkdir(exist_ok=True)
+    (atlas_dir / "icons.png").write_bytes(badge_png(8,2))
+    (atlas_dir / "atlas.json").write_text(json.dumps(dict(version=1,
+        pages=[dict(file="_atlas/icons.png",w=8,h=8)],
+        textures={"hud/badge.png":[0,0,0,8,8,2,2,12,12,0]})))
     map_data["minimapBackground"] = background.name
     original = json.dumps(map_data)
     map_file.write_text(original)
@@ -51,6 +65,17 @@ with tempfile.TemporaryDirectory(dir=args.scratch) as temp:
              style=dict(color="#16eaafff", thickness=.15, fadeIn=.4)),
         dict(id="build_site", anchor="ghost", shape=dict(type="footprint", predicate="ok"),
              style=dict(fill=True, outline=False, fadeIn=.4, colors={"true": "#f6bf4aff", "false": "#db3854ff"})),
+        dict(id="beacon", order=10, anchor=dict(type="point", at=[5,12]), shape=dict(type="icon",size=3,image="beacon.png"),
+             style=dict(space="ground",rotate=1.5707963,color="#ffffffff")),
+        dict(id="beacon_center", order=11, anchor=dict(type="point", at=[5,12]), shape=dict(type="circle",radius=.3),
+             style=dict(color="#ceb7ffff")),
+        dict(id="banner", anchor=dict(type="point", at=[18,4]), shape=dict(type="icon",size=3,image="beacon.png"),
+             style=dict(space="billboard",rotate=1.5707963,color="#ffffffff")),
+        dict(id="status_badge", anchor=dict(type="screen", at=[58,38]), shape=dict(type="icon",size=30,image="hud/badge.png"),
+             style=dict(color="#80ffffff")),
+        dict(id="banner_frame", anchor=dict(type="point", at=[18,4]), shape=dict(type="rect",size=[3.5,4]),
+             style=dict(space="billboard",fill=False,outline=True,thickness=.25,color="#99bd88ff")),
+        dict(id="missing_badge", anchor="cursor", shape=dict(type="icon",size=2,image="missing.png")),
         dict(id="patrol_signal", anchor=dict(type="point", at=[5,9]), shape=dict(type="ring", radius=2),
              style=dict(space="minimap", color="#ffbd59ff")),
         dict(id="patrol_zone", anchor=dict(type="point", at=[16,3]), shape=dict(type="rect", size=[2,4]),

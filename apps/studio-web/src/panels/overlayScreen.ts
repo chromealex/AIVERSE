@@ -1,5 +1,6 @@
 type Paint = { fill?:number; line?:number; thickness:number };
 type Shape =
+  | {shape:'icon'; texture:string; size:number}
   | {shape:'text'; text:string; size:number; color:number; shadow?:number; background?:number; padX:number; padY:number}
   | {shape:'bar'; w:number; h:number; fraction:number; border:number; background?:number; color:number}
   | ({shape:'circle'; radius:number; segments:number} & Paint)
@@ -12,11 +13,14 @@ function color(packed:number) {
 }
 
 export function drawScreenOverlays(ctx:CanvasRenderingContext2D, items:ScreenOverlay[], width:number, height:number,
-  bounds:{scale:number;x:number;z:number}) {
+  bounds:{scale:number;x:number;z:number}, images:Map<string,HTMLImageElement>) {
   for (const item of items) {
     const x = item.dx + (item.hud ? item.x + (item.x<0 ? width : 0) : bounds.x + item.x*bounds.scale);
     const y = item.dy + (item.hud ? item.z + (item.z<0 ? height : 0) : bounds.z + item.z*bounds.scale);
-    if (item.shape==='text') {
+    if (item.shape==='icon') {
+      const image=images.get(item.texture);
+      if (image) ctx.drawImage(image,x-item.size/2,y-item.size/2,item.size,item.size);
+    } else if (item.shape==='text') {
       const size = 13*item.size;
       ctx.font = `${size}px system-ui`;
       ctx.textBaseline = 'top';

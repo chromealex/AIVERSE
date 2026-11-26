@@ -96,6 +96,27 @@
     await wait(()=>miniPixel(55,72,'255,189,89') && miniPixel(40,72,'43,72,58') &&
       miniPixel(128,24,'104,207,222') && miniPixel(144,24,'43,72,58') &&
       miniPixel(26,35,'38,76,107'),'minimap ring, disc, painted ground and water');
+    const iconIds=['beacon','beacon_center','banner','status_badge','banner_frame'];
+    for(const id of iconIds) {
+      checkbox(id).click();
+      await wait(()=>checkbox(id).checked,id+' enabled');
+    }
+    const iconPlan=await plan({ids:iconIds});
+    if(iconPlan.worldIcons.length!==2 || Object.keys(iconPlan.textures).length!==2 ||
+       iconPlan.screen.length!==1 || iconPlan.missingImages.length)throw Error('Icon source resolution');
+    const partial=await plan({ids:['missing_badge','banner']});
+    if(partial.missingImages.join()!=='missing.png' || partial.worldIcons.length!==1)throw Error('Missing icon isolation');
+    function iconPixel(x,y,color,world=true) {
+      const w=canvas.clientWidth,h=canvas.clientHeight,scale=Math.min((w-16)/24,(h-16)/16);
+      const px=world ? (w-24*scale)/2+x*scale : x;
+      const py=world ? (h-16*scale)/2+y*scale : y;
+      const rgba=canvas.getContext('2d').getImageData(Math.floor(px*canvas.width/w),Math.floor(py*canvas.height/h),1,1).data;
+      return [...rgba].slice(0,3).join(',')===color;
+    }
+    await wait(()=>iconPixel(5,11.3,'200,96,42') && iconPixel(5,12.7,'50,172,220') &&
+      iconPixel(5,12,'206,183,255') && iconPixel(17.3,4,'200,96,42') && iconPixel(18.7,4,'50,172,220') &&
+      iconPixel(18,2,'153,189,136') && iconPixel(52,38,'100,96,42',false) && iconPixel(64,38,'25,172,220',false),
+      'rotated ground icon, primitive drawn above icon, facing billboard and tinted atlas HUD icon');
     await sleep(1800);
     log('SHOT_plan');
     await sleep(1600);
@@ -134,7 +155,7 @@
     try { await rpc('studio.op',{op:'overlay_preview',params:{ids:['sensor_radius']},expectedDocumentEpoch:before.epoch}); }
     catch { stale=true; }
     if(!stale)throw Error('Stale UI overlay command accepted');
-    log('VERIFIED minimap terrain/background, ring/disc pixels, cursor ping and release; map isolation and stale command rejection; screen HUD resizing, selection text, health bars, circle, rectangle, project colors, forced rings, concurrent overlays, water click, deselection and Hierarchy selection');
+    log('VERIFIED rotated loose icon, overlapping geometry, billboard orientation, reconstructed atlas HUD tint and missing asset isolation; minimap terrain/background, ring/disc pixels, cursor ping and release; map isolation and stale command rejection; screen HUD resizing, selection text, health bars, circle, rectangle, project colors, forced rings, concurrent overlays, water click, deselection and Hierarchy selection');
     log('DONE_1');
   } catch (error) { log('FAIL '+error.message); }
 })();

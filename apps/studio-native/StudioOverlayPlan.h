@@ -6,25 +6,13 @@
 #include "apps/editor/core/OverlayPreviewTerritory.h"
 #include "engine/view/game/GameView.h"
 #include "engine/view/game/PlanarMinimap.h"
-#include "engine/world/WorldAssets.h"
-#include "apps/editor/core/ProjectFileEdits.h"
 #include "apps/editor/core/BrandingOps.h"
-#include "apps/editor/core/PrismaOps.h"
+#include "StudioOverlayImages.h"
 #include <set>
 
 namespace aiverse::studio {
 
-inline bool studioPlanShape(const game::OverlayDef& def) {
-    using game::OvShape;
-    if (def.style.space == game::OvSpace::Minimap) return true;
-    if (def.style.space == game::OvSpace::Screen)
-        return def.shape == OvShape::Text || def.shape == OvShape::Bar || def.shape == OvShape::Circle ||
-               def.shape == OvShape::Ring || def.shape == OvShape::Rect;
-    return def.style.space == game::OvSpace::Ground && def.shape != OvShape::Icon &&
-           def.shape != OvShape::Text && def.shape != OvShape::Bar;
-}
-
-inline void registerStudioOverlayPlan(StudioSession& session, std::function<void(const Json&, bool)> notify) {
+inline void registerStudioOverlayPlan(StudioSession& session, StudioPngEncoder encode, std::function<void(const Json&, bool)> notify) {
     auto& ws = session.workspace();
     Json schema;
     for (const auto& op : ws.ops()) if (op.name == "overlay_preview") { schema = op.schema; break; }
@@ -70,7 +58,7 @@ inline void registerStudioOverlayPlan(StudioSession& session, std::function<void
                     if (!requested.isArray()) throw std::runtime_error("ids must be an array");
                     const auto catalog = game::loadOverlaySet(rules, ws.project.rulesJson["overlays"], ws.project.manifest["overlays"]);
                     std::set<std::string> allowed, seen;
-                    for (const auto& def : catalog.defs) if (studioPlanShape(def)) allowed.insert(def.id);
+                    for (const auto& def : catalog.defs) allowed.insert(def.id);
                     Json ids = Json::array();
                     for (const auto& id : requested.items()) {
                         if (!id.isString() || !allowed.count(id.str())) throw std::runtime_error("Unavailable preview overlay: " + id.dump());
@@ -101,7 +89,7 @@ inline void registerStudioOverlayPlan(StudioSession& session, std::function<void
         }, true});
     ws.registerOp({"overlay_plan_preview", "Preview ground, screen and minimap overlay definitions in project draw order on the map plan.",
         Json::parse(R"({"properties":{"ids":{"type":"array","items":{"type":"string"}},"placeType":{"type":"string"},"x":{"type":"number"},"z":{"type":"number"}}})"),
-        [&ws, &session](const Json& args) {
+        [&ws, &session, encode](const Json& args) {
             const auto& map = ws.map.data;
             const auto& project = ws.project;
             const auto& rules = project.rules;
@@ -114,7 +102,6 @@ inline void registerStudioOverlayPlan(StudioSession& session, std::function<void
             game::OverlaySet selected;
             std::vector<std::string> forced;
             for (const auto& def : set.defs) {
-                if (!studioPlanShape(def)) continue;
                 catalog.push(Json::string(def.id));
                 if (ids.erase(def.id)) { selected.defs.push_back(def); forced.push_back(def.id); }
             }
@@ -202,14 +189,7 @@ inline void registerStudioOverlayPlan(StudioSession& session, std::function<void
             if (minimap) {
                 const auto background = map.extra.getStr("minimapBackground", project.manifest.getStr("minimapBackground"));
                 std::string bytes;
-                if (world::safeAssetPath(background)) {
-                    namespace fs = std::filesystem;
-                    const auto root = fs::weakly_canonical(project.dir);
-                    const auto file = fs::weakly_canonical(root / background);
-                    const auto local = file.lexically_relative(root);
-                    if (!local.empty() && *local.begin() != ".." && fs::is_regular_file(file))
-                        bytes = editor::readProjectFileBytes(file);
-                }
+                readStudioOverlayAsset(project.dir, background, bytes);
                 int width, height;
                 float cellsPerPixel;
                 std::vector<uint32_t> base, pixels;
@@ -221,10 +201,10 @@ inline void registerStudioOverlayPlan(StudioSession& session, std::function<void
                 for (auto pixel : pixels)
                     for (int shift : {0, 8, 16, 24}) rgba.push_back(uint8_t(pixel >> shift));
                 result.set("minimap", Json::string("data:image/png;base64," +
-                    editor::base64Encode(editor::encodePngRgba(width, height, rgba))));
+                    editor::base64Encode(encode(rgba, width, height))));
             }
             result.set("terrain", terrain);
-            result.set("screen", std::move(screen));
+            studioOverlayImages(project.dir, screen, result, encode);
             result.set("stride", Json::number(int64_t(stride)));
             result.set("objects", objects);
             result.set("primitives", primitives);

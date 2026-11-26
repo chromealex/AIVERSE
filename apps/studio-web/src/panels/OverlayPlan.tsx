@@ -5,7 +5,8 @@ import { StudioAlert, StudioSection } from '../ui';
 
 import { drawScreenOverlays, type ScreenOverlay } from './overlayScreen';
 
-type Plan = {catalog:string[]; terrain:string[]; stride:number; width:number; height:number; objects:number[][]; minimap?:string; screen:ScreenOverlay[]; primitives:number[][]};
+type WorldIcon = {texture:string; x:number; z:number; size:number; angle:number; before:number; additive:boolean};
+type Plan = {catalog:string[]; terrain:string[]; stride:number; width:number; height:number; objects:number[][]; textures:Record<string,string>; worldIcons:WorldIcon[]; missingImages:string[]; minimap?:string; screen:ScreenOverlay[]; primitives:number[][]};
 
 type PickPosition = (x:number,z:number)=>void;
 
@@ -15,6 +16,8 @@ function PlanCanvas({plan,pick}:{plan:Plan;pick:PickPosition}) {
   useEffect(()=>{
     const canvas = ref.current;
     if (!canvas) return;
+    const images=new Map<string,HTMLImageElement>();
+    let live=true;
     const draw = ()=>{
       const w = canvas.clientWidth, h = canvas.clientHeight;
       if (!w || !h) return;
@@ -44,7 +47,22 @@ function PlanCanvas({plan,pick}:{plan:Plan;pick:PickPosition}) {
       ctx.lineWidth=1.5/scale;
       let opaqueFill:number|undefined;
       const flush=()=>{if(opaqueFill!==undefined){ctx.fill();opaqueFill=undefined;}};
-      for(const [packed,x1,z1,x2,z2,x3,z3] of plan.primitives){
+      let nextIcon=0;
+      for(let index=0;index<=plan.primitives.length;index++){
+        while(nextIcon<plan.worldIcons.length && plan.worldIcons[nextIcon].before===index) {
+          const icon=plan.worldIcons[nextIcon++];
+          const image=images.get(icon.texture);
+          if (!image) continue;
+          flush();
+          ctx.save();
+          ctx.translate(icon.x,icon.z);
+          ctx.rotate(icon.angle);
+          if (icon.additive) ctx.globalCompositeOperation='lighter';
+          ctx.drawImage(image,-icon.size/2,-icon.size/2,icon.size,icon.size);
+          ctx.restore();
+        }
+        if(index===plan.primitives.length)break;
+        const [packed,x1,z1,x2,z2,x3,z3]=plan.primitives[index];
         const color = `rgba(${packed&255},${(packed>>>8)&255},${(packed>>>16)&255},${(packed>>>24)/255})`;
         const opaqueTriangle = x3!==undefined && (packed>>>24)===255;
         if(!opaqueTriangle || opaqueFill!==packed){
@@ -57,10 +75,19 @@ function PlanCanvas({plan,pick}:{plan:Plan;pick:PickPosition}) {
       }
       flush();
       ctx.setTransform(ratio,0,0,ratio,0,0);
-      drawScreenOverlays(ctx,plan.screen,w,h,bounds.current);
+      drawScreenOverlays(ctx,plan.screen,w,h,bounds.current,images);
     };
     const observer=new ResizeObserver(draw);
-    observer.observe(canvas);draw();return ()=>observer.disconnect();
+    observer.observe(canvas);
+    draw();
+    const loads=Object.entries(plan.textures).map(async ([key,url])=>{
+      const image=new Image();
+      image.src=url;
+      await image.decode();
+      if(live) images.set(key,image);
+    });
+    if(loads.length) void Promise.allSettled(loads).then(()=>{if(live)draw();});
+    return ()=>{live=false;observer.disconnect();};
   },[plan]);
   return <canvas ref={ref} role="img" aria-label="Project overlays on the open map"
     onClick={event=>{
@@ -105,7 +132,8 @@ export default function OverlayPlan({scope,placeType,x,z,pick,selectionKey,ids,s
           <img src={plan.minimap} alt="Minimap with project overlays"/>
         </figure>}
       </div>
-      {!plan.minimap && !plan.primitives.length && !plan.screen.length && <p>No visible geometry at this position.</p>}
+      {plan.missingImages.length>0 && <StudioAlert tone="warning">Missing overlay textures: {plan.missingImages.join(', ')}</StudioAlert>}
+      {!plan.minimap && !plan.worldIcons.length && !plan.primitives.length && !plan.screen.length && <p>No visible geometry at this position.</p>}
     </>}
   </StudioSection>;
 }

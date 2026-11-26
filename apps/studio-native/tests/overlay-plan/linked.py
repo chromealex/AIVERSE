@@ -50,6 +50,7 @@ try:
     assert preview() == local
     assert preview(ids=["hud_note"])["preview"] == ["hud_note"]
     assert preview(ids=["cursor_ping"])["preview"] == ["cursor_ping"]
+    assert preview(ids=["banner","status_badge"])["preview"] == ["banner","status_badge"]
     cleared = preview(off=True)
     assert cleared["preview"] == [] and cleared["placeType"] == "" and "x" not in cleared
     wait_for("CROSS main LINK_OFF")

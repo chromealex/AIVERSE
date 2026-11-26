@@ -182,7 +182,7 @@ private:
     size_t cellCap(const OverlayDef& d) const;
     bool resolveTo(const OverlayDef& d, const Inst& in, render::float3& out) const;
     // GameOverlaysDraw.cpp: world geometry
-    void emit(const OverlayDef& d, size_t di, const Inst& in);
+    void emit(const OverlayDef& d, size_t di, const Inst& in, Json* icons = nullptr);
     float groundY(const OverlayDef& d, float x, float z, float anchorGround) const;
     void seg(const OverlayDef& d, render::float3 a, render::float3 b, uint32_t col);
     void tri(const OverlayDef& d, render::float3 a, render::float3 b, render::float3 c, uint32_t col, gfx::TextureHandle tex = {},

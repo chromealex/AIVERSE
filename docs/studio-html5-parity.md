@@ -292,3 +292,5 @@ Overlays transfer: bind the legacy overlay_preview command to document-scoped HT
 Overlays transfer: emit screen anchors and resolved text, bars, circles and rectangles from the game renderer for the independent HTML Studio plan.
 
 Overlays transfer: render an independent minimap using the game terrain, object and mark rasterizer. Verify project backgrounds, ring/disc coverage and map coordinates in desktop Studio.
+
+Overlays transfer: render authored screen, ground and billboard icon textures in the private plan. Verify loose images, atlas-only regions, tint, orientation and paint order.

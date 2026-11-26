@@ -346,14 +346,17 @@ std::vector<GameOverlays::PlanPrimitive> GameOverlays::groundPlan(const GameScen
             if (set_.defs[index].enabled) gather(set_.defs[index], index, set_.defs[index].style.space == OvSpace::Screen);
     }
     prepare(scene, time, nullptr, grid, float(std::max(grid.w, grid.h)));
+    // The north-up plan looks down the Y axis; billboards face its viewer.
+    camRight_ = {1, 0, 0};
+    camUp_ = {0, 0, -1};
+    if (screen) *screen = Json::array();
     marks_.clear();
     for (uint16_t index : worldDefs_) {
         const auto& def = set_.defs[index];
-        if (!def.enabled || (def.style.space != OvSpace::Ground && def.style.space != OvSpace::Minimap) || !gather(def, index, false)) continue;
-        for (const auto& instance : insts_) emit(def, index, instance);
+        if (!def.enabled || !gather(def, index, false)) continue;
+        for (const auto& instance : insts_) emit(def, index, instance, screen);
     }
     if (screen) {
-        *screen = Json::array();
         visitScreen(scene, [&](const OverlayDef& def, size_t index, const Inst& in) {
             Json item = Json::object();
             const bool hud = def.anchor == OvAnchor::Screen;
@@ -687,7 +690,7 @@ bool GameOverlays::resolveTo(const OverlayDef& d, const Inst& in, float3& out) c
     return false;
 }
 
-void GameOverlays::emit(const OverlayDef& d, size_t di, const Inst& in) {
+void GameOverlays::emit(const OverlayDef& d, size_t di, const Inst& in, Json* icons) {
     const OvStyle& s = d.style;
     lift_ = s.lift + (in.popup >= 0 ? d.event.rise * in.age : 0.0f);
     const int pred = d.pred == OvPred::None || d.shape == OvShape::Grid || d.shape == OvShape::Cells ? -1
@@ -743,7 +746,23 @@ void GameOverlays::emit(const OverlayDef& d, size_t di, const Inst& in) {
         if (d.shape == OvShape::Arrow) arrowHead(d, p[0], p[1], col, ag);
         break;
     }
-    case OvShape::Icon: icon(d, di, in, d.size[0] + (in.popup >= 0 ? d.event.grow * in.age : 0.0f), col); break;
+    case OvShape::Icon: {
+        const float size = d.size[0] + (in.popup >= 0 ? d.event.grow * in.age : 0.0f);
+        if (!icons) { icon(d, di, in, size, col); break; }
+        if (icons->size() >= 65536) throw std::runtime_error("Overlay plan is too dense; select fewer overlays");
+        Json item = Json::object();
+        item.set("shape", Json::string("icon"));
+        item.set("image", Json::string(d.image));
+        item.set("color", Json::number(int64_t(col)));
+        item.set("size", Json::number(double(size)));
+        item.set("x", Json::number(double(in.pos.x)));
+        item.set("z", Json::number(double(in.pos.z)));
+        item.set("angle", Json::number(s.space == OvSpace::Billboard ? 0.0 : double(float(time_) * s.rotate)));
+        item.set("additive", Json::fromBool(s.additive));
+        item.set("before", Json::number(int64_t(plan_->size())));
+        icons->push(std::move(item));
+        break;
+    }
     case OvShape::Text: case OvShape::Bar: break;   // screen pass
     }
 }
@@ -948,9 +967,17 @@ void GameOverlays::drawScreenInst(const OverlayDef& d, size_t di, const Inst& in
         break;
     }
     case OvShape::Icon: {
-        if (preview || di >= images_.size() || !images_[di].valid()) break;
+        const float size = d.size[0] + (in.popup >= 0 ? d.event.grow * in.age : 0.0f);
+        if (preview) {
+            preview->set("shape", Json::string("icon"));
+            preview->set("image", Json::string(d.image));
+            preview->set("color", Json::number(int64_t(col)));
+            preview->set("size", Json::number(double(size)));
+            break;
+        }
+        if (di >= images_.size() || !images_[di].valid()) break;
         const TextureRef& t = images_[di];
-        const float hs = (d.size[0] + (in.popup >= 0 ? d.event.grow * in.age : 0.0f)) * 0.5f;
+        const float hs = size * 0.5f;
         dl->AddImage(ImTextureRef(ImTextureID(t.tex.id)), ImVec2(x - hs, y - hs), ImVec2(x + hs, y + hs), ImVec2(t.u0, t.v0), ImVec2(t.u1, t.v1), col);
         break;
     }

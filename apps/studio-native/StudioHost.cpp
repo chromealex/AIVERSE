@@ -105,7 +105,7 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
     : platform_(platform), engineRoot_(engineRoot), htmlComposite_(htmlComposite) {
     // The project opens asynchronously after the UI loads (splash and progress).
     session_ = std::make_unique<StudioSession>(engineRoot, std::string());
-    registerStudioOverlayPlan(*session_, [this](const Json& state, bool reveal) {
+    registerStudioOverlayPlan(*session_, encodePng, [this](const Json& state, bool reveal) {
         sendEventPayload("overlay.preview", state);
         if (reveal) sendEventPayload("ui.showPanel", Json::parse(R"({"panel":"overlays"})"));
     });

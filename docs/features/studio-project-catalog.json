@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-native/StudioOverlayImages.h",
     "engine/view/game/PlanarMinimap.h",
     "apps/client/Minimap.cpp",
     "apps/studio-web/src/panels/overlayScreen.ts",
