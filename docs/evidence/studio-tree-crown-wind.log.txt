@@ -1,0 +1,19 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+    Start 585: studio_terrain_geometry
+1/1 Test #585: studio_terrain_geometry ..........   Passed    0.11 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+EDITOR    =   0.11 sec*proc (1 test)
+
+Total Test time (real) =   0.14 sec
+2026-11-26 15:14:56.767 AiverseStudioHTML5[49781:85135542] [studio-web] JS: CROSS main DONE_1
+2026-11-26 15:14:56.767 AiverseStudioHTML5[49781:85135542] [studio-web] JS: CROSS main VERIFIED crown wind visibility, reversed wind, calm and cleared selection
+enabled 1405 added warm pixels
+reversed 1042 added warm pixels
+restored direction 1042 added warm pixels
+east minus west arrow centroid 347.2 pixels
+calm 72 added blue pixels
+deselected 3222 removed blue pixels

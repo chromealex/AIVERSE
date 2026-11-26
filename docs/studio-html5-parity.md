@@ -588,3 +588,5 @@ Transfer TERRA downhill arrows at the selected terrain tile or camera target. Us
 Packaged macOS Studio verified terrain slope arrows on selected imported tile meshes and around the camera target. Radius and spacing are controlled in Scene overlays. Clean Scene captures omit these arrows. [Desktop and geometry checks](evidence/studio-terrain-slope-verified.json).
 
 Transfer the selected TerraWeave tree crown wind marker, including a calm ring, renderer wind direction, terrain-relative placement and the Scene overlay toggle. Verify against the packaged HTML toolbar and Wind state.
+
+Verified selected-tree crown wind in packaged macOS Studio with a reversed heading, disabled wind and cleared selection. [Desktop and geometry evidence](evidence/studio-tree-crown-wind.json).

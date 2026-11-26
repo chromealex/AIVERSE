@@ -1,0 +1,11 @@
+{
+  "sha": "736d8fc6175f8dc2c4b324fac5c6b9f44c829dd8",
+  "argv": [
+    "bash",
+    "-c",
+    "ctest --test-dir /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native --output-on-failure -R \"^studio_terrain_geometry$\" && bash /tmp/scene-treewind-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-tree-crown-wind.log.txt",
+  "sha256": "6473f91c0bb03e69184c841519702cb3d57bb056a5184792b45e2f1b41526796"
+}
