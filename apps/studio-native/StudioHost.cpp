@@ -3895,7 +3895,8 @@ Json StudioHost::viewportInput(const Json& input) {
     // otherwise); toolbar commands work in both.
     const bool toolbarCommand = kind == "focus" || kind == "reset" || kind == "view" || kind == "projection" || kind == "tool" ||
                                 kind == "hover" || kind == "frameAll" || kind == "camera";
-    if ((!htmlComposite_ && !toolbarCommand) || !placement_.visible || !preview_ || !platform_.surfaceDrawable(StudioSurface::Scene))
+    if (!preview_ || (!htmlComposite_ && !toolbarCommand) ||
+        (kind != "tool" && (!placement_.visible || !platform_.surfaceDrawable(StudioSurface::Scene))))
         throw std::runtime_error("Viewport input unavailable");
     auto delta = [&](const char* a, const char* b, double limit, const char* what) {
         const double x = input[a].toDouble(), y = input[b].toDouble();
