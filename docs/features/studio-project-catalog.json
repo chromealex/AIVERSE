@@ -392,6 +392,7 @@
     "docs/evidence/studio-generator-seed-roundtrip.json",
     "docs/evidence/studio-effect-lifetime-color-layout.json",
     "docs/evidence/studio-physis-diagnostic-checks.json",
+    "docs/evidence/studio-physis-demo-layout.json",
     "docs/evidence/studio-physis-demo-panel.json",
     "docs/evidence/studio-effect-particle-axes.json",
     "docs/evidence/studio-effect-spawn-speed-color.json",
