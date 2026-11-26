@@ -1,0 +1,10 @@
+{
+  "sha": "a9351ba1236ef2e65faf05ec1aa1786d88e76446",
+  "argv": [
+    "bash",
+    "../build-audio.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-build-audio-profile.log.txt",
+  "sha256": "d537fd6477cf317e6c41b4ee3a0b208fd9f26726df4f65613fc5c97a9cd1c049"
+}
