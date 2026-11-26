@@ -1,0 +1,10 @@
+{
+  "sha": "08ca61cc0ca89cc1e6d247742723a3dbc441e152",
+  "argv": [
+    "bash",
+    "/tmp/play-status.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-linked-play-status.log.txt",
+  "sha256": "cb1ac2835ab046d70d189c79d8c3e3e777499f9bc8c05bdb70b720a2fe9e5a43"
+}
