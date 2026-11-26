@@ -558,3 +558,5 @@ Route MCP Game screenshots to the active Game drawable and preserve device selec
 Packaged macOS Game capture now uses the Game drawable through linked MCP. With Scene closed, free size returned 1280 × 510 and a device-only request for iPhone SE returned 957 × 538. Idle, hidden and stopped Game captures reported unavailable. [Game screenshot evidence](evidence/studio-game-viewport-screenshot.json).
 
 Restore whole-window MCP capture in HTML Studio, including simultaneous browser controls and native viewports, with Scene closed.
+
+An explicit all or default view_screenshot now captures the main HTML Studio window. Packaged macOS included WKWebView controls and a live Metal Game layer. Switching to Console replaced the game region while retaining the Post FX panel. [Whole-window verification](evidence/studio-full-window-screenshot.json).
