@@ -2095,8 +2095,7 @@ Json StudioHost::sceneViewAgentRequest(const std::string& name,const Json& param
     const auto& ws=session_->workspace();
     if(name=="view_gizmos"){
         const auto document=session_->sceneDocument();
-        if(!placement_.visible || !platform_.surfaceDrawable(StudioSurface::Scene) ||
-           !onScene([&]{return renderedSceneDocument_ && *renderedSceneDocument_==document;}))
+        if(!onScene([&]{return renderedSceneDocument_ && *renderedSceneDocument_==document;}))
             throw std::runtime_error("Show the current map in Scene before changing overlays");
         const auto next=natureLayers_.patched(params,true);
         Json result=Json::object();
