@@ -82,3 +82,10 @@
 .water-shores__segment small { display:block; color:var(--au-text-muted); }
 .water-shores__operations { margin-top:12px; }
 .water-shores__operations > summary { cursor:pointer; padding-block:8px; color:var(--au-text-muted); }
+
+.map-generator { display:grid; gap:12px; }
+.map-generator label:not(.au-checkbox) { display:grid; grid-template-columns:minmax(70px,1fr) minmax(100px,2fr); align-items:center; gap:8px; margin-block:6px; }
+.map-generator .au-row { gap:6px; flex-wrap:wrap; }
+.map-generator .au-row input { flex:1; min-width:48px; }
+.map-generator details { margin:8px 0; }
+.map-generator summary { cursor:pointer; }

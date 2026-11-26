@@ -5,6 +5,7 @@ import type { StudioSnapshot } from '../types';
 import { buildParams, fieldDraft, opLabel, resultLine, schemaFields, stateOps, type ToolField, type ToolOpInfo } from './toolSchema';
 import { TOOL_PANELS, type ToolPanelId } from './toolPanels';
 import JsonTree from './JsonTree';
+import MapGeneratorPanel from './MapGeneratorPanel';
 import WaterShorePanel from './WaterShorePanel';
 import SceneBrushBar, { type BrushKind, type BrushField } from './SceneBrushBar';
 import './ProjectToolPanels.css';
@@ -152,10 +153,11 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
     <div className="tool__scroll">
       {panel==='models'&&<MaterialTechniquePanel key={projectPath} projectPath={projectPath}/>}
       {panel==='models'&&<StrataAnalysisPanel projectPath={projectPath}/>}
+      {panel==='generate' && snapshot?.graphDocument && <MapGeneratorPanel key={snapshot.graphDocument.epoch} scope={snapshot.graphDocument} onChanged={()=>done(true)}/>}
       {panel==='water' && snapshot?.graphDocument && <WaterShorePanel key={snapshot.graphDocument.epoch} scope={snapshot.graphDocument} onChanged={()=>done(true)}/>}
       {BRUSHES[panel] && <SceneBrushBar project={projectPath} tileCatalog={state.tileset_list as Parameters<typeof SceneBrushBar>[0]['tileCatalog']} kinds={BRUSHES[panel]!} fields={(state.field_list as {fields?:BrushField[]} | undefined)?.fields}/>}
-      {panel==='water' ? <details className="water-shores__operations" open={q ? true : undefined}>
-        <summary>Water operations</summary>{operationCards}
+      {(panel==='water'||panel==='generate') ? <details className="water-shores__operations" open={q ? true : undefined}>
+        <summary>{panel==='water'?'Water operations':'Map operations'}</summary>{operationCards}
       </details> : operationCards}
     </div>
     </div>

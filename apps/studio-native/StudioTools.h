@@ -31,7 +31,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
                    "road_toggle", "road_type_set", "road_stop_set", "road_driveway_set"}},
         {"tiles", {"tileset_list", "tile_info", "tiles_init", "tile_paint", "tiles_remove"}},
         {"fog", {"rules_get", "rules_merge", "rules_delete"}},
-        {"generate", {"gen_presets", "map_generate", "map_mirror", "map_resize", "map_validate", "map_ascii"}},
+        {"generate", {"gen_presets", "map_generate", "map_generation_disable", "map_mirror", "map_resize", "map_validate", "map_ascii"}},
         {"postfx", {"postfx_get", "postfx_compositor_set", "postfx_catalog", "postfx_add", "postfx_set", "postfx_enable", "postfx_remove",
                     "postfx_preset", "postfx_estimate", "postfx_lut_neutral"}},
         {"effects", {"fx_list", "fx_templates", "fx_get", "fx_set", "fx_bind", "fx_delete"}},

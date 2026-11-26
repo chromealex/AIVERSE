@@ -1,4 +1,5 @@
 #include "GenOps.h"
+#include <charconv>
 #include <fstream>
 #include <iterator>
 #include "engine/game/gen/MapGen.h"
@@ -13,6 +14,14 @@ GenOptions optionsFrom(const Json& p) {
     GenOptions o;
     o.preset = p.getStr("preset", o.preset);
     o.seed = uint64_t(p.getInt("seed", 1));
+    if(p.has("seedText")){
+        const auto text=p.getStr("seedText");
+        int64_t seed=0;
+        const auto parsed=std::from_chars(text.data(),text.data()+text.size(),seed);
+        if(parsed.ec!=std::errc{} || parsed.ptr!=text.data()+text.size() || seed<0)
+            throw std::runtime_error("Seed must be a whole number between 0 and 9223372036854775807");
+        o.seed=uint64_t(seed);
+    }
     o.players = int(p.getInt("players", 2));
     o.symmetry = p.getStr("symmetry", "auto");
     if (p["params"].isObject()) o.params = p["params"];
@@ -99,6 +108,13 @@ void registerGenOps(Workspace& ws) {
         R"({"properties": {}})",
         [w](const Json&) {
             Json r = Json::object();
+            const auto& start=w->map.data.extra["generate"];
+            if(start.isObject()){
+                Json setting=Json::object();
+                setting.set("preset",str(start.getStr("preset")));
+                setting.set("seed",str(start["seed"].isNumber()?std::to_string(start.getInt("seed")):start.getStr("seed","match")));
+                r.set("matchStart",std::move(setting));
+            }
             r.set("presets", gen::presetList(w->project.rulesJson));
             r.set("params", str("shape, size [w,h], water 0..1, rivers 0..1, lakes, shallows, levels 0..9, plateau, peaks, relief (world units), "
                                 "scale (feature size, cells), octaves, roughness, ridged, warp, thermal, erosion, erosionRate, talus, moisture, "
@@ -110,6 +126,17 @@ void registerGenOps(Workspace& ws) {
             return r;
         });
 
+    add("map_generation_disable","Remove generation at match start from the open map. Keeps its current terrain and entities. Undoable.",
+        R"({"properties":{}})",[w](const Json&){
+            if(w->project.dir.empty())throw std::runtime_error("Open a project first");
+            if(w->map.data.extra.has("generate")){
+                w->map.beginEdit();
+                w->map.data.extra.erase("generate");
+                w->map.touched();
+                w->note({Change::Map,0,0,-1,-1,-1,"Disable match-start generation"});
+            }
+            return Json::object().set("ok",Json::fromBool(true));
+        });
     add("map_generate",
         "Generate the open map with the deterministic map generator (same code as match-time generation): preset (gen_presets), "
         "seed, players (1..8), symmetry (auto | none | point | mirror | mirror-y | mirror4 | rot4 | rotational), params (overrides, "
@@ -119,7 +146,7 @@ void registerGenOps(Workspace& ws) {
         "planet + moon), params.layout 'shared' (all players on one body, polar rotational symmetry) or 'separate' (one identical "
         "planet each), moons get params.moonResources x the resources. mode: 'bake' (default) writes a static map (undoable); 'match' only stores a 'generate' block so every match "
         "generates a new map from the match seed ('seed': 'match'); 'fixed' stores the block with this seed.",
-        R"({"properties": {"preset": {"type": "string"}, "seed": {"type": "integer"}, "players": {"type": "integer"},
+        R"({"properties": {"preset": {"type": "string"}, "seed": {"type": "integer"}, "seedText":{"type":"string","description":"Exact decimal seed; takes precedence over seed."}, "players": {"type": "integer"},
             "symmetry": {"type": "string"}, "params": {"type": "object"}, "mode": {"type": "string", "enum": ["bake", "match", "fixed"]},
             "useTemplate": {"type": "boolean"}, "keepSize": {"type": "boolean"}}, "required": ["preset"]})",
         [w](const Json& p) {
