@@ -466,3 +466,5 @@ Fix Escape during a captured port drag. Verify with trusted browser pointer inpu
 Port state rename and removal to the existing scoped animation document editor. Preserve transition metadata and allow returning to a stateless pose graph. Verify native save, compile and draft undo.
 
 Standalone States inspector: rename and remove verified in the packaged Mac host with nested scope, incoming and self transitions, history, saved data and a return to the default pose graph.
+
+Redesign the States pane around state selection, state-specific transition editing and graph-wide controls. Check narrow and wide panel layouts, including authoring a self transition with one state.

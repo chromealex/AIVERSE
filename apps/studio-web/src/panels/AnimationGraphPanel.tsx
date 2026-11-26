@@ -225,23 +225,46 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route,his
     addRig={()=>void run(async()=>{let i=1;while(nodeIds.has('rig'+i))i++;await edit('add',{kind:'rig',id:'rig'+i});select('rig'+i);})}
     nativeEdit={(action,params)=>void run(()=>edit(action,params))}
     update={(id,units)=>patchNode(id,{units})}/>:<fieldset disabled={busy} className="anim-states">
-    <label>New state<input value={stateName} onChange={e=>setStateName(e.target.value)}/></label>
-    <button disabled={!stateName.trim()||states.some(s=>s.id===stateName.trim())||states.length>=64} onClick={()=>{const id=stateName.trim();change(inScope({...graph,states:[...states,{id,output:graph.output,transitions:[]}]}));setStateId(id);setStateName('');}}>Add state</button>
+    <div className="anim-state-page">
+     <aside className="anim-state-sidebar">
+      <section className="anim-state-card">
+       <header><h3>States</h3><span>{states.length}</span></header>
+       {state&&<label>State<select value={state.id} onChange={e=>setStateId(e.target.value)}>{states.map(s=><option key={s.id}>{s.id}</option>)}</select></label>}
+       <div className="anim-state-row">
+        <label>New state<input value={stateName} onChange={e=>setStateName(e.target.value)}/></label>
+        <button disabled={!stateName.trim()||states.some(s=>s.id===stateName.trim())||states.length>=64} onClick={()=>{const id=stateName.trim();change(inScope({...graph,states:[...states,{id,output:graph.output,transitions:[]}]}));setStateId(id);setStateName('');}}>Add state</button>
+       </div>
+      </section>
+      <section className="anim-state-card">
+       <header><h3>Graph parameters</h3></header>
     <AnimationProperties parameters title="Parameter defaults" fields={(graph.parameters??{}) as Record<string,Value>}
       change={parameters=>change(inScope({...graph,parameters}))}/>
-    <label>Scalar parameter<input value={parameter} placeholder="speed" onChange={e=>setParameter(e.target.value)}/></label>
-    <button disabled={!parameter.trim()||Object.hasOwn(graph.parameters??{},parameter.trim())} onClick={()=>{change(inScope({...graph,parameters:{...graph.parameters,[parameter.trim()]:0}}));setParameter('');}}>Add parameter</button>
-    {state&&<><label>State<select value={state.id} onChange={e=>setStateId(e.target.value)}>{states.map(s=><option key={s.id}>{s.id}</option>)}</select></label>
+       <div className="anim-state-row">
+        <label>Scalar parameter<input value={parameter} placeholder="speed" onChange={e=>setParameter(e.target.value)}/></label>
+        <button disabled={!parameter.trim()||Object.hasOwn(graph.parameters??{},parameter.trim())} onClick={()=>{change(inScope({...graph,parameters:{...graph.parameters,[parameter.trim()]:0}}));setParameter('');}}>Add parameter</button>
+       </div>
+      </section>
+     </aside>
+     {state&&<div className="anim-state-content">
+      <section className="anim-state-card">
+       <header><h3>{state.id}</h3>{(graph.initial??states[0]?.id)===state.id&&<span>Initial state</span>}</header>
+       <div className="anim-state-row">
      <label>State name<input value={renameStateTo} onChange={e=>setRenameStateTo(e.target.value)}/></label>
      <button disabled={!renameStateTo.trim()||states.some(s=>s.id===renameStateTo.trim())} onClick={()=>void run(async()=>{
       const name=renameStateTo.trim();await edit('renameState',{id:state.id,name});setStateId(name);
      })}>Rename state</button>
-     <button onClick={()=>void run(async()=>{await edit('removeState',{id:state.id});setStateId('');})}>Remove state</button>
+       </div><div className="anim-state-row">
      <label>Output pose<select value={state.output} onChange={e=>updateState({...state,output:e.target.value})}>{nodeOptions(graph.nodes)}</select></label>
      <button disabled={(graph.initial??states[0]?.id)===state.id} onClick={()=>change(inScope({...graph,initial:state.id}))}>Set initial state</button>
-     <button disabled={states.length<2||(state.transitions?.length??0)>=64} onClick={()=>updateState({...state,transitions:[...state.transitions??[],{to:states.find(s=>s!==state)!.id,fade:.2,after:0,when:[]}]})}>Add transition</button>
+     <button onClick={()=>void run(async()=>{await edit('removeState',{id:state.id});setStateId('');})}>Remove state</button>
+       </div>
+      </section>
+      <section className="anim-state-card">
+       <header><h3>Transitions</h3>
+     <button disabled={(state.transitions?.length??0)>=64} onClick={()=>updateState({...state,transitions:[...state.transitions??[],{to:states.find(s=>s!==state)?.id??state.id,fade:.2,after:0,when:[]}]})}>Add transition</button>
+       </header>
      {(state.transitions??[]).map((t,i)=>{const patch=(value:Partial<Transition>)=>updateState({...state,transitions:state.transitions!.map((v,j)=>j===i?{...v,...value}:v)});
-      return <div className="anim-transition" key={i}><span>{state.id} →</span><label>Destination<select value={t.to} onChange={e=>patch({to:e.target.value})}>{states.map(s=><option key={s.id}>{s.id}</option>)}</select></label>
+      return <div className="anim-transition" key={i}><label>Destination<select value={t.to} onChange={e=>patch({to:e.target.value})}>{states.map(s=><option key={s.id}>{s.id}</option>)}</select></label>
        {(['after','fade'] as const).map(k=><label key={k}>{k==='after'?'Delay (s)':'Fade (s)'}<input type="number" min="0" step="any" value={t[k]??(k==='fade'?.2:0)} onChange={e=>{if(e.target.validity.valid&&Number.isFinite(e.target.valueAsNumber))patch({[k]:e.target.valueAsNumber});}}/></label>)}
        {(Array.isArray(t.when)?t.when:[]).map((c,index)=>{
         const conditions=Array.isArray(t.when)?t.when:[];
@@ -252,7 +275,10 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route,his
          <button onClick={()=>patch({when:conditions.filter((_,j)=>j!==index)})}>Remove condition</button></div>;
        })}
        <button disabled={!scalars.length||(Array.isArray(t.when)&&t.when.length>=32)} onClick={()=>patch({when:[...Array.isArray(t.when)?t.when:[],{parameter:scalars[0],op:'gt',value:0}]})}>Add condition</button>
-       <button onClick={()=>updateState({...state,transitions:state.transitions!.filter((_,j)=>j!==i)})}>Remove transition</button></div>;})}</>}
+       <button onClick={()=>updateState({...state,transitions:state.transitions!.filter((_,j)=>j!==i)})}>Remove transition</button></div>;})}
+      </section>
+     </div>}
+    </div>
    </fieldset>}
   </>}
  </section>;
