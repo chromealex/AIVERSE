@@ -476,6 +476,16 @@ Json StudioGameSurface::profile(const std::string& action,uint32_t steps) {
 Json StudioGameSurface::entities(int offset,int limit,const std::string& query,const StudioRuntimeInspect::GroupQuery& group) {
     return inspector_.entities(liveSimulation(),std::to_string(runtimeEpoch_),offset,limit,query,group,setupRefs_);
 }
+std::optional<render::float3> StudioGameSurface::selectedEntityPosition() const {
+    auto* sim=liveSimulation();
+    if(!sim)return {};
+    const auto ref=inspector_.selectedRef(sim,std::to_string(runtimeEpoch_));
+    if(ref.empty())return {};
+    const auto* transform=sim->world().tryGetConst<Transform>(editor::worldEntity(std::stoull(ref)));
+    if(!transform)return {};
+    const auto& pos=transform->pos;
+    return render::float3{float(pos.x.toDouble()),float(pos.y.toDouble()),float(pos.z.toDouble())};
+}
 size_t StudioGameSurface::selectEntities(const Json& docs,const Json& refs,const std::string& epoch) {
     auto* sim=liveSimulation();
     auto* mod=sim?dynamic_cast<game::GameCore*>(&sim->module()):nullptr;

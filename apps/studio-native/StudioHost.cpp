@@ -170,6 +170,13 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
                 if(game_ && game_->active() && gameState().getBool("inMatch")){
                     const auto epoch=input.getStr("epoch",std::to_string(game_->runtimeEpoch()));
                     const auto count=game_->selectEntities(docs,input["refs"],epoch);
+                    if(input.getBool("focus") && count && preview_ && !projectLoading_){
+                        const auto position=game_->selectedEntityPosition();
+                        if(position)onScene([&]{
+                            const auto camera=preview_->cameraState();
+                            preview_->tweenCamera(*position,18.f,camera.yaw,camera.pitch);
+                        });
+                    }
                     Json result=Json::object();
                     result.set("selected",Json::number(int64_t(count)));
                     return result;
