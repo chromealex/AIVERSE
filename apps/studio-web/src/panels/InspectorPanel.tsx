@@ -97,7 +97,7 @@ function ComponentCard({ component, entityId, busy, collapsed, onToggle, onChang
         const shown = missing ? { ...property, options: [...(property.options ?? []), { label: String(property.value) + ' (missing)', value: String(property.value) }] } : property;
         return <div key={entityId + component.id + property.key} className={missing ? 'insp-field is-missing' : 'insp-field'}>
           <PropertyField property={shown} disabled={busy || property.editable === false} onChange={value => onChange(property.key, value)}/>
-          {missing && component.id === 'MeshRenderer' && <div className="insp-missing" role="alert">Not in materials.json ·
+          {missing && component.id === 'MeshRenderer' && <div className="insp-missing" role="alert">Material missing from this project ·
             <button type="button" disabled={busy} onClick={() => onCreateMaterial(String(property.value))}>Create “{String(property.value)}”</button>·
             <button type="button" disabled={busy} onClick={() => onChange(property.key, '')}>Use default</button></div>}
         </div>;
