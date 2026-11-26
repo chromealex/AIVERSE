@@ -1,3 +1,4 @@
+import { revealProjectAsset } from '../assetNavigation';
 import { MapRegions } from './MapRegions';
 import { MapInspector } from './MapInspector';
 import { copyText } from '../clipboard';
@@ -211,7 +212,14 @@ export default function InspectorPanel({ inspector: primary, selected, busy, ins
     }
   };
   const createMaterial = (name: string) => {
-    void run(async () => { await invoke('studio.materialCreate', { name, preset: 'matte' }); return invoke('studio.snapshot', {}); });
+    const project = snapshot?.project.path;
+    if (!project) return;
+    void run(async () => {
+      const library = await invoke('studio.materialCreate', { name, preset: 'matte' });
+      const file = library.files?.[name];
+      if (file?.startsWith('content/')) revealProjectAsset(project, file.slice('content/'.length));
+      return invoke('studio.snapshot', {});
+    });
   };
   const [name, setName] = useState(inspector?.name ?? '');
   useEffect(() => setName(inspector?.name ?? ''), [inspector?.id, inspector?.name]);
