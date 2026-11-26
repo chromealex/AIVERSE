@@ -57,6 +57,8 @@ def package_entry(work, rel, repo, branch):
     found, arch = {}, None
     with zipfile.ZipFile(path) as z:
         listed = set(z.namelist())
+        if plat == "macos" and "AIVERSE/bin/AiverseStudioHTML5.app/Contents/MacOS/AiverseStudioHTML5" in listed:
+            names["editor"] = "AiverseStudioHTML5.app"
         for key, exe in names.items():
             inner = package_root + "/bin/" + exe
             if inner in listed or inner + "/" in listed or any(n.startswith(inner + "/") for n in listed):
@@ -142,8 +144,7 @@ def main():
     new = [NAME.match(os.path.basename(z)).group(3) + "/" + os.path.basename(z) for z in a.zips]
     order = new + [o for o in order if o and o not in new and present(o)]
     lines = ["# AIVERSE builds", "",
-             "Ready-to-run editor + tools. Unpack the zip anywhere and start `AIVERSE/bin/aiverse_editor.exe` (Windows), "
-             "`AIVERSE/bin/AiverseEditor.app` (macOS) or `AIVERSE/bin/aiverse_editor` (Linux, when the package has it). "
+             "Ready-to-run editor + tools. Unpack the zip anywhere and launch the editor at the path listed in index.json for your package. "
              "The folder also holds the engine sources at that commit, which aiversebuild and the MCP server "
              "(`AIVERSE/bin/aiversemcp`) use.", "",
              "Programs that download a build read [index.json](index.json): every package with platform, arch, "

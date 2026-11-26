@@ -65,7 +65,18 @@ def main():
     a = ap.parse_args()
     if git("status", "--porcelain", "--untracked-files=no"):
         print("warning: uncommitted changes are not in the source snapshot (git archive HEAD)", file=sys.stderr)
-    if not any(os.path.exists(os.path.join(a.bin, r)) for r in REQUIRED[a.platform]):
+    binaries = list(BINARIES[a.platform])
+    required = REQUIRED[a.platform]
+    studio_bundle = "AiverseStudioHTML5.app"
+    studio_dir = a.bin
+    if a.platform == "macos":
+        for directory in (a.bin, os.path.join(a.bin, "apps", "studio-native")):
+            if os.path.isdir(os.path.join(directory, studio_bundle)):
+                studio_dir = directory
+                binaries[binaries.index("AiverseEditor.app")] = studio_bundle
+                required = []
+                break
+    if required and not any(os.path.exists(os.path.join(a.bin, r)) for r in required):
         sys.exit(f"no {' / '.join(REQUIRED[a.platform])} in {a.bin}")
     ver, commit, date = version()
     name = f"AIVERSE-{ver}-{commit}-{a.platform}.zip"
@@ -89,8 +100,8 @@ def main():
                 elif m.isfile():
                     info.external_attr = (stat.S_IFREG | (m.mode & 0o777)) << 16
                     z.writestr(info, t.extractfile(m).read())
-        for b in BINARIES[a.platform]:
-            p = os.path.join(a.bin, b)
+        for b in binaries:
+            p = os.path.join(studio_dir if b == studio_bundle else a.bin, b)
             if not os.path.exists(p) and b.startswith("aiverse_fps_"):
                 p = os.path.join(a.bin, "engine", "actor", b)
             if os.path.exists(p):

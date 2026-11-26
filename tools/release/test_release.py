@@ -59,6 +59,9 @@ def test_index():
             "linux/AIVERSE-0.2.0-aaaaaaaa-linux.zip": {
                 "AIVERSE/bin/aiversemcp": fake_elf(62), "AIVERSE/bin/aiverse_headless": fake_elf(62)},
         }
+        studio = "macos/AIVERSE-0.3.0-cccccccc-macos.zip"
+        pkgs[studio] = {"AIVERSE/bin/AiverseStudioHTML5.app/Contents/MacOS/AiverseStudioHTML5": b"x",
+                       "AIVERSE/bin/AiverseEditor.app/Contents/MacOS/AiverseEditor": b"x"}
         for rel, files in pkgs.items():
             write_zip(os.path.join(work, rel), files)
         order = list(pkgs)
@@ -68,6 +71,7 @@ def test_index():
         assert idx["schema"] == 1 and idx["repository"] == "owner/repo" and idx["branch"] == "builds", idx
         assert [p["file"] for p in idx["packages"]] == order, "packages keep the newest-first order"
         by = {p["file"]: p for p in idx["packages"]}
+        assert by[studio]["editor"] == "AIVERSE/bin/AiverseStudioHTML5.app"
         w = by[order[0]]
         assert (w["platform"], w["arch"], w["version"], w["commit"]) == ("windows", "x86_64", "0.2.0", "aaaaaaaa"), w
         assert w["rtsmcp"] == "AIVERSE/bin/aiversemcp.exe" and w["editor"] == "AIVERSE/bin/aiverse_editor.exe", w
