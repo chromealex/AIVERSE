@@ -82,7 +82,7 @@ struct StudioNaturePreview {
             if (forestEnabled && !forestFramed) {
                 // Start above the canopy, within the near forest preview's culling range.
                 distance=std::max(distance,48.f);
-                pitch=std::max(pitch,.75f);
+                pitch=std::max(pitch,1.25f);
                 forestFramed=true;
             }
         }
