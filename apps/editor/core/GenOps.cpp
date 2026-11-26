@@ -70,12 +70,11 @@ Json generateIntoMap(Workspace& ws, const GenOptions& o) {
     Json visual = ws.project.manifest["terrain"];
     if (!gen::generateMap(req, ws.project.rules, ws.project.rulesJson, in, &err, &visual)) throw std::runtime_error(err);
     const Json summary = in["generated"];
-    ws.map.beginEdit();
+    MapDoc generated;
     std::string lerr;
-    const std::string path = ws.map.path;
-    if (!ws.map.loadJson(in, &lerr)) throw std::runtime_error("generated map does not load: " + lerr);
-    ws.map.path = path;
-    ws.map.touched();
+    if (!generated.loadJson(in, &lerr)) throw std::runtime_error("generated map does not load: " + lerr);
+    ws.map.beginEdit();
+    ws.map.data = std::move(generated.data);
     ws.note({Change::Map, 0, 0, ws.map.data.w - 1, ws.map.data.h - 1, -1, "Карта сгенерирована: " + o.preset});
     return summary;
 }
