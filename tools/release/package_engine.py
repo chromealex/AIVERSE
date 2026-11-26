@@ -76,6 +76,30 @@ def main():
                 binaries[binaries.index("AiverseEditor.app")] = studio_bundle
                 required = []
                 break
+    studio_files = {studio_bundle: studio_dir}
+    if a.platform == "windows":
+        nested = os.path.join(a.bin, "apps", "studio-native")
+        candidates = [a.bin, os.path.join(nested, "Release"), nested]
+        if os.path.basename(a.bin).lower() in ("release", "debug", "relwithdebinfo", "minsizerel"):
+            candidates.append(os.path.join(os.path.dirname(a.bin), "apps", "studio-native", os.path.basename(a.bin)))
+        for directory in candidates:
+            if not os.path.isfile(os.path.join(directory, "AiverseStudio.exe")):
+                continue
+            for path in ("WebView2Loader.dll", "studio-web/index.html", "aiversemcp.exe",
+                         "engine/fonts/ui.ttf", "engine/fonts/LICENSE-ui.txt", "engine/fx/physis/flame_16x4.png",
+                         "engine/fx/physis/smoke_8x8.png", "engine/fx/physis/LICENSE-fx.txt"):
+                if not os.path.isfile(os.path.join(directory, path)):
+                    sys.exit(f"incomplete Windows Studio build: missing {os.path.join(directory, path)}")
+            binaries.remove("aiverse_editor.exe")
+            resources = ["AiverseStudio.exe", "WebView2Loader.dll", "studio-web", "engine/fonts", "engine/fx/physis"]
+            binaries.extend(resources)
+            studio_files.update(dict.fromkeys(resources + ["aiversemcp.exe"], directory))
+            if directory == os.path.join(nested, "Release"):
+                for binary in binaries:
+                    if binary not in studio_files and os.path.isfile(os.path.join(a.bin, "Release", binary)):
+                        studio_files[binary] = os.path.join(a.bin, "Release")
+            required = []
+            break
     if required and not any(os.path.exists(os.path.join(a.bin, r)) for r in required):
         sys.exit(f"no {' / '.join(REQUIRED[a.platform])} in {a.bin}")
     ver, commit, date = version()
@@ -101,7 +125,7 @@ def main():
                     info.external_attr = (stat.S_IFREG | (m.mode & 0o777)) << 16
                     z.writestr(info, t.extractfile(m).read())
         for b in binaries:
-            p = os.path.join(studio_dir if b == studio_bundle else a.bin, b)
+            p = os.path.join(studio_files.get(b, a.bin), b)
             if not os.path.exists(p) and b.startswith("aiverse_fps_"):
                 p = os.path.join(a.bin, "engine", "actor", b)
             if os.path.exists(p):

@@ -59,6 +59,8 @@ def package_entry(work, rel, repo, branch):
         listed = set(z.namelist())
         if plat == "macos" and "AIVERSE/bin/AiverseStudioHTML5.app/Contents/MacOS/AiverseStudioHTML5" in listed:
             names["editor"] = "AiverseStudioHTML5.app"
+        if plat == "windows" and "AIVERSE/bin/AiverseStudio.exe" in listed:
+            names["editor"] = "AiverseStudio.exe"
         for key, exe in names.items():
             inner = package_root + "/bin/" + exe
             if inner in listed or inner + "/" in listed or any(n.startswith(inner + "/") for n in listed):

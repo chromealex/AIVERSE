@@ -140,3 +140,6 @@ jobs:
             build/studio-windows-ci/apps/studio-native/Release/AiverseStudio.exe
             build/studio-windows-ci/apps/studio-native/Release/WebView2Loader.dll
             build/studio-windows-ci/apps/studio-native/Release/studio-web/
+            build/studio-windows-ci/apps/studio-native/Release/aiversemcp.exe
+            build/studio-windows-ci/apps/studio-native/Release/engine/fonts/
+            build/studio-windows-ci/apps/studio-native/Release/engine/fx/physis/
