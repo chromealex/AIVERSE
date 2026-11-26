@@ -1,0 +1,6 @@
+2026-11-26 05:10:53.252 AiverseStudioHTML5[79142:82853704] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/fx-play-ui-5VWZB9/Catalog.app/Contents/Resources/studio-web
+2026-11-26 05:10:53.379 AiverseStudioHTML5[79142:82853704] [studio-web] served index.html (6769 bytes)
+2026-11-26 05:10:53.384 AiverseStudioHTML5[79142:82853704] [studio-web] served assets/index-D1cwSbcr.js (1568067 bytes)
+2026-11-26 05:10:53.413 AiverseStudioHTML5[79142:82853704] [studio-web] JS: CROSS main boot
+2026-11-26 05:10:53.420 AiverseStudioHTML5[79142:82853704] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 05:11:04.697 AiverseStudioHTML5[79142:82853704] [studio-web] JS: CROSS main FAIL @aiverse-studio://shell/index.html:95:50 Error: no rendered particles {"particles":0,"drawCalls":0,"time":0}

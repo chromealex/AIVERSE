@@ -667,3 +667,5 @@ Effects file authoring verified at e4bdee2f5. TypeScript, Vite, 299 web tests an
 Effects playback stage: drive the engine ParticleSystem from the current effect source in a dedicated Effects surface, with replay, motion, looping, quality and playback speed.
 
 Playback stage at 62a584d74: TypeScript/Vite and 299 web tests passed. Native build failed in StudioEffectPlayback.h clamping the 64-bit quality index with int bounds. Next: rebuild with matching integer types and verify GPU playback on desktop.
+
+57aba77e0 built on macOS. Native receipt docs/evidence/studio-particle-effect-playback.json recorded zero ticks with automatic placement. Follow-up WKWebView probe measured 877×180 CSS pixels, no overlay, document hidden and CGSSessionScreenIsLocked=Yes. Next: independently measure actual native Metal frames using the visible viewport RPC in the test window, then repeat automatic placement on an unlocked desktop.
