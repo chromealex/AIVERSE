@@ -9,6 +9,7 @@
 #include "apps/editor/core/LegacyCameraBookmarks.h"
 #include "StudioNetworkPlay.h"
 #include "StudioGameWizard.h"
+#include "apps/editor/core/PortOps.h"
 #include "apps/editor/core/WizardOps.h"
 #include "engine/game/Script.h"
 #include "apps/editor/core/StudioPlayTools.h"
@@ -3949,6 +3950,58 @@ bool StudioHost::handleHostMethod(const Json& req) {
         }
         return gameState(method == "studio.gameState" && params.getBool("scriptErrors"));
     });
+    if(method=="studio.portFolder"){
+        const auto id=req["id"];
+        auto alive=alive_;
+        platform_.chooseFolder("Choose project folder","",[this,alive,id](std::string folder){
+            if(!*alive)return;
+            Json reply=Json::object();reply.set("id",id);reply.set("result",Json::string(folder));sendReply(reply);
+        });
+        return true;
+    }
+    if(method=="studio.projectPort"){
+        const auto id=req["id"];
+        const auto operation=params.getStr("action");
+        if(projectLoading_ || portJobActive_ || (operation!="scan" && operation!="import")){
+            sendError(id,"Project import unavailable or already running");return true;
+        }
+        portJobActive_=true;
+        auto result=std::make_shared<Json>();
+        auto error=std::make_shared<std::string>();
+        auto alive=alive_;
+        platform_.runInBackground([operation,params,engine=session_->workspace().engineDir,result,error]{
+            try{
+                Json input=Json::object();
+                input.set("path",params["path"]);
+                if(operation=="import")for(const char* key:{"out","mode","scale"})input.set(key,params[key]);
+                const Json report=editor::runProjectPort(engine,operation,input);
+                *result=Json::object();
+                for(const char* key:{"ok","engine","version","summary","counts","error","errors","destination"})
+                    if(report.has(key))result->set(key,report[key]);
+                if(operation=="scan"){
+                    Json counts=report["counts"].isObject()?report["counts"]:Json::object();
+                    for(const char* key:{"assets","scenes","scripts"})if(report[key].isArray())counts.set(key,Json::number(int64_t(report[key].size())));
+                    result->set("counts",counts);
+                }
+            }catch(const std::exception& e){*error=e.what();}
+        },[this,alive,id,result,error,operation]{
+            if(!*alive)return;
+            portJobActive_=false;
+            if(!error->empty()){sendError(id,*error);return;}
+            if(operation=="import" && result->getBool("ok",true) && !result->has("error"))
+                importedProject_=result->getStr("destination");
+            Json reply=Json::object();reply.set("id",id);reply.set("result",std::move(*result));sendReply(reply);
+        });
+        return true;
+    }
+    if(method=="studio.openImported"){
+        if(projectLoading_ || importedProject_.empty() || params.getStr("dir")!=importedProject_){
+            sendError(req["id"],"Import the destination before opening it");return true;
+        }
+        const auto id=req["id"].integer();
+        if(!confirmClose())sendProjectCancelled(id);else openProject(importedProject_,id);
+        return true;
+    }
     if (method == "studio.hubTemplates" || method == "studio.wizardPlan") {
         // Catalog requests and scanning the chosen artwork folder can both take time.
         const int64_t requestId = req["id"].integer();

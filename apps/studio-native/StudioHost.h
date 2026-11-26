@@ -324,6 +324,8 @@ private:
     uint64_t wizardArtRequest_ = 0;
     StudioWizardDictation wizardDictation_;
     bool wizardCreating_ = false;
+    bool portJobActive_=false;
+    std::string importedProject_;
     bool readyEmitted_ = false, projectLoading_ = false, loadingShown_ = false, surfaceSnap_ = false;
     bool showSceneBake_=true;
     bool atlasPreviewBusy_=false;

@@ -3,6 +3,8 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "tools/importers/port/aiverse_port.py",
+    "apps/studio-web/src/panels/ProjectImportPanel.tsx",
     "engine/game/gen/GenSeed.h",
     "engine/game/gen/MapGen.cpp",
     "apps/studio-web/src/panels/MapGeneratorPanel.tsx",

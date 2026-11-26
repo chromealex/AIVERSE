@@ -40,6 +40,7 @@ import ToolPanel from './ToolPanel';
 import OverlayPlacement from './OverlayPlacement';
 import SpectraDataInterfacesPanel from './SpectraDataInterfacesPanel';
 import SpectraLibraryPanel from './SpectraLibraryPanel';
+import ProjectImportPanel from './ProjectImportPanel';
 import AgentPanel from './AgentPanel';
 import AnimationTimeline from './AnimationTimeline';
 import PostFxPanel from './PostFxPanel';
@@ -128,8 +129,10 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'terrain': case 'water': case 'tiles': case 'generate':
       case 'effects': case 'models':
       case 'fields': case 'physis': case 'raid': case 'balance': case 'fx_functions': case 'modeling':
-      case 'model_anim': case 'project_import':
+      case 'model_anim':
         return <ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
+      case 'project_import': return <ProjectImportPanel commitSnapshot={ctx.commitSnapshot} showAgent={()=>ctx.showPanel('agent')}
+        tools={snapshot?.project.path && <ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
       case 'branding': return <BrandingPanel key={snapshot?.project.path} project={snapshot?.project.path ?? ''} advanced={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
       case 'anim_assets': return <AnimationAssetsPanel key={snapshot?.project.path} project={snapshot?.project.path??''} tools={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
       case 'actor': return <LensCameraPanel actorSession={!!snapshot?.project.actorSession} openScene={()=>ctx.showPanel('scene')} key={snapshot?.project.path} project={snapshot?.project.path??''} operations={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;

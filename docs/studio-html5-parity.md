@@ -318,3 +318,5 @@ Tiles transfer: browse the authored atlas, paint a fixed tile, and return to aut
 Water transfer: list the selected body’s shore segments by bank and edit their types from the project catalog. Verify rebake, reset, Undo and saved-map reopen.
 
 Generate transfer: bake a map, increment its seed, and enable or remove match-start generation without replacing the baked terrain. Verify Undo, persistence and native seed precision.
+
+Project Import transfer: scan an external project, carry its source into a background import, open the emitted destination and prepare an editable Agent brief. Verify a real conversion and existing drafts.

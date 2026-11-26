@@ -89,3 +89,13 @@
 .map-generator .au-row input { flex:1; min-width:48px; }
 .map-generator details { margin:8px 0; }
 .map-generator summary { cursor:pointer; }
+
+.project-port { height:100%; overflow:auto; padding:12px; display:flex; flex-direction:column; gap:12px; box-sizing:border-box; }
+.project-port label { display:grid; gap:4px; margin-bottom:6px; }
+.project-port p { overflow-wrap:anywhere; }
+.project-port .au-row { gap:6px; flex-wrap:wrap; }
+.port-options { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:8px; margin-top:8px; }
+.port-counts { display:flex; gap:6px 16px; flex-wrap:wrap; }
+.port-counts dt { color:var(--au-text-muted); font-size:.9em; }
+.port-counts dd { margin:0; font-variant-numeric:tabular-nums; }
+.project-port summary { cursor:pointer; }
