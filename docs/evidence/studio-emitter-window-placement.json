@@ -1,0 +1,10 @@
+{
+  "sha": "b1ce6111afb97d5e5ca5383cf8378a2b72c70675",
+  "argv": [
+    "bash",
+    "/tmp/studio-emitter-auto-acceptance.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-emitter-window-placement.log.txt",
+  "sha256": "bc2e7a6bd275ea4c0376d97188b09d789fe0892a5d2d4adf5a28ebbba1d3d10a"
+}
