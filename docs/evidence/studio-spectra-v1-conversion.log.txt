@@ -1,0 +1,11 @@
+2026-11-26 08:59:00.912 AiverseStudioHTML5[24436:83570374] [studio-web] JS: CROSS main DONE_1
+2026-11-26 08:59:00.912 AiverseStudioHTML5[24436:83570374] [studio-web] JS: CROSS main VERIFIED unsaved Metal GPU emitter, frozen time, exact single step, paused restart, resume, orbit/zoom/reset, CPU fallback selection, invalid draft and recovery, closed Scene, no disk write
+2026-11-26 08:59:05.382 AiverseStudioHTML5[24830:83572067] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-graph-migrate-WdxPJm/Catalog.app/Contents/Resources/studio-web
+2026-11-26 08:59:05.509 AiverseStudioHTML5[24830:83572067] [studio-web] served index.html (7136 bytes)
+2026-11-26 08:59:05.514 AiverseStudioHTML5[24830:83572067] [studio-web] served assets/index-D3mw5dgq.js (1665900 bytes)
+2026-11-26 08:59:05.546 AiverseStudioHTML5[24830:83572067] [studio-web] JS: CROSS main boot
+2026-11-26 08:59:05.554 AiverseStudioHTML5[24830:83572067] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 08:59:05.914 AiverseStudioHTML5[24830:83572067] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 08:59:06.281 AiverseStudioHTML5[24830:83572067] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 08:59:06.470 AiverseStudioHTML5[24830:83572067] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 08:59:06.643 AiverseStudioHTML5[24830:83572067] [studio-web] JS: CROSS main FAIL @aiverse-studio://shell/index.html:93:78 Error: graph payload changed
