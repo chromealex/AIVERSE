@@ -155,11 +155,39 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
             stopGame();
             return Json::parse(R"({"ok":true,"summary":"Тест остановлен"})");
         },true});
-    session_->workspace().registerOp({"editor_select","Inspect a project rule by key, the map, a named area, a region letter, a zero-based entity or a one-based player, or clear selection.",
-        Json::parse(R"({"properties":{"kind":{"type":"string","enum":["entity","player","area","region","type","resource","tech","faction","map","none"]},"key":{"type":"string"},"index":{"type":"integer","minimum":0}},"required":["kind"]})"),[this](const Json& input){
+    session_->workspace().registerOp({"editor_select","Select map entities by docs with optional focus, inspect a project rule by key, the map, a named area, a region letter, a zero-based entity or a one-based player, or clear selection.",
+        Json::parse(R"({"properties":{"docs":{"type":"array","items":{"type":"integer","minimum":0}},"focus":{"type":"boolean"},"kind":{"type":"string","enum":["entity","player","area","region","type","resource","tech","faction","map","none"]},"key":{"type":"string"},"index":{"type":"integer","minimum":0}}})"),[this](const Json& input){
             const auto kind=input.getStr("kind");
             const auto& map=session_->workspace().map;
             Json selection=Json::object();
+            if (!input.has("kind") || input.has("docs") || input.has("refs")) {
+                if (input.has("kind")) throw std::runtime_error("Choose either kind or a selection list");
+                if (input.has("refs") && (!input["refs"].isArray() || input["refs"].size()))
+                    throw std::runtime_error("Live world reference selection is unavailable");
+                const auto& docs=input["docs"];
+                if (input.has("docs") && (!docs.isArray() || docs.size()>100000))
+                    throw std::runtime_error("Expected an array of map entity indices");
+                Json ids=Json::array();
+                std::string first;
+                for (const auto& value:docs.items()) {
+                    const double index=value.toDouble(-1);
+                    if (!value.isNumber() || !(index>=0 && index<map.data.entities.size() && std::floor(index)==index))
+                        throw std::runtime_error("Unknown map entity index");
+                    auto id=studioDocumentId(map,editor::DocumentEntityRef::mapEntity(size_t(index)));
+                    if (first.empty()) first=id;
+                    ids.push(Json::string(id));
+                }
+                selection.set("ids",std::move(ids));
+                const auto reply=request("studio.select",selection);
+                if (reply.has("error")) throw std::runtime_error(reply.getStr("error","Selection failed"));
+                if (input.getBool("focus") && !first.empty() && preview_ && !projectLoading_)
+                    onScene([&]{preview_->focusSelected(map,map.data.worldSpace,first);});
+                sendEventPayload("inspector.selection",Json::object());
+                sendEvent("selection.changed","");
+                Json result=Json::object();
+                result.set("selected",Json::number(int64_t(session_->selectedObjectIds().size())));
+                return result;
+            }
             if (kind=="type" || kind=="resource" || kind=="tech" || kind=="faction") {
                 const auto group=kind+"s", key=input.getStr("key");
                 const auto& project=session_->workspace().project;
