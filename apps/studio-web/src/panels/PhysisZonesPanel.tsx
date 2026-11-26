@@ -1,4 +1,5 @@
 import {useEffect,useState} from 'react';
+import PhysisZonePlan from './PhysisZonePlan';
 import {invoke} from '../bridge';
 import type {StudioGraphDocumentScope} from '../types';
 import {StudioAlert,StudioButton,StudioInput,StudioSelect} from '../ui';
@@ -84,13 +85,20 @@ export default function PhysisZonesPanel({scope,onChanged}:{scope:StudioGraphDoc
     {error&&<StudioAlert tone="danger">{error}</StudioAlert>}
     <fieldset className="physis-zone-editor" disabled={busy||data?.key!==key}>
       {!snapshot?.config?<StudioButton onClick={()=>void apply('initialize')}>Create PHYSIS settings</StudioButton>:<>
-        <div className="physis-zone-actions"><label>Zone type<StudioSelect value={kind} onChange={e=>setKind(e.target.value as Kind)}>
+        <div className="physis-zone-sidebar"><div className="physis-zone-actions"><label>Zone type<StudioSelect value={kind} onChange={e=>setKind(e.target.value as Kind)}>
           {(Object.keys(kinds) as Kind[]).map(k=><option key={k} value={k}>{kinds[k]}</option>)}</StudioSelect></label>
           <StudioButton onClick={()=>void apply('add')}>Add zone</StudioButton></div>
         {active&&<><div className="physis-zone-actions"><label>Selected zone<StudioSelect value={active.zone.id} onChange={e=>select(e.target.value)}>
           {zones.map(({type,zone})=><option key={zone.id} value={zone.id}>{zone.id} · {kinds[type]}</option>)}</StudioSelect></label>
           <StudioButton onClick={()=>void apply('duplicate')}>Duplicate</StudioButton><StudioButton onClick={()=>void apply('remove')}>Remove</StudioButton></div>
-          <ZoneForm key={active.zone.id+':'+snapshot.revision} zone={active.zone} kind={active.type} save={p=>void apply('edit',p)}/></>}
+          <PhysisZonePlan key={active.zone.id} selected={active.zone.id} select={select}
+            zones={zones.map(({type,zone})=>{
+              const [x,,z]=Array.isArray(zone.center)?zone.center:[0,0,0];
+              const defaultRadius=type==='wind'?100:type==='storm'?2000:0;
+              return {id:zone.id,type,x,z,radius:Number(zone[type==='storm'?'outerRadiusMeters':'radiusMeters']??defaultRadius)};
+            })} move={(x,z)=>void apply('edit',{center:[x,(active.zone.center as number[]|undefined)?.[1]??0,z]})}/>
+        </>}</div>
+        {active&&<ZoneForm key={active.zone.id+':'+snapshot.revision} zone={active.zone} kind={active.type} save={p=>void apply('edit',p)}/>}
       </>}
     </fieldset></section>;
 }

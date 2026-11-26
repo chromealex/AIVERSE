@@ -745,3 +745,5 @@ Local play-test source d5384d17a, verified with corrected fixture on 4-step nati
 PHYSIS authored zones: move native create, duplicate, edit and remove operations into a dedicated HTML form. Verify revision guards, Undo and saved map reopen.
 
 PHYSIS map zones ac479c45c. apps/editor/core/PhysisOps.cpp exposes revision-checked physis_zone, rendered in apps/studio-web/src/panels/PhysisZonesPanel.tsx. Mac packaged Studio verified config creation, wind, gravity and storm editing, copy/delete, Undo/Redo, invalid storm rejection and saved map reopen. 40/40 native PHYSIS tests including real MCP, TypeScript/Vite and 299 web tests. Evidence docs/evidence/studio-physis-zone-authoring.json, studio-physis-zone-suite.log.txt and studio-project-catalog/physis-map-zones.png. Improve the wide layout after screenshot inspection, then address remaining interactions.
+
+PHYSIS map zone plan: show native authored footprints and select or position a zone in X/Z, preserving Y. Verify map hit testing and one Undo.

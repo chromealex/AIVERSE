@@ -350,3 +350,5 @@ PHYSIS cell details: sample wind velocity and gravity acceleration at the select
 PHYSIS live transfer: select the local play-test, capture a committed native field raster with optional cell vectors in the same read, and verify isolation from demo stepping and the authored map.
 
 PHYSIS authored zones: move native create, duplicate, edit and remove operations into a dedicated HTML form. Verify revision guards, Undo and saved map reopen.
+
+PHYSIS map zone plan: show native authored footprints and select or position a zone in X/Z, preserving Y. Verify map hit testing and one Undo.
