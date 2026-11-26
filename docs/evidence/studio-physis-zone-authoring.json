@@ -1,0 +1,10 @@
+{
+  "sha": "ac479c45ce33f974e69fc75f0df54ddae2b2b42d",
+  "argv": [
+    "bash",
+    "/tmp/physis-zones-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-physis-zone-authoring.log.txt",
+  "sha256": "1e6c2b09013fc486af261b758fdf6262f16b93137bc257206a7a09c52de038d5"
+}
