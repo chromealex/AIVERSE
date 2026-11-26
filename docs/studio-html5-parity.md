@@ -570,3 +570,5 @@ Packaged macOS HTML Studio exported planar and planetary Scene PNGs at 511 × 51
 Scope Scene capture to the map accepted by the agent link and its matching render snapshot. Transfer linked view_focus for world coordinates and current planetary face cells.
 
 Packaged macOS confirmed linked view_focus on the flat map and the planetary face under the viewport center. A same-poll reopen or alternate-map switch canceled the preceding screenshot. A fresh request then exported at 513 × 389. [Scoped capture and camera verification](evidence/studio-scene-scoped-focus-verified.json).
+
+Transfer normalized read-only view_pick to the HTML Scene mouse-picking path. Verify both map topologies, entity identity, misses, hidden Scene, stale frames and unchanged selection.

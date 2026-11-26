@@ -1943,16 +1943,24 @@ Json StudioHost::planetForestLiveRequest(){
 Json StudioHost::sceneViewAgentRequest(const std::string& name,const Json& params){
     if(projectLoading_||!session_||!preview_)throw std::runtime_error("Native Scene unavailable");
     const auto& ws=session_->workspace();
-    if(name=="view_focus"){
-        if(!placement_.visible || !platform_.surfaceDrawable(StudioSurface::Scene))
-            throw std::runtime_error("Show the Scene panel to focus its camera");
-        if(!params.has("x") || !params.has("z"))throw std::runtime_error("Camera target requires x and z");
-        const float x=editor::cameraNumber(params,"x",0),y=editor::cameraNumber(params,"y",0);
-        const float z=editor::cameraNumber(params,"z",0),distance=editor::cameraNumber(params,"distance",-1);
+    if(name=="view_pick" || name=="view_focus"){
+        const auto width=placement_.pixelsW,height=placement_.pixelsH;
+        if(!placement_.visible || !platform_.surfaceDrawable(StudioSurface::Scene) || width<2 || height<2)
+            throw std::runtime_error("Show the Scene panel to inspect its viewport");
         const auto document=session_->sceneDocument();
         return onScene([&]{
             if(!renderedSceneDocument_ || *renderedSceneDocument_!=document || !preview_->hasSceneCamera())
                 throw std::runtime_error("Wait for the current map to render in Scene");
+            if(name=="view_pick"){
+                const double u=params["u"].toDouble(),v=params["v"].toDouble();
+                if(!params["u"].isNumber() || !params["v"].isNumber() || !finite({u,v}) ||
+                   u<0 || u>1 || v<0 || v>1)throw std::runtime_error("u and v must be numbers from 0 to 1");
+                const auto objectId=preview_->pick(float(u*width),float(v*height),float(width),float(height),ws.map,ws.map.data.worldSpace);
+                return studioMapPickResult(objectId,ws.map);
+            }
+            if(!params.has("x") || !params.has("z"))throw std::runtime_error("Camera target requires x and z");
+            const float x=editor::cameraNumber(params,"x",0),y=editor::cameraNumber(params,"y",0);
+            const float z=editor::cameraNumber(params,"z",0),distance=editor::cameraNumber(params,"distance",-1);
             return preview_->focusCoordinates(x,y,z,distance,ws.map);
         });
     }

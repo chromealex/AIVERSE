@@ -2092,6 +2092,8 @@ void Workspace::registerCoreOps() {
     };
     gui("view_screenshot", "HTML Studio captures its full main window by default (window: all). Game and PHYSIS capture their own visible native viewports. Scene screenshot defaults to clean render-texture capture; clean:false keeps viewport UI. Optional width/height render256..4096 up to8MP, pitch -89..89; camera inspection never changes the map.",
         R"({"properties": {"window": {"type": "string", "enum": ["all", "scene", "game", "physis"]}, "device": {"type": "string", "description": "device preset id (see device_list) or 'none'"}, "clean":{"type":"boolean"}, "width":{"type":"integer"}, "height":{"type":"integer"}, "x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"}, "distance": {"type": "number"}, "pitch": {"type": "number"}, "yaw": {"type": "number"}}})");
+    gui("view_pick","Inspect a point in the visible Scene using normalized u,v coordinates from the top left. Returns hit, map entity index and entityId. HTML Studio also reports the picked document objectId. The current selection is preserved.",
+        R"({"properties":{"u":{"type":"number","minimum":0,"maximum":1},"v":{"type":"number","minimum":0,"maximum":1}},"required":["u","v"]})");
     gui("view_focus", "Focus the visible Scene camera on x,y,z. On a planet, x,z are cells on the face under the center of the viewport. Height defaults to zero on planar maps. Distance is optional.",
         R"({"properties": {"x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"}, "distance": {"type": "number"}}, "required": ["x", "z"]})");
     gui("play_start", "Play-test the open map inside the editor window (bots on all sides unless 'human' is set). The user watches live.",

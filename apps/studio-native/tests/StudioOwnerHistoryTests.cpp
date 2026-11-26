@@ -41,7 +41,7 @@ int main(){
     AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("planet_forest_get"))=="read");
     for(const auto* op:{"planet_forest_set","planet_forest_plant","planet_forest_move","planet_forest_remove"})
         AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy(op))=="map");
-    for(const auto* op:{"studio_planet_forest_live","studio_planet_scene_get"})
+    for(const auto* op:{"view_pick","studio_planet_forest_live","studio_planet_scene_get"})
         AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy(op))=="read"&&aiverse::studio::studioSceneViewAgentOperation(op));
     for(const auto* op:{"view_focus","studio_planet_scene_body_set","studio_planet_scene_camera_set"})
         AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy(op))=="view"&&aiverse::studio::studioSceneViewAgentOperation(op));
