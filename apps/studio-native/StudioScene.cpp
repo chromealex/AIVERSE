@@ -407,6 +407,7 @@ bool axisParameter(float3 pivot,float3 a,float3 o,float3 d,float& t){
 }
 }
 struct StudioScene::NatureView : StudioPreviewParticles {
+    render::Camera renderedCamera;
     editor::PhysisNaturePreview display;
     std::chrono::steady_clock::time_point last{};
     std::uint64_t ignition=0;
@@ -3252,10 +3253,22 @@ Json StudioScene::effectFileCommand(const std::string& project,const Json& param
     if(!effectFile_)effectFile_=std::make_unique<StudioEffectPlayback>(*device_,deviceLifetime_->lease(),project);
     return effectFile_->command(params);
 }
+std::optional<float3> StudioScene::natureGroundPoint(float x,float y,float width,float height) const {
+    float3 origin,direction;
+    if(!natureView_ || x<0 || y<0 || x>=width || y>=height ||
+       !natureView_->renderedCamera.screenRay(x,y,width,height,origin,direction))return {};
+    const float t=studioRayMesh(origin,direction,terrainCpu_);
+    if(!std::isfinite(t))return {};
+    return origin+direction*t;
+}
 Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,const editor::MapDoc& map,
                              const std::string& project,float levelHeight) {
     if(width<2 || height<2)return Json::object();
-    if(!natureView_)natureView_=std::make_unique<NatureView>(*device_,deviceLifetime_->lease(),project,map);
+    if(!natureView_){
+        natureView_=std::make_unique<NatureView>(*device_,deviceLifetime_->lease(),project,map);
+        buildTerrainPreview(map.data,terrainCpu_,levelHeight);
+        if(!terrainCpu_.empty())terrain_=terrainCpu_.upload(*device_);
+    }
     auto& view=*natureView_;
     const auto now=std::chrono::steady_clock::now();
     const float dt=view.last.time_since_epoch().count()?std::clamp(std::chrono::duration<float>(now-view.last).count(),0.f,.12f):0.f;
@@ -3263,8 +3276,8 @@ Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,con
     const auto heightAt=[&](float x,float z){return terrainPreviewHeight(map.data,x,z,levelHeight);};
     render::Camera camera;
     camera.target={map.data.w*.5f,heightAt(map.data.w*.5f,map.data.h*.5f),map.data.h*.5f};
-    camera.distance=std::clamp(float(std::max(map.data.w,map.data.h))*.9f,8.f,50.f);
-    camera.pitch=.55f;camera.yaw=.6f;
+    camera.distance=state.distance;camera.pitch=state.pitch;camera.yaw=state.yaw;
+    view.renderedCamera=camera;
     if(view.ignition!=state.ignitionRevision || view.display.settings.grass!=state.preview.settings.grass)
         view.display.invalidateFrame();
     view.ignition=state.ignitionRevision;
@@ -3273,6 +3286,7 @@ Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,con
     device_->beginFrame(width,height);StudioFrameScope frame{*device_};
     renderer_.beginScene(camera,width,height);
     renderer_.lighting.skyColor={.7f,.8f,.95f};renderer_.lighting.fogDensity=0;
+    if(terrain_.vb.valid() && terrain_.ib.valid())renderer_.drawMesh(terrain_,mat4{},{1,1,1,1},kDrawNoCastShadow);
     particles.setView(camera,renderer_.viewProj(),width,height);
     auto retire=[&](auto& model){if(model)renderer_.invalidateModelCachesFor(model.get());sparseTerrainRetirement_.retireModel(*device_,model);};
     (void)sparseTerrainRetirement_.collectWithoutIdle(*device_);
@@ -3286,6 +3300,9 @@ Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,con
     renderer_.render(pass);particles.render({renderer_.lighting.fogColor,0});
     Json stats=Json::object();
     stats.set("tick",Json::number(int64_t(view.display.tick())));
+    stats.set("yaw",Json::number(double(camera.yaw)));
+    stats.set("pitch",Json::number(double(camera.pitch)));
+    stats.set("distance",Json::number(double(camera.distance)));
     stats.set("patches",Json::number(int64_t(view.display.grassPatches())));
     stats.set("particles",Json::number(int64_t(particles.stats().particles)));
     stats.set("voices",Json::number(int64_t(view.display.voices())));

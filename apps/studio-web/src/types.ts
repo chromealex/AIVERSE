@@ -1,6 +1,6 @@
 type Ring={kind:string;x:number;z:number;radius:number};
 export type StudioPhysisGrid={requestedMeters:number;humidity:number;mapAvailable:boolean;meters:number;width:number;height:number;baseHumidity:number};
-export type StudioPhysisFrame={active:true;tick:number;width:number;height:number;stride:number;originX:number;originZ:number;available:number;values:(number|null)[];colors:number[];rings:Ring[];presentation?:{grass:boolean;flames:boolean;sound:boolean;tick?:number;patches?:number;particles?:number;voices?:number};previewGrid?:StudioPhysisGrid;previewWind?:{speed:number;direction:number};cell?:StudioPhysisCell};
+export type StudioPhysisFrame={active:true;tick:number;width:number;height:number;stride:number;originX:number;originZ:number;available:number;values:(number|null)[];colors:number[];rings:Ring[];presentation?:{igniteOnClick:boolean;grass:boolean;flames:boolean;sound:boolean;tick?:number;patches?:number;particles?:number;voices?:number};previewGrid?:StudioPhysisGrid;previewWind?:{speed:number;direction:number};cell?:StudioPhysisCell};
 export type StudioPhysisCell={active:boolean;available:boolean;tick:number;wind:number[];gravity:number[]};
 export interface NereidFlowSurface {id:number;kind?:string;shape?:string;flow?:number[];grade?:{automaticCurrent?:boolean;slopeDegrees?:number;downhillHeadingDegrees?:number;responseSeconds?:number;maxSpeed?:number;origin?:number[]}}
 export type WindDebugView = 'off'|'parts'|'depth'|'weight'|'skeleton';
@@ -633,7 +633,7 @@ export interface StudioParams {
   'studio.planetForestPlant': {mapPath:string;expectedRevision:string;species:number;habit:'tree'|'shrub';at:{body:string;face:number;x:number;y:number}};
   'studio.planetForest': Record<string, never>;
   'studio.planetForestSet': {mapPath:string;expectedRevision:string;forest:unknown;catalog:unknown};
-  'studio.physisNature': StudioParams['studio.physisLive'] & {action:'view'|'reset'|'step'|'step60'|'ignite'|'wind'|'playback'|'grid'|'presentation';grass?:boolean;flames?:boolean;sound?:boolean;humidity?:number;cellMeters?:number;elapsed?:number;speed?:number;windSpeed?:number;windDirection?:number;expectedDocumentEpoch:string};
+  'studio.physisNature': StudioParams['studio.physisLive'] & {action:'view'|'reset'|'step'|'step60'|'ignite'|'wind'|'playback'|'grid'|'presentation';igniteOnClick?:boolean;grass?:boolean;flames?:boolean;sound?:boolean;humidity?:number;cellMeters?:number;elapsed?:number;speed?:number;windSpeed?:number;windDirection?:number;expectedDocumentEpoch:string};
   'studio.physisLive': {expectedProject:string;layer:number;palette:number;size:number;stride:number;centerX:number;centerZ:number;cellX?:number;cellZ?:number};
   'studio.planetForestLive': Record<string, never>;
   'studio.rules': Record<string, never>;

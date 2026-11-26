@@ -57,6 +57,8 @@ namespace studio = aiverse::studio;
 
 @interface StudioFxView : StudioMetalView
 @property(nonatomic) studio::StudioSurface surface;
+@property(nonatomic) NSPoint pressPoint;
+@property(nonatomic) BOOL clickPending;
 @end
 @interface StudioCharacterSurface : NSView
 @property(nonatomic,strong) CALayer* photo;
@@ -575,13 +577,24 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
 @implementation StudioFxView
 // A dedicated VFX render target is never a map editor. Mouse gestures can
 // only manipulate its isolated camera; no pick, brush or asset drop.
-- (void)mouseDown:(NSEvent*)event { (void)event; [self.window makeFirstResponder:self]; }
-- (void)mouseUp:(NSEvent*)event {(void)event;} // never select a map entity
+- (void)mouseDown:(NSEvent*)event {
+    self.pressPoint=event.locationInWindow;self.clickPending=self.surface==studio::StudioSurface::Nature;
+    [self.window makeFirstResponder:self];
+}
+- (void)mouseUp:(NSEvent*)event {
+    if(self.clickPending && NSPointInRect(event.locationInWindow,NSInsetRect(NSMakeRect(self.pressPoint.x,self.pressPoint.y,0,0),-3,-3))){
+        const NSPoint p=[self convertPoint:event.locationInWindow fromView:nil];
+        if(auto* core=[self core])core->natureClick(p.x,p.y,self.bounds.size.width,self.bounds.size.height);
+    }
+    self.clickPending=NO;
+}
 - (void)rightMouseDown:(NSEvent*)event {(void)event;}
 - (void)rightMouseUp:(NSEvent*)event {(void)event;}
 - (void)otherMouseDown:(NSEvent*)event {(void)event;}
 - (void)otherMouseUp:(NSEvent*)event {(void)event;}
 - (void)mouseDragged:(NSEvent*)event {
+    if(self.clickPending && hypot(event.locationInWindow.x-self.pressPoint.x,event.locationInWindow.y-self.pressPoint.y)<3)return;
+    self.clickPending=NO;
     if (auto* core=[self core])core->fxCameraOrbit(self.surface,event.deltaX,event.deltaY);
 }
 - (void)rightMouseDragged:(NSEvent*)event {
@@ -764,7 +777,7 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
     for(int i=0;i<int(studio::StudioSurface::Count)-int(studio::StudioSurface::Material);++i){
         NSView* view;
         const auto surface=static_cast<studio::StudioSurface>(i+int(studio::StudioSurface::Material));
-        if(surface==studio::StudioSurface::GpuEmitter||surface==studio::StudioSurface::EffectFile){
+        if(surface==studio::StudioSurface::Nature||surface==studio::StudioSurface::GpuEmitter||surface==studio::StudioSurface::EffectFile){
             StudioFxView* effect=[[StudioFxView alloc] initWithFrame:NSZeroRect];
             effect.surface=surface;effect.shell=self;view=effect;
         }else view=i>=3&&i<=4?[[StudioCharacterSurface alloc] initWithFrame:NSZeroRect]:[[NSView alloc] initWithFrame:NSZeroRect];

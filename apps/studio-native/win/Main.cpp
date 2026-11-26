@@ -591,7 +591,7 @@ public:
         if (s && s->core_) {
             const int which = int(GetWindowLongPtrW(h, GWLP_USERDATA));
             if(which==int(studio::StudioSurface::Character)||which==int(studio::StudioSurface::Appearance))return s->characterInput(h,msg,wp,lp,static_cast<studio::StudioSurface>(which));
-            if(which>=3 && which!=int(studio::StudioSurface::EffectFile) && which!=int(studio::StudioSurface::GpuEmitter))return DefWindowProcW(h,msg,wp,lp);
+            if(which>=3 && which!=int(studio::StudioSurface::Nature) && which!=int(studio::StudioSurface::EffectFile) && which!=int(studio::StudioSurface::GpuEmitter))return DefWindowProcW(h,msg,wp,lp);
             const LRESULT handled = which==0?s->sceneInput(h,msg,wp,lp):
                 which==1?s->gameInput(h,msg,wp,lp):
                 s->fxInput(h,msg,wp,lp,static_cast<studio::StudioSurface>(which));
@@ -632,16 +632,25 @@ public:
         case WM_LBUTTONDOWN:
         case WM_RBUTTONDOWN:
             SetFocus(h);SetCapture(h);fxLast_={GET_X_LPARAM(lp),GET_Y_LPARAM(lp)};
+            natureClickPending_=surface==studio::StudioSurface::Nature && msg==WM_LBUTTONDOWN;
             return 0;
         case WM_MOUSEMOVE:
             if(GetCapture()==h && (wp&(MK_LBUTTON|MK_RBUTTON))) {
                 const POINT now{GET_X_LPARAM(lp),GET_Y_LPARAM(lp)};
+                if(natureClickPending_ && std::abs(now.x-fxLast_.x)<3 && std::abs(now.y-fxLast_.y)<3)return 0;
+                natureClickPending_=false;
                 core_->fxCameraOrbit(surface,now.x-fxLast_.x,now.y-fxLast_.y);
                 fxLast_=now;
             }
             return 0;
         case WM_LBUTTONUP:
         case WM_RBUTTONUP:
+            if(GetCapture()==h && msg==WM_LBUTTONUP && surface==studio::StudioSurface::Nature && natureClickPending_ &&
+               std::abs(GET_X_LPARAM(lp)-fxLast_.x)<3 && std::abs(GET_Y_LPARAM(lp)-fxLast_.y)<3){
+                RECT rect{};GetClientRect(h,&rect);
+                core_->natureClick(GET_X_LPARAM(lp),GET_Y_LPARAM(lp),rect.right,rect.bottom);
+            }
+            natureClickPending_=false;
             if(GetCapture()==h)ReleaseCapture();
             return 0;
         case WM_MOUSEWHEEL:
@@ -1353,6 +1362,7 @@ private:
     std::unique_ptr<studio::StudioHost> core_;
     int captured_ = -1;
     bool tracking_ = false;
+    bool natureClickPending_=false;
     POINT fxLast_{0,0};
     std::pair<double, double> last_{0, 0}, lastGame_{0, 0};
     uint32_t highSurrogate_ = 0;

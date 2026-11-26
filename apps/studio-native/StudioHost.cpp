@@ -914,8 +914,29 @@ void StudioHost::tickFx() {
         try{onScene([&]{fxPreview_.reset();});}catch(const std::exception&){}
     }
 }
+void StudioHost::natureClick(double x,double y,double width,double height) {
+    if (!finite({x,y,width,height}) || width<=1 || height<=1 || projectLoading_ || !naturePreview_ ||
+        !naturePreview_->preview.settings.igniteOnClick || !natureSurface_.placement.visible || !natureSurface_.renderer ||
+        naturePreview_->epoch!=session_->graphDocumentScope().getStr("epoch") ||
+        naturePreview_->revision!=session_->workspace().map.revision)return;
+    const auto hit=onScene([&]{return natureSurface_.renderer->natureGroundPoint(float(x),float(y),float(width),float(height));});
+    if(!hit)return;
+    std::string reason;
+    if(!naturePreview_->preview.ignite(hit->x,hit->z,&reason)){
+        sendEvent("nature.ignition",reason);return;
+    }
+    ++naturePreview_->ignitionRevision;
+    sendEvent("nature.ignition","");
+}
 void StudioHost::fxCameraOrbit(StudioSurface surface,double dx,double dy) {
     if(!finite({dx,dy})||std::abs(dx)>250||std::abs(dy)>250)return;
+    if(surface==StudioSurface::Nature){
+        if(!projectLoading_ && naturePreview_ && natureSurface_.placement.visible){
+            naturePreview_->yaw=std::remainder(naturePreview_->yaw-float(dx)*.01f,6.2831853f);
+            naturePreview_->pitch=std::clamp(naturePreview_->pitch+float(dy)*.01f,.08f,1.5f);
+        }
+        return;
+    }
     if(surface==StudioSurface::EffectFile || surface==StudioSurface::GpuEmitter){
         auto& asset=assetSurface(surface);
         if(projectLoading_||!asset.renderer||!asset.placement.visible)return;
@@ -933,6 +954,11 @@ void StudioHost::fxCameraOrbit(StudioSurface surface,double dx,double dy) {
 }
 void StudioHost::fxCameraZoom(StudioSurface surface,double wheel) {
     if(!std::isfinite(wheel)||std::abs(wheel)>250)return;
+    if(surface==StudioSurface::Nature){
+        if(!projectLoading_ && naturePreview_ && natureSurface_.placement.visible)
+            naturePreview_->distance=std::clamp(naturePreview_->distance*float(std::pow(.9,wheel)),2.f,400.f);
+        return;
+    }
     if(surface==StudioSurface::EffectFile || surface==StudioSurface::GpuEmitter){
         auto& asset=assetSurface(surface);
         if(projectLoading_||!asset.renderer||!asset.placement.visible)return;

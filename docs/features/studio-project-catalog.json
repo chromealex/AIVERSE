@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-native/StudioVisualPicking.h",
     "apps/studio-native/StudioPreviewParticles.h",
     "apps/studio-web/src/panels/PhysisPreviewGrid.tsx",
     "apps/editor/PhysisNaturePreview.h",

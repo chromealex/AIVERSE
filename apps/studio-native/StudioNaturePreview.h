@@ -9,6 +9,7 @@ struct StudioNaturePreview {
     std::string epoch;
     std::uint64_t revision;
     std::uint64_t ignitionRevision=0;
+    float yaw=.6f,pitch=.55f,distance=0;
     Json presentation=Json::object();
     fx::ParticleSystem particles;
     editor::PhysisNaturePreview preview;
@@ -16,6 +17,7 @@ struct StudioNaturePreview {
     StudioNaturePreview(std::string scope, const editor::MapDoc& map, float levelHeight,
                        editor::PhysisNaturePreviewSettings settings)
         : epoch(std::move(scope)), revision(map.revision) {
+        distance=std::clamp(float(std::max(map.data.w,map.data.h))*.9f,8.f,50.f);
         preview.settings=settings;
         preview.settings.enabled=true;
         preview.setWater(editor::AuthoredWaterQuery::fromDoc(map));
@@ -27,6 +29,7 @@ struct StudioNaturePreview {
     Json read(const Json& params) const {
         auto frame=editor::readPhysisGameFrame(preview.previewWorld(),params);
         auto status=presentation;
+        status.set("igniteOnClick",Json::fromBool(preview.settings.igniteOnClick));
         status.set("grass",Json::fromBool(preview.settings.grass));
         status.set("flames",Json::fromBool(preview.settings.flames));
         status.set("sound",Json::fromBool(preview.settings.sound));
@@ -73,9 +76,10 @@ struct StudioNaturePreview {
             preview.settings.windDirectionDeg=float(d);
             preview.applyWindSettings();
         } else if (action=="presentation") {
-            for (const char* key:{"grass","flames","sound"})
+            for (const char* key:{"grass","flames","sound","igniteOnClick"})
                 if (params.has(key) && params[key].type()!=Json::Type::Bool)
                     throw std::runtime_error("Invalid nature presentation setting");
+            if (params.has("igniteOnClick")) preview.settings.igniteOnClick=params.getBool("igniteOnClick");
             if (params.has("grass")) preview.settings.grass=params.getBool("grass");
             if (params.has("flames")) preview.settings.flames=params.getBool("flames");
             if (params.has("sound")) preview.settings.sound=params.getBool("sound");

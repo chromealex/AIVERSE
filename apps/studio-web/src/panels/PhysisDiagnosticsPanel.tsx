@@ -65,7 +65,7 @@ function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:strin
   const requestId=useRef(0), pending=useRef(false);
   const [playing,setPlaying]=useState(false),[speed,setSpeed]=useState(1);
   const workspace=useRef<HTMLFieldSetElement>(null);
-  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback'|'grid'|'presentation',next:View,selection=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}|{cellMeters:number;humidity:number}|{grass?:boolean;flames?:boolean;sound?:boolean}){
+  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback'|'grid'|'presentation',next:View,selection=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}|{cellMeters:number;humidity:number}|{igniteOnClick?:boolean;grass?:boolean;flames?:boolean;sound?:boolean}){
     const id=++requestId.current;
     const sameArea=next.size===view.size&&next.stride===view.stride&&next.centerX===view.centerX&&next.centerZ===view.centerZ;
     const rebuild=action==='reset'||action==='grid';
@@ -86,6 +86,7 @@ function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:strin
   }
   useEffect(()=>{void request('view',initial);return ()=>{requestId.current++;};},[projectPath]);
   useEffect(()=>onNativeEvent((event,payload)=>{
+    if(event==='nature.ignition'&&showNature)setError(String((payload as {message?:string})?.message??''));
     if(event==='nature.previewError'&&showNature){
       setShowNature(false);setError(String((payload as {message?:string})?.message??payload));
     }
@@ -125,10 +126,10 @@ function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:strin
           <StudioButton aria-pressed={showNature} onClick={()=>setShowNature(true)}>3D nature</StudioButton>
         </div>}{map&&showNature?<><SpectraDockViewport id="nature" label="3D nature preview"/>
           {frame.presentation&&<div className="physis-display-options">
-            {([['grass','Grass'],['flames','Fire and smoke'],['sound','Sound']] as const).map(([key,label])=>
+            {([['igniteOnClick','Ignite on click'],['grass','Grass'],['flames','Fire and smoke'],['sound','Sound']] as const).map(([key,label])=>
               <label key={key}><input type="checkbox" checked={frame.presentation![key]}
                 onChange={event=>void request('presentation',view,cell,{[key]:event.target.checked})}/>{label}</label>)}
-          </div>}</>:<FieldMap key={[view.centerX,view.centerZ,view.size,view.stride].join('/')} frame={frame} cell={cell} pick={live||map?index=>void request('view',view,index):pick} contours={contours} label={layers[view.layer]}/>}</div>
+          </div>}<p>Drag to orbit · Scroll to zoom</p></>:<FieldMap key={[view.centerX,view.centerZ,view.size,view.stride].join('/')} frame={frame} cell={cell} pick={live||map?index=>void request('view',view,index):pick} contours={contours} label={layers[view.layer]}/>}</div>
         <div className="physis-options">{map&&<label className="physis-playback-speed">Playback speed · {speed.toFixed(1)}×
           <input type="range" name="playbackSpeed" min="0.1" max="6" step="0.1" value={speed}
             onChange={event=>setSpeed(event.currentTarget.valueAsNumber)}/>
