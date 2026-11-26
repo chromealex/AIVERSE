@@ -20,6 +20,7 @@ namespace aiverse::editor {
 
 // SpectraFX graph authoring is in a separate translation unit.
 void registerSpectraGraphOps(Workspace& ws);
+void registerSpectraGpuFileOps(Workspace& ws);
 
 namespace {
 
@@ -612,6 +613,7 @@ void registerFxOps(Workspace& ws) {
         return r;
     });
     registerSpectraGraphOps(ws);
+    registerSpectraGpuFileOps(ws);
 }
 
 } // namespace aiverse::editor

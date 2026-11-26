@@ -1,0 +1,2 @@
+.gpu-file-fields{display:grid;gap:12px;border:0;padding:0;margin:0;min-width:0}
+.gpu-route{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(125px,100%),1fr));align-items:end;gap:8px;padding:10px 0;border-bottom:1px solid var(--au-border)}

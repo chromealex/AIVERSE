@@ -3,6 +3,9 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/editor/core/SpectraGpuFileOps.cpp",
+    "apps/studio-web/src/panels/SpectraGpuFiles.tsx",
+    "apps/studio-web/src/panels/SpectraGpuFiles.css",
     "apps/studio-web/src/components/AssetsPanel.css",
     "apps/studio-native/StudioContentDirectory.h",
     "apps/studio-native/StudioProjectDirectory.h",

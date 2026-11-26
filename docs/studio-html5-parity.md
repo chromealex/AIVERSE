@@ -390,3 +390,5 @@ Hosted actor geometry: report Game routing from the initialized actor renderer o
 Assets project browsing: keep the indexed content catalog as the entry point, add read-only navigation at project root, folder search and full path copy. Verify nested maps, root/up navigation and returning to content in packaged Studio.
 
 Finish selectable file rows, keyboard copy and folder context actions in the HTML project browser.
+
+GPU asset authoring: expose project-scoped list/read/validate/save of fx/gpu emitters and event routes through canonical SpectraFX codecs. Preserve raw source, reject stale saves and edit in the HTML GPU functions window.
