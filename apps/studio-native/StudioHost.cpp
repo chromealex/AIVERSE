@@ -1626,15 +1626,14 @@ void StudioHost::tick() {
     pollScriptChanges();
     tickGame();
     tickTextureGraph(session_->workspace().project.dir); // independent of Scene visibility
-    // An empty Workspace owns an internal default MapDoc, NOT a loaded project.
-    // Never render that provisional map as if it belonged to the user.
-    if (session_->workspace().project.dir.empty()) return;
-    // Agent panel: tool calls from aiversemcp run here, on the main thread, between frames.
-    if (session_->pollAgentLink()) {
+    // Serve the Hub as soon as it opens. A startup project must finish opening first.
+    if (pendingProject_.empty() && session_->pollAgentLink()) {
         sendEvent("assets.changed", "");
         sendEvent("document.changed", "");
         sendEvent("agent.changed", "");
     }
+    // An empty workspace has a provisional MapDoc. Only render a loaded project.
+    if (session_->workspace().project.dir.empty()) return;
     // Extension gizmos (editor/extensions.lua scene_gizmos) a few times a second.
     if (preview_ && platform_.now() >= nextGizmoPoll_) {
         nextGizmoPoll_ = platform_.now() + 0.2;
