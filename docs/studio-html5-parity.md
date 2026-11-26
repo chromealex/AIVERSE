@@ -624,3 +624,4 @@ Route the original view_wind MCP schema to the PHYSIS viewport and validate the 
 Expose legacy play_status through the HTML Studio game owner. Preserve the inactive, map match and client menu result shapes.
 
 Route linked play_stop through the same Game surface teardown as the HTML control and verify repeat stops.
+Route legacy play_start arguments to the shared HTML Studio Game launch path and open the Game tab on successful launch.

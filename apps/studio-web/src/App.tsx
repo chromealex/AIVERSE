@@ -76,6 +76,7 @@ export default function App() {
   const [natureRequest,setNatureRequest]=useState<import('./types').NatureOpenRequest>();
   const [animationRequest,setAnimationRequest]=useState<import('./types').AnimationAuthoringRequest>();
   useEffect(()=>onNativeEvent((event,payload)=>{
+    if(event==='game.open'){if(!FLOAT)showPanelEvent('game');return;}
     if(event==='nature.command'){
       const source=field(payload,'openSource'),epoch=field(payload,'epoch');
       if((source!=='map'&&source!=='game')||epoch!==snapshot?.graphDocument?.epoch||typeof epoch!=='string')return;

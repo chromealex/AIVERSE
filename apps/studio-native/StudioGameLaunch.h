@@ -11,6 +11,7 @@ namespace aiverse::studio {
 struct StudioGameLaunch {
     std::string project; std::optional<size_t> map;
     bool actorSession=false;
+    double startSpeed=1;
     std::optional<uint8_t> localSeat;
     std::string sourceMap;
     uint64_t sourceRevision=0;

@@ -2101,8 +2101,8 @@ void Workspace::registerCoreOps() {
         R"({"properties":{"u":{"type":"number","minimum":0,"maximum":1},"v":{"type":"number","minimum":0,"maximum":1}},"required":["u","v"]})");
     gui("view_focus", "Focus the visible Scene camera on x,y,z. On a planet, x,z are cells on the face under the center of the viewport. Height defaults to zero on planar maps. Distance is optional.",
         R"({"properties": {"x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"}, "distance": {"type": "number"}}, "required": ["x", "z"]})");
-    gui("play_start", "Play-test the open map inside the editor window (bots on all sides unless 'human' is set). The user watches live.",
-        R"({"properties": {"speed": {"type": "number"}, "human": {"type": "integer", "description": "player slot controlled by the user, 0 = bots only"}, "device": {"type": "string"}}})");
+    addLinked("play_start","Launch the open map or client menu in the HTML Studio Game window.",
+        R"({"properties":{"speed":{"type":"number"},"human":{"type":"integer"},"device":{"type":"string"},"client":{"type":"boolean"}}})",requireStudioLink);
     addLinked("play_stop", "Stop the Studio play-test and return to editing.", "{}",requireStudioLink);
     gui("region_ownership_diagnostics", "Read last successful live region ownership reconciliation; requires running editor simulation.", "{}");
     addLinked("play_status", "Current Studio play-test time, players, resources, units and result.", "{}",requireStudioLink);

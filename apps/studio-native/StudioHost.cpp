@@ -117,6 +117,39 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
         Json::parse(editor::windShowcaseSchema),[this](const Json& params){return natureCommand(params,true);},true});
     session_->workspace().registerOp({"physis_nature_preview","Control the PHYSIS panel's private nature simulation.",
         Json::parse(editor::physisNatureCommandSchema),[this](const Json& params){return natureCommand(params);},true});
+    session_->workspace().registerOp({"play_start","Launch a play-test in the Game window.",
+        Json::parse(R"({"properties":{"speed":{"type":"number"},"human":{"type":"integer"},"device":{"type":"string"},"client":{"type":"boolean"}}})"),
+        [this](const Json& params){
+            if (params.has("client") && params["client"].type()!=Json::Type::Bool)
+                throw std::invalid_argument("client must be boolean");
+            const bool menu=params.getBool("client");
+            std::optional<uint8_t> seat;
+            if (!menu && (!session_->workspace().project.actorSession() || params.has("human"))) {
+                const auto human=params["human"].toDouble(0);
+                if ((params.has("human") && !params["human"].isNumber()) || !std::isfinite(human) ||
+                    human<0 || human>255 || std::floor(human)!=human)
+                    throw std::invalid_argument("Invalid human player slot");
+                seat=static_cast<uint8_t>(human);
+            }
+            auto plan=studioGameLaunch(session_->workspace(),!menu,seat);
+            if (!menu && params.has("speed")) {
+                const auto speed=params["speed"].toDouble();
+                if (!params["speed"].isNumber() || !(speed>=.25 && speed<=16) || (plan.actorSession && speed!=1))
+                    throw std::invalid_argument("Unsupported play-test speed");
+                plan.startSpeed=speed;
+            }
+            std::optional<StudioGameDevice> device;
+            if (params.has("device")) {
+                if (!params["device"].isString()) throw std::invalid_argument("Invalid device ID");
+                device.emplace();
+                device->id=params.getStr("device");
+                (void)device->profile();
+            }
+            startGame(plan);
+            if (device) {game_->setDevice(*device);platform_.gameDeviceChanged(gameState());}
+            sendEvent("game.open","");
+            return Json::parse(R"({"ok":true,"summary":"Игра запущена"})");
+        },true});
     session_->workspace().registerOp({"play_stop","Stop the Game window play-test.",
         Json::object(),[this](const Json&){
             stopGame();
@@ -484,6 +517,21 @@ bool StudioHost::confirmClose() {
 }
 
 // ---------------------------------------------------------------- tick
+void StudioHost::startGame(const StudioGameLaunch& plan) {
+    if (!game_) game_=std::make_unique<StudioGameSurface>(platform_.createDevice(StudioSurface::Game));
+    wpLiveSnapshot_=Json();wpLivePlanetProject_.clear();wpLivePlanetMapPath_.clear();wpLivePlanetRevision_=0;wpLiveRefresh_=0;
+    buildingGraphOverlayScene_=0;rebuildOverlay();
+    session_->setBuildingGraphReader({});
+    clearPlayReviews();
+    game_->start(plan, engineRoot_ + "/engine/assets");
+    if(plan.map){
+        wpLivePlanetProject_=plan.project;
+        wpLivePlanetMapPath_=session_->workspace().map.path;
+        wpLivePlanetRevision_=session_->workspace().map.revision;
+    }
+    rebuildOverlay();
+    gameFrameTime_ = 0;
+}
 void StudioHost::stopGame() {
     if (!game_) return;
     buildingGraphOverlayScene_=0;
@@ -4659,19 +4707,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
                 const auto cam = onScene([&] { return preview_->cameraState(); });
                 plan.camera = std::array<float, 5>{cam.target.x, cam.target.z, cam.distance, float(cam.pitch * 57.29578), float(cam.yaw * 57.29578)};
             }
-            ensureGame();
-            wpLiveSnapshot_=Json();wpLivePlanetProject_.clear();wpLivePlanetMapPath_.clear();wpLivePlanetRevision_=0;wpLiveRefresh_=0;
-            buildingGraphOverlayScene_=0;rebuildOverlay();
-            session_->setBuildingGraphReader({});
-            clearPlayReviews();
-            game_->start(plan, engineRoot_ + "/engine/assets");
-            if(plan.map){
-                wpLivePlanetProject_=plan.project;
-                wpLivePlanetMapPath_=session_->workspace().map.path;
-                wpLivePlanetRevision_=session_->workspace().map.revision;
-            }
-            rebuildOverlay();
-            gameFrameTime_ = 0;
+            startGame(plan);
         } else if (method == "studio.gameStop") {
             stopGame();
         } else if (method == "studio.gameControl") {

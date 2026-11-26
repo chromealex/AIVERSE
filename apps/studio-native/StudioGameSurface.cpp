@@ -125,6 +125,7 @@ void StudioGameSurface::frame(int w,int h,float pw,float ph,double dt,bool focus
         device_->endFrame();
         const bool match=host_->inMatch();
         if(match && !matchObserved_){
+            if (!actor_ && launch_.startSpeed!=1) setSimulationSpeed(launch_.startSpeed);
             ++runtimeEpoch_;runtimeDebugEdited_=false;
             setupRefs_.clear();
             if(auto* sim=liveSimulation()){
