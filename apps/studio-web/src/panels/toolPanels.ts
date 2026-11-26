@@ -14,7 +14,7 @@ export interface ToolPanelSpec {
 export const TOOL_PANELS: Record<ToolPanelId, ToolPanelSpec> = {
   terrain: { prefix: 'terrain', state: ['map_info'], open: ['terrain_sculpt'],
     intro: 'Heights, levels and surface materials of the open map. Each change is one History step.' },
-  water: { prefix: 'water', state: ['water_network'], open: ['water_set'],
+  water: { prefix: 'water', state: [], open: [],
     intro: 'Spline water: straits, rivers and open sea with their shores.' },
   roads: { prefix: 'road', state: ['road_network'], open: ['road_add'],
     intro: 'Spline road network: nodes, edges, road types, stops and driveways.' },

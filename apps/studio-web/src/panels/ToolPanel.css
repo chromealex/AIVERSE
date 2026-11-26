@@ -73,3 +73,10 @@
 .tile-palette button { min-width:0; padding:3px; background:var(--au-panel); color:var(--au-text); border:1px solid var(--au-line); border-radius:4px; cursor:pointer; }
 .tile-palette button[aria-pressed=true] { border-color:var(--au-accent); outline:1px solid var(--au-accent); }
 .tile-palette button span { display:block; width:100%; margin-bottom:2px; image-rendering:pixelated; background-repeat:no-repeat; }
+
+.water-shores { margin-bottom:12px; }
+.water-shores__body, .water-shores__segment { display:grid; grid-template-columns:minmax(72px,1fr) minmax(100px,1.4fr); gap:8px; align-items:center; }
+.water-shores__bank { margin-block:12px; }
+.water-shores__bank h4 { margin:0 0 4px; color:var(--au-text); }
+.water-shores__segment { padding-block:4px; border-top:1px solid var(--au-line); font-variant-numeric:tabular-nums; }
+.water-shores__segment small { display:block; color:var(--au-muted); }

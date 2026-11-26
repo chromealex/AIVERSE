@@ -314,3 +314,5 @@ Game transfer: expose local first-person map play in the Game panel and verify a
 Fields transfer: expose the selected player layer in the Scene brush and apply Shift erase per dab. Verify layer isolation and Undo.
 
 Tiles transfer: browse the authored atlas, paint a fixed tile, and return to autotiling through the Scene brush. Verify saved map overrides and Undo.
+
+Water transfer: list the selected body’s shore segments by bank and edit their types from the project catalog. Verify rebake, reset, Undo and saved-map reopen.

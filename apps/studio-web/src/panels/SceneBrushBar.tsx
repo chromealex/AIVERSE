@@ -237,7 +237,7 @@ export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS, tileCatalog,
   const field = fields.find(f => f.id === brush.field);
   const continuous = kind === 'terrain' || kind === 'paint' || kind === 'tiles' || kind === 'region' || kind === 'field' || kind === 'objects';
   return <div className={'tbrush' + (brush.armed ? ' is-armed' : '')}>
-    {kind !== 'field' && !kinds.includes('region') && <EcologyLayerPicker/>}
+    {kind !== 'field' && kind !== 'river' && !kinds.includes('region') && <EcologyLayerPicker/>}
     <div className="tbrush__row">
       <button type="button" className={'au-button au-button--sm' + (brush.armed ? ' au-button--primary' : '')} aria-pressed={brush.armed} disabled={!brush.armed && ((kind === 'tiles' && !tileset?.terrains?.length) || (kind === 'field' && (!field || (field.perPlayer && field.layers <= 1))))}
         onClick={() => { set({ armed: !brush.armed, kind }); if (!brush.armed) setEditing(false); }} title="Drag in the Scene (Alt+drag orbits, [ ] size, Esc stops)">
@@ -290,7 +290,7 @@ export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS, tileCatalog,
       max={kind === 'paint' || brush.op === 'smooth' || brush.op === 'flatten' || brush.op === 'erode' ? 1 : 6} step={0.05} onCommit={v => set({ strength: v })}/>}
     {editing && <p className="ptp__hint">Drag a {kind === 'road' ? 'road node' : 'river point'} in the Scene to move it</p>}
     {brush.armed && <p className="ptp__hint">{continuous ? 'Drag in the Scene to paint' : 'Drag the path in the Scene; it is built on release'} · one History step per stroke · [ ] size · Esc stops</p>}
-    {kinds.includes('region') && <details><summary>World overlays</summary><EcologyLayerPicker/></details>}
+    {(kinds.includes('region') || kind === 'river') && <details><summary>World overlays</summary><EcologyLayerPicker/></details>}
     {error && <div className="tool__error" role="alert">{error}</div>}
   </div>;
 }
