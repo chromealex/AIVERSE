@@ -1,0 +1,14 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+    Start 589: studio_session
+1/1 Test #589: studio_session ...................   Passed    9.59 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+EDITOR    =   9.59 sec*proc (1 test)
+
+Total Test time (real) =   9.62 sec
+Folder navigation, pagination, Cyrillic search and layout passed at 240 and 800 CSS pixels.
+2026-11-26 08:37:27.410 AiverseStudioHTML5[8243:83498396] [studio-web] JS: CROSS main DONE_1
+2026-11-26 08:37:27.409 AiverseStudioHTML5[8243:83498396] [studio-web] JS: CROSS main VERIFIED content file and folder absolute paths, existing relative path; default content, project root, parent, breadcrumbs, filter, Unicode nested file, absolute clipboard payload, selected row, keyboard copy, file/folder context menus, scoped listing, return to catalog and direct reveal
