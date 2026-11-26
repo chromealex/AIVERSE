@@ -66,17 +66,17 @@ export default function PhysisDiagnosticsPanel({projectPath}:{projectPath:string
   function change(key:keyof View,value:number){void request('view',{...view,[key]:value});}
   return <section className="physis-diagnostics">
     <header><h3>Field diagnostics</h3>{frame&&<output>Tick {frame.tick}</output>}</header>
-    <fieldset disabled={busy}>
+    <fieldset disabled={busy} className={frame?'physis-workspace':undefined}>
       <div className="au-row"><StudioButton onClick={()=>void request('reset',{...view,centerX:0,centerZ:0})}>{frame?'Reset demo':'Create demo'}</StudioButton>
         {frame&&<><StudioButton onClick={()=>void request('step',view)}>Step 1 tick</StudioButton><StudioButton onClick={()=>void request('step60',view)}>Step 60 ticks</StudioButton></>}
       </div>
       {!frame&&<p>Create an isolated environment to inspect its weather and force fields.</p>}
       {frame&&<>
-        <div className="physis-controls"><label>Field<StudioSelect value={view.layer} onChange={e=>change('layer',Number(e.target.value))}>{layers.map((l,i)=><option key={l} value={i}>{l}</option>)}</StudioSelect></label>
+        <div className="physis-controls physis-layers"><label>Field<StudioSelect value={view.layer} onChange={e=>change('layer',Number(e.target.value))}>{layers.map((l,i)=><option key={l} value={i}>{l}</option>)}</StudioSelect></label>
           <label>Palette<StudioSelect value={view.palette} onChange={e=>change('palette',Number(e.target.value))}>{['Thermal','High contrast','Ocean'].map((l,i)=><option key={l} value={i}>{l}</option>)}</StudioSelect></label>
         </div>
-        <FieldMap key={[view.centerX,view.centerZ,view.size,view.stride].join('/')} frame={frame} contours={contours} label={layers[view.layer]}/>
-        <label className="physis-toggle"><input type="checkbox" checked={contours} onChange={e=>showContours(e.target.checked)}/>Volume contours</label>
+        <div className="physis-figure"><FieldMap key={[view.centerX,view.centerZ,view.size,view.stride].join('/')} frame={frame} contours={contours} label={layers[view.layer]}/></div>
+        <div className="physis-options"><label className="physis-toggle"><input type="checkbox" checked={contours} onChange={e=>showContours(e.target.checked)}/>Volume contours</label>
         <details><summary>Map area</summary><form className="physis-controls" key={[view.size,view.stride,view.centerX,view.centerZ].join('/')} onSubmit={e=>{
           e.preventDefault();const data=new FormData(e.currentTarget);
           void request('view',{...view,size:Number(data.get('size')),stride:Number(data.get('stride')),centerX:Number(data.get('centerX')),centerZ:Number(data.get('centerZ'))});
@@ -84,7 +84,7 @@ export default function PhysisDiagnosticsPanel({projectPath}:{projectPath:string
           {([['size','Width (cells)',8,64],['stride','Sample stride',1,8],['centerX','Center X',-1000000,1000000],['centerZ','Center Z',-1000000,1000000]] as const).map(([k,label,min,max])=><label key={k}>{label}
             <StudioInput type="number" name={k} defaultValue={view[k]} min={min} max={max} step={1} required/></label>)}
           <StudioButton type="submit">Apply area</StudioButton>
-        </form></details>
+        </form></details></div>
       </>}
     </fieldset>
     {error&&<StudioAlert tone="warning">{error}</StudioAlert>}

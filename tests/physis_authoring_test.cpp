@@ -39,7 +39,20 @@ void mcpAuthoring() {
     p.set("config",valid);p.set("expectedRevision",Json::number(int64_t(w.map.revision)));
     CHECK(w.call("physis_set",p).getBool("ok")); CHECK(w.map.toJson()["physis"]==valid);
     int count=0;for(const auto& op:w.ops())if(op.name.rfind("physis_",0)==0)++count;
-    CHECK(count==3);
+    CHECK(count==4);
+    const auto mapBefore=w.map.toJson();
+    const auto revisionBefore=w.map.revision;
+    auto demo=[&](const char* args){return w.call("physis_demo",Json::parse(args));};
+    CHECK(!demo(R"({"action":"view"})").getBool("active"));
+    const auto first=demo(R"({"action":"reset"})");
+    CHECK(first["tick"].integer()==25 && first["available"].integer()==1024);
+    CHECK(demo(R"({"action":"step60","size":0})").has("error"));
+    CHECK(demo(R"({"action":"step"})")["tick"].integer()==26);
+    CHECK(demo(R"({"action":"view","centerX":1000})")["available"].integer()==0);
+    CHECK(demo(R"({"action":"reset"})")["values"]==first["values"]);
+    Workspace other;
+    CHECK(!other.call("physis_demo",Json::parse(R"({"action":"view"})")).getBool("active"));
+    CHECK(w.map.toJson()==mapBefore && w.map.revision==revisionBefore);
 }
 void plainMapAndUndo() {
     MapDoc map; map.reset(8,8);

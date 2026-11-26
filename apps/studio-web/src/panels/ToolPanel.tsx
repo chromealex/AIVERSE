@@ -155,7 +155,7 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
       {panel==='models'&&<MaterialTechniquePanel key={projectPath} projectPath={projectPath}/>}
       {panel==='models'&&<StrataAnalysisPanel projectPath={projectPath}/>}
       {panel==='generate' && snapshot?.graphDocument && <MapGeneratorPanel key={snapshot.graphDocument.epoch} scope={snapshot.graphDocument} onChanged={()=>done(true)}/>}
-      {panel==='physis'&&<PhysisDiagnosticsPanel key={projectPath} projectPath={projectPath}/>}
+      {panel==='physis'&&<PhysisDiagnosticsPanel key={snapshot?.graphDocument?.epoch??projectPath} projectPath={projectPath}/>}
       {panel==='water' && snapshot?.graphDocument && <WaterShorePanel key={snapshot.graphDocument.epoch} scope={snapshot.graphDocument} onChanged={()=>done(true)}/>}
       {BRUSHES[panel] && <SceneBrushBar project={projectPath} tileCatalog={state.tileset_list as Parameters<typeof SceneBrushBar>[0]['tileCatalog']} kinds={BRUSHES[panel]!} fields={(state.field_list as {fields?:BrushField[]} | undefined)?.fields}/>}
       {(panel==='water'||panel==='generate'||panel==='physis') ? <details className="water-shores__operations" open={q ? true : undefined}>

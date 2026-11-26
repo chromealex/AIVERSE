@@ -1,4 +1,4 @@
-.physis-diagnostics { padding:12px; }
+.physis-diagnostics { padding:clamp(12px,2vw,24px); container-type:inline-size; }
 .physis-diagnostics header,.physis-legend,.physis-legend span,.physis-toggle { display:flex; align-items:center; gap:8px; }
 .physis-diagnostics header { justify-content:space-between; margin-bottom:10px; }
 .physis-diagnostics h3,.physis-diagnostics p { margin:6px 0; }
@@ -6,10 +6,24 @@
 .physis-diagnostics fieldset { padding:0; border:0; min-width:0; margin:0; }
 .physis-controls { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr)); gap:8px; margin:10px 0; }
 .physis-controls label { display:grid; gap:4px; }
-.physis-map { width:min(100%,440px); aspect-ratio:1; position:relative; background:var(--au-field); cursor:crosshair; }
+.physis-map { width:min(100%,560px); aspect-ratio:1; position:relative; background:var(--au-field); cursor:crosshair; }
 .physis-map canvas,.physis-map svg { width:100%; height:100%; position:absolute; inset:0; }
 .physis-map canvas { image-rendering:pixelated; }
 .physis-map:focus-visible { outline:2px solid var(--au-accent); }
 .physis-legend { flex-wrap:wrap; margin-top:6px; }
 .physis-legend i { width:10px; height:10px; border:2px solid; border-radius:50%; }
 .physis-toggle { margin-block:8px; }
+
+.physis-diagnostics header,.physis-workspace { max-width:1080px; margin-inline:auto; }
+.physis-workspace > .au-row { flex-wrap:wrap; }
+.physis-workspace > .au-row button { flex:0 1 auto; }
+.physis-figure { min-width:0; }
+@container (min-width:680px) {
+  .physis-workspace { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(240px,1fr); grid-template-rows:auto auto 1fr; gap:8px 24px; align-items:start; }
+  .physis-figure { grid-column:1; grid-row:1/4; }
+  .physis-figure .physis-map { width:100%; }
+  .physis-workspace > .au-row,.physis-layers,.physis-options { grid-column:2; }
+  .physis-workspace > .au-row { grid-row:1; }
+  .physis-layers { grid-row:2; }
+  .physis-options { grid-row:3; }
+}
