@@ -1,0 +1,10 @@
+{
+  "sha": "6a4b4e561a59e6064a126c9bba35685a1eb1f793",
+  "argv": [
+    "bash",
+    "/tmp/physis3d-ui.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-physis-nature-surface.log.txt",
+  "sha256": "591847c246738e78e328b1730d12c92486231e7ffa7309ba5d98ddcc4225db0d"
+}
