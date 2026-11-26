@@ -1,0 +1,10 @@
+{
+  "sha": "f43d8fb393c85b1c9a45a01cd8739a1b40919bfb",
+  "argv": [
+    "bash",
+    "/tmp/physis-linked.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-physis-linked-nature.log.txt",
+  "sha256": "9e32b20840dd521c998abba3dafdfd2c92ed575a60977d36b88c876dc94ef434"
+}
