@@ -1,0 +1,14 @@
+{
+  "sha": "bf207ebe44d381bd14dcd5b1011bcde490764c8a",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^physis_mcp$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-physis-mcp.log.txt",
+  "sha256": "11be3268b92b677d4fdc1cd4234526bfb8e461845f2ed33405d9929b085ed134"
+}
