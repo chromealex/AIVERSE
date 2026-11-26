@@ -1,0 +1,2 @@
+2026-11-26 12:42:57.456 AiverseStudioHTML5[78406:84607530] [studio-web] JS: CROSS physis-detail DONE_1
+2026-11-26 12:42:57.456 AiverseStudioHTML5[78406:84607530] [studio-web] JS: CROSS physis-detail VERIFIED 64 m grid and 2 m grid; ignition at cell (7,4) rejected with 40 m sand, succeeded with 0.5 m sand; invalid inputs retained tick and settings, reset retained shore, map untouched

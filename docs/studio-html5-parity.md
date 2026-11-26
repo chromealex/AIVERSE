@@ -512,3 +512,5 @@ b7406df0366e348d38d0a4748579061043c6816b verified paused native ignition updates
 Transfer nature-preview grass quality and sound volume, then verify the settings reach the renderer and audio engine in a detached HTML panel.
 
 Legacy nature MCP reconciliation: bring the full 1-64 m detail grid and adjustable 0-40 m bare shore band to the private Studio simulation before wiring legacy automation to it.
+
+c0827893e195d639fed52ca32bb07bb3116741ed verified in the detached macOS HTML panel. A 64 m cell worked. On the same 2 m grid with authored NEREID water, ignition at (7,4) failed with a 40 m shore and succeeded at 0.5 m. Invalid widths and sizes preserved the running tick and settings, reset retained the selected width, and the map bytes matched. Receipt docs/evidence/studio-physis-shore-detached.json and capture docs/evidence/studio-project-catalog/physis-bare-shore.png. Next move the MCP operation to Studio with shared preview state, playback and read-only live-source handling.
