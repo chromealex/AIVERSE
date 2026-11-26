@@ -520,6 +520,7 @@
     "docs/evidence/studio-static-geometry-authoring.json",
     "docs/evidence/studio-static-geometry-game-source.json",
     "docs/evidence/studio-static-geometry-world-files.json",
-    "docs/evidence/studio-static-geometry-source-final.json"
+    "docs/evidence/studio-static-geometry-source-final.json",
+    "docs/evidence/studio-assets-project-navigation.json"
   ]
 }

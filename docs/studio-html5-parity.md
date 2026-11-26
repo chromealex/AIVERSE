@@ -388,3 +388,5 @@ Static Geometry document scope: resolve world-space map geometry from the map, s
 Hosted actor geometry: report Game routing from the initialized actor renderer only for the open source document. Verify map switches, return to its live Game report and Stop.
 
 Assets project browsing: keep the indexed content catalog as the entry point, add read-only navigation at project root, folder search and full path copy. Verify nested maps, root/up navigation and returning to content in packaged Studio.
+
+Finish selectable file rows, keyboard copy and folder context actions in the HTML project browser.

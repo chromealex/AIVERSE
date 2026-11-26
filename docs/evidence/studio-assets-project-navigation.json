@@ -1,0 +1,10 @@
+{
+  "sha": "5176d0f617972c7d61bbae3081c37811a3472427",
+  "argv": [
+    "bash",
+    "/tmp/project-dir-acceptance.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-assets-project-navigation.log.txt",
+  "sha256": "054167dbb91528697dfd28d01990d2113432c7d844ac04bb6c953bd78dc4f789"
+}
