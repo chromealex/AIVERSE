@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/tmp/select-region-client.py", line 77, in <module>
+    wait_for('REGION_ROW '+name);print('Inspector region and cells verified',name,flush=True)
+  File "/tmp/select-region-client.py", line 36, in wait_for
+    raise RuntimeError(message)
+RuntimeError: REGION_ROW K

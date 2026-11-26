@@ -1,0 +1,10 @@
+{
+  "sha": "bec7754b36d92bcfd7b2bd38e6be91d56865a8b9",
+  "argv": [
+    "bash",
+    "/tmp/select-region.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-editor-select-region.log.txt",
+  "sha256": "03035a055a8fe59af5c2fb8fe75eba3a92aeefbda07ecc4405fbac9f680002e2"
+}
