@@ -29,7 +29,7 @@ inline const char* studioAgentHistoryPolicy(const std::string& op){
     static const std::set<std::string> project={"rules_set","rules_merge","rules_delete","set_manifest"};
     static const std::set<std::string> assets={"studio_asset_meta_patch","studio_asset_folder_create","studio_asset_move_commit","studio_asset_delete"};
     if(op=="studio_play_review_apply")return "map";
-    if(op=="studio_runtime_edit"||op=="studio_runtime_profile"||op=="physis_nature_preview")return "runtime";
+    if(op=="play_stop"||op=="studio_runtime_edit"||op=="studio_runtime_profile"||op=="physis_nature_preview")return "runtime";
     if(reads.count(op))return "read";
     if(op=="view_wind" || op=="view_postfx" || studioSceneViewAgentOperation(op))return "view";
     if(map.count(op))return "map";

@@ -117,6 +117,11 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
         Json::parse(editor::windShowcaseSchema),[this](const Json& params){return natureCommand(params,true);},true});
     session_->workspace().registerOp({"physis_nature_preview","Control the PHYSIS panel's private nature simulation.",
         Json::parse(editor::physisNatureCommandSchema),[this](const Json& params){return natureCommand(params);},true});
+    session_->workspace().registerOp({"play_stop","Stop the Game window play-test.",
+        Json::object(),[this](const Json&){
+            stopGame();
+            return Json::parse(R"({"ok":true,"summary":"Тест остановлен"})");
+        },true});
     session_->workspace().registerOp({"play_status","Read the running Game window match.",
         Json::object(),[this](const Json&){return game_?game_->playStatus():Json::parse(R"({"playing":false})");},true});
     auto& workspace=session_->workspace();
@@ -479,6 +484,16 @@ bool StudioHost::confirmClose() {
 }
 
 // ---------------------------------------------------------------- tick
+void StudioHost::stopGame() {
+    if (!game_) return;
+    buildingGraphOverlayScene_=0;
+    session_->setBuildingGraphReader({});
+    clearPlayReviews();
+    game_->stop();
+    wpLiveSnapshot_=Json();
+    wpLivePlanetMapPath_.clear();
+    rebuildOverlay();
+}
 Json StudioHost::gameState(bool includeScriptErrors) {
     if (game_) {auto out=game_->state(includeScriptErrors);out.set("canReviewPlayChanges",Json::fromBool(game_->canReview(session_->workspace())));return out;}
     auto out = Json::parse(R"({"paused":false,"canControl":false,"canStep":false,"active":false,"loading":false,"progress":0,"inMatch":false,"tick":0,"error":""})");
@@ -4657,9 +4672,8 @@ bool StudioHost::handleHostMethod(const Json& req) {
             }
             rebuildOverlay();
             gameFrameTime_ = 0;
-        } else if (method == "studio.gameStop" && game_) {
-            buildingGraphOverlayScene_=0;session_->setBuildingGraphReader({});
-            clearPlayReviews();game_->stop();wpLiveSnapshot_=Json();wpLivePlanetMapPath_.clear();rebuildOverlay();
+        } else if (method == "studio.gameStop") {
+            stopGame();
         } else if (method == "studio.gameControl") {
             if (!game_) throw std::runtime_error("No game is running");
             clearPlayReviews();

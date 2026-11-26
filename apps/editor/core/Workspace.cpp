@@ -2103,7 +2103,7 @@ void Workspace::registerCoreOps() {
         R"({"properties": {"x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"}, "distance": {"type": "number"}}, "required": ["x", "z"]})");
     gui("play_start", "Play-test the open map inside the editor window (bots on all sides unless 'human' is set). The user watches live.",
         R"({"properties": {"speed": {"type": "number"}, "human": {"type": "integer", "description": "player slot controlled by the user, 0 = bots only"}, "device": {"type": "string"}}})");
-    gui("play_stop", "Stop the play-test and return to editing.", "{}");
+    addLinked("play_stop", "Stop the Studio play-test and return to editing.", "{}",requireStudioLink);
     gui("region_ownership_diagnostics", "Read last successful live region ownership reconciliation; requires running editor simulation.", "{}");
     addLinked("play_status", "Current Studio play-test time, players, resources, units and result.", "{}",requireStudioLink);
     gui("play_units", "Live objects of the running play-test: id (for play_command), map name, type, owner, position, hp, orders, statuses. "

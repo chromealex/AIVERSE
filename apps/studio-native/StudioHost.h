@@ -173,6 +173,7 @@ public:
     void gameSuspend() { if (game_) game_->suspend(); }
     // A native view went back to the main window (its floating window closed): hidden until the UI reports its rect.
     void surfaceDetached(StudioSurface surface);
+    void stopGame();
     Json gameState(bool includeScriptErrors = false);
 
 private:
