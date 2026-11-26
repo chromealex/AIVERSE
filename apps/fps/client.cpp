@@ -1334,6 +1334,9 @@ public:
         }
     }
     Simulation& simulation() override {return app_.server->simulation();}
+    const render::GeometryScene* staticGeometry() const override {
+        return initialized_ ? &app_.staticGeometry : nullptr;
+    }
     bool paused() const override {return paused_;}
     void pause(bool value) override {
         if(value && !paused_) {

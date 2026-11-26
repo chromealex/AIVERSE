@@ -19,6 +19,7 @@
 #include "engine/sim/Simulation.h"
 #include "engine/sim/CommonComponents.h"
 #include "engine/game/GameCore.h"
+#include "engine/render/StaticGeometryReport.h"
 #include "engine/game/Script.h"
 #include "engine/view/game/GameViewScript.h"
 #include "engine/world/WorldPersistenceDiagnostics.h"
@@ -172,6 +173,17 @@ Json StudioGameSurface::worldProcessDiagnostics(int cap,const std::string& focus
     return worldProcessDiagnostics_.sample(sim?&sim->world():nullptr,
         std::to_string(runtimeEpoch_),sim?sim->tick():0,cap,focus);
 }
+Json StudioGameSurface::staticGeometryReport(const editor::Workspace& ws) const {
+    if(launch_.project!=ws.project.dir)return {};
+    if(actor_){
+        if(launch_.sourceMap!=ws.map.path)return {};
+        const auto* scene=actor_->staticGeometry();
+        return scene ? render::staticGeometryReport(*scene) : Json{};
+    }
+    if(ws.map.data.worldSpace || ws.map.data.planet())return {};
+    return host_->staticGeometryReport();
+}
+
 bool StudioGameSurface::planetMatch() const {
     auto* sim=host_&&host_->inMatch()?host_->simulation():nullptr;
     if(sim)if(const auto* game=dynamic_cast<const game::GameCore*>(&sim->module()))

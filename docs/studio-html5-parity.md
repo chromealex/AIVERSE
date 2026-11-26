@@ -384,3 +384,5 @@ Static Geometry diagnostics: show the active Game renderer’s STRATA/LOD decisi
 Authoring static geometry: load project scenery in the native map Scene, update routing after saved mode changes and expose renderer decisions before Play. Verify edited routing and drawn models in packaged Studio.
 
 Static Geometry document scope: resolve world-space map geometry from the map, show and edit that file in the current document, and reject stale map/file writes. Keep project-scoped operations compatible.
+
+Hosted actor geometry: report Game routing from the initialized actor renderer only for the open source document. Verify map switches, return to its live Game report and Stop.

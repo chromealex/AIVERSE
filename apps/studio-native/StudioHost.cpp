@@ -4029,8 +4029,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
         if (method == "studio.gameState" && params.has("geometryProject")) {
             const auto& project = session_->workspace().project.dir;
             if (params.getStr("geometryProject") != project) throw std::runtime_error("Geometry project changed");
-            if (game_ && game_->launchPlan().project == project)
-                state.set("geometry", game_->staticGeometryReport());
+            if (game_)state.set("geometry",game_->staticGeometryReport(session_->workspace()));
             if (preview_ && placement_.visible && state["geometry"].isNull()) {
                 const auto file=editor::configuredGeometryScene(session_->workspace());
                 auto authored=onScene([&]{return preview_->staticGeometryReport(project,file);});
