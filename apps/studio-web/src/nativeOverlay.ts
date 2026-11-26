@@ -82,9 +82,15 @@ export function concealNativeViews(): void {
   }
 }
 
-export function watchOverlays(changed: () => void): () => void {
+export function watchOverlays(changed: () => void, nativeWindowVisibility = false): () => void {
   let frame = 0;
-  const schedule = () => { if (!frame) frame = requestAnimationFrame(() => { frame = 0; changed(); }); };
+  const schedule = () => {
+    if (nativeWindowVisibility && document.hidden) {
+      if (frame) cancelAnimationFrame(frame);
+      frame = 0;
+      changed();
+    } else if (!frame) frame = requestAnimationFrame(() => { frame = 0; changed(); });
+  };
   const observer = new MutationObserver(schedule);
   observer.observe(document.body, { subtree: true, childList: true, attributes: true,
     attributeFilter: ['open', 'class', 'style', 'role', 'hidden'] });

@@ -396,3 +396,5 @@ GPU asset authoring: expose project-scoped list/read/validate/save of fx/gpu emi
 GPU files: expose emitter execution, capacity, alpha and fallback policies and route quality/budget as editable fields.
 
 GPU emitter playback: give the authoring panel its own native surface and hybrid runtime instance. Verify draft execution mode changes, pause, step, restart and camera with Scene closed.
+
+Detached emitter: the visible native preview window reported hidden in its embedded WKWebView during desktop capture. Keep placement in CSS coordinates and let the native host decide when its window is drawable; verify actual automatic placement, modal occlusion, and docked/detached capture.

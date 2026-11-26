@@ -20,39 +20,44 @@ export default function SpectraDockViewport({id='fx',label='Native GPU particle 
     const element=ref.current;
     if(!element)return;
     let disposed=false,frame=0;
-    const publish=()=>{
-      if(frame)cancelAnimationFrame(frame);
-      frame=requestAnimationFrame(()=>{
-        frame=0;
-        if(disposed)return;
-        const viewport=element.getBoundingClientRect();
-        const scroller=element.closest('.spectra-di__editor,.graph-inspector,.attachment-body,.lens-layout,.effects-files,.lighting-scroll,.materials-editor,.anim-editor,.au-panel__body');
-        const clipped=fxViewportRect(viewport,
-          scroller?.getBoundingClientRect()??viewport,
-          window.devicePixelRatio||1,
-          document.visibilityState==='visible'&&!dockDragActive());
-        const fit=visibleViewport({
-          left:clipped.x,top:clipped.y,
-          right:clipped.x+clipped.width,bottom:clipped.y+clipped.height
-        });
-        const rect={...clipped,x:fit.x,y:fit.y,
-          width:fit.width,height:fit.height,visible:clipped.visible&&fit.visible};
-        onRect?.(rect);
-        if(!viewportRectChanged(id,rect))return;
-        void invoke('studio.viewportRect',{id,...rect}).catch(error=>{
-          forgetViewportRect(id);
-          console.warn('AIVERSE SpectraFX native viewport:',error);
-        });
+    const measure=()=>{
+      frame=0;
+      if(disposed)return;
+      const viewport=element.getBoundingClientRect();
+      const scroller=element.closest('.spectra-di__editor,.graph-inspector,.attachment-body,.lens-layout,.effects-files,.lighting-scroll,.materials-editor,.anim-editor,.au-panel__body');
+      const clipped=fxViewportRect(viewport,
+        scroller?.getBoundingClientRect()??viewport,
+        window.devicePixelRatio||1,
+        (id==='gpuEmitter'||document.visibilityState==='visible')&&!dockDragActive());
+      const fit=visibleViewport({
+        left:clipped.x,top:clipped.y,
+        right:clipped.x+clipped.width,bottom:clipped.y+clipped.height
       });
+      const rect={...clipped,x:fit.x,y:fit.y,
+        width:fit.width,height:fit.height,visible:clipped.visible&&fit.visible};
+      onRect?.(rect);
+      if(!viewportRectChanged(id,rect))return;
+      void invoke('studio.viewportRect',{id,...rect}).catch(error=>{
+        forgetViewportRect(id);
+        console.warn('AIVERSE SpectraFX native viewport:',error);
+      });
+    };
+    const publish=()=>{
+      // A floating native window can draw while its WebView throttles animation frames.
+      // AppKit and Win32 check the emitter surface and host window before each draw.
+      if(id==='gpuEmitter' && document.hidden){
+        if(frame)cancelAnimationFrame(frame);
+        measure();
+      }else if(!frame)frame=requestAnimationFrame(measure);
     };
     const ro=new ResizeObserver(publish);
     ro.observe(element);
-    const unsubscribeOverlay=watchOverlays(publish);
+    const unsubscribeOverlay=watchOverlays(publish,id==='gpuEmitter');
     const unsubscribeDrag=watchDockDrag(publish);
     window.addEventListener('resize',publish);
     window.addEventListener('scroll',publish,true);
     document.addEventListener('visibilitychange',publish);
-    publish();
+    measure();
     return()=>{
       disposed=true;
       if(frame)cancelAnimationFrame(frame);
