@@ -462,3 +462,5 @@ Standalone pose canvas: reuse the shared Studio GraphCanvas for zoom, fit, panni
 Packaged macOS standalone animation canvas verified against a saved graph with signed coordinates, direct port reassignment, movement history and navigation. Native physical pointer capture remains to verify.
 
 Fix Escape during a captured port drag. Verify with trusted browser pointer input and grouped selection.
+
+Port state rename and removal to the existing scoped animation document editor. Preserve transition metadata and allow returning to a stateless pose graph. Verify native save, compile and draft undo.

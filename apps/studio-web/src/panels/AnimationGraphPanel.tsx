@@ -71,6 +71,8 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route,his
   ...(current?.kind==='clip'?['clip','loop','speed']:[]),...(current?.weight!==undefined?['weight']:[]),
   ...(current?.kind==='subgraph'?['graph','bindings']:[]),...(current?.kind==='rig'?['units']:[])];
  const state=states.find(s=>s.id===stateId)??states[0];
+ const [renameStateTo,setRenameStateTo]=useState('');
+ useEffect(()=>setRenameStateTo(state?.id??''),[name,scope,state?.id]);
  const dirty=JSON.stringify(saved)!==JSON.stringify(draft);
  const [preview,setPreview]=useState({token:0,error:''});
  useEffect(()=>{
@@ -230,6 +232,11 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route,his
     <label>Scalar parameter<input value={parameter} placeholder="speed" onChange={e=>setParameter(e.target.value)}/></label>
     <button disabled={!parameter.trim()||Object.hasOwn(graph.parameters??{},parameter.trim())} onClick={()=>{change(inScope({...graph,parameters:{...graph.parameters,[parameter.trim()]:0}}));setParameter('');}}>Add parameter</button>
     {state&&<><label>State<select value={state.id} onChange={e=>setStateId(e.target.value)}>{states.map(s=><option key={s.id}>{s.id}</option>)}</select></label>
+     <label>State name<input value={renameStateTo} onChange={e=>setRenameStateTo(e.target.value)}/></label>
+     <button disabled={!renameStateTo.trim()||states.some(s=>s.id===renameStateTo.trim())} onClick={()=>void run(async()=>{
+      const name=renameStateTo.trim();await edit('renameState',{id:state.id,name});setStateId(name);
+     })}>Rename state</button>
+     <button onClick={()=>void run(async()=>{await edit('removeState',{id:state.id});setStateId('');})}>Remove state</button>
      <label>Output pose<select value={state.output} onChange={e=>updateState({...state,output:e.target.value})}>{nodeOptions(graph.nodes)}</select></label>
      <button disabled={(graph.initial??states[0]?.id)===state.id} onClick={()=>change(inScope({...graph,initial:state.id}))}>Set initial state</button>
      <button disabled={states.length<2||(state.transitions?.length??0)>=64} onClick={()=>updateState({...state,transitions:[...state.transitions??[],{to:states.find(s=>s!==state)!.id,fade:.2,after:0,when:[]}]})}>Add transition</button>

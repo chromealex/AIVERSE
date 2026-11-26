@@ -89,6 +89,8 @@ void registerAnimationOps(Workspace& ws){auto schema=Json::parse(R"({"type":"obj
                     if(children[name]["parameters"].has(key))bindings.set(key,value);
                 node->set("bindings",std::move(bindings));
             }else if(action=="connect")animation::connect(*graph,p.getStr("source"),id,p.getStr("port"));
+            else if(action=="renameState")animation::renameState(*graph,id,p.getStr("name"));
+            else if(action=="removeState")animation::removeState(*graph,id);
             else if(action=="remove")animation::remove(*graph,id);
             else if(action=="rename")animation::rename(*graph,id,p.getStr("name"));
             else if(action=="addUnit"||action=="addContacts"){
