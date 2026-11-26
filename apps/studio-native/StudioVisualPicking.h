@@ -21,9 +21,12 @@ inline float studioRayMesh(render::float3 origin,render::float3 direction,const 
         const float det=render::dot(e,h);
         if(std::abs(det)<1e-7f)continue;
         const auto s=origin-a;const float u=render::dot(s,h)/det;
-        if(u<0||u>1)continue;
+        // Shared mesh vertices can round a boundary barycentric weight a few
+        // ulps outside the triangle. Include that edge on either incident face.
+        constexpr float edgeTolerance=8*std::numeric_limits<float>::epsilon();
+        if(u < -edgeTolerance || u > 1+edgeTolerance)continue;
         const auto q=render::cross(s,e);const float w=render::dot(direction,q)/det;
-        if(w<0||u+w>1)continue;
+        if(w < -edgeTolerance || u+w > 1+edgeTolerance)continue;
         const float t=render::dot(f,q)/det;
         if(t>=0&&t<nearest)nearest=t;
     }

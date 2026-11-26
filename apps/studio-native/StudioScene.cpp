@@ -2991,10 +2991,11 @@ Json StudioScene::focusCoordinates(float x,float y,float z,float distance,const 
         const auto b=StudioPlanetPreview::fixed(std::clamp(z,0.f,side));
         game::CubeSphere cube(planetPreview_->faceSize);
         const auto up=normalize(StudioPlanetPreview::f3(cube.dirFromFace(face,a,b)));
-        const auto start=up*(planetPreview_->extent*2.f+1.f);
-        const float hit=planetPreview_->terrainHit(start,up*(-1.f),visiblePlanetTerrain());
-        if(!std::isfinite(hit))throw std::runtime_error("Planet focus cell has no rendered terrain");
-        target=start-up*hit;
+        // The mesh is radial. Casting from its center excludes intersections
+        // with the back hemisphere, even when the cell lies on a triangle edge.
+        const float radius=planetPreview_->terrainHit({},up,visiblePlanetTerrain());
+        if(!std::isfinite(radius))throw std::runtime_error("Planet focus cell has no rendered terrain");
+        target=up*radius;
         yaw=std::atan2(up.x,up.z);pitch=std::asin(std::clamp(up.y,-1.f,1.f));
         out.set("body",Json::string(planetPreview_->bodyId));out.set("face",Json::number(int64_t(face)));
     }

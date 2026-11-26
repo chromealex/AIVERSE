@@ -238,6 +238,13 @@ int main() {
     globe.data.entities.push_back(e);
     const auto preview=StudioPlanetPreview::build(globe,0);
     AIVERSE_TEST_CHECK(preview&&preview->mesh.indices().size()==6*8*8*6);
+    // Exact vertices and shared cube seams must pick the front hemisphere.
+    const game::CubeSphere sphere(body.faceSize);
+    for(int face=0;face<6;++face)for(int x=0;x<=body.faceSize;++x)for(int y=0;y<=body.faceSize;++y){
+        const auto dir=normalize(StudioPlanetPreview::f3(sphere.dirFromFace(face,Fixed::fromInt(x),Fixed::fromInt(y))));
+        AIVERSE_TEST_CHECK(std::abs(preview->terrainHit({},dir)-64.f)<.02f);
+        AIVERSE_TEST_CHECK(std::abs(preview->terrainHit(dir*128.f,dir*(-1.f))-64.f)<.02f);
+    }
     {
         auto& surface=globe.data.bodies.front();
         surface.detailScale=4;surface.detail.assign(6*33*33,0);
