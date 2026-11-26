@@ -629,6 +629,7 @@
     "docs/evidence/studio-physis-local-field-edit.json",
     "docs/evidence/studio-physis-remote-field-edit.json",
     "docs/evidence/studio-physis-live-display.json",
-    "docs/evidence/studio-physis-live-cycle.json"
+    "docs/evidence/studio-physis-live-cycle.json",
+    "docs/evidence/studio-physis-viewport-overlay.json"
   ]
 }

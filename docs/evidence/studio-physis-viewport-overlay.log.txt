@@ -1,0 +1,8 @@
+2026-11-26 13:35:28.520 AiverseStudioHTML5[9155:84804271] [studio-web] JS: CROSS main DONE_1
+2026-11-26 13:35:15.211 AiverseStudioHTML5[9155:84804271] [studio-web] JS: CROSS main VERIFIED live diagnostic tiles 64 to 16, one wind outline to zero, radius 6 and opacity 70% on paused tick 4
+2026-11-26 13:35:24.338 AiverseStudioHTML5[9155:84804271] [studio-web] JS: CROSS main VERIFIED live layer switches zero patches, particles and voices; quality cap 4608 and native gain 0.25; untouched pause and private display settings; invalid and stale edits refused
+2026-11-26 13:35:24.921 AiverseStudioHTML5[9155:84804271] [studio-web] JS: CROSS main VERIFIED MCP disabled and reopened live surface on tick 4; retained high quality and updated gain while hidden; private source kept medium, gain 0.8 and tick 1
+2026-11-26 13:35:28.520 AiverseStudioHTML5[9155:84804271] [studio-web] JS: CROSS main VERIFIED private overlay at tick 1 and independent default radius 9, tiles 24
+2026-11-26 13:35:28.520 AiverseStudioHTML5[9155:84804271] [studio-web] JS: CROSS main VERIFIED read-only local PHYSIS Metal surface matched paused game tick 4 and resumed tick 28, patches 4, separate private tick 1, stopped drawable removed
+Linked MCP reported read-only game, rejected ignite and step, captured live PNG 499 405
+Paused PHYSIS native capture 499 405 changed by at least 10 channel levels in 201097 pixels
