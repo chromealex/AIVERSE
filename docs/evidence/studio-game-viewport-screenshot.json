@@ -1,0 +1,10 @@
+{
+  "sha": "e63067c4469d86cd1413ec66c8f103c6f5372396",
+  "argv": [
+    "bash",
+    "/tmp/game-shot-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-game-viewport-screenshot.log.txt",
+  "sha256": "85430854566d2d0323de9ed87a4918c8c981680f8952c62eea23714b4e576fbd"
+}

@@ -554,3 +554,5 @@ Share the legacy PHYSIS camera-centered diagnostic sampler with HTML Studio and 
 Transfer PRISMA view_postfx to HTML Studio, including runtime quality for the hosted Game and Scene-only visibility, without changing project files.
 
 Route MCP Game screenshots to the active Game drawable and preserve device selection, source lifetime and hidden/stopped errors.
+
+Packaged macOS Game capture now uses the Game drawable through linked MCP. With Scene closed, free size returned 1280 × 510 and a device-only request for iPhone SE returned 957 × 538. Idle, hidden and stopped Game captures reported unavailable. [Game screenshot evidence](evidence/studio-game-viewport-screenshot.json).
