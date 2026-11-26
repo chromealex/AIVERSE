@@ -2216,12 +2216,10 @@ Json StudioHost::planetForestLiveRequest(){
         Json out=Json::object();out.set("active",Json::fromBool(false));return out;
 }
 Json StudioHost::sceneViewAgentRequest(const std::string& name,const Json& params){
-    if(projectLoading_||!session_||!preview_)throw std::runtime_error("Native Scene unavailable");
+    if(projectLoading_||!session_||session_->workspace().project.dir.empty())
+        throw std::runtime_error("Open a project before using Scene tools");
     const auto& ws=session_->workspace();
     if(name=="view_gizmos"){
-        const auto document=session_->sceneDocument();
-        if(!onScene([&]{return renderedSceneDocument_ && *renderedSceneDocument_==document;}))
-            throw std::runtime_error("Show the current map in Scene before changing overlays");
         const auto next=natureLayers_.patched(params,true);
         Json result=Json::object();
         if(params.has("select")){
@@ -2237,7 +2235,7 @@ Json StudioHost::sceneViewAgentRequest(const std::string& name,const Json& param
         }
         if(next!=natureLayers_){
             natureLayers_=next;nextNatureSample_=0;
-            onScene([&]{preview_->setNatureLayers(next);});
+            if(preview_)onScene([&]{preview_->setNatureLayers(next);});
             sendEventPayload("viewport.natureLayers",next.json(false));
         }
         result.set("ok",Json::fromBool(true));
@@ -2245,6 +2243,7 @@ Json StudioHost::sceneViewAgentRequest(const std::string& name,const Json& param
         result.set("summary",Json::string("Scene overlays updated"));
         return result;
     }
+    if(!preview_)throw std::runtime_error("Native Scene unavailable");
     if(name=="view_pick" || name=="view_focus" || name=="view_ground"){
         const auto width=placement_.pixelsW,height=placement_.pixelsH;
         if(!placement_.visible || !platform_.surfaceDrawable(StudioSurface::Scene) || width<2 || height<2)
