@@ -10,8 +10,8 @@ import './ProjectToolPanels.css';
 import './PostFxPanel.css';
 
 type Scope = 'game' | 'map';
-interface CatalogParam { name: string; kind: string; range?: [number, number]; default?: unknown; help: string }
-interface CatalogEffect { type: string; help: string; class: string; defaultMinQuality: string; params: CatalogParam[]; msPerFrame: Record<string, Record<string, number>> }
+export interface CatalogParam { name: string; kind: string; range?: [number, number]; default?: unknown; help: string }
+export interface CatalogEffect { type: string; help: string; class: string; defaultMinQuality: string; params: CatalogParam[]; msPerFrame: Record<string, Record<string, number>> }
 interface Catalog { effects: CatalogEffect[]; presets: Array<{ id: string; help: string }>; profiles?: Array<{ id: string; device: string }> }
 interface ChainTotal { device: string; tier: string; ms: number; fpsAt60: number; effects: number; passes: number }
 interface PostFxState { gameVolumes: string; mapVolumes: string; game: any; map: any; chain: { effects: any[]; total: Record<string, ChainTotal>; warnings: string[]; enabled: boolean; issues?: string[] } }
@@ -87,7 +87,7 @@ export default function PostFxPanel({ snapshot, commitSnapshot }: { snapshot: St
       })}</div>
       {scope === 'map' && <p className="ptp__hint">Map effects override the game's chain for this map only.</p>}
       {state && snapshot?.graphDocument && <PrismaVolumeEditor key={JSON.stringify([path,snapshot.graphDocument.epoch,scope])}
-        scope={scope} stored={scope==='map'?state.mapVolumes:state.gameVolumes}
+        scope={scope} catalog={catalog?.effects??[]} project={path} stored={scope==='map'?state.mapVolumes:state.gameVolumes}
         save={async (block, expected) => {
           const doc = snapshot.graphDocument!;
           await invoke('studio.op',{op:'postfx_volumes_set',params:{scope,block,expected},

@@ -1,4 +1,7 @@
 import {useState, type FormEvent} from 'react';
+import PrismaVolumeProfile from './PrismaVolumeProfile';
+import type {CatalogEffect} from './PostFxPanel';
+import {invoke} from '../bridge';
 import {StudioButton, StudioInput, StudioSelect} from '../ui';
 
 type Shape = 'global' | 'sphere' | 'box';
@@ -8,7 +11,9 @@ interface Volume {
 }
 interface Block { volumes: Volume[]; replace?: boolean }
 
-function VolumeForm({volume, apply, remove}: {volume: Volume; apply:(v:Volume)=>void; remove:()=>void}) {
+interface ProfileContext {catalog:CatalogEffect[]; project:string}
+
+function VolumeForm({volume, apply, remove, catalog, project}: ProfileContext & {volume: Volume; apply:(v:Volume)=>void; remove:()=>void}) {
   const [shape,setShape] = useState<Shape>(volume.shape ?? 'global');
   const [error,setError] = useState('');
   const scalar = (name:string,label:string,value:number,min?:number,max?:number,step='any') =>
@@ -45,15 +50,27 @@ function VolumeForm({volume, apply, remove}: {volume: Volume; apply:(v:Volume)=>
       {scalar('priority','Priority',volume.priority??0,-100000,100000,'1')}
       {scalar('layerMask','Layer mask',volume.layerMask??4294967295,0,4294967295,'1')}
     </div>
+    {shape!=='global' && <StudioButton onClick={async e=>{
+      const form=e.currentTarget.form;
+      try {
+        const {position}=await invoke('studio.lensPreview',{project,copyScene:true});
+        if (!position || position.length!==3 || !position.every(Number.isFinite)) throw Error('Scene camera position unavailable.');
+        if (!form?.isConnected) return;
+        for (const [i,axis] of ['X','Y','Z'].entries()) {
+          const input=form.elements.namedItem('center'+axis);
+          if (input instanceof HTMLInputElement) input.value=String(position[i]);
+        }
+        setError('');
+      } catch(e) {setError(e instanceof Error?e.message:String(e));}
+    }}>Use Scene camera position</StudioButton>}
     <label className="ptp__check"><input name="enabled" type="checkbox" defaultChecked={volume.enabled!==false}/>Enabled</label>
-    <details><summary>Effect profile</summary><textarea className="au-input" name="profile" aria-label="Effect profile JSON" rows={6}
-      defaultValue={JSON.stringify(volume.profile??{effects:[]},null,2)}/></details>
+    <PrismaVolumeProfile initial={volume.profile} catalog={catalog}/>
     {error && <p role="alert">{error}</p>}
     <StudioButton type="submit" variant="primary">Apply volume</StudioButton> <StudioButton onClick={remove}>Remove volume</StudioButton>
   </form>;
 }
 
-export default function PrismaVolumeEditor({scope,stored,save}: {
+export default function PrismaVolumeEditor({scope,stored,save,catalog,project}: ProfileContext & {
   scope:'map'|'game'; stored:string; save:(block:Block,expected:string)=>Promise<void>;
 }) {
   const [selected,setSelected]=useState(0);
@@ -84,7 +101,7 @@ export default function PrismaVolumeEditor({scope,stored,save}: {
         {volumes.map((v,i)=><option key={i} value={i}>{v.id??scope+':'+i}</option>)}</StudioSelect>}
       <StudioButton onClick={add}>Add volume</StudioButton>
     </div>
-    {index>=0 && <VolumeForm key={JSON.stringify([stored,index])} volume={volumes[index]}
+    {index>=0 && <VolumeForm key={JSON.stringify([stored,index])} volume={volumes[index]} catalog={catalog} project={project}
       apply={v=>void commit({...block,volumes:volumes.map((old,i)=>i===index?v:old)})}
       remove={()=>void commit({...block,volumes:volumes.filter((_,i)=>i!==index)},index-1)}/>}
     {error && <p role="alert">{error}</p>}

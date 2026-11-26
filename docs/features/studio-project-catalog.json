@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/panels/PrismaVolumeProfile.tsx",
     "apps/studio-web/src/panels/PrismaVolumeEditor.tsx",
     "apps/studio-web/src/panels/RaidPanel.tsx",
     "apps/editor/core/RaidOps.cpp",

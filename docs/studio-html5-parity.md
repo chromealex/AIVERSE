@@ -358,3 +358,5 @@ PHYSIS group transforms: select several authored zones, translate, rotate and sc
 Raid window: provide an extraction point form, readable objectives and bot receipts. Validate candidate map overrides before committing undoable edits. Verify in packaged Studio.
 
 PostFX transfer: edit local camera volume bounds and effect profiles in game and map scopes. Verify that map edits survive reopening and respect Undo.
+
+PostFX volume profiles: catalog-driven parameter overrides, inheritance, and placement from the native Scene camera pose. Verify authored masks and persisted coordinates.

@@ -765,3 +765,5 @@ Raid 09f79e18e verified with packaged Mac Studio. Created north-gate at (8,10), 
 PostFX transfer: edit local camera volume bounds and effect profiles in game and map scopes. Verify that map edits survive reopening and respect Undo.
 
 PostFX 47e869efa. apps/editor/core/PrismaOps.cpp and apps/studio-web/src/panels/PrismaVolumeEditor.tsx. Packaged Mac Studio authored an independent game sphere and map box with bloom, rejected stale and invalid writes without an Undo entry, restored a deleted volume, saved and reopened the map. Evidence docs/evidence/studio-postfx-local-volumes.json and docs/evidence/studio-project-catalog/postfx-camera-volumes.png. Typecheck, Vite, 299 web tests, Mac Studio build and prisma_volume CTest passed. Next: structured per-effect overrides and native per-camera diagnostics. Windows and merged-tree gate pending.
+
+PostFX volume profiles: catalog-driven parameter overrides, inheritance, and placement from the native Scene camera pose. Verify authored masks and persisted coordinates.
