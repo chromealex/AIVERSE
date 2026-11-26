@@ -835,3 +835,5 @@ Authoring geometry 636b09c9e6dc164fda633d345b3d8597544929f3. StudioScene on the 
 Game source regression at 8babc9bb4: the updated packaged panel showed Renderer = Game, one STRATA and one LOD source while playing with the Scene window closed. Stopping cleared the active source and model decisions. Receipt docs/evidence/studio-static-geometry-game-source.json.
 
 Static Geometry document scope: resolve world-space map geometry from the map, show and edit that file in the current document, and reject stale map/file writes. Keep project-scoped operations compatible.
+
+7fd043cf2de5c0a89166f629fc1a83cc51105c45. Configured geometry is now shared by StudioHost and document-scoped GeometryOps. The panel supplies project, document epoch and displayed file for a write. Mac Studio built and 299 web tests passed. The initial GUI fixture tried opening a world-space map in a grid-map project; Studio correctly rejected this at studio.openMap. Receipt docs/evidence/studio-static-geometry-map-files.json records this fixture failure. Repeat with an actor project, then repeat the project descriptor check separately on a grid project.

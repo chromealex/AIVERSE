@@ -1,0 +1,7 @@
+2026-11-26 08:18:34.394 AiverseStudioHTML5[95361:83435850] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/scoped-geometry-ui-au548q/Catalog.app/Contents/Resources/studio-web
+2026-11-26 08:18:34.519 AiverseStudioHTML5[95361:83435850] [studio-web] served index.html (7146 bytes)
+2026-11-26 08:18:34.524 AiverseStudioHTML5[95361:83435850] [studio-web] served assets/index-B_7jaBhj.js (1651035 bytes)
+2026-11-26 08:18:34.554 AiverseStudioHTML5[95361:83435850] [studio-web] JS: CROSS main boot
+2026-11-26 08:18:34.562 AiverseStudioHTML5[95361:83435850] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 08:18:36.263 AiverseStudioHTML5[95361:83435850] [studio-web] JS: CROSS main FAIL @aiverse-studio://shell/index.html:74:298
+global code@aiverse-studio://shell/index.html:1:51 Error: Map format does not match the project
