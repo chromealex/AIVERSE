@@ -1,0 +1,10 @@
+{
+  "sha": "c2594f2127df04d389e1ed6ee5bc7f372e3fb53f",
+  "argv": [
+    "bash",
+    "/tmp/live-refs.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-live-ref-groups.log.txt",
+  "sha256": "0205e62fd1b76cddffeaaf1a22e86a34d1d03fd935576234bd9f236cd3803a09"
+}
