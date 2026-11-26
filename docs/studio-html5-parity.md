@@ -348,3 +348,5 @@ PHYSIS diagnostics transfer: reuse the isolated native demo, tick stepping, all 
 PHYSIS cell details: sample wind velocity and gravity acceleration at the selected native cell center and elevation. Check keyboard and mouse selection against the displayed frame tick, including missing cells.
 
 PHYSIS live transfer: select the local play-test, capture a committed native field raster with optional cell vectors in the same read, and verify isolation from demo stepping and the authored map.
+
+PHYSIS authored zones: move native create, duplicate, edit and remove operations into a dedicated HTML form. Verify revision guards, Undo and saved map reopen.

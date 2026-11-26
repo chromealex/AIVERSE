@@ -30,7 +30,7 @@ def main():
         request("initialize", dict(protocolVersion="2025-06-18", capabilities={}, clientInfo=dict(name="physis-test", version="1")))
         listed = request("tools/list", {})["tools"]
         names = [t["name"] for t in listed if t["name"].startswith("physis_")]
-        assert sorted(names) == ["physis_demo", "physis_get", "physis_set", "physis_validate"], names
+        assert sorted(names) == ["physis_demo", "physis_get", "physis_set", "physis_validate", "physis_zone"], names
         before = call("physis_get", {})
         assert not call("physis_demo", dict(action="view"))["active"]
         reset = call("physis_demo", dict(action="reset", size=8, stride=2))
@@ -58,6 +58,16 @@ def main():
         assert call("physis_get", {})["config"] == config
         removed = call("physis_set", dict(config=None, expectedRevision=changed["revision"]))
         assert removed["changed"] and removed["config"] is None
+        setup = call("physis_set",dict(config=first["defaultConfig"],expectedRevision=removed["revision"]))
+        added = call("physis_zone",dict(action="add",kind="storm",expectedRevision=setup["revision"]))
+        edit = dict(action="edit",id=added["id"],patch={"updraft":37},expectedRevision=added["revision"])
+        updated = call("physis_zone",edit)
+        assert updated["config"]["storms"][0]["updraft"] == 37
+        call("physis_zone",edit,error=True)
+        copied = call("physis_zone",dict(action="duplicate",id=added["id"],expectedRevision=updated["revision"]))
+        assert copied["id"] != added["id"] and len(copied["config"]["storms"]) == 2
+        final = call("physis_zone",dict(action="remove",id=copied["id"],expectedRevision=copied["revision"]))
+        assert final["config"] == updated["config"]
         proc.stdin.close()
         assert proc.wait(timeout=5) == 0
         print("PHYSIS MCP stdio: PASS (discovery, validate, set/read, conflict, rejection atomicity, removal)")

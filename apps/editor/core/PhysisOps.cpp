@@ -135,6 +135,12 @@ const Json& requiredConfig(const Json& p) {
     if (!p.has("config")) throw std::invalid_argument("config is required; null explicitly removes PHYSIS");
     return p["config"];
 }
+void requireRevision(const Workspace& w,const Json& p) {
+    const auto& expected = p["expectedRevision"];
+    if (!expected.isNumber() || expected.numberLiteral().find_first_of(".eE") != std::string::npos ||
+        expected.integer(-1)<0 || uint64_t(expected.integer(-1)) != uint64_t(w.map.revision))
+        throw std::invalid_argument("PHYSIS document revision mismatch; read physis_get again");
+}
 Json snapshot(const Workspace& w) {
     Json r = Json::object();
     r.set("ok", Json::fromBool(true));
@@ -181,13 +187,51 @@ void registerPhysisOps(Workspace& ws) {
             validateConfig(requiredConfig(p));
             Json r=Json::object(); r.set("ok",Json::fromBool(true)); return r;
         });
+    add("physis_zone", "Create, duplicate, patch or remove one authored map zone with Undo and revision checking.",
+        R"({"properties":{"action":{"type":"string","enum":["add","duplicate","edit","remove"]},"kind":{"type":"string","enum":["wind","storm","gravity"]},"id":{"type":"string"},"patch":{"type":"object"},"expectedRevision":{"type":"integer","minimum":0}},"required":["action","expectedRevision"],"additionalProperties":false})",
+        [w](const Json& p) {
+            requireRevision(*w,p);
+            const auto before=w->map.revision;
+            auto action=p.getStr("action"), id=p.getStr("id");
+            std::string error;
+            bool ok=false;
+            if (action=="add") {
+                using Kind=physis::AuthoredFieldKind;
+                const auto kind=p.getStr("kind");
+                if (kind!="wind" && kind!="storm" && kind!="gravity") throw std::invalid_argument("Choose a zone type");
+                ok=physis_authoring::addField(w->map,kind=="wind"?Kind::Wind:kind=="storm"?Kind::Storm:Kind::Gravity,0,0,0,id,&error);
+            } else if (action=="duplicate") {
+                std::vector<std::string> added;
+                ok=physis_authoring::duplicateFields(w->map,{id},0,0,0,added,&error);
+                if (ok) id=added.front();
+            } else if (action=="remove") {
+                ok=physis_authoring::removeField(w->map,id,&error);
+                id.clear();
+            } else if (action=="edit") {
+                std::string collection; size_t index=0; Json entry;
+                if (!physis_authoring::findField(physis_authoring::read(w->map),id,collection,index,&entry))
+                    throw std::invalid_argument("PHYSIS zone no longer exists");
+                const auto& patch=p["patch"];
+                if (!patch.isObject() || patch.has("id")) throw std::invalid_argument("Supply zone properties with an unchanged ID");
+                for (const auto& [key,value]:patch.members()) {
+                    if (value.isNull()) entry.erase(key);
+                    else entry.set(key,value);
+                }
+                ok=physis_authoring::replaceField(w->map,id,entry,&error);
+            } else throw std::invalid_argument("Unknown PHYSIS zone action");
+            if (!ok) throw std::invalid_argument(error);
+            auto r=snapshot(*w);
+            r.set("id",Json::string(id));
+            r.set("changed",Json::fromBool(before!=w->map.revision));
+            if (before!=w->map.revision) {
+                Change change;change.kind=Change::Map;change.text="PHYSIS zones updated";w->note(change);
+            }
+            return r;
+        });
     add("physis_set", "Atomically replace the open map's PHYSIS config with Undo/Redo. Read physis_get first and supply its revision as expectedRevision; stale edits fail. config:null removes the block. Does not save files or apply live/remote simulation changes.",
         R"({"properties":{"config":{"type":["object","null"]},"expectedRevision":{"type":"integer","minimum":0}},"required":["config","expectedRevision"],"additionalProperties":false})", [w](const Json& p) {
             const auto& config = requiredConfig(p);
-            const auto& expected = p["expectedRevision"];
-            if (!expected.isNumber() || expected.numberLiteral().find_first_of(".eE") != std::string::npos ||
-                expected.integer(-1)<0 || uint64_t(expected.integer(-1)) != uint64_t(w->map.revision))
-                throw std::invalid_argument("PHYSIS document revision mismatch; read physis_get again");
+            requireRevision(*w,p);
             validateConfig(config);
             const auto before = w->map.revision;
             std::string error;

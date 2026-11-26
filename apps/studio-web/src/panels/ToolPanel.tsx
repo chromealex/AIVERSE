@@ -6,6 +6,7 @@ import { buildParams, fieldDraft, opLabel, resultLine, schemaFields, stateOps, t
 import { TOOL_PANELS, type ToolPanelId } from './toolPanels';
 import JsonTree from './JsonTree';
 import MapGeneratorPanel from './MapGeneratorPanel';
+import PhysisZonesPanel from './PhysisZonesPanel';
 import PhysisDiagnosticsPanel from './PhysisDiagnosticsPanel';
 import WaterShorePanel from './WaterShorePanel';
 import SceneBrushBar, { type BrushKind, type BrushField } from './SceneBrushBar';
@@ -100,6 +101,7 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
   const graphDomain=panel==='fx_graph'?'spectrafx':panel==='anim_graph'?'motionweave':null;
   const modelGraph=panel==='modeling';
   const hasGraph=!!graphDomain||modelGraph;
+  const [zoneMode,setZoneMode]=useState(false);
   const [graphMode,setGraphMode]=useState(true);
   const [ops, setOps] = useState<ToolOpInfo[]>([]);
   const [state, setState] = useState<Record<string, unknown>>({});
@@ -132,7 +134,7 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
   };
   if (!projectPath) return <div className="tool__empty">Open a project to use this panel.</div>;
   const q = filter.trim().toLowerCase();
-  const shown = ops.filter(o => o.name!=='physis_demo' && !(panel==='project_import' && (o.name==='port_scan'||o.name==='port_import')) && !o.name.startsWith('material_techniques_') && !spec.state.includes(o.name) && (!q || opLabel(o.name, spec.prefix).toLowerCase().includes(q) || o.name.includes(q) || o.description.toLowerCase().includes(q)));
+  const shown = ops.filter(o => o.name!=='physis_demo' && o.name!=='physis_zone' && !(panel==='project_import' && (o.name==='port_scan'||o.name==='port_import')) && !o.name.startsWith('material_techniques_') && !spec.state.includes(o.name) && (!q || opLabel(o.name, spec.prefix).toLowerCase().includes(q) || o.name.includes(q) || o.description.toLowerCase().includes(q)));
   const operationCards=<>
       {Object.entries(state).map(([name, value]) => <div key={name} className="tool__state">
         <JsonTree value={value} name={opLabel(name, spec.prefix)} open={false}/>
@@ -155,7 +157,11 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
       {panel==='models'&&<MaterialTechniquePanel key={projectPath} projectPath={projectPath}/>}
       {panel==='models'&&<StrataAnalysisPanel projectPath={projectPath}/>}
       {panel==='generate' && snapshot?.graphDocument && <MapGeneratorPanel key={snapshot.graphDocument.epoch} scope={snapshot.graphDocument} onChanged={()=>done(true)}/>}
-      {panel==='physis'&&<PhysisDiagnosticsPanel key={snapshot?.graphDocument?.epoch??projectPath} projectPath={projectPath}/>}
+      {panel==='physis'&&<><div className="physis-zone-nav" role="group" aria-label="PHYSIS views">
+        <button className="au-button" aria-pressed={!zoneMode} onClick={()=>setZoneMode(false)}>Field diagnostics</button>
+        <button className="au-button" aria-pressed={zoneMode} onClick={()=>setZoneMode(true)}>Map zones</button></div>
+        {zoneMode&&snapshot?.graphDocument?<PhysisZonesPanel key={snapshot.graphDocument.epoch} scope={snapshot.graphDocument} onChanged={()=>done(true)}/>:
+          <PhysisDiagnosticsPanel key={snapshot?.graphDocument?.epoch??projectPath} projectPath={projectPath}/>}</>}
       {panel==='water' && snapshot?.graphDocument && <WaterShorePanel key={snapshot.graphDocument.epoch} scope={snapshot.graphDocument} onChanged={()=>done(true)}/>}
       {BRUSHES[panel] && <SceneBrushBar project={projectPath} tileCatalog={state.tileset_list as Parameters<typeof SceneBrushBar>[0]['tileCatalog']} kinds={BRUSHES[panel]!} fields={(state.field_list as {fields?:BrushField[]} | undefined)?.fields}/>}
       {(panel==='water'||panel==='generate'||panel==='physis') ? <details className="water-shores__operations" open={q ? true : undefined}>
