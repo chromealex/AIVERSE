@@ -939,3 +939,5 @@ ab012abd784d518690c198c87b57e497139861da: apps/studio-web/src/panels/AnimationGr
 Next stage adds animation_editor_status and rig_editor_status in StudioHost. Editor state comes from the owning HTML panel and evaluated pose from its existing native preview session. Verify panel and project isolation, dirty state, inactive preview and stable read-only pose over linked MCP.
 
 efe939eae91ca56722ec13ac6ef25a4ed956c41a built on macOS; TypeScript, Vite and 299 web checks passed. docs/evidence/studio-linked-editor-status.json records a failed linked acceptance: both HTML previews opened, stepped and recovered from a missing model, but the external tools/list uses the local registry and lacked both names. Add linked-only discovery, distinguish a returned diagnostic error field from an MCP invocation failure, and bind cached state to Workspace projectLifetime before repeating.
+
+98d33c4d3a0950018c9b6f569a6f4023bf344592: the native build failed in tools/mcp/main.cpp:179 because engine Json exposes type() rather than isBool(). Correct the boolean check, rebuild Studio and retry linked status verification.
