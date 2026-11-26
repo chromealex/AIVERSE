@@ -1,0 +1,10 @@
+{
+  "sha": "fd9911d69da1a59301d9db6872f9200484b176c3",
+  "argv": [
+    "bash",
+    "/tmp/generate-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-generator-seed-roundtrip.log.txt",
+  "sha256": "f256c74b6159f53178ab68df387c58d581b4a4f9f8ad2cabaf893ab8624994a4"
+}
