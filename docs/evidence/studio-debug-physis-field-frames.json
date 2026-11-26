@@ -1,0 +1,10 @@
+{
+  "sha": "54a5030b2c4bf896146cc2bc69565eb7866a636f",
+  "argv": [
+    "bash",
+    "/tmp/debug-physis.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-debug-physis-field-frames.log.txt",
+  "sha256": "d68e685c501a5eeb95ca3052c038d87223cacb8842ba073b5fb29a295f1adce2"
+}
