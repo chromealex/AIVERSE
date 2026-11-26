@@ -158,6 +158,10 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
   }
   if (method === 'studio.planetForest') return {available:false,mapPath:'',revision:'0',moduleEnabled:false,physicsRequested:false,override:false,forest:null,catalog:null,markers:[]};
   if (method === 'studio.planetSceneBody') throw new Error('Native Scene required');
+  if (method === 'studio.physisNature') {
+    if ((params as StudioParams['studio.physisNature']).action === 'view') return {active:false};
+    throw new Error('Open desktop Studio to simulate the current map.');
+  }
   if (method === 'studio.physisLive') return {active:false};
   if (method === 'studio.planetForestLive') return {active:false};
   if (method === 'studio.planetForestArm' || method === 'studio.planetForestPlant' || method === 'studio.planetForestMove') throw new Error('Scene planting requires native Studio');

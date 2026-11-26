@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-native/StudioNaturePreview.h",
     "apps/editor/NatureGizmos.h",
     "apps/editor/core/NatureFieldArrows.h",
     "apps/studio-web/src/components/SceneToolbar.tsx",

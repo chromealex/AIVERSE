@@ -42,6 +42,8 @@
 
 #include "apps/studio-native/StudioStbCodecs.h"
 
+#include "StudioNaturePreview.h"
+
 namespace aiverse::studio {
 namespace fs = std::filesystem;
 
@@ -3836,6 +3838,28 @@ bool StudioHost::handleHostMethod(const Json& req) {
             forestPlantArm_=params;forestPlantArm_.set("project",Json::string(ws.project.dir));forestPlantArm_.set("sceneBody",Json::string(sceneBody));
         }
         out.set("armed",Json::fromBool(forestPlantArm_.isObject()));return out;
+    });
+    if (method=="studio.physisNature") return answer([&] {
+        const auto& ws=session_->workspace();
+        const auto epoch=session_->graphDocumentScope().getStr("epoch");
+        if (projectLoading_ || epoch.empty() || ws.project.dir.empty() ||
+            params.getStr("expectedProject")!=ws.project.dir || params.getStr("expectedDocumentEpoch")!=epoch)
+            throw std::runtime_error("Map changed. Reopen the PHYSIS panel.");
+        if (naturePreview_ && (naturePreview_->epoch!=epoch || naturePreview_->revision!=ws.map.revision))
+            naturePreview_.reset();
+        const auto action=params.getStr("action");
+        if (action=="reset") {
+            if (ws.map.data.planet()) throw std::runtime_error("Nature preview requires a terrain map.");
+            auto next=std::make_shared<StudioNaturePreview>(epoch,ws.map,float(ws.project.rules.levelHeight.toDouble()));
+            auto frame=next->read(params);
+            naturePreview_=std::move(next);
+            return frame;
+        }
+        if (!naturePreview_) {
+            if (action=="view") return editor::readPhysisGameFrame(nullptr,params);
+            throw std::runtime_error("Create the map preview first.");
+        }
+        return naturePreview_->apply(action,params);
     });
     if(method=="studio.physisLive")return answer([&] {
         const auto& project=session_->workspace().project.dir;

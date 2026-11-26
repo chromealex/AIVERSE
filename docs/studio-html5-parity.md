@@ -480,3 +480,5 @@ The Scene overlays menu shows PHYSIS wind and fire direction from a running loca
 Restore adjustable nature-field radius (8–200 m) and spacing (2–32 m) in the Scene overlays menu. Verify actual frame differences, preference persistence and input bounds.
 
 Field sampling controls on the Scene menu were verified at a frozen game tick in packaged macOS Studio. Radius and spacing changed the rendered arrows and survived a full app relaunch.
+
+PHYSIS Diagnostics: migrate the private map simulation, single and 60-tick stepping, cell ignition and reset into the panel. Verify with Scene and Game closed.

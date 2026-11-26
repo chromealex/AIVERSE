@@ -31,6 +31,7 @@ namespace aiverse::studio {
 enum class StudioSurface { Scene, Game, Fx, Material, Shader, FacialRig, Character, Appearance, AnimationGraph, AnimationRig, Attachments, LensCamera, Lighting, EffectFile, GpuEmitter, SourceModel, ImportedClip, Count };
 
 // What a shell provides. Called on the main (UI) thread only, except runInBackground's work.
+struct StudioNaturePreview;
 class StudioLightBakeFiles;
 class StudioHostPlatform {
 public:
@@ -306,6 +307,7 @@ private:
     std::string rulesSnapshotProject_;
     size_t rulesSnapshotHash_ = 0;
     double nextMapSnapshot_ = 0, nextRulesCheck_ = 0;
+    std::shared_ptr<StudioNaturePreview> naturePreview_;
     std::unique_ptr<StudioGameSurface> game_;
     Json playReview_;
     Json agentPlayReview_;

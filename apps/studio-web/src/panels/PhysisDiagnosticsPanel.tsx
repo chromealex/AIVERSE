@@ -45,27 +45,28 @@ function FieldMap({frame,contours,label,cell,pick}:{frame:Frame;contours:boolean
   </>;
 }
 
-export default function PhysisDiagnosticsPanel({projectPath}:{projectPath:string}){
+export default function PhysisDiagnosticsPanel({projectPath,epoch}:{projectPath:string;epoch:string}){
   const [source,setSource]=useState('demo');
   return <section className="physis-diagnostics"><label className="physis-source">Field source<StudioSelect value={source} onChange={e=>setSource(e.target.value)}>
-    <option value="demo">Isolated demo</option><option value="game">Local play-test</option>
+    <option value="demo">Isolated demo</option><option value="map">Current map preview</option><option value="game">Local play-test</option>
   </StudioSelect></label>
-  <Diagnostics key={projectPath+source} projectPath={projectPath} live={source==='game'}/></section>;
+  <Diagnostics key={projectPath+source} projectPath={projectPath} source={source} epoch={epoch}/></section>;
 }
 
-function Diagnostics({projectPath,live}:{projectPath:string;live:boolean}){
+function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:string;epoch:string}){
+  const live=source==='game', map=source==='map';
   const [view,setView]=useState(initial),[frame,setFrame]=useState<Frame>();
   const [busy,setBusy]=useState(true),[error,setError]=useState(''),[contours,showContours]=useState(true);
   const [cell,pick]=useState<number>();
   const requestId=useRef(0);
-  async function request(action:string,next:View,selection=cell){
+  async function request(action:'view'|'step'|'step60'|'reset'|'ignite',next:View,selection=cell){
     const id=++requestId.current;
     const sameArea=next.size===view.size&&next.stride===view.stride&&next.centerX===view.centerX&&next.centerZ===view.centerZ;
     const selected=sameArea&&action!=='reset'?selection:undefined;
     const coords=frame&&selected!==undefined?{cellX:frame.originX+(selected%frame.width)*frame.stride,cellZ:frame.originZ+Math.floor(selected/frame.width)*frame.stride}:{};
     setBusy(true);setError('');
     try{
-      const result=live?await invoke('studio.physisLive',{...next,...coords,expectedProject:projectPath}):
+      const result=map?await invoke('studio.physisNature',{...next,...coords,action,expectedProject:projectPath,expectedDocumentEpoch:epoch}):live?await invoke('studio.physisLive',{...next,...coords,expectedProject:projectPath}):
         (await invoke('studio.op',{op:'physis_demo',params:{action,...next},expectedProject:projectPath})).result as Frame|{active:false};
       if(id!==requestId.current)return;
       pick(result.active?selected:undefined);
@@ -78,15 +79,15 @@ function Diagnostics({projectPath,live}:{projectPath:string;live:boolean}){
   return <>
     <header><h3>Field diagnostics</h3>{frame&&<output>Tick {frame.tick}</output>}</header>
     <fieldset disabled={busy} className={frame?'physis-workspace':undefined}>
-      <div className="au-row">{live?<StudioButton onClick={()=>void request('view',view)}>Refresh play-test</StudioButton>:<><StudioButton onClick={()=>void request('reset',{...view,centerX:0,centerZ:0})}>{frame?'Reset demo':'Create demo'}</StudioButton>
-        {frame&&<><StudioButton onClick={()=>void request('step',view)}>Step 1 tick</StudioButton><StudioButton onClick={()=>void request('step60',view)}>Step 60 ticks</StudioButton></>}</>}
+      <div className="au-row">{live?<StudioButton onClick={()=>void request('view',view)}>Refresh play-test</StudioButton>:<><StudioButton onClick={()=>void request('reset',{...view,centerX:0,centerZ:0})}>{map?(frame?'Reset map preview':'Create map preview'):(frame?'Reset demo':'Create demo')}</StudioButton>
+        {frame&&<><StudioButton onClick={()=>void request('step',view)}>Step 1 tick</StudioButton><StudioButton onClick={()=>void request('step60',view)}>Step 60 ticks</StudioButton>{map&&<StudioButton disabled={!frame.cell?.available} onClick={()=>void request('ignite',view)}>Ignite selected cell</StudioButton>}</>}</>}
       </div>
-      {!frame&&<p>{live?'Start a local play-test with PHYSIS enabled, then refresh.':'Create an isolated environment to inspect its weather and force fields.'}</p>}
+      {!frame&&<p>{live?'Start a local play-test with PHYSIS enabled, then refresh.':map?'Preview the open map’s weather and fire. Changes stay in this preview.':'Create an isolated environment to inspect its weather and force fields.'}</p>}
       {frame&&<>
         <div className="physis-controls physis-layers"><label>Field<StudioSelect value={view.layer} onChange={e=>change('layer',Number(e.target.value))}>{layers.map((l,i)=><option key={l} value={i}>{l}</option>)}</StudioSelect></label>
           <label>Palette<StudioSelect value={view.palette} onChange={e=>change('palette',Number(e.target.value))}>{['Thermal','High contrast','Ocean'].map((l,i)=><option key={l} value={i}>{l}</option>)}</StudioSelect></label>
         </div>
-        <div className="physis-figure"><FieldMap key={[view.centerX,view.centerZ,view.size,view.stride].join('/')} frame={frame} cell={cell} pick={live?index=>void request('view',view,index):pick} contours={contours} label={layers[view.layer]}/></div>
+        <div className="physis-figure"><FieldMap key={[view.centerX,view.centerZ,view.size,view.stride].join('/')} frame={frame} cell={cell} pick={live||map?index=>void request('view',view,index):pick} contours={contours} label={layers[view.layer]}/></div>
         <div className="physis-options"><label className="physis-toggle"><input type="checkbox" checked={contours} onChange={e=>showContours(e.target.checked)}/>Volume contours</label>
         <details><summary>Map area</summary><form className="physis-controls" key={[view.size,view.stride,view.centerX,view.centerZ].join('/')} onSubmit={e=>{
           e.preventDefault();const data=new FormData(e.currentTarget);
@@ -97,7 +98,7 @@ function Diagnostics({projectPath,live}:{projectPath:string;live:boolean}){
           <StudioButton type="submit">Apply area</StudioButton>
         </form></details>
         {cell!==undefined&&<PhysisCellReading key={[frame.tick,cell,frame.originX,frame.originZ,frame.stride].join('/')}
-          captured={live?frame.cell:undefined} projectPath={projectPath} x={frame.originX+(cell%frame.width)*frame.stride} z={frame.originZ+Math.floor(cell/frame.width)*frame.stride}
+          captured={live||map?frame.cell:undefined} projectPath={projectPath} x={frame.originX+(cell%frame.width)*frame.stride} z={frame.originZ+Math.floor(cell/frame.width)*frame.stride}
           tick={frame.tick} label={layers[view.layer]} value={frame.values[cell]} refresh={()=>void request('view',view)}/>}
         </div>
       </>}
