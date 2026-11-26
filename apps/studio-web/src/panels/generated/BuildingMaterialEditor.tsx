@@ -3,7 +3,7 @@ import { StudioSelect } from '../../ui/StudioUI';
 import AssetReferencePicker from '../../components/AssetReferencePicker';
 import { invoke, nativeConnected, onNativeEvent } from '../../bridge';
 import type { MaterialData, MaterialPatch, MaterialLibrary } from '../materialSchema';
-import { materialNames } from '../materialSchema';
+import { materialFields, materialNames } from '../materialSchema';
 import './BuildingMaterialEditor.css';
 
 type NumericKey = 'metallic' | 'roughness' | 'emissiveStrength' | 'normalScale' | 'occlusionStrength';
@@ -27,16 +27,7 @@ const textures: ReadonlyArray<{ key: TextureKey; label:string }> = [
 
 const initial = (source: MaterialData): MaterialPatch => {
   const copy: MaterialPatch = {};
-  for (const {key} of numeric) {
-    const raw = source[key];
-    copy[key] = typeof raw === 'number' && Number.isFinite(raw) ? raw : key === 'roughness' ? 1 : 0;
-  }
-  for (const {key} of uvFields) {
-    const raw=source[key];
-    copy[key]=Array.isArray(raw)&&raw.length===2
-      ? raw.join(',') : typeof raw==='string' ? raw : key==='uvScale'?'1,1':'0,0';
-  }
-  for (const {key} of textures) copy[key] = typeof source[key] === 'string' ? source[key] : '';
+  for (const field of materialFields(source)) copy[field.key] = field.value;
   return copy;
 };
 
@@ -79,7 +70,7 @@ export default function BuildingMaterialEditor({ projectLoaded,onSaved }:{projec
       name && data.library[name] ? name : materialNames(data)[0] ?? '';
     const values = await editableSource(data.library[next] ?? {});
     setLibrary(data);setName(next);setDraft(values);setBaseline(values);
-    setMessage('');setError('');
+    setError('');
   };
   useEffect(()=>{
     if(!projectLoaded){setLibrary({library:{}});setName('');return;}
@@ -121,7 +112,11 @@ export default function BuildingMaterialEditor({ projectLoaded,onSaved }:{projec
     try{
       // One native patch persists the scalar material values AND all image
       // GUIDs through the project material library.
-      const saved=await invoke('studio.materialPatch',{name,patch:draft});
+      const patch:MaterialPatch = {};
+      for (const {key} of [...numeric,...uvFields,...textures]) {
+        if (draft[key] !== baseline[key]) patch[key] = draft[key];
+      }
+      const saved=await invoke('studio.materialPatch',{name,patch});
       setLibrary(saved);
       const next=await editableSource(saved.library[name]??{});
       setDraft(next);setBaseline(next);

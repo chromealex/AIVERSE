@@ -1,0 +1,10 @@
+{
+  "sha": "5dfefd9be3c87518040dfd86c057b0a6e7014e02",
+  "argv": [
+    "bash",
+    "../building-path.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-building-file-path.log.txt",
+  "sha256": "d3363e648baa9f0bc0ea0f5bdbccf8a55cf53bc00e862d8d0a4f3e8974b31086"
+}
