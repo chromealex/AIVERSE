@@ -422,3 +422,5 @@ Model Animation: choose an imported model and clip, sample its native pose, play
 Animation authoring navigation: implement animation_editor in the HTML host, reveal project-scoped clips or the embedded model graph, preserve edited drafts and verify linked requests.
 
 Dock panels: add Maximize and Restore to the shared ellipsis menu; keep split ratios, mounted panel state and native preview placement across both actions.
+
+The dock menu supports Maximize and Restore throughout HTML Studio. A native window containing just one dock area uses system window zoom. Packaged macOS verification and screenshots are recorded in docs/evidence/studio-panel-maximize-native.json and docs/evidence/studio-project-catalog/panel-maximized.png.
