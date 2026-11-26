@@ -10,6 +10,7 @@
 #include "apps/editor/AuthoringWater.h"
 #include "apps/studio-native/StudioScene.h"
 #include "apps/studio-native/StudioAttachmentPreview.h"
+#include "engine/view/game/GameView.h"
 #include "apps/studio-native/StudioGpuEmitterPlayback.h"
 #include "apps/studio-native/StudioEffectPlayback.h"
 #include "engine/render/CameraCaptureViews.h"
@@ -644,6 +645,25 @@ static bool readPreviewAsset(const std::filesystem::path& root,const std::string
     out.resize(size_t(size));
     return bool(input.read(out.data(),std::streamsize(size)));
 }
+
+struct StudioScene::ConfiguredModel {
+    gfx::Device& device;
+    render::Renderer3D& renderer;
+    game::Rules rules;
+    game::GameView view;
+    uint16_t type=0;
+    int owner=0;
+    float yaw=.6f,pitch=.4f;
+    double time=0;
+    bool playing=true;
+    std::chrono::steady_clock::time_point last{};
+    ConfiguredModel(gfx::Device& dev,render::Renderer3D& r,const Json& definitions)
+        :device(dev),renderer(r),rules(game::loadRules(definitions)){}
+    void shutdown(){
+        {const auto read=view.readModelOf(type);if(read.get())renderer.invalidateModelCachesFor(read.get());}
+        view.shutdown(device);
+    }
+};
 
 struct StudioScene::StaticScenery {
     render::GeometryScene scene;
@@ -2050,6 +2070,12 @@ void StudioScene::drawLivePlanetForestMeshes(const editor::MapDoc& doc,const std
     if(missing)lightingStatus_+=" · missing live models "+std::to_string(missing);
 }
 StudioScene::~StudioScene() {
+    if(configuredModel_){
+        try{configuredModel_->shutdown();}catch(const std::exception& e){
+            std::fprintf(stderr,"Studio type preview retirement: %s\n",e.what());
+            (void)configuredModel_.release();
+        }
+    }
     attachmentPreview_.reset();
     if (device_) {
         const bool idle=device_->waitForResourceIdle();
@@ -3127,6 +3153,64 @@ Json StudioScene::configureLensCamera(const Json& params) {
         return Json::object();
     }
     throw std::runtime_error("Select an existing camera");
+}
+Json StudioScene::sourceModelCommand(const std::string& project,const Json& rules,const Json& params){
+    if(params["type"].isString()){
+        auto next=std::make_unique<ConfiguredModel>(*device_,renderer_,rules);
+        const int index=next->rules.findType(params.getStr("type"));
+        if(index<0)throw std::runtime_error("Unknown game type");
+        next->type=uint16_t(index);
+        next->view.setGpuDeviceLease(deviceLifetime_->lease());
+        next->view.setDeferredLoading(true);
+        next->view.setContentBase(project+"/");
+        try{
+            if(!next->view.init(*device_,next->rules,[project](const std::string& path,std::string& bytes){
+                return readPreviewAsset(project,path,bytes);
+            }))throw std::runtime_error("Game type preview initialization failed");
+            next->view.loadType(next->type);
+            if(configuredModel_)configuredModel_->shutdown();
+        }catch(...){
+            try{next->shutdown();}catch(...){(void)next.release();}
+            throw;
+        }
+        configuredModel_=std::move(next);
+        attachmentPreview_.reset();
+    }
+    if(params["model"].isString()){
+        Json layout=Json::object();layout.set("parent",params["model"]);layout.set("attachments",Json::array());
+        Json settings=params;settings.set("document",layout);settings.set("playing",Json::fromBool(false));
+        auto result=attachmentCommand(project,settings,true);
+        if(configuredModel_){configuredModel_->shutdown();configuredModel_.reset();}
+        return result;
+    }
+    if(!configuredModel_)return attachmentCommand(project,params,true);
+    auto& model=*configuredModel_;
+    if(params.has("owner"))model.owner=int(std::clamp<int64_t>(params.getInt("owner"),0,8));
+    if(params.has("playing"))model.playing=params.getBool("playing");
+    if(params.has("yaw"))model.yaw=float(params["yaw"].toDouble());
+    if(params.has("pitch"))model.pitch=float(std::clamp(params["pitch"].toDouble(),-.9,1.4));
+    Json result=Json::object();
+    result.set("time",Json::number(model.time));return result;
+}
+void StudioScene::drawSourceModel(int width,int height){
+    if(!configuredModel_){drawAttachments(width,height);return;}
+    if(width<2||height<2)return;
+    auto& model=*configuredModel_;
+    const auto now=std::chrono::steady_clock::now();
+    if(model.playing&&model.last.time_since_epoch().count())
+        model.time+=std::min(.1,std::chrono::duration<double>(now-model.last).count());
+    model.last=now;
+    render::Camera camera;
+    const float heightHint=std::max(.3f,float(model.rules.types[model.type].view["height"].toDouble(1)));
+    const float radius=std::max(heightHint,model.view.selectionRadius(model.type));
+    camera.target={0,heightHint*.45f,0};camera.distance=radius*2.65f*std::max(1.f,float(height)/width);
+    camera.minDistance=.05f;camera.yaw=model.yaw;camera.pitch=model.pitch;
+    device_->beginFrame(width,height);StudioFrameScope frame{*device_};
+    renderer_.beginScene(camera,width,height);
+    renderer_.lighting.skyColor={.8f,.85f,.9f};renderer_.lighting.fogDensity=0;
+    model.view.drawPreview(renderer_,model.type,uint8_t(model.owner),model.time,0.f);
+    gfx::PassDesc pass;pass.clearColor[0]=.07f;pass.clearColor[1]=.09f;pass.clearColor[2]=.135f;
+    renderer_.render(pass);
 }
 Json StudioScene::attachmentCommand(const std::string& project,const Json& params,bool originalModel){
     if(!attachmentPreview_)attachmentPreview_=std::make_unique<StudioAttachmentPreview>(*device_,renderer_,deviceLifetime_->lease());

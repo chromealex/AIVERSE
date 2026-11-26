@@ -414,3 +414,5 @@ SpectraFX value nodes: edit numeric, vector, boolean, color and parameter litera
 Modeling to Attachments: route the active model editor to the shared attachment panel and retain its unsaved graph while switching tabs.
 
 Models: render the original project model directly on a dedicated native surface using the existing imported-model provider; verify independent orbit and unchanged assets with Scene closed.
+
+Models: inspect the authored game type through the shared GameView with owner color, idle animation and panel-local camera; preserve source-only inspection.

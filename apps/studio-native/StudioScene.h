@@ -452,6 +452,8 @@ public:
     void drawGpuEmitter(int width,int height);
     Json effectFileCommand(const std::string& project,const Json& params);
     void drawEffectFile(int width,int height);
+    Json sourceModelCommand(const std::string& project,const Json& rules,const Json& params);
+    void drawSourceModel(int width,int height);
     void drawAttachments(int width,int height);
     void drawAnimationPose(int width,int height,const std::shared_ptr<const render::Model>& source,
                            const render::Pose& pose,float yaw);
@@ -640,6 +642,8 @@ private:
     bool terrainWasShown_=false,terrainCavernsAuthored_=false;
     std::unique_ptr<class StudioGpuEmitterPlayback> gpuEmitter_;
     std::unique_ptr<class StudioEffectPlayback> effectFile_;
+    struct ConfiguredModel;
+    std::unique_ptr<ConfiguredModel> configuredModel_;
     std::unique_ptr<class StudioAttachmentPreview> attachmentPreview_;
     std::shared_ptr<const render::Model> animationSource_;
     std::unique_ptr<render::Model> animationModel_;

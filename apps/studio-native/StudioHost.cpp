@@ -1098,7 +1098,8 @@ void StudioHost::tick() {
         if (!asset.renderer || !asset.placement.visible || !platform_.surfaceDrawable(surface)) continue;
         try {
             onScene([&] { platform_.sceneThreadScope([&] {
-                asset.renderer->drawAttachments(asset.placement.pixelsW,asset.placement.pixelsH);
+                if(source)asset.renderer->drawSourceModel(asset.placement.pixelsW,asset.placement.pixelsH);
+                else asset.renderer->drawAttachments(asset.placement.pixelsW,asset.placement.pixelsH);
             }); });
         } catch(const std::exception& e) {
             sendEvent(source ? "sourceModel.previewError" : "attachments.previewError",e.what());
@@ -4489,7 +4490,7 @@ void StudioHost::handleMessage(const std::string& json) {
                 if(lens){lensShot_.reset();lensCameraId_=0;}
                 ownerProject.clear();
             } else {
-                const bool publishing = sourceModel ? params["model"].isString() : (gpuEmitter || effectFile) ? params["source"].isString() : params["document"].isObject();
+                const bool publishing = sourceModel ? (params["model"].isString()||params["type"].isString()) : (gpuEmitter || effectFile) ? params["source"].isString() : params["document"].isObject();
                 if (!renderThread_) {
                     if (!publishing) throw std::runtime_error("Open the attachment preview first");
                     const char* threaded = std::getenv("AIVERSE_STUDIO_RENDER_THREAD");
@@ -4511,17 +4512,7 @@ void StudioHost::handleMessage(const std::string& json) {
                         } else if(gpuEmitter) result=asset.renderer->gpuEmitterCommand(project,params);
                         else if(effectFile) result=asset.renderer->effectFileCommand(project,params);
                         else if (sourceModel) {
-                            Json settings=Json::object();
-                            if (publishing) {
-                                Json layout=Json::object();
-                                layout.set("parent",params["model"]);
-                                layout.set("attachments",Json::array());
-                                settings.set("document",std::move(layout));
-                                settings.set("playing",Json::fromBool(false));
-                            }
-                            if(params.has("yaw"))settings.set("yaw",params["yaw"]);
-                            if(params.has("pitch"))settings.set("pitch",params["pitch"]);
-                            result=asset.renderer->attachmentCommand(project,settings,true);
+                            result=asset.renderer->sourceModelCommand(project,session_->workspace().project.rulesJson,params);
                         } else result=asset.renderer->attachmentCommand(project,params);
                     });
                 });

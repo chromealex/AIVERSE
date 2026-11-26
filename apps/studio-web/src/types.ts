@@ -685,7 +685,7 @@ export interface StudioParams {
   'studio.extensionAction': { id: string; value?: string | number | boolean };
   'studio.extensionCreate': Record<string,never>;
   'studio.lensPreview': {project:string;close?:boolean;copyScene?:boolean;useInScene?:boolean;capture?:boolean;document?:unknown;id?:number};
-  'studio.sourceModelPreview': {project:string;model?:string;yaw?:number;pitch?:number;close?:boolean};
+  'studio.sourceModelPreview': {project:string;model?:string;type?:string;owner?:number;playing?:boolean;yaw?:number;pitch?:number;close?:boolean};
   'studio.attachmentsPreview': {project:string;close?:boolean;status?:boolean;document?:StudioAttachmentDoc;playing?:boolean;time?:number;yaw?:number;pitch?:number};
   'studio.attachmentsGet': { path?: string; project?:string };
   'studio.attachmentsSet': { path?: string; project?:string; expected?:StudioAttachmentDoc|null; document: StudioAttachmentDoc };
@@ -950,7 +950,7 @@ export interface StudioResult {
   'studio.extensionAction': { command: Record<string, unknown> | null };
   'studio.extensionCreate': StudioExtensions;
   'studio.lensPreview': {position?:number[];rotation?:number[];camera?:{projection:string;fov:number;near:number;far:number;orthographicHalfHeight:number}};
-  'studio.sourceModelPreview': {duration?:number};
+  'studio.sourceModelPreview': {duration?:number;time?:number};
   'studio.attachmentsPreview': {time?:number;children?:number;duration?:number;sockets?:string[]};
   'studio.attachmentsGet': StudioAttachmentsResult;
   'studio.attachmentsSet': StudioAttachmentsResult;
