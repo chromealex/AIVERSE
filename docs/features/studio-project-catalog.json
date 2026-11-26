@@ -611,6 +611,7 @@
     "docs/evidence/studio-private-physis-grid.json",
     "docs/evidence/studio-physis-textured-nature.json",
     "docs/evidence/studio-physis-nature-pointer.json",
-    "docs/evidence/studio-physis-nature-picked-cell.json"
+    "docs/evidence/studio-physis-nature-picked-cell.json",
+    "docs/evidence/studio-physis-pointer-recenter.json"
   ]
 }
