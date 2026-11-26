@@ -4,6 +4,7 @@
 // No ImGui, no CPU texture readback, no dependency on UI component hierarchy.
 #pragma once
 #include "apps/studio-native/StudioMapAreaBounds.h"
+#include "apps/studio-native/StudioSceneDocument.h"
 #include "engine/fx/SpectraSdfFileIO.h"
 #include <chrono>
 #include <memory>
@@ -271,11 +272,11 @@ public:
         lastFrameSignature_=0;settleFrames_=30;
         return result;
     }
-    void requestMapCapture(editor::SceneScreenshotOptions options,gfx::Device::CaptureFn callback) {
-        mapCapture_=MapCapture{options,std::move(callback)};
+    void requestMapCapture(const StudioSceneDocument& document,editor::SceneScreenshotOptions options,gfx::Device::CaptureFn callback) {
+        mapCapture_=MapCapture{document,options,std::move(callback)};
     }
     void cancelMapCapture() { mapCapture_.reset(); }
-    void renderMapOutput(int width,int height,const std::function<void(int,int)>& draw);
+    void renderMapOutput(const StudioSceneDocument& document,int width,int height,const std::function<void(int,int)>& draw);
     void captureNextFrame(gfx::Device::CaptureFn callback) { lastFrameSignature_=0; device_->captureNextFrame(std::move(callback)); }
     void setCaveGlobe(std::string body,const std::string& project,const std::string& map);
     bool caveGlobeRequested()const noexcept{return !globeBody_.empty();}
@@ -350,6 +351,7 @@ public:
     void look(float dx, float dy);
     void move(float right, float up, float forward);
     void focusSelected(const editor::MapDoc& map, bool fpsProject, const std::string& selectedId);
+    Json focusCoordinates(float x,float y,float z,float distance,const editor::MapDoc& map);
     void resetView();
     // Unity-style Scene view helpers: animated orbit to an axis view and the
     // Persp/Iso toggle. Orientation/projection are editor camera state only.
@@ -723,7 +725,7 @@ private:
     std::deque<ThumbJob> thumbJobs_;
     struct ThumbShared { std::mutex mutex; std::vector<std::string> done; };
     std::shared_ptr<ThumbShared> thumbShared_ = std::make_shared<ThumbShared>();
-    struct MapCapture { editor::SceneScreenshotOptions options; gfx::Device::CaptureFn callback; };
+    struct MapCapture { StudioSceneDocument document; editor::SceneScreenshotOptions options; gfx::Device::CaptureFn callback; };
     std::optional<MapCapture> mapCapture_;
     MapCapture* captureOutput_=nullptr; // scoped to one render-thread frame
     gfx::TextureHandle captureColor_,captureDepth_;

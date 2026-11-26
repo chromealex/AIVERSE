@@ -312,6 +312,26 @@ int aiverseMain(int argc,char** argv) { @autoreleasepool {
             if(scene.framesDrawn()!=drawn+2)throw std::runtime_error("document change not redrawn");
         }
         std::cout<<"Idle frame skipping PASS\n";
+        {
+            const studio::StudioSceneDocument requested{"demo","field.json","history",2,doc.revision};
+            auto stale=requested;--stale.epoch;
+            auto received=std::make_shared<std::promise<bool>>();
+            auto ready=received->get_future();
+            editor::SceneScreenshotOptions options;options.clean=true;options.width=357;options.height=259;
+            scene.requestMapCapture(requested,options,[received](int w,int h,std::vector<uint8_t> pixels){
+                received->set_value(w==357 && h==259 && pixels.size()==357*259*4);
+            });
+            auto draw=[&](int w,int h){scene.frame(w,h,doc,fps,"","",empty,0);};
+            scene.renderMapOutput(stale,160,160,[&](int w,int h){
+                if(w!=160 || h!=160)throw std::runtime_error("Stale map consumed export dimensions");
+                draw(w,h);
+            });
+            scene.renderMapOutput(requested,160,160,draw);
+            for(int i=0;i<80 && ready.wait_for(std::chrono::milliseconds(4))!=std::future_status::ready;++i)frame();
+            if(ready.wait_for(std::chrono::seconds(1))!=std::future_status::ready || !ready.get())
+                throw std::runtime_error("Matching map failed to consume the queued Scene export");
+        }
+        std::cout<<"Scene export waits for matching document lifetime PASS\n";
         std::cout<<"Studio Metal lighting PASS\n";return 0;
     }catch(const std::exception& e){std::cerr<<"Studio Metal lighting FAIL: "<<e.what()<<"\n";return 1;}
 } }

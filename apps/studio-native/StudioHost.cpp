@@ -218,7 +218,7 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
         sendEventPayload("overlay.preview", state);
         if (reveal) sendEventPayload("ui.showPanel", Json::parse(R"({"panel":"overlays"})"));
     });
-    session_->setPlanetViewAgentProvider([this](const std::string& name,const Json& args){return planetViewAgentRequest(name,args);});
+    session_->setSceneViewAgentProvider([this](const std::string& name,const Json& args){return sceneViewAgentRequest(name,args);});
     session_->setMaterialSlotProvider([this](const std::string& asset) {
         return preview_ ? onScene([&] { return preview_->modelMaterialSlots(asset); }) : std::vector<std::string>{};
     });
@@ -621,8 +621,8 @@ void StudioHost::tickAgentScreenshot() {
     const bool game=session_->agentGameScreenshotPending();
     const bool window=session_->agentWindowScreenshotPending();
     const bool scene=session_->agentScreenshotPending() && !window && !game && !nature;
-    if(scene && agentShot_ && (!preview_ || !placement_.visible || !platform_.surfaceDrawable(StudioSurface::Scene) ||
-        !sameDocumentScope(sceneShotScope_,session_->graphDocumentScope()) || platform_.now()>=sceneShotDeadline_)){
+    if(scene && (session_->agentSceneDocument()!=session_->sceneDocument() ||
+        (agentShot_ && (!preview_ || !placement_.visible || !platform_.surfaceDrawable(StudioSurface::Scene) || platform_.now()>=sceneShotDeadline_)))){
         if(preview_)onScene([&]{preview_->cancelMapCapture();});
         session_->finishAgentScreenshot("",0,0,"Scene changed, closed or capture expired. Retry with the current map.");
         agentShot_.reset();
@@ -725,9 +725,9 @@ void StudioHost::tickAgentScreenshot() {
     } else if (game) game_->captureNextFrame(std::move(capture));
     else if(scene){
         sceneShotDeadline_=platform_.now()+12;
-        sceneShotScope_=session_->graphDocumentScope();
+        const auto document=session_->agentSceneDocument();
         const auto options=session_->agentSceneScreenshotOptions();
-        onScene([&]{renderer->requestMapCapture(options,std::move(capture));});
+        onScene([&]{renderer->requestMapCapture(document,options,std::move(capture));});
     }
     else onScene([&]{renderer->captureNextFrame(std::move(capture));});
 }
@@ -1499,11 +1499,11 @@ void StudioHost::tickScene() {
     const double now = platform_.now();
     const auto& map = ws.map;
     // Copy only on change (and once a second for edits that did not bump the revision).
-    if (!mapSnapshot_ || mapSnapshotSource_ != &map || mapSnapshot_->revision != map.revision ||
-        mapSnapshot_->path != map.path || now >= nextMapSnapshot_) {
+    const auto document=session_->sceneDocument();
+    if (!mapSnapshot_ || !mapSnapshotDocument_ || *mapSnapshotDocument_!=document || now >= nextMapSnapshot_) {
         auto copy = std::make_shared<editor::MapDoc>();
         copy->data = map.data; copy->path = map.path; copy->revision = map.revision;
-        mapSnapshot_ = std::move(copy); mapSnapshotSource_ = &map; nextMapSnapshot_ = now + 1.0;
+        mapSnapshot_ = std::move(copy); mapSnapshotDocument_=std::make_shared<const StudioSceneDocument>(document); nextMapSnapshot_ = now + 1.0;
     }
     if (!rulesSnapshot_ || rulesSnapshotProject_ != ws.project.dir || now >= nextRulesCheck_) {
         const size_t hash = std::hash<std::string>{}(ws.project.rulesJson.dump(-1));
@@ -1527,7 +1527,7 @@ void StudioHost::tickScene() {
     in.gamePost=gamePostSnapshot_;
     in.postQuality=postQuality_;in.postVisible=postInScene_;
     in.width = placement_.pixelsW; in.height = placement_.pixelsH;
-    in.map = mapSnapshot_; in.rules = rulesSnapshot_;in.planetLook=planetLookSnapshot_;
+    in.document=mapSnapshotDocument_;in.map = mapSnapshot_; in.rules = rulesSnapshot_;in.planetLook=planetLookSnapshot_;
     const auto& brush=session_->sceneBrush();
     in.brushArmed=brush.armed;
     in.editBaseTerrain=brush.editsBaseGrid() && !map.data.worldSpace;
@@ -1584,10 +1584,11 @@ void StudioHost::renderSceneFrame() {
             preview_->setNatureFrame(in.nature);
             preview_->setWindPreview(in.wind);
             preview_->setPostPreview(in.project,*in.gamePost,in.map->data.extra["postfx"],in.postQuality,in.postVisible);
-            preview_->renderMapOutput(in.width,in.height,[&](int width,int height){
+            preview_->renderMapOutput(*in.document,in.width,in.height,[&](int width,int height){
                 preview_->frame(width,height, *in.map, in.fps, in.selected, "", Json::object(), 0,
                             in.levelHeight, in.project, *in.rules, nullptr);
             });
+            renderedSceneDocument_=in.document;
             out.lightingStatus = preview_->lightingStatus();
             out.load = preview_->modelLoadProgress();
             out.camera = preview_->cameraState();
@@ -1939,9 +1940,22 @@ Json StudioHost::planetForestLiveRequest(){
         }
         Json out=Json::object();out.set("active",Json::fromBool(false));return out;
 }
-Json StudioHost::planetViewAgentRequest(const std::string& name,const Json& params){
+Json StudioHost::sceneViewAgentRequest(const std::string& name,const Json& params){
     if(projectLoading_||!session_||!preview_)throw std::runtime_error("Native Scene unavailable");
     const auto& ws=session_->workspace();
+    if(name=="view_focus"){
+        if(!placement_.visible || !platform_.surfaceDrawable(StudioSurface::Scene))
+            throw std::runtime_error("Show the Scene panel to focus its camera");
+        if(!params.has("x") || !params.has("z"))throw std::runtime_error("Camera target requires x and z");
+        const float x=editor::cameraNumber(params,"x",0),y=editor::cameraNumber(params,"y",0);
+        const float z=editor::cameraNumber(params,"z",0),distance=editor::cameraNumber(params,"distance",-1);
+        const auto document=session_->sceneDocument();
+        return onScene([&]{
+            if(!renderedSceneDocument_ || *renderedSceneDocument_!=document || !preview_->hasSceneCamera())
+                throw std::runtime_error("Wait for the current map to render in Scene");
+            return preview_->focusCoordinates(x,y,z,distance,ws.map);
+        });
+    }
     if(!ws.map.data.planet()||!params["expectedProject"].isString()||params.getStr("expectedProject")!=ws.project.dir||
        !params["mapPath"].isString()||params.getStr("mapPath")!=ws.map.path||
        !params["expectedRevision"].isString()||params.getStr("expectedRevision")!=std::to_string(ws.map.revision))

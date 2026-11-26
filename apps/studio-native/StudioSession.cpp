@@ -1462,7 +1462,9 @@ Json StudioSession::agentLinkedCall(const std::string& name,const Json& args){
             if(reply.has("error")){Json error=Json::object();error.set("error",reply["error"]);return error;}
             return reply["result"];
         }
-        return ws_.call(name,args,"agent");
+        auto result=ws_.call(name,args,"agent");
+        if(!result.has("error") && (name=="map_open" || name=="map_new"))++graphDocumentEpoch_;
+        return result;
     }catch(const std::exception& e){Json out=Json::object();out.set("error",str(e.what()));return out;}
 }
 // Agent link, protocol 2 (docs/mcp-agent-link.md): hello + token, then {"method":"call"} lines from
@@ -1536,17 +1538,17 @@ bool StudioSession::pollAgentLink() {
                     continue;
                 }
             }
-            agentShots_.push_back({m.client,id,window,args.getStr("device"),scene});
+            agentShots_.push_back({m.client,id,window,args.getStr("device"),scene,window=="scene"?sceneDocument():StudioSceneDocument{}});
             agentLines_.push_back("→ view_screenshot");
             continue;
         }
         // The authenticated, explicit native view adapter cannot touch a document
         // owner. Do not put camera navigation in the map/asset history journal.
-        if(studioPlanetViewAgentOperation(name)){
+        if(studioSceneViewAgentOperation(name)){
             Json result;
             try{
-                if(!planetViewAgent_)throw std::runtime_error("Requires an authenticated HTML5 Studio agent link with a native Scene host");
-                result=planetViewAgent_(name,args);
+                if(!sceneViewAgent_)throw std::runtime_error("Requires an authenticated HTML5 Studio agent link with a native Scene host");
+                result=sceneViewAgent_(name,args);
             }catch(const std::exception& e){result=error(e.what());}
             agentServer_.send(m.client,reply(id,result).dump(-1));continue;
         }

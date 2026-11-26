@@ -186,6 +186,7 @@ private:
     struct FrameInputs {
         int width = 0, height = 0;
         std::shared_ptr<const editor::MapDoc> map;
+        std::shared_ptr<const StudioSceneDocument> document;
         std::shared_ptr<const Json> rules;
         std::shared_ptr<const game::TerrainLook> planetLook;
         bool brushArmed=false,editBaseTerrain=false;
@@ -305,7 +306,7 @@ private:
     FrameOutputs renderOutputs_;
     bool renderOutputsFresh_ = false;
     std::shared_ptr<const editor::MapDoc> mapSnapshot_;
-    const editor::MapDoc* mapSnapshotSource_ = nullptr;
+    std::shared_ptr<const StudioSceneDocument> mapSnapshotDocument_;
     std::shared_ptr<const Json> rulesSnapshot_;
     std::shared_ptr<const game::TerrainLook> planetLookSnapshot_;
     Json planetManifestTerrain_;
@@ -335,7 +336,7 @@ private:
     void captureLensFrame(int64_t cameraId);
     void finishLensCapture();
     double sceneShotDeadline_=0;
-    Json sceneShotScope_;
+    std::shared_ptr<const StudioSceneDocument> renderedSceneDocument_; // render thread
     double windowShotDeadline_=0;
     double gameShotDeadline_=0;
     uint64_t gameShotEpoch_=0;
@@ -425,7 +426,7 @@ private:
     Json sampleWorldProcessLive();
     Json planetSceneBodyRequest(const Json& params);
     Json planetForestLiveRequest();
-    Json planetViewAgentRequest(const std::string& name,const Json& params);
+    Json sceneViewAgentRequest(const std::string& name,const Json& params);
     std::int64_t wpPreviewRevision_=-1;
     std::string wpPreviewOwner_;
     std::string wpPreviewSelection_;

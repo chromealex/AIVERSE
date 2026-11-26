@@ -13,6 +13,7 @@
 #include "apps/studio-native/StudioFacialPreviewBinding.h"
 #include "engine/character/vivid/HumanCreatorWorkbench.h"
 #include "apps/editor/core/Workspace.h"
+#include "apps/studio-native/StudioSceneDocument.h"
 #include "apps/editor/core/SceneScreenshotOptions.h"
 #include "apps/editor/core/WorldInspect.h"
 #include "apps/studio-native/StudioWindPreview.h"
@@ -110,6 +111,10 @@ public:
     bool agentWindowScreenshotPending() const { return agentScreenshotPending() && agentShots_.front().window=="all"; }
     bool agentGameScreenshotPending() const { return agentScreenshotPending() && agentShots_.front().window=="game"; }
     const std::string& agentScreenshotDevice() const { return agentShots_.front().device; }
+    StudioSceneDocument sceneDocument() const {
+        return {ws_.project.dir,ws_.map.path,ws_.map.historyEpoch(),graphDocumentEpoch_,ws_.map.revision};
+    }
+    const StudioSceneDocument& agentSceneDocument() const { return agentShots_.front().document; }
     const editor::SceneScreenshotOptions& agentSceneScreenshotOptions() const { return agentShots_.front().scene; }
     void finishAgentScreenshot(const std::string& pngBase64, int width, int height, const std::string& error);
     // Host-provided material slot names of a loaded content model (the native
@@ -123,8 +128,8 @@ public:
         ws_.registerOp({"texture_graph_gpu_owner_preview","Native Studio GPU preview and validated bake owner",
             std::move(schema),[this,provider=std::move(provider)](const Json& p){return provider(ws_,p);},true});
     }
-    using PlanetViewAgentProvider=std::function<Json(const std::string&,const Json&)>;
-    void setPlanetViewAgentProvider(PlanetViewAgentProvider provider){planetViewAgent_=std::move(provider);}
+    using SceneViewAgentProvider=std::function<Json(const std::string&,const Json&)>;
+    void setSceneViewAgentProvider(SceneViewAgentProvider provider){sceneViewAgent_=std::move(provider);}
     Json previewExternalAssets(const std::vector<std::filesystem::path>& files,
                                const std::string& destination); // native picker ONLY
     Json graphDocumentScope() const;
@@ -154,7 +159,7 @@ private:
     Json inspectorFor(const std::string& entityId) const; // entity header + components
     Json setMeshRenderer(int index, const std::string& key, const Json& value);
     MaterialSlotProvider materialSlots_;
-    PlanetViewAgentProvider planetViewAgent_;
+    SceneViewAgentProvider sceneViewAgent_;
     int indexFor(const std::string& id) const;
     editor::Workspace ws_;
     std::string selected_;
@@ -208,7 +213,7 @@ private:
     std::string batchOwnerVersion() const;
     Json agentBatchPreview(bool redo) const;
     void applyAgentBatch(bool redo,const std::string& expectedToken);
-    struct AgentShot { int client; Json id; std::string window,device; editor::SceneScreenshotOptions scene; };
+    struct AgentShot { int client; Json id; std::string window,device; editor::SceneScreenshotOptions scene; StudioSceneDocument document; };
     std::vector<AgentShot> agentShots_;
     SceneBrush brush_;
     std::string splineEdit_;

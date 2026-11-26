@@ -4,8 +4,8 @@
 #include <string>
 #include <set>
 namespace aiverse::studio {
-inline bool studioPlanetViewAgentOperation(const std::string& op){
-    return op=="studio_planet_forest_live"||op=="studio_planet_scene_get"||op=="studio_planet_scene_body_set"||op=="studio_planet_scene_camera_set";
+inline bool studioSceneViewAgentOperation(const std::string& op){
+    return op=="view_focus"||op=="studio_planet_forest_live"||op=="studio_planet_scene_get"||op=="studio_planet_scene_body_set"||op=="studio_planet_scene_camera_set";
 }
 inline const char* studioAgentHistoryPolicy(const std::string& op){
     static const std::set<std::string> reads={
@@ -31,7 +31,7 @@ inline const char* studioAgentHistoryPolicy(const std::string& op){
     if(op=="studio_play_review_apply")return "map";
     if(op=="studio_runtime_edit"||op=="studio_runtime_profile"||op=="physis_nature_preview")return "runtime";
     if(reads.count(op))return "read";
-    if(op=="view_postfx" || studioPlanetViewAgentOperation(op))return "view";
+    if(op=="view_postfx" || studioSceneViewAgentOperation(op))return "view";
     if(map.count(op))return "map";
     if(project.count(op))return "project";
     if(assets.count(op))return "assets";

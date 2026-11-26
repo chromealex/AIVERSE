@@ -2973,6 +2973,36 @@ void StudioScene::move(float right, float up, float forward) {
                        -std::cos(yaw)*std::cos(camera_.pitch)};
     camera_.target += (side*right + float3{0,1,0}*up + ahead*forward)*speed;
 }
+Json StudioScene::focusCoordinates(float x,float y,float z,float distance,const editor::MapDoc& map) {
+    float3 target{x,y,z};
+    float yaw=camera_.yaw,pitch=camera_.pitch;
+    Json out=Json::object();
+    if(map.data.planet()){
+        if(!planetPreview_ || !planetMode_ || planetMapPath_!=map.path || planetRevision_!=map.revision)
+            throw std::runtime_error("Planet surface unavailable");
+        const auto view=viewCamera();
+        float3 origin,ray;
+        if(!view.screenRay(.5f,.5f,1,1,origin,ray))throw std::runtime_error("Invalid Scene camera");
+        const auto at=planetPreview_->groundPlacement(origin,ray,visiblePlanetTerrain());
+        if(!at)throw std::runtime_error("Point the Scene camera at a planetary face");
+        const int face=int(at->getInt("face"));
+        const float side=float(planetPreview_->faceSize);
+        const auto a=StudioPlanetPreview::fixed(std::clamp(x,0.f,side));
+        const auto b=StudioPlanetPreview::fixed(std::clamp(z,0.f,side));
+        game::CubeSphere cube(planetPreview_->faceSize);
+        const auto up=normalize(StudioPlanetPreview::f3(cube.dirFromFace(face,a,b)));
+        const auto start=up*(planetPreview_->extent*2.f+1.f);
+        const float hit=planetPreview_->terrainHit(start,up*(-1.f),visiblePlanetTerrain());
+        if(!std::isfinite(hit))throw std::runtime_error("Planet focus cell has no rendered terrain");
+        target=start-up*hit;
+        yaw=std::atan2(up.x,up.z);pitch=std::asin(std::clamp(up.y,-1.f,1.f));
+        out.set("body",Json::string(planetPreview_->bodyId));out.set("face",Json::number(int64_t(face)));
+    }
+    const auto zoom=distance>0?std::clamp(distance,camera_.minDistance,camera_.maxDistance):camera_.distance;
+    startTween(target,zoom,yaw,pitch);
+    out.set("ok",Json::fromBool(true));
+    return out;
+}
 void StudioScene::focusSelected(const editor::MapDoc& map,bool fpsProject,
                                       const std::string& selectedId) {
     if(map.data.planet()){
@@ -3501,8 +3531,8 @@ void StudioScene::frameSpectraDock(int framebufferWidth,int framebufferHeight) {
     while(fxFrameProvenance_->size()>64)fxFrameProvenance_->pop_front();
     // StudioFrameScope closes the native pass and frame on owner thread.
 }
-void StudioScene::renderMapOutput(int width,int height,const std::function<void(int,int)>& draw) {
-    if(!mapCapture_){draw(width,height);return;}
+void StudioScene::renderMapOutput(const StudioSceneDocument& document,int width,int height,const std::function<void(int,int)>& draw) {
+    if(!mapCapture_ || mapCapture_->document!=document){draw(width,height);return;}
     auto request=std::move(*mapCapture_);
     mapCapture_.reset();
     if(request.options.width){
