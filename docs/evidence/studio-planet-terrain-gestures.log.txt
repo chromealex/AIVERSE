@@ -1,0 +1,7 @@
+2026-11-26 07:35:46.405 AiverseStudioHTML5[73581:83318273] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/planet-terrain-ui-U5nKHA/Catalog.app/Contents/Resources/studio-web
+2026-11-26 07:35:46.540 AiverseStudioHTML5[73581:83318273] [studio-web] served index.html (7257 bytes)
+2026-11-26 07:35:46.545 AiverseStudioHTML5[73581:83318273] [studio-web] served assets/index-x9ady537.js (1648930 bytes)
+2026-11-26 07:35:46.577 AiverseStudioHTML5[73581:83318273] [studio-web] JS: CROSS main boot
+2026-11-26 07:35:46.586 AiverseStudioHTML5[73581:83318273] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 07:35:50.232 AiverseStudioHTML5[73581:83318273] [studio-web] JS: CROSS main FAIL @aiverse-studio://shell/index.html:73:298
+global code@aiverse-studio://shell/index.html:1:51 Error: This operation is not available in Studio panels: planet_info
