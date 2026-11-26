@@ -6,6 +6,7 @@
     "apps/editor/core/SpectraGpuFileOps.cpp",
     "apps/studio-web/src/panels/SpectraGpuFiles.tsx",
     "apps/studio-web/src/panels/SpectraGpuFiles.css",
+    "apps/studio-web/src/panels/SpectraGpuSettings.tsx",
     "apps/studio-web/src/components/AssetsPanel.css",
     "apps/studio-native/StudioContentDirectory.h",
     "apps/studio-native/StudioProjectDirectory.h",
@@ -525,6 +526,7 @@
     "docs/evidence/studio-static-geometry-world-files.json",
     "docs/evidence/studio-static-geometry-source-final.json",
     "docs/evidence/studio-assets-project-navigation.json",
-    "docs/evidence/studio-assets-project-actions.json"
+    "docs/evidence/studio-assets-project-actions.json",
+    "docs/evidence/studio-gpu-files.json"
   ]
 }

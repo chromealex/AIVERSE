@@ -392,3 +392,5 @@ Assets project browsing: keep the indexed content catalog as the entry point, ad
 Finish selectable file rows, keyboard copy and folder context actions in the HTML project browser.
 
 GPU asset authoring: expose project-scoped list/read/validate/save of fx/gpu emitters and event routes through canonical SpectraFX codecs. Preserve raw source, reject stale saves and edit in the HTML GPU functions window.
+
+GPU files: expose emitter execution, capacity, alpha and fallback policies and route quality/budget as editable fields.
