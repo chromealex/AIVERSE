@@ -685,3 +685,5 @@ Effect emitter editing verified at e5b245f43 in the packaged Mac app. Created, d
 Effect ranges: inspect nine emitter parameters, edit constant and random bounds and curve keys in existing source drafts. Verify native validation, source preservation and reopened values.
 
 5f1210070 built and passed 299 web tests. Desktop evidence docs/evidence/studio-effect-emission-curves.json stopped before edits: QA searched the entire emitter inspector for Minimum and selected Minimum quality. Next: scope selectors to the range editor and repeat.
+
+On 1a6d8f395, desktop editing and restart assertions passed (docs/evidence/studio-effect-emission-curves-desktop.json). Screenshot inspection showed appended midpoint keys listed after the endpoint; next stage sorts visible rows by curve time while edits still address the original source index.

@@ -74,3 +74,5 @@ Effect camera implementation 65db9a692 verified on a1fe7b380. Packaged Mac deskt
 Effect emitter editing verified at e5b245f43 in the packaged Mac app. Created, duplicated with internal comment, removed first/last, checked 1–16 UI limits, read original bytes before explicit save, reopened two emitters after restart and discarded a deletion. TypeScript/Vite and 299 frontend tests passed. Evidence docs/evidence/studio-effect-emitter-authoring.json and docs/evidence/studio-project-catalog/effect-emitters.png. Next: emission ranges and remaining effect modules.
 
 5f1210070 built and passed 299 web tests. Desktop evidence docs/evidence/studio-effect-emission-curves.json stopped before edits: QA searched the entire emitter inspector for Minimum and selected Minimum quality. Next: scope selectors to the range editor and repeat.
+
+On 1a6d8f395, desktop editing and restart assertions passed (docs/evidence/studio-effect-emission-curves-desktop.json). Screenshot inspection showed appended midpoint keys listed after the endpoint; next stage sorts visible rows by curve time while edits still address the original source index.
