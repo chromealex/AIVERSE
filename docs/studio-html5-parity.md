@@ -620,3 +620,5 @@ Expose the TerraWeave forest LOD scale and horizon in the private PHYSIS viewpor
 Switch private forest tree geometry and hierarchical wind masks using the existing TerraWeave prototypes. Preserve simulation and camera during GPU rebuild.
 
 Route the original view_wind MCP schema to the PHYSIS viewport and validate the legacy arguments before updating presentation state.
+
+Expose legacy play_status through the HTML Studio game owner. Preserve the inactive, map match and client menu result shapes.

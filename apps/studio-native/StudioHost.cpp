@@ -117,6 +117,8 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
         Json::parse(editor::windShowcaseSchema),[this](const Json& params){return natureCommand(params,true);},true});
     session_->workspace().registerOp({"physis_nature_preview","Control the PHYSIS panel's private nature simulation.",
         Json::parse(editor::physisNatureCommandSchema),[this](const Json& params){return natureCommand(params);},true});
+    session_->workspace().registerOp({"play_status","Read the running Game window match.",
+        Json::object(),[this](const Json&){return game_?game_->playStatus():Json::parse(R"({"playing":false})");},true});
     auto& workspace=session_->workspace();
     for (const auto& registered:workspace.ops()) {
         if (registered.name!="view_postfx") continue;

@@ -2105,7 +2105,7 @@ void Workspace::registerCoreOps() {
         R"({"properties": {"speed": {"type": "number"}, "human": {"type": "integer", "description": "player slot controlled by the user, 0 = bots only"}, "device": {"type": "string"}}})");
     gui("play_stop", "Stop the play-test and return to editing.", "{}");
     gui("region_ownership_diagnostics", "Read last successful live region ownership reconciliation; requires running editor simulation.", "{}");
-    gui("play_status", "Current play-test state: time, players, resources, units, result.", "{}");
+    addLinked("play_status", "Current Studio play-test time, players, resources, units and result.", "{}",requireStudioLink);
     gui("play_units", "Live objects of the running play-test: id (for play_command), map name, type, owner, position, hp, orders, statuses. "
         "Filter by owner / type; at most 'limit' (default 200).",
         R"({"properties": {"owner": {"type": "integer"}, "type": {"type": "string"}, "limit": {"type": "integer"}}})");

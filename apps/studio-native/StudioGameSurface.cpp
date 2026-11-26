@@ -542,6 +542,48 @@ Json StudioGameSurface::scriptLog(bool errorsOnly) const {
     }
     return rows;
 }
+Json StudioGameSurface::playStatus() const {
+    Json out=Json::object();
+    auto* sim=liveSimulation();
+    const bool client=(actor_ || host_->active()) && !launch_.map.has_value();
+    out.set("playing",Json::fromBool(!client && sim));
+    if (client) {
+        out.set("client",Json::fromBool(true));
+        out.set("loading",Json::fromBool(host_->loading()));
+        out.set("inMatch",Json::fromBool(sim!=nullptr));
+    }
+    if (!sim) return out;
+    out.set("seconds",Json::number(double(sim->tick())/sim->tickRate(),1));
+    out.set("result",Json::number(int64_t(sim->result())));
+    const auto* module=dynamic_cast<const game::GameCore*>(&sim->module());
+    if (client || !module) return out;
+    const auto& rules=module->rules();
+    const auto& state=module->state(*sim);
+    std::array<int,256> units{},structures{};
+    sim->world().each<game::Unit,Owner>([&](Entity,game::Unit& unit,Owner& owner){
+        (rules.types[unit.type].structure?structures:units)[owner.player]++;
+    });
+    Json players=Json::array();
+    for (const auto& player:sim->players()) {
+        Json row=Json::object(),resources=Json::object();
+        row.set("name",Json::string(player.name));
+        row.set("alive",Json::fromBool(player.alive));
+        row.set("units",Json::number(int64_t(units[player.slot])));
+        row.set("structures",Json::number(int64_t(structures[player.slot])));
+        for (size_t i=0;i<rules.resources.size();++i)
+            resources.set(rules.resources[i].id,Json::number(state.players[player.slot].stock[i].toInt()));
+        row.set("resources",std::move(resources));
+        players.push(std::move(row));
+    }
+    out.set("players",std::move(players));
+    if (auto* scripts=module->scripts()) {
+        Json errors=Json::array();
+        for (const auto& entry:scripts->log()) if (entry.error)
+            errors.push(Json::string("t="+std::to_string(entry.tick)+" "+entry.text));
+        out.set("scriptErrors",std::move(errors));
+    }
+    return out;
+}
 Json StudioGameSurface::state(bool includeScriptErrors) const {
     Json out=Json::object();out.set("device",profile_.json());
     out.set("active",Json::fromBool(actor_ || host_->active()));
