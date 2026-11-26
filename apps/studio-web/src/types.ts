@@ -475,6 +475,7 @@ export interface StudioSpectraPreviewState {
   camera?:StudioSpectraCameraSnapshot;
 }
 export interface StudioParams {
+  'studio.animationEditorState': {project:string;panel:'graph'|'rig';graph:object|null;dirty:boolean;token:number;error:string};
   'studio.buildingSurfacePreview': {style:string;slot:string;resolution?:128|256|512};
   'studio.buildingPublishMaterial': {style:string;slot:string;name:string;resolution:128|256|512};
   'studio.buildingCatalog': Record<string, never>;
@@ -773,6 +774,7 @@ export interface StudioParams {
   'studio.viewportInput': {kind:'focusLight'; entityId:string; expectedDocumentEpoch:string} | {surface:'character'|'appearance';kind:'brushCursor';x:number;y:number;radius:number} | {surface:'character'|'appearance';kind:'reference';image?:string;opacity:number;scale:number;x:number;y:number;mirror:boolean;visible:boolean} | {surface:'character'|'appearance';kind:'pick';x:number;y:number} | {surface:'character'|'appearance';kind:'orbit';dx:number;dy:number} | {surface:'character'|'appearance';kind:'zoom';amount:number} | { kind: 'orbit' | 'pan' | 'look'; dx: number; dy: number } | { kind: 'move'; right: number; up: number; forward: number } | { kind: 'focus' | 'reset' | 'frameAll' } | { kind: 'camera'; set?: { x: number; y: number; z: number; distance: number; yaw: number; pitch: number; ortho?: boolean } } | { kind: 'zoom'; amount: number } | { kind: 'view'; yaw: number; pitch: number } | { kind: 'projection'; ortho: boolean } | { kind: 'hover'; id: string } | { kind: 'tool'; tool?: 'view' | 'move' | 'rotate' | 'scale'; local?: boolean; snap?: boolean; snapMove?: number; snapRotate?: number; snapScale?: number; gizmos?: boolean; surface?: boolean } | { kind:'areaGesture'; token:string; phase:'down'|'drag'|'up'; x:number; y:number; width:number; height:number } | { kind: 'handle'; phase: 'down' | 'drag' | 'up'; x: number; y: number; width: number; height: number; invertSnap?: boolean } | { kind: 'pick'; x: number; y: number; width: number; height: number; roadToken?:string;chain?:boolean };
 }
 export interface StudioResult {
+  'studio.animationEditorState': Record<string, never>;
   'studio.buildingSurfacePreview': StudioBuildingSurfacePreview;
   'studio.buildingPublishMaterial': {name:string;path:string;assets:Array<{path:string;guid:string;channel:string}>};
   'studio.buildingCatalog': StudioBuildingCatalog;
