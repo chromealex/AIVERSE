@@ -132,7 +132,7 @@ public:
     void setSceneViewAgentProvider(SceneViewAgentProvider provider){sceneViewAgent_=std::move(provider);}
     Json previewExternalAssets(const std::vector<std::filesystem::path>& files,
                                const std::string& destination); // native picker ONLY
-    Json inspectEditWorldEntity(const Json& params);
+    Json queryEditWorld(const Json& params,bool list);
     Json graphDocumentScope() const;
 private:
     Json snapshot() const;

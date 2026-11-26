@@ -508,14 +508,23 @@ size_t StudioGameSurface::selectEntities(const Json& docs,const Json& refs,const
 void StudioGameSurface::selectEntity(const std::string& epoch,const std::string& ref) {
     inspector_.select(liveSimulation(),std::to_string(runtimeEpoch_),epoch,ref);
 }
-Json StudioGameSurface::inspectWorldEntity(const editor::Workspace& ws,const Json& params) {
+Json StudioGameSurface::queryWorld(const editor::Workspace& ws,const Json& params,bool list) {
     auto* sim=liveSimulation();
     auto* module=sim?dynamic_cast<game::GameCore*>(&sim->module()):nullptr;
     if(!module)throw std::runtime_error("No inspectable game is running");
     std::vector<uint64_t> links;
     for(auto e:module->mapPlaced())links.push_back(e.valid()?editor::worldRef(e):0);
     editor::WorldModel world;
-    editor::readWorld(*sim,*module,studioHierarchyConfig(ws.project.manifest),links,setupRefs_,&ws.map.data,world,{false});
+    const auto config=studioHierarchyConfig(ws.project.manifest);
+    editor::readWorld(*sim,*module,config,links,setupRefs_,&ws.map.data,world,{false});
+    if(list){
+        if(auto* scripts=module->scripts()){
+            std::string blob;
+            for(auto& row:world.rows)
+                if(scripts->peekData(*sim,row.e,blob))editor::setWorldRowData(config,blob,row);
+        }
+        return editor::listWorldRows(world,module->rules(),&ws.map.data,params,"play");
+    }
     return editor::inspectWorldRow(*sim,*module,world,ws.project.rulesJson,&ws.map.data,params);
 }
 Json StudioGameSurface::inspect(const std::string& epoch,const std::string& ref) {

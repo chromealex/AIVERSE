@@ -165,6 +165,7 @@ std::string worldGroupValue(const WorldModel& m, const game::Rules& rules, const
 // # / id: entity or map id; a plain token matches any of them and the row name.
 bool worldRowMatches(const WorldModel& m, const game::Rules& rules, const MapData* doc, const WorldRow& r, const std::string& query);
 std::string worldRowName(const WorldModel& m, const game::Rules& rules, const MapData* doc, const WorldRow& r);
+Json listWorldRows(const WorldModel& world,const game::Rules& rules,const MapData* doc,const Json& p,const char* mode);
 Json inspectWorldRow(Simulation& sim, game::GameCore& module,const WorldModel& world,const Json& rulesJson,const MapData* doc,const Json& params);
 Json worldRowJson(const WorldModel& m, const game::Rules& rules, const MapData* doc, const WorldRow& r);
 

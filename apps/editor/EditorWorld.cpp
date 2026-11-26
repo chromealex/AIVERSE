@@ -475,35 +475,13 @@ void Editor::registerWorldOps() {
         "data:<key>) -> nested counts; 'filter': Hierarchy search (t: type, p: owner, c: component, r: region, d: data, #id).",
         R"J({"properties": {"group": {"type": "array", "items": {"type": "string"}}, "filter": {"type": "string"},
             "limit": {"type": "integer", "description": "entities listed (default 200, 0 = only groups)"}}})J",
-        [this, rowJson](const Json& p) {
+        [this](const Json& p) {
             ensureWorld();
             if (!worldLive_ && !preview_.sim()) {
                 previewForce_ = true;
                 throw std::runtime_error(preview_.error().empty() ? "world preview not ready yet, call again" : "world preview failed: " + preview_.error());
             }
-            const std::string filter = p.getStr("filter");
-            const int64_t limit = std::clamp<int64_t>(p["limit"].integer(200), 0, 5000);
-            std::vector<std::string> keys;
-            for (auto& k : p["group"].items()) keys.push_back(k.str());
-            Json groups = Json::object(), list = Json::array();
-            int64_t total = 0;
-            for (auto& r : world_.rows) {
-                if (!filter.empty() && !worldRowMatches(world_, rules(), &doc().data, r, filter)) continue;
-                ++total;
-                if (int64_t(list.size()) < limit) list.push(rowJson(r));
-                Json* g = &groups;
-                for (size_t k = 0; k < keys.size(); ++k) {
-                    const std::string v = worldGroupValue(world_, rules(), r, keys[k]);
-                    if (k + 1 == keys.size()) g->set(v, Json::number((*g)[v].integer() + 1));
-                    else g = &g->member(v);
-                }
-            }
-            Json r = Json::object();
-            r.set("mode", Json::string(worldLive_ ? "play" : "edit"));
-            r.set("tick", Json::number(int64_t(world_.tick)));
-            r.set("total", Json::number(total));
-            if (!keys.empty()) r.set("groups", groups);
-            r.set("entities", list);
+            auto r=listWorldRows(world_,rules(),&doc().data,p,worldLive_?"play":"edit");
             if (!worldLive_ && !preview_.error().empty()) r.set("previewError", Json::string(preview_.error()));
             return r;
         });

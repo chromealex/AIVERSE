@@ -674,6 +674,32 @@ std::string worldGroupValue(const WorldModel& m, const Rules& R, const WorldRow&
     return {};
 }
 
+Json listWorldRows(const WorldModel& world,const game::Rules& rules,const MapData* doc,const Json& p,const char* mode) {
+    const std::string filter = p.getStr("filter");
+    const int64_t limit = std::clamp<int64_t>(p["limit"].integer(200), 0, 5000);
+    std::vector<std::string> keys;
+    for (auto& k : p["group"].items()) keys.push_back(k.str());
+    Json groups = Json::object(), list = Json::array();
+    int64_t total = 0;
+    for (auto& r : world.rows) {
+        if (!filter.empty() && !worldRowMatches(world, rules, doc, r, filter)) continue;
+        ++total;
+        if (int64_t(list.size()) < limit) list.push(worldRowJson(world,rules,doc,r));
+        Json* g = &groups;
+        for (size_t k = 0; k < keys.size(); ++k) {
+            const std::string v = worldGroupValue(world, rules, r, keys[k]);
+            if (k + 1 == keys.size()) g->set(v, Json::number((*g)[v].integer() + 1));
+            else g = &g->member(v);
+        }
+    }
+    Json r = Json::object();
+    r.set("mode", Json::string(mode));
+    r.set("tick", Json::number(int64_t(world.tick)));
+    r.set("total", Json::number(total));
+    if (!keys.empty()) r.set("groups", groups);
+    r.set("entities", list);
+    return r;
+}
 Json inspectWorldRow(Simulation& sim, game::GameCore& module,const WorldModel& world,const Json& rulesJson,const MapData* doc,const Json& params) {
     const WorldRow* row=nullptr;
     if(params.has("ref")){

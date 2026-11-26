@@ -932,7 +932,7 @@ bool StudioSession::prepareHierarchyPreview(const editor::WorldConfig& config,bo
     if(!sim || !module || !hierarchyPreview_.error().empty())throw std::runtime_error("Hierarchy preview: "+hierarchyPreview_.error());
     return true;
 }
-Json StudioSession::inspectEditWorldEntity(const Json& params) {
+Json StudioSession::queryEditWorld(const Json& params,bool list) {
     if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
     const auto config=studioHierarchyConfig(ws_.project.manifest);
     if(!prepareHierarchyPreview(config,false))throw std::runtime_error("Hierarchy preview is loading; retry");
@@ -940,6 +940,7 @@ Json StudioSession::inspectEditWorldEntity(const Json& params) {
     auto& module=*hierarchyPreview_.module();
     editor::WorldModel world;
     editor::readWorld(sim,module,config,hierarchyPreview_.links(),hierarchyPreview_.setupRefs(),&ws_.map.data,world);
+    if(list)return editor::listWorldRows(world,module.rules(),&ws_.map.data,params,"edit");
     auto details=editor::inspectWorldRow(sim,module,world,ws_.project.rulesJson,&ws_.map.data,params);
     if(details["row"].has("doc"))details.set("map",ws_.map.toJson()["entities"][size_t(details["row"].getInt("doc"))]);
     return details;
