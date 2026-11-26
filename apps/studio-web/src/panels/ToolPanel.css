@@ -117,7 +117,7 @@
 .effects-emitter-fields .effects-emitter-loop { display:flex; align-items:center; min-height:var(--au-control-height); gap:6px; }
 .effects-files details+.au-row { margin-block-start:12px; }
 .effects-range { border-top:1px solid var(--au-line); padding-block-start:8px; }
-:is(.effects-range,.effects-bursts) .effects-emitter-loop { display:flex; align-items:center; gap:6px; margin-block:8px; }
+:is(.effects-range,.effects-bursts,.effects-colors) .effects-emitter-loop { display:flex; align-items:center; gap:6px; margin-block:8px; }
 .effects-key-list { min-width:0; border:1px solid var(--au-line); border-radius:var(--au-radius-sm); margin:8px 0; padding:8px; }
 .effects-key-row { display:grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) auto; gap:8px; align-items:end; margin-bottom:6px; }
 .effects-key-plot { display:block; width:100%; height:56px; margin-bottom:8px; background:var(--au-field); border-radius:var(--au-radius-sm); }
