@@ -72,7 +72,7 @@ import CavernsPanel from './generated/CavernsPanel';
 import CatalogPanel from './generated/CatalogPanel';
 import FeatureReadinessPanel from './FeatureReadinessPanel';
 
-export type InspectorRecord = {kind:"player";slot:number} | {kind:"area";key:string};
+export type InspectorRecord = {kind:"player";slot:number} | {kind:"area"|"region";key:string};
 
 export interface StudioPanelContext {
   snapshot: StudioSnapshot | null;

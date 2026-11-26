@@ -15,17 +15,25 @@ function territoryPath(rows:string[],stride:number){
   return runs.join('');
 }
 
-export function MapRegions({scope,busy,onApply}:{
+export function MapRegions({scope,busy,onApply,requestedRegion}:{
+  requestedRegion?:{key:string}|null;
   scope:StudioGraphDocumentScope;busy:boolean;onApply:(snapshot:StudioSnapshot)=>void;
 }){
-  const [letter,setLetter]=useState('A');
-  const initialSelection=useRef(true);
+  const [letter,setLetter]=useState(requestedRegion?.key??'A');
+  const initialSelection=useRef(!requestedRegion);
   const [loaded,setLoaded]=useState<{letter:string;revision:string;map:StudioMapRegions}>();
   const [draft,setDraft]=useState<{name:string;scope:StudioGraphDocumentScope}>();
   const [brush,setBrush]=useState<StudioSceneBrush>();
   const [error,setError]=useState('');
   const [pending,setPending]=useState(false);
   const [retry,setRetry]=useState(0);
+  useEffect(()=>{
+    if(requestedRegion){
+      initialSelection.current=false;
+      setDraft(undefined);
+      setLetter(requestedRegion.key);
+    }
+  },[requestedRegion]);
   useEffect(()=>{
     let live=true;
     setError('');

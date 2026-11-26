@@ -277,7 +277,7 @@ export default function App() {
       } else if (event === 'inspector.selection') {
         const slot=field(payload,'index');
         const kind=field(payload,'kind'),key=field(payload,'key');
-        if(kind==='area' && typeof key==='string')setInspectorRecord({kind,key});
+        if((kind==='area' || kind==='region') && typeof key==='string')setInspectorRecord({kind,key});
         else if(kind==='player' && typeof slot==='number')setInspectorRecord({kind,slot});
         else setInspectorRecord(null);
         setInspectorPin(null);
