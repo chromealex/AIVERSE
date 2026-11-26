@@ -468,3 +468,5 @@ Port state rename and removal to the existing scoped animation document editor. 
 Standalone States inspector: rename and remove verified in the packaged Mac host with nested scope, incoming and self transitions, history, saved data and a return to the default pose graph.
 
 Redesign the States pane around state selection, state-specific transition editing and graph-wide controls. Check narrow and wide panel layouts, including authoring a self transition with one state.
+
+States layout and one-state transition authoring verified in docked and maximized macOS Studio. Screenshots and the native validation receipt accompany the feature manifest.

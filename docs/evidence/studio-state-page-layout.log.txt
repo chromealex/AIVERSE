@@ -1,0 +1,2 @@
+2026-11-26 11:17:07.366 AiverseStudioHTML5[10180:84116263] [studio-web] JS: CROSS main DONE_1
+2026-11-26 11:17:07.366 AiverseStudioHTML5[10180:84116263] [studio-web] JS: CROSS main VERIFIED narrow and maximized States layout, single-state transition creation and persistence, scoped state rename and removal, duplicate rejection in UI, self and incoming transitions, initial state, preservation of delay and parent scope, undo/redo, save/reopen and native compilation after final state removal
