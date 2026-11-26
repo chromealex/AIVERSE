@@ -362,3 +362,5 @@ PostFX transfer: edit local camera volume bounds and effect profiles in game and
 PostFX volume profiles: catalog-driven parameter overrides, inheritance, and placement from the native Scene camera pose. Verify authored masks and persisted coordinates.
 
 PostFX diagnostic stage: expose native per-view execution receipts for Scene, published LENS and Game in HTML Studio. Check actual encoded effects and stopped-source clearing.
+
+Terrain stamp transfer: use single-click detail sculpt stamps with rotation, hardness, seed and terrain elevation rendering in Scene. Verify one stroke, Undo and persistence.

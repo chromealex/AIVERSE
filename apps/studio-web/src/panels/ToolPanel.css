@@ -133,3 +133,6 @@
 .effects-color-stop { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,80px),1fr)); gap:8px; align-items:end; margin-bottom:8px; }
 .effects-color-stop label { display:grid; gap:4px; min-width:0; }
 .effects-color-stop input { width:100%; min-width:0; }
+
+.tbrush__stamp{display:grid;gap:var(--au-space-2);min-width:0;border:1px solid var(--au-line);border-radius:var(--au-radius-md);padding:var(--au-space-2)}
+.tbrush__stamp legend{padding-inline:4px;font-weight:600}

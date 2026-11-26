@@ -3686,7 +3686,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             std::set<std::string> modelIds;
             for(const auto& instance:modelInstances_)modelIds.insert(instance.id);
             lightingModel_=studioLightingPreview(doc,fpsProject,levelHeight,modelIds,
-                (terrainCavernsAuthored_||sparseTerrain)?&terrainCpu_:nullptr);
+                (terrainCavernsAuthored_||sparseTerrain||terrainDetailScale(map)>0)?&terrainCpu_:nullptr);
             StaticShadowGeometry geometry;
             if(lightingModel_) {
                 if(bakedScene && !fpsProject)studioTerrainLightmapUv(*lightingModel_,sceneBake_->gpu.data().terrain);

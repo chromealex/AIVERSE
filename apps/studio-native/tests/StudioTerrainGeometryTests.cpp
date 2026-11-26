@@ -19,6 +19,17 @@ using namespace aiverse::render;
 
 int main() {
     {
+        editor::MapData map;map.w=2;map.h=2;map.detailScale=4;map.detail.assign(81,0);
+        map.detail[10]=48;
+        MeshBuilder mesh;
+        const auto stats=buildTerrainPreview(map,mesh);
+        AIVERSE_TEST_CHECK(stats.quads==64 && terrainPreviewHeight(map,.25f,.25f)==3.f);
+        AIVERSE_TEST_CHECK(terrainPreviewHeight(map,.125f,.25f)==1.5f);
+        AIVERSE_TEST_CHECK(std::any_of(mesh.vertices().begin(),mesh.vertices().end(),[](const auto& v){
+            return v.pos.x==.25f && v.pos.z==.25f && v.pos.y==3.f;
+        }));
+    }
+    {
         const StudioMapAreaBounds expected{2,3,8,10},single{4,5,1,1};
         AIVERSE_TEST_CHECK(studioAreaBetween({9,3},{2,12})==expected);
         AIVERSE_TEST_CHECK(studioAreaBetween({2,12},{9,3})==expected);

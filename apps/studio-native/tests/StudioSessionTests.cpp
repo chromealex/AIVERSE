@@ -1715,6 +1715,18 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"Fixture co
        const auto steps=call("studio.history")["result"]["steps"];
        AIVERSE_TEST_CHECK(steps.size()>0 && steps[steps.size()-1].getStr("label")=="Terrain brush");
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && session.workspace().map.undoDepth()==depth);
+       const auto originalDetail=session.workspace().map.data.detail;
+       AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"op":"stamp","stamp":"dunes","angle":90,"seed":17,"hardness":0.75})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"seed":1.5})").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"stamp":"other"})").has("error"));
+       AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err));
+       const auto stamped=session.workspace().map.data.detail;
+       AIVERSE_TEST_CHECK(stamped!=originalDetail);
+       AIVERSE_TEST_CHECK(session.strokeDab(12,12,&err) && session.strokeEnd(&err));
+       AIVERSE_TEST_CHECK(session.workspace().map.data.detail==stamped && session.workspace().map.undoDepth()==depth+1);
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && session.workspace().map.data.detail==originalDetail);
+       AIVERSE_TEST_CHECK(!call("studio.redo").has("error") && session.workspace().map.data.detail==stamped);
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error"));
        const auto originalRegions=session.workspace().map.data.regions;
        const auto borderDepth=session.workspace().map.undoDepth();
        AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"regionBorders":true})")["result"].getBool("regionBorders"));

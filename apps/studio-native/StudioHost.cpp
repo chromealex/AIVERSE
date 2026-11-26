@@ -1416,6 +1416,11 @@ void StudioHost::selectionAction(const std::string& method) {
 // Ring under the cursor while the Scene brush is armed (radius; river: half its width; road: a dot).
 bool StudioHost::resolveBrushPoint(double x,double y,double w,double h,render::float3& at,std::string* error) {
     if(!preview_||x<0||y<0||w<2||h<2||x>=w||y>=h)return false;
+    if(session_->sceneBrush().kind=="terrain" && session_->sceneBrush().op=="stamp"){
+        const auto hit=onScene([&]{return preview_->flatMapPoint(float(x),float(y),float(w),float(h),session_->workspace().map);});
+        if(!hit)return false;
+        at=*hit;return true;
+    }
     if(session_->sceneBrush().kind!="caverns")
         return onScene([&]{return preview_->groundPoint(float(x),float(y),float(w),float(h),at);});
     render::float3 origin{},direction{};

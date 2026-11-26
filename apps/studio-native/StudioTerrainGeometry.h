@@ -3,6 +3,7 @@
 // the engine's full terrain/detail/water/planet renderer.
 #pragma once
 #include "apps/editor/core/MapDoc.h"
+#include "engine/view/game/GameTerrainSurface.h"
 #include "apps/editor/core/TerraWeavePlanetCavernsDoc.h"
 #include "engine/render/Renderer3D.h"
 #include "engine/world/TerraWeaveCavernsArchive.h"
@@ -40,10 +41,23 @@ inline float terrainPreviewCorner(const editor::MapData& d, int x, int z, float 
     return fine + cliff;
 }
 
+inline int terrainDetailScale(const editor::MapData& d) {
+    const int k=d.detailScale;
+    return k>0 && k<=8 && d.w>0 && d.h>0 && d.w<INT32_MAX/k && d.h<INT32_MAX/k &&
+        (uint64_t(d.w)*k+1)*(uint64_t(d.h)*k+1)==d.detail.size() ? k : 0;
+}
+
 inline float terrainPreviewHeight(const editor::MapData& d, float x, float z, float levelHeight = 1.5f) {
     if (d.w <= 0 || d.h <= 0) return 0;
     x = std::clamp(x, 0.0f, float(d.w));
     z = std::clamp(z, 0.0f, float(d.h));
+    if (const int k=terrainDetailScale(d)) {
+        const int width=d.w*k, height=d.h*k;
+        const float sx=x*k, sz=z*k;
+        const int ix=int(sx), iz=int(sz), jx=std::min(ix+1,width), jz=std::min(iz+1,height);
+        auto h=[&](int a,int b){return d.detail[size_t(b)*(width+1)+a]/16.f;};
+        return game::terrain::quadSurface(h(ix,iz),h(jx,iz),h(ix,jz),h(jx,jz),sx-ix,sz-iz);
+    }
     const int x0 = int(std::floor(x)), z0 = int(std::floor(z));
     const int x1 = std::min(x0 + 1, d.w), z1 = std::min(z0 + 1, d.h);
     const float tx = x - float(x0), tz = z - float(z0);
@@ -119,18 +133,20 @@ inline TerrainPreviewStats buildTerrainPreview(const editor::MapData& d,
     TerrainPreviewStats stats;
     if(d.extra.getStr("terrainPresentation","legacy")=="entities")return stats;
     if (d.planet() || d.w <= 0 || d.h <= 0 || d.w > 200000 || d.h > 200000) return stats;
-    const int longest = std::max(d.w, d.h);
-    const int step = std::max(1, (longest + 255) / 256);
+    const int detail=terrainDetailScale(d);
+    const int scale=std::max(1,detail);
+    const int width=d.w*scale, height=d.h*scale;
+    const int step=std::max(1,(std::max(width,height)+255)/256);
     stats.step=step;stats.handled=true;
-    const int nx=(d.w+step-1)/step,nz=(d.h+step-1)/step;
+    const int nx=(width+step-1)/step,nz=(height+step-1)/step;
+    const auto vertex=[&](int sx,int sz){
+        const float x=float(sx)/scale,z=float(sz)/scale;
+        const float y=detail ? d.detail[size_t(sz)*(width+1)+sx]/16.f : terrainPreviewCorner(d,sx,sz,levelHeight);
+        return float3{x,y,z};
+    };
     const auto cell=[&](int x,int z){
-        const int ex=std::min(d.w,x+step),ez=std::min(d.h,z+step);
-        return std::array<float3,4>{{
-            {float(x),terrainPreviewCorner(d,x,z,levelHeight),float(z)},
-            {float(ex),terrainPreviewCorner(d,ex,z,levelHeight),float(z)},
-            {float(ex),terrainPreviewCorner(d,ex,ez,levelHeight),float(ez)},
-            {float(x),terrainPreviewCorner(d,x,ez,levelHeight),float(ez)}
-        }};
+        const int ex=std::min(width,x+step),ez=std::min(height,z+step);
+        return std::array<float3,4>{vertex(x,z),vertex(ex,z),vertex(ex,ez),vertex(x,ez)};
     };
     const auto cm=[](float3 p){return cave::CutVertexCm{double(p.x)*100.,double(p.y)*100.,double(p.z)*100.};};
     constexpr size_t maxTriangles=600000,maxAssociations=262144;
@@ -151,9 +167,9 @@ inline TerrainPreviewStats buildTerrainPreview(const editor::MapData& d,
                 // closed seam where the source terrain does not exist.
                 if(bounds.minX<0||bounds.minZ<0||bounds.maxX>int64_t(d.w)*100+1||
                    bounds.maxZ>int64_t(d.h)*100+1){++stats.rejectedEntrances;continue;}
-                const int ax=int(bounds.minX/span),az=int(bounds.minZ/span);
-                const int bx=std::min(nx-1,int((bounds.maxX-1)/span));
-                const int bz=std::min(nz-1,int((bounds.maxZ-1)/span));
+                const int ax=int(bounds.minX*scale/span),az=int(bounds.minZ*scale/span);
+                const int bx=std::min(nx-1,int((bounds.maxX*scale-1)/span));
+                const int bz=std::min(nz-1,int((bounds.maxZ*scale-1)/span));
                 if(ax>bx||az>bz){++stats.rejectedEntrances;continue;}
                 const size_t count=size_t(bx-ax+1)*size_t(bz-az+1);
                 if(count>maxAssociations-associations)throw std::length_error("Caverns terrain cut work budget");
@@ -198,7 +214,7 @@ inline TerrainPreviewStats buildTerrainPreview(const editor::MapData& d,
             const int x=ix*step,z=iz*step;
             const auto v=cell(x,z);
             const auto normal=render::normalize(render::cross(v[2]-v[0],v[1]-v[0]));
-            const size_t offset=size_t(z)*size_t(d.w)+size_t(x);
+            const size_t offset=size_t(z/scale)*size_t(d.w)+size_t(x/scale);
             const uint32_t color=terrainPreviewColor(offset<d.cells.size()?d.cells[offset]:'.');
             const auto& candidates=bins[size_t(iz)*nx+ix];
             if(!cut||candidates.empty()){

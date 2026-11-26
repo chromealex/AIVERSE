@@ -1707,6 +1707,8 @@ Json StudioSession::sceneBrushJson() const {
     Json o=Json::object();
     o.set("armed",Json::fromBool(b.armed));o.set("kind",str(b.kind));o.set("op",str(b.op));
     o.set("radius",Json::number(b.radius,3));o.set("strength",Json::number(b.strength,3));
+    o.set("stamp",str(b.stamp));o.set("angle",Json::number(b.angle,2));
+    o.set("hardness",Json::number(b.hardness,3));o.set("seed",num(int64_t(b.seed)));
     o.set("layer",num(int64_t(b.layer)));o.set("tile",str(b.tile));o.set("fixedTile",num(int64_t(b.fixedTile)));o.set("field",str(b.field));o.set("fieldMode",str(b.fieldMode));o.set("fieldPlayer",num(int64_t(b.fieldPlayer)));
     o.set("regionBorders",Json::fromBool(b.regionBorders));
     o.set("regionLetter",str(b.regionLetter));
@@ -1780,9 +1782,13 @@ bool StudioSession::strokeDabImpl(double x, double z, std::string* error,double 
     }
     // Dabs closer than about a third of the radius add little but cost a full map snapshot each.
     const double spacing=b.kind=="objects"?std::max(1.0,b.radius):b.kind=="tiles"||b.kind=="field"?std::max(1.0,b.radius*0.5):b.radius*0.33;
-    if(d<spacing && strokeDabs_>0)return true;
+    if(strokeDabs_>0 && (d<spacing || (b.kind=="terrain" && b.op=="stamp")))return true;
     Json p=Json::object();std::string op;
     if(b.kind=="terrain"){op="terrain_sculpt";p.set("op",str(b.op));p.set("x",Json::number(x,3));p.set("y",Json::number(z,3));
+        if (b.op=="stamp") {
+            p.set("stamp",str(b.stamp));p.set("angle",Json::number(b.angle,2));
+            p.set("seed",num(int64_t(b.seed)));p.set("hardness",Json::number(b.hardness,3));
+        }
         p.set("radius",Json::number(b.radius,3));p.set("strength",Json::number(b.strength,3));}
     else if(b.kind=="paint"){op="terrain_paint_material";p.set("layer",num(int64_t(b.layer)));p.set("x",Json::number(x,3));p.set("y",Json::number(z,3));
         p.set("radius",Json::number(b.radius,3));p.set("strength",Json::number(std::min(1.0,b.strength),3));}
@@ -4722,7 +4728,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 throw std::runtime_error("Map changed. Reload the region before painting.");
             auto next=brush_;auto& b=next;
             static const std::set<std::string> kinds={"terrain","paint","tiles","region","field","objects","road","river","caverns"};
-            static const std::set<std::string> ops={"raise","lower","smooth","flatten","noise","erode"};
+            static const std::set<std::string> ops={"raise","lower","smooth","flatten","noise","erode","stamp"};
             static const std::set<std::string> modes={"set","add","max","erase"};
             auto number=[&](const char* k,double lo,double hi){const double v=params[k].toDouble();
                 if(!params[k].isNumber()||!std::isfinite(v)||v<lo||v>hi)throw std::runtime_error(std::string(k)+" must be "+std::to_string(lo)+".."+std::to_string(hi));return v;};
@@ -4732,6 +4738,18 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             if (params.has("radius")) b.radius=number("radius",0.25,64);
             if (params.has("strength")) b.strength=number("strength",0,20);
             if (params.has("layer")) b.layer=int(number("layer",0,15));
+            if (params.has("stamp")) {
+                const auto name=params.getStr("stamp");
+                if(name!="crater" && name!="mesa" && name!="dunes" && name!="rocks")throw std::runtime_error("Unknown terrain stamp");
+                b.stamp=name;
+            }
+            if(params.has("angle")) b.angle=number("angle",0,360);
+            if(params.has("hardness")) b.hardness=number("hardness",0,1);
+            if(params.has("seed")) {
+                const auto seed=number("seed",0,UINT32_MAX);
+                if(seed!=std::floor(seed))throw std::runtime_error("Choose a whole stamp seed");
+                b.seed=uint32_t(seed);
+            }
             if (params.has("fixedTile")) {
                 const double tile=number("fixedTile",-1,INT32_MAX);
                 if(std::floor(tile)!=tile)throw std::runtime_error("Choose a whole atlas tile number");
@@ -4767,6 +4785,8 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             if(params.has("caveSurface"))b.caveSurface=params.getBool("caveSurface");
             if(params.has("caveDepth"))b.caveDepth=number("caveDepth",.01,10000);
             if (params.has("armed")) b.armed=params.getBool("armed")&&!ws_.project.dir.empty();
+            if(b.armed && b.kind=="terrain" && b.op=="stamp" && (ws_.map.data.worldSpace || ws_.map.data.planet()))
+                throw std::runtime_error("Terrain stamps require a flat heightmap");
             if(b.armed && b.kind=="region" && (ws_.map.data.worldSpace || ws_.map.data.planet()))
                 throw std::runtime_error("Region painting requires a flat map");
             if(b.armed&&b.kind=="caverns"){
