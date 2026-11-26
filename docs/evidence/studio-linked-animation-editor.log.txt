@@ -1,0 +1,20 @@
+√ó
+
+Graph
+Native operations
+Model source graph
+Inspect building report
+
+
+Validate
+Save
+Discard
+Undo
+Redo
+Part hierarchy edits parent transforms. Geometry view edits native CSG operands and modifier order; operands use local geometry, not node transforms. Layout is local. Native validation governs saves.
+Choose a model source
+0 errors0
+Untitled
+¬∑ saved
+edit mode
+‚óè Native host
