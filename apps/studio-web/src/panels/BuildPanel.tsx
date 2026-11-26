@@ -91,6 +91,7 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
   const elapsed = startedAt ? Math.max(0, Math.round((now - startedAt) / 1000)) : 0;
   const selected = info?.targets.find(t => t.id === target);
   const pack = estimate?.pack as { packBytes?: number; rawBytes?: number; entries?: number; duplicates?: number } | undefined;
+  const atlas = estimate?.atlas;
   return <div className="build">
     <aside className="build__side">
       {info && <section className="build__identity" aria-label="Game">
@@ -166,6 +167,19 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
               <li key={i}><span title={f.path}>{f.path ?? f.file}</span><small>{formatBytes(f.storedBytes)}</small></li>)}</ul>
           </> : <p className="build__note">Run <b>Estimate size</b> to pack the content and see what is heavy.</p>}
         </section>
+        {atlas?.enabled && <section className="build__card" aria-label="Texture atlas report">
+          <h3>Texture atlases</h3>
+          <p>{atlas.atlased ?? 0} textures · {atlas.pages ?? 0} pages · {atlas.occupancyPercent ?? 0}% filled</p>
+          {typeof atlas.bytesSaved === 'number' && <p>Pack {atlas.bytesSaved < 0 ? 'increase' : 'savings'} · {formatBytes(Math.abs(atlas.bytesSaved))}</p>}
+          {atlas.gpuBytesBefore != null && atlas.gpuBytesAfter != null &&
+            <p>GPU memory · {formatBytes(atlas.gpuBytesBefore)} → {formatBytes(atlas.gpuBytesAfter)}</p>}
+          {atlas.textureBindsBefore != null && atlas.textureBindsAfter != null &&
+            <p>Texture bindings · {atlas.textureBindsBefore} → {atlas.textureBindsAfter}</p>}
+          {!!atlas.excluded?.length && <details><summary>Excluded textures ({atlas.excluded.length})</summary>
+            <ul>{atlas.excluded.map(item => <li key={item.path}><strong>{item.path}</strong> · {item.reason}
+              {!!item.fixMaxSize && <span> · Suggested maximum {item.fixMaxSize} px</span>}</li>)}</ul>
+          </details>}
+        </section>}
       </div>
       <div className="build__loghead"><ScrollText size={13}/><span>Log</span>
         <button type="button" disabled={!state.runs} onClick={() => reveal({ log: true })}>Show log file</button></div>

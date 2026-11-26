@@ -1076,7 +1076,9 @@ export interface StudioToolchainRequirement { id: string; name: string; required
 export interface StudioToolchain { target: string; host: string; hostSupported: boolean; hostNote?: string; ok: boolean; missing: string[];
   requirements: StudioToolchainRequirement[] }
 export interface StudioBuildLog { run:number; from: number; next: number; text: string; size: number; running: boolean; label: string; exitCode: number; runs: number; logFile: string }
-export interface StudioBuildEstimate { target: string; pack: Record<string, unknown>; atlas: Record<string, unknown>; split?: Record<string, unknown>;
+export interface StudioBuildEstimate { target: string; pack: Record<string, unknown>; atlas?: { enabled?: boolean; atlased?: number; pages?: number; occupancyPercent?: number; bytesSaved?: number;
+    gpuBytesBefore?: number; gpuBytesAfter?: number; textureBindsBefore?: number; textureBindsAfter?: number;
+    excluded?: { path: string; reason: string; fixMaxSize?: number }[] } | null; split?: Record<string, unknown>;
   heaviest: Array<{ path?: string; file?: string; bytes?: number; storedBytes?: number }> }
 
 export interface MetaHumanReport { pending?:boolean; detected:boolean; score:number; headBone:string; faceMeshes:string[]; hiddenMaterials:string[]; materialRoles:Record<string,string>;
