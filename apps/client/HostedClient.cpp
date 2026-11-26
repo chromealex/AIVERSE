@@ -343,6 +343,9 @@ Json HostedClient::staticGeometryReport() const {
     return render::staticGeometryReport(scene);
 }
 
+void HostedClient::setPostQuality(render::PrismaQuality quality) {
+    if (client_ && currentEpochValid()) client_->setHostPostQuality(quality);
+}
 Json HostedClient::prismaFrameReports() const {
     return currentEpochValid() && inMatch() ? render::prismaViewReports(client_->prismaDiagnostics()) : Json::array();
 }

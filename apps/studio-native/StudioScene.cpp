@@ -3121,6 +3121,26 @@ void StudioScene::finishReplayTransaction() {
         rollbackReplayTransaction("failed",reason.empty()?"Replay candidate failed":reason);
     }
 }
+void StudioScene::setPostPreview(const std::string& project,const Json& game,const Json& map,PrismaQuality quality,bool visible) {
+    const bool projectChanged=postProject_!=project;
+    if (projectChanged) {
+        post_.setImageLoader([project](const std::string& path,int& w,int& h,std::vector<uint8_t>& pixels){
+            std::string bytes;
+            return readPreviewAsset(project,path,bytes) && render::decodeImage(bytes,w,h,pixels);
+        });
+    }
+    if (projectChanged || game!=gamePostSettings_ || map!=mapPostSettings_) {
+        if (game.isNull() && map.isNull()) {
+            post_.configure(game,map);
+            PrismaSettings settings;
+            settings.hdr=HdrMode::On;
+            post_.setSettings(settings);
+        } else post_.configure(game,map);
+        postProject_=project;gamePostSettings_=game;mapPostSettings_=map;
+    }
+    post_.setQuality(quality);
+    post_.setEnabled(visible);
+}
 Json StudioScene::prismaFrameReports(const std::string& project, const std::string& map) const {
     if (project.empty() || prismaReportProject_ != project || prismaReportMap_ != map) return Json::array();
     return render::prismaViewReports(post_);
@@ -5439,7 +5459,13 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     if(tool_==TransformTool::Rotate||tool_==TransformTool::Scale)drawTransformGizmo(view,width,height);
     if(orientationGizmo_&&gizmosVisible_)drawOrientationGizmo(view,width,height);
     gfx::PassDesc pass;pass.clearColor[0]=.038f;pass.clearColor[1]=.064f;pass.clearColor[2]=.098f;pass.clearColor[3]=1;
-    renderer_.render(pass,&antialiasing_);renderer_.resolvePostFx();++framesDrawn_;
+    const bool authoredPost=post_.enabled() && (!gamePostSettings_.isNull() || !mapPostSettings_.isNull());
+    renderer_.render(pass,authoredPost?static_cast<PostProcess*>(&post_):&antialiasing_);
+    renderer_.resolvePostFx();
+    if (authoredPost && post_.effectReport(post_.viewId())) {
+        prismaReportProject_=projectPath;prismaReportMap_=doc.path;
+    } else prismaReportProject_.clear();
+    ++framesDrawn_;
 }
 
 void StudioScene::rebuildProxyDraws(const editor::MapDoc& doc) {

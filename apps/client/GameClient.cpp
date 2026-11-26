@@ -172,7 +172,7 @@ void GameClient::initStep(gfx::Device& dev, int step) {
         if (render::prismaDlssCompiled() && dev.info().backend == gfx::Backend::Vulkan)
             prisma_.setExternalUpscaler(render::makePrismaDlss());
         prismaBase_ = render::Prisma::defaultQualityFor(dev, platform::isTouchDevice());
-        prisma_.setQuality(prismaBase_);
+        prisma_.setQuality(hostPostQuality_.value_or(prismaBase_));
         prisma_.setImageLoader([](const std::string& path, int& w, int& h, std::vector<uint8_t>& rgba) {
             std::string bytes;
             return platform::readContentFile(path, bytes) && render::decodeImage(bytes, w, h, rgba);
@@ -595,7 +595,7 @@ void GameClient::configurePrisma(const Json& map) {
     prismaVolumes_ = render::parsePrismaVolumes(manifest_["prismaVolumes"], map["prismaVolumes"], &prismaWarnings);
     for (const auto& issue : prismaWarnings)
         std::fprintf(stderr, "[prisma] %s\n", issue.c_str());
-    prisma_.setQuality(prismaBase_);
+    prisma_.setQuality(hostPostQuality_.value_or(prismaBase_));
 }
 
 std::vector<std::string> GameClient::matchFileList(bool replay) const {
@@ -1852,7 +1852,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
             r3d_.lights.setQuality(aiverse::render::LightQuality(quality_.lights()));
             shadowQuality_ = boundShadowQuality_ = quality_.shadows();
             // post effects follow: one tier down per governor step, but keep the cheap look (low)
-            if (prismaBase_ != render::PrismaQuality::Off)
+            if (!hostPostQuality_ && prismaBase_ != render::PrismaQuality::Off)
                 prisma_.setQuality(render::PrismaQuality(std::max(1, int(prismaBase_) - quality_.stepsDown())));
         }
 

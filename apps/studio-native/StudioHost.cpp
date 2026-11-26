@@ -115,6 +115,30 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
     session_ = std::make_unique<StudioSession>(engineRoot, std::string());
     session_->workspace().registerOp({"physis_nature_preview","Control the PHYSIS panel's private nature simulation.",
         Json::parse(editor::physisNatureCommandSchema),[this](const Json& params){return natureCommand(params);},true});
+    auto& workspace=session_->workspace();
+    for (const auto& registered:workspace.ops()) {
+        if (registered.name!="view_postfx") continue;
+        auto op=registered;
+        op.fn=[this](const Json& params) {
+            auto quality=postQuality_;
+            if (params.has("quality") && !render::parsePrismaQuality(params.getStr("quality"),quality))
+                throw std::runtime_error("Choose off, low, medium or high for preview quality.");
+            if (params.has("scene") && params["scene"].type()!=Json::Type::Bool)
+                throw std::runtime_error("Scene visibility must be a boolean.");
+            if (params.has("quality")) gamePostOverride_=true;
+            postQuality_=quality;
+            postInScene_=params.getBool("scene",postInScene_);
+            Json out=Json::object();
+            out.set("ok",Json::fromBool(true));
+            out.set("quality",Json::string(render::prismaQualityName(quality)));
+            out.set("scene",Json::fromBool(postInScene_));
+            out.set("gameOverride",Json::fromBool(gamePostOverride_));
+            if (params.has("quality") || params.has("scene")) sendEventPayload("postfx.preview",out);
+            return out;
+        };
+        workspace.registerOp(std::move(op));
+        break;
+    }
     for(const bool rig:{false,true}){
         session_->workspace().registerOp({rig?"rig_runtime_status":"animation_runtime_status",
             "Read animation contact and climbing diagnostics from the current play-test.",Json::object(),
@@ -544,6 +568,7 @@ void StudioHost::tickGame() {
     };
     invalidate();
     if (!gamePlacement_.visible || !platform_.surfaceDrawable(StudioSurface::Game)) { game_->suspend(); return; }
+    if (gamePostOverride_) game_->setPostQuality(postQuality_);
     game_->frame(gamePlacement_.pixelsW, gamePlacement_.pixelsH, float(gamePlacement_.width), float(gamePlacement_.height),
                  dt, platform_.gameFocused());
     invalidate();
@@ -1432,6 +1457,10 @@ void StudioHost::tickScene() {
         nextRulesCheck_ = now + 1.0;
     }
     FrameInputs in;
+    const auto& gamePost=ws.project.manifest["postfx"];
+    if (!gamePostSnapshot_ || *gamePostSnapshot_!=gamePost) gamePostSnapshot_=std::make_shared<const Json>(gamePost);
+    in.gamePost=gamePostSnapshot_;
+    in.postQuality=postQuality_;in.postVisible=postInScene_;
     in.width = placement_.pixelsW; in.height = placement_.pixelsH;
     in.map = mapSnapshot_; in.rules = rulesSnapshot_;in.planetLook=planetLookSnapshot_;
     const auto& brush=session_->sceneBrush();
@@ -1489,6 +1518,7 @@ void StudioHost::renderSceneFrame() {
             preview_->setRegionBorders(in.regionBorderLetter);
             preview_->setNatureFrame(in.nature);
             preview_->setWindPreview(in.wind);
+            preview_->setPostPreview(in.project,*in.gamePost,in.map->data.extra["postfx"],in.postQuality,in.postVisible);
             preview_->frame(in.width, in.height, *in.map, in.fps, in.selected, "", Json::object(), 0,
                             in.levelHeight, in.project, *in.rules, nullptr);
             out.lightingStatus = preview_->lightingStatus();

@@ -32,7 +32,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
         {"tiles", {"tileset_list", "tile_info", "tiles_init", "tile_paint", "tiles_remove"}},
         {"fog", {"rules_get", "rules_merge", "rules_delete"}},
         {"generate", {"gen_presets", "map_generate", "map_generation_disable", "map_mirror", "map_resize", "map_validate", "map_ascii"}},
-        {"postfx", {"postfx_get", "postfx_compositor_set", "postfx_volumes_set", "postfx_catalog", "postfx_add", "postfx_set", "postfx_enable", "postfx_remove",
+        {"postfx", {"view_postfx", "postfx_get", "postfx_compositor_set", "postfx_volumes_set", "postfx_catalog", "postfx_add", "postfx_set", "postfx_enable", "postfx_remove",
                     "postfx_preset", "postfx_estimate", "postfx_lut_neutral"}},
         {"effects", {"fx_list", "fx_templates", "fx_get", "fx_set", "fx_bind", "fx_delete"}},
         {"lightbake", {"lightbake_get", "lightbake_set", "lightbake_clear", "lightbake_atlas_preview"}},
@@ -89,7 +89,7 @@ inline bool studioToolAllowed(const std::string& op) {
 // document refresh.
 inline bool studioToolReadOnly(const std::string& op) {
     if(op=="animation_graph_edit"||op=="animation_graph_preview"||op=="animation_ragdoll_generate"||op=="animation_root_motion_generate")return true;
-    if(op=="building_graph_diagnostics")return true;
+    if(op=="building_graph_diagnostics" || op=="view_postfx")return true;
     if (op == "feature_readiness_query" || op == "feature_readiness_refresh") return true; // engine report only, no project mutation
     if (op == "texture_graph_preview" || op == "texture_graph_image_asset" || op == "texture_graph_catalog" || op == "texture_graph_templates" || op == "texture_graph_cache") return true;
     if (op == "strata_capabilities" || op == "graph_diagnostics" || op == "graph_dependencies" || op == "graph_property_schema" || op == "graph_asset_dependencies" || op == "graph_runtime_capabilities" || op == "graph_runtime_probe" || op == "graph_live_snapshot" || op == "graph_live_watch" || op == "graph_live_profile" || op == "graph_gpu_profile" || op == "graph_debug_session") return true;

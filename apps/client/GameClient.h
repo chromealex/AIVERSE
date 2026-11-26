@@ -185,6 +185,10 @@ public:
     }
     const render::GeometryScene& staticGeometry() const { return view_.geometryScene(); }
     const render::Prisma& prismaDiagnostics() const { return prisma_; }
+    void setHostPostQuality(render::PrismaQuality quality) {
+        hostPostQuality_=quality;
+        prisma_.setQuality(quality);
+    }
     bool inMatch() const { return !mapLoading_ && sim_ != nullptr && (screen_ == Screen::Playing || screen_ == Screen::Paused || screen_ == Screen::Over); }
     const std::string& errorText() const { return error_; }
     // Non-owning, frame-scoped LENS RT handles for native UI/material consumers.
@@ -485,6 +489,7 @@ private:
     int worldRadius_ = 2;
     render::PrismaVolumeStack prismaVolumes_; // camera-local PRISMA presentation profiles, nonauthoritative
     render::Prisma prisma_;               // post-processing: game.json / map "postfx" (engine/render/Prisma.h)
+    std::optional<render::PrismaQuality> hostPostQuality_;
     render::PrismaQuality prismaBase_ = render::PrismaQuality::Medium;   // tier before the governor stepped down
     void configurePrisma(const Json& map);
     // PHYSIS nature presentation (fire/smoke, sound, vegetation + water wind, sky)

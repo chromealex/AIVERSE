@@ -39,6 +39,7 @@ public:
     Json mapEntityStates();
     Json ecologyState(const StudioWorldProcessLiveOptions& options={},const std::string& focusBody={},const std::optional<StudioForestCameraFocus>& camera={},Json* forestRender=nullptr);
     Json staticGeometryReport(const editor::Workspace& ws) const;
+    void setPostQuality(render::PrismaQuality quality) { if (host_) host_->setPostQuality(quality); }
     Json prismaFrameReports() const { return host_ ? host_->prismaFrameReports() : Json::array(); }
     std::shared_ptr<const world::NaturePresentationFrame> natureFrame(float x,float z,float radius);
     Json physisFieldEdit(const editor::Workspace& ws,const Json& request,bool apply);

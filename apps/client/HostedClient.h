@@ -17,6 +17,7 @@
 
 namespace aiverse { class Simulation; class Json; }
 namespace aiverse::client { class GameClient; }
+namespace aiverse::render { enum class PrismaQuality; }
 namespace aiverse::game { class ViewScripts; }
 
 namespace aiverse::client {
@@ -65,6 +66,7 @@ public:
     const game::ViewScripts* viewScripts() const;
     Json staticGeometryReport() const;
     Json prismaFrameReports() const;
+    void setPostQuality(render::PrismaQuality quality);
     bool inMatch() const;
     // Forward editor-authored cave SDF into the SAME GameClient used by Play.
     // Visual only; game collision and navigation are separate owners.

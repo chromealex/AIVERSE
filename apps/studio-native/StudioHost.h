@@ -188,6 +188,9 @@ private:
         std::shared_ptr<const Json> rules;
         std::shared_ptr<const game::TerrainLook> planetLook;
         bool brushArmed=false,editBaseTerrain=false;
+        render::PrismaQuality postQuality=render::PrismaQuality::High;
+        bool postVisible=true;
+        std::shared_ptr<const Json> gamePost;
         char regionBorderLetter=0;
         bool fps = false;
         std::string selected, project, hover, geometryFile;
@@ -312,6 +315,10 @@ private:
     bool natureShowsGame_=false;
     uint64_t liveNatureEpoch_=0;
     const auto& displayedNature() const { return natureShowsGame_?liveNatureView_:naturePreview_; }
+    render::PrismaQuality postQuality_=render::PrismaQuality::High;
+    bool postInScene_=true;
+    bool gamePostOverride_=false;
+    std::shared_ptr<const Json> gamePostSnapshot_;
     std::unique_ptr<StudioGameSurface> game_;
     Json playReview_;
     Json agentPlayReview_;
