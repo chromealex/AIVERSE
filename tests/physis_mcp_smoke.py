@@ -30,8 +30,15 @@ def main():
         request("initialize", dict(protocolVersion="2025-06-18", capabilities={}, clientInfo=dict(name="physis-test", version="1")))
         listed = request("tools/list", {})["tools"]
         names = [t["name"] for t in listed if t["name"].startswith("physis_")]
-        assert sorted(names) == ["physis_get", "physis_set", "physis_validate"], names
+        assert sorted(names) == ["physis_demo", "physis_get", "physis_set", "physis_validate"], names
+        before = call("physis_get", {})
+        assert not call("physis_demo", dict(action="view"))["active"]
+        reset = call("physis_demo", dict(action="reset", size=8, stride=2))
+        assert reset["tick"] == 25 and reset["available"] == 16
+        wind = call("physis_demo", dict(action="step", layer=8, palette=2, size=8, stride=2))
+        assert wind["tick"] == 26 and len(wind["rings"]) == 3
         first = call("physis_get", {})
+        assert first == before
         assert first["config"] is None and not first["liveApplied"]
         config = first["defaultConfig"]
         call("physis_validate", dict(config=config))
