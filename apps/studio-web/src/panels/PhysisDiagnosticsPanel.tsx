@@ -49,20 +49,25 @@ function FieldMap({frame,contours,label,cell,pick}:{frame:Frame;contours:boolean
   </>;
 }
 
-export default function PhysisDiagnosticsPanel({projectPath,epoch}:{projectPath:string;epoch:string}){
-  const [source,setSource]=useState('demo');
+type NatureRoute=import('../types').NatureOpenRoute;
+export default function PhysisDiagnosticsPanel({projectPath,epoch,route}:{projectPath:string;epoch:string;route?:NatureRoute}){
+  const [source,setSource]=useState<string>(route?.request.source??'demo');
+  useEffect(()=>{if(route)setSource(route.request.source);},[route?.request]);
   return <section className="physis-diagnostics"><label className="physis-source">Field source<StudioSelect value={source} onChange={e=>setSource(e.target.value)}>
     <option value="demo">Isolated demo</option><option value="map">Current map preview</option><option value="game">Local play-test</option>
   </StudioSelect></label>
-  <Diagnostics key={projectPath+source} projectPath={projectPath} source={source} epoch={epoch}/></section>;
+  <Diagnostics route={route?.request.source===source?route:undefined} key={projectPath+source} projectPath={projectPath} source={source} epoch={epoch}/></section>;
 }
 
-function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:string;epoch:string}){
+function Diagnostics({projectPath,source,epoch,route}:{projectPath:string;source:string;epoch:string;route?:NatureRoute}){
   const live=source==='game', map=source==='map';
   const [view,setView]=useState(initial),[frame,setFrame]=useState<Frame>();
   const [busy,setBusy]=useState(true),[error,setError]=useState(''),[contours,showContours]=useState(true);
   const [cell,pick]=useState<number>();
   const [showNature,setShowNature]=useState(false);
+  useEffect(()=>{
+    if(route){setShowNature(map);route.consume();}
+  },[route?.request]);
   const requestId=useRef(0), pending=useRef(false);
   const [playing,setPlaying]=useState(false),[speed,setSpeed]=useState(1);
   const workspace=useRef<HTMLFieldSetElement>(null);

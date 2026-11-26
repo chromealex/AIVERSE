@@ -73,8 +73,16 @@ export default function App() {
   type GraphPanel='anim_graph'|'anim_rig';
   type OpenGraph=import('./panels/AnimationGraphPanel').GraphOpenRequest;
   const [graphRequests,setGraphRequests]=useState<Partial<Record<GraphPanel,OpenGraph>>>({});
+  const [natureRequest,setNatureRequest]=useState<import('./types').NatureOpenRequest>();
   const [animationRequest,setAnimationRequest]=useState<import('./types').AnimationAuthoringRequest>();
   useEffect(()=>onNativeEvent((event,payload)=>{
+    if(event==='nature.command'){
+      const source=field(payload,'openSource'),epoch=field(payload,'epoch');
+      if((source!=='map'&&source!=='game')||epoch!==snapshot?.graphDocument?.epoch||typeof epoch!=='string')return;
+      if(FLOAT?panelStack(dock,'physis')!==null:!floatOwner(floating,'physis'))setNatureRequest({source,epoch});
+      if(!FLOAT)showPanelEvent('physis');
+      return;
+    }
     if(event==='animation.graphOpen'){
       const panel=field(payload,'panel'),project=field(payload,'project'),name=field(payload,'name'),graph=field(payload,'graph');
       if((panel!=='anim_graph'&&panel!=='anim_rig')||typeof name!=='string'||typeof project!=='string'||!Array.isArray(field(graph,'nodes')))return;
@@ -91,7 +99,7 @@ export default function App() {
     const panel=tab==='clips'?'animation':'modeling';
     if(FLOAT?panelStack(dock,panel)!==null:!floatOwner(floating,panel))setAnimationRequest({name,project,tab});
     if(!FLOAT)showPanelEvent(panel);
-  }),[dock,floating]);
+  }),[dock,floating,snapshot?.graphDocument?.epoch]);
   const [scriptLocation,setScriptLocation] = useState<{project:string; path:string; line:number} | null>(null);
   const [connected] = useState(nativeConnected);
   const panelIds = useMemo(() => treePanels(dock), [dock]);
@@ -363,6 +371,8 @@ export default function App() {
     }, setBusy, commitSnapshot: setSnapshot, showPanel: panel => showPanel(panel), reportError: setError,
     graphRoute: key=>({request:graphRequests[key]?.project===snapshot?.project.path?graphRequests[key]:undefined,
       consume:()=>setGraphRequests(current=>current[key]===graphRequests[key]?{...current,[key]:undefined}:current)}),
+    natureRoute:natureRequest&&natureRequest.epoch===snapshot?.graphDocument?.epoch?{request:natureRequest,
+      consume:()=>setNatureRequest(current=>current===natureRequest?undefined:current)}:undefined,
     animationRoute: {request:animationRequest?.project===snapshot?.project.path?animationRequest:undefined,
       consume:()=>setAnimationRequest(current=>current===animationRequest?undefined:current)},
     scriptLocation: scriptLocation?.project === snapshot?.project.path ? scriptLocation : null,

@@ -95,6 +95,7 @@ export interface StudioPanelContext {
   commitSnapshot: (value: StudioSnapshot) => void;
   /** A game runs in the Game panel: Hierarchy / Inspector offer the live view. */
   graphRoute:(panel:'anim_graph'|'anim_rig')=>import('./AnimationGraphPanel').GraphOpenRoute;
+  natureRoute?:import('../types').NatureOpenRoute;
   animationRoute:import('../types').AnimationAuthoringRoute;
   scriptLocation:{path:string;line:number} | null;
   openScript:(path:string,line:number)=>void;
@@ -134,7 +135,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'models':
       case 'fields': case 'physis': case 'raid': case 'balance': case 'modeling':
       case 'model_anim':
-        return <ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot} animationRoute={panel==='modeling'?ctx.animationRoute:undefined} openAttachments={()=>ctx.showPanel('attachments')}/>;
+        return <ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot} natureRoute={panel==='physis'?ctx.natureRoute:undefined} animationRoute={panel==='modeling'?ctx.animationRoute:undefined} openAttachments={()=>ctx.showPanel('attachments')}/>;
       case 'fx_functions': return <SpectraGpuFiles key={snapshot?.project.path} project={snapshot?.project.path??''}
         tools={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
       case 'effects': return <EffectsPanel key={snapshot?.project.path} project={snapshot?.project.path ?? ''}

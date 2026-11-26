@@ -97,14 +97,15 @@ function OpCard({ op, prefix, initiallyOpen, onDone }: { op: ToolOpInfo; prefix:
 }
 
 /** A legacy editor window as an HTML panel: its current state on top, then one card per operation. */
-export default function ToolPanel({ panel, snapshot, commitSnapshot, openAttachments, animationRoute }: {
-  panel: ToolPanelId; animationRoute?:import('../types').AnimationAuthoringRoute; openAttachments?:()=>void; snapshot: StudioSnapshot | null; commitSnapshot: (s: StudioSnapshot) => void;
+export default function ToolPanel({ panel, snapshot, commitSnapshot, openAttachments, animationRoute, natureRoute }: {
+  panel: ToolPanelId; natureRoute?:import('../types').NatureOpenRoute; animationRoute?:import('../types').AnimationAuthoringRoute; openAttachments?:()=>void; snapshot: StudioSnapshot | null; commitSnapshot: (s: StudioSnapshot) => void;
 }) {
   const spec = TOOL_PANELS[panel];
   const graphDomain=panel==='fx_graph'?'spectrafx':panel==='anim_graph'?'motionweave':null;
   const modelGraph=panel==='modeling';
   const hasGraph=!!graphDomain||modelGraph;
   const [zoneMode,setZoneMode]=useState(false);
+  useEffect(()=>{if(natureRoute)setZoneMode(false);},[natureRoute?.request]);
   const [graphMode,setGraphMode]=useState(true);
   useEffect(()=>{if(animationRoute?.request?.tab==='graph')setGraphMode(true);},[animationRoute?.request]);
   const [ops, setOps] = useState<ToolOpInfo[]>([]);
@@ -167,7 +168,7 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot, openAttachm
         <button className="au-button" aria-pressed={!zoneMode} onClick={()=>setZoneMode(false)}>Field diagnostics</button>
         <button className="au-button" aria-pressed={zoneMode} onClick={()=>setZoneMode(true)}>Map zones</button></div>
         {zoneMode&&snapshot?.graphDocument?<PhysisZonesPanel key={snapshot.graphDocument.epoch} scope={snapshot.graphDocument} onChanged={()=>done(true)}/>:
-          <PhysisDiagnosticsPanel epoch={snapshot?.graphDocument?.epoch??''} key={snapshot?.graphDocument?.epoch??projectPath} projectPath={projectPath}/>}</>}
+          <PhysisDiagnosticsPanel route={natureRoute} epoch={snapshot?.graphDocument?.epoch??''} key={snapshot?.graphDocument?.epoch??projectPath} projectPath={projectPath}/>}</>}
       {panel==='raid' && snapshot?.graphDocument && <RaidPanel key={snapshot.graphDocument.epoch} scope={snapshot.graphDocument} info={state.raid_info as RaidInfo | undefined} onChanged={()=>done(true)}/>}
       {panel==='water' && snapshot?.graphDocument && <WaterShorePanel key={snapshot.graphDocument.epoch} scope={snapshot.graphDocument} onChanged={()=>done(true)}/>}
       {BRUSHES[panel] && <SceneBrushBar project={projectPath} tileCatalog={state.tileset_list as Parameters<typeof SceneBrushBar>[0]['tileCatalog']} kinds={BRUSHES[panel]!} fields={(state.field_list as {fields?:BrushField[]} | undefined)?.fields}/>}

@@ -742,6 +742,7 @@ Json StudioHost::natureCommand(const Json& p) {
         }
         if (steps) out.set("advanced",Json::number(int64_t(state.preview.advance(steps))));
         Json event=Json::object();event.set("epoch",Json::string(epoch));
+        if (p.getBool("enabled")) event.set("openSource",Json::string(live?"game":"map"));
         sendEventPayload("nature.command",event);
     }
     const auto frame=naturePreview_?naturePreview_->read(Json::object()):Json{};

@@ -518,3 +518,5 @@ c0827893e195d639fed52ca32bb07bb3116741ed verified in the detached macOS HTML pan
 Register the original nature command in the linked MCP registry and operate on the same transient state as the HTML panel. Verify world-space ignition, batched steps and map isolation.
 
 f43d8fb393c85b1c9a45a01cd8739a1b40919bfb verified with packaged aiversemcp and detached macOS Studio. Discovery and linked calls set the private grid, wind and shore, ignited by world coordinates and advanced 13 ticks. The HTML panel saw tick 13, stepped to 14 and MCP read 14. Invalid ignition preserved tick, playback advanced, disable blocked stepping and re-enable reset. Map bytes matched. TypeScript, Vite, 299 web checks, native build and focused CTest passed. Receipt docs/evidence/studio-physis-linked-nature.json. Next verify running-game read-only routing and matching live presentation counters, opening the panel from MCP and capturing its surface. Windows and legacy retirement are pending.
+
+Route explicit MCP enable to the owning PHYSIS window, including a closed dock, and select the active source. Validate that status reads do not open a panel.
