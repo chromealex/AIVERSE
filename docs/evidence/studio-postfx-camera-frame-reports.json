@@ -1,0 +1,10 @@
+{
+  "sha": "1e0ed96d58ae4476b8f1ebfe33271ae313121856",
+  "argv": [
+    "bash",
+    "/tmp/pfx-frames-suite.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-postfx-camera-frame-reports.log.txt",
+  "sha256": "269b3592eacdc6e772036b8893a3afdcbf9e35ffcde697a9fc9edf4e75e44512"
+}
