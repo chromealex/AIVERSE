@@ -1,0 +1,10 @@
+{
+  "sha": "b6bc08e56c3cd9e01c6e57759663becde88da0f5",
+  "argv": [
+    "bash",
+    "/tmp/studio-marquee.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-flat-scene-marquee-input.log.txt",
+  "sha256": "cb811f85804cf4d5e2b12bafb0e9281a2a8779291b165cece5d16d7f58bac662"
+}
