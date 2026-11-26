@@ -580,3 +580,5 @@ Transfer the batched view_ground query with transformed terrain tile meshes and 
 Packaged macOS HTML Studio verified linked view_ground on overlapping sloped terrain tiles, partial mesh coverage, a triangle-interpolated heightfield and live tile visibility changes. [Ground height verification](evidence/studio-linked-ground-height.json).
 
 Transfer NEREID river direction and bank gizmos to the Scene overlays menu, for the selected river or all rivers.
+
+Packaged macOS Studio verified the selected-river and all-rivers controls, direction and bank rendering, hidden entity filtering, and unchanged map files. [River overlay evidence](evidence/studio-river-flow-desktop.json).
