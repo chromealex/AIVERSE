@@ -1,0 +1,10 @@
+{
+  "sha": "443f75bb152617ce4942c31ef90c905bcbbb3968",
+  "argv": [
+    "bash",
+    "/tmp/select-entity.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-linked-editor-selection.log.txt",
+  "sha256": "185023ee23944d58068c0beeb378b33e56b13dce70e73a8f5f8495aaaf879be5"
+}
