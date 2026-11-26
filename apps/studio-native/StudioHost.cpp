@@ -155,8 +155,8 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
             stopGame();
             return Json::parse(R"({"ok":true,"summary":"Тест остановлен"})");
         },true});
-    session_->workspace().registerOp({"editor_select","Inspect the map, select an entity by index, or clear selection.",
-        Json::parse(R"({"properties":{"kind":{"type":"string","enum":["entity","map","none"]},"index":{"type":"integer","minimum":0}},"required":["kind"]})"),[this](const Json& input){
+    session_->workspace().registerOp({"editor_select","Inspect the map, a zero-based entity or a one-based player, or clear selection.",
+        Json::parse(R"({"properties":{"kind":{"type":"string","enum":["entity","player","map","none"]},"index":{"type":"integer","minimum":0}},"required":["kind"]})"),[this](const Json& input){
             const auto kind=input.getStr("kind");
             const auto& map=session_->workspace().map;
             Json selection=Json::object();
@@ -165,12 +165,16 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
                 if (!(index>=0 && index<map.data.entities.size() && std::floor(index)==index))
                     throw std::runtime_error("Unknown map entity index");
                 selection.set("id",Json::string(studioDocumentId(map,editor::DocumentEntityRef::mapEntity(size_t(index)))));
+            } else if (kind=="player") {
+                const double slot=input["index"].toDouble(-1);
+                if (map.data.worldSpace || !(slot>=1 && slot<=map.data.players.size() && std::floor(slot)==slot))
+                    throw std::runtime_error("Unknown map player slot");
             } else if (kind=="map") {
                 if (session_->workspace().project.dir.empty()) throw std::runtime_error("Open a project first");
             } else if (kind!="none") throw std::runtime_error("Unknown selection kind");
             const auto reply=request("studio.select",selection);
             if (reply.has("error")) throw std::runtime_error(reply.getStr("error","Selection failed"));
-            sendEvent("inspector.selection",kind);
+            sendEventPayload("inspector.selection",input);
             if (kind=="entity") focusSelection();
             if (kind!="none") {
                 sendEventPayload("ui.showPanel",Json::parse(R"({"panel":"inspector"})"));

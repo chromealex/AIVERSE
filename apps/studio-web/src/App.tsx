@@ -148,6 +148,7 @@ export default function App() {
     const stored = Number(window.localStorage.getItem('aiverse.studio.uiScale'));
     return Number.isFinite(stored) && stored >= 0.75 && stored <= 2 ? stored : 1;
   });
+  const [requestedPlayer,setRequestedPlayer]=useState<{slot:number}|null>(null);
   const [inspectorPin, setInspectorPin] = useState<{
     entity: StudioEntity; inspector: StudioInspector | null;
   } | null>(null);
@@ -274,6 +275,8 @@ export default function App() {
         const panel = field(payload, 'panel');
         if (knownPanel(panel)) window.dispatchEvent(new CustomEvent(event === 'ui.dockPanel' ? 'studio:dock-panel' : 'studio:show-panel', { detail: panel }));
       } else if (event === 'inspector.selection') {
+        const slot=field(payload,'index');
+        setRequestedPlayer(field(payload,'kind')==='player' && typeof slot==='number'?{slot}:null);
         setInspectorPin(null);
       } else if (event === 'workspace.changed' || event === 'selection.changed' ||
                  event === 'document.changed') void refresh();
@@ -390,11 +393,12 @@ export default function App() {
   const selected = inspectorPin?.entity ??
     snapshot?.scene.entities.find(entity => entity.id === snapshot.selectedId);
   const inspector = inspectorPin ? inspectorPin.inspector : snapshot?.inspector ?? null;
+  useEffect(()=>setRequestedPlayer(null),[snapshot?.graphDocument?.epoch]);
   const toggleInspectorPin = () => setInspectorPin(current => current ? null :
     selected ? {entity: {...selected}, inspector: snapshot?.inspector ? structuredClone(snapshot.inspector) : null} : null);
   const renderPanel = (panel: StudioPanel) => <PanelErrorBoundary key={panel} name={STUDIO_PANEL_TITLES[panel]}>{renderStudioPanel(panel, {
     snapshot, busy, connected, search, setSearch, rows, selected,
-    inspector, inspectorPinned: !!inspectorPin, toggleInspectorPin,
+    inspector, requestedPlayer, inspectorPinned: !!inspectorPin, toggleInspectorPin,
     select, selectIds, hoverId, changeProperty, openProject, updateSnapshot: value => {
       setInspectorPin(null); // create/delete/duplicate or map replacement invalidates positional pins
       setSnapshot(value);

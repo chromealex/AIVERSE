@@ -84,6 +84,7 @@ export interface StudioPanelContext {
   rows: Array<{node: StudioEntity; depth: number}>;
   selected: StudioEntity | undefined;
   inspector: StudioInspector | null;
+  requestedPlayer: {slot:number}|null;
   inspectorPinned: boolean;
   toggleInspectorPin: () => void;
   select: (id: string | null, mode?: 'replace' | 'add' | 'toggle') => Promise<void>;

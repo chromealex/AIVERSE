@@ -4,10 +4,11 @@ import { invoke, onNativeEvent } from '../bridge';
 import { StudioButton, StudioInput } from '../ui';
 import type { PlayerStartPosition, PlayerChanges, StudioMapProperties, StudioSnapshot } from '../types';
 
-export function MapPlayers({data, revision, busy, onApply}:{
+export function MapPlayers({data, revision, busy, onApply, requestedPlayer}:{
+  requestedPlayer?:{slot:number}|null;
   data:StudioMapProperties; revision:string; busy:boolean; onApply:(snapshot:StudioSnapshot)=>void;
 }){
-  const [selected,setSelected]=useState(1);
+  const [selected,setSelected]=useState(requestedPlayer?.slot??1);
   const [draft,setDraft]=useState<StudioMapProperties>();
   const [removing,setRemoving]=useState(false);
   const [pending,setPending]=useState(false);
@@ -18,6 +19,7 @@ export function MapPlayers({data, revision, busy, onApply}:{
   const player=base.roster[slot-1];
   const stale=base.scope.revision!==revision;
   const discard=()=>{setDraft(undefined);setRemoving(false);setError('');setReset(n=>n+1);};
+  useEffect(()=>{if(requestedPlayer){setSelected(requestedPlayer.slot);discard();}},[requestedPlayer]);
   const send=async(action:'add'|'edit'|'remove',changes?:PlayerChanges)=>{
     setPending(true);setError('');
     try{
