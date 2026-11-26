@@ -549,6 +549,7 @@
     "docs/evidence/studio-spectra-property-inspector.json",
     "docs/evidence/studio-spectra-function-library.json",
     "docs/evidence/studio-spectra-literals.json",
-    "docs/evidence/studio-model-attachments-navigation.json"
+    "docs/evidence/studio-model-attachments-navigation.json",
+    "docs/evidence/studio-attachments-auto-placement.json"
   ]
 }
