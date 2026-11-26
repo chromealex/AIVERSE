@@ -459,6 +459,8 @@ public:
     Json gpuEmitterCommand(const std::string& project,const Json& params);
     void drawGpuEmitter(int width,int height);
     Json effectFileCommand(const std::string& project,const Json& params);
+    Json drawNature(int width,int height,struct StudioNaturePreview& state,const editor::MapDoc& map,
+                    const std::string& project,float levelHeight);
     void drawEffectFile(int width,int height);
     Json sourceModelCommand(const std::string& project,const Json& rules,const Json& params);
     void drawSourceModel(int width,int height);
@@ -649,6 +651,8 @@ private:
     bool baseTerrainView_=false;
     bool terrainWasShown_=false,terrainCavernsAuthored_=false;
     std::unique_ptr<class StudioGpuEmitterPlayback> gpuEmitter_;
+    struct NatureView;
+    std::unique_ptr<NatureView> natureView_;
     std::unique_ptr<class StudioEffectPlayback> effectFile_;
     struct ConfiguredModel;
     std::unique_ptr<ConfiguredModel> configuredModel_;

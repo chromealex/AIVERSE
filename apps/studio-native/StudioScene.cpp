@@ -13,6 +13,7 @@
 #include "apps/studio-native/StudioAttachmentPreview.h"
 #include "engine/view/game/GameView.h"
 #include "apps/studio-native/StudioGpuEmitterPlayback.h"
+#include "apps/studio-native/StudioNaturePreview.h"
 #include "apps/studio-native/StudioEffectPlayback.h"
 #include "engine/render/CameraCaptureViews.h"
 #include "engine/render/EcsCameraRender.h"
@@ -405,6 +406,18 @@ bool axisParameter(float3 pivot,float3 a,float3 o,float3 d,float& t){
     t=(b*ew-dw)/denom; return std::isfinite(t);
 }
 }
+struct StudioScene::NatureView : StudioPreviewParticles {
+    editor::PhysisNaturePreview display;
+    std::chrono::steady_clock::time_point last{};
+    std::uint64_t ignition=0;
+    NatureView(gfx::Device& device, render::RenderDeviceLifetime::Lease lease,const std::string& project,const editor::MapDoc& map)
+        :StudioPreviewParticles(device,std::move(lease),project) {
+        display.setWater(editor::AuthoredWaterQuery::fromDoc(map));
+    }
+    ~NatureView(){display.release(device_,particles_);}
+    using StudioPreviewParticles::particles_;
+    using StudioPreviewParticles::read;
+};
 struct StudioScene::GraphParticlePreview {
     explicit GraphParticlePreview(gfx::Device& device):device(device){}
     ~GraphParticlePreview(){
@@ -2087,6 +2100,7 @@ StudioScene::~StudioScene() {
                 (void)staticScenery_.release(); // Quarantine owners while submitted work is unresolved.
             }
         }
+        natureView_.reset();
         gpuEmitter_.reset();
         effectFile_.reset();
         if(textureGraph_){
@@ -3237,6 +3251,45 @@ void StudioScene::drawGpuEmitter(int width,int height){
 Json StudioScene::effectFileCommand(const std::string& project,const Json& params){
     if(!effectFile_)effectFile_=std::make_unique<StudioEffectPlayback>(*device_,deviceLifetime_->lease(),project);
     return effectFile_->command(params);
+}
+Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,const editor::MapDoc& map,
+                             const std::string& project,float levelHeight) {
+    if(width<2 || height<2)return Json::object();
+    if(!natureView_)natureView_=std::make_unique<NatureView>(*device_,deviceLifetime_->lease(),project,map);
+    auto& view=*natureView_;
+    const auto now=std::chrono::steady_clock::now();
+    const float dt=view.last.time_since_epoch().count()?std::clamp(std::chrono::duration<float>(now-view.last).count(),0.f,.12f):0.f;
+    view.last=now;
+    const auto heightAt=[&](float x,float z){return terrainPreviewHeight(map.data,x,z,levelHeight);};
+    render::Camera camera;
+    camera.target={map.data.w*.5f,heightAt(map.data.w*.5f,map.data.h*.5f),map.data.h*.5f};
+    camera.distance=std::clamp(float(std::max(map.data.w,map.data.h))*.9f,8.f,50.f);
+    camera.pitch=.55f;camera.yaw=.6f;
+    if(view.ignition!=state.ignitionRevision || view.display.settings.grass!=state.preview.settings.grass)
+        view.display.invalidateFrame();
+    view.ignition=state.ignitionRevision;
+    view.display.settings=state.preview.settings;
+    auto& particles=view.particles_;
+    device_->beginFrame(width,height);StudioFrameScope frame{*device_};
+    renderer_.beginScene(camera,width,height);
+    renderer_.lighting.skyColor={.7f,.8f,.95f};renderer_.lighting.fogDensity=0;
+    particles.setView(camera,renderer_.viewProj(),width,height);
+    auto retire=[&](auto& model){if(model)renderer_.invalidateModelCachesFor(model.get());sparseTerrainRetirement_.retireModel(*device_,model);};
+    (void)sparseTerrainRetirement_.collectWithoutIdle(*device_);
+    view.display.draw(*device_,renderer_,particles,view.read,map,state.preview.previewWorld(),camera,
+        std::chrono::duration<double>(now.time_since_epoch()).count(),heightAt,retire);
+    particles.update(dt);
+    std::vector<fx::FxPointLight> lights;
+    particles.collectLights(lights);
+    for(const auto& light:lights)renderer_.lights.add(light.pos,light.radius,light.color,light.intensity);
+    gfx::PassDesc pass;pass.clearColor[0]=.09f;pass.clearColor[1]=.12f;pass.clearColor[2]=.14f;
+    renderer_.render(pass);particles.render({renderer_.lighting.fogColor,0});
+    Json stats=Json::object();
+    stats.set("tick",Json::number(int64_t(view.display.tick())));
+    stats.set("patches",Json::number(int64_t(view.display.grassPatches())));
+    stats.set("particles",Json::number(int64_t(particles.stats().particles)));
+    stats.set("voices",Json::number(int64_t(view.display.voices())));
+    return stats;
 }
 void StudioScene::drawEffectFile(int width,int height){
     if(!effectFile_ || width<2 || height<2)return;

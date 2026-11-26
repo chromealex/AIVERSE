@@ -1,7 +1,8 @@
 import {useEffect,useRef,useState} from 'react';
 import type {StudioPhysisFrame as Frame} from '../types';
-import {invoke} from '../bridge';
+import {invoke,onNativeEvent} from '../bridge';
 import {StudioAlert,StudioButton,StudioInput,StudioSelect} from '../ui';
+import SpectraDockViewport from './SpectraDockViewport';
 import PhysisPreviewGrid from './PhysisPreviewGrid';
 import PhysisPreviewWind from './PhysisPreviewWind';
 import PhysisCellReading from './PhysisCellReading';
@@ -60,10 +61,11 @@ function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:strin
   const [view,setView]=useState(initial),[frame,setFrame]=useState<Frame>();
   const [busy,setBusy]=useState(true),[error,setError]=useState(''),[contours,showContours]=useState(true);
   const [cell,pick]=useState<number>();
+  const [showNature,setShowNature]=useState(false);
   const requestId=useRef(0), pending=useRef(false);
   const [playing,setPlaying]=useState(false),[speed,setSpeed]=useState(1);
   const workspace=useRef<HTMLFieldSetElement>(null);
-  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback'|'grid',next:View,selection=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}|{cellMeters:number;humidity:number}){
+  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback'|'grid'|'presentation',next:View,selection=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}|{cellMeters:number;humidity:number}|{grass?:boolean;flames?:boolean;sound?:boolean}){
     const id=++requestId.current;
     const sameArea=next.size===view.size&&next.stride===view.stride&&next.centerX===view.centerX&&next.centerZ===view.centerZ;
     const rebuild=action==='reset'||action==='grid';
@@ -83,6 +85,11 @@ function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:strin
     finally{if(id===requestId.current){pending.current=false;setBusy(false);}}
   }
   useEffect(()=>{void request('view',initial);return ()=>{requestId.current++;};},[projectPath]);
+  useEffect(()=>onNativeEvent((event,payload)=>{
+    if(event==='nature.previewError'&&showNature){
+      setShowNature(false);setError(String((payload as {message?:string})?.message??payload));
+    }
+  }),[showNature]);
   const advance=useRef<(elapsed:number)=>void>(()=>{});
   useEffect(()=>{
     advance.current=elapsed=>{if(!pending.current)void request('playback',view,cell,{speed,elapsed});};
@@ -113,7 +120,15 @@ function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:strin
         <div className="physis-controls physis-layers"><label>Field<StudioSelect value={view.layer} onChange={e=>change('layer',Number(e.target.value))}>{layers.map((l,i)=><option key={l} value={i}>{l}</option>)}</StudioSelect></label>
           <label>Palette<StudioSelect value={view.palette} onChange={e=>change('palette',Number(e.target.value))}>{['Thermal','High contrast','Ocean'].map((l,i)=><option key={l} value={i}>{l}</option>)}</StudioSelect></label>
         </div>
-        <div className="physis-figure"><FieldMap key={[view.centerX,view.centerZ,view.size,view.stride].join('/')} frame={frame} cell={cell} pick={live||map?index=>void request('view',view,index):pick} contours={contours} label={layers[view.layer]}/></div>
+        <div className="physis-figure">{map&&<div className="physis-view-switch">
+          <StudioButton aria-pressed={!showNature} onClick={()=>setShowNature(false)}>Field map</StudioButton>
+          <StudioButton aria-pressed={showNature} onClick={()=>setShowNature(true)}>3D nature</StudioButton>
+        </div>}{map&&showNature?<><SpectraDockViewport id="nature" label="3D nature preview"/>
+          {frame.presentation&&<div className="physis-display-options">
+            {([['grass','Grass'],['flames','Fire and smoke'],['sound','Sound']] as const).map(([key,label])=>
+              <label key={key}><input type="checkbox" checked={frame.presentation![key]}
+                onChange={event=>void request('presentation',view,cell,{[key]:event.target.checked})}/>{label}</label>)}
+          </div>}</>:<FieldMap key={[view.centerX,view.centerZ,view.size,view.stride].join('/')} frame={frame} cell={cell} pick={live||map?index=>void request('view',view,index):pick} contours={contours} label={layers[view.layer]}/>}</div>
         <div className="physis-options">{map&&<label className="physis-playback-speed">Playback speed · {speed.toFixed(1)}×
           <input type="range" name="playbackSpeed" min="0.1" max="6" step="0.1" value={speed}
             onChange={event=>setSpeed(event.currentTarget.valueAsNumber)}/>

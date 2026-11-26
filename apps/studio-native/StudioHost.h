@@ -28,7 +28,7 @@ namespace aiverse::game { class GameLights; struct TerrainLook; }
 
 namespace aiverse::studio {
 
-enum class StudioSurface { Scene, Game, Fx, Material, Shader, FacialRig, Character, Appearance, AnimationGraph, AnimationRig, Attachments, LensCamera, Lighting, EffectFile, GpuEmitter, SourceModel, ImportedClip, Count };
+enum class StudioSurface { Scene, Game, Fx, Material, Shader, FacialRig, Character, Appearance, AnimationGraph, AnimationRig, Attachments, LensCamera, Lighting, EffectFile, GpuEmitter, SourceModel, ImportedClip, Nature, Count };
 
 // What a shell provides. Called on the main (UI) thread only, except runInBackground's work.
 struct StudioNaturePreview;
@@ -279,7 +279,7 @@ private:
         std::string error;
         NativeViewportPlacement placement;
         std::unique_ptr<StudioScene> renderer;
-    } materialSurface_, shaderSurface_, facialRigSurface_, characterSurface_, appearanceSurface_, animationGraphSurface_, animationRigSurface_, attachmentSurface_, sourceModelSurface_, importedClipSurface_, lensSurface_, lightingSurface_, effectFileSurface_, gpuEmitterSurface_;
+    } materialSurface_, shaderSurface_, facialRigSurface_, characterSurface_, appearanceSurface_, animationGraphSurface_, animationRigSurface_, attachmentSurface_, sourceModelSurface_, importedClipSurface_, lensSurface_, lightingSurface_, effectFileSurface_, gpuEmitterSurface_, natureSurface_;
     std::string effectFileProject_, gpuEmitterProject_;
     std::unique_ptr<game::GameLights> weatherLights_;
     double weatherStart_=0;
@@ -348,6 +348,7 @@ private:
     std::optional<bake::CapturedBake> pendingBake_;
     std::string bakeEpoch_,bakeMessage_;
     uint64_t bakeRevision_=0;
+    void tickNaturePreview();
     void tickLightBake();
     bool bakeFailed_=false;
     Json lightBakeJob(const Json& params,const Json& settings = {});

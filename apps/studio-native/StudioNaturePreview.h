@@ -8,6 +8,8 @@ namespace aiverse::studio {
 struct StudioNaturePreview {
     std::string epoch;
     std::uint64_t revision;
+    std::uint64_t ignitionRevision=0;
+    Json presentation=Json::object();
     fx::ParticleSystem particles;
     editor::PhysisNaturePreview preview;
 
@@ -24,6 +26,11 @@ struct StudioNaturePreview {
 
     Json read(const Json& params) const {
         auto frame=editor::readPhysisGameFrame(preview.previewWorld(),params);
+        auto status=presentation;
+        status.set("grass",Json::fromBool(preview.settings.grass));
+        status.set("flames",Json::fromBool(preview.settings.flames));
+        status.set("sound",Json::fromBool(preview.settings.sound));
+        frame.set("presentation",std::move(status));
         Json wind=Json::object();
         wind.set("speed",Json::number(double(preview.settings.windSpeed)));
         wind.set("direction",Json::number(double(preview.settings.windDirectionDeg)));
@@ -65,6 +72,13 @@ struct StudioNaturePreview {
             preview.settings.windSpeed=float(s);
             preview.settings.windDirectionDeg=float(d);
             preview.applyWindSettings();
+        } else if (action=="presentation") {
+            for (const char* key:{"grass","flames","sound"})
+                if (params.has(key) && params[key].type()!=Json::Type::Bool)
+                    throw std::runtime_error("Invalid nature presentation setting");
+            if (params.has("grass")) preview.settings.grass=params.getBool("grass");
+            if (params.has("flames")) preview.settings.flames=params.getBool("flames");
+            if (params.has("sound")) preview.settings.sound=params.getBool("sound");
         } else if (action=="ignite") {
             if (!frame["cell"].getBool("available")) throw std::runtime_error("Select a PHYSIS cell first.");
             const auto* state=preview.previewWorld()->resourceConst<physis::State>();
@@ -72,6 +86,7 @@ struct StudioNaturePreview {
             std::string reason;
             if (!preview.ignite((params.getInt("cellX")+.5f)*meters,(params.getInt("cellZ")+.5f)*meters,&reason))
                 throw std::runtime_error(reason);
+            ++ignitionRevision;
         } else {
             throw std::runtime_error("Unknown nature preview action");
         }

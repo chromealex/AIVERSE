@@ -83,6 +83,7 @@ public:
     float cellMeters() const { return frame_ ? frame_->cellSize : 0; }
     const world::NaturePresentationFrame* frame() const { return frame_.get(); }
 
+    void invalidateFrame() { frameDirty_ = true; }
     void requestReset() { resetRequested_ = true; }
     // Authored NEREID water (AuthoredWaterQuery::fromDoc): grass and fuel stay
     // out of it. A changed revision rebuilds the preview World and grass.

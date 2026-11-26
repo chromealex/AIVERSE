@@ -234,7 +234,7 @@ void StudioHost::shutdown() {
     game_.reset(); // hosted client and its device retire before the native surface
     if (renderThread_) {
         // The Scene and its GPU resources are released on their owner thread, then the thread stops.
-        try { renderThread_->invoke([&] { gpuEmitterSurface_.renderer.reset(); effectFileSurface_.renderer.reset(); lightingSurface_.renderer.reset(); lensSurface_.renderer.reset(); attachmentSurface_.renderer.reset(); sourceModelSurface_.renderer.reset(); importedClipSurface_.renderer.reset(); animationGraphSurface_.renderer.reset(); animationRigSurface_.renderer.reset(); appearanceSurface_.renderer.reset(); characterSurface_.renderer.reset(); facialRigSurface_.renderer.reset(); materialSurface_.renderer.reset(); shaderSurface_.renderer.reset(); fxPreview_.reset(); preview_.reset(); }); } catch (const std::exception&) {}
+        try { renderThread_->invoke([&] { natureSurface_.renderer.reset(); gpuEmitterSurface_.renderer.reset(); effectFileSurface_.renderer.reset(); lightingSurface_.renderer.reset(); lensSurface_.renderer.reset(); attachmentSurface_.renderer.reset(); sourceModelSurface_.renderer.reset(); importedClipSurface_.renderer.reset(); animationGraphSurface_.renderer.reset(); animationRigSurface_.renderer.reset(); appearanceSurface_.renderer.reset(); characterSurface_.renderer.reset(); facialRigSurface_.renderer.reset(); materialSurface_.renderer.reset(); shaderSurface_.renderer.reset(); fxPreview_.reset(); preview_.reset(); }); } catch (const std::exception&) {}
         renderThread_->stop();
         renderThread_.reset();
     }
@@ -652,6 +652,7 @@ void StudioHost::pollAgentRequests() {
 }
 StudioHost::AssetSurface& StudioHost::assetSurface(StudioSurface surface) {
     switch(surface){
+    case StudioSurface::Nature:return natureSurface_;
     case StudioSurface::GpuEmitter:return gpuEmitterSurface_;
     case StudioSurface::EffectFile:return effectFileSurface_;
     case StudioSurface::Lighting:return lightingSurface_;
@@ -672,6 +673,30 @@ StudioHost::AssetSurface& StudioHost::assetSurface(StudioSurface surface) {
 StudioScene* StudioHost::activeHumanRenderer(){
     if(characterSurface_.placement.visible&&characterSurface_.renderer)return characterSurface_.renderer.get();
     return appearanceSurface_.placement.visible?appearanceSurface_.renderer.get():nullptr;
+}
+void StudioHost::tickNaturePreview() {
+    auto& surface=natureSurface_;
+    if (!surface.placement.visible || !platform_.surfaceDrawable(StudioSurface::Nature)) return;
+    const auto& ws=session_->workspace();
+    if (!naturePreview_ || naturePreview_->epoch!=session_->graphDocumentScope().getStr("epoch") ||
+        naturePreview_->revision!=ws.map.revision) {
+        if (surface.renderer) onScene([&]{surface.renderer.reset();});
+        return;
+    }
+    try {
+        if (!renderThread_) {
+            const char* threaded=std::getenv("AIVERSE_STUDIO_RENDER_THREAD");
+            renderThread_=std::make_unique<StudioRenderThread>([this]{renderSceneFrame();},!(threaded&&std::string(threaded)=="0"));
+        }
+        onScene([&]{platform_.sceneThreadScope([&]{
+            if (!surface.renderer) surface.renderer=std::make_unique<StudioScene>(platform_.createDevice(StudioSurface::Nature));
+            naturePreview_->presentation=surface.renderer->drawNature(surface.placement.pixelsW,surface.placement.pixelsH,
+                *naturePreview_,ws.map,ws.project.dir,float(ws.project.rules.levelHeight.toDouble()));
+        });});
+    } catch (const std::exception& e) {
+        platform_.log(std::string("PHYSIS preview: ")+e.what());
+        sendEvent("nature.previewError",e.what());surfaceDetached(StudioSurface::Nature);
+    }
 }
 void StudioHost::tickAnimationPreview(StudioSurface surface) {
     auto& asset=assetSurface(surface);
@@ -1185,6 +1210,7 @@ void StudioHost::tick() {
             surfaceDetached(surface);
         }
     }
+    tickNaturePreview();
     tickAnimationPreview(StudioSurface::AnimationGraph);
     tickAnimationPreview(StudioSurface::AnimationRig);
     tickCharacterPreview(StudioSurface::FacialRig);
@@ -3311,8 +3337,8 @@ void StudioHost::applyViewport(const Json& params) {
         else if (game_) game_->suspend();
         return;
     }
-    if(id=="importedClip"||id=="sourceModel"||id=="gpuEmitter"||id=="effectFile"||id=="lighting"||id=="shader"||id=="material"||id=="facialRig"||id=="character"||id=="appearance"||id=="animationGraph"||id=="animationRig"||id=="attachments"||id=="lensCamera") {
-        const auto surface=id=="importedClip"?StudioSurface::ImportedClip:id=="sourceModel"?StudioSurface::SourceModel:id=="gpuEmitter"?StudioSurface::GpuEmitter:id=="effectFile"?StudioSurface::EffectFile:id=="lighting"?StudioSurface::Lighting:id=="lensCamera"?StudioSurface::LensCamera:id=="attachments"?StudioSurface::Attachments:id=="animationRig"?StudioSurface::AnimationRig:id=="animationGraph"?StudioSurface::AnimationGraph:id=="character"?StudioSurface::Character:id=="appearance"?StudioSurface::Appearance:id=="facialRig"?StudioSurface::FacialRig:id=="shader"?StudioSurface::Shader:StudioSurface::Material;
+    if(id=="nature"||id=="importedClip"||id=="sourceModel"||id=="gpuEmitter"||id=="effectFile"||id=="lighting"||id=="shader"||id=="material"||id=="facialRig"||id=="character"||id=="appearance"||id=="animationGraph"||id=="animationRig"||id=="attachments"||id=="lensCamera") {
+        const auto surface=id=="nature"?StudioSurface::Nature:id=="importedClip"?StudioSurface::ImportedClip:id=="sourceModel"?StudioSurface::SourceModel:id=="gpuEmitter"?StudioSurface::GpuEmitter:id=="effectFile"?StudioSurface::EffectFile:id=="lighting"?StudioSurface::Lighting:id=="lensCamera"?StudioSurface::LensCamera:id=="attachments"?StudioSurface::Attachments:id=="animationRig"?StudioSurface::AnimationRig:id=="animationGraph"?StudioSurface::AnimationGraph:id=="character"?StudioSurface::Character:id=="appearance"?StudioSurface::Appearance:id=="facialRig"?StudioSurface::FacialRig:id=="shader"?StudioSurface::Shader:StudioSurface::Material;
         auto& asset=assetSurface(surface);
         NativeViewportPlacement placed;
         if(platform_.placeSurface(surface,rect,placed)){
@@ -3867,6 +3893,7 @@ bool StudioHost::handleHostMethod(const Json& req) {
             }
             auto next=std::make_shared<StudioNaturePreview>(epoch,ws.map,float(ws.project.rules.levelHeight.toDouble()),settings);
             auto frame=next->read(params);
+            if (natureSurface_.renderer) onScene([&]{natureSurface_.renderer.reset();});
             naturePreview_=std::move(next);
             return frame;
         }
