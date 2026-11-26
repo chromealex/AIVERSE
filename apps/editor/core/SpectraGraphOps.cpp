@@ -985,6 +985,7 @@ void registerSpectraGraphOps(Workspace& ws) {
             item.set("type",Json::string(info.type));
             item.set("group",Json::string(info.group));
             item.set("v2Only",Json::fromBool(info.v2Only));
+            item.set("outputKind",strGraph(spectra::authoring::isOutput(info.type)?"none":spectra::authoring::isData(info.type)?"value":"execution"));
             item.set("properties",Json::parse(info.initialProperties));
             item.set("ports",graphStrings(spectra::authoring::inputPorts(info.type)));
             entries.push(std::move(item));

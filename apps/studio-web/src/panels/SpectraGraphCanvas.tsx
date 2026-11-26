@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import {createPortal} from 'react-dom';
+import { Fragment, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { GitBranch, Maximize2, Plus, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
 import { invoke } from '../bridge';
-import { StudioButton, StudioField, StudioSelect, StudioInput } from '../ui';
+import { StudioButton, StudioField, StudioSelect, StudioInput, StudioContextMenu } from '../ui';
 import { graphV2, type SpectraGraphV2 } from './spectraDataInterfaceModel';
 import { connectionParams, moveGraphNode, nodePoint, visualEdges } from './spectraGraphCanvasModel';
 import './graphSurface.css';
 import './SpectraGraphCanvas.css';
 
-interface CatalogNode {type:string;group:string;ports:string[]}
+interface CatalogNode {type:string;group:string;ports:string[];outputKind:'none'|'execution'|'value'}
 const volumeFields:Record<string,Record<string,unknown>>={
   VolumetricParticleOutput:{shape:'sphere',axes:[1,1,1],density:2,emission:0,steps:12,noiseFrequency:3,noiseStrength:0,noiseOctaves:3,shadowSteps:4,shadowStrength:1,anisotropy:0,ambient:0.35,directIntensity:0.65,depthAware:false,sortBackToFront:true,adaptiveLod:true,minimumSteps:4,lodSmallPixels:8,lodFullPixels:96,sparseTexture:true,densityTexture:''},
   VolumeDomain:{dimension:32,origin:[-2,-1,-2],cellSize:0.125,gravity:[0,-9.81,0],wind:[0,0,0],obstacle:'',particleDrag:0,particleDeposit:[0,0,0],physisWindResponse:0,physisGravityBlend:0,attachment:'world'},
@@ -42,6 +43,10 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
   const [volumeValue,setVolumeValue]=useState('');
   const [volumeVector,setVolumeVector]=useState<string[]>(['0','0','0']);
   const [selectedNode,setSelectedNode]=useState('');
+  const [wire,setWire]=useState<{id:string;value:boolean;graph:SpectraGraphV2}|null>(null);
+  const [fieldMenu,setFieldMenu]=useState<{to:string;x:number;y:number;ports:string[]}|null>(null);
+  const pending=wire?.graph===graph?wire:null;
+  const cancelWire=()=>{setWire(null);setFieldMenu(null);};
   const [from,setFrom]=useState('');
   const [to,setTo]=useState('');
   const [toPort,setToPort]=useState('');
@@ -71,8 +76,9 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
         const r=response.result as {nodes?:unknown[]} | undefined;
         const items=(r?.nodes??[]).flatMap(raw=>{
           if(!raw || typeof raw!=='object')return [];
-          const v=raw as {type?:unknown;group?:unknown;ports?:unknown};
+          const v=raw as {type?:unknown;group?:unknown;ports?:unknown;outputKind?:unknown};
           return typeof v.type==='string'?[{type:v.type,group:typeof v.group==='string'?v.group:'',
+            outputKind:v.outputKind==='value'?'value' as const:v.outputKind==='none'?'none' as const:'execution' as const,
             ports:Array.isArray(v.ports)?v.ports.filter((p):p is string=>typeof p==='string'):[]}]:[];
         });
         setCatalog(items);
@@ -86,6 +92,12 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
     try{onEdit(await nativeFxEdit({...params,graph}));}
     catch(e){onError(e instanceof Error?e.message:String(e));}
     finally{setWorking(false);}
+  };
+  const finishWire=(target:string,port='')=>{
+    if(!pending)return;
+    const params=connectionParams('connect',graph,pending.id,target,port);
+    cancelWire();
+    if(params)void execute(params);
   };
   const connect=()=>{
     const params=connectionParams('connect',graph,from,to,toPort);
@@ -105,7 +117,9 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
     }
     setMove(null);
   };
-  return <div className="spectra-canvas">
+  return <div className="spectra-canvas" onKeyDown={e=>{
+    if(pending&&e.key==='Escape'){e.preventDefault();e.stopPropagation();cancelWire();}
+  }}>
     <div className="spectra-canvas__toolbar">
       <StudioField label="New node" htmlFor="spectra-canvas-node-type">
         <StudioSelect id="spectra-canvas-node-type" value={nodeType}
@@ -145,7 +159,10 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
           </svg>
           {nodes.map((node,i)=>{
             const pos=nodePoint(node,i);
-            return <div key={node.id}
+            const info=catalog.find(item=>item.type===node.type);
+            const target=!!pending&&pending.id!==node.id&&(pending.value?!!info?.ports.length:
+              node.type!=='Spawn'&&info?.outputKind!=='value');
+            return <Fragment key={node.id}><div
               className={'spectra-canvas__node '+(node.id===selectedNode?'is-selected':'')}
               style={{left:pos.x,top:pos.y}}
               role="button" tabIndex={0} aria-pressed={node.id===selectedNode}
@@ -170,11 +187,34 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
               <div className="spectra-canvas__node-head"><GitBranch size={13}/><span title={node.type}>{node.type.replace(/([a-z0-9])([A-Z])/g,'$1 $2')}</span></div>
               <div className="spectra-canvas__node-id" title={node.id}>{node.id}</div>
               {node.type==='DataInterface' && <div className="spectra-canvas__node-param">{String(node.properties?.name??'Unbound')}</div>}
-            </div>;
+            </div>
+              <button type="button" className="spectra-canvas__socket" data-side="in"
+                data-kind={pending?.value?'value':'execution'} data-target={target||undefined}
+                aria-label={'Input of '+node.id} title={pending?'Connect '+pending.id+' to '+node.id:'Input of '+node.id}
+                style={{left:pos.x,top:pos.y+26}} disabled={!target||disabled||working}
+                onClick={e=>{
+                  if(!pending||!info)return;
+                  if(!pending.value){finishWire(node.id);return;}
+                  const rect=e.currentTarget.getBoundingClientRect();
+                  setFieldMenu({to:node.id,x:rect.left,y:rect.bottom,ports:info.ports});
+                }}/>
+              {info&&info.outputKind!=='none'&&<button type="button" className="spectra-canvas__socket" data-side="out"
+                data-kind={info.outputKind} aria-pressed={pending?.id===node.id}
+                aria-label={'Output of '+node.id} title={'Connect '+info.outputKind+' output of '+node.id}
+                style={{left:pos.x+170,top:pos.y+26}} disabled={disabled||working}
+                onClick={()=>{setFieldMenu(null);setWire(pending?.id===node.id?null:{id:node.id,value:info.outputKind==='value',graph});}}/>}
+            </Fragment>;
           })}
         </div>
       </div>
     </div>
+    {pending&&<div className="spectra-canvas__pending" role="status">
+      <span>Select an input for <strong>{pending.id}</strong>.</span>
+      <StudioButton size="sm" variant="ghost" onClick={cancelWire}>Cancel connection</StudioButton>
+    </div>}
+    {pending&&fieldMenu&&createPortal(<StudioContextMenu x={fieldMenu.x} y={fieldMenu.y}
+      label={'Input field on '+fieldMenu.to} onClose={cancelWire}
+      items={fieldMenu.ports.map(port=>({id:port,label:port,onSelect:()=>finishWire(fieldMenu.to,port)}))}/>,document.body)}
     {edges.some(edge=>edge.toPort)&&<div className="graph-wire-key" aria-label="Connection styles">
       <span>Execution</span><span data-kind="value">Value</span>
     </div>}
