@@ -1707,7 +1707,7 @@ Json StudioSession::sceneBrushJson() const {
     Json o=Json::object();
     o.set("armed",Json::fromBool(b.armed));o.set("kind",str(b.kind));o.set("op",str(b.op));
     o.set("radius",Json::number(b.radius,3));o.set("strength",Json::number(b.strength,3));
-    o.set("layer",num(int64_t(b.layer)));o.set("tile",str(b.tile));o.set("field",str(b.field));o.set("fieldMode",str(b.fieldMode));
+    o.set("layer",num(int64_t(b.layer)));o.set("tile",str(b.tile));o.set("field",str(b.field));o.set("fieldMode",str(b.fieldMode));o.set("fieldPlayer",num(int64_t(b.fieldPlayer)));
     o.set("regionBorders",Json::fromBool(b.regionBorders));
     o.set("regionLetter",str(b.regionLetter));
     o.set("value",Json::number(b.value,3));o.set("type",str(b.type));o.set("owner",num(int64_t(b.owner)));
@@ -1756,16 +1756,16 @@ bool StudioSession::strokeCancel(){
     stroking_=false;strokeTransaction_.reset();strokePoints_=Json::array();
     clearSelection();dropOrdinalFlags();syncHistoryLabels();return true;
 }
-bool StudioSession::strokeDab(double x,double z,std::string* error,double y){
+bool StudioSession::strokeDab(double x,double z,std::string* error,double y,bool shift){
     if(!stroking_)return false;
     try{
         if(!std::isfinite(x)||!std::isfinite(y)||!std::isfinite(z)||std::abs(x)>1e7||std::abs(y)>1e7||std::abs(z)>1e7)
             throw std::runtime_error("Invalid stroke coordinates");
-        if(strokeDabImpl(x,z,error,y))return true;
+        if(strokeDabImpl(x,z,error,y,shift))return true;
     }catch(const std::exception& e){if(error)*error=e.what();}
     strokeCancel();return false;
 }
-bool StudioSession::strokeDabImpl(double x, double z, std::string* error,double y) {
+bool StudioSession::strokeDabImpl(double x, double z, std::string* error,double y,bool shift) {
     if(!stroking_)return false;
     const auto& b=brush_;
     const double d=b.kind=="caverns"?std::hypot(x-strokeX_,y-strokeHeight_,z-strokeY_):std::hypot(x-strokeX_,z-strokeY_);
@@ -1800,7 +1800,7 @@ bool StudioSession::strokeDabImpl(double x, double z, std::string* error,double 
     else if(b.kind=="tiles"){op="tile_paint";p.set("terrain",str(b.tile));p.set("x",num(int64_t(std::floor(x))));p.set("y",num(int64_t(std::floor(z))));
         p.set("radius",num(int64_t(std::lround(b.radius))));}
     else if(b.kind=="field"){op="field_paint";p.set("id",str(b.field));p.set("x",num(int64_t(std::floor(x))));p.set("z",num(int64_t(std::floor(z))));
-        p.set("radius",num(int64_t(std::lround(b.radius))));p.set("value",Json::number(b.value,3));p.set("mode",str(b.fieldMode));}
+        p.set("radius",num(int64_t(std::lround(b.radius))));p.set("value",Json::number(b.value,3));p.set("mode",str(shift?"erase":b.fieldMode));p.set("player",num(int64_t(b.fieldPlayer)));}
     else if(b.kind=="caverns"){
         if(!std::isfinite(x)||!std::isfinite(y)||!std::isfinite(z)||
            std::abs(x)>1e7||std::abs(y)>1e7||std::abs(z)>1e7||strokeDabs_>=256){
@@ -1822,7 +1822,7 @@ bool StudioSession::strokeDabImpl(double x, double z, std::string* error,double 
     strokeX_=x;strokeY_=z;strokeHeight_=y;++strokeDabs_;
     return true;
 }
-bool StudioSession::strokeBegin(double x, double z, std::string* error,double y) {
+bool StudioSession::strokeBegin(double x, double z, std::string* error,double y,bool shift) {
     if(!brush_.armed||ws_.project.dir.empty()||stroking_)return false;
     const auto& b=brush_;
     if((b.kind=="tiles"&&b.tile.empty())||(b.kind=="field"&&b.field.empty())||(b.kind=="objects"&&b.type.empty())||(b.kind=="road"&&b.roadType.empty())){
@@ -1834,7 +1834,7 @@ bool StudioSession::strokeBegin(double x, double z, std::string* error,double y)
         strokeTransaction_=std::make_unique<editor::MapDoc::CompoundEdit>(ws_.map);
         strokeHistoryMark_=ws_.map.historyMark();stroking_=true;strokeDabs_=0;strokePoints_=Json::array();
         strokeX_=x+1e9;strokeY_=z+1e9;
-        return strokeDab(x,z,error,y);
+        return strokeDab(x,z,error,y,shift);
     }catch(const std::exception& e){if(error)*error=e.what();strokeCancel();return false;}
 }
 bool StudioSession::strokeEnd(std::string* error) {
@@ -4744,8 +4744,13 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                     throw std::runtime_error("Choose a region A–Z or erase");
                 b.regionLetter=letter;
             }
+            if (params.has("fieldPlayer")) {
+                const double player=number("fieldPlayer",1,ws_.map.data.players.size());
+                if(std::floor(player)!=player)throw std::runtime_error("Choose a whole player number");
+                b.fieldPlayer=int(player);
+            }
             if (params.has("fieldMode")) { const std::string m=params.getStr("fieldMode"); if(!modes.count(m))throw std::runtime_error("Unknown field mode"); b.fieldMode=m; }
-            if (params.has("value")) b.value=number("value",-1000,1000);
+            if (params.has("value")) b.value=number("value",INT32_MIN,INT32_MAX);
             if (params.has("type")) b.type=text("type");
             if (params.has("owner")) b.owner=int(number("owner",-1,16));
             if (params.has("count")) b.count=int(number("count",1,50));

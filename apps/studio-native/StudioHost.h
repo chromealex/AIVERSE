@@ -152,7 +152,7 @@ public:
     void brushAdjust(double factor, bool disarm);
     bool splineDrag(int phase, double x, double y, double w, double h);
     bool worldProcessDrag(int phase, double x, double y, double w, double h, bool symmetric = false, bool snap = false);
-    bool terrainStroke(int phase, double x, double y, double w, double h);
+    bool terrainStroke(int phase, double x, double y, double w, double h, bool shift = false);
     bool placeAsset(const std::string& asset, double x, double y, double w, double h);
     bool placeType(const std::string& type, double x, double y, double w, double h);
     // Files dropped from the file manager on the Assets panel (folder: the panel's drop target).

@@ -1731,6 +1731,32 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"Fixture co
        AIVERSE_TEST_CHECK(grid.regions[grid.idx(4,4)]=='.' && grid.regions[grid.idx(5,4)]=='B');
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && grid.regions[grid.idx(4,4)]=='B');
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && grid.regions==originalRegions);
+       {
+           auto& map=session.workspace().map.data;
+           const auto players=map.players;
+           const auto extra=map.extra;
+           map.players.resize(2);
+           map.extra.member("gridFields").set("influence",Json::parse(R"({"type":"int","perPlayer":true})"));
+           auto value=[&](int player){
+               Json query=Json::parse(R"({"id":"influence","rect":[4,4,1,1]})");
+               query.set("player",Json::number(int64_t(player)));
+               return session.workspace().call("field_get",query)["rows"][0][0].integer();
+           };
+           AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"kind":"field","field":"influence","fieldMode":"set","fieldPlayer":1,"value":7})").has("error"));
+           AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err) && session.strokeEnd(&err));
+           AIVERSE_TEST_CHECK(value(1)==7 && value(2)==0);
+           AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"fieldPlayer":2,"value":12})")["result"].getInt("fieldPlayer")==2);
+           AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"fieldPlayer":3})").has("error"));
+           AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"fieldPlayer":1.5})").has("error"));
+           AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err) && session.strokeEnd(&err));
+           AIVERSE_TEST_CHECK(value(1)==7 && value(2)==12);
+           AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err,0,true) && session.strokeEnd(&err));
+           AIVERSE_TEST_CHECK(value(1)==7 && value(2)==0 && session.sceneBrush().fieldMode=="set");
+           AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && value(2)==12);
+           AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && !call("studio.undo").has("error"));
+           map.extra=extra;
+           map.players=players;
+       }
        // Object scatter: three dabs far apart place three entities, one History step "Scatter objects".
        const size_t entities=session.workspace().map.data.entities.size(),depth2=session.workspace().map.undoDepth();
        AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"kind":"objects","type":"tree","radius":2})")["result"].getStr("kind")=="objects");

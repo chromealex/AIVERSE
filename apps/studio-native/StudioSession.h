@@ -78,7 +78,7 @@ public:
     struct SceneBrush {
         bool armed=false; std::string kind="terrain";
         std::string op="raise"; double radius=4, strength=1;   // terrain sculpt; paint uses radius/strength + layer
-        int layer=0; bool regionBorders=false; std::string regionLetter="A", tile, field, fieldMode="add"; double value=1;
+        int layer=0, fieldPlayer=1; bool regionBorders=false; std::string regionLetter="A", tile, field, fieldMode="add"; double value=1;
         std::string type; int owner=0, count=1; double spread=1;
         std::string roadType; double width=6;
         std::string caveMode="carve",caveRegionId; double caveY=-5,caveDepth=2; bool caveSurface=true;
@@ -90,8 +90,8 @@ public:
     Json splineHandles();   // {handles:[{id,x,z}], segments:[[x0,z0,x1,z1],...]}
     bool splineMove(const std::string& id, double x, double z, std::string* error);
     bool caveBrushPoint(double ox,double oy,double oz,double dx,double dy,double dz,double& x,double& y,double& z,std::string* error);
-    bool strokeBegin(double x, double z, std::string* error,double y=0);
-    bool strokeDab(double x, double z, std::string* error,double y=0);
+    bool strokeBegin(double x, double z, std::string* error,double y=0,bool shift=false);
+    bool strokeDab(double x, double z, std::string* error,double y=0,bool shift=false);
     bool strokeEnd(std::string* error = nullptr);
     bool strokeActive() const noexcept{return stroking_;}
     bool strokeCancel();
@@ -209,7 +209,7 @@ private:
     std::unique_ptr<editor::MapDoc::CompoundEdit> strokeTransaction_;
     uint64_t strokeHistoryMark_=0; bool stroking_=false; double strokeX_=0, strokeY_=0, strokeHeight_=0;
     std::string wizardArtDir_;
-    bool strokeDabImpl(double x,double z,std::string* error,double y);
+    bool strokeDabImpl(double x,double z,std::string* error,double y,bool shift);
     Json agentRequest(const std::string& method, const Json& params);
     Json agentLinkedCall(const std::string& name,const Json& args);
     Json agentHistoryLink(Json change) const;

@@ -197,11 +197,13 @@ export function EcologyLayerPicker(){
     setPending(true);void invoke('studio.evolveLayer',{granularCellCm:Number(e.target.value)}).then(r=>{setGranularCellCm(r.granularCellCm??0);setError('');}).catch(e=>setError(message(e))).finally(()=>setPending(false));
   }}>{Array.from(new Set([0,10,25,50,100,200,500,1000,2000,5000,10000,granularCellCm])).sort((a,b)=>a-b).map(n=><option key={n} value={n}>{n===0?'Off':n}</option>)}</select></label><small>Display scale only; ground-relative tops, no physical geometry changes.</small><EcologyLiveMap layer={layer}/><WorldProcessDiagnostics/></div>;
 }
-export default function SceneBrushBar({ kinds }: { kinds: BrushKind[] }) {
+export interface BrushField { id:string; perPlayer:boolean; layers:number; type:string; min?:number; max?:number; resolution:number; kernels:string[]; effects:string[] }
+const EMPTY_FIELDS: BrushField[] = [];
+export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS }: { kinds: BrushKind[]; fields?: BrushField[] }) {
   const [brush, setBrush] = useState<StudioSceneBrush | null>(null);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
-  const [options, setOptions] = useState<{ tiles: string[]; fields: string[]; types: string[]; roads: string[] }>({ tiles: [], fields: [], types: [], roads: [] });
+  const [options, setOptions] = useState<{ tiles: string[]; types: string[]; roads: string[] }>({ tiles: [], types: [], roads: [] });
   const set = (patch: Partial<StudioSceneBrush>) =>
     void invoke('studio.sceneBrush', patch).then(b => { setBrush(b); setError(''); }).catch(e => setError(message(e)));
   useEffect(() => {
@@ -216,7 +218,6 @@ export default function SceneBrushBar({ kinds }: { kinds: BrushKind[] }) {
     // Choices for the active tool, from the same ops the panels use.
     if (kind === 'tiles') void op('tileset_list').then(r => setOptions(o => ({ ...o,
       tiles: (r.tilesets ?? []).filter((t: any) => !r.mapTileset || t.name === r.mapTileset || t.path?.includes(r.mapTileset)).flatMap((t: any) => (t.terrains ?? []).map((x: any) => x.id)) }))).catch(() => {});
-    if (kind === 'field') void op('field_list').then(r => setOptions(o => ({ ...o, fields: (r.fields ?? []).map((f: any) => f.id) }))).catch(() => {});
     if (kind === 'road') void op('road_types').then(r => setOptions(o => ({ ...o, roads: (r.types ?? []).map((t: any) => t.id ?? t.name).filter(Boolean) }))).catch(() => {});
     if (kind === 'objects') void invoke('studio.rules', {}).then((r: any) => setOptions(o => ({ ...o, types: Object.keys(r.types ?? {}).sort() }))).catch(() => {});
   }, [kind]);
@@ -224,16 +225,21 @@ export default function SceneBrushBar({ kinds }: { kinds: BrushKind[] }) {
   useEffect(() => {
     if (!brush) return;
     if (kind === 'tiles' && !brush.tile && options.tiles[0]) set({ tile: options.tiles[0] });
-    if (kind === 'field' && !brush.field && options.fields[0]) set({ field: options.fields[0] });
+    if (kind === 'field' && fields.length) {
+      const selected = fields.find(f => f.id === brush.field);
+      if (!selected) set({ field: fields[0].id });
+      else if (selected.perPlayer && selected.layers > 1 && brush.fieldPlayer >= selected.layers) set({ fieldPlayer: 1 });
+    }
     if (kind === 'road' && !brush.roadType && options.roads[0]) set({ roadType: options.roads[0] });
     if (kind === 'objects' && !brush.type && options.types[0]) set({ type: options.types.find(t => /tree|rock|stone/i.test(t)) ?? options.types[0] });
-  }, [kind, options, brush?.tile, brush?.field, brush?.roadType, brush?.type]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [kind, fields, options, brush?.fieldPlayer, brush?.tile, brush?.field, brush?.roadType, brush?.type]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!brush) return null;
+  const field = fields.find(f => f.id === brush.field);
   const continuous = kind === 'terrain' || kind === 'paint' || kind === 'tiles' || kind === 'region' || kind === 'field' || kind === 'objects';
   return <div className={'tbrush' + (brush.armed ? ' is-armed' : '')}>
-    {!kinds.includes('region') && <EcologyLayerPicker/>}
+    {kind !== 'field' && !kinds.includes('region') && <EcologyLayerPicker/>}
     <div className="tbrush__row">
-      <button type="button" className={'au-button au-button--sm' + (brush.armed ? ' au-button--primary' : '')} aria-pressed={brush.armed}
+      <button type="button" className={'au-button au-button--sm' + (brush.armed ? ' au-button--primary' : '')} aria-pressed={brush.armed} disabled={!brush.armed && kind === 'field' && (!field || (field.perPlayer && field.layers <= 1))}
         onClick={() => { set({ armed: !brush.armed, kind }); if (!brush.armed) setEditing(false); }} title="Drag in the Scene (Alt+drag orbits, [ ] size, Esc stops)">
         <Brush size={13}/>{brush.armed ? 'Brush on' : 'Brush'}</button>
       {(kind === 'road' || kind === 'river') && <button type="button" className={'au-button au-button--sm' + (editing ? ' au-button--primary' : '')}
@@ -255,9 +261,17 @@ export default function SceneBrushBar({ kinds }: { kinds: BrushKind[] }) {
       </select></label>}
     {kind === 'tiles' && <Choice label="Terrain" value={brush.tile} options={options.tiles} onChange={v => set({ tile: v })}/>}
     {kind === 'field' && <>
-      <Choice label="Field" value={brush.field} options={options.fields} onChange={v => set({ field: v })}/>
+      <Choice label="Field" value={brush.field} options={fields.map(f => f.id)} onChange={v => set({ field: v })}/>
+      {field && <small>{field.type === 'fixed' ? 'Fractional' : 'Integer'} · {field.resolution} × {field.resolution} map cells per field cell
+        {field.kernels.length > 0 && ' · Kernels: ' + field.kernels.join(', ')}
+        {field.effects.length > 0 && ' · Effects: ' + field.effects.join(', ')}</small>}
+      {field?.perPlayer && <label className="ptp__row"><span>Player layer</span>
+        <select className="au-input" value={brush.fieldPlayer} onChange={e => set({ fieldPlayer: Number(e.target.value) })}>
+          {Array.from({length: field.layers - 1}, (_, i) => <option key={i} value={i + 1}>Player {i + 1}</option>)}
+        </select></label>}
+      <small>Hold Shift while painting to erase.</small>
       <Choice label="Mode" value={brush.fieldMode} options={['set', 'add', 'max', 'erase']} onChange={v => set({ fieldMode: v as StudioSceneBrush['fieldMode'] })}/>
-      <Slider label="Value" value={brush.value} min={0} max={100} step={1} onCommit={v => set({ value: v })}/></>}
+      {brush.fieldMode !== 'erase' && <Slider label="Value" value={Math.max(field?.min ?? -1000, Math.min(field?.max ?? 1000, brush.value))} min={field?.min ?? -1000} max={field?.max ?? 1000} step={field?.type === 'fixed' ? 0.01 : 1} onCommit={v => set({ value: v })}/>}</>}
     {kind === 'objects' && <>
       <Choice label="Type" value={brush.type} options={options.types} onChange={v => set({ type: v })}/>
       <Slider label="Owner" value={brush.owner} min={-1} max={8} step={1} onCommit={v => set({ owner: v })}/>
@@ -266,7 +280,8 @@ export default function SceneBrushBar({ kinds }: { kinds: BrushKind[] }) {
     {kind === 'road' && <Choice label="Road type" value={brush.roadType} options={options.roads} onChange={v => set({ roadType: v })}/>}
     {kind === 'river' && <Slider label="Width, m" value={brush.width} min={2} max={80} step={1} onCommit={v => set({ width: v })}/>}
     {kind === 'region' && <Slider label="Radius (cells)" value={Math.floor(brush.radius)} min={0} max={24} step={1} onCommit={v => set({ radius: v || 0.5 })}/>}
-    {continuous && kind !== 'region' && <Slider label={kind === 'objects' ? 'Spacing' : 'Radius'} value={brush.radius} min={0.5} max={24} step={0.5} onCommit={v => set({ radius: v })}/>}
+    {kind === 'field' && <Slider label="Radius (cells)" value={Math.round(brush.radius)} min={0} max={24} step={1} onCommit={v => set({ radius: v || 0.25 })}/>}
+    {continuous && kind !== 'region' && kind !== 'field' && <Slider label={kind === 'objects' ? 'Spacing' : 'Radius'} value={brush.radius} min={0.5} max={24} step={0.5} onCommit={v => set({ radius: v })}/>}
     {(kind === 'terrain' || kind === 'paint') && <Slider label="Strength" value={brush.strength} min={0.05}
       max={kind === 'paint' || brush.op === 'smooth' || brush.op === 'flatten' || brush.op === 'erode' ? 1 : 6} step={0.05} onCommit={v => set({ strength: v })}/>}
     {editing && <p className="ptp__hint">Drag a {kind === 'road' ? 'road node' : 'river point'} in the Scene to move it</p>}

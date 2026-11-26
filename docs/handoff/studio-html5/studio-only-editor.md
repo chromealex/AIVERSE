@@ -627,3 +627,5 @@ bc17721e334ca383d5a550e0a6189a35642d4bfc. Windows Game now attaches a WS_EX_LAYE
 Game transfer: expose local first-person map play in the Game panel and verify actor pause, step and restart on the selected map.
 
 aafb2229871368760bf25c7a8bc3fb738fb83230. GamePanel.tsx exposes Play map for first-person projects and hides unsupported project-menu and play-change actions. On packaged macOS Studio the second Harbor Range map opened in Game with Scene closed. The simulation paused at tick 14, advanced to 15 with one Step, resumed, restarted with a fresh runtime epoch and stopped. The saved map matched byte for byte. The background harness placed the native viewport at the measured Game bounds when occluded. HTML build, TypeScript and 299 web tests passed. Evidence docs/evidence/studio-hosted-actor-game.json and docs/evidence/studio-project-catalog/actor-game-{ready,running}.png. Next: per-player field authoring and erase, Windows visual/input acceptance and remaining migration gates.
+
+Fields transfer: expose the selected player layer in the Scene brush and apply Shift erase per dab. Verify layer isolation and Undo.

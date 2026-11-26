@@ -3,6 +3,8 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-native/StudioSession.h",
+    "apps/studio-web/src/panels/SceneBrushBar.tsx",
     "apps/studio-web/src/panels/GamePanel.tsx",
     "apps/studio-native/tests/StudioWindowsDeviceOverlayTests.cpp",
     "apps/studio-native/win/GameDeviceOverlay.h",
@@ -91,7 +93,6 @@
     "apps/studio-native/StudioHierarchyGroups.h",
     "apps/editor/core/DocumentWorldPreview.h",
     "apps/editor/EditorWorld.cpp",
-    "apps/studio-native/StudioSession.h",
     "apps/studio-native/StudioGameSurface.cpp",
     "apps/studio-native/StudioGameSurface.h",
     "apps/studio-native/StudioRuntimeInspect.h",

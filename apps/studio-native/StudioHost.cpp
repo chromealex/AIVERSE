@@ -2335,7 +2335,7 @@ bool StudioHost::splineDrag(int phase, double x, double y, double w, double h) {
     return true;
 }
 // phase 0 begin, 1 drag, 2 end. Map coordinates: world x, world z (the terrain ops' x, y).
-bool StudioHost::terrainStroke(int phase, double x, double y, double w, double h) {
+bool StudioHost::terrainStroke(int phase, double x, double y, double w, double h, bool shift) {
     if (projectLoading_ || !preview_) return false;
     std::string error;
     auto report = [&] {
@@ -2357,7 +2357,7 @@ bool StudioHost::terrainStroke(int phase, double x, double y, double w, double h
     const auto& brush=session_->sceneBrush();
     const float radius=brush.kind=="road"?.6f:brush.kind=="river"?float(brush.width*.5):float(brush.radius);
     onScene([&]{preview_->setBrushCursor(true,at,radius,brush.kind=="caverns",brush.caveMode=="fill");});
-    const bool ok = phase == 0 ? session_->strokeBegin(at.x, at.z, &error,at.y) : session_->strokeDab(at.x, at.z, &error,at.y);
+    const bool ok = phase == 0 ? session_->strokeBegin(at.x, at.z, &error,at.y,shift) : session_->strokeDab(at.x, at.z, &error,at.y,shift);
     if (phase==0&&ok)sendEvent("document.changed", ""); // History controls observe stroke ownership immediately.
     if (!ok && !error.empty()) {report();if(!session_->strokeActive())sendEvent("document.changed", "");}
     return ok;
@@ -2644,7 +2644,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
         // Spline handles (Roads / Water "Edit nodes"): LMB on a handle drags it.
         if (!mods.alt && splineDrag(0, x, y, w, h)) { m.spline = true; return; }
         // Scene brush armed: plain LMB paints; Alt still orbits.
-        if (!mods.alt && brushArmed()) { m.stroke = terrainStroke(0, x, y, w, h); if (m.stroke||session_->sceneBrush().kind=="caverns") { if(!m.stroke)m.active=false;return; } }
+        if (!mods.alt && brushArmed()) { m.stroke = terrainStroke(0, x, y, w, h, mods.shift); if (m.stroke||session_->sceneBrush().kind=="caverns") { if(!m.stroke)m.active=false;return; } }
         // Plain LMB on a handle starts a Move / Rotate / Scale drag (Unity W/E/R tools).
         m.move = !mods.alt && moveBegin(x, y, w, h);
         return;
@@ -2672,7 +2672,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
         }
         if(m.worldProcess){worldProcessDrag(1,x,y,w,h,mods.shift,mods.ctrl||mods.command);return;}
         if (m.spline) { splineDrag(1, x, y, w, h); return; }
-        if (m.stroke) { terrainStroke(1, x, y, w, h); return; }
+        if (m.stroke) { terrainStroke(1, x, y, w, h, mods.shift); return; }
         if (m.move) { m.dragged = true; moveUpdate(x, y, w, h, mods.ctrl || mods.command); return; }
         // Hand tool (Q): plain LMB drag pans the view.
         if (!mods.alt && tool() == 0) { m.dragged = true; pan(dx, dy); return; }

@@ -5,7 +5,7 @@ import type { StudioSnapshot } from '../types';
 import { buildParams, fieldDraft, opLabel, resultLine, schemaFields, stateOps, type ToolField, type ToolOpInfo } from './toolSchema';
 import { TOOL_PANELS, type ToolPanelId } from './toolPanels';
 import JsonTree from './JsonTree';
-import SceneBrushBar, { type BrushKind } from './SceneBrushBar';
+import SceneBrushBar, { type BrushKind, type BrushField } from './SceneBrushBar';
 import './ProjectToolPanels.css';
 import './ToolPanel.css';
 import { StudioLoader, StudioButton } from '../ui';
@@ -144,7 +144,7 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
     <div className="tool__scroll">
       {panel==='models'&&<MaterialTechniquePanel key={projectPath} projectPath={projectPath}/>}
       {panel==='models'&&<StrataAnalysisPanel projectPath={projectPath}/>}
-      {BRUSHES[panel] && <SceneBrushBar kinds={BRUSHES[panel]!}/>}
+      {BRUSHES[panel] && <SceneBrushBar kinds={BRUSHES[panel]!} fields={(state.field_list as {fields?:BrushField[]} | undefined)?.fields}/>}
       {Object.entries(state).map(([name, value]) => <div key={name} className="tool__state">
         <JsonTree value={value} name={opLabel(name, spec.prefix)} open={false}/>
       </div>)}
