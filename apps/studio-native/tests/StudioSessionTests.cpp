@@ -2229,6 +2229,12 @@ void entityWorkflow() {
             auto page=inspector.entities(&live,"run-1",0,1,"");
             AIVERSE_TEST_CHECK(page["active"].boolean() && page["rows"].size()==1 && page["total"].integer()>=2);
             const auto ref=page["rows"][0].getStr("ref");
+            const auto& placed=static_cast<game::GameCore&>(live.module()).mapPlaced();
+            AIVERSE_TEST_CHECK(!placed.empty() && placed.front().valid());
+            const auto mapRef=std::to_string(editor::worldRef(placed.front()));
+            const auto placedPage=inspector.entities(&live,"run-1",0,1,"ref:"+mapRef);
+            AIVERSE_TEST_CHECK(placedPage.getInt("total")==1 && placedPage["rows"][0].getInt("doc",-1)==0);
+            AIVERSE_TEST_CHECK(placedPage["rows"][0].getStr("origin")=="map");
             const auto second=inspector.entities(&live,"run-1",1,1,"");
             AIVERSE_TEST_CHECK(second["total"].integer()==page["total"].integer() && second["rows"].size()==1);
             AIVERSE_TEST_CHECK(second["rows"][0].getStr("ref")!=ref);

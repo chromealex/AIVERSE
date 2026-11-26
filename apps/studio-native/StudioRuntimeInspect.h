@@ -98,9 +98,8 @@ public:
         out.set("tick",Json::number(int64_t(sim?sim->tick():0)));
         if(mod) {
             std::vector<uint64_t> links;
-            if(!group.keys.empty()){
-                for(const Entity e:mod->mapPlaced())links.push_back(e.valid()?editor::worldRef(e):0);
-            }
+            links.reserve(mod->mapPlaced().size());
+            for(const Entity e:mod->mapPlaced())links.push_back(e.valid()?editor::worldRef(e):0);
             editor::readWorld(*sim,*mod,group.config,links,setupRefs,nullptr,model_,{false});
             const bool scriptData=!group.keys.empty() && (!group.config.labelKey.empty() ||
                 std::any_of(group.keys.begin(),group.keys.end(),[](const auto& key){return key.starts_with("data:");}));
@@ -149,6 +148,8 @@ public:
                 Json item=Json::object();item.set("ref",Json::string(std::to_string(row.ref)));
                 item.set("name",Json::string(editor::worldRowName(model_,mod->rules(),nullptr,row)));
                 item.set("kind",Json::string(editor::worldKindId(row.kind)));
+                item.set("doc",Json::number(int64_t(row.doc)));
+                item.set("origin",Json::string(row.origin==editor::WorldOrigin::Map?"map":row.origin==editor::WorldOrigin::Setup?"setup":"runtime"));
                 item.set("owner",Json::number(int64_t(row.owner)));
                 item.set("parent",Json::string(row.parent?std::to_string(row.parent):""));
                 if(nesting){
