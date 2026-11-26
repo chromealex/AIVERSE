@@ -2494,9 +2494,16 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
         // A build packs the files on disk: never save implicitly from here.
         if (ws_.map.dirty || ws_.project.rulesDirty || ws_.project.manifestDirty)
             throw std::runtime_error("Save the project before building");
+        const std::string audio = params.getStr("audio", "auto");
+        std::string flags;
+        if (audio != "auto") {
+            if (audio != "desktop" && audio != "mobile" && audio != "web" && audio != "off")
+                throw std::runtime_error("Unknown audio profile");
+            flags = "--audio " + audio;
+        }
         if (params.getBool("estimate"))
-            ws_.startBuild(target, config, "--estimate", (builds / ".temp" / "estimate").string());
-        else ws_.startBuild(target, config, params.getBool("installMissing") ? "--install-missing" : "");
+            ws_.startBuild(target, config, "--estimate " + flags, (builds / ".temp" / "estimate").string());
+        else ws_.startBuild(target, config, flags + (params.getBool("installMissing") ? " --install-missing" : ""));
         Json out = Json::object(); out.set("started", Json::fromBool(true));
         return out;
     }

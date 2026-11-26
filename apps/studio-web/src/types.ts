@@ -710,7 +710,7 @@ export interface StudioParams {
   'studio.agentStop': { from?: number };
   'studio.agentReset': { from?: number };
   'studio.buildToolchain': { target: string };
-  'studio.buildStart': { target: string; config: 'Release' | 'Debug'; installMissing?: boolean; estimate?: boolean };
+  'studio.buildStart': { target: string; config: 'Release' | 'Debug'; audio?: string; installMissing?: boolean; estimate?: boolean };
   'studio.buildLog': { from: number; run?: number; project?: string };
   'studio.buildEstimate': { target: string };
   /** Show a build folder (or the last build log) in Finder. */

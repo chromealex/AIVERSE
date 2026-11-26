@@ -18,6 +18,7 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
   const [info, setInfo] = useState<StudioBuildInfo | null>(null);
   const [target, setTarget] = useState(() => window.localStorage.getItem('aiverse.studio.build.target') || 'macos');
   const [config, setConfig] = useState<'Release' | 'Debug'>('Release');
+  const [audio, setAudio] = useState('auto');
   const [installMissing, setInstallMissing] = useState(false);
   const [toolchain, setToolchain] = useState<StudioToolchain | null>(null);
   const [checking, setChecking] = useState(false);
@@ -69,7 +70,7 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
     setError('');
     try {
       follow.current = true;
-      await invoke('studio.buildStart', { target, config, installMissing: withInstall, estimate: kind === 'estimate' });
+      await invoke('studio.buildStart', { target, config, audio, installMissing: withInstall, estimate: kind === 'estimate' });
       setStartedAt(Date.now()); setNow(Date.now());
       reloadTranscript(kind === 'estimate' ? 'estimate' : 'build-'+target);
     } catch (e) { setError(message(e)); }
@@ -106,6 +107,12 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
       <StudioField label="Configuration" htmlFor="build-config">
         <StudioSelect id="build-config" value={config} disabled={state.running} onChange={e => setConfig(e.target.value as 'Release' | 'Debug')}>
           <option value="Release">Release</option><option value="Debug">Debug</option>
+        </StudioSelect>
+      </StudioField>
+      <StudioField label="Audio profile" htmlFor="build-audio">
+        <StudioSelect id="build-audio" value={audio} disabled={state.running} onChange={e => setAudio(e.target.value)}>
+          <option value="auto">Platform default</option><option value="desktop">Desktop</option>
+          <option value="mobile">Mobile</option><option value="web">Web</option><option value="off">Off</option>
         </StudioSelect>
       </StudioField>
       <StudioCheckbox label="Install missing tools first" checked={installMissing} disabled={state.running}
