@@ -1,0 +1,10 @@
+{
+  "sha": "b7cfea726052bcb3c52e7345621cfbbd51673ec1",
+  "argv": [
+    "bash",
+    "/tmp/studio-anim-runtime.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-live-entity-animation.log.txt",
+  "sha256": "08a8ae1d712b622261b9c20b25b2065636427f0e9ba4d6764afbd3e6b341147e"
+}

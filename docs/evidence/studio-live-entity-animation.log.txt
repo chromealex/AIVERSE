@@ -1,0 +1,9 @@
+2026-11-26 10:38:30.178 AiverseStudioHTML5[87464:83912733] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-anim-runtime-48knwc/Catalog.app/Contents/Resources/studio-web
+2026-11-26 10:38:30.374 AiverseStudioHTML5[87464:83912733] [studio-web] served index.html (6163 bytes)
+2026-11-26 10:38:30.381 AiverseStudioHTML5[87464:83912733] [studio-web] served assets/index-Dz4eacxX.js (1690905 bytes)
+2026-11-26 10:38:30.413 AiverseStudioHTML5[87464:83912733] [studio-web] JS: CROSS main boot
+2026-11-26 10:38:30.422 AiverseStudioHTML5[87464:83912733] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 10:38:39.278 AiverseStudioHTML5[87464:83912733] [studio-web] JS: CROSS main LINK_PORT 47321
+2026-11-26 10:38:50.201 AiverseStudioHTML5[87464:83912733] [studio-web] JS: CROSS main state [[{"entity":0,"entityId":"0","error":"","climbing":false,"attached":false,"stanceFeet":0,"steppingFeet":0,"footError":0,"penetration":0,"bodyPosition":[0,0,0],"surfaceNormal":[0,1,0]}],[]]
+2026-11-26 10:38:58.275 AiverseStudioHTML5[87464:83912733] [studio-web] JS: CROSS main state [[{"entity":0,"entityId":"0","error":"","climbing":false,"attached":false,"stanceFeet":0,"steppingFeet":0,"footError":0,"penetration":0,"bodyPosition":[0,0,0],"surfaceNormal":[0,1,0]}],[]]
+2026-11-26 10:39:01.506 AiverseStudioHTML5[87464:83912733] [studio-web] JS: CROSS main FAIL @aiverse-studio://shell/index.html:94:69 Error: expected live attached crawler [{"entity":0,"entityId":"0","error":"","climbing":false,"attached":false,"stanceFeet":0,"steppingFeet":0,"footError":0,"penetration":0,"bodyPosition":[0,0,0],"surfaceNormal":[0,1,0]}]
