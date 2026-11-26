@@ -1,4 +1,6 @@
 #include "apps/editor/PhysisAuthoring.h"
+#include "apps/editor/PhysisDiagnosticDemo.h"
+#include "apps/editor/core/PhysisDiagnosticFrame.h"
 #include <cstdio>
 #include "apps/editor/core/Workspace.h"
 using namespace aiverse;
@@ -40,6 +42,14 @@ void mcpAuthoring() {
     CHECK(w.call("physis_set",p).getBool("ok")); CHECK(w.map.toJson()["physis"]==valid);
     int count=0;for(const auto& op:w.ops())if(op.name.rfind("physis_",0)==0)++count;
     CHECK(count==4);
+    const auto liveWorld=makePhysisDiagnosticDemo();
+    const auto liveParams=Json::parse(R"({"cellX":3,"cellZ":2,"layer":8,"action":"step60"})");
+    const auto captured=readPhysisGameFrame(liveWorld.get(),liveParams);
+    CHECK(captured.getBool("active") && captured["tick"].integer()==25);
+    CHECK(captured["cell"]["tick"]==captured["tick"] && captured["cell"].getBool("available"));
+    CHECK(captured["cell"]["wind"].size()==3 && captured["cell"]["gravity"].size()==3);
+    CHECK(liveWorld->resourceConst<physis::State>()->tick==25);
+    CHECK(!readPhysisGameFrame(nullptr,liveParams).getBool("active"));
     const auto mapBefore=w.map.toJson();
     const auto revisionBefore=w.map.revision;
     auto demo=[&](const char* args){return w.call("physis_demo",Json::parse(args));};

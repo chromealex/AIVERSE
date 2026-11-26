@@ -3646,6 +3646,13 @@ bool StudioHost::handleHostMethod(const Json& req) {
         }
         out.set("armed",Json::fromBool(forestPlantArm_.isObject()));return out;
     });
+    if(method=="studio.physisLive")return answer([&] {
+        const auto& project=session_->workspace().project.dir;
+        if(project.empty() || projectLoading_ || params.getStr("expectedProject")!=project)
+            throw std::runtime_error("PHYSIS project changed; reopen the panel");
+        if(game_ && game_->launchPlan().project==project) return game_->physisFrame(params);
+        Json out=Json::object();out.set("active",Json::fromBool(false));return out;
+    });
     if(method=="studio.planetForestLive")return answer([&]{return planetForestLiveRequest();});
     if(method=="studio.evolveState")return answer([&]{
         // Browser polling can reuse the same completed-tick geometry sampled

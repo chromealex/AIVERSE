@@ -33,3 +33,6 @@
 .physis-cell table { width:100%; margin-top:8px; border-collapse:collapse; font-variant-numeric:tabular-nums; }
 .physis-cell :is(th,td) { text-align:right; padding:5px 3px; border-top:1px solid var(--au-line); }
 .physis-cell th:first-child { text-align:left; }
+
+.physis-source { display:flex; gap:8px; align-items:center; margin:0 auto 12px; max-width:1080px; }
+.physis-source select { width:auto; }

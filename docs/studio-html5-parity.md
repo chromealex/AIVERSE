@@ -346,3 +346,5 @@ Effects base emitter transfer: edit separate size/rotation axes, sprite aspect, 
 PHYSIS diagnostics transfer: reuse the isolated native demo, tick stepping, all field layers and palette conversion. Provide panel-local map, volume contours and cell inspection. Verify reset and project isolation.
 
 PHYSIS cell details: sample wind velocity and gravity acceleration at the selected native cell center and elevation. Check keyboard and mouse selection against the displayed frame tick, including missing cells.
+
+PHYSIS live transfer: select the local play-test, capture a committed native field raster with optional cell vectors in the same read, and verify isolation from demo stepping and the authored map.

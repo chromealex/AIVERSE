@@ -2,20 +2,21 @@ import {useEffect,useState} from 'react';
 import {invoke} from '../bridge';
 import {StudioButton} from '../ui';
 
-type Sample={active:boolean;available:boolean;tick:number;wind:number[];gravity:number[]};
-export default function PhysisCellReading({projectPath,x,z,tick,label,value,refresh}:{
+import type {StudioPhysisCell as Sample} from '../types';
+export default function PhysisCellReading({projectPath,x,z,tick,label,value,refresh,captured}:{captured?:Sample;
   projectPath:string;x:number;z:number;tick:number;label:string;value:number|null;refresh:()=>void
 }){
-  const [sample,setSample]=useState<Sample>();
+  const [probe,setSample]=useState<Sample>();
+  const sample=captured??probe;
   const [error,setError]=useState('');
   useEffect(()=>{
-    if(value===null)return;
+    if(value===null||captured)return;
     let current=true;
     invoke('studio.op',{op:'physis_demo',params:{action:'probe',cellX:x,cellZ:z},expectedProject:projectPath})
       .then(reply=>{if(current)setSample(reply.result as Sample);})
       .catch(e=>{if(current)setError(String(e));});
     return ()=>{current=false;};
-  },[projectPath,x,z,tick,value]);
+  },[projectPath,x,z,tick,value,captured]);
   return <section className="physis-cell" aria-label="Selected cell">
     <h4>Cell ({x}, {z})</h4>
     {value===null?<p>Outside grid</p>:<>

@@ -24,6 +24,7 @@
 #include "engine/world/WorldPersistenceDiagnostics.h"
 #include "engine/world/SimulationLod.h"
 #include "apps/studio-native/StudioRuntimeEdit.h"
+#include "apps/editor/core/PhysisDiagnosticFrame.h"
 #include <algorithm>
 #include <chrono>
 #include <stdexcept>
@@ -146,6 +147,10 @@ Simulation* StudioGameSurface::liveSimulation() const {
 bool StudioGameSurface::paused() const {return actor_?actor_->paused():host_->paused();}
 bool StudioGameSurface::canControl() const {return actor_ || host_->canControl();}
 bool StudioGameSurface::canStep() const {return actor_?actor_->paused():host_->canStep();}
+Json StudioGameSurface::physisFrame(const Json& params) const {
+    const auto* sim = canControl() ? liveSimulation() : nullptr;
+    return editor::readPhysisGameFrame(sim && sim->tick()>0 ? &sim->world() : nullptr,params);
+}
 Json StudioGameSurface::planetForestState(const std::string& focusBody,const std::optional<StudioForestCameraFocus>& camera){
     Simulation* sim=host_&&host_->inMatch()&&host_->canControl()?host_->simulation():nullptr;
     if(sim&&sim->tick()>0)if(const auto* game=dynamic_cast<const game::GameCore*>(&sim->module()))

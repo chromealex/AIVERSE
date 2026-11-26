@@ -1,5 +1,6 @@
 // Shared GUI/MCP authoring; never mutates the live simulation.
 #include "Workspace.h"
+#include "PhysisDiagnosticFrame.h"
 #include "apps/editor/PhysisDiagnosticDemo.h"
 #include "engine/physis/PhysisDebugPalette.h"
 #include "apps/editor/PhysisAuthoring.h"
@@ -22,51 +23,39 @@ int diagnosticInteger(const Json& p, const char* key, int fallback, int low, int
     return static_cast<int>(n);
 }
 
-Json inspectDemo(DiagnosticDemo& demo, uint64_t lifetime, const Json& params) {
-    using namespace physis;
-    const auto action = params["action"].str();
-    if (action != "reset" && action != "view" && action != "step" && action != "step60" && action != "probe")
-        throw std::invalid_argument("Expected reset, view, step, step60 or probe");
+using namespace physis;
+DiagnosticRequest diagnosticArea(const Json& params) {
     DiagnosticRequest req;
     req.layer = static_cast<DiagnosticLayer>(diagnosticInteger(params,"layer",0,0,13));
-    const auto palette = static_cast<DebugPalette>(diagnosticInteger(params,"palette",0,0,2));
     req.width = req.height = diagnosticInteger(params,"size",32,8,64);
     req.stride = diagnosticInteger(params,"stride",1,1,8);
     req.originX = diagnosticInteger(params,"centerX",0,-1000000,1000000) - req.width/2;
     req.originZ = diagnosticInteger(params,"centerZ",0,-1000000,1000000) - req.height/2;
-    if (demo.projectLifetime != lifetime) {
-        demo.world.reset();
-        demo.projectLifetime = lifetime;
-    }
-    if (action == "probe" && (!params.has("cellX") || !params.has("cellZ")))
-        throw std::invalid_argument("A probe requires cellX and cellZ");
-    if (action == "reset") demo.world = makePhysisDiagnosticDemo();
+    return req;
+}
+
+Json readCell(const World& world, int x, int z) {
     Json result = Json::object();
-    result.set("active",Json::fromBool(bool(demo.world)));
-    if (!demo.world) return result;
-    if (action == "probe") {
-        const int x = diagnosticInteger(params,"cellX",0,INT32_MIN,INT32_MAX);
-        const int z = diagnosticInteger(params,"cellZ",0,INT32_MIN,INT32_MAX);
-        const auto& world = *demo.world;
-        result.set("tick",Json::number(int64_t(world.resourceConst<State>()->tick)));
-        NatureFieldSample sample;
-        const bool available = samplePhysisCell(world,x,z,sample);
-        result.set("available", Json::fromBool(available));
-        if (available) {
-            auto vector = [](Vec3 v) {
-                Json out = Json::array();
-                for (auto n : {v.x,v.y,v.z}) out.push(Json::number(n.toDouble(),6));
-                return out;
-            };
-            result.set("wind",vector(sample.windVelocity));
-            result.set("gravity",vector(sample.gravityAcceleration));
-        }
-        return result;
+    result.set("active",Json::fromBool(true));
+    result.set("tick",Json::number(int64_t(world.resourceConst<State>()->tick)));
+    NatureFieldSample sample;
+    const bool available = samplePhysisCell(world,x,z,sample);
+    result.set("available", Json::fromBool(available));
+    if (available) {
+        auto vector = [](Vec3 v) {
+            Json out = Json::array();
+            for (auto n : {v.x,v.y,v.z}) out.push(Json::number(n.toDouble(),6));
+            return out;
+        };
+        result.set("wind",vector(sample.windVelocity));
+        result.set("gravity",vector(sample.gravityAcceleration));
     }
-    const int ticks = action == "step" ? 1 : action == "step60" ? 60 : 0;
-    for (int i = 0; i < ticks; ++i)
-        advanceEnvironmentWithStormsAndDisasters(*demo.world, FloodMode::ExternalAuthority);
-    const World& world = *demo.world;
+    return result;
+}
+
+Json readFrame(const World& world, const DiagnosticRequest& req, DebugPalette palette) {
+    Json result = Json::object();
+    result.set("active",Json::fromBool(true));
     DiagnosticRaster raster;
     const bool ok = diagnosticNeeds3DField(req.layer)
         ? sampleDiagnosticRasterIndexed(FieldSpatialIndex(world),req,raster)
@@ -106,6 +95,34 @@ Json inspectDemo(DiagnosticDemo& demo, uint64_t lifetime, const Json& params) {
     return result;
 }
 
+Json inspectDemo(DiagnosticDemo& demo, uint64_t lifetime, const Json& params) {
+    using namespace physis;
+    const auto action = params["action"].str();
+    if (action != "reset" && action != "view" && action != "step" && action != "step60" && action != "probe")
+        throw std::invalid_argument("Expected reset, view, step, step60 or probe");
+    const auto req = diagnosticArea(params);
+    const auto palette = static_cast<DebugPalette>(diagnosticInteger(params,"palette",0,0,2));
+    if (demo.projectLifetime != lifetime) {
+        demo.world.reset();
+        demo.projectLifetime = lifetime;
+    }
+    if (action == "probe" && (!params.has("cellX") || !params.has("cellZ")))
+        throw std::invalid_argument("A probe requires cellX and cellZ");
+    if (action == "reset") demo.world = makePhysisDiagnosticDemo();
+    Json result = Json::object();
+    result.set("active",Json::fromBool(bool(demo.world)));
+    if (!demo.world) return result;
+    if (action == "probe") {
+        const int x = diagnosticInteger(params,"cellX",0,INT32_MIN,INT32_MAX);
+        const int z = diagnosticInteger(params,"cellZ",0,INT32_MIN,INT32_MAX);
+        return readCell(*demo.world,x,z);
+    }
+    const int ticks = action == "step" ? 1 : action == "step60" ? 60 : 0;
+    for (int i = 0; i < ticks; ++i)
+        advanceEnvironmentWithStormsAndDisasters(*demo.world, FloodMode::ExternalAuthority);
+    return readFrame(*demo.world,req,palette);
+}
+
 void validateConfig(const Json& config) {
     if (config.isNull()) return; // explicit removal
     std::string error;
@@ -126,6 +143,24 @@ Json snapshot(const Workspace& w) {
     r.set("liveApplied", Json::fromBool(false));
     return r;
 }
+}
+Json readPhysisGameFrame(const World* world, const Json& params) {
+    const auto area = diagnosticArea(params);
+    const auto palette = static_cast<DebugPalette>(diagnosticInteger(params,"palette",0,0,2));
+    if (params.has("cellX") != params.has("cellZ"))
+        throw std::invalid_argument("Supply both cell coordinates");
+    if (!world || !world->resourceConst<State>()) {
+        Json out = Json::object();
+        out.set("active",Json::fromBool(false));
+        return out;
+    }
+    auto frame = readFrame(*world,area,palette);
+    if (params.has("cellX")) {
+        const int x = diagnosticInteger(params,"cellX",0,INT32_MIN,INT32_MAX);
+        const int z = diagnosticInteger(params,"cellZ",0,INT32_MIN,INT32_MAX);
+        frame.set("cell",readCell(*world,x,z));
+    }
+    return frame;
 }
 void registerPhysisOps(Workspace& ws) {
     auto add = [&ws](const char* name, const char* description, const char* schema, Workspace::OpFn fn) {
