@@ -1,0 +1,7 @@
+2026-11-27 00:53:15.923 AiverseStudioHTML5[6202:86439216] [studio-web] JS: CROSS main DONE_1
+2026-11-27 00:53:15.923 AiverseStudioHTML5[6202:86439216] [studio-web] JS: CROSS main VERIFIED stopped and running match, Game only
+Inspector selected and cleared entity:1
+Dock open, close, Look workspace, reset and saved Scene layout verified
+Panel inventory verified: 66
+Match status: {'playing': True, 'seconds': 0.2, 'result': 0, 'players': [{'name': 'Patrol', 'alive': True, 'units': 1, 'structures': 1, 'resources': {'supply': 37}}, {'name': 'Watch', 'alive': True, 'units': 0, 'structures': 1, 'resources': {'supply': 37}}], 'scriptErrors': []}
+MCP map, seat, 2x speed, device, invalid requests and client launch verified

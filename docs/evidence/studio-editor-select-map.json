@@ -1,0 +1,10 @@
+{
+  "sha": "0146c7c10f8a5c94614eb4430c1557ed417009aa",
+  "argv": [
+    "bash",
+    "/tmp/select-map.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-editor-select-map.log.txt",
+  "sha256": "cb664c36525efd2d3e97c05a4167ea9ff409bc41edd16332ce3b14fd3bb88c96"
+}
