@@ -1,0 +1,10 @@
+{
+  "sha": "2d25f42875adbcd422516cba48d7db57e4af1f79",
+  "argv": [
+    "bash",
+    "/tmp/frame-evidence.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-game-device-frame-stable.log.txt",
+  "sha256": "d0607f74de9e34cba5cad12db4b6527fb0b8fd327f002f7c5c57c28a7b6bb14a"
+}
