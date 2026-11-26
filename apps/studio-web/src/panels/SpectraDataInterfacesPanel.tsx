@@ -8,6 +8,7 @@ import {
   type SpectraGraphV2, type FxDataInterface, type FxInstanceScalar, type GraphEdit
 } from './spectraDataInterfaceModel';
 import {DraftHistory} from '../graphs/graphFramework';
+import {GraphObjectEditor} from './SpectraNodeProperties';
 import SpectraGraphCanvas from './SpectraGraphCanvas';
 import SpectraCurveEditor from './SpectraCurveEditor';
 import SpectraNativePreview from './SpectraNativePreview';
@@ -340,6 +341,11 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
             <SpectraGraphCanvas graph={graph} disabled={busy}
               onError={setError}
               onEdit={editGraph}/>
+          </StudioSection>
+          <StudioSection title="Graph definitions">
+            {(['parameters','functions'] as const).map(field=><GraphObjectEditor key={field+JSON.stringify(graph[field])}
+              label={field==='parameters'?'Shared parameters':'Local functions'} value={graph[field]} disabled={busy}
+              apply={value=>editGraph({...graph,[field]:value})}/>)}
           </StudioSection>
           <SpectraCurveEditor graph={graph} disabled={busy} onError={setError} onEdit={editGraph}/>
           <SpectraNativePreview key={projectPath} graph={graph} projectPath={projectPath}

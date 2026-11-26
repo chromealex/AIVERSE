@@ -36,3 +36,11 @@
 .spectra-canvas__node-head svg { flex-shrink: 0; color: var(--au-accent); }
 .spectra-canvas__node-head span { min-width: 0; overflow-wrap: anywhere; }
 .spectra-canvas__node-id { padding-inline: 10px; font-family: ui-monospace, monospace; }
+.spectra-property-inspector,.spectra-property-source[open]{display:grid;gap:8px;min-width:0}
+.spectra-property-row{display:grid;grid-template-columns:minmax(95px,1fr) minmax(0,2fr);align-items:center;gap:8px}
+.spectra-property-row>span{font-size:var(--au-font-sm);color:var(--au-text-soft)}
+.spectra-property-control,.spectra-property-control form{display:flex;align-items:center;gap:6px;min-width:0}
+.spectra-property-control form,.spectra-property-control select{flex:1;min-width:0}
+.spectra-property-control input:not([type=checkbox]){width:100%;min-width:0}
+.spectra-property-source summary{cursor:pointer;padding-block:6px}
+.spectra-property-source textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,monospace}

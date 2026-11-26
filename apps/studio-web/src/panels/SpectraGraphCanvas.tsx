@@ -5,10 +5,11 @@ import { invoke } from '../bridge';
 import { StudioButton, StudioField, StudioSelect, StudioInput, StudioContextMenu } from '../ui';
 import { graphV2, type SpectraGraphV2 } from './spectraDataInterfaceModel';
 import { connectionParams, moveGraphNode, nodePoint, visualEdges } from './spectraGraphCanvasModel';
+import SpectraNodeProperties,{type ModuleField} from './SpectraNodeProperties';
 import './graphSurface.css';
 import './SpectraGraphCanvas.css';
 
-interface CatalogNode {type:string;group:string;ports:string[];outputKind:'none'|'execution'|'value'}
+interface CatalogNode {type:string;group:string;ports:string[];fields:ModuleField[];outputKind:'none'|'execution'|'value'}
 const volumeFields:Record<string,Record<string,unknown>>={
   VolumetricParticleOutput:{shape:'sphere',axes:[1,1,1],density:2,emission:0,steps:12,noiseFrequency:3,noiseStrength:0,noiseOctaves:3,shadowSteps:4,shadowStrength:1,anisotropy:0,ambient:0.35,directIntensity:0.65,depthAware:false,sortBackToFront:true,adaptiveLod:true,minimumSteps:4,lodSmallPixels:8,lodFullPixels:96,sparseTexture:true,densityTexture:''},
   VolumeDomain:{dimension:32,origin:[-2,-1,-2],cellSize:0.125,gravity:[0,-9.81,0],wind:[0,0,0],obstacle:'',particleDrag:0,particleDeposit:[0,0,0],physisWindResponse:0,physisGravityBlend:0,attachment:'world'},
@@ -76,8 +77,9 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
         const r=response.result as {nodes?:unknown[]} | undefined;
         const items=(r?.nodes??[]).flatMap(raw=>{
           if(!raw || typeof raw!=='object')return [];
-          const v=raw as {type?:unknown;group?:unknown;ports?:unknown;outputKind?:unknown};
+          const v=raw as {type?:unknown;group?:unknown;ports?:unknown;fields?:ModuleField[];outputKind?:unknown};
           return typeof v.type==='string'?[{type:v.type,group:typeof v.group==='string'?v.group:'',
+            fields:Array.isArray(v.fields)?v.fields:[],
             outputKind:v.outputKind==='value'?'value' as const:v.outputKind==='none'?'none' as const:'execution' as const,
             ports:Array.isArray(v.ports)?v.ports.filter((p):p is string=>typeof p==='string'):[]}]:[];
         });
@@ -271,8 +273,11 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
           void execute({action:'setProperty',node:chosen.id,property:volumeProperty,value});
         }}>Apply volume property</StudioButton>
         <small>Native validation on save/preview. Reload to apply authored changes.</small>
-      </div>:<code>{JSON.stringify(chosen.properties??{})}</code>}
+      </div>:null}
+      <SpectraNodeProperties key={chosen.id} node={chosen} fields={catalog.find(item=>item.type===chosen.type)?.fields??[]}
+        functions={graph.functions} disabled={disabled||working} edit={params=>void execute(params)}
+        replace={properties=>onEdit({...graph,nodes:graph.nodes.map(node=>node.id===chosen.id?{...node,properties}:node)})}/>
     </div>}
-    <p className="spectra-canvas__hint">Drag nodes to arrange them. Connections and new nodes use the native SpectraFX graph editor; save changes in the parent Graph panel. This canvas does not simulate or draw GPU particles.</p>
+
   </div>;
 }

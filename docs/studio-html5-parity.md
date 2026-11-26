@@ -404,3 +404,5 @@ SpectraFX graph migration: open v1 assets, explicitly upgrade in memory, discard
 SpectraFX local edit history: share DraftHistory across node edits, moves, curves and parameter changes. Commit one edit per drag and keep the original disk revision independent from undo/redo.
 
 SpectraFX canvas connections: port the legacy output/input selection with native execution and value validation. Verify wiring, undo, redo and persisted destination ports.
+
+SpectraFX inspector: expose the canonical module field schema, edit and remove individual properties without flattening complex values, and edit node properties, graph parameters and local function definitions with undo and guarded save.

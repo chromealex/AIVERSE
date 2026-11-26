@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/panels/SpectraNodeProperties.tsx",
     "apps/studio-web/src/panels/SpectraGraphCanvas.css",
     "apps/studio-web/src/panels/SpectraGraphCanvas.tsx",
     "apps/studio-web/src/panels/SpectraDataInterfacesPanel.tsx",

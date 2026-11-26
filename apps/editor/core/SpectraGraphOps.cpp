@@ -7,6 +7,7 @@
 #include "PackageTool.h"
 #include "engine/fx/SpectraFX.h"
 #include "engine/fx/SpectraAuthoring.h"
+#include "engine/fx/SpectraModuleSchema.h"
 #include "engine/fx/SpectraSdfBaker.h"
 #include "engine/fx/SpectraSdfFileIO.h"
 #include <algorithm>
@@ -988,6 +989,18 @@ void registerSpectraGraphOps(Workspace& ws) {
             item.set("outputKind",strGraph(spectra::authoring::isOutput(info.type)?"none":spectra::authoring::isData(info.type)?"value":"execution"));
             item.set("properties",Json::parse(info.initialProperties));
             item.set("ports",graphStrings(spectra::authoring::inputPorts(info.type)));
+            Json fields=Json::array();
+            for(const auto& spec:spectra::fieldsForNode(info.type)){
+                static constexpr const char* kinds[]={"number","integer","boolean","string","choice","vector3","color"};
+                Json field=Json::object();
+                field.set("key",strGraph(spec.key));field.set("label",strGraph(spec.label));
+                field.set("kind",strGraph(kinds[static_cast<size_t>(spec.kind)]));
+                field.set("initial",Json::parse(spec.initial));
+                field.set("min",Json::number(spec.minimum));field.set("max",Json::number(spec.maximum));
+                field.set("choices",strGraph(spec.choices));
+                fields.push(std::move(field));
+            }
+            item.set("fields",std::move(fields));
             entries.push(std::move(item));
         }
         Json response=Json::object();
@@ -1115,6 +1128,11 @@ void registerSpectraGraphOps(Workspace& ws) {
             props.set("staticSdf",fx::staticSdfToJson(sdf));
             // Other modules, terrain policy, and sphere stay as authored.
             n->set("properties",std::move(props));
+        } else if(action=="setTypedField" || action=="removeTypedField") {
+            auto* n=spectra::authoring::node(graph,p.getStr("node"));
+            const auto key=p.getStr("property");
+            ok=n && (action=="removeTypedField"?spectra::removeTypedField(*n,key,error):
+                                                 spectra::applyTypedField(*n,key,p["value"],error));
         } else if(action=="setProperty") {
             Json* n=spectra::authoring::node(graph,p.getStr("node"));
             if(!n || !p.has("value"))ok=false;
