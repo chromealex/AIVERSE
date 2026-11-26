@@ -326,3 +326,5 @@ Effects authoring stage: select a project particle effect or event bindings, edi
 Effects playback stage: drive the engine ParticleSystem from the current effect source in a dedicated Effects surface, with replay, motion, looping, quality and playback speed.
 
 Effect camera stage: route drag and wheel input on the Effects native layer to its particle camera on Mac and Windows, with keyboard controls and reset in HTML. Verify distinct camera poses and unchanged source files.
+
+Effect emitter stage: edit emission settings and add, duplicate or remove emitters in the current source draft; preserve other modules and comments. Verify persistence and the engine limit.

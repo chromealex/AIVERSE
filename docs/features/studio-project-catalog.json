@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/panels/EffectEmitters.tsx",
     "apps/studio-native/StudioEffectPlayback.h",
     "apps/studio-web/src/panels/EffectPlayback.tsx",
     "apps/editor/core/FxOps.cpp",

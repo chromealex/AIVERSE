@@ -677,3 +677,5 @@ Effect camera stage: route drag and wheel input on the Effects native layer to i
 Effect camera at 65db9a692 compiled on Mac; typecheck, Vite and 299 frontend tests passed. First QA launch rejected stale packaged web index (native asset copy raced independent web build). See docs/evidence/studio-effects-camera-metal.json. Next: copy completed assets and rerun.
 
 Effect camera implementation 65db9a692 verified on a1fe7b380. Packaged Mac desktop exercised HTML keyboard controls, both travel bounds, replay preserving framing and reset. Changed framing moved 3,648 grid pixels; reset differed by 12 with live particles. See docs/evidence/studio-effects-camera-metal-frames.json and docs/evidence/studio-project-catalog/effect-camera-{orbit,reset}.png. Screen lock required explicit measured viewport publication. Native mouse gestures and Windows Vulkan require interactive acceptance. Next: structured emitter parameters.
+
+Effect emitter stage: edit emission settings and add, duplicate or remove emitters in the current source draft; preserve other modules and comments. Verify persistence and the engine limit.
