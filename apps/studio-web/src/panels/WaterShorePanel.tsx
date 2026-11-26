@@ -22,7 +22,11 @@ export default function WaterShorePanel({scope,onChanged}:{scope:StudioGraphDocu
       invoke('studio.op',{op:'water_network',params:{},...guard}),
       invoke('studio.op',{op:'water_types',params:{},...guard}),
     ]).then(([network,catalog])=>{
-      if(active){setData({key,bodies:(network.result as {bodies:Body[]}).bodies,types:(catalog.result as {types:ShoreType[]}).types});setError('');}
+      if(!active)return;
+      const authored=(network.result as {bodies?:Body[]}).bodies ?? [];
+      const bodies=authored.map((b,i)=>({...b,id:b.id ?? i+1,kind:b.kind ?? 'river'}));
+      setData({key,bodies,types:(catalog.result as {types:ShoreType[]}).types});
+      setError('');
     }).catch(e=>{if(active)setError(String(e));});
     return ()=>{active=false;};
   },[key,projectPath,epoch,revision]);
