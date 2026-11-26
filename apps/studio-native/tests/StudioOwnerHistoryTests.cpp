@@ -32,7 +32,8 @@ int main(){
     using aiverse::studio::studioAgentHistoryPolicy;
     AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("fake_get"))=="unverified");
     AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("heightmap_export"))=="unverified");
-    AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("rules_get"))=="read");
+    for(const auto* op:{"world_entity","world_entities","world_regions_status","rules_get"})
+        AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy(op))=="read");
     AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("studio_asset_move_commit"))=="assets");
     AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("studio_owner_history"))=="read");
     AIVERSE_TEST_CHECK(std::string(studioAgentHistoryPolicy("studio_asset_history_reset_review"))=="read");
