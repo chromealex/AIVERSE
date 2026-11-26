@@ -1115,7 +1115,15 @@ void StudioHost::tickScene() {
     }
     if (!rulesSnapshot_ || rulesSnapshotProject_ != ws.project.dir || now >= nextRulesCheck_) {
         const size_t hash = std::hash<std::string>{}(ws.project.rulesJson.dump(-1));
-        if (!rulesSnapshot_ || rulesSnapshotProject_ != ws.project.dir || hash != rulesSnapshotHash_) {
+        const bool rulesChanged=!rulesSnapshot_ || rulesSnapshotProject_ != ws.project.dir || hash != rulesSnapshotHash_;
+        const auto& manifestTerrain=ws.project.manifest["terrain"];
+        if(rulesChanged || manifestTerrain!=planetManifestTerrain_){
+            auto look=std::make_shared<game::TerrainLook>();
+            game::applyTerrainLook(*look,ws.project.rulesJson["terrain"]);
+            game::applyTerrainLook(*look,manifestTerrain);
+            planetLookSnapshot_=std::move(look);planetManifestTerrain_=manifestTerrain;
+        }
+        if (rulesChanged) {
             rulesSnapshot_ = std::make_shared<const Json>(ws.project.rulesJson);
             rulesSnapshotHash_ = hash; rulesSnapshotProject_ = ws.project.dir;
         }
@@ -1123,7 +1131,7 @@ void StudioHost::tickScene() {
     }
     FrameInputs in;
     in.width = placement_.pixelsW; in.height = placement_.pixelsH;
-    in.map = mapSnapshot_; in.rules = rulesSnapshot_;
+    in.map = mapSnapshot_; in.rules = rulesSnapshot_;in.planetLook=planetLookSnapshot_;
     const auto& brush=session_->sceneBrush();
     in.brushArmed=brush.armed;
     in.editBaseTerrain=brush.editsBaseGrid() && !map.data.worldSpace;
@@ -1164,6 +1172,7 @@ void StudioHost::renderSceneFrame() {
         platform_.sceneThreadScope([&] {
             preview_->setEditorState(std::move(in.selection), std::move(in.hidden), std::move(in.locked), std::move(in.hover));
             if(!in.brushArmed)preview_->setBrushCursor(false,{},0);
+            preview_->setPlanetTerrainLook(in.planetLook);
             preview_->setBaseTerrainView(in.editBaseTerrain);
             preview_->setRegionBorders(in.regionBorderLetter);
             preview_->setWindPreview(in.wind);

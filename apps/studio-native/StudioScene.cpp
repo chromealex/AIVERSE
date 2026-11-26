@@ -4313,7 +4313,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
     if(changedDocument){
         if(!device_->waitForResourceIdle())return;
         clearLivePlanetTerrain();
-        auto next=StudioPlanetPreview::build(doc,body,baseTerrainView_);
+        auto next=StudioPlanetPreview::build(doc,body,baseTerrainView_,planetTerrainLook_.get());
         Mesh replacement;
         if(next)replacement=next->mesh.upload(*device_);
         if(!changedBody && planetRevision_!=doc.revision)clearTransformPreview();

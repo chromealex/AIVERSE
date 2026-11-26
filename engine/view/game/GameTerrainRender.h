@@ -74,6 +74,8 @@ struct TerrainLook {
 // Cell kinds, in the classic colour order.
 enum CellKind : uint8_t { kKindGrass, kKindSand, kKindRamp, kKindRock, kKindBlocked, kKindLakebed, kKindShallows, kKindDug };
 const char* cellKindName(int k);
+int terrainCellKind(uint8_t flags,bool dug=false);
+void applyTerrainLook(TerrainLook& look,const Json& settings);
 // Map key "terrainMaterial" (rows of '0'..'3', other chars = by cell kind) -> per cell layer (255 = by kind).
 std::vector<uint8_t> parseMaterialRows(const Json& rows, int w, int h);
 
@@ -241,7 +243,6 @@ private:
     };
     void commitMapVisible(PreparedMap& candidate) noexcept;
     bool buildInternal(gfx::Device& dev,const MapGrid& g,bool flatDig);
-    void parseLook(const Json& t);
     void loadTextures(gfx::Device& dev);
     uint64_t chunkHash(const MapGrid& g, const Chunk& c, bool flatDig) const;
     void buildLevelsChunk(gfx::Device& dev, const MapGrid& g, Chunk& c, bool flatDig);

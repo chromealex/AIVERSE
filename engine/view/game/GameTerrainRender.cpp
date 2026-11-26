@@ -82,10 +82,10 @@ void TerrainRenderer::init(gfx::Device& dev, const Rules& rules, const FileReade
             }
         }catch(...) {}
         try {
-            parsed.parseLook(readComposedJson(rulesPath,
+            applyTerrainLook(parsed.look_,readComposedJson(rulesPath,
                 [&](const std::string& p,std::string& out){return read(p,out);})["terrain"]);
         }catch(...) {}
-        if(game.isObject())parsed.parseLook(game["terrain"]);
+        if(game.isObject())applyTerrainLook(parsed.look_,game["terrain"]);
     }
     std::string nextBase=contentBase;
     FileReader nextReader=read;
@@ -137,30 +137,30 @@ void TerrainRenderer::init(gfx::Device& dev, const Rules& rules, const FileReade
     ++publicationRevision_;
 }
 
-void TerrainRenderer::parseLook(const Json& t) {
+void applyTerrainLook(TerrainLook& look,const Json& t) {
     if (!t.isObject()) return;
-    look_.render=t.getBool("render",look_.render);
+    look.render=t.getBool("render",look.render);
     if (t["pbr"].isObject()) {
         const Json& p=t["pbr"];
-        look_.pbr=p.getBool("enabled",look_.pbr);
-        look_.packedPbr=p.getBool("packedMaps",look_.packedPbr);
-        look_.pbrRoughness=std::clamp(float(p["roughness"].toDouble(look_.pbrRoughness)),0.045f,1.0f);
+        look.pbr=p.getBool("enabled",look.pbr);
+        look.packedPbr=p.getBool("packedMaps",look.packedPbr);
+        look.pbrRoughness=std::clamp(float(p["roughness"].toDouble(look.pbrRoughness)),0.045f,1.0f);
     }
     if (t["layers"].isArray()) {
-        look_.layers.clear();
+        look.layers.clear();
         for (auto& l : t["layers"].items()) {
-            if (look_.layers.size() >= 4) break;
+            if (look.layers.size() >= 4) break;
             TerrainLook::Layer L;
-            L.id = l.getStr("id", "layer" + std::to_string(look_.layers.size()));
+            L.id = l.getStr("id", "layer" + std::to_string(look.layers.size()));
             L.texture = l.getStr("texture");
             L.normal = l.getStr("normal");
             L.scale = std::max(0.05f, float(l["scale"].toDouble(4)));
             L.tint = jsonColor(l["tint"], {1, 1, 1});
-            look_.layers.push_back(L);
+            look.layers.push_back(L);
         }
     }
     auto layerIndex = [&](const std::string& id) {
-        for (size_t i = 0; i < look_.layers.size(); ++i) if (look_.layers[i].id == id) return int(i);
+        for (size_t i = 0; i < look.layers.size(); ++i) if (look.layers[i].id == id) return int(i);
         return -1;
     };
     if (t["cells"].isObject())
@@ -169,51 +169,51 @@ void TerrainRenderer::parseLook(const Json& t) {
             for (int i = 0; i < 8; ++i) if (k == kKindNames[i]) kind = i;
             if (kind < 0) continue;
             const Json& lj = v.isString() ? v : v["layer"];
-            if (lj.isString()) { int li = layerIndex(lj.str()); if (li >= 0) look_.cellLayer[kind] = li; }
-            else if (lj.isNumber()) look_.cellLayer[kind] = std::clamp(int(lj.integer()), 0, 3);
-            if (v.isObject() && v["color"].isArray()) { look_.hasColor[kind] = true; look_.color[kind] = jsonColor(v["color"], {1, 1, 1}); }
+            if (lj.isString()) { int li = layerIndex(lj.str()); if (li >= 0) look.cellLayer[kind] = li; }
+            else if (lj.isNumber()) look.cellLayer[kind] = std::clamp(int(lj.integer()), 0, 3);
+            if (v.isObject() && v["color"].isArray()) { look.hasColor[kind] = true; look.color[kind] = jsonColor(v["color"], {1, 1, 1}); }
         }
     if (const Json& c = t["cliff"]; c.isObject()) {
-        look_.cliffTexture = c.getStr("texture", look_.cliffTexture);
-        look_.cliffNormal = c.getStr("normal", look_.cliffNormal);
-        look_.cliffScale = std::max(0.05f, float(c["scale"].toDouble(look_.cliffScale)));
-        look_.cliffTint = jsonColor(c["tint"], look_.cliffTint);
+        look.cliffTexture = c.getStr("texture", look.cliffTexture);
+        look.cliffNormal = c.getStr("normal", look.cliffNormal);
+        look.cliffScale = std::max(0.05f, float(c["scale"].toDouble(look.cliffScale)));
+        look.cliffTint = jsonColor(c["tint"], look.cliffTint);
         if (c["slope"].isArray() && c["slope"].size() >= 2) {
-            look_.slopeStart = float(c["slope"][0].toDouble()); look_.slopeEnd = std::max(look_.slopeStart + 0.01f, float(c["slope"][1].toDouble()));
+            look.slopeStart = float(c["slope"][0].toDouble()); look.slopeEnd = std::max(look.slopeStart + 0.01f, float(c["slope"][1].toDouble()));
         }
     }
-    if (t.has("splatStrength")) look_.splatStrength = std::clamp(float(t["splatStrength"].toDouble(1)), 0.0f, 1.0f);
+    if (t.has("splatStrength")) look.splatStrength = std::clamp(float(t["splatStrength"].toDouble(1)), 0.0f, 1.0f);
     if (const Json& w = t["water"]; w.isObject()) {
         std::string m = w.getStr("mode", "auto");
-        look_.water = m == "sheet" ? TerrainLook::Water::Sheet : m == "bodies" ? TerrainLook::Water::Bodies : TerrainLook::Water::Auto;
+        look.water = m == "sheet" ? TerrainLook::Water::Sheet : m == "bodies" ? TerrainLook::Water::Bodies : TerrainLook::Water::Auto;
         if (w["color"].isArray() && w["color"].size() >= 3) {
             float3 c = jsonColor(w["color"], {0.22f, 0.45f, 0.62f});
-            look_.waterColor = {c.x, c.y, c.z, w["color"].size() >= 4 ? float(w["color"][3].toDouble()) : 0.78f};
+            look.waterColor = {c.x, c.y, c.z, w["color"].size() >= 4 ? float(w["color"][3].toDouble()) : 0.78f};
         }
-        look_.waterOffset = float(w["offset"].toDouble(look_.waterOffset));
+        look.waterOffset = float(w["offset"].toDouble(look.waterOffset));
         const std::string renderer = w.getStr("renderer", "legacy");
-        look_.waterRenderer = renderer == "nereid" ? TerrainLook::WaterRenderer::Nereid : TerrainLook::WaterRenderer::Legacy;
+        look.waterRenderer = renderer == "nereid" ? TerrainLook::WaterRenderer::Nereid : TerrainLook::WaterRenderer::Legacy;
         if (renderer != "nereid" && renderer != "legacy")
             std::fprintf(stderr, "[water] unknown terrain.water.renderer \"%s\", using legacy\n", renderer.c_str());
-        if (w["nereid"].isObject()) look_.nereid = w["nereid"];
+        if (w["nereid"].isObject()) look.nereid = w["nereid"];
     } else if (w.isString()) {
         std::string m = w.str();
-        look_.water = m == "sheet" ? TerrainLook::Water::Sheet : m == "bodies" ? TerrainLook::Water::Bodies : TerrainLook::Water::Auto;
+        look.water = m == "sheet" ? TerrainLook::Water::Sheet : m == "bodies" ? TerrainLook::Water::Bodies : TerrainLook::Water::Auto;
     }
-    if (const Json& l = t["lod"]; l.type() == Json::Type::Bool) look_.lod = l.boolean() ? 1 : 0;
-    else if (l.isString()) look_.lod = l.str() == "on" ? 1 : l.str() == "off" ? 0 : -1;
-    if (t.has("lodRange")) look_.lodRange = std::max(16.0f, float(t["lodRange"].toDouble(128)));
+    if (const Json& l = t["lod"]; l.type() == Json::Type::Bool) look.lod = l.boolean() ? 1 : 0;
+    else if (l.isString()) look.lod = l.str() == "on" ? 1 : l.str() == "off" ? 0 : -1;
+    if (t.has("lodRange")) look.lodRange = std::max(16.0f, float(t["lodRange"].toDouble(128)));
     // detail surface (docs/terrain.md "Detail surface")
-    if (t["style"].isString()) look_.smooth = t["style"].str() == "smooth";
+    if (t["style"].isString()) look.smooth = t["style"].str() == "smooth";
     if (const Json& d = t["detailLook"]; d.isObject()) {
-        look_.detailScale = std::clamp(int(d.getInt("scale", look_.detailScale)), 1, 8);
-        look_.bevel = std::clamp(float(d["bevel"].toDouble(look_.bevel)), 0.0f, 3.0f);
-        look_.wobble = std::clamp(float(d["wobble"].toDouble(look_.wobble)), 0.0f, 2.0f);
-        look_.roughness = std::clamp(float(d["roughness"].toDouble(look_.roughness)), 0.0f, 1.0f);
-        look_.blendSharpness = std::clamp(float(d["blendSharpness"].toDouble(look_.blendSharpness)), 0.0f, 1.0f);
-        look_.macro = std::clamp(float(d["macro"].toDouble(look_.macro)), 0.0f, 1.0f);
-        look_.detailRange = std::clamp(float(d["lodRange"].toDouble(look_.detailRange)), 4.0f, 1000.0f);
-        if (d["rockColor"].isArray()) { look_.rockColor = jsonColor(d["rockColor"], look_.rockColor); look_.hasRockColor = true; }
+        look.detailScale = std::clamp(int(d.getInt("scale", look.detailScale)), 1, 8);
+        look.bevel = std::clamp(float(d["bevel"].toDouble(look.bevel)), 0.0f, 3.0f);
+        look.wobble = std::clamp(float(d["wobble"].toDouble(look.wobble)), 0.0f, 2.0f);
+        look.roughness = std::clamp(float(d["roughness"].toDouble(look.roughness)), 0.0f, 1.0f);
+        look.blendSharpness = std::clamp(float(d["blendSharpness"].toDouble(look.blendSharpness)), 0.0f, 1.0f);
+        look.macro = std::clamp(float(d["macro"].toDouble(look.macro)), 0.0f, 1.0f);
+        look.detailRange = std::clamp(float(d["lodRange"].toDouble(look.detailRange)), 4.0f, 1000.0f);
+        if (d["rockColor"].isArray()) { look.rockColor = jsonColor(d["rockColor"], look.rockColor); look.hasRockColor = true; }
     }
 }
 
@@ -391,9 +391,12 @@ void TerrainRenderer::upload(gfx::Device& dev, const std::vector<TV>& v,
 // ------------------------------------------------------------------ cell look
 
 int TerrainRenderer::kindOf(const MapGrid& g, size_t i, bool flatDig) const {
-    const uint8_t f = g.flags[i];
+    return terrainCellKind(g.flags[i],flatDig && g.dig[i]);
+}
+
+int terrainCellKind(uint8_t f,bool dug){
     if (!(f & kCellGround) && (f & kCellWater)) return kKindLakebed;
-    if (flatDig && g.dig[i]) return kKindDug;
+    if (dug) return kKindDug;
     if (!(f & kCellGround)) return kKindBlocked;
     if (f & kCellRock) return kKindRock;
     if (f & kCellRamp) return kKindRamp;

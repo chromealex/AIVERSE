@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 
-namespace aiverse::game { class GameLights; }
+namespace aiverse::game { class GameLights; struct TerrainLook; }
 
 namespace aiverse::studio {
 
@@ -184,6 +184,7 @@ private:
         int width = 0, height = 0;
         std::shared_ptr<const editor::MapDoc> map;
         std::shared_ptr<const Json> rules;
+        std::shared_ptr<const game::TerrainLook> planetLook;
         bool brushArmed=false,editBaseTerrain=false;
         char regionBorderLetter=0;
         bool fps = false;
@@ -293,6 +294,8 @@ private:
     std::shared_ptr<const editor::MapDoc> mapSnapshot_;
     const editor::MapDoc* mapSnapshotSource_ = nullptr;
     std::shared_ptr<const Json> rulesSnapshot_;
+    std::shared_ptr<const game::TerrainLook> planetLookSnapshot_;
+    Json planetManifestTerrain_;
     std::string rulesSnapshotProject_;
     size_t rulesSnapshotHash_ = 0;
     double nextMapSnapshot_ = 0, nextRulesCheck_ = 0;

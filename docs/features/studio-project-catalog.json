@@ -3,6 +3,8 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "engine/view/game/GameTerrainRender.cpp",
+    "engine/view/game/GamePlanetRender.cpp",
     "apps/studio-native/StudioTerrainGeometry.h",
     "apps/studio-web/src/panels/PrismaFrameDiagnostics.tsx",
     "engine/render/PrismaReportJson.h",

@@ -376,3 +376,5 @@ Terrain base-surface inspection: show and pick the editable corner surface while
 Planetary Terrain transfer: pick the visible body mesh, route sculpt and cell materials through the shared spherical operations, and keep one body per undoable stroke. Verify body isolation, radial height sampling and real macOS Scene input.
 
 Planetary sub-cell surface transfer: display explicit per-face detail heights, preserve the selectable base grid and sample the displayed layer. Verify a sub-cell peak on an otherwise flat planet.
+
+Planetary material transfer: resolve face material overrides and inherited cell layers using the runtime terrain look. Verify painted tint, undo, redo and save/reopen in packaged Scene.

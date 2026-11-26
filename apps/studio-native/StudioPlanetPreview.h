@@ -4,6 +4,7 @@
 #include "apps/studio-native/StudioVisualPicking.h"
 #include "engine/game/Sphere.h"
 #include "engine/view/game/GamePlanet.h"
+#include "engine/view/game/GameTerrainRender.h"
 #include "apps/studio-native/StudioModelPicking.h"
 #include <optional>
 #include <array>
@@ -68,7 +69,7 @@ struct StudioPlanetPreview {
         }
         return render::mat4::translate(ground)*basis*local;
     }
-    static std::optional<StudioPlanetPreview> build(const editor::MapDoc& doc,int bi,bool baseGrid=false){
+    static std::optional<StudioPlanetPreview> build(const editor::MapDoc& doc,int bi,bool baseGrid=false,const game::TerrainLook* look=nullptr){
         if(bi<0||size_t(bi)>=doc.data.bodies.size())return {};
         const auto& body=doc.data.bodies[size_t(bi)];
         const int n=body.faceSize;
@@ -88,6 +89,10 @@ struct StudioPlanetPreview {
             const auto dir=f3(cube.dirFromFace(face,fixed(x),fixed(y)));
             return dir*(out.radius+height(body,face,x,y,baseGrid));
         };
+        std::array<std::vector<uint8_t>,6> overrides;
+        if(look && look->materials())
+            for(size_t f=0;f<std::min(overrides.size(),body.faceExtra.size());++f)
+                overrides[f]=game::parseMaterialRows(body.faceExtra[f]["material"],n,n);
         for(int f=0;f<6;++f)for(int sy=0;sy<segments;++sy)for(int sx=0;sx<segments;++sx){
             const float x=float(sx*n)/segments,y=float(sy*n)/segments;
             const float xx=float((sx+1)*n)/segments,yy=float((sy+1)*n)/segments;
@@ -98,7 +103,20 @@ struct StudioPlanetPreview {
                 render::normalize(normal)-render::normalize(p[0]+p[1]+p[2]+p[3]) : render::float3{};
             const auto offset=uint32_t(out.mesh.vertexCount());
             const size_t ci=body.cellIndex(f,int(x),int(y));
-            const auto color=terrainPreviewColor(ci<body.cells.size()?body.cells[ci]:'.');
+            const char cell=ci<body.cells.size()?body.cells[ci]:'.';
+            auto color=terrainPreviewColor(cell);
+            if(look){
+                const int kind=game::terrainCellKind(game::cellFlagsFromChar(cell));
+                const auto& rows=overrides[size_t(f)];
+                const size_t index=size_t(int(y))*n+int(x);
+                const int layer=index<rows.size() && rows[index]<4 ? rows[index] : look->cellLayer[kind];
+                render::float3 tint=look->hasColor[kind]?look->color[kind]:render::float3{1,1,1};
+                if(layer>=0 && size_t(layer)<look->layers.size()){
+                    const auto l=look->layers[size_t(layer)].tint;
+                    tint={tint.x*l.x,tint.y*l.y,tint.z*l.z};
+                    color=render::rgbaf({tint.x,tint.y,tint.z,1});
+                }else if(look->hasColor[kind])color=render::rgbaf({tint.x,tint.y,tint.z,1});
+            }
             for(const auto& v:p){
                 const float length=std::sqrt(render::dot(v,v));
                 if(!std::isfinite(length)||length<.01f)return {};

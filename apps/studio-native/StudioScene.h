@@ -373,6 +373,9 @@ public:
     void setLocalSpace(bool local) { localSpace_ = local; }
     bool localSpace() const { return localSpace_; }
     void setSnap(bool enabled, float move, float rotate, float scale);
+    void setPlanetTerrainLook(const std::shared_ptr<const game::TerrainLook>& look){
+        if(planetTerrainLook_!=look){planetTerrainLook_=look;planetRevision_=std::numeric_limits<uint64_t>::max();}
+    }
     bool baseTerrainView()const {return baseTerrainView_;}
     void setBaseTerrainView(bool base){
         if(baseTerrainView_==base)return;
@@ -626,6 +629,7 @@ private:
     std::string sparseTerrainProject_;
     std::string planetChartIdentity_;
     std::string sparseTerrainError_;
+    std::shared_ptr<const game::TerrainLook> planetTerrainLook_;
     bool baseTerrainView_=false;
     bool terrainWasShown_=false,terrainCavernsAuthored_=false;
     std::unique_ptr<class StudioEffectPlayback> effectFile_;
