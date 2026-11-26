@@ -1,0 +1,10 @@
+{
+  "sha": "d536100877485ea03f6f7eeb5d2cd500b24e474b",
+  "argv": [
+    "bash",
+    "/tmp/generate-check.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-generator-seed.log.txt",
+  "sha256": "6a8dc82e23422827f62d7c0efdaefcea16c0b484f9c1e8277c79919a5ccf4b5e"
+}
