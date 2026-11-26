@@ -1,0 +1,4 @@
+2026-11-26 12:53:46.041 AiverseStudioHTML5[85401:84658330] [studio-web] JS: CROSS wmwxdkk1h8a7n DONE_1
+2026-11-26 12:53:42.591 AiverseStudioHTML5[85401:84658330] [studio-web] JS: CROSS main VERIFIED closed dock opened into active 3D preview at tick 13; status read left it closed
+2026-11-26 12:53:46.041 AiverseStudioHTML5[85401:84658330] [studio-web] JS: CROSS wmwxdkk1h8a7n VERIFIED existing detached PHYSIS returned from Map zones into its 3D viewport at tick 19
+MCP opened closed PHYSIS, then activated detached owner, preserving its world and the main layout.
