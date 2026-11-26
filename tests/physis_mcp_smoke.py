@@ -37,6 +37,12 @@ def main():
         assert reset["tick"] == 25 and reset["available"] == 16
         wind = call("physis_demo", dict(action="step", layer=8, palette=2, size=8, stride=2))
         assert wind["tick"] == 26 and len(wind["rings"]) == 3
+        sample = call("physis_demo", dict(action="probe", cellX=0, cellZ=0))
+        assert sample["tick"] == wind["tick"] and sample["available"]
+        assert len(sample["wind"]) == 3 and len(sample["gravity"]) == 3
+        outside = call("physis_demo", dict(action="probe", cellX=700, cellZ=-700))
+        assert outside["available"] is False and "wind" not in outside
+        call("physis_demo", dict(action="probe", cellX=0), error=True)
         first = call("physis_get", {})
         assert first == before
         assert first["config"] is None and not first["liveApplied"]

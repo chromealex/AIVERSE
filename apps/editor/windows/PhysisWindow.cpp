@@ -202,28 +202,15 @@ public:
             ImGui::Text("Ячейка X %d · Z %d", x, z);
             ImGui::Text("Значение: %s", Fixed::fromRaw(
                 raster_.rawValues[std::size_t(selected_)]).toString().c_str());
-            const auto entity = cellAt(*world, x, z);
-            if (const auto* cell = world->tryGetConst<Cell>(entity)) {
-                const std::int64_t meters = state->settings.cellSizeMeters;
-                const std::int64_t mx = std::int64_t(x) * meters + meters / 2;
-                const std::int64_t mz = std::int64_t(z) * meters + meters / 2;
-                const auto maxMeters = std::numeric_limits<std::int64_t>::max() /
-                                       Fixed::kOne / 2;
-                if (mx >= -maxMeters && mx <= maxMeters &&
-                    mz >= -maxMeters && mz <= maxMeters) {
-                    const Vec3 position{Fixed::fromInt(mx), cell->elevation,
-                                        Fixed::fromInt(mz)};
-                    NatureFieldSample detail;
-                    if (sampleNatureField(*world, position, detail)) {
-                    ImGui::TextDisabled("Ветер: %.2f, %.2f, %.2f м/с",
-                        detail.windVelocity.x.toDouble(), detail.windVelocity.y.toDouble(),
-                        detail.windVelocity.z.toDouble());
-                    ImGui::TextDisabled("Гравитация: %.2f, %.2f, %.2f м/с²",
-                        detail.gravityAcceleration.x.toDouble(),
-                        detail.gravityAcceleration.y.toDouble(),
-                        detail.gravityAcceleration.z.toDouble());
-                    }
-                }
+            NatureFieldSample detail;
+            if (samplePhysisCell(*world,x,z,detail)) {
+                ImGui::TextDisabled("Ветер: %.2f, %.2f, %.2f м/с",
+                    detail.windVelocity.x.toDouble(), detail.windVelocity.y.toDouble(),
+                    detail.windVelocity.z.toDouble());
+                ImGui::TextDisabled("Гравитация: %.2f, %.2f, %.2f м/с²",
+                    detail.gravityAcceleration.x.toDouble(),
+                    detail.gravityAcceleration.y.toDouble(),
+                    detail.gravityAcceleration.z.toDouble());
             }
         }
         ImGui::Spacing();

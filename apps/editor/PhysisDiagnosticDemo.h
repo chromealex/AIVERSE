@@ -1,8 +1,23 @@
 #pragma once
 #include "engine/physis/PhysisStorm.h"
+#include "engine/physis/PhysisPresentation.h"
+#include <limits>
 #include <memory>
 
 namespace aiverse::editor {
+inline bool samplePhysisCell(const World& world, int x, int z, physis::NatureFieldSample& sample) {
+    const auto* state = world.resourceConst<physis::State>();
+    if (!state) return false;
+    const auto* cell = world.tryGetConst<physis::Cell>(physis::cellAt(world,x,z));
+    if (!cell) return false;
+    const int64_t meters = state->settings.cellSizeMeters;
+    const int64_t mx = int64_t(x)*meters + meters/2;
+    const int64_t mz = int64_t(z)*meters + meters/2;
+    const auto limit = std::numeric_limits<int64_t>::max()/Fixed::kOne/2;
+    if (mx < -limit || mx > limit || mz < -limit || mz > limit) return false;
+    return physis::sampleNatureField(world,{Fixed::fromInt(mx),cell->elevation,Fixed::fromInt(mz)},sample);
+}
+
 inline std::unique_ptr<World> makePhysisDiagnosticDemo() {
     using namespace physis;
     auto world = std::make_unique<aiverse::World>();

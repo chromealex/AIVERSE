@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/panels/PhysisCellReading.tsx",
     "apps/editor/PhysisDiagnosticDemo.h",
     "apps/studio-web/src/panels/PhysisDiagnosticsPanel.tsx",
     "apps/studio-web/src/panels/EffectSimulation.tsx",

@@ -27,3 +27,9 @@
   .physis-layers { grid-row:2; }
   .physis-options { grid-row:3; }
 }
+
+.physis-cell { margin-top:14px; padding:12px; background:var(--au-panel-raised); border:1px solid var(--au-line); border-radius:var(--au-radius-md); }
+.physis-cell h4 { margin:0; }
+.physis-cell table { width:100%; margin-top:8px; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+.physis-cell :is(th,td) { text-align:right; padding:5px 3px; border-top:1px solid var(--au-line); }
+.physis-cell th:first-child { text-align:left; }

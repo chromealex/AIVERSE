@@ -729,3 +729,5 @@ PHYSIS wide layout and isolation 16aa334d7. tests/physis_authoring_test.cpp vali
 Wide PHYSIS layout 16aa334d7, captured on d1d631e44. Repeated Mac WKWebView demo interaction and asserted controls appear beside the raster in the wide layout. Fresh captures docs/evidence/studio-project-catalog/physis-{temperature,wind}.png, receipt docs/evidence/studio-physis-demo-layout.json. Next verify MCP tool catalog and full PHYSIS suite.
 
 PHYSIS MCP smoke bf207ebe4, tests/physis_mcp_smoke.py. The real stdio server discovers physis_demo, starts inactive, resets to tick 25 and steps to tick 26 without altering map config/revision. Mac native aiverse_physis_tests aggregate built, CTest -R ^physis_ passed 40/40; docs/evidence/studio-physis-full-suite.log.txt and docs/evidence/studio-physis-mcp.json. Next: surface full cell observations and live ECS field inspection in PHYSIS. Windows and merged-tree gate remain pending.
+
+PHYSIS cell details: sample wind velocity and gravity acceleration at the selected native cell center and elevation. Check keyboard and mouse selection against the displayed frame tick, including missing cells.

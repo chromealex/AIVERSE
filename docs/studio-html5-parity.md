@@ -344,3 +344,5 @@ Effects color modules: transfer constant, pair and gradient spawn sampling and s
 Effects base emitter transfer: edit separate size/rotation axes, sprite aspect, gravity, space, texture, prewarm and particle limits. Verify native files and mode switches in the packaged Studio.
 
 PHYSIS diagnostics transfer: reuse the isolated native demo, tick stepping, all field layers and palette conversion. Provide panel-local map, volume contours and cell inspection. Verify reset and project isolation.
+
+PHYSIS cell details: sample wind velocity and gravity acceleration at the selected native cell center and elevation. Check keyboard and mouse selection against the displayed frame tick, including missing cells.

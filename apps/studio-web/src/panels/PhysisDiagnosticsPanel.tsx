@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {invoke} from '../bridge';
 import {StudioAlert,StudioButton,StudioInput,StudioSelect} from '../ui';
+import PhysisCellReading from './PhysisCellReading';
 import './PhysisDiagnosticsPanel.css';
 
 const layers=['Temperature (°C)','Relative humidity','Pressure (hPa)','Rain','Snow','Surface wetness','Snowpack (m)','Surface ice','Wind speed (m/s)','Vertical wind (m/s)','Gravity (m/s²)','Fire','Quake','Local flood (m)'];
@@ -10,9 +11,8 @@ type Ring={kind:string;x:number;z:number;radius:number};
 type Frame={active:true;tick:number;width:number;height:number;stride:number;originX:number;originZ:number;available:number;values:(number|null)[];colors:number[];rings:Ring[]};
 const ringColor:Record<string,string>={Wind:'#83efff',Tornado:'#ffcb69',Hurricane:'#ffcb69',Gravity:'#e0aaff'};
 
-function FieldMap({frame,contours,label}:{frame:Frame;contours:boolean;label:string}){
+function FieldMap({frame,contours,label,cell,pick}:{frame:Frame;contours:boolean;label:string;cell?:number;pick:(index:number)=>void}){
   const canvas=useRef<HTMLCanvasElement>(null);
-  const [cell,pick]=useState<number>();
   useEffect(()=>{
     const context=canvas.current?.getContext('2d');
     if(!context)return;
@@ -25,7 +25,7 @@ function FieldMap({frame,contours,label}:{frame:Frame;contours:boolean;label:str
   const [x,z]=coord(cell??0);
   return <>
     <div className="physis-map" tabIndex={0} role="group" aria-label={label+' map. Use arrow keys to inspect cells.'}
-      onClick={e=>{const rect=e.currentTarget.getBoundingClientRect();
+      onClick={e=>{e.currentTarget.focus();const rect=e.currentTarget.getBoundingClientRect();
         const column=Math.min(frame.width-1,Math.floor((e.clientX-rect.left)*frame.width/rect.width));
         const row=Math.min(frame.height-1,Math.floor((e.clientY-rect.top)*frame.height/rect.height));
         pick(row*frame.width+column);}}
@@ -43,13 +43,13 @@ function FieldMap({frame,contours,label}:{frame:Frame;contours:boolean;label:str
     </div>
     {contours&&<div className="physis-legend">{frame.rings.map(r=>r.kind).filter((v,i,a)=>a.indexOf(v)===i).map(k=><span key={k}><i style={{borderColor:ringColor[k]}}/>{k}</span>)}</div>}
     <p>{frame.available?label+' · '+Math.min(...valid).toFixed(3)+' to '+Math.max(...valid).toFixed(3):'No PHYSIS cells in this area.'}</p>
-    {cell!==undefined&&<output>Cell ({frame.originX+x*frame.stride}, {frame.originZ+z*frame.stride}) · {frame.values[cell]?.toFixed(4)??'Outside grid'}</output>}
   </>;
 }
 
 export default function PhysisDiagnosticsPanel({projectPath}:{projectPath:string}){
   const [view,setView]=useState(initial),[frame,setFrame]=useState<Frame>();
   const [busy,setBusy]=useState(true),[error,setError]=useState(''),[contours,showContours]=useState(true);
+  const [cell,pick]=useState<number>();
   const requestId=useRef(0);
   async function request(action:string,next:View){
     const id=++requestId.current;
@@ -58,6 +58,7 @@ export default function PhysisDiagnosticsPanel({projectPath}:{projectPath:string
       const reply=await invoke('studio.op',{op:'physis_demo',params:{action,...next},expectedProject:projectPath});
       if(id!==requestId.current)return;
       const result=reply.result as Frame|{active:false};
+      if(action==='reset'||!result.active||next.size!==view.size||next.stride!==view.stride||next.centerX!==view.centerX||next.centerZ!==view.centerZ)pick(undefined);
       setFrame(result.active?result:undefined);setView(next);
     }catch(e){if(id===requestId.current)setError(String(e));}
     finally{if(id===requestId.current)setBusy(false);}
@@ -75,7 +76,7 @@ export default function PhysisDiagnosticsPanel({projectPath}:{projectPath:string
         <div className="physis-controls physis-layers"><label>Field<StudioSelect value={view.layer} onChange={e=>change('layer',Number(e.target.value))}>{layers.map((l,i)=><option key={l} value={i}>{l}</option>)}</StudioSelect></label>
           <label>Palette<StudioSelect value={view.palette} onChange={e=>change('palette',Number(e.target.value))}>{['Thermal','High contrast','Ocean'].map((l,i)=><option key={l} value={i}>{l}</option>)}</StudioSelect></label>
         </div>
-        <div className="physis-figure"><FieldMap key={[view.centerX,view.centerZ,view.size,view.stride].join('/')} frame={frame} contours={contours} label={layers[view.layer]}/></div>
+        <div className="physis-figure"><FieldMap key={[view.centerX,view.centerZ,view.size,view.stride].join('/')} frame={frame} cell={cell} pick={pick} contours={contours} label={layers[view.layer]}/></div>
         <div className="physis-options"><label className="physis-toggle"><input type="checkbox" checked={contours} onChange={e=>showContours(e.target.checked)}/>Volume contours</label>
         <details><summary>Map area</summary><form className="physis-controls" key={[view.size,view.stride,view.centerX,view.centerZ].join('/')} onSubmit={e=>{
           e.preventDefault();const data=new FormData(e.currentTarget);
@@ -84,7 +85,11 @@ export default function PhysisDiagnosticsPanel({projectPath}:{projectPath:string
           {([['size','Width (cells)',8,64],['stride','Sample stride',1,8],['centerX','Center X',-1000000,1000000],['centerZ','Center Z',-1000000,1000000]] as const).map(([k,label,min,max])=><label key={k}>{label}
             <StudioInput type="number" name={k} defaultValue={view[k]} min={min} max={max} step={1} required/></label>)}
           <StudioButton type="submit">Apply area</StudioButton>
-        </form></details></div>
+        </form></details>
+        {cell!==undefined&&<PhysisCellReading key={[frame.tick,cell,frame.originX,frame.originZ,frame.stride].join('/')}
+          projectPath={projectPath} x={frame.originX+(cell%frame.width)*frame.stride} z={frame.originZ+Math.floor(cell/frame.width)*frame.stride}
+          tick={frame.tick} label={layers[view.layer]} value={frame.values[cell]} refresh={()=>void request('view',view)}/>}
+        </div>
       </>}
     </fieldset>
     {error&&<StudioAlert tone="warning">{error}</StudioAlert>}

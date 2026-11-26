@@ -25,6 +25,6 @@ Validate native operation behavior with the existing `physis_authoring` CTest vi
 
 ## Inspect the isolated diagnostic demo
 
-Use `physis_demo` with `{"action":"reset"}` to create a private seeded ECS world. Sample it with `{"action":"view","layer":8,"palette":2}` for wind speed with the ocean palette. Actions `step` and `step60` advance one or sixty committed ticks. The response includes sample coordinates, tick, valid values, palette colors and Wind/Storm/Gravity outlines. Empty cells return null. The demo belongs to the Workspace project lifetime and does not edit the map or advance the game.
+Use `physis_demo` with `{"action":"reset"}` to create a private seeded ECS world. Sample it with `{"action":"view","layer":8,"palette":2}` for wind speed with the ocean palette. Actions `step` and `step60` advance one or sixty committed ticks. The response includes sample coordinates, tick, valid values, palette colors and Wind/Storm/Gravity outlines. Empty cells return null. For wind and gravity XYZ at the cell center, call `{"action":"probe","cellX":0,"cellZ":0}` and compare the returned tick with the raster tick. The demo belongs to the Workspace project lifetime and does not edit the map or advance the game.
 
 Workflow-only skill; no separate runtime library. Uses `aiverse_editor_core` through `aiversemcp`.
