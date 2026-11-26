@@ -430,3 +430,5 @@ Linked graph parity also requires a graph request made during initial model-list
 Packaged macOS Studio verified external animation_editor requests at startup for clips and embedded pose graphs, default model, invalid names/tabs and queued graph selection after discarding an edited draft. The source documents and revisions remained unchanged. Evidence: docs/evidence/studio-linked-animation-graph.json.
 
 Standalone Animation Graph and Rig parity audit: both legacy panels expose undo and redo. HTML currently loses redo and draft history when switching dock tabs. Restore both via the existing graph draft-history owner and verify graph and rig histories stay independent.
+
+macOS Graph and Rig now have verified independent Undo/Redo across dock tab switches, including when Undo returned to the saved document. Discard clears both directions. Evidence at docs/evidence/studio-animation-graph-rig-history.json.
