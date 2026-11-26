@@ -206,6 +206,16 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
           {!!atlas.excluded?.length && <details><summary>Excluded textures ({atlas.excluded.length})</summary>
             <ul>{atlas.excluded.map(item => <li key={item.path}><strong>{item.path}</strong> · {item.reason}
               {!!item.fixMaxSize && <span> · Suggested maximum {item.fixMaxSize} px</span>}</li>)}</ul>
+            {atlas.excluded.some(item => (item.fixMaxSize ?? 0)>0) &&
+              <StudioButton disabled={atlasDisabled || estimate?.fixRun == null} onClick={async () => {
+                if (estimate?.fixRun == null || !atlas.excluded) return;
+                setSavingAtlas(true);setError('');
+                try {
+                  commitSnapshot(await invoke('studio.buildAtlasFixSizes',{project:projectPath,target,run:estimate.fixRun,excluded:atlas.excluded}));
+                  await start('estimate');
+                } catch (err) {setError(message(err));}
+                finally {setSavingAtlas(false);}
+              }}>Apply suggested sizes for {selected?.name ?? target}</StudioButton>}
           </details>}
         </section>}
       </div>

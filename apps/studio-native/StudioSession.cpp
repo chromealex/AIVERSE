@@ -1,4 +1,5 @@
 #include "StudioHierarchyGroups.h"
+#include "apps/editor/core/BuildFixes.h"
 #include "StudioOrientedCollider.h"
 #include "StudioEntityNesting.h"
 #include "aiverselib/world/EvolveAreaScaleMath.h"
@@ -2539,9 +2540,11 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
                 throw std::runtime_error("Unknown audio profile");
             flags = "--audio " + audio;
         }
-        if (params.getBool("estimate"))
+        if (params.getBool("estimate")) {
+            const int completed = ws_.runCount() + 1;
             ws_.startBuild(target, config, "--estimate " + flags, (builds / ".temp" / "estimate").string());
-        else ws_.startBuild(target, config, flags + (params.getBool("installMissing") ? " --install-missing" : ""));
+            estimateRun_=completed;estimateProject_=ws_.project.dir;estimateTarget_=target;estimateManifest_=manifest.dump();
+        } else ws_.startBuild(target, config, flags + (params.getBool("installMissing") ? " --install-missing" : ""));
         Json out = Json::object(); out.set("started", Json::fromBool(true));
         return out;
     }
@@ -2557,6 +2560,21 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
     if (!fs::is_regular_file(report, ec)) throw std::runtime_error("No size estimate yet for " + target);
     const Json rep = Json::parseFile(report.string());
     Json out = Json::object();
+    const bool current = estimateProject_ == ws_.project.dir && estimateTarget_ == target &&
+        estimateRun_ == ws_.runCount() && !ws_.building() && ws_.buildResult()==0 && estimateManifest_==manifest.dump();
+    const auto& excluded=rep["atlas"]["excluded"];
+    if (method=="studio.buildAtlasFixSizes") {
+        if (!current || params.getStr("project")!=ws_.project.dir || params.getInt("run",-1)!=estimateRun_ ||
+            params["excluded"].dump()!=excluded.dump()) throw std::runtime_error("Run a new size estimate before applying texture sizes.");
+        const auto& existing=manifest["packaging"]["targets"][target]["files"];
+        const auto rules=editor::atlasSizeFixRules(existing,excluded);
+        if (!rules.size() || rules.dump()==existing.dump()) return snapshot();
+        Json patch=Json::object();patch.set("path",str("packaging.targets."+target+".files"));patch.set("value",rules);
+        const auto saved=ws_.call("set_manifest",patch);
+        if (saved.has("error")) throw std::runtime_error(saved.getStr("error"));
+        return snapshot();
+    }
+    if(current) out.set("fixRun",num(int64_t(estimateRun_)));
     out.set("target", str(target));
     out.set("pack", rep["pack"]); out.set("atlas", rep["atlas"]);
     if (rep.has("split")) out.set("split", rep["split"]);
@@ -5081,7 +5099,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             reply.set("result",sceneBrushJson());
         } else if (method == "studio.agentInfo" || method == "studio.agentStart" || method == "studio.agentStop" || method == "studio.agentReset") {
             reply.set("result", agentRequest(method, params));
-        } else if (method == "studio.buildInfo" || method == "studio.buildAtlasPage" || method == "studio.buildAtlasEnabled" || method == "studio.buildToolchain" || method == "studio.buildStart" ||
+        } else if (method == "studio.buildInfo" || method == "studio.buildAtlasFixSizes" || method == "studio.buildAtlasPage" || method == "studio.buildAtlasEnabled" || method == "studio.buildToolchain" || method == "studio.buildStart" ||
                    method == "studio.buildLog" || method == "studio.buildEstimate") {
             reply.set("result", buildRequest(method, params));
         } else if(method=="studio.worldProcessAreaBatchResize"){

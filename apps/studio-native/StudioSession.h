@@ -151,6 +151,8 @@ private:
     std::string hierarchyPreviewVersion_;
     Json selectedPreviewIds_,previewInspector_;
     uint64_t graphDocumentEpoch_=1;
+    std::string estimateProject_, estimateTarget_, estimateManifest_;
+    int estimateRun_ = -1;
     Json buildRequest(const std::string& method, const Json& params);
     Json dispatchImpl(const Json& request);
     Json dispatchImplCore(const Json& request);
