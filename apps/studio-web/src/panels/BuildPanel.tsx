@@ -195,6 +195,17 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
               <li key={i}><span title={f.path}>{f.path ?? f.file}</span><small>{formatBytes(f.storedBytes)}</small></li>)}</ul>
           </> : <p className="build__note">Run <b>Estimate size</b> to pack the content and see what is heavy.</p>}
         </section>
+        {!!estimate?.fileRules?.length && <details className="build__card build__files">
+          <summary>Applied file rules ({estimate.fileRules.length})</summary>
+          <table aria-label="Applied file rules">
+            <thead><tr><th>File</th><th>Change</th><th>Before</th><th>After</th></tr></thead>
+            <tbody>{estimate.fileRules.map((rule,i) => <tr key={i}>
+              <td>{rule.path}</td><td>{rule.what}</td>
+              <td>{rule.before != null ? formatBytes(rule.before) : '—'}</td>
+              <td>{rule.after != null ? formatBytes(rule.after) : '—'}</td>
+            </tr>)}</tbody>
+          </table>
+        </details>}
         {atlas?.enabled && <section className="build__card" aria-label="Texture atlas report">
           <h3>Texture atlases</h3>
           <p>{atlas.atlased ?? 0} textures · {atlas.pages ?? 0} pages · {atlas.occupancyPercent ?? 0}% filled</p>

@@ -2580,6 +2580,7 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
     if(current) {out.set("fixRun",num(int64_t(estimateRun_)));out.set("fixToken",str(token));}
     out.set("target", str(target));
     out.set("pack", rep["pack"]); out.set("atlas", rep["atlas"]);
+    if (rep["fileRules"].isArray()) out.set("fileRules",rep["fileRules"]);
     if (rep.has("split")) out.set("split", rep["split"]);
     std::vector<const Json*> all;
     for (const auto& f : rep["files"].items()) all.push_back(&f);

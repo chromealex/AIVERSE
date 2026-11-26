@@ -1086,6 +1086,7 @@ export interface StudioBuildLog { run:number; from: number; next: number; text: 
 export interface StudioBuildEstimate { fixRun?: number; fixToken?: string; target: string; pack: Record<string, unknown>; atlas?: { enabled?: boolean; atlased?: number; pages?: number; occupancyPercent?: number; bytesSaved?: number;
     gpuBytesBefore?: number; gpuBytesAfter?: number; textureBindsBefore?: number; textureBindsAfter?: number;
     excluded?: { path: string; reason: string; fixMaxSize?: number }[] } | null; split?: Record<string, unknown>;
+  fileRules?: Array<{path: string; what: string; before?: number; after?: number}>;
   heaviest: Array<{ path?: string; file?: string; bytes?: number; storedBytes?: number }> }
 
 export interface MetaHumanReport { pending?:boolean; detected:boolean; score:number; headBone:string; faceMeshes:string[]; hiddenMaterials:string[]; materialRoles:Record<string,string>;

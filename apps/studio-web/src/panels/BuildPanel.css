@@ -33,6 +33,12 @@
 .build__note{color:var(--au-text-muted);margin:4px 0 0}
 .build__size{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
 .build__size b{font-size:18px}.build__size span{color:var(--au-text-muted);font-size:var(--au-font-xs)}
+.build__files{grid-column:1/-1;overflow:auto;max-height:22rem}
+.build__files summary{cursor:pointer}
+.build__files table{width:100%;margin-top:8px;border-collapse:collapse;text-align:left}
+.build__files th,.build__files td{padding:4px 8px;border-bottom:1px solid var(--au-line)}
+.build__files td:first-child{overflow-wrap:anywhere}
+.build__files td:nth-last-child(-n+2){white-space:nowrap;font-variant-numeric:tabular-nums}
 .build__heavy{list-style:none;margin:0;padding:0}
 .build__heavy li{display:flex;gap:8px;padding:1px 0}
 .build__heavy li span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--au-text-muted)}
