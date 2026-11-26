@@ -1,0 +1,25 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+    Start 589: studio_session
+1/1 Test #589: studio_session ...................   Passed   11.35 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+EDITOR    =  11.35 sec*proc (1 test)
+
+Total Test time (real) =  11.38 sec
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/win-device-mask/Main.o: Common Data Format (Version 2.5 or earlier) data
+
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/win-device-mask/Main.o:     file format pe-bigobj-x86-64
+architecture: i386:x86-64, flags 0x0000003d:
+HAS_RELOC, HAS_LINENO, HAS_DEBUG, HAS_SYMS, HAS_LOCALS
+start address 0x0000000000000000
+
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/win-device-mask/studio-win-device-overlay-test.exe: PE32+ executable (console) x86-64, for MS Windows
+	DLL Name: GDI32.dll
+	001226b0  <none>  0037  CreateDIBSection
+	DLL Name: USER32.dll
+	00122b90  <none>  0048  ChildWindowFromPointEx
+	00122bb0  <none>  0152  GetDpiForWindow
+	00122c00  <none>  03aa  UpdateLayeredWindow
