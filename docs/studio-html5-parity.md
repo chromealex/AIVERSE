@@ -408,3 +408,5 @@ SpectraFX canvas connections: port the legacy output/input selection with native
 SpectraFX inspector: expose the canonical module field schema, edit and remove individual properties without flattening complex values, and edit node properties, graph parameters and local function definitions with undo and guarded save.
 
 SpectraFX function libraries: import a reusable package into the current draft and export local definitions with a checked disk revision. Keep selected properties visible beside the canvas when space allows.
+
+SpectraFX value nodes: edit numeric, vector, boolean, color and parameter literals in the selected-node inspector while preserving connected inputs.

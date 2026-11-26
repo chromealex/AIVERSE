@@ -1,4 +1,5 @@
 import {useState} from 'react';
+import SpectraLiteralEditor from './SpectraLiteralEditor';
 import {Minus} from 'lucide-react';
 import {StudioAlert,StudioButton,StudioInput,StudioSelect,StudioTextarea} from '../ui';
 import type {FxNode} from './spectraDataInterfaceModel';
@@ -84,6 +85,8 @@ export default function SpectraNodeProperties({node,fields,functions,disabled,ed
   const absent=fields.filter(field=>!Object.hasOwn(props,field.key));
   const fn=typeof props.function==='string'?props.function:'';
   return <div className="spectra-property-inspector">
+    <SpectraLiteralEditor key={JSON.stringify([node.type,props.value,props.name])} node={node} disabled={disabled}
+      apply={(property,value)=>replace({...props,[property]:value})}/>
     {node.type==='FunctionCall'&&object(functions)&&<label>Function
       <StudioSelect aria-label="Function" disabled={disabled} value={fn} onChange={e=>replace({...props,function:e.target.value})}>
         {[...new Set([fn,...Object.keys(functions)])].map(id=><option key={id} value={id}>{id||'Choose function…'}</option>)}

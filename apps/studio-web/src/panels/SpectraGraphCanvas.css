@@ -53,3 +53,6 @@
   .spectra-canvas__workspace.has-inspector{grid-template-columns:minmax(0,1fr) minmax(250px,32%);align-items:start}
   .spectra-canvas__selected{max-height:min(560px,48vh);overflow:auto;box-sizing:border-box}
 }
+.spectra-literal{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,100px),1fr));gap:8px;align-items:end}
+.spectra-literal label{display:grid;gap:4px;min-width:0}
+.spectra-literal input{width:100%;min-width:0}
