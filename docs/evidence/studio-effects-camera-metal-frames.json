@@ -1,0 +1,10 @@
+{
+  "sha": "a1fe7b3804f2fcde278207267fc452459c7ea4e4",
+  "argv": [
+    "bash",
+    "/tmp/fx-cam-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-effects-camera-metal-frames.log.txt",
+  "sha256": "a648ab48fd0e1f795f3055ece8dbbbcffa3125ae945cf7186c732cca5240ec21"
+}
