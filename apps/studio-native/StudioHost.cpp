@@ -109,6 +109,19 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
     : platform_(platform), engineRoot_(engineRoot), htmlComposite_(htmlComposite) {
     // The project opens asynchronously after the UI loads (splash and progress).
     session_ = std::make_unique<StudioSession>(engineRoot, std::string());
+    session_->workspace().registerOp({"animation_editor","Open an authoring model's clips or embedded graph in HTML Studio.",
+        Json::parse(R"({"type":"object","properties":{"name":{"type":"string","default":"robot"},"tab":{"enum":["clips","graph"],"type":"string"}}})"),
+        [this](const Json& params){
+            const auto tab=params.getStr("tab","clips");
+            if(tab!="clips"&&tab!="graph")throw std::runtime_error("Choose clips or graph");
+            Json args=Json::object();args.set("name",Json::string(params.getStr("name","robot")));
+            auto state=session_->workspace().call("modeling_get",args);
+            if(state.has("error"))return state;
+            args.set("project",Json::string(session_->workspace().project.dir));
+            args.set("tab",Json::string(tab));
+            sendEventPayload("animation.authoringOpen",args);
+            return state;
+        },true});
     registerStudioOverlayPlan(*session_, encodePng, [this](const Json& state, bool reveal) {
         sendEventPayload("overlay.preview", state);
         if (reveal) sendEventPayload("ui.showPanel", Json::parse(R"({"panel":"overlays"})"));

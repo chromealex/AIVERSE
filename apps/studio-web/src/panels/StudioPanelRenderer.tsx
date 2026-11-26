@@ -94,6 +94,7 @@ export interface StudioPanelContext {
   /** Apply a snapshot from an Inspector action without dropping the Inspector pin. */
   commitSnapshot: (value: StudioSnapshot) => void;
   /** A game runs in the Game panel: Hierarchy / Inspector offer the live view. */
+  animationRoute:import('../types').AnimationAuthoringRoute;
   scriptLocation:{path:string;line:number} | null;
   openScript:(path:string,line:number)=>void;
   consumeScriptLocation:()=>void;
@@ -132,7 +133,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'models':
       case 'fields': case 'physis': case 'raid': case 'balance': case 'modeling':
       case 'model_anim':
-        return <ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot} openAttachments={()=>ctx.showPanel('attachments')}/>;
+        return <ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot} animationRoute={panel==='modeling'?ctx.animationRoute:undefined} openAttachments={()=>ctx.showPanel('attachments')}/>;
       case 'fx_functions': return <SpectraGpuFiles key={snapshot?.project.path} project={snapshot?.project.path??''}
         tools={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
       case 'effects': return <EffectsPanel key={snapshot?.project.path} project={snapshot?.project.path ?? ''}
@@ -218,6 +219,6 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'world_persistence': return <WorldPersistencePanel projectPath={snapshot?.project.path ?? ''}/>;
       // AI_PANEL_CASES: add new panel renderers above this line.
       case 'game': return <GamePanel {...ctx}/>;
-      case 'animation': return <AnimationTimeline snapshot={snapshot} showPanel={ctx.showPanel}/>;
+      case 'animation': return <AnimationTimeline key={snapshot?.project.path} route={ctx.animationRoute} snapshot={snapshot} showPanel={ctx.showPanel}/>;
     }
 }

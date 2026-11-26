@@ -13,7 +13,7 @@ const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 const op = async (name: string, params: Record<string, unknown> = {}) => (await invoke('studio.op', { op: name, params })).result as any;
 
 /** Animation: clips of the project's authoring models (modeling/*.model.json) on a timeline with a live skeleton preview. */
-export default function AnimationTimeline({ snapshot, showPanel }: { snapshot: StudioSnapshot | null; showPanel: (p: StudioPanel) => void }) {
+export default function AnimationTimeline({ snapshot, showPanel, route }: { route:import('../types').AnimationAuthoringRoute; snapshot: StudioSnapshot | null; showPanel: (p: StudioPanel) => void }) {
   const path = snapshot?.project.path ?? '';
   const [models, setModels] = useState<string[]>([]);
   const [model, setModel] = useState('');
@@ -31,10 +31,19 @@ export default function AnimationTimeline({ snapshot, showPanel }: { snapshot: S
   }, [path]);
   useEffect(() => {
     if (!model) { setDoc(null); return; }
+    let live=true;
     void op('animation_get', { name: model }).then(r => {
+      if(!live)return;
       const d = r.document as AnimDoc; setDoc(d); setClip(d.clips?.[0]?.id ?? ''); setTime(0); setError('');
-    }).catch(e => setError(message(e)));
+    }).catch(e => {if(live)setError(message(e));});
+    return ()=>{live=false;};
   }, [model]);
+  useEffect(()=>{
+    const target=route.request;
+    if(target?.tab==='clips'&&target.project===path){
+      setModel(target.name);setPlaying(false);setTime(0);route.consume?.();
+    }
+  },[route.request,path]);
   const current = doc?.clips?.find(c => c.id === clip);
   const duration = current ? clipDuration(current) : 0;
   const sample = useCallback(async (t: number) => {

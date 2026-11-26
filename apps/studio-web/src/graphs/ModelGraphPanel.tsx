@@ -13,7 +13,7 @@ import type {Positioned} from './graphSelection';
 import {modelProjection,connectModelParent,modelingReply,object,replaceAnimationEntry,animationProjection,connectAnimationPose,addAnimationTransition,geometryProjection,connectGeometryOperand,setGeometryBoolean,moveGeometryModifier,geometryModifierKinds,addGeometryModifier,removeGeometryModifier,modelMaterialIds,bindModelMaterial} from './nativeGraphAdapters';
 import type {GraphObject} from './nativeGraphAdapters';
 
-export default function ModelGraphPanel({documentEpoch,projectPath,openAttachments}:{documentEpoch?:string;projectPath:string;openAttachments?:()=>void}){
+export default function ModelGraphPanel({documentEpoch,projectPath,openAttachments,route}:{route?:import('../types').AnimationAuthoringRoute;documentEpoch?:string;projectPath:string;openAttachments?:()=>void}){
  const op=async(name:string,params:GraphObject={})=>(await invoke('studio.op',{op:name,params,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch})).result;
  const [names,setNames]=useState<string[]>([]),[name,setName]=useState('');
  const [original,setOriginal]=useState<GraphObject|null>(null),[draft,setDraft]=useState<GraphObject|null>(null);
@@ -52,6 +52,19 @@ export default function ModelGraphPanel({documentEpoch,projectPath,openAttachmen
   const r=modelingReply(await op('modeling_get',{name:asset}));if(!live())return;
   setName(asset);reset(r.document,r.revision);
  });
+ useEffect(()=>{
+  const request=route?.request;
+  if(!request||request.tab!=='graph'||request.project!==projectPath||busy||lock.current)return;
+  if(dirty&&name!==request.name){
+   setStatus('Save or discard this draft to open '+request.name+'.');return;
+  }
+  route?.consume?.();
+  if(dirty){setMode('pose');setPending(null);setSelection([]);return;}
+  void run(async live=>{
+   const r=modelingReply(await op('modeling_get',{name:request.name}));if(!live())return;
+   setName(request.name);reset(r.document,r.revision);setMode('pose');
+  });
+ },[route?.request,projectPath,busy,dirty,name]);
  const connect=(to:PortRef)=>{
   if(!draft||!pending||busy)return;
   if(mode==='model'){

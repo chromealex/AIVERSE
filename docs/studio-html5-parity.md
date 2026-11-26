@@ -418,3 +418,5 @@ Models: render the original project model directly on a dedicated native surface
 Models: inspect the authored game type through the shared GameView with owner color, idle animation and panel-local camera; preserve source-only inspection.
 
 Model Animation: choose an imported model and clip, sample its native pose, play, pause and scrub on an independent panel surface.
+
+Animation authoring navigation: implement animation_editor in the HTML host, reveal project-scoped clips or the embedded model graph, preserve edited drafts and verify linked requests.

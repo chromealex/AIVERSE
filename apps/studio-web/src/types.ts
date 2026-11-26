@@ -40,6 +40,8 @@ export interface StudioRules { bodies?:Record<string,{radius:number;mass:number}
 export interface StudioInspector { id: string; name: string; kind: string; nameEditable?: boolean; components: StudioInspectorComponent[] }
 export interface StudioEntity { preview?:{components:string[];health?:number}; id: string; name: string; kind: string; parentId?: string; visible?: boolean; locked?: boolean; owner?: number }
 export interface StudioLog { level: 'info' | 'warning' | 'error'; text: string; time: string; source?: string }
+export interface AnimationAuthoringRequest {project:string;name:string;tab:'clips'|'graph'}
+export interface AnimationAuthoringRoute {request?:AnimationAuthoringRequest;consume?:()=>void}
 export interface StudioAsset {
   path: string;
   bytes: number;
