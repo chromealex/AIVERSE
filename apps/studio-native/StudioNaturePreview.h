@@ -1,4 +1,5 @@
 #pragma once
+#include <chrono>
 #include "StudioTerrainGeometry.h"
 #include "apps/editor/PhysisNaturePreview.h"
 #include "apps/editor/core/PhysisDiagnosticFrame.h"
@@ -9,6 +10,8 @@ struct StudioNaturePreview {
     std::string epoch;
     std::uint64_t revision;
     std::uint64_t ignitionRevision=0;
+    bool commandPlaying=false;
+    std::chrono::steady_clock::time_point commandTime{};
     float yaw=.6f,pitch=.55f,distance=0;
     Json presentation=Json::object();
     fx::ParticleSystem particles;
@@ -28,6 +31,7 @@ struct StudioNaturePreview {
 
     Json read(const Json& params) const {
         auto frame=editor::readPhysisGameFrame(preview.previewWorld(),params);
+        if (!frame.getBool("active")) return frame;
         auto status=presentation;
         status.set("igniteOnClick",Json::fromBool(preview.settings.igniteOnClick));
         status.set("quality",Json::number(int64_t(preview.settings.grassQuality)));

@@ -91,6 +91,7 @@ function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:strin
   }
   useEffect(()=>{void request('view',initial);return ()=>{requestId.current++;};},[projectPath]);
   useEffect(()=>onNativeEvent((event,payload)=>{
+    if(event==='nature.command'&&map&&(payload as {epoch?:string}).epoch===epoch){setPlaying(false);void request('view',view);}
     if(event==='nature.ignition'&&showNature){
       const hit=payload as {epoch?:string;cellX:number;cellZ:number;message?:string};
       if(hit.message)setError(hit.message);

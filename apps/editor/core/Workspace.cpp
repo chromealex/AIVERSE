@@ -1,5 +1,6 @@
 #include "ModelingOps.h"
 #include "Workspace.h"
+#include "PhysisNatureCommandSchema.h"
 #include "StudioPlayTools.h"
 #include <aiverselib/runtime/WorkBudget.h>
 #include "ShaderGraphOps.h"
@@ -1026,6 +1027,8 @@ void Workspace::registerCoreOps() {
         registerOp({name,desc,schema(sch),std::move(fn),false,true});
     };
     const auto requireStudioLink=[](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");};
+    addLinked("physis_nature_preview","Inspect or control the PHYSIS nature preview in linked Studio.",
+        physisNatureCommandSchema,requireStudioLink);
     for(const char* name:{"animation_runtime_status","rig_runtime_status"})
         addLinked(name,"Read per-entity animation diagnostics from the running Studio play-test.",
             R"({"type":"object","properties":{},"additionalProperties":false})",requireStudioLink);

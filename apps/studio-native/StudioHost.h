@@ -349,6 +349,7 @@ private:
     std::optional<bake::CapturedBake> pendingBake_;
     std::string bakeEpoch_,bakeMessage_;
     uint64_t bakeRevision_=0;
+    Json natureCommand(const Json& params);
     void tickNaturePreview();
     void tickLightBake();
     bool bakeFailed_=false;

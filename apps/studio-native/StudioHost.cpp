@@ -43,6 +43,7 @@
 #include "apps/studio-native/StudioStbCodecs.h"
 
 #include "StudioNaturePreview.h"
+#include "apps/editor/core/PhysisNatureCommandSchema.h"
 
 namespace aiverse::studio {
 namespace fs = std::filesystem;
@@ -111,6 +112,8 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
     : platform_(platform), engineRoot_(engineRoot), htmlComposite_(htmlComposite) {
     // The project opens asynchronously after the UI loads (splash and progress).
     session_ = std::make_unique<StudioSession>(engineRoot, std::string());
+    session_->workspace().registerOp({"physis_nature_preview","Control the PHYSIS panel's private nature simulation.",
+        Json::parse(editor::physisNatureCommandSchema),[this](const Json& params){return natureCommand(params);},true});
     for(const bool rig:{false,true}){
         session_->workspace().registerOp({rig?"rig_runtime_status":"animation_runtime_status",
             "Read animation contact and climbing diagnostics from the current play-test.",Json::object(),
@@ -674,11 +677,95 @@ StudioScene* StudioHost::activeHumanRenderer(){
     if(characterSurface_.placement.visible&&characterSurface_.renderer)return characterSurface_.renderer.get();
     return appearanceSurface_.placement.visible?appearanceSurface_.renderer.get():nullptr;
 }
+Json StudioHost::natureCommand(const Json& p) {
+    const auto& ws=session_->workspace();
+    const auto epoch=session_->graphDocumentScope().getStr("epoch");
+    if (projectLoading_ || ws.project.dir.empty() || epoch.empty()) throw std::runtime_error("Open a project first.");
+    if (naturePreview_ && (naturePreview_->epoch!=epoch || naturePreview_->revision!=ws.map.revision))
+        naturePreview_.reset();
+    auto settings=naturePreview_?naturePreview_->preview.settings:editor::PhysisNaturePreviewSettings{};
+    const bool wasEnabled=settings.enabled;
+    for (const char* key:{"enabled","playing","grass","flames","sound","reset"})
+        if (p.has(key) && p[key].type()!=Json::Type::Bool) throw std::invalid_argument(std::string("Expected boolean: ")+key);
+    auto number=[&](const char* key,double initial,double lo,double hi,bool integer=false){
+        if (!p.has(key)) return initial;
+        const double v=p[key].toDouble();
+        if (!p[key].isNumber() || !std::isfinite(v) || (integer && v!=std::floor(v)))
+            throw std::invalid_argument(std::string("Invalid nature setting: ")+key);
+        return std::clamp(v,lo,hi);
+    };
+    settings.enabled=p.getBool("enabled",settings.enabled);
+    settings.playing=p.getBool("playing",settings.playing);
+    settings.grass=p.getBool("grass",settings.grass);
+    settings.flames=p.getBool("flames",settings.flames);
+    settings.sound=p.getBool("sound",settings.sound);
+    settings.speed=float(number("speed",settings.speed,0,8));
+    settings.volume=float(number("volume",settings.volume,0,1));
+    settings.windSpeed=float(number("windSpeed",settings.windSpeed,0,60));
+    settings.windDirectionDeg=float(number("windDirection",settings.windDirectionDeg,-360,360));
+    settings.previewCellMeters=int(number("cellMeters",settings.previewCellMeters,0,64,true));
+    settings.humidity=float(number("humidity",settings.humidity,0,1));
+    settings.shoreSandMeters=float(number("shoreSand",settings.shoreSandMeters,0,40));
+    const int steps=int(number("advanceTicks",0,0,600,true));
+    const auto& at=p["ignite"];
+    if (p.has("ignite") && (!at["x"].isNumber() || !at["z"].isNumber() ||
+        std::abs(at["x"].toDouble())>1e9 || std::abs(at["z"].toDouble())>1e9))
+        throw std::invalid_argument("Ignition requires world coordinates x and z.");
+    const auto live=game_ && game_->launchPlan().project==ws.project.dir?game_->physisTick():std::nullopt;
+    if (p.has("ignite") || steps) {
+        if (live) throw std::runtime_error("The running game's PHYSIS is read-only.");
+        if (!settings.enabled) throw std::runtime_error("Enable the nature preview first.");
+    }
+    Json out=Json::object();
+    if (p.size()) {
+        if (ws.map.data.planet()) throw std::runtime_error("Nature preview requires a terrain map.");
+        const bool rebuild=!naturePreview_ || (!wasEnabled && settings.enabled) || p.getBool("reset") ||
+            p.has("cellMeters") || p.has("humidity") || p.has("shoreSand");
+        const bool wasPlaying=naturePreview_ && naturePreview_->commandPlaying;
+        if (rebuild) {
+            auto next=std::make_shared<StudioNaturePreview>(epoch,ws.map,float(ws.project.rules.levelHeight.toDouble()),settings);
+            if (natureSurface_.renderer) onScene([&]{natureSurface_.renderer.reset();});
+            naturePreview_=std::move(next);
+        }
+        auto& state=*naturePreview_;
+        state.preview.settings=settings;
+        const bool playing=settings.enabled && (p.has("playing") || !wasEnabled?settings.playing:wasPlaying);
+        if (rebuild || playing!=wasPlaying) state.commandTime=std::chrono::steady_clock::now();
+        state.commandPlaying=playing;
+        if (p.has("windSpeed") || p.has("windDirection")) state.preview.applyWindSettings();
+        if (p.has("ignite")) {
+            std::string reason;
+            const bool ok=state.preview.ignite(float(at["x"].toDouble()),float(at["z"].toDouble()),&reason);
+            out.set("ignited",Json::fromBool(ok));
+            if (ok) ++state.ignitionRevision;
+            else out.set("igniteError",Json::string(reason));
+        }
+        if (steps) out.set("advanced",Json::number(int64_t(state.preview.advance(steps))));
+        Json event=Json::object();event.set("epoch",Json::string(epoch));
+        sendEventPayload("nature.command",event);
+    }
+    const auto frame=naturePreview_?naturePreview_->read(Json::object()):Json{};
+    const auto& display=frame["presentation"];
+    out.set("ok",Json::fromBool(true));out.set("enabled",Json::fromBool(settings.enabled));
+    out.set("source",Json::string(live?"live (read-only)":"preview"));
+    out.set("tick",Json::number(live?int64_t(*live):frame.getInt("tick")));
+    for (const char* key:{"flames","smoke","voices","burningAreaM2"}) out.set(key,display.has(key)?display[key]:Json::number(int64_t(0)));
+    out.set("grassPatches",Json::number(display.getInt("patches")));
+    return out;
+}
+
 void StudioHost::tickNaturePreview() {
     auto& surface=natureSurface_;
+    if (naturePreview_ && naturePreview_->commandPlaying) {
+        const auto now=std::chrono::steady_clock::now();
+        if ((!game_ || !game_->physisTick()) && naturePreview_->epoch==session_->graphDocumentScope().getStr("epoch") &&
+            naturePreview_->revision==session_->workspace().map.revision)
+            naturePreview_->preview.advanceElapsed(std::chrono::duration<float>(now-naturePreview_->commandTime).count());
+        naturePreview_->commandTime=now;
+    }
     if (!surface.placement.visible || !platform_.surfaceDrawable(StudioSurface::Nature)) return;
     const auto& ws=session_->workspace();
-    if (!naturePreview_ || naturePreview_->epoch!=session_->graphDocumentScope().getStr("epoch") ||
+    if (!naturePreview_ || !naturePreview_->preview.settings.enabled || naturePreview_->epoch!=session_->graphDocumentScope().getStr("epoch") ||
         naturePreview_->revision!=ws.map.revision) {
         if (surface.renderer) onScene([&]{surface.renderer.reset();});
         return;
@@ -3940,6 +4027,8 @@ bool StudioHost::handleHostMethod(const Json& req) {
             if (action=="view") return editor::readPhysisGameFrame(nullptr,params);
             throw std::runtime_error("Create the map preview first.");
         }
+        if (!naturePreview_->preview.settings.enabled && action!="view") throw std::runtime_error("Enable the map preview first.");
+        if (action=="playback") naturePreview_->commandPlaying=false;
         return naturePreview_->apply(action,params);
     });
     if(method=="studio.physisLive")return answer([&] {
