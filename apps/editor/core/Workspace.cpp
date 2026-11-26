@@ -2109,6 +2109,7 @@ void Workspace::registerCoreOps() {
     addLinked("geometry_stats","Read the last rendered Studio Scene geometry counters and completed GPU timings.","{}",requireStudioLink);
     addLinked("editor_theme","Set Studio theme and accent.",R"({"properties":{"mode":{"type":"string","enum":["dark","light"]},"accent":{"type":"string","enum":["blue","violet","teal","orange"]}}})",requireStudioLink);
     addLinked("editor_window","Open or close a panel, switch workspace or restore the layout.", R"({"properties":{"id":{"type":"string"},"open":{"type":"boolean"},"resetLayout":{"type":"boolean"},"workspace":{"type":"string","enum":["scene","world","look","animate","character","logic","publish"]}}})",requireStudioLink);
+    addLinked("world_regions_status","Read region ownership in the current preview or match.","{}",requireStudioLink);
     addLinked("world_entities","List and group filtered objects in the edit or play world.",R"({"properties":{"filter":{"type":"string"},"group":{"type":"array","items":{"type":"string"}},"limit":{"type":"integer"}}})",requireStudioLink);
     addLinked("world_entity","Inspect a world object by reference or map index.",R"({"properties":{"ref":{"type":"integer","minimum":1},"doc":{"type":"integer","minimum":0}}})",requireStudioLink);
     addLinked("editor_windows","List HTML Studio panels and their open state.", "{}",requireStudioLink);

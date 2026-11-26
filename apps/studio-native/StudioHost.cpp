@@ -155,6 +155,13 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
             stopGame();
             return Json::parse(R"({"ok":true,"summary":"Тест остановлен"})");
         },true});
+    session_->workspace().registerOp({"world_regions_status","Read region ownership in the current preview or match.",Json::object(),[this](const Json&){
+        if(!game_ || !gameState().getBool("inMatch"))return session_->editWorldRegions();
+        auto result=game_->regions();
+        if(!result.getBool("available"))throw std::runtime_error(result.getStr("reason"));
+        result.set("mode",Json::string("play"));
+        return result;
+    },true});
     session_->workspace().registerOp({"world_entities","List and group filtered objects in the edit or play world.",Json::parse(R"({"properties":{"filter":{"type":"string"},"group":{"type":"array","items":{"type":"string"}},"limit":{"type":"integer"}}})"),[this](const Json& params){
         if(game_ && gameState().getBool("inMatch"))return game_->queryWorld(session_->workspace(),params,true);
         return session_->queryEditWorld(params,true);

@@ -134,6 +134,7 @@ public:
                                const std::string& destination); // native picker ONLY
     Json resolvePreviewRefs(const Json& refs);
     void setPreviewSelection(Json ids,Json detail) { selectedPreviewIds_=std::move(ids); previewInspector_=std::move(detail); }
+    Json editWorldRegions();
     Json queryEditWorld(const Json& params,bool list);
     Json graphDocumentScope() const;
 private:

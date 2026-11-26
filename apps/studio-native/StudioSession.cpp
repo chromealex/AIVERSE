@@ -58,6 +58,8 @@
 #include "apps/editor/core/MaterialOps.h"
 #include "apps/editor/core/DocumentWorldPreview.h"
 #include <charconv>
+#include "engine/world/WorldPersistenceDiagnostics.h"
+#include "engine/world/SimulationLod.h"
 #include "libraries/include/aiverselib/mechanics/SpectraSourceDocument.h"
 #include <cctype>
 #include <cmath>
@@ -962,6 +964,21 @@ Json StudioSession::resolvePreviewRefs(const Json& refs) {
         rows.push(std::move(item));
     }
     return rows;
+}
+Json StudioSession::editWorldRegions() {
+    if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
+    if(!prepareHierarchyPreview(studioHierarchyConfig(ws_.project.manifest),false))
+        throw std::runtime_error("Hierarchy preview is loading; retry");
+    const auto& sim=*hierarchyPreview_.sim();
+    const auto& ecs=sim.world();
+    const auto* ledger=ecs.resourceConst<world::RegionEntityLedger>();
+    if(!ledger)throw std::runtime_error("Region ownership is not enabled");
+    auto result=world::ledgerStatus(*ledger,ecs);
+    result.set("durabilityKnown",Json::fromBool(false));
+    result.set("simulationLod",world::simulationLodDiagnosticsJson(ecs.resourceConst<world::SimulationLodDiagnostics>()));
+    result.set("mode",Json::string("preview"));
+    result.set("tick",Json::number(int64_t(sim.tick())));
+    return result;
 }
 Json StudioSession::queryEditWorld(const Json& params,bool list) {
     if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
