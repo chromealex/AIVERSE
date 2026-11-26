@@ -148,7 +148,7 @@ export interface StudioRuntimeEditField {id:'hp'|'energy';title:string;raw:strin
 export interface StudioRuntimeEntity {ref:string; epoch:string; tick:number; components:Record<string,unknown>; stats?:Record<string,unknown>;ownership?:StudioRuntimeOwnership;componentSchemas?:Record<string,unknown>;runtimeEditAvailable?:boolean;runtimeFields?:StudioRuntimeEditField[];runtimeDebugEdited?:boolean}
 export interface StudioGameDeviceChrome { corner:number; cutout?:{x:number;y:number;width:number;height:number;radius:number}; insets:{left:number;top:number;right:number;bottom:number} }
 export interface StudioGameDevice { id:string; landscape:boolean; safeArea:boolean; width:number; height:number; touch:boolean; chrome?:StudioGameDeviceChrome }
-export interface StudioGameDeviceOption { id:string; name:string; group:string }
+export interface StudioGameDeviceOption { id:string; name:string; group:string; width:number; height:number; scale:number }
 export interface EvolveLiveRegion { id:string; minXcm:number; minZcm:number; maxXcm:number; maxZcm:number; fertility:number; pollution:number; succession:number; durability:number }
 export interface PlanetLiveProcessSummary {sampleTick:number;truncated:boolean;rejected:number;cells:unknown[]}
 export interface PlanetEvolveLiveRegion {id:string;body:string;fertility:number;pollution:number;succession:number;durability:number;chartClipped:boolean;edges:(number[]|null)[][]}

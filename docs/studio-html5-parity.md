@@ -296,3 +296,5 @@ Overlays transfer: render an independent minimap using the game terrain, object 
 Overlays transfer: render authored screen, ground and billboard icon textures in the private plan. Verify loose images, atlas-only regions, tint, orientation and paint order.
 
 Overlays transfer: capture the project structure through GameView::drawGhost into the panel’s own GPU target, with validity tint and snapped map position. Verify blocked and buildable placements with Scene closed.
+
+Game transfer: expose the shared device catalog dimensions and pixel density in a searchable Game device chooser. Verify selection and orientation preservation on macOS.

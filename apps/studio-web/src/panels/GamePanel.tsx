@@ -4,7 +4,8 @@ import { Menu, RotateCcw } from 'lucide-react';
 import { invoke } from '../bridge';
 import type { StudioGameState, StudioGameDevice, StudioGameDeviceOption, StudioPlayReview } from '../types';
 import type { StudioPanelContext } from './StudioPanelRenderer';
-import { StudioPanel, StudioButton, StudioAlert, StudioEmptyState, StudioBadge, StudioSelect, StudioField, StudioCheckbox } from '../ui';
+import { StudioPanel, StudioButton, StudioAlert, StudioEmptyState, StudioBadge, StudioCheckbox } from '../ui';
+import GameDevicePicker from './GameDevicePicker';
 import './GamePanel.css';
 import { gameViewportSize } from './gameViewport';
 
@@ -123,10 +124,8 @@ export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelC
     footer={<><StudioBadge>{state?.active?(state.loading?`Loading ${Math.round(state.progress*100)}%`:state.inMatch?`${state.paused?'Paused':'Running'} · tick ${state.tick}`:'Project menu'):'Stopped'}</StudioBadge><span>Native game client · click the viewport to focus input</span></>}>
     {(error||state?.error) && <StudioAlert tone="danger">{error||state?.error}</StudioAlert>}
     <div className="studio-game__devices">
-      <StudioField label="Device" htmlFor="studio-game-device"><StudioSelect id="studio-game-device" aria-label="Game device" value={device?.id||'none'} disabled={!connected||busy} onChange={e=>void configure({id:e.target.value})}>
-        {!devices.length && <option value="none">Free size</option>}
-        {devices.map(d=><option key={d.id} value={d.id}>{d.group?`${d.group} · `:''}{d.name}</option>)}
-      </StudioSelect></StudioField>
+      <GameDevicePicker devices={devices} selected={device?.id ?? 'none'} disabled={!connected || busy}
+        onSelect={id => void configure({id})}/>
       <StudioButton disabled={!device?.width||busy} onClick={()=>void configure({landscape:!device?.landscape})}>{device?.landscape?'Landscape':'Portrait'}</StudioButton>
       <StudioCheckbox label="Safe area" checked={device?.safeArea??true} disabled={!device?.width||busy} onChange={e=>void configure({safeArea:e.target.checked})}/>
       {!!device?.width && <StudioBadge>{device.width} × {device.height} · {device.touch?'Touch':'Mouse'}</StudioBadge>}

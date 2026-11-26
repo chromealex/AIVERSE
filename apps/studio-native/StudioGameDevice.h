@@ -78,7 +78,9 @@ inline Json studioGameDevices() {
     Json out=Json::array();
     for (const auto& p:editor::kDevices) {
         Json v=Json::object();v.set("id",Json::string(p.id));
-        v.set("name",Json::string(p.name));v.set("group",Json::string(p.group));out.push(std::move(v));
+        v.set("name",Json::string(p.name));v.set("group",Json::string(p.group));
+        v.set("width",Json::number(double(p.w)));v.set("height",Json::number(double(p.h)));
+        v.set("scale",Json::number(double(p.scale)));out.push(std::move(v));
     }
     return out;
 }
