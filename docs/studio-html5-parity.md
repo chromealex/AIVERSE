@@ -294,3 +294,5 @@ Overlays transfer: emit screen anchors and resolved text, bars, circles and rect
 Overlays transfer: render an independent minimap using the game terrain, object and mark rasterizer. Verify project backgrounds, ring/disc coverage and map coordinates in desktop Studio.
 
 Overlays transfer: render authored screen, ground and billboard icon textures in the private plan. Verify loose images, atlas-only regions, tint, orientation and paint order.
+
+Overlays transfer: capture the project structure through GameView::drawGhost into the panel’s own GPU target, with validity tint and snapped map position. Verify blocked and buildable placements with Scene closed.

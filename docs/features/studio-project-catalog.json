@@ -3,6 +3,10 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-native/StudioBuildingPanelPreview.h",
+    "apps/studio-native/StudioPanelRenderTarget.h",
+    "apps/studio-native/StudioPlacementGhost.h",
+    "apps/studio-web/src/panels/PlacementGhost.tsx",
     "apps/studio-native/StudioOverlayImages.h",
     "engine/view/game/PlanarMinimap.h",
     "apps/client/Minimap.cpp",

@@ -319,3 +319,10 @@
   .overlay-plan-with-minimap { grid-template-columns: minmax(0, 1fr); }
   .overlay-minimap { width: min(100%, 192px); box-sizing: border-box; }
 }
+
+.placement-view-switch { display:inline-flex; gap:2px; margin-top:10px; padding:3px; border:1px solid var(--au-line); border-radius:7px; }
+.placement-view-switch button { background:transparent; border:0; padding:5px 10px; color:var(--au-text); border-radius:4px; }
+.placement-view-switch button[aria-pressed=true] { background:var(--au-surface-raised, #30465d); }
+.placement-model-preview { position:relative; display:flex; align-items:center; justify-content:center; height:240px; background:#11151c; border-radius:8px; overflow:hidden; }
+.placement-model-preview canvas { display:block; width:min(100%,240px); height:auto; }
+.placement-model-preview p { position:absolute; margin:0; }

@@ -1,5 +1,6 @@
 #include "StudioHierarchyGroups.h"
 #include "StudioOverlayPlan.h"
+#include "StudioPlacementGhost.h"
 #include "apps/editor/core/LightBakeOps.h"
 #include "StudioDocumentIds.h"
 #include "engine/view/game/GameLights.h"
@@ -3445,6 +3446,34 @@ bool StudioHost::handleHostMethod(const Json& req) {
         const std::string note = params.getStr("message");
         if (note.size() <= 1200) platform_.log("[studio-web] JS: " + note);
         return true; // diagnostics never touch Workspace or the filesystem
+    }
+    if(method=="studio.placementGhost") {
+        const auto scope=session_->graphDocumentScope();
+        try {
+            if(scope.getStr("epoch")!=params.getStr("expectedDocumentEpoch") ||
+               scope.getStr("revision")!=params.getStr("expectedDocumentRevision"))
+                throw std::runtime_error("Map changed; refresh placement");
+            auto& ws=session_->workspace();
+            const auto patch=ws.call("overlay_placement_preview",params);
+            if(patch.has("error"))throw std::runtime_error(patch.getStr("error"));
+            if(!patch["rows"].size())throw std::runtime_error("Choose a structure on a planar map");
+            auto ghost=std::make_shared<StudioPlacementGhost>(ws,patch,params.getStr("placeType"));
+            auto reply=std::make_shared<Json>(Json::object());
+            platform_.runInBackground([ghost,reply]{
+                try {
+                    const auto pixels=ghost->frame();
+                    const auto png=encodePng(pixels,StudioPanelRenderTarget::Side,StudioPanelRenderTarget::Side);
+                    if(png.empty())throw std::runtime_error("Placement model capture failed");
+                    reply->set("url",Json::string("data:image/png;base64,"+editor::base64Encode(png)));
+                } catch(const std::exception& e){reply->set("error",Json::string(e.what()));}
+            },[this,alive=alive_,id=req["id"],scope,reply]{
+                if(!*alive)return;
+                if(!sameDocumentScope(scope,session_->graphDocumentScope()))sendError(id,"Map changed; refresh placement");
+                else if(reply->has("error"))sendError(id,reply->getStr("error"));
+                else {Json response=Json::object();response.set("id",id);response.set("result",*reply);sendReply(response);}
+            });
+        } catch(const std::exception& e){sendError(req["id"],e.what());}
+        return true;
     }
     if(method=="studio.lightBakeJob")return answer([&]{return lightBakeJob(params);});
     if(method=="studio.lightBakeDisplay")return answer([&]{

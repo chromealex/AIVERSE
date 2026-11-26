@@ -120,11 +120,45 @@
     await sleep(1800);
     log('SHOT_plan');
     await sleep(1600);
+    const viewButton=text=>[...document.querySelectorAll('[aria-label="Placement view"] button')].find(b=>b.textContent===text);
+    viewButton('3D model').scrollIntoView({block:'start',behavior:'instant'});
+    await sleep(700);
+    viewButton('3D model').click();
+    const model=(label='Guard house')=>document.querySelector('.placement-model-preview[aria-busy="false"] canvas[aria-label="'+label+' placement model"]');
+    const image=await wait(()=>model()?.width===512 && model(),'green structure GPU frame');
+    const originalFrame=image.toDataURL();
+    function sample(img) {
+      const c=document.createElement('canvas');c.width=c.height=128;
+      const ctx=c.getContext('2d');ctx.drawImage(img,0,0,128,128);
+      const data=ctx.getImageData(0,0,128,128).data;
+      let count=0,sum=0;
+      for(let i=0;i<data.length;i+=4) {
+        if(Math.abs(data[i]-data[0])+Math.abs(data[i+1]-data[1])+Math.abs(data[i+2]-data[2])<12)continue;
+        count++;sum+=data[i+1]-data[i];
+      }
+      if(count<100)throw Error('No GPU model silhouette: '+count);
+      return sum/count;
+    }
+    const allowedTint=sample(image);
+    if(image.getBoundingClientRect().bottom>innerHeight)throw Error('Model preview outside visible window');
+    await sleep(900);
+    log('SHOT_ghost');
+    await sleep(1200);
     const rect = canvas.getBoundingClientRect();
     const scale = Math.min((rect.width-16)/24, (rect.height-16)/16);
     canvas.dispatchEvent(new MouseEvent('click',{bubbles:true,
       clientX:rect.left+(rect.width-24*scale)/2+4.1*scale, clientY:rect.top+(rect.height-16*scale)/2+4.1*scale}));
     await wait(() => hasColor(219,56,84), 'red ghost at water');
+    const blocked=await wait(()=>model()?.width===512 && model().toDataURL()!==originalFrame && model(),'blocked structure GPU frame');
+    const blockedTint=sample(blocked);
+    if(allowedTint<blockedTint+5)throw Error('Placement tint did not change: '+allowedTint+', '+blockedTint);
+    const blockedFrame=blocked.toDataURL();
+    const select=document.getElementById('overlay-structure');
+    select.value='watchtower';select.dispatchEvent(new Event('change',{bubbles:true}));
+    const tower=await wait(()=>model('Watchtower') && model('Watchtower').toDataURL()!==blockedFrame && model('Watchtower'),'different structure model');
+    sample(tower);
+    viewButton('Footprint').click();
+    await wait(()=>document.querySelector('[aria-label="Structure footprint on map terrain"]'),'footprint restored');
     await wait(()=>miniPixel(33,33,'232,121,161'),'cursor ping follows map click');
     for(const id of minimapIds) {
       checkbox(id).click();
@@ -155,7 +189,7 @@
     try { await rpc('studio.op',{op:'overlay_preview',params:{ids:['sensor_radius']},expectedDocumentEpoch:before.epoch}); }
     catch { stale=true; }
     if(!stale)throw Error('Stale UI overlay command accepted');
-    log('VERIFIED rotated loose icon, overlapping geometry, billboard orientation, reconstructed atlas HUD tint and missing asset isolation; minimap terrain/background, ring/disc pixels, cursor ping and release; map isolation and stale command rejection; screen HUD resizing, selection text, health bars, circle, rectangle, project colors, forced rings, concurrent overlays, water click, deselection and Hierarchy selection');
+    log('VERIFIED native placement model pixels, allowed/blocked tint, house/tower selection and return to footprint; rotated loose icon, overlapping geometry, billboard orientation, reconstructed atlas HUD tint and missing asset isolation; minimap terrain/background, ring/disc pixels, cursor ping and release; map isolation and stale command rejection; screen HUD resizing, selection text, health bars, circle, rectangle, project colors, forced rings, concurrent overlays, water click, deselection and Hierarchy selection');
     log('DONE_1');
   } catch (error) { log('FAIL '+error.message); }
 })();

@@ -60,6 +60,9 @@ with tempfile.TemporaryDirectory(dir=args.scratch) as temp:
     (map_file.parent / "second.json").write_text(original)
     rules = project / "rules.json"
     data = json.loads(rules.read_text())
+    (project / "models").mkdir(exist_ok=True)
+    shutil.copy2(root / "demos/model-triplanar/models/sculpt.glb", project / "models/guard-monument.glb")
+    data["types"]["watchtower"]["view"] = {"model":"models/guard-monument.glb","height":2.4}
     data["overlays"] = [
         dict(id="sensor_radius", when="never", anchor="selected", shape=dict(type="ring", radius=2.5),
              style=dict(color="#16eaafff", thickness=.15, fadeIn=.4)),

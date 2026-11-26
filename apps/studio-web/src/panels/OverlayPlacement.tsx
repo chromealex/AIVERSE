@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useOverlayPreview } from './useOverlayPreview';
 import OverlayPlan from './OverlayPlan';
+import PlacementGhost from './PlacementGhost';
 import { invoke } from '../bridge';
 import type { StudioGraphDocumentScope } from '../types';
 import { StudioAlert, StudioField, StudioInput, StudioPanel, StudioSection, StudioSelect } from '../ui';
@@ -11,17 +12,17 @@ type Placement = {
   rows?:string[]; left:number; top:number; footprintW:number; footprintH:number; ok:boolean; x:number; z:number;
 };
 
-function TerrainPatch({data}:{data:Placement}) {
+function TerrainPatch({data,model}:{data:Placement;model?:ReactNode}) {
   const rows = data.rows;
   if (!rows?.length) return null;
   const color = data.ok ? '#79d9b1' : '#ff9886';
   return <figure style={{margin:'12px 0'}}>
-    <svg role="img" aria-label="Structure footprint on map terrain" viewBox={`0 0 ${rows[0].length} ${rows.length}`}
+    {model??<svg role="img" aria-label="Structure footprint on map terrain" viewBox={`0 0 ${rows[0].length} ${rows.length}`}
       style={{width:'100%',height:220,background:'var(--au-surface)',borderRadius:8}}>
       {rows.map((row,z)=>Array.from(row,(cell,x)=><rect key={x+','+z} x={x+.025} y={z+.025} width={.95} height={.95}
         fill={cell==='~'||cell==='='?'#375e86':cell==='#'||cell==='R'?'#656979':'#39544d'}/>))}
       <rect x={data.left} y={data.top} width={data.footprintW} height={data.footprintH} stroke={color} strokeWidth={.09} fill={color} fillOpacity={.38}/>
-    </svg>
+    </svg>}
     <figcaption role="status">{data.ok?'Buildable terrain':'Placement blocked'} · {data.footprintW} × {data.footprintH} cells · Center ({data.x}, {data.z})</figcaption>
   </figure>;
 }
@@ -29,6 +30,7 @@ function TerrainPatch({data}:{data:Placement}) {
 export default function OverlayPlacement({scope,tools,selectionKey}:{selectionKey:string;scope?:StudioGraphDocumentScope;tools:ReactNode}) {
   const {state,error:commandError,request}=useOverlayPreview(scope);
   const [draft,setDraft]=useState<{x?:string;z?:string}>({});
+  const [showModel,setShowModel]=useState(false);
   const [data,setData] = useState<Placement>();
   const [error,setError] = useState('');
   const {projectPath,epoch,revision}=scope??{};
@@ -74,7 +76,14 @@ export default function OverlayPlacement({scope,tools,selectionKey}:{selectionKe
             <StudioField label="Map X" htmlFor="overlay-x"><StudioInput id="overlay-x" type="number" min={0} step="any" placeholder={String(data.width/2)} value={x} onChange={e=>coordinate('x',e.target.value)}/></StudioField>
             <StudioField label="Map Z" htmlFor="overlay-z"><StudioInput id="overlay-z" type="number" min={0} step="any" placeholder={String(data.height/2)} value={z} onChange={e=>coordinate('z',e.target.value)}/></StudioField>
           </div>
-          {!error && <TerrainPatch data={data}/>}
+          {type && !error && <>
+            <div role="group" aria-label="Placement view" className="placement-view-switch">
+              <button type="button" aria-pressed={!showModel} onClick={()=>setShowModel(false)}>Footprint</button>
+              <button type="button" aria-pressed={showModel} onClick={()=>setShowModel(true)}>3D model</button>
+            </div>
+            <TerrainPatch data={data} model={showModel?<PlacementGhost scope={scope} type={type} x={x} z={z}
+              name={data.types.find(item=>item.id===type)?.name||type}/>:undefined}/>
+          </>}
         </>)}
       </>}
     </StudioSection>
