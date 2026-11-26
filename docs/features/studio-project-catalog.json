@@ -607,6 +607,7 @@
     "docs/evidence/studio-private-map-nature-preview.json",
     "docs/evidence/studio-private-nature-wind.json",
     "docs/evidence/studio-private-physis-playback.json",
-    "docs/evidence/studio-private-physis-grid.json"
+    "docs/evidence/studio-private-physis-grid.json",
+    "docs/evidence/studio-physis-textured-nature.json"
   ]
 }

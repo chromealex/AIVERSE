@@ -1,0 +1,10 @@
+{
+  "sha": "444cd87c81ee707621b0f572149612530b8bb46f",
+  "argv": [
+    "bash",
+    "/tmp/physis3d-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-physis-textured-nature.log.txt",
+  "sha256": "d23402a33ee781a4d6eeaf92a591058f9191f3abff6e38156ad0398d8f45e122"
+}
