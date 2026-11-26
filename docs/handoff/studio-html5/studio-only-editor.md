@@ -647,3 +647,5 @@ WaterShorePanel.tsx, ToolPanel.tsx and SceneBrushBar.tsx. Implementation b23095d
 Generate transfer: bake a map, increment its seed, and enable or remove match-start generation without replacing the baked terrain. Verify Undo, persistence and native seed precision.
 
 d53610087. Generate built on macOS and 299 web tests passed. The packaged first bake failed coordinated Save: generateIntoMap called loadJson on the live document, invalidating its saved-file baseline. Parse the generated data on a detached MapDoc before committing it as one live edit, then repeat save, Undo and deterministic terrain checks. Evidence docs/evidence/studio-generator-seed.json.
+
+e62f3fe9c. Desktop baked and saved consecutive integer seeds 9007199254740993/4; Undo saved the first again. The harness clicked during the native Redo notification and the stale revision guard rejected generation. Wait for the panel refresh. Inspection also found fixed match seeds pass through the generic fixed-point JSON accessor; use the original number literal for full-width integer seeds in both match and editor reads.

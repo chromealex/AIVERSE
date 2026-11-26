@@ -3,6 +3,8 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "engine/game/gen/GenSeed.h",
+    "engine/game/gen/MapGen.cpp",
     "apps/studio-web/src/panels/MapGeneratorPanel.tsx",
     "apps/editor/core/GenOps.cpp",
     "apps/studio-web/src/panels/toolPanels.ts",

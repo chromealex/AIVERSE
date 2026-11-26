@@ -1,0 +1,10 @@
+{
+  "sha": "e62f3fe9c63707f00b02655286b79c453675c13c",
+  "argv": [
+    "bash",
+    "/tmp/generate-ui.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-generator-map-save.log.txt",
+  "sha256": "a24b2c775f1ecc3e80a547c17224914ed5d06965f07d3f899f29df5df4b70e4b"
+}
