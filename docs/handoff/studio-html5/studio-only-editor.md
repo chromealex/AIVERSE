@@ -793,3 +793,5 @@ Sparse terrain brush 502e618d8db9944c3ba13d6ec3d998386adddcbb. TypeScript, Vite,
 Terrain target height: transfer the signed Set brush and one-click Scene surface sampler. Verify that sampling preserves the document and history, then verify painting and persistence.
 
 Terrain elevation and picker 428d1aeea460832cee26240999bd16071794f0d6. In the packaged Mac Studio an AppKit gesture sampled the rendered 2.5 m detail surface without changing sampled heights or Undo depth. A second gesture set the target to -3.25 m in one history step. Undo restored the original samples and redo/save/reopen restored the edit; signed 16-bit disk samples spanned -3.25 to 2.5 m. TypeScript, Vite, 299 web tests, studio_session and studio_terrain_geometry passed. Evidence docs/evidence/studio-terrain-target-height.json and docs/evidence/studio-project-catalog/terrain-target-height.png. Next: explicit base/detail grid selection and planetary brush routing. Windows and merged-tree quick gate remain pending.
+
+Terrain grid transfer: choose automatic, base-cell or detail-sample routing for sculpt and material strokes. Check layer isolation, base material erase, undo and persistence.

@@ -1708,6 +1708,8 @@ Json StudioSession::sceneBrushJson() const {
     o.set("armed",Json::fromBool(b.armed));o.set("kind",str(b.kind));o.set("op",str(b.op));
     o.set("radius",Json::number(b.radius,3));o.set("strength",Json::number(b.kind=="terrain" && b.op=="stamp"?b.stampHeight:b.strength,3));
     const auto& sparse=ws_.map.data.extra["terraweaveSparse"];
+    o.set("terrainGrid",str(b.terrainGrid));
+    o.set("detailScale",num(int64_t(ws_.map.data.detailScale)));
     o.set("targetHeight",Json::number(b.targetHeight,6));o.set("pickHeight",Json::fromBool(b.pickHeight));
     o.set("sparseMode",str(b.sparseMode));
     o.set("chunkMetres",num(sparse.getInt("chunkMetres",b.chunkMetres)));
@@ -1801,8 +1803,10 @@ bool StudioSession::strokeDabImpl(double x, double z, std::string* error,double 
         p.set("op",str(mode));p.set("x",Json::number(x,3));p.set("y",Json::number(z,3));
         if (b.op=="stamp") {
             p.set("stamp",str(b.stamp));p.set("angle",Json::number(b.angle,2));
-            p.set("seed",num(int64_t(b.seed)));p.set("hardness",Json::number(b.hardness,3));
         }
+        if(b.terrainGrid!="auto")p.set("detail",Json::fromBool(b.terrainGrid=="detail"));
+        p.set("seed",num(int64_t(b.seed)));
+        p.set("hardness",Json::number(b.hardness,3));
         p.set("radius",Json::number(b.radius,3));p.set("strength",Json::number(strength,6));}
     else if(b.kind=="sparse"){
         op="terraweave_sparse_paint";
@@ -1815,7 +1819,14 @@ bool StudioSession::strokeDabImpl(double x, double z, std::string* error,double 
         p.set("depthCm",num(int64_t(b.depthCm)));
         p.set("radiusCm",num(std::llround(b.radius*100)));
     }
-    else if(b.kind=="paint"){op="terrain_paint_material";p.set("layer",num(int64_t(b.layer)));p.set("x",Json::number(x,3));p.set("y",Json::number(z,3));
+    else if(b.kind=="paint" && b.terrainGrid=="base"){
+        op="terrain_material";
+        p.set("layer",num(int64_t(shift?-1:b.layer)));
+        p.set("x",num(int64_t(std::floor(x))));
+        p.set("y",num(int64_t(std::floor(z))));
+        p.set("radius",num(int64_t(b.radius)));
+    }
+    else if(b.kind=="paint"){op="terrain_paint_material";p.set("hardness",Json::number(b.hardness,3));p.set("layer",num(int64_t(b.layer)));p.set("x",Json::number(x,3));p.set("y",Json::number(z,3));
         p.set("radius",Json::number(b.radius,3));p.set("strength",Json::number(std::min(1.0,b.strength),3));}
     else if(b.kind=="region"){
         const auto& map=ws_.map.data;
@@ -4774,6 +4785,13 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 if(params.has("depthCm"))b.depthCm=integer("depthCm",1,20000);
             }
             if (params.has("op")) { const std::string op=params.getStr("op"); if(!ops.count(op))throw std::runtime_error("Unknown brush op"); b.op=op; }
+            if(params.has("terrainGrid")){
+                const auto grid=params.getStr("terrainGrid");
+                if(grid!="auto" && grid!="base" && grid!="detail")throw std::runtime_error("Unknown terrain grid");
+                b.terrainGrid=grid;
+            }
+            if(b.kind=="terrain" && b.terrainGrid=="base" && (b.op=="stamp" || b.op=="erode"))
+                throw std::runtime_error("Stamp and erosion require the detail grid");
             if(params.has("targetHeight"))b.targetHeight=number("targetHeight",-2048,2047.9375);
             if(params.has("pickHeight")){
                 if(params["pickHeight"].type()!=Json::Type::Bool)throw std::runtime_error("Invalid height picker flag");

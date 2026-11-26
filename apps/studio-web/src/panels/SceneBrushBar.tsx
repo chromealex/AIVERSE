@@ -237,6 +237,8 @@ export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS, tileCatalog,
   if (!brush) return null;
   const field = fields.find(f => f.id === brush.field);
   const stamping = kind==='terrain' && brush.op==='stamp';
+  const detailOnly = (op:StudioSceneBrush['op']) => op==='erode' || op==='stamp';
+  const usesDetail = brush.terrainGrid==='detail' || (brush.terrainGrid==='auto' && (kind==='paint' || brush.detailScale>0 || detailOnly(brush.op)));
   const continuous = kind === 'terrain' || kind === 'sparse' || kind === 'paint' || kind === 'tiles' || kind === 'region' || kind === 'field' || kind === 'objects';
   return <div className={'tbrush' + (brush.armed ? ' is-armed' : '')}>
     {kinds.includes('terrain') && <h3 className="terrain-brush-heading">Terrain brush</h3>}
@@ -269,8 +271,17 @@ export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS, tileCatalog,
       }}>Create chunk at camera target</button>
       <small>Paint beyond the map edge. Hold Shift to reverse raise and lower.</small>
     </fieldset>}
+    {(kind==='terrain' || kind==='paint') && <label className="ptp__row"><span>Terrain grid</span>
+      <select className="au-input" value={brush.terrainGrid} onChange={e=>{
+        const terrainGrid=e.target.value as StudioSceneBrush['terrainGrid'];
+        set({terrainGrid,...(terrainGrid==='base' && detailOnly(brush.op)?{op:'raise' as const}:{})});
+      }}>
+        <option value="auto">Automatic ({kind==='paint' || brush.detailScale>0 || detailOnly(brush.op)?'detail':'base'})</option>
+        <option value="base">Base cells</option><option value="detail">Detail samples</option>
+      </select></label>}
+    {kind === 'terrain' && brush.terrainGrid==='base' && brush.detailScale>0 && <small>The detail surface covers the base grid in the Scene.</small>}
     {kind === 'terrain' && <div className="ptp__seg" role="radiogroup" aria-label="Sculpt operation">
-      {OPS.map(([id, label]) => <button key={id} type="button" role="radio" aria-checked={brush.op === id}
+      {OPS.filter(([id])=>brush.terrainGrid!=='base' || !detailOnly(id)).map(([id, label]) => <button key={id} type="button" role="radio" aria-checked={brush.op === id}
         className={brush.op === id ? 'is-on' : ''} onClick={() => set({ op: id })}>{label}</button>)}</div>}
     {kind === 'terrain' && brush.op==='set' && <fieldset className="tbrush__stamp"><legend>Target elevation</legend>
       <label className="ptp__row"><span>Height (m)</span><input className="au-input" type="number" step="any" min={-2048} max={2047.9375}
@@ -286,13 +297,15 @@ export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS, tileCatalog,
         onChange={e=>set({stamp:e.target.value as StudioSceneBrush['stamp']})}>
         {['crater','mesa','dunes','rocks'].map(s=><option key={s} value={s}>{s}</option>)}</select></label>
       <Slider label="Rotation (°)" min={0} max={360} step={1} value={brush.angle} onCommit={angle=>set({angle})}/>
-      <Slider label="Hardness" min={0} max={0.95} step={0.05} value={brush.hardness} onCommit={hardness=>set({hardness})}/>
       <label className="ptp__row"><span>Seed</span><input className="au-input" type="number" min={0} max={4294967295} step={1}
         key={brush.seed} defaultValue={brush.seed} onBlur={e=>{
           if(e.target.validity.valid && Number.isInteger(e.target.valueAsNumber))set({seed:e.target.valueAsNumber});
           else e.target.value=String(brush.seed);
         }}/></label>
     </fieldset>}
+    {(kind==='terrain' || kind==='paint') && usesDetail && <Slider label="Hardness" min={0} max={0.95} step={0.05}
+      value={brush.hardness} onCommit={hardness=>set({hardness})}/>}
+    {kind==='paint' && !usesDetail && <small>Hold Shift while painting to restore the cell material.</small>}
     {kind === 'paint' && <Slider label="Layer" value={brush.layer} min={0} max={3} step={1} onCommit={v => set({ layer: v })}/>}
     {kind === 'region' && <label className="ptp__row"><span>Region</span>
       <select value={brush.regionLetter} onChange={e => set({ regionLetter: e.target.value })}>
@@ -326,7 +339,7 @@ export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS, tileCatalog,
     {kind === 'region' && <Slider label="Radius (cells)" value={Math.floor(brush.radius)} min={0} max={24} step={1} onCommit={v => set({ radius: v || 0.5 })}/>}
     {kind === 'field' && <Slider label="Radius (cells)" value={Math.round(brush.radius)} min={0} max={24} step={1} onCommit={v => set({ radius: v || 0.25 })}/>}
     {continuous && kind !== 'region' && kind !== 'field' && !(kind==='sparse' && brush.sparseMode==='create') && <Slider label={kind === 'objects' ? 'Spacing' : 'Radius'} value={brush.radius} min={stamping?0.25:0.5} max={stamping?32:24} step={stamping?0.25:0.5} onCommit={v => set({ radius: v })}/>}
-    {((kind === 'terrain' && brush.op!=='set') || kind === 'paint') && <Slider label={stamping?'Stamp height':'Strength'} value={brush.strength} min={stamping?-6:0.05}
+    {((kind === 'terrain' && brush.op!=='set') || (kind === 'paint' && usesDetail)) && <Slider label={stamping?'Stamp height':'Strength'} value={brush.strength} min={stamping?-6:0.05}
       max={kind === 'paint' || brush.op === 'smooth' || brush.op === 'flatten' || brush.op === 'erode' ? 1 : 6} step={0.05} onCommit={v => set({ strength: v })}/>}
     {editing && <p className="ptp__hint">Drag a {kind === 'road' ? 'road node' : 'river point'} in the Scene to move it</p>}
     {brush.pickHeight && <p className="ptp__hint">Click the terrain to sample its elevation · Esc cancels</p>}

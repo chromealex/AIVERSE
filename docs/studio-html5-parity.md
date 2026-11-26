@@ -368,3 +368,5 @@ Terrain stamp transfer: use single-click detail sculpt stamps with rotation, har
 Sparse Terrain transfer: expose chunk creation and signed-world sculpting in the HTML Terrain brush. Check compound undo, reversed depth, camera placement and persisted chunks.
 
 Terrain target height: transfer the signed Set brush and one-click Scene surface sampler. Verify that sampling preserves the document and history, then verify painting and persistence.
+
+Terrain grid transfer: choose automatic, base-cell or detail-sample routing for sculpt and material strokes. Check layer isolation, base material erase, undo and persistence.

@@ -289,7 +289,7 @@
     },
     "tests": {
       "status": "pass",
-      "note": "Native studio_session and 287 web tests passed. Sparse terrain checks cover signed coordinates, undo and persisted chunks. Target-height checks cover Scene sampling without an edit, signed sculpting and reopening.",
+      "note": "Native studio_session and 287 web tests passed. Sparse terrain checks cover signed coordinates, undo and persisted chunks. Grid acceptance checks base corners, detail samples and cell material erase. Target-height checks cover Scene sampling without an edit, signed sculpting and reopening.",
       "evidence": [
         "docs/evidence/studio-project-catalog-6026efdde.json"
       ]
