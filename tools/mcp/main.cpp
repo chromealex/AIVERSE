@@ -176,7 +176,7 @@ void replyError(const Json& id, int code, const std::string& msg) {
 Json toContent(const std::string& name,const Json& result) {
     Json content = Json::array();
     // These status documents include the preview's error string even on a successful read.
-    const bool editorStatus=(name=="animation_editor_status" || name=="rig_editor_status") && result["ready"].isBool();
+    const bool editorStatus=(name=="animation_editor_status" || name=="rig_editor_status") && result["ready"].type()==Json::Type::Bool;
     const bool isError=result.has("error") && !editorStatus;
     if (result.has("png_base64")) {
         Json img = Json::object();
