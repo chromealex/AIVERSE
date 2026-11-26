@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { DraftHistory } from '../graphs/graphFramework';
 import { invoke } from '../bridge';
 import AnimationSkeletonPreview from './AnimationSkeletonPreview';
 import RigInspector, {type RigUnit,type ItemPresets} from './RigInspector';
@@ -10,8 +11,8 @@ type Condition = {parameter:string;op?:string;value?:number};
 type Transition = {to:string;fade?:number;after?:number;when:Condition[]|Record<string,never>};
 type State = {id:string;output:string;transitions?:Transition[]};
 type Graph = {nodes:Node[];output:string;model?:string;parameters?:Record<string,unknown>;states?:State[];initial?:string;graphs?:Record<string,Graph>};
-// Dock tabs unmount inactive panels. Retain only unsaved documents for this window.
-const drafts=new Map<string,{name:string;draft:Graph;saved:Graph|null;revision:string}>();
+// Dock tabs unmount inactive panels. Retain active edit histories for this window.
+const drafts=new Map<string,{name:string;history:DraftHistory<Graph>;saved:Graph|null;revision:string}>();
 const kinds=['bind','clip','blend','additive','twoBoneIK','rig','stack','subgraph','motionMatching','native'];
 const ports=(n:Node):('a'|'b'|'input')[]=>n.kind==='additive'||n.kind==='blend'?['a','b']:n.input!==undefined?['input']:[];
 const position=(n:Node,i:number)=>({x:n.position?.[0]??24+190*(i%3),y:n.position?.[1]??24+90*Math.floor(i/3)});
@@ -23,9 +24,12 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode}:{project
  const restored=drafts.get(cacheKey);
  const [itemPresets,setItemPresets]=useState<ItemPresets>({});
  const [names,setNames]=useState<string[]>([]),[name,setName]=useState(restored?.name??''),[newName,setNewName]=useState('');
- const [draft,setDraft]=useState<Graph|null>(restored?.draft??null),[saved,setSaved]=useState<Graph|null>(restored?.saved??null);
+ const history=useRef(restored?.history);
+ const [committed,setDraft]=useState<Graph|null>(restored?.history.current()??null),[saved,setSaved]=useState<Graph|null>(restored?.saved??null);
+ const [dragPreview,setDragPreview]=useState<Graph|null>(null);
+ const draft=dragPreview??committed;
  const [revision,setRevision]=useState(restored?.revision??'');
- const [past,setPast]=useState<Graph[]>([]),[scope,setScope]=useState(''),[selection,select]=useState('');
+ const [scope,setScope]=useState(''),[selection,select]=useState('');
  const [nodeName,setNodeName]=useState(''),[pickedBone,setPickedBone]=useState('');
  useEffect(()=>setPickedBone(''),[name,draft?.model]);
  useEffect(()=>setNodeName(selection),[selection]);
@@ -39,9 +43,10 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode}:{project
  const current=graph?.nodes.find(n=>n.id===selection),states=graph?.states??[];
  const state=states.find(s=>s.id===stateId)??states[0];
  const dirty=JSON.stringify(saved)!==JSON.stringify(draft);
- const drag=useRef<{id:string;x:number;y:number;left:number;top:number;before:Graph}|null>(null);
+ const drag=useRef<{id:string;x:number;y:number;left:number;top:number;before:Graph;latest:Graph}|null>(null);
  useEffect(()=>{
-  if(dirty&&draft)drafts.set(cacheKey,{name,draft,saved,revision});
+  if(history.current&&(dirty||history.current.canUndo()||history.current.canRedo()))
+   drafts.set(cacheKey,{name,history:history.current,saved,revision});
   else drafts.delete(cacheKey);
  },[cacheKey,name,dirty,draft,saved,revision]);
  async function op(method:string,params:Record<string,unknown>={}){
@@ -59,8 +64,7 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode}:{project
   try{await fn();}catch(e){setError(String(e));}finally{setBusy(false);}
  }
  function change(next:Graph){
-  if(draft)setPast(h=>[...h.slice(-39),draft]);
-  setDraft(next);setError('');setNotice('');
+  if(history.current)setDraft(history.current.push(next));setError('');setNotice('');
  }
  function inScope(next:Graph){
   return scope&&draft?{...draft,graphs:{...draft.graphs,[scope]:next}}:next;
@@ -72,7 +76,7 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode}:{project
   if(graph)change(inScope({...graph,states:states.map(s=>s.id===next.id?next:s)}));
  }
  async function load(id:string){
-  const r=await op('get',{name:id});if(!Array.isArray(r.graph?.nodes))throw new Error('Asset has no pose graph');setDraft(r.graph);setSaved(r.graph);setRevision(r.revision);setName(id);setScope('');setPast([]);select('');setStateId('');
+  const r=await op('get',{name:id});if(!Array.isArray(r.graph?.nodes))throw new Error('Asset has no pose graph');history.current=new DraftHistory(r.graph,40);setDraft(r.graph);setSaved(r.graph);setRevision(r.revision);setName(id);setScope('');select('');setStateId('');
  }
  async function edit(action:string,params:Record<string,unknown>){
   const r=await op('edit',{action,graph:draft,scope,...params});change(r.graph);
@@ -97,9 +101,10 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode}:{project
     <option value="">Root graph</option>{Object.keys(draft?.graphs??{}).map(s=><option key={s}>{s}</option>)}</select>
     <label>Model<input value={draft?.model??''} disabled={busy} placeholder="content/model.glb" onChange={e=>{if(draft)change({...draft,model:e.target.value});}}/></label>
     <button disabled={busy||!draft?.model} onClick={()=>void run(async()=>{await op('validate',{graph:draft});setNotice('Graph compiled against '+draft?.model);})}>Validate</button>
-    <button disabled={busy||!past.length} onClick={()=>{setDraft(past[past.length-1]);setPast(p=>p.slice(0,-1));}}>Undo</button>
-    <button disabled={busy||!dirty} onClick={()=>{setDraft(saved);setPast([]);setScope('');select('');setError('');}}>Discard</button>
-    <button disabled={busy||!dirty} onClick={()=>void run(async()=>{const r=await op('set',{name,graph:draft,expectedRevision:revision});setDraft(r.graph);setSaved(r.graph);setRevision(r.revision);setPast([]);})}>Save graph</button>
+    <button disabled={busy||!history.current?.canUndo()} onClick={()=>{if(history.current)setDraft(history.current.undo());}}>Undo</button>
+    <button disabled={busy||!history.current?.canRedo()} onClick={()=>{if(history.current)setDraft(history.current.redo());}}>Redo</button>
+    <button disabled={busy||!dirty} onClick={()=>{history.current=saved?new DraftHistory(saved,40):undefined;setDraft(saved);setScope('');select('');setError('');}}>Discard</button>
+    <button disabled={busy||!dirty} onClick={()=>void run(async()=>{const r=await op('set',{name,graph:draft,expectedRevision:revision});history.current=new DraftHistory(r.graph,40);setDraft(r.graph);setSaved(r.graph);setRevision(r.revision);})}>Save graph</button>
    </div>
    {tab==='preview'&&draft?<AnimationSkeletonPreview projectPath={projectPath} graph={draft} scope={scope} panel={rigMode?'rig':'graph'} onPick={setPickedBone} busy={busy}
     onKeep={controls=>{if(graph)change(inScope({...graph,parameters:{...graph.parameters,...controls}}));}}/>:tab==='nodes'?<>
@@ -109,9 +114,9 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode}:{project
       return <path key={n.id+port} className="graph-wire" d={`M${x} ${y} C${x+48} ${y} ${end.x-48} ${v} ${end.x} ${v}`}/>;}))}
      {graph.nodes.map(n=>{const p=positions.get(n.id)!;return <g key={n.id} transform={`translate(${p.x} ${p.y})`} role="button" tabIndex={0} aria-label={'Select '+n.id} aria-pressed={selection===n.id} className="graph-draggable"
        onClick={()=>select(n.id)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select(n.id);}}}
-       onPointerDown={e=>{if(busy||!draft||e.button!==0)return;select(n.id);e.currentTarget.setPointerCapture(e.pointerId);drag.current={id:n.id,x:e.clientX,y:e.clientY,left:p.x,top:p.y,before:draft};}}
-       onPointerMove={e=>{const d=drag.current;if(!d||d.id!==n.id)return;const dx=e.clientX-d.x,dy=e.clientY-d.y;if(!dx&&!dy)return;setDraft(inScope({...graph,nodes:graph.nodes.map(v=>v.id===n.id?{...v,position:[Math.round(d.left+dx),Math.round(d.top+dy)]}:v)}));}}
-       onLostPointerCapture={()=>{const d=drag.current;drag.current=null;if(d&&JSON.stringify(d.before)!==JSON.stringify(draft))setPast(h=>[...h.slice(-39),d.before]);}}>
+       onPointerDown={e=>{if(busy||!draft||e.button!==0)return;select(n.id);e.currentTarget.setPointerCapture(e.pointerId);drag.current={id:n.id,x:e.clientX,y:e.clientY,left:p.x,top:p.y,before:draft,latest:draft};}}
+       onPointerMove={e=>{const d=drag.current;if(!d||d.id!==n.id)return;const dx=e.clientX-d.x,dy=e.clientY-d.y;d.latest=(!dx&&!dy)?d.before:inScope({...graph,nodes:graph.nodes.map(v=>v.id===n.id?{...v,position:[Math.round(d.left+dx),Math.round(d.top+dy)]}:v)});setDragPreview(d.latest);}}
+       onLostPointerCapture={()=>{const d=drag.current;drag.current=null;setDragPreview(null);if(d&&d.before!==d.latest)change(d.latest);}}>
       <title>{n.id} · {n.kind}</title><rect className="graph-node-body" width="144" height="52" rx="6"/><path className="graph-node-accent" data-source={n.id===graph.output} d="M2 10 V34"/><text className="graph-node-operation" x="12" y="21">{n.id}</text>
       <text className="graph-node-id" x="12" y="41">{n.kind}{graph.output===n.id?' · output':''}</text>
       <circle className="anim-port" cx="144" cy="26" r="3"/>{ports(n).map((port,i)=><circle className="anim-port" key={port} cx="0" cy={18+i*18} r="3"/>)}</g>;})}</svg></div>
