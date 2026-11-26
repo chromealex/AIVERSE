@@ -1,0 +1,10 @@
+{
+  "sha": "2fea7ec18d204ab2fe328a1d6eb6670d5afd6eae",
+  "argv": [
+    "bash",
+    "../undo-read.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-agent-clean-conversation-undo.log.txt",
+  "sha256": "194037cf3a6c43fe546dbf4390dd5cdab957b63622cf2e2f4e9f58af800974ba"
+}
