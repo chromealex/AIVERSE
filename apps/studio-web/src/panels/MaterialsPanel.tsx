@@ -86,7 +86,9 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
   try{
    const response=await invoke('studio.materialCreate',{name:newName,preset:newPreset,...(newPreset==='triplanar'?{colorGuid:colorMap,normalGuid:normalMap,repeatMetres:Number(repeatMetres)}:{})});
    setLibrary(response);setName(newName);setDraft({});setPending(null);setNewName('');setCreating(false);
-   setMessage('Material file created in content/materials.');
+   const file=response.files?.[newName];
+   if(file?.startsWith('content/'))revealProjectAsset(projectPath,file.slice('content/'.length));
+   setMessage(file ? 'Created '+file : 'Material created.');
   }catch(e){setError(e instanceof Error?e.message:String(e));}
   finally{setBusy(false);}
  };

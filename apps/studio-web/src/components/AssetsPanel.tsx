@@ -1,3 +1,4 @@
+import { revealProjectAsset } from '../assetNavigation';
 import { StudioDialog } from '../ui';
 import { copyText } from '../clipboard';
 import type React from 'react';
@@ -393,10 +394,11 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     if(!native||!projectPath||!name||busy)return;
     setBusy(true);setError('');setMessage('');
     try{
-      await invoke('studio.materialCreate',{name,preset:materialPreset});
+      const library=await invoke('studio.materialCreate',{name,preset:materialPreset});
       setCreatingMaterial(false);setMaterialName('');
-      setFolder('materials');setSearch('');setSelected('materials/'+name+'.material.json');reload();
-      setMessage('Created '+name+'.material.json');
+      const file=library.files?.[name];
+      if(file?.startsWith('content/'))revealProjectAsset(projectPath,file.slice('content/'.length));
+      reload();setMessage(file?'Created '+file:'Material created.');
     }catch(e){setError(String(e instanceof Error?e.message:e))}
     finally{setBusy(false)}
   };
