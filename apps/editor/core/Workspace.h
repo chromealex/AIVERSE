@@ -150,7 +150,7 @@ public:
     Json buildLogChunk(int64_t from, int64_t expectedRun = -1);
     std::string buildLog() { std::lock_guard<std::mutex> lk(buildMutex_); return buildLog_; }
     // extraArgs: more aiversebuild flags (Build window: --estimate --out ..., --audio, --no-atlas, ...)
-    void startBuild(const std::string& target, const std::string& config, const std::string& extraArgs = "");
+    void startBuild(const std::string& target, const std::string& config, const std::string& extraArgs = "", const std::string& outputDir = "");
     int buildResult() { std::lock_guard<std::mutex> lk(buildMutex_); return buildRc_; }
     // Any aiversebuild run streamed into the same log (Build window / MCP): args after the executable;
     // `label` names the log file (logs/<label>-<time>.log); withProject adds --project / --engine.

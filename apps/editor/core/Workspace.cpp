@@ -492,11 +492,12 @@ std::string shellQuote(const std::string& s) {
 
 static std::string stamp(const char* fmt);
 
-void Workspace::startBuild(const std::string& target, const std::string& config, const std::string& extraArgs) {
+void Workspace::startBuild(const std::string& target, const std::string& config, const std::string& extraArgs, const std::string& outputDir) {
     if (project.dir.empty()) throw std::runtime_error("no game is open");
     if (map.dirty && !map.path.empty() && !building_) map.save(map.path, nullptr);
     const bool estimate = extraArgs.find("--estimate") != std::string::npos;   // the Build window's size estimate: one file, overwritten
-    startTool("--target " + target + " --config " + config + (extraArgs.empty() ? "" : " " + extraArgs), estimate ? "estimate" : "build-" + target, true);
+    startTool("--target " + target + " --config " + config + (extraArgs.empty() ? "" : " " + extraArgs) +
+              (outputDir.empty() ? "" : " --out " + shellQuote(outputDir)), estimate ? "estimate" : "build-" + target, true);
 }
 
 namespace {

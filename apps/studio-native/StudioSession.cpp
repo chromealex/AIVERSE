@@ -2495,7 +2495,7 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
         if (ws_.map.dirty || ws_.project.rulesDirty || ws_.project.manifestDirty)
             throw std::runtime_error("Save the project before building");
         if (params.getBool("estimate"))
-            ws_.startBuild(target, config, "--estimate --out '" + (builds / ".temp" / "estimate").string() + "'");
+            ws_.startBuild(target, config, "--estimate", (builds / ".temp" / "estimate").string());
         else ws_.startBuild(target, config, params.getBool("installMissing") ? "--install-missing" : "");
         Json out = Json::object(); out.set("started", Json::fromBool(true));
         return out;
