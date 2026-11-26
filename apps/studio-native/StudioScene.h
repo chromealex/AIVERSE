@@ -405,6 +405,7 @@ public:
     void setNatureLayers(bool wind,bool fire,float radius,float spacing) {
         natureWind_=wind;natureFire_=fire;natureRadius_=radius;natureSpacing_=spacing;
     }
+    void setTreeWindVisible(bool value){treeWindVisible_=value;}
     void setTileSlope(bool value){tileSlope_=value;}
     void setCameraSlope(bool value){cameraSlope_=value;}
     void setRiverFlowVisible(bool value){riverFlowVisible_=value;}
@@ -798,6 +799,7 @@ private:
     std::shared_ptr<const world::NaturePresentationFrame> natureFrame_;
     float natureRadius_=48.f,natureSpacing_=6.f;
     const editor::TerrainTileSurface* groundTiles(const editor::MapDoc& map,std::optional<editor::TerrainTileSurface>& dragSurface);
+    bool treeWindVisible_=true;
     bool tileSlope_=true,cameraSlope_=false;
     bool riverFlowVisible_=true,allRiverFlows_=false;
     bool natureWind_=false,natureFire_=false;

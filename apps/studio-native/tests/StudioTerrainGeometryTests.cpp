@@ -1,3 +1,4 @@
+#include "apps/editor/core/TreeWindGizmo.h"
 #include "apps/editor/core/TerrainSlopeArrows.h"
 #include "apps/editor/core/RiverFlowGizmos.h"
 #include "apps/editor/core/TerrainTileSurface.h"
@@ -21,6 +22,31 @@ using namespace aiverse::render;
 #include "apps/studio-native/StudioMapAreaBounds.h"
 
 int main() {
+    {
+        editor::DocEntity tree;
+        tree.x=4;tree.z=6;
+        AIVERSE_TEST_CHECK(!editor::isWindGizmoTree(tree));
+        tree.type="TerraTreeOak";
+        AIVERSE_TEST_CHECK(editor::isWindGizmoTree(tree));
+        tree.type="oak";
+        tree.extra=Json::parse(R"({"components":{"TerraTree":{},"Transform":{"y":2}}})");
+        AIVERSE_TEST_CHECK(editor::isWindGizmoTree(tree));
+        render::wind::SceneWind wind;
+        wind.x=-60;
+        int samples=0,arrows=0,rings=0;
+        float baseY=2;
+        const auto check=[&]{
+            editor::treeWindGizmo(tree,wind,[&](float,float){++samples;return 5.f;},
+                [&](auto a,auto b,auto){AIVERSE_TEST_CHECK(a.y==baseY && b.y==a.y+12);},
+                [&](auto a,auto b,auto){++arrows;AIVERSE_TEST_CHECK(b.x==a.x-15 && b.y==a.y && b.z==a.z);},
+                [&](auto crown,auto){++rings;AIVERSE_TEST_CHECK(crown.x==4 && crown.y==17 && crown.z==6);});
+        };
+        check();
+        AIVERSE_TEST_CHECK(samples==0 && arrows==1 && rings==0);
+        tree.extra=Json::object();baseY=5;wind.x=.05f;
+        check();
+        AIVERSE_TEST_CHECK(samples==1 && arrows==1 && rings==1);
+    }
     {
         int count=0;
         const auto slope=[](float x,float z){return .3f*x+.4f*z;};

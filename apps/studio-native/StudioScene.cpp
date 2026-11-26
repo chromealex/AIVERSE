@@ -1,6 +1,7 @@
 #include "apps/editor/core/NatureFieldArrows.h"
 #include "apps/editor/core/RiverFlowGizmos.h"
 #include "apps/editor/core/TerrainSlopeArrows.h"
+#include "apps/editor/core/TreeWindGizmo.h"
 #include "apps/studio-native/StudioDocumentIds.h"
 #include "engine/render/BakedLighting.h"
 #include "engine/render/PrismaReportJson.h"
@@ -4474,6 +4475,35 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                 renderer_.line(edge.a,edge.b,color);
             }
         }
+        if(!planetaryChart && treeWindVisible_ && !selectedId.empty() && !hidden_.count(selectedId)){
+            const int index=studioMapEntityIndex(selectedId,doc);
+            if(index>=0 && editor::isWindGizmoTree(map.entities[size_t(index)])){
+                Overlay2D overlay{renderer_,view,float(framebufferWidth),float(framebufferHeight),view.ortho?.5f:view.zNear*1.4f};
+                const auto project=[&](float3 point,float2& p){
+                    return view.worldToScreen(point,overlay.W,overlay.H,p) && std::isfinite(p.x) && std::isfinite(p.y);
+                };
+                editor::treeWindGizmo(map.entities[size_t(index)],renderer_.sceneWind(),[&](float x,float z){
+                    const float base=terrainMeshHeight(map,x,z,levelHeight,baseTerrainView_);
+                    std::optional<editor::TerrainTileSurface> dragSurface;
+                    const auto* tiles=groundTiles(doc,dragSurface);
+                    return tiles?tiles->sample(x,z,base):base;
+                },[&](float3 a,float3 b,uint32_t color){
+                    float2 start,end;
+                    if(project(a,start)&&project(b,end))overlay.segment(start.x,start.y,end.x,end.y,2.f,color);
+                },[&](float3 a,float3 b,uint32_t color){overlay.arrow(a,b,3.f,color);},
+                [&](float3 crown,uint32_t color){
+                    float2 centre;
+                    if(!project(crown,centre))return;
+                    float2 last{centre.x+7,centre.y};
+                    for(int i=1;i<=16;++i){
+                        const float angle=i*(6.2831853f/16);
+                        float2 next{centre.x+7*std::cos(angle),centre.y+7*std::sin(angle)};
+                        overlay.segment(last.x,last.y,next.x,next.y,2.f,color);
+                        last=next;
+                    }
+                });
+            }
+        }
         if(!planetaryChart && (tileSlope_ || cameraSlope_)){
             const int selected=studioMapEntityIndex(selectedId,doc);
             const auto* tile=tileSlope_ && selected>=0 && !hidden_.count(selectedId) &&
@@ -5710,7 +5740,7 @@ uint64_t StudioScene::frameSignature(int width,int height,const editor::MapDoc& 
     vec(camera_.target);value(camera_.distance);value(camera_.pitch);value(camera_.yaw);value(camera_.fovY);
     value(camera_.ortho);value(autoIso_);value(tween_.active);
     ids(selection_);ids(hidden_);text(hover_);
-    value(tileSlope_);value(cameraSlope_);value(riverFlowVisible_);value(allRiverFlows_);value(tool_);value(localSpace_);value(gizmosVisible_);value(natureRadius_);value(natureSpacing_);value(natureWind_);value(natureFire_);value(natureFrame_.get());value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
+    value(treeWindVisible_);value(tileSlope_);value(cameraSlope_);value(riverFlowVisible_);value(allRiverFlows_);value(tool_);value(localSpace_);value(gizmosVisible_);value(natureRadius_);value(natureSpacing_);value(natureWind_);value(natureFire_);value(natureFrame_.get());value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
     value(drag_.axis);value(drag_.tool);text(drag_.id);vec(drag_.moveOffset);value(drag_.value);
     value(drag_.accumulated);value(drag_.lastAngle);value(drag_.snapping);
     value(marquee_.on);value(marquee_.x0);value(marquee_.y0);value(marquee_.x1);value(marquee_.y1);

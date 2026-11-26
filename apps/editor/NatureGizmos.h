@@ -16,6 +16,7 @@
 #include "apps/editor/core/NatureFieldArrows.h"
 #include "apps/editor/core/RiverFlowGizmos.h"
 #include "apps/editor/core/TerrainSlopeArrows.h"
+#include "apps/editor/core/TreeWindGizmo.h"
 #include "engine/render/Math3D.h"
 #include <algorithm>
 #include <cmath>
@@ -83,15 +84,7 @@ struct Painter {
     }
 };
 
-inline ImU32 speedColor(float t, int alpha = 230) {
-    // calm cyan -> strong white -> gale orange
-    t = std::clamp(t, 0.f, 1.f);
-    const float r = t < .5f ? 80 + 350 * t : 255;
-    const float g = t < .5f ? 200 + 110 * t : 255 - 160 * (t - .5f);
-    const float b = t < .5f ? 240 : 240 - 400 * (t - .5f);
-    return IM_COL32(int(std::clamp(r, 0.f, 255.f)), int(std::clamp(g, 0.f, 255.f)),
-                    int(std::clamp(b, 0.f, 255.f)), alpha);
-}
+
 
 inline float ground(Editor& ed, float x, float z) {
     const float h = ed.surfaceHeightAt(x, z);
@@ -118,7 +111,7 @@ inline void drawNatureGizmos(Editor& ed, const Viewport& vp, const render::Camer
         natureFieldArrows(*frame,cx,cz,radius,step,cfg.physisWind,cfg.physisFire,
             [&](float x,float z,float dx,float dz,bool fire,float strength){
                 const float y=ground(ed,x,z)+(fire?1.8f:1.2f);
-                const auto color=fire?IM_COL32(255,int(150-110*strength),40,240):speedColor(strength,200);
+                const auto color=fire?IM_COL32(255,int(150-110*strength),40,240):windGizmoColor(strength,200);
                 if(dx||dz)paint.arrow({x,y,z},{x+dx,y,z+dz},color,fire?3.f:1.6f);
                 else {ImVec2 p;if(paint.project({x,y,z},p))draw->AddCircle(p,6.f,color,12,2.5f);}
             });
@@ -153,20 +146,11 @@ inline void drawNatureGizmos(Editor& ed, const Viewport& vp, const render::Camer
                                e.extra["components"].has("TerraTerrain"))) {
             slopeHere = true; slopeX = e.x; slopeZ = e.z;
         }
-        if (cfg.terraTreeWind && (type.rfind("TerraTree", 0) == 0 || e.extra["components"].has("TerraTree"))) {
-            const float y = float(e.extra["components"]["Transform"]["y"].toDouble(ground(ed, e.x, e.z)));
-            const auto wind = ed.renderer().sceneWind();
-            const float speed = std::sqrt(wind.x * wind.x + wind.z * wind.z);
-            const render::float3 base{e.x, y, e.z}, crown{e.x, y + 12.f, e.z};
-            paint.line(base, crown, IM_COL32(200, 160, 110, 200), 2.f);
-            if (speed > 0.05f) {
-                const float len = 3.f + std::min(speed, 30.f) * 0.4f;
-                paint.arrow(crown, {crown.x + wind.x / speed * len, crown.y, crown.z + wind.z / speed * len},
-                            speedColor(speed / 20.f), 3.f);
-            } else {
-                ImVec2 p;
-                if (paint.project(crown, p)) draw->AddCircle(p, 7.f, IM_COL32(160, 220, 255, 200), 16, 2.f);
-            }
+        if(cfg.terraTreeWind && isWindGizmoTree(e)){
+            treeWindGizmo(e,ed.renderer().sceneWind(),[&](float x,float z){return ground(ed,x,z);},
+                [&](auto a,auto b,auto color){paint.line(a,b,color,2.f);},
+                [&](auto a,auto b,auto color){paint.arrow(a,b,color,3.f);},
+                [&](auto crown,auto color){ImVec2 p;if(paint.project(crown,p))draw->AddCircle(p,7.f,color,16,2.f);});
         }
     }
     if (!slopeHere && cfg.terraSlopeAtTarget) slopeHere = true;
