@@ -310,6 +310,7 @@ private:
     double nextMapSnapshot_ = 0, nextRulesCheck_ = 0;
     std::shared_ptr<StudioNaturePreview> naturePreview_,liveNatureView_;
     bool natureShowsGame_=false;
+    uint64_t liveNatureEpoch_=0;
     const auto& displayedNature() const { return natureShowsGame_?liveNatureView_:naturePreview_; }
     std::unique_ptr<StudioGameSurface> game_;
     Json playReview_;

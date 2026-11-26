@@ -43,6 +43,7 @@ public:
     std::shared_ptr<const world::NaturePresentationFrame> natureFrame(float x,float z,float radius);
     Json physisFieldEdit(const editor::Workspace& ws,const Json& request,bool apply);
     const World* localPhysisWorld() const;
+    uint64_t runtimeEpoch() const { return runtimeEpoch_; }
     std::optional<uint64_t> physisTick() const;
     Json physisFrame(const Json& params) const;
     Json planetForestState(const std::string& focusBody={},const std::optional<StudioForestCameraFocus>& camera={});

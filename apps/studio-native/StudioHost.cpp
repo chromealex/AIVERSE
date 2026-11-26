@@ -764,6 +764,14 @@ Json StudioHost::natureCommand(const Json& p) {
         }
         if (steps) out.set("advanced",Json::number(int64_t(state.preview.advance(steps))));
         Json event=Json::object();event.set("epoch",Json::string(epoch));
+        if (live && liveNatureView_ && liveNatureEpoch_==game_->runtimeEpoch() && liveNatureView_->epoch==epoch) {
+            auto& display=liveNatureView_->preview.settings;
+            if (p.has("volume"))display.volume=settings.volume;
+            if (p.has("grass"))display.grass=settings.grass;
+            if (p.has("flames"))display.flames=settings.flames;
+            if (p.has("sound"))display.sound=settings.sound;
+        }
+        if (p.has("enabled")) event.set("enabled",Json::fromBool(settings.enabled));
         if (p.getBool("enabled")) event.set("openSource",Json::string(live?"game":"map"));
         sendEventPayload("nature.command",event);
     }
@@ -794,15 +802,14 @@ void StudioHost::tickNaturePreview() {
     if (natureShowsGame_) {
         if (game_ && !ws.map.data.planet() && game_->launchedMapCurrent() && studioPlaySourceMatches(game_->launchPlan(),ws))
             source=game_->localPhysisWorld();
-        if (source && (!liveNatureView_ || liveNatureView_->epoch!=epoch || liveNatureView_->revision!=ws.map.revision)) {
+        if (source && (!liveNatureView_ || liveNatureView_->epoch!=epoch || liveNatureView_->revision!=ws.map.revision || liveNatureEpoch_!=game_->runtimeEpoch())) {
             if (surface.renderer) onScene([&]{surface.renderer.reset();});
             liveNatureView_=std::make_shared<StudioNaturePreview>(epoch,ws.map,float(ws.project.rules.levelHeight.toDouble()),
-                editor::PhysisNaturePreviewSettings{},false);
+                naturePreview_ && naturePreview_->epoch==epoch && naturePreview_->revision==ws.map.revision?
+                    naturePreview_->preview.settings:editor::PhysisNaturePreviewSettings{},false);
+            liveNatureEpoch_=game_->runtimeEpoch();
         }
         if (!source) liveNatureView_.reset();
-        if (source && naturePreview_ && naturePreview_->epoch==epoch && naturePreview_->revision==ws.map.revision) {
-            liveNatureView_->preview.settings=naturePreview_->preview.settings;
-        }
     } else if (naturePreview_) source=naturePreview_->preview.previewWorld();
     const auto& shown=displayedNature();
     if (!source || !shown || !shown->preview.settings.enabled || shown->epoch!=epoch || shown->revision!=ws.map.revision) {
@@ -3504,7 +3511,7 @@ void StudioHost::applyViewport(const Json& params) {
             if (surface==StudioSurface::Nature && placed.visible && natureShowsGame_!=params.getBool("liveNature")) {
                 natureShowsGame_=params.getBool("liveNature");
                 if (asset.renderer) onScene([&]{asset.renderer.reset();});
-                liveNatureView_.reset();
+                if(liveNatureView_)liveNatureView_->presentation=Json::object();
             }
             asset.placement=placed;
             if(!placed.visible){asset.error.clear();if(surface!=StudioSurface::ImportedClip&&surface!=StudioSurface::SourceModel&&surface!=StudioSurface::GpuEmitter&&surface!=StudioSurface::EffectFile&&surface!=StudioSurface::LensCamera&&surface!=StudioSurface::Attachments&&asset.renderer)onScene([&]{asset.renderer.reset();});}
@@ -4102,15 +4109,30 @@ bool StudioHost::handleHostMethod(const Json& req) {
         const auto& project=session_->workspace().project.dir;
         if(project.empty() || projectLoading_ || params.getStr("expectedProject")!=project)
             throw std::runtime_error("PHYSIS project changed; reopen the panel");
+        const bool edit=params.getStr("action","view")=="presentation";
+        if (!edit && params.getStr("action","view")!="view") throw std::runtime_error("The live simulation is read-only.");
         if(game_ && game_->launchPlan().project==project) {
             auto frame=game_->physisFrame(params);
             const auto& ws=session_->workspace();
             const bool current=frame.getBool("active") && !ws.map.data.planet() && game_->launchedMapCurrent() && studioPlaySourceMatches(game_->launchPlan(),ws);
             frame.set("canShowNature",Json::fromBool(current));
-            if (current && natureShowsGame_ && liveNatureView_ && natureSurface_.placement.visible)
+            const bool visible=current && natureShowsGame_ && liveNatureView_ && natureSurface_.placement.visible &&
+                liveNatureEpoch_==game_->runtimeEpoch() && liveNatureView_->epoch==session_->graphDocumentScope().getStr("epoch") &&
+                liveNatureView_->revision==ws.map.revision;
+            if (edit) {
+                if (!visible || params.getStr("expectedDocumentEpoch")!=liveNatureView_->epoch ||
+                    params.getStr("runtimeEpoch")!=std::to_string(liveNatureEpoch_) || params.has("igniteOnClick"))
+                    throw std::runtime_error("Reopen the current play-test viewport to change its display.");
+                liveNatureView_->setDisplay(params);
+            }
+            if (visible) {
                 frame.set("livePresentation",liveNatureView_->presentation);
+                frame.set("presentation",liveNatureView_->displayStatus());
+                frame.set("runtimeEpoch",Json::string(std::to_string(liveNatureEpoch_)));
+            }
             return frame;
         }
+        if(edit)throw std::runtime_error("The play-test has stopped.");
         Json out=Json::object();out.set("active",Json::fromBool(false));return out;
     });
     if(method=="studio.planetForestLive")return answer([&]{return planetForestLiveRequest();});

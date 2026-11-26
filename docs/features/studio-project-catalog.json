@@ -272,7 +272,7 @@
   "checks": {
     "implementation": {
       "status": "pass",
-      "note": "Project catalog and HTML Studio parity, including private PHYSIS grid, shoreline rebuilds and linked window activation, capture and read-only game presentation.",
+      "note": "Project catalog and HTML Studio parity, including private PHYSIS grid, shoreline rebuilds and linked window activation, capture and read-only game presentation with local layer controls.",
       "evidence": [
         "apps/studio-web/src/panels/generated/ProjectPanel.tsx"
       ]

@@ -76,7 +76,7 @@ function Diagnostics({projectPath,source,epoch,route}:{projectPath:string;source
     workspace.current?.querySelector('.asset-native-surface')?.scrollIntoView({block:'center',inline:'nearest'});
     route.consume();
   },[route?.request,showNature,!!frame,map]);
-  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback'|'grid'|'presentation',next:View,selection:number|{cellX:number;cellZ:number}|undefined=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}|{cellMeters:number;humidity:number;shoreSand:number}|{quality?:number;volume?:number;igniteOnClick?:boolean;grass?:boolean;flames?:boolean;sound?:boolean}){
+  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback'|'grid'|'presentation',next:View,selection:number|{cellX:number;cellZ:number}|undefined=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}|{cellMeters:number;humidity:number;shoreSand:number}|{quality?:number;volume?:number;igniteOnClick?:boolean;grass?:boolean;flames?:boolean;sound?:boolean},background=false){
     const id=++requestId.current;
     const sameArea=next.size===view.size&&next.stride===view.stride&&next.centerX===view.centerX&&next.centerZ===view.centerZ;
     const rebuild=action==='reset'||action==='grid';
@@ -85,10 +85,11 @@ function Diagnostics({projectPath,source,epoch,route}:{projectPath:string;source
     const coords=target??(frame&&selected!==undefined?{cellX:frame.originX+(selected%frame.width)*frame.stride,cellZ:frame.originZ+Math.floor(selected/frame.width)*frame.stride}:{});
     pending.current=true;
     if(rebuild)setPlaying(false);
-    if(action!=='playback')setBusy(true);
+    if(action!=='playback'&&!background)setBusy(true);
     setError('');
     try{
-      const result=map?await invoke('studio.physisNature',{...next,...coords,...options,action,expectedProject:projectPath,expectedDocumentEpoch:epoch}):live?await invoke('studio.physisLive',{...next,...coords,expectedProject:projectPath}):
+      const result=map?await invoke('studio.physisNature',{...next,...coords,...options,action,expectedProject:projectPath,expectedDocumentEpoch:epoch}):live?await invoke('studio.physisLive',{...next,...coords,...options,action:action==='presentation'?'presentation':'view',
+          expectedProject:projectPath,expectedDocumentEpoch:epoch,runtimeEpoch:frame?.runtimeEpoch}):
         (await invoke('studio.op',{op:'physis_demo',params:{action,...next},expectedProject:projectPath})).result as Frame|{active:false};
       if(id!==requestId.current)return;
       if(result.active&&target){
@@ -101,6 +102,8 @@ function Diagnostics({projectPath,source,epoch,route}:{projectPath:string;source
   }
   useEffect(()=>{void request('view',initial);return ()=>{requestId.current++;};},[projectPath]);
   useEffect(()=>onNativeEvent((event,payload)=>{
+    if(event==='nature.command'&&live&&(payload as {epoch?:string;enabled?:boolean}).epoch===epoch&&
+      (payload as {enabled?:boolean}).enabled===false)setShowNature(false);
     if(event==='nature.command'&&map&&(payload as {epoch?:string}).epoch===epoch){setPlaying(false);void request('view',view);}
     if(event==='nature.ignition'&&showNature){
       const hit=payload as {epoch?:string;cellX:number;cellZ:number;message?:string};
@@ -117,7 +120,7 @@ function Diagnostics({projectPath,source,epoch,route}:{projectPath:string;source
     }
   }));
   const refreshLive=useRef(()=>{});
-  refreshLive.current=()=>{if(!pending.current)void request('view',view);};
+  refreshLive.current=()=>{if(!pending.current)void request('view',view,cell,undefined,true);};
   useEffect(()=>{
     if(!live||!showNature)return;
     const timer=window.setInterval(()=>refreshLive.current(),500);
@@ -158,7 +161,7 @@ function Diagnostics({projectPath,source,epoch,route}:{projectPath:string;source
           <StudioButton aria-pressed={showNature} onClick={()=>setShowNature(true)}>3D nature</StudioButton>
         </div>}{(map||frame.canShowNature)&&showNature?<><SpectraDockViewport id="nature" liveNature={live} label="3D nature preview"/>
           {frame.presentation&&<div className="physis-display-options">
-            {([['igniteOnClick','Ignite on click'],['grass','Grass'],['flames','Fire and smoke'],['sound','Sound']] as const).map(([key,label])=>
+            {([['igniteOnClick','Ignite on click'],['grass','Grass'],['flames','Fire and smoke'],['sound','Sound']] as const).filter(([key])=>map||key!=='igniteOnClick').map(([key,label])=>
               <label key={key}><input type="checkbox" checked={frame.presentation![key]}
                 onChange={event=>void request('presentation',view,cell,{[key]:event.target.checked})}/>{label}</label>)}
           </div>}{frame.presentation&&<PhysisDisplaySettings

@@ -30,9 +30,7 @@ struct StudioNaturePreview {
         });
     }
 
-    Json read(const Json& params) const {
-        auto frame=editor::readPhysisGameFrame(preview.previewWorld(),params);
-        if (!frame.getBool("active")) return frame;
+    Json displayStatus() const {
         auto status=presentation;
         status.set("igniteOnClick",Json::fromBool(preview.settings.igniteOnClick));
         status.set("quality",Json::number(int64_t(preview.settings.grassQuality)));
@@ -40,7 +38,31 @@ struct StudioNaturePreview {
         status.set("grass",Json::fromBool(preview.settings.grass));
         status.set("flames",Json::fromBool(preview.settings.flames));
         status.set("sound",Json::fromBool(preview.settings.sound));
-        frame.set("presentation",std::move(status));
+        return status;
+    }
+
+    void setDisplay(const Json& params) {
+        for (const char* key:{"grass","flames","sound","igniteOnClick"})
+            if (params.has(key) && params[key].type()!=Json::Type::Bool)
+                throw std::runtime_error("Invalid nature presentation setting");
+        const double quality=params["quality"].toDouble(preview.settings.grassQuality);
+        const double volume=params["volume"].toDouble(preview.settings.volume);
+        if ((params.has("quality") && !params["quality"].isNumber()) || !std::isfinite(quality) ||
+            quality!=std::floor(quality) || quality<0 || quality>2 ||
+            (params.has("volume") && !params["volume"].isNumber()) || !std::isfinite(volume) || volume<0 || volume>1)
+            throw std::runtime_error("Invalid grass quality or preview volume.");
+        preview.settings.grassQuality=int(quality);
+        preview.settings.volume=float(volume);
+        if (params.has("igniteOnClick")) preview.settings.igniteOnClick=params.getBool("igniteOnClick");
+        if (params.has("grass")) preview.settings.grass=params.getBool("grass");
+        if (params.has("flames")) preview.settings.flames=params.getBool("flames");
+        if (params.has("sound")) preview.settings.sound=params.getBool("sound");
+    }
+
+    Json read(const Json& params) const {
+        auto frame=editor::readPhysisGameFrame(preview.previewWorld(),params);
+        if (!frame.getBool("active")) return frame;
+        frame.set("presentation",displayStatus());
         Json wind=Json::object();
         wind.set("speed",Json::number(double(preview.settings.windSpeed)));
         wind.set("direction",Json::number(double(preview.settings.windDirectionDeg)));
@@ -84,21 +106,7 @@ struct StudioNaturePreview {
             preview.settings.windDirectionDeg=float(d);
             preview.applyWindSettings();
         } else if (action=="presentation") {
-            for (const char* key:{"grass","flames","sound","igniteOnClick"})
-                if (params.has(key) && params[key].type()!=Json::Type::Bool)
-                    throw std::runtime_error("Invalid nature presentation setting");
-            const double quality=params["quality"].toDouble(preview.settings.grassQuality);
-            const double volume=params["volume"].toDouble(preview.settings.volume);
-            if ((params.has("quality") && !params["quality"].isNumber()) || !std::isfinite(quality) ||
-                quality!=std::floor(quality) || quality<0 || quality>2 ||
-                (params.has("volume") && !params["volume"].isNumber()) || !std::isfinite(volume) || volume<0 || volume>1)
-                throw std::runtime_error("Invalid grass quality or preview volume.");
-            preview.settings.grassQuality=int(quality);
-            preview.settings.volume=float(volume);
-            if (params.has("igniteOnClick")) preview.settings.igniteOnClick=params.getBool("igniteOnClick");
-            if (params.has("grass")) preview.settings.grass=params.getBool("grass");
-            if (params.has("flames")) preview.settings.flames=params.getBool("flames");
-            if (params.has("sound")) preview.settings.sound=params.getBool("sound");
+            setDisplay(params);
         } else if (action=="ignite") {
             if (!frame["cell"].getBool("available")) throw std::runtime_error("Select a PHYSIS cell first.");
             const auto* state=preview.previewWorld()->resourceConst<physis::State>();
