@@ -1081,3 +1081,5 @@ b7f624c341654142b25164f98228a3cddce53aee wired the authenticated EditorLink into
 Transfer grass, fire/smoke and audio layer controls, quality and gain to the local game PHYSIS viewport. Verify that display-only edits preserve paused ECS and private preview settings.
 
 80cebef08ba2a1b99111261abc4ba900088b6091 verified live grass, fire/smoke and audio toggles at paused game tick 2 in packaged Mac Studio. All three renderer counters reached zero; grass High set cap 4608, gain 25% reached the audio engine. Invalid quality, ignition and stale runtime rejected. Private map remained at tick 1, medium and 80%. Resume matched tick 26; stop removed drawable. TypeScript, Vite, 299 web checks, 2 focused CTests and native build passed. Evidence docs/evidence/studio-physis-live-display.json and docs/evidence/studio-project-catalog/physis-live-display.png. Next separate MCP live disable/enable from the private world and verify restoration, then transfer the diagnostic overlay.
+
+Separate the MCP live viewport lifecycle from the private preview world; verify disable, enable, hidden capture and preserved presentation settings and ticks across both sources.
