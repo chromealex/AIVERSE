@@ -15,6 +15,7 @@
 #include "Editor.h"
 #include "apps/editor/core/NatureFieldArrows.h"
 #include "apps/editor/core/RiverFlowGizmos.h"
+#include "apps/editor/core/TerrainSlopeArrows.h"
 #include "engine/render/Math3D.h"
 #include <algorithm>
 #include <cmath>
@@ -170,20 +171,8 @@ inline void drawNatureGizmos(Editor& ed, const Viewport& vp, const render::Camer
     }
     if (!slopeHere && cfg.terraSlopeAtTarget) slopeHere = true;
     if (slopeHere) {
-        const float sx = std::floor(slopeX / step) * step, sz = std::floor(slopeZ / step) * step;
-        for (float z = sz - radius; z <= sz + radius; z += step)
-            for (float x = sx - radius; x <= sx + radius; x += step) {
-                if ((x - sx) * (x - sx) + (z - sz) * (z - sz) > radius * radius) continue;
-                const float h = ground(ed, x, z);
-                const float gx = (ground(ed, x + 1.f, z) - ground(ed, x - 1.f, z)) * .5f;
-                const float gz = (ground(ed, x, z + 1.f) - ground(ed, x, z - 1.f)) * .5f;
-                const float g = std::sqrt(gx * gx + gz * gz);
-                if (g < 0.02f) continue;   // flatter than 2%
-                const float t = std::clamp(g / 0.6f, 0.f, 1.f);   // 60% slope = red
-                const float len = step * (0.35f + 0.5f * t);
-                paint.arrow({x, h + 0.4f, z}, {x - gx / g * len, h + 0.4f - g * len, z - gz / g * len},
-                            IM_COL32(int(120 + 135 * t), int(220 - 150 * t), 80, 210), 1.8f);
-            }
+        terrainSlopeArrows(slopeX,slopeZ,radius,step,[&](float x,float z){return ground(ed,x,z);},
+            [&](auto a,auto b,float t){paint.arrow(a,b,IM_COL32(int(120+135*t),int(220-150*t),80,210),1.8f);});
     }
     // ---- Erosion zones: where the ground erodes and how fast.
     if (cfg.erosionZones) {

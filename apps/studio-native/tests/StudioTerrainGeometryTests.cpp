@@ -1,3 +1,4 @@
+#include "apps/editor/core/TerrainSlopeArrows.h"
 #include "apps/editor/core/RiverFlowGizmos.h"
 #include "apps/editor/core/TerrainTileSurface.h"
 #include "apps/studio-native/StudioTerrainGeometry.h"
@@ -20,6 +21,19 @@ using namespace aiverse::render;
 #include "apps/studio-native/StudioMapAreaBounds.h"
 
 int main() {
+    {
+        int count=0;
+        const auto slope=[](float x,float z){return .3f*x+.4f*z;};
+        editor::terrainSlopeArrows(5,7,8,4,slope,[&](float3 a,float3 b,float strength){
+            AIVERSE_TEST_CHECK(std::hypot(a.x-4,a.z-4)<=8);
+            AIVERSE_TEST_CHECK(a.x>b.x && a.z>b.z && std::abs(b.y-slope(b.x,b.z)-.4f)<1.e-5f);
+            AIVERSE_TEST_CHECK(std::abs(strength-5.f/6.f)<1.e-5f);
+            ++count;
+        });
+        AIVERSE_TEST_CHECK(count==13);
+        editor::terrainSlopeArrows(0,0,8,4,[](float,float){return 2.f;},[&](auto,auto,float){++count;});
+        AIVERSE_TEST_CHECK(count==13);
+    }
     {
         editor::DocEntity river;
         river.x=4;river.z=8;

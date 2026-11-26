@@ -582,3 +582,5 @@ Packaged macOS HTML Studio verified linked view_ground on overlapping sloped ter
 Transfer NEREID river direction and bank gizmos to the Scene overlays menu, for the selected river or all rivers.
 
 Packaged macOS Studio verified the selected-river and all-rivers controls, direction and bank rendering, hidden entity filtering, and unchanged map files. [River overlay evidence](evidence/studio-river-flow-desktop.json).
+
+Transfer TERRA downhill arrows at the selected terrain tile or camera target. Use the same displayed ground sampler as linked view_ground. Verify both modes, field spacing and clean output.

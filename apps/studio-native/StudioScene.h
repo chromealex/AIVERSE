@@ -405,6 +405,8 @@ public:
     void setNatureLayers(bool wind,bool fire,float radius,float spacing) {
         natureWind_=wind;natureFire_=fire;natureRadius_=radius;natureSpacing_=spacing;
     }
+    void setTileSlope(bool value){tileSlope_=value;}
+    void setCameraSlope(bool value){cameraSlope_=value;}
     void setRiverFlowVisible(bool value){riverFlowVisible_=value;}
     void setAllRiverFlows(bool value){allRiverFlows_=value;}
     void setWorldAxes(bool visible) { worldAxes_ = visible; }
@@ -795,6 +797,8 @@ private:
     bool regionBordersDirty_=true;
     std::shared_ptr<const world::NaturePresentationFrame> natureFrame_;
     float natureRadius_=48.f,natureSpacing_=6.f;
+    const editor::TerrainTileSurface* groundTiles(const editor::MapDoc& map,std::optional<editor::TerrainTileSurface>& dragSurface);
+    bool tileSlope_=true,cameraSlope_=false;
     bool riverFlowVisible_=true,allRiverFlows_=false;
     bool natureWind_=false,natureFire_=false;
     bool worldAxes_ = false, objectBounds_ = false, selectionBoxVisible_ = true;

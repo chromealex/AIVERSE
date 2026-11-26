@@ -3796,6 +3796,8 @@ Json StudioHost::viewportInput(const Json& input) {
             for (int i = 0; i < 4; ++i) if (t == names[i]) preview_->setTransformTool(StudioScene::TransformTool(i));
             if (realBool("local")) preview_->setLocalSpace(input["local"].boolean());
             preview_->setNatureLayers(natureWind_,natureFire_,natureRadius_,natureSpacing_);
+            if(realBool("terraSlope"))preview_->setTileSlope(input["terraSlope"].boolean());
+            if(realBool("terraSlopeAtTarget"))preview_->setCameraSlope(input["terraSlopeAtTarget"].boolean());
             if(realBool("nereidFlow"))preview_->setRiverFlowVisible(input["nereidFlow"].boolean());
             if(realBool("nereidAllWater"))preview_->setAllRiverFlows(input["nereidAllWater"].boolean());
             if (realBool("worldAxes")) preview_->setWorldAxes(input["worldAxes"].boolean());
