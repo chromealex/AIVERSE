@@ -507,6 +507,7 @@
     "docs/evidence/studio-planet-detail-seams.json",
     "docs/evidence/studio-planet-material-tint.json",
     "docs/evidence/studio-planet-named-material.json",
-    "docs/evidence/studio-static-geometry-game.json"
+    "docs/evidence/studio-static-geometry-game.json",
+    "docs/evidence/studio-static-geometry-authoring.json"
   ]
 }
