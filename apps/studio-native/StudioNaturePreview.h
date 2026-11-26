@@ -13,6 +13,8 @@ struct StudioNaturePreview {
     std::uint64_t revision;
     std::uint64_t ignitionRevision=0;
     bool forestEnabled=false;
+    bool forestHorizon=false;
+    float forestLodScale=1;
     bool forestFramed=false;
     render::wind::WindDebugView forestMask=render::wind::WindDebugView::Off;
     bool commandPlaying=false;
@@ -38,6 +40,8 @@ struct StudioNaturePreview {
 
     Json displayStatus() const {
         auto status=presentation;
+        status.set("horizon",Json::fromBool(forestHorizon));
+        status.set("lodScale",Json::number(double(forestLodScale)));
         status.set("forestMask",Json::string(windDebugName(forestMask)));
         status.set("forest",Json::fromBool(forestEnabled));
         status.set("overlayRadius",Json::number(int64_t(overlay.radiusCells)));
@@ -55,7 +59,7 @@ struct StudioNaturePreview {
     }
 
     void setDisplay(const Json& params) {
-        for (const char* key:{"forest","grass","flames","sound","igniteOnClick","fieldOverlay","overlayVolumes"})
+        for (const char* key:{"forest","horizon","grass","flames","sound","igniteOnClick","fieldOverlay","overlayVolumes"})
             if (params.has(key) && params[key].type()!=Json::Type::Bool)
                 throw std::runtime_error("Invalid nature presentation setting");
         const double quality=params["quality"].toDouble(preview.settings.grassQuality);
@@ -80,7 +84,10 @@ struct StudioNaturePreview {
         const auto radius=setting("overlayRadius",overlay.radiusCells,6,24,true);
         const auto stride=setting("overlayStride",overlay.stride,1,4,true);
         const auto alpha=setting("overlayAlpha",overlay.alpha,.1,.8,false);
+        const auto lodScale=setting("lodScale",forestLodScale,.25,4,false);
         if (params.has("forestMask")) forestMask=parseWindDebugView(params["forestMask"]);
+        forestLodScale=float(lodScale);
+        if (params.has("horizon")) forestHorizon=params.getBool("horizon");
         if (params.has("forest")) {
             forestEnabled=params.getBool("forest");
             if (forestEnabled && !forestFramed) {

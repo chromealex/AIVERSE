@@ -76,7 +76,7 @@ function Diagnostics({projectPath,source,epoch,route}:{projectPath:string;source
     workspace.current?.querySelector('.asset-native-surface')?.scrollIntoView({block:'center',inline:'nearest'});
     route.consume();
   },[route?.request,showNature,!!frame,map]);
-  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback'|'grid'|'presentation',next:View,selection:number|{cellX:number;cellZ:number}|undefined=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}|{cellMeters:number;humidity:number;shoreSand:number}|{overlayRadius?:number;overlayStride?:number;overlayAlpha?:number;overlayVolumes?:boolean;quality?:number;volume?:number;igniteOnClick?:boolean;forest?:boolean;forestMask?:string;grass?:boolean;flames?:boolean;sound?:boolean},background=false){
+  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback'|'grid'|'presentation',next:View,selection:number|{cellX:number;cellZ:number}|undefined=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}|{cellMeters:number;humidity:number;shoreSand:number}|{overlayRadius?:number;overlayStride?:number;overlayAlpha?:number;overlayVolumes?:boolean;quality?:number;volume?:number;igniteOnClick?:boolean;forest?:boolean;forestMask?:string;horizon?:boolean;lodScale?:number;grass?:boolean;flames?:boolean;sound?:boolean},background=false){
     const id=++requestId.current;
     const sameArea=next.size===view.size&&next.stride===view.stride&&next.centerX===view.centerX&&next.centerZ===view.centerZ;
     const rebuild=action==='reset'||action==='grid';
@@ -164,11 +164,19 @@ function Diagnostics({projectPath,source,epoch,route}:{projectPath:string;source
             {([['igniteOnClick','Ignite on click'],['fieldOverlay','Field overlay'],['forest','Forest'],['grass','Grass'],['flames','Fire and smoke'],['sound','Sound']] as const).filter(([key])=>map||key!=='igniteOnClick').map(([key,label])=>
               <label key={key}><input type="checkbox" checked={frame.presentation![key]}
                 onChange={event=>void request('presentation',view,cell,{[key]:event.target.checked})}/>{label}</label>)}
-          </div>}{frame.presentation?.forest&&<label>Wind mask
+          </div>}{frame.presentation?.forest&&<div className="physis-controls"><label>Wind mask
             <StudioSelect value={frame.presentation.forestMask??'off'} onChange={e=>void request('presentation',view,cell,{forestMask:e.target.value})}>
               <option value="off">Off</option><option value="parts">Tree parts</option>
               <option value="depth">Branch depth</option><option value="weight">Wind weight</option><option value="skeleton">Skeleton</option>
-            </StudioSelect></label>}{frame.presentation&&<PhysisDisplaySettings
+            </StudioSelect></label>
+            <label>Tree detail distance
+              <StudioSelect value={frame.presentation.lodScale??1} onChange={e=>void request('presentation',view,cell,{lodScale:Number(e.target.value)})}>
+                {Array.from(new Set([.25,.5,1,2,4,frame.presentation.lodScale??1])).sort((a,b)=>a-b).map(scale=><option key={scale} value={scale}>{scale}×</option>)}
+              </StudioSelect>
+            </label>
+            <label><input type="checkbox" checked={frame.presentation.horizon??false}
+              onChange={e=>void request('presentation',view,cell,{horizon:e.target.checked})}/>Distant forest</label>
+          </div>}{frame.presentation&&<PhysisDisplaySettings
             key={frame.presentation.quality+'/'+frame.presentation.volume+'/'+frame.presentation.grass+'/'+frame.presentation.sound}
             settings={frame.presentation} apply={(quality,volume)=>void request('presentation',view,cell,{quality,volume})}/>}
           {frame.presentation?.fieldOverlay&&<form aria-label="3D field overlay" className="physis-controls"

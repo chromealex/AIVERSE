@@ -3394,6 +3394,7 @@ Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,con
     render::Camera camera;
     camera.target={map.data.w*.5f,heightAt(map.data.w*.5f,map.data.h*.5f),map.data.h*.5f};
     camera.distance=state.distance;camera.pitch=state.pitch;camera.yaw=state.yaw;
+    if (state.forestEnabled && state.forestHorizon) camera.zFar=std::max(camera.zFar,14000.f);
     view.renderedCamera=camera;
     if(view.ignition!=state.ignitionRevision || view.display.settings.grass!=state.preview.settings.grass)
         view.display.invalidateFrame();
@@ -3412,6 +3413,8 @@ Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,con
     view.display.draw(*device_,renderer_,particles,view.read,map,&source,camera,seconds,heightAt,retire);
     renderer_.setSceneWind(view.display.sceneWind(seconds));
     renderer_.setWindRigDebugView(state.forestEnabled?state.forestMask:render::wind::WindDebugView::Off);
+    view.forest.setLodScale(state.forestLodScale);
+    view.forest.setHorizon(state.forestHorizon);
     view.forest.setEnabled(state.forestEnabled);
     if (state.forestEnabled) {
         const auto eye=renderer_.cameraPos();

@@ -615,3 +615,4 @@ Feed the private viewport renderer from the sampled PHYSIS wind after the nature
 Expose the Parts, Depth and Weight GPU forest masks in PHYSIS. Skeleton line rendering requires separate geometry.
 
 Render the forest skeleton from the encoded wind rig and actual per-instance draw transform. Verify the fifth dropdown mode in the independent PHYSIS viewport.
+Expose the TerraWeave forest LOD scale and horizon in the private PHYSIS viewport. Verify controls, projection range and terrain-map persistence on macOS.
