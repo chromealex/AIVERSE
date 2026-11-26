@@ -2,6 +2,7 @@
 // Live game ECS is NEVER mutated here. The offline demo owns an independent
 // World and can be stepped explicitly, even when the current project has no PHYSIS.
 #include "../Editor.h"
+#include "../PhysisDiagnosticDemo.h"
 #include "../EditorUtil.h"
 #include "../PhysisSceneOverlay.h"
 #include "../PhysisFieldEditor.h"
@@ -399,53 +400,7 @@ private:
     }
 
     void makeDemo() {
-        demo_ = std::make_unique<aiverse::World>();
-        Settings config;
-        config.originX = -16;
-        config.originZ = -16;
-        config.width = 32;
-        config.height = 32;
-        config.cellSizeMeters = 100;
-        config.seed = 307;
-        initialize(*demo_, config);
-        initializeDisasters(*demo_);
-
-        // Gradient provides a useful heatmap even without a weather tick.
-        for (const auto entity : demo_->resourceConst<State>()->cells) {
-            const auto* cell = demo_->tryGetConst<Cell>(entity);
-            if (!cell) continue;
-            ClimateZone zone;
-            zone.temperatureOffset = Fixed::fromInt(cell->x);
-            zone.humidityOffset = Fixed::fromRatio(cell->z, 64);
-            demo_->add<ClimateZone>(entity, zone);
-        }
-        StormEvent storm;
-        storm.kind = StormKind::Tornado;
-        storm.center = {150_fx, 0_fx, 50_fx};
-        storm.eyeRadiusMeters = 100_fx;
-        storm.outerRadiusMeters = 900_fx;
-        storm.heightMeters = 600_fx;
-        storm.tangentialWind = 55_fx;
-        storm.updraft = 35_fx;
-        storm.pressureDrop = 45_fx;
-        storm.precipitationBoost = Fixed::fromRatio(3, 4);
-        demo_->add<StormEvent>(demo_->create(), storm);
-        WindZone zone;
-        zone.center = {-600_fx, 0_fx, -350_fx};
-        zone.radiusMeters = 1100_fx;
-        zone.velocity = {25_fx, 1_fx, -5_fx};
-        zone.gustAmplitude = 6_fx;
-        demo_->add<WindZone>(demo_->create(), zone);
-        GravityField gravity;
-        gravity.center = {-200_fx, 0_fx, 350_fx};
-        gravity.radiusMeters = 600_fx;
-        gravity.mode = GravityMode::Uniform;
-        gravity.acceleration = {};
-        gravity.overrideBaseline = true;
-        demo_->add<GravityField>(demo_->create(), gravity);
-        (void)ignite(*demo_, 2, 2);
-        for (int i = 0; i < 25; ++i)
-            advanceEnvironmentWithStormsAndDisasters(*demo_, FloodMode::ExternalAuthority);
+        demo_ = makePhysisDiagnosticDemo();
         showDemo_ = true;
         centerX_ = centerZ_ = 0;
         selected_ = -1;

@@ -23,4 +23,8 @@ These operations do not tick, install, or modify a live simulation, remote serve
 
 Validate native operation behavior with the existing `physis_authoring` CTest via `run-tests.sh`; it covers rejection without mutation, stale revisions, no-op, removal, Undo/Redo and FPS document routing. Check actual MCP tools/list and tools/call too. For this workspace, builds and compiler temporary/module-cache files belong on KINGSTON as requested by the owner. A diagnostic demo or headless test does not prove host integration or visual quality.
 
+## Inspect the isolated diagnostic demo
+
+Use `physis_demo` with `{"action":"reset"}` to create a private seeded ECS world. Sample it with `{"action":"view","layer":8,"palette":2}` for wind speed with the ocean palette. Actions `step` and `step60` advance one or sixty committed ticks. The response includes sample coordinates, tick, valid values, palette colors and Wind/Storm/Gravity outlines. Empty cells return null. The demo belongs to the Workspace project lifetime and does not edit the map or advance the game.
+
 Workflow-only skill; no separate runtime library. Uses `aiverse_editor_core` through `aiversemcp`.

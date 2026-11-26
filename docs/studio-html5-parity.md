@@ -342,3 +342,5 @@ Effects lifetime color: edit RGBA stops, normalized particle age and optional se
 Effects color modules: transfer constant, pair and gradient spawn sampling and speed-driven gradient authoring. Verify native save/reopen.
 
 Effects base emitter transfer: edit separate size/rotation axes, sprite aspect, gravity, space, texture, prewarm and particle limits. Verify native files and mode switches in the packaged Studio.
+
+PHYSIS diagnostics transfer: reuse the isolated native demo, tick stepping, all field layers and palette conversion. Provide panel-local map, volume contours and cell inspection. Verify reset and project isolation.
