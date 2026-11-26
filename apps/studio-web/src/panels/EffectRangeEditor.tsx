@@ -31,7 +31,8 @@ function CurveKeys({label,curve,path,min,max,patch}:{label:string;curve:unknown;
   const points=numeric(curve)?[[0,curve],[1,curve]]:curve;
   if(!keys(points))return <StudioAlert tone="warning">Correct the curve keys in Effect source.</StudioAlert>;
   const validPoints=points;
-  const ordered=[...points].sort((a,b)=>a[0]-b[0]);
+  const rows=points.map(([time,value],index)=>({time,value,index})).sort((a,b)=>a.time-b.time);
+  const ordered=rows.map(row=>points[row.index]);
   const bottom=ordered.reduce((a,b)=>Math.min(a,b[1]),Infinity);
   const top=ordered.reduce((a,b)=>Math.max(a,b[1]),-Infinity);
   const y=(v:number)=>top===bottom?28:50-(v-bottom)/(top-bottom)*44;
@@ -44,11 +45,12 @@ function CurveKeys({label,curve,path,min,max,patch}:{label:string;curve:unknown;
   return <fieldset className="effects-key-list"><legend>{label}</legend>
     <svg className="effects-key-plot" viewBox="0 0 300 56" preserveAspectRatio="none" role="img" aria-label={label+' over normalized time'}>
       <polyline points={'0,'+y(ordered[0][1])+' '+line+' 300,'+y(ordered[ordered.length-1][1])} fill="none" stroke="var(--au-accent)" strokeWidth="2" vectorEffect="non-scaling-stroke"/>
+      {rows.map(row=><circle key={row.index} cx={Math.max(0,Math.min(1,row.time))*300} cy={y(row.value)} r="2" fill="var(--au-text)"/>)}
     </svg>
-    {points.map(([t,v],i)=><div className="effects-key-row" key={i}>
-      <NumberBox label={'Time '+(i+1)} value={t} min={0} max={1} change={n=>setPoint(i,0,n)}/>
-      <NumberBox label={'Value '+(i+1)} value={v} min={min} max={max} change={n=>setPoint(i,1,n)}/>
-      <StudioButton disabled={points.length<2} aria-label={'Remove key '+(i+1)} onClick={()=>{
+    {rows.map(({time:t,value:v,index:i},order)=><div className="effects-key-row" key={i}>
+      <NumberBox label={'Time '+(order+1)} value={t} min={0} max={1} change={n=>setPoint(i,0,n)}/>
+      <NumberBox label={'Value '+(order+1)} value={v} min={min} max={max} change={n=>setPoint(i,1,n)}/>
+      <StudioButton disabled={points.length<2} aria-label={'Remove key '+(order+1)} onClick={()=>{
         if(numeric(curve))patch(path,points.filter((_,j)=>j!==i));else patch([...path,i],undefined);
       }}>Remove</StudioButton>
     </div>)}
