@@ -657,3 +657,5 @@ fd9911d69da1a59301d9db6872f9200484b176c3. Generate uses the native catalog and g
 Project Import transfer: scan an external project, carry its source into a background import, open the emitted destination and prepare an editable Agent brief. Verify a real conversion and existing drafts.
 
 Project Import at 47fc85553 built on macOS. Desktop conversion reached the result view. The test queried the snapshot during project loading and failed; retry after waiting for the new project. Evidence: docs/evidence/studio-project-import-workflow.json.
+
+Verified Project Import on e6e287eca (implementation 47fc85553). Both macOS desktop paths opened the emitted Godot project. The Agent composer retained its existing draft and added the report prompt. On-disk maps, manifest and source provenance passed. Evidence: docs/evidence/studio-project-import-workflow-retry.json and docs/evidence/studio-project-catalog/project-import.png. Next: remaining effects playback and retry parity.
