@@ -1,0 +1,10 @@
+{
+  "sha": "4468e1bc6e92cd3fba9a30c0b536ea5c3cd184ce",
+  "argv": [
+    "bash",
+    "/tmp/cold-wind.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-linked-wind-cold.log.txt",
+  "sha256": "9b6ff9d43b2430e9f833cd88030457d813bb779c24339fe042e2f664fce8ce63"
+}
