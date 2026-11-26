@@ -23,7 +23,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
     static const std::vector<StudioToolGroup> groups = {
         {"building_generator", {"building_graph_diagnostics"}},
         {"feature_readiness", {"feature_readiness_get", "feature_readiness_query", "feature_readiness_status_get", "feature_readiness_refresh"}},
-        {"terrain", {"map_info", "terrain_sculpt", "terrain_level", "terrain_height", "terrain_heights", "terrain_paint",
+        {"terrain", {"map_info", "terrain_sculpt", "terraweave_sparse_paint", "terrain_level", "terrain_height", "terrain_heights", "terrain_paint",
                      "terraweave_meadow_get", "terraweave_meadow_set", "terrain_paint_material", "terrain_material", "terrain_detail", "heightmap_import", "heightmap_export"}},
         {"caverns", {"terraweave_caverns_paint","terraweave_caverns_pick"}},
         {"water", {"water_types", "water_network", "water_set", "water_delete", "water_shores", "water_bake", "nereid_water_state"}},

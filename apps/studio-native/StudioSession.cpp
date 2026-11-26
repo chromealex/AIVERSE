@@ -1602,7 +1602,7 @@ bool StudioSession::pollAgentLink() {
 namespace {
 bool brushPathKind(const std::string& k){return k=="road"||k=="river";}
 const char* brushLabel(const std::string& k){
-    return k=="terrain"?"Terrain brush":k=="paint"?"Paint terrain":k=="region"?"Paint region":k=="tiles"?"Paint tiles":k=="field"?"Paint field":
+    return k=="sparse"?"Sparse terrain brush":k=="terrain"?"Terrain brush":k=="paint"?"Paint terrain":k=="region"?"Paint region":k=="tiles"?"Paint tiles":k=="field"?"Paint field":
            k=="objects"?"Scatter objects":k=="road"?"Draw road":k=="river"?"Draw river":k=="caverns"?"Caverns brush":"Brush";
 }
 }
@@ -1707,6 +1707,11 @@ Json StudioSession::sceneBrushJson() const {
     Json o=Json::object();
     o.set("armed",Json::fromBool(b.armed));o.set("kind",str(b.kind));o.set("op",str(b.op));
     o.set("radius",Json::number(b.radius,3));o.set("strength",Json::number(b.kind=="terrain" && b.op=="stamp"?b.stampHeight:b.strength,3));
+    const auto& sparse=ws_.map.data.extra["terraweaveSparse"];
+    o.set("sparseMode",str(b.sparseMode));
+    o.set("chunkMetres",num(sparse.getInt("chunkMetres",b.chunkMetres)));
+    o.set("sparseChunks",num(int64_t(sparse["chunks"].size())));
+    o.set("depthCm",num(int64_t(b.depthCm)));
     o.set("stamp",str(b.stamp));o.set("angle",Json::number(b.angle,2));
     o.set("hardness",Json::number(b.hardness,3));o.set("seed",num(int64_t(b.seed)));
     o.set("layer",num(int64_t(b.layer)));o.set("tile",str(b.tile));o.set("fixedTile",num(int64_t(b.fixedTile)));o.set("field",str(b.field));o.set("fieldMode",str(b.fieldMode));o.set("fieldPlayer",num(int64_t(b.fieldPlayer)));
@@ -1790,6 +1795,17 @@ bool StudioSession::strokeDabImpl(double x, double z, std::string* error,double 
             p.set("seed",num(int64_t(b.seed)));p.set("hardness",Json::number(b.hardness,3));
         }
         p.set("radius",Json::number(b.radius,3));p.set("strength",Json::number(b.op=="stamp"?b.stampHeight:b.strength,3));}
+    else if(b.kind=="sparse"){
+        op="terraweave_sparse_paint";
+        auto mode=b.sparseMode;
+        if(shift && mode!="create")mode=mode=="raise"?"lower":"raise";
+        p.set("mode",str(mode));
+        p.set("xCm",num(std::llround(x*100)));
+        p.set("zCm",num(std::llround(z*100)));
+        p.set("chunkMetres",num(int64_t(b.chunkMetres)));
+        p.set("depthCm",num(int64_t(b.depthCm)));
+        p.set("radiusCm",num(std::llround(b.radius*100)));
+    }
     else if(b.kind=="paint"){op="terrain_paint_material";p.set("layer",num(int64_t(b.layer)));p.set("x",Json::number(x,3));p.set("y",Json::number(z,3));
         p.set("radius",Json::number(b.radius,3));p.set("strength",Json::number(std::min(1.0,b.strength),3));}
     else if(b.kind=="region"){
@@ -4727,13 +4743,27 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             if(params.has("scope") && !sameDocumentScope(params["scope"],graphDocumentScope()))
                 throw std::runtime_error("Map changed. Reload the region before painting.");
             auto next=brush_;auto& b=next;
-            static const std::set<std::string> kinds={"terrain","paint","tiles","region","field","objects","road","river","caverns"};
+            static const std::set<std::string> kinds={"sparse","terrain","paint","tiles","region","field","objects","road","river","caverns"};
             static const std::set<std::string> ops={"raise","lower","smooth","flatten","noise","erode","stamp"};
             static const std::set<std::string> modes={"set","add","max","erase"};
             auto number=[&](const char* k,double lo,double hi){const double v=params[k].toDouble();
                 if(!params[k].isNumber()||!std::isfinite(v)||v<lo||v>hi)throw std::runtime_error(std::string(k)+" must be "+std::to_string(lo)+".."+std::to_string(hi));return v;};
             auto text=[&](const char* k){const std::string v=params.getStr(k);if(v.size()>128)throw std::runtime_error(std::string(k)+" is too long");return v;};
             if (params.has("kind")) { const std::string k=params.getStr("kind"); if(!kinds.count(k))throw std::runtime_error("Unknown brush tool"); b.kind=k; }
+            if(params.has("sparseMode")){
+                const auto mode=params.getStr("sparseMode");
+                if(mode!="create" && mode!="raise" && mode!="lower")throw std::runtime_error("Unknown sparse terrain operation");
+                b.sparseMode=mode;
+            }
+            if(params.has("chunkMetres") || params.has("depthCm")){
+                auto integer=[&](const char* key,int lo,int hi){
+                    const double value=number(key,lo,hi);
+                    if(value!=std::floor(value))throw std::runtime_error(std::string(key)+" requires a whole number");
+                    return int(value);
+                };
+                if(params.has("chunkMetres"))b.chunkMetres=integer("chunkMetres",16,1024);
+                if(params.has("depthCm"))b.depthCm=integer("depthCm",1,20000);
+            }
             if (params.has("op")) { const std::string op=params.getStr("op"); if(!ops.count(op))throw std::runtime_error("Unknown brush op"); b.op=op; }
             if (params.has("radius")) b.radius=number("radius",0.25,64);
             if (params.has("strength")) {

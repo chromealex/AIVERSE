@@ -364,3 +364,5 @@ PostFX volume profiles: catalog-driven parameter overrides, inheritance, and pla
 PostFX diagnostic stage: expose native per-view execution receipts for Scene, published LENS and Game in HTML Studio. Check actual encoded effects and stopped-source clearing.
 
 Terrain stamp transfer: use single-click detail sculpt stamps with rotation, hardness, seed and terrain elevation rendering in Scene. Verify one stroke, Undo and persistence.
+
+Sparse Terrain transfer: expose chunk creation and signed-world sculpting in the HTML Terrain brush. Check compound undo, reversed depth, camera placement and persisted chunks.

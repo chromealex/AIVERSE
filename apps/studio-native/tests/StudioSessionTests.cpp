@@ -1732,6 +1732,16 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"Fixture co
        AIVERSE_TEST_CHECK(session.workspace().map.data.detail!=stamped && session.workspace().map.data.detail!=originalDetail);
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error"));
        AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"op":"raise"})")["result"]["strength"].toDouble()==1);
+       const auto sparseDepth=session.workspace().map.undoDepth();
+       AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"kind":"sparse","sparseMode":"raise","chunkMetres":16,"depthCm":80,"radius":2})").has("error"));
+       AIVERSE_TEST_CHECK(session.strokeBegin(-32,-40,&err) && session.strokeDab(-48,-40,&err) && session.strokeEnd(&err));
+       const auto sparse=session.workspace().map.data.extra["terraweaveSparse"];
+       AIVERSE_TEST_CHECK(sparse.getInt("chunkMetres")==16 && sparse["chunks"].size()>=2 && sparse["heights"].size()>0);
+       AIVERSE_TEST_CHECK(session.workspace().map.undoDepth()==sparseDepth+1);
+       AIVERSE_TEST_CHECK(session.strokeBegin(-32,-40,&err,0,true) && session.strokeEnd(&err));
+       AIVERSE_TEST_CHECK(session.workspace().map.data.extra["terraweaveSparse"]["heights"]!=sparse["heights"]);
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && session.workspace().map.data.extra["terraweaveSparse"]==sparse);
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && session.workspace().map.data.extra["terraweaveSparse"].isNull());
        const auto originalRegions=session.workspace().map.data.regions;
        const auto borderDepth=session.workspace().map.undoDepth();
        AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"regionBorders":true})")["result"].getBool("regionBorders"));

@@ -7,7 +7,7 @@ import type { StudioSceneBrush, EvolveLayer, EvolveLiveState, AetherLayer } from
 
 export type BrushKind = StudioSceneBrush['kind'];
 const KIND_LABEL: Record<BrushKind, string> = {
-  terrain: 'Sculpt', paint: 'Paint', objects: 'Objects', tiles: 'Tiles', region: 'Regions', field: 'Field', road: 'Draw road', river: 'Draw river', caverns: 'Caverns',
+  terrain: 'Sculpt', sparse: 'Open world', paint: 'Paint', objects: 'Objects', tiles: 'Tiles', region: 'Regions', field: 'Field', road: 'Draw road', river: 'Draw river', caverns: 'Caverns',
 };
 const OPS: Array<[StudioSceneBrush['op'], string]> = [['raise', 'Raise'], ['lower', 'Lower'], ['smooth', 'Smooth'], ['flatten', 'Flatten'], ['noise', 'Noise'], ['erode', 'Erode'], ['stamp','Stamp']];
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
@@ -210,7 +210,8 @@ export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS, tileCatalog,
   useEffect(() => {
     void invoke('studio.sceneBrush', kinds.includes('terrain') ? {} : { kind: kinds[0] }).then(b =>
       kinds.includes(b.kind) ? setBrush(b) : invoke('studio.sceneBrush', { kind: kinds[0], armed: false }).then(setBrush)).catch(() => {});
-    const off = onNativeEvent((event, payload) => { if (event === 'brush.changed' && payload) setBrush(payload as StudioSceneBrush); });
+    const off = onNativeEvent((event, payload) => { if (event === 'brush.changed' && payload) setBrush(payload as StudioSceneBrush);
+      if (event === 'document.changed' && kinds.includes('sparse')) void invoke('studio.sceneBrush',{}).then(setBrush).catch(()=>{}); });
     // Leaving the panel puts the brush down: Scene clicks select again.
     return () => { off(); void invoke('studio.sceneBrush', { armed: false }).catch(() => {}); void invoke('studio.splineEdit', { kind: '' }).catch(() => {}); };
   }, [kinds.join()]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -236,7 +237,7 @@ export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS, tileCatalog,
   if (!brush) return null;
   const field = fields.find(f => f.id === brush.field);
   const stamping = kind==='terrain' && brush.op==='stamp';
-  const continuous = kind === 'terrain' || kind === 'paint' || kind === 'tiles' || kind === 'region' || kind === 'field' || kind === 'objects';
+  const continuous = kind === 'terrain' || kind === 'sparse' || kind === 'paint' || kind === 'tiles' || kind === 'region' || kind === 'field' || kind === 'objects';
   return <div className={'tbrush' + (brush.armed ? ' is-armed' : '')}>
     {kinds.includes('terrain') && <h3 className="terrain-brush-heading">Terrain brush</h3>}
     {kind !== 'field' && kind !== 'river' && !kinds.includes('region') && !kinds.includes('terrain') && <EcologyLayerPicker/>}
@@ -252,6 +253,22 @@ export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS, tileCatalog,
         {kinds.map(k => <button key={k} type="button" role="radio" aria-checked={kind === k} className={kind === k ? 'is-on' : ''}
           onClick={() => set({ kind: k })}>{KIND_LABEL[k]}</button>)}</div>}
     </div>
+    {kind === 'sparse' && <fieldset className="tbrush__stamp"><legend>Open-world terrain</legend>
+      <Choice label="Chunk operation" value={brush.sparseMode} options={['create','raise','lower']}
+        onChange={v=>set({sparseMode:v as StudioSceneBrush['sparseMode']})}/>
+      {brush.sparseChunks ? <small>{brush.sparseChunks} {brush.sparseChunks===1?'chunk':'chunks'} · {brush.chunkMetres} m each</small>
+        : <Slider label="Chunk size (m)" value={brush.chunkMetres} min={16} max={1024} step={1} onCommit={v=>set({chunkMetres:v})}/>}
+      {brush.sparseMode!=='create' && <Slider label="Depth (cm)" value={brush.depthCm} min={1} max={500} step={1} onCommit={v=>set({depthCm:v})}/>}
+      <button type="button" className="au-button au-button--sm" onClick={async()=>{
+        try {
+          const camera=await invoke('studio.viewportInput',{kind:'camera'}) as {x?:number;z?:number};
+          if(camera.x===undefined || camera.z===undefined)throw new Error('Open the Scene to place a chunk at the camera target');
+          await op('terraweave_sparse_paint',{mode:'create',xCm:Math.round(camera.x*100),zCm:Math.round(camera.z*100),chunkMetres:brush.chunkMetres});
+          set({});
+        }catch(e){setError(message(e));}
+      }}>Create chunk at camera target</button>
+      <small>Paint beyond the map edge. Hold Shift to reverse raise and lower.</small>
+    </fieldset>}
     {kind === 'terrain' && <div className="ptp__seg" role="radiogroup" aria-label="Sculpt operation">
       {OPS.map(([id, label]) => <button key={id} type="button" role="radio" aria-checked={brush.op === id}
         className={brush.op === id ? 'is-on' : ''} onClick={() => set({ op: id })}>{label}</button>)}</div>}
@@ -299,7 +316,7 @@ export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS, tileCatalog,
     {kind === 'river' && <Slider label="Width, m" value={brush.width} min={2} max={80} step={1} onCommit={v => set({ width: v })}/>}
     {kind === 'region' && <Slider label="Radius (cells)" value={Math.floor(brush.radius)} min={0} max={24} step={1} onCommit={v => set({ radius: v || 0.5 })}/>}
     {kind === 'field' && <Slider label="Radius (cells)" value={Math.round(brush.radius)} min={0} max={24} step={1} onCommit={v => set({ radius: v || 0.25 })}/>}
-    {continuous && kind !== 'region' && kind !== 'field' && <Slider label={kind === 'objects' ? 'Spacing' : 'Radius'} value={brush.radius} min={stamping?0.25:0.5} max={stamping?32:24} step={stamping?0.25:0.5} onCommit={v => set({ radius: v })}/>}
+    {continuous && kind !== 'region' && kind !== 'field' && !(kind==='sparse' && brush.sparseMode==='create') && <Slider label={kind === 'objects' ? 'Spacing' : 'Radius'} value={brush.radius} min={stamping?0.25:0.5} max={stamping?32:24} step={stamping?0.25:0.5} onCommit={v => set({ radius: v })}/>}
     {(kind === 'terrain' || kind === 'paint') && <Slider label={stamping?'Stamp height':'Strength'} value={brush.strength} min={stamping?-6:0.05}
       max={kind === 'paint' || brush.op === 'smooth' || brush.op === 'flatten' || brush.op === 'erode' ? 1 : 6} step={0.05} onCommit={v => set({ strength: v })}/>}
     {editing && <p className="ptp__hint">Drag a {kind === 'road' ? 'road node' : 'river point'} in the Scene to move it</p>}

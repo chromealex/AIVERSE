@@ -21,7 +21,7 @@ import StrataAnalysisPanel from '../graphs/StrataAnalysisPanel';
 
 /** Panels with a Scene brush and the brush tools each offers. */
 const BRUSHES: Partial<Record<ToolPanelId, BrushKind[]>> = {
-  terrain: ['terrain', 'paint', 'objects'], tiles: ['tiles', 'region'], fields: ['field'], roads: ['road'], water: ['river'],
+  terrain: ['terrain', 'sparse', 'paint', 'objects'], tiles: ['tiles', 'region'], fields: ['field'], roads: ['road'], water: ['river'],
 };
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
