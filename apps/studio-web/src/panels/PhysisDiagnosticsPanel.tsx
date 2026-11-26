@@ -66,11 +66,16 @@ function Diagnostics({projectPath,source,epoch,route}:{projectPath:string;source
   const [cell,pick]=useState<number>();
   const [showNature,setShowNature]=useState(false);
   useEffect(()=>{
-    if(route){setShowNature(map);route.consume();}
+    if(route)setShowNature(map);
   },[route?.request]);
   const requestId=useRef(0), pending=useRef(false);
   const [playing,setPlaying]=useState(false),[speed,setSpeed]=useState(1);
   const workspace=useRef<HTMLFieldSetElement>(null);
+  useEffect(()=>{
+    if(!route || (map&&(!frame||!showNature)))return;
+    if(map)workspace.current?.querySelector('.asset-native-surface')?.scrollIntoView({block:'center',inline:'nearest'});
+    route.consume();
+  },[route?.request,showNature,!!frame,map]);
   async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback'|'grid'|'presentation',next:View,selection:number|{cellX:number;cellZ:number}|undefined=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}|{cellMeters:number;humidity:number;shoreSand:number}|{quality?:number;volume?:number;igniteOnClick?:boolean;grass?:boolean;flames?:boolean;sound?:boolean}){
     const id=++requestId.current;
     const sameArea=next.size===view.size&&next.stride===view.stride&&next.centerX===view.centerX&&next.centerZ===view.centerZ;
