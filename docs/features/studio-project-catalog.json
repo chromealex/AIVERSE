@@ -551,6 +551,7 @@
     "docs/evidence/studio-spectra-function-library.json",
     "docs/evidence/studio-spectra-literals.json",
     "docs/evidence/studio-model-attachments-navigation.json",
-    "docs/evidence/studio-attachments-auto-placement.json"
+    "docs/evidence/studio-attachments-auto-placement.json",
+    "docs/evidence/studio-original-model-preview.json"
   ]
 }
