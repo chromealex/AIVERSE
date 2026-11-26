@@ -7,6 +7,7 @@ import {
   dropInterface, putParameter, dropParameter, putNode, dropNode, safeGraphName,
   type SpectraGraphV2, type FxDataInterface, type FxInstanceScalar, type GraphEdit
 } from './spectraDataInterfaceModel';
+import {DraftHistory} from '../graphs/graphFramework';
 import SpectraGraphCanvas from './SpectraGraphCanvas';
 import SpectraCurveEditor from './SpectraCurveEditor';
 import SpectraNativePreview from './SpectraNativePreview';
@@ -44,6 +45,7 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
   },[projectPath]);
   const [assets,setAssets]=useState<AssetEntry[]>([]);
   const [selected,setSelected]=useState<AssetEntry|null>(null);
+  const history=useRef(new DraftHistory<SpectraGraphV2|null>(null));
   const originals=useRef<{published:string|null;draft:string|null}>({published:null,draft:null});
   const [legacy,setLegacy]=useState<string|null>(null);
   const [saved,setSaved]=useState<SpectraGraphV2|null>(null);
@@ -62,7 +64,7 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
   const [status,setStatus]=useState('');
   const [pending,setPending]=useState<AssetEntry|null>(null);
   const [validation,setValidation]=useState<NativeResponse|null>(null);
-  const dirty=!!graph && (!saved || JSON.stringify(saved)!==JSON.stringify(graph));
+  const dirty=graph ? !saved || JSON.stringify(saved)!==JSON.stringify(graph) : !!legacy && !!saved;
   const names=useMemo(()=>graph?scalarParameters(graph):[],[graph]);
   const providers=useMemo(()=>graph?providerNames(graph,providerSearch):[],[graph,providerSearch]);
 
@@ -86,6 +88,7 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
 
   useEffect(()=>{
     let alive=true;
+    history.current=new DraftHistory<SpectraGraphV2|null>(null);
     setSelected(null);setLegacy(null);setSaved(null);setGraph(null);setError('');setValidation(null);
     if(!projectPath){setAssets([]);return;}
     void listAssets().catch(e=>{if(alive)setError(errorText(e));});
@@ -118,6 +121,7 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
       if(!parsed&&!isLegacy)throw new Error('Unsupported SpectraFX graph format.');
       const counterpart=typeof other?.originalJson==='string'?other.originalJson:null;
       originals.current=item.draft?{draft:revision,published:counterpart}:{published:revision,draft:counterpart};
+      history.current=new DraftHistory<SpectraGraphV2|null>(parsed);
       setLegacy(isLegacy?revision:null);setSaved(parsed);setGraph(parsed);setSelected(item);
       if(!parsed)return;
       const first=Object.keys(parsed.instanceParameters??{})[0]??'';
@@ -144,7 +148,7 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
       const result=await nativeOp('fx_graph_edit',{action:'upgrade',text:legacy});
       const next=graphV2(result.graph);
       if(!next||result.ok===false)throw new Error(String(result.error??'Could not upgrade this graph.'));
-      setGraph(next);setSelectedName('');setValidation(asRecord(result.validation));
+      setGraph(history.current.push(next));setSelectedName('');setValidation(asRecord(result.validation));
       setStatus('Upgraded locally. Save Draft or Publish to write this version.');
     }catch(e){setError(errorText(e));}
     finally{setBusy(false);}
@@ -168,6 +172,7 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
         verified=await nativeOp('fx_graph_validate',{graph:next});
         if(verified.ok!==true)throw new Error('Native starter validation failed: '+diagnostics(verified));
       }
+      history.current=new DraftHistory<SpectraGraphV2|null>(next);
       originals.current={draft:null,published:null};setLegacy(null);
       setSelected({name,draft:true,valid:true});setSaved(null);setGraph(next);
       setSelectedName('');setValidation(verified);
@@ -179,9 +184,30 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
     }catch(e){setError(errorText(e));}
     finally{setBusy(false);}
   };
+  const editGraph=(next:SpectraGraphV2)=>{
+    if(history.current.current()!==graph)return; // Ignore native edits completed after changing the draft.
+    if(JSON.stringify(next)===JSON.stringify(graph))return;
+    setGraph(history.current.push(next));setValidation(null);setError('');setStatus('');
+  };
+  const restore=(next:SpectraGraphV2|null)=>{
+    setGraph(next);setValidation(null);setStatus('');setError('');
+    const name=next?.instanceParameters?.[selectedName]?selectedName:Object.keys(next?.instanceParameters??{})[0]??'';
+    chooseParameter(name,next);
+    if(!name){setParamName('');setParam({slot:0,default:0,min:-100,max:100});}
+    if(!next?.nodes.some(node=>node.id===selectedResourceNode))setSelectedResourceNode('');
+  };
+  const undoRedo=(redo:boolean)=>{
+    if(busy)return;
+    const edits=history.current;
+    if(redo?edits.canRedo():edits.canUndo())restore(redo?edits.redo():edits.undo());
+  };
+  const historyButtons=<>
+    <StudioButton size="sm" disabled={busy||!history.current.canUndo()} onClick={()=>undoRedo(false)}>Undo</StudioButton>
+    <StudioButton size="sm" disabled={busy||!history.current.canRedo()} onClick={()=>undoRedo(true)}>Redo</StudioButton>
+  </>;
   const apply=(result:GraphEdit)=>{
     if(result.error){setError(result.error);return;}
-    setGraph(result.graph);setValidation(null);setError('');setStatus('Local changes — Validate and Save Draft or Publish.');
+    editGraph(result.graph);
   };
   const validate=async()=>{
     if(!graph)return;
@@ -211,7 +237,7 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
       const result=await nativeOp(publish?'fx_graph_set':'fx_graph_draft_set',{name:selected.name,graph,expected:originals.current[target]});
       if(result.ok!==true)throw new Error(diagnostics(result));
       originals.current[target]=typeof result.originalJson==='string'?result.originalJson:JSON.stringify(graph);
-      setLegacy(null);setSaved(graph);setSelected({...selected,draft:!publish,valid:true});
+      setSaved(graph);setSelected({...selected,draft:!publish,valid:true});
       setStatus(publish?'Published '+selected.name+'.':'Saved draft '+selected.name+'.');
       await listAssets();
       onSaved?.();
@@ -227,7 +253,11 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
   </StudioPanel>;
   return <StudioPanel title="SpectraFX Graph" eyebrow="VFX · Data Interfaces"
     subtitle="Typed, presentation-only parameters · native compiler validation"
-    className="spectra-di"
+    className="spectra-di" onKeyDown={e=>{
+      if(!selected||!(e.metaKey||e.ctrlKey)||e.altKey||e.target instanceof Element&&e.target.closest('input,textarea,[contenteditable="true"]'))return;
+      const key=e.key.toLowerCase();
+      if(key==='z'||key==='y'){e.preventDefault();e.stopPropagation();undoRedo(key==='y'||e.shiftKey);}
+    }}
     actions={<div className="spectra-di__top-actions">
       <StudioButton size="sm" variant="primary" disabled={busy||dirty}
         onClick={()=>void makeGraph(true)}><FilePlus2 size={14}/> Starter FX</StudioButton>
@@ -285,6 +315,7 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
         {legacy&&!graph&&selected?<StudioSection title={selected.name}>
           <p>This file uses SpectraFX Graph v1. Upgrade a local copy to edit its nodes and links.</p>
           <StudioButton variant="primary" disabled={busy} onClick={()=>void upgrade()}>Upgrade to v2</StudioButton>
+          {historyButtons}
         </StudioSection>:!graph||!selected ? <div className="spectra-di__welcome">
           <GitBranch size={26}/>
           <strong>{assets.length===0?'Create your first VFX effect':'Choose a Graph v2'}</strong>
@@ -297,7 +328,8 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
           <div className="spectra-di__toolbar">
             <strong>{selected.name}</strong><StudioBadge tone={dirty?'warning':'neutral'}>{dirty?'Unsaved':selected.draft?'Saved draft':'Saved'}</StudioBadge>
             <StudioButton size="sm" disabled={busy} onClick={()=>void validate()}><CheckCircle2 size={14}/> Validate</StudioButton>
-            <StudioButton size="sm" disabled={busy||!dirty&&!!saved} onClick={()=>{setGraph(saved);setError('');setStatus('');setValidation(null);}}>Discard</StudioButton>
+            {historyButtons}
+            <StudioButton size="sm" disabled={busy||!dirty&&!!saved} onClick={()=>{history.current=new DraftHistory<SpectraGraphV2|null>(saved);restore(saved);}}>Discard</StudioButton>
             <StudioButton size="sm" disabled={busy} onClick={()=>void save(false)}><Save size={14}/> Save Draft</StudioButton>
             <StudioButton size="sm" variant="primary" disabled={busy} onClick={()=>void save(true)}><Save size={14}/> Publish</StudioButton>
           </div>
@@ -307,12 +339,9 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
           <StudioSection title="Graph Nodes & Links">
             <SpectraGraphCanvas graph={graph} disabled={busy}
               onError={setError}
-              onEdit={next=>{setGraph(next);setValidation(null);setError('');
-                setStatus('Graph topology changed locally. Validate and save before publishing.');}}/>
+              onEdit={editGraph}/>
           </StudioSection>
-          <SpectraCurveEditor graph={graph} disabled={busy} onError={setError}
-            onEdit={next=>{setGraph(next);setValidation(null);setError('');
-              setStatus('Curve/Gradient changed in local draft. Validate and save before publishing.');}}/>
+          <SpectraCurveEditor graph={graph} disabled={busy} onError={setError} onEdit={editGraph}/>
           <SpectraNativePreview key={projectPath} graph={graph} projectPath={projectPath}
             libraryAsset={selected&&!dirty?{name:selected.name,draft:selected.draft}:undefined}
             disabled={busy}/>

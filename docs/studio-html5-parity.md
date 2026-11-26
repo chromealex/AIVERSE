@@ -400,3 +400,5 @@ GPU emitter playback: give the authoring panel its own native surface and hybrid
 Detached emitter: the visible native preview window reported hidden in its embedded WKWebView during desktop capture. Keep placement in CSS coordinates and let the native host decide when its window is drawable; verify actual automatic placement, modal occlusion, and docked/detached capture.
 
 SpectraFX graph migration: open v1 assets, explicitly upgrade in memory, discard or save drafts, guard both draft and published replacements. Verify conflict isolation and retained graph topology.
+
+SpectraFX local edit history: share DraftHistory across node edits, moves, curves and parameter changes. Commit one edit per drag and keep the original disk revision independent from undo/redo.

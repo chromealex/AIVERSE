@@ -47,9 +47,11 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
   const [toPort,setToPort]=useState('');
   const [zoom,setZoom]=useState(1);
   const [working,setWorking]=useState(false);
-  const drag=useRef<{id:string;clientX:number;clientY:number;x:number;y:number}|null>(null);
-  const edges=useMemo(()=>visualEdges(graph),[graph]);
-  const nodes=graph.nodes;
+  const drag=useRef<{base:SpectraGraphV2;pointerId:number;id:string;clientX:number;clientY:number;x:number;y:number}|null>(null);
+  const [move,setMove]=useState<{base:SpectraGraphV2;next:SpectraGraphV2}|null>(null);
+  const display=move?.base===graph?move.next:graph;
+  const edges=useMemo(()=>visualEdges(display),[display]);
+  const nodes=display.nodes;
   const chosen=nodes.find(n=>n.id===selectedNode);
   const isVolumeNode=(chosen?.type.startsWith('Volume')??false)||chosen?.type==='VolumetricParticleOutput';
   const fields=chosen?volumeFields[chosen.type]??{}:{};
@@ -91,10 +93,17 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
     void execute(params);
   };
   const finishDrag=(e:PointerEvent<HTMLDivElement>)=>{
-    if(!drag.current)return;
+    const d=drag.current;
+    if(!d||d.pointerId!==e.pointerId)return;
+    drag.current=null;
     if(e.currentTarget.hasPointerCapture(e.pointerId))
       e.currentTarget.releasePointerCapture(e.pointerId);
-    drag.current=null;
+    if(e.type==='pointerup'&&d.base===graph&&(e.clientX!==d.clientX||e.clientY!==d.clientY)){
+      const edited=moveGraphNode(graph,d.id,{x:Math.max(0,d.x+(e.clientX-d.clientX)/zoom),
+        y:Math.max(0,d.y+(e.clientY-d.clientY)/zoom)});
+      if(!edited.error)onEdit(edited.graph);
+    }
+    setMove(null);
   };
   return <div className="spectra-canvas">
     <div className="spectra-canvas__toolbar">
@@ -144,20 +153,20 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
               onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSelectedNode(node.id);}}}
               onClick={()=>setSelectedNode(node.id)}
               onPointerDown={e=>{
-                if(disabled||e.button!==0)return;
+                if(disabled||working||e.button!==0||!e.isPrimary)return;
                 setSelectedNode(node.id);
-                drag.current={id:node.id,clientX:e.clientX,clientY:e.clientY,x:pos.x,y:pos.y};
+                drag.current={base:graph,pointerId:e.pointerId,id:node.id,clientX:e.clientX,clientY:e.clientY,x:pos.x,y:pos.y};
                 e.currentTarget.setPointerCapture(e.pointerId);
               }}
               onPointerMove={e=>{
-                if(!drag.current||drag.current.id!==node.id)return;
+                if(!drag.current||drag.current.base!==graph||drag.current.pointerId!==e.pointerId||drag.current.id!==node.id)return;
                 const d=drag.current;
                 const point={x:Math.max(0,d.x+(e.clientX-d.clientX)/zoom),
                              y:Math.max(0,d.y+(e.clientY-d.clientY)/zoom)};
                 const edited=moveGraphNode(graph,node.id,point);
-                if(!edited.error)onEdit(edited.graph);
+                if(!edited.error)setMove({base:graph,next:edited.graph});
               }}
-              onPointerUp={finishDrag} onPointerCancel={finishDrag}>
+              onPointerUp={finishDrag} onPointerCancel={finishDrag} onLostPointerCapture={finishDrag}>
               <div className="spectra-canvas__node-head"><GitBranch size={13}/><span title={node.type}>{node.type.replace(/([a-z0-9])([A-Z])/g,'$1 $2')}</span></div>
               <div className="spectra-canvas__node-id" title={node.id}>{node.id}</div>
               {node.type==='DataInterface' && <div className="spectra-canvas__node-param">{String(node.properties?.name??'Unbound')}</div>}
