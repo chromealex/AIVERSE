@@ -1,0 +1,10 @@
+{
+  "sha": "777809747db0e7f843f79e79435d2326aa28e267",
+  "argv": [
+    "bash",
+    "/tmp/strata-pixel.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-strata-debug-pixels.log.txt",
+  "sha256": "7c41c9fe727c33cc18b4b9226fa2542100ab289ed6b0f8fce9e62787f91435a4"
+}
