@@ -214,6 +214,7 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
   }
   if (method === 'studio.select') {
     const select = params as StudioParams['studio.select'];
+    if ('previewRef' in select) throw Error('Unknown preview reference');
     const id = select.ids?.length ? select.ids[select.ids.length - 1] : select.id ?? null;
     if (id !== null && !snapshot.scene.entities.some(entity => entity.id === id)) throw Error('Unknown entity: ' + id);
     snapshot.selectedIds = id === null ? [] : select.ids?.length ? [...select.ids] : [id];
