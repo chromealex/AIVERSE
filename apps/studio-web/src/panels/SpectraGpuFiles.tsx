@@ -1,3 +1,4 @@
+import SpectraGpuSettings from './SpectraGpuSettings';
 import './SpectraGpuFiles.css';import {useEffect, useState, type ReactNode} from 'react';
 import {applyEdits, modify, parse, type ParseError} from 'jsonc-parser';
 import {invoke} from '../bridge';
@@ -63,6 +64,8 @@ export default function SpectraGpuFiles({project,tools}:{project:string;tools:Re
       </StudioSelect></StudioField>
       <div className="au-row"><StudioInput aria-label="New emitter name" placeholder="Emitter name" value={newName} onChange={e=>setNewName(e.target.value)}/>
         <StudioButton disabled={dirty||!/^[A-Za-z0-9_-]{1,64}$/.test(newName)||files.includes(newName)} onClick={()=>{select(newName);setNewName('');}}>New emitter</StudioButton></div>
+      {source!==undefined&&!issues.length&&doc&&typeof doc==='object'&&!Array.isArray(doc)&&
+        <SpectraGpuSettings routes={name===routesFile} doc={doc} change={(field,value)=>patch([field],value)}/>}
       {routes&&<StudioSection title="Event routes" actions={<StudioButton disabled={routes.length>=64} onClick={()=>{
         const ids=new Set(routes.map(r=>r.eventType));let id=1;while(ids.has(id))id++;
         patch(['routes',routes.length],{eventType:id,asset:files[0]??'new_effect',ownPlayerOnly:true,enabled:true,oneShotSeconds:3});
@@ -77,7 +80,7 @@ export default function SpectraGpuFiles({project,tools}:{project:string;tools:Re
           <StudioButton onClick={()=>patch(['routes',i],undefined)}>Remove route</StudioButton>
         </div>)}
       </StudioSection>}
-      {source!==undefined&&<StudioField label="GPU asset source"><StudioTextarea aria-label="GPU asset source" rows={12} spellCheck={false} value={draft} onChange={e=>change(e.target.value)}/></StudioField>}
+      {source!==undefined&&<details open={!!issues.length}><summary>GPU asset source</summary><StudioField label="JSON"><StudioTextarea aria-label="GPU asset source" rows={12} spellCheck={false} value={draft} onChange={e=>change(e.target.value)}/></StudioField></details>}
       <div className="au-row"><StudioButton variant="primary" disabled={source===undefined||(!dirty&&source!==null)} onClick={()=>void submit(true)}>Save file</StudioButton>
         <StudioButton disabled={source===undefined} onClick={()=>void submit(false)}>Validate</StudioButton>
         <StudioButton onClick={()=>reload(revision+1)}>{dirty?'Discard and reload':'Reload'}</StudioButton></div>

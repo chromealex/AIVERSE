@@ -1,2 +1,5 @@
 .gpu-file-fields{display:grid;gap:12px;border:0;padding:0;margin:0;min-width:0}
 .gpu-route{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(125px,100%),1fr));align-items:end;gap:8px;padding:10px 0;border-bottom:1px solid var(--au-border)}
+.gpu-settings{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:12px;align-items:start}
+.gpu-switches{display:grid;grid-column:1/-1;grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr));gap:6px}
+.gpu-switches label{display:flex;align-items:center;gap:6px}
