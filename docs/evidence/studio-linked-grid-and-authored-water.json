@@ -1,0 +1,10 @@
+{
+  "sha": "be6e01ad19a79a2a21941bd6e5ae3989f7e97666",
+  "argv": [
+    "bash",
+    "/tmp/grid-water-test.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-linked-grid-and-authored-water.log.txt",
+  "sha256": "2d3b248876b901779b5be12ffaca70748d40bd99b85d8ebf8e8694123e73685e"
+}
