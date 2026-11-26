@@ -212,7 +212,7 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
       if(result.ok!==true)throw new Error(diagnostics(result));
       originals.current[target]=typeof result.originalJson==='string'?result.originalJson:JSON.stringify(graph);
       setLegacy(null);setSaved(graph);setSelected({...selected,draft:!publish,valid:true});
-      setStatus(publish?'Published through native fx_graph_set.':'Draft saved separately; published graph unchanged.');
+      setStatus(publish?'Published '+selected.name+'.':'Saved draft '+selected.name+'.');
       await listAssets();
       onSaved?.();
     }catch(e){setError(errorText(e));}
@@ -257,7 +257,7 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
               onClick={()=>void makeGraph(false)}>Blank V2</StudioButton>
           </div>
           <p className="spectra-di__hint">Starter FX creates a working Spawn → Initialize → SpriteOutput chain.
-          Load it in the native Scene to preview actual particles. Nothing is written until Save Draft or Publish.</p>
+          Use the preview in this window to play the effect.</p>
         </StudioSection>
         <StudioSection title="Graph Assets">
           <StudioField label="Search graphs" htmlFor="spectra-search">
