@@ -1,0 +1,10 @@
+{
+  "sha": "5cc5ac2531bfd2333c3d2b5c79216bb8f35be374",
+  "argv": [
+    "bash",
+    "/tmp/physis-capture.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-physis-full-viewport-capture.log.txt",
+  "sha256": "a05f886c178f694de4df2de991941ad919d55d4b32fe31725d9546b3ae4f50bc"
+}

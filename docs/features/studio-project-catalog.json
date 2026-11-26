@@ -619,6 +619,7 @@
     "docs/evidence/studio-physis-shore-detached.json",
     "docs/evidence/studio-physis-linked-nature.json",
     "docs/evidence/studio-physis-open-panel.json",
-    "docs/evidence/studio-physis-surface-capture.json"
+    "docs/evidence/studio-physis-surface-capture.json",
+    "docs/evidence/studio-physis-full-viewport-capture.json"
   ]
 }
