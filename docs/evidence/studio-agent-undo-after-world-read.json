@@ -1,0 +1,10 @@
+{
+  "sha": "905a2a0eb0a504f6277ce0820d78e41f184a508b",
+  "argv": [
+    "bash",
+    "../undo-read.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-agent-undo-after-world-read.log.txt",
+  "sha256": "8f88977d3aefc82154601156d0d587c11cf01d74d357a4dc28324bca99395172"
+}
