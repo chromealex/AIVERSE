@@ -761,3 +761,5 @@ Raid window: provide an extraction point form, readable objectives and bot recei
 Raid stage 09f79e18e built for macOS. Typecheck, Vite and 299 web tests passed. Initial desktop capture timed out after persistence checks. Repeat after waiting for the reopened document UI to mount. Receipt docs/evidence/studio-raid-extraction-ui.json.
 
 Raid 09f79e18e verified with packaged Mac Studio. Created north-gate at (8,10), rejected both invalid map and point edits without polluting Undo, restored the point with Redo, saved/reopened, then ran a seeded bot raid and observed Player 1 extracted. Capture docs/evidence/studio-project-catalog/raid-extraction.png and receipt docs/evidence/studio-raid-map-receipts.json. Next: PostFX camera diagnostics and local volume authoring. Windows and merged-tree quick gate pending.
+
+PostFX transfer: edit local camera volume bounds and effect profiles in game and map scopes. Verify that map edits survive reopening and respect Undo.

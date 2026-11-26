@@ -17,3 +17,11 @@
 .pfx__dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-left:5px;background:currentColor}
 .pfx__warn{border:1px solid #e0a43c66;border-radius:var(--au-radius-md);padding:6px 8px;color:#f3c873;font-size:var(--au-font-xs)}
 .pfx__warn p{margin:0 0 4px}
+
+.pfx-volumes fieldset { min-width:0; padding:var(--au-space-3); border:1px solid var(--au-line); border-radius:var(--au-radius-md); background:var(--au-panel-raised); }
+.pfx-volumes legend { padding-inline:4px; font-weight:600; }
+.pfx-volume-nav { display:flex; flex-wrap:wrap; gap:var(--au-space-2); margin-block:var(--au-space-2); }
+.pfx-volume-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,8rem),1fr)); gap:var(--au-space-2); }
+.pfx-volume-grid label { display:grid; gap:4px; min-width:0; color:var(--au-text-muted); }
+.pfx-volume-grid :is(input,select), .pfx-volumes textarea { width:100%; min-width:0; }
+.pfx-volumes details, .pfx-volumes .ptp__check { margin-block:var(--au-space-2); }

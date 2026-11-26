@@ -356,3 +356,5 @@ PHYSIS map zone plan: show native authored footprints and select or position a z
 PHYSIS group transforms: select several authored zones, translate, rotate and scale around native pivot modes, duplicate or remove as one MapDoc transaction. Verify Undo, isolation and persistence.
 
 Raid window: provide an extraction point form, readable objectives and bot receipts. Validate candidate map overrides before committing undoable edits. Verify in packaged Studio.
+
+PostFX transfer: edit local camera volume bounds and effect profiles in game and map scopes. Verify that map edits survive reopening and respect Undo.
