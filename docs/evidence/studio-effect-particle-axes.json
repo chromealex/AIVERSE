@@ -1,0 +1,10 @@
+{
+  "sha": "bb163182885097a9314340c007ccd1e7c5977905",
+  "argv": [
+    "bash",
+    "/tmp/fx-axes-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-effect-particle-axes.log.txt",
+  "sha256": "0dd0af8029729f85b72f03ef05d6d50773866332e44e49fa77afcb2c21e49327"
+}
