@@ -1,0 +1,11 @@
+{
+  "sha": "862fb615b3f7d2ff1361058acfb93ca9f6b74a16",
+  "argv": [
+    "bash",
+    "-c",
+    "ctest --test-dir /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native --output-on-failure -R \"^studio_(terrain_geometry|owner_history)$\" && bash /tmp/scene-ground-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-linked-ground-height.log.txt",
+  "sha256": "c8c92cfcdd3394dec0799a0ce792186b6aaa4486400c4e016826279ae55c6cbc"
+}
