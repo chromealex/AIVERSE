@@ -767,3 +767,5 @@ PostFX transfer: edit local camera volume bounds and effect profiles in game and
 PostFX 47e869efa. apps/editor/core/PrismaOps.cpp and apps/studio-web/src/panels/PrismaVolumeEditor.tsx. Packaged Mac Studio authored an independent game sphere and map box with bloom, rejected stale and invalid writes without an Undo entry, restored a deleted volume, saved and reopened the map. Evidence docs/evidence/studio-postfx-local-volumes.json and docs/evidence/studio-project-catalog/postfx-camera-volumes.png. Typecheck, Vite, 299 web tests, Mac Studio build and prisma_volume CTest passed. Next: structured per-effect overrides and native per-camera diagnostics. Windows and merged-tree gate pending.
 
 PostFX volume profiles: catalog-driven parameter overrides, inheritance, and placement from the native Scene camera pose. Verify authored masks and persisted coordinates.
+
+Volume profiles 58aef55ba passed TypeScript, Vite and 299 web tests. First Mac UI fixture requested the Scene pose before a camera was available. Receipt docs/evidence/studio-postfx-volume-profile.json. Retry after Scene readiness on the known camera fixture.

@@ -1,0 +1,10 @@
+2026-11-26 06:38:21.165 AiverseStudioHTML5[38814:83142959] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/volume-profile-ui-W9FDYK/Catalog.app/Contents/Resources/studio-web
+2026-11-26 06:38:21.313 AiverseStudioHTML5[38814:83142959] [studio-web] served index.html (7914 bytes)
+2026-11-26 06:38:21.319 AiverseStudioHTML5[38814:83142959] [studio-web] served assets/index-DwproFpu.js (1641057 bytes)
+2026-11-26 06:38:21.350 AiverseStudioHTML5[38814:83142959] [studio-web] JS: CROSS main boot
+2026-11-26 06:38:21.358 AiverseStudioHTML5[38814:83142959] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 06:38:26.184 AiverseStudioHTML5[38814:83142959] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 06:38:27.499 AiverseStudioHTML5[38814:83142959] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 06:38:28.200 AiverseStudioHTML5[38814:83142959] AIVERSE bridge exception: Open Scene to copy its camera
+2026-11-26 06:38:28.201 AiverseStudioHTML5[38814:83142959] [studio-web] JS: CROSS main FAIL @aiverse-studio://shell/index.html:73:298
+global code@aiverse-studio://shell/index.html:1:51 Error: Open Scene to copy its camera
