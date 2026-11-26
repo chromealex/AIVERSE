@@ -133,7 +133,7 @@ jobs:
         run: |
           $out = 'build/studio-windows-ci/apps/studio-native/Release'
           $stage = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP 'Studio distribution')
-          foreach ($file in 'AiverseStudio.exe','aiversemcp.exe','WebView2Loader.dll','studio-web','engine') {
+          foreach ($file in 'AiverseStudio.exe','aiversemcp.exe','aiversebuild.exe','WebView2Loader.dll','studio-web','engine') {
             Copy-Item (Join-Path $out $file) $stage.FullName -Recurse
           }
           python -B apps/studio-native/tests/standalone_bundle.py $stage.FullName

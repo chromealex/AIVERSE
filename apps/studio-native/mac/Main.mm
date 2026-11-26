@@ -11,6 +11,7 @@
 #include "apps/studio-native/StudioNetworkPlay.h"
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/editor/core/BuildTool.h"
+#include "engine/platform/EngineDir.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -750,18 +751,14 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
         // The Metal-under-HTML path requires WebKit to leave its page canvas unpainted.
         htmlComposite_=composite && [WKWebView instancesRespondToSelector:NSSelectorFromString(@"_setDrawsBackground:")];
         if(composite && !htmlComposite_) NSLog(@"[studio-web] Transparent page canvas unavailable; using native Scene input");
-        const std::string root=AIVERSE_STUDIO_SOURCE_DIR;
+        const std::string root=aiverse::platform::resolveEngineDir(AIVERSE_STUDIO_SOURCE_DIR,nullptr);
         aiverse::platform::setEngineAssetsDir([[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:@"engine"].UTF8String);
         platform_=std::make_unique<MacPlatform>(self);
         core_=std::make_unique<studio::StudioHost>(*platform_,root,htmlComposite_);
         if (listenPort && !core_->session().listenForAgent(listenPort))
             throw std::runtime_error("Could not start the authenticated Studio agent listener");
         const std::string exeDir=[[[NSBundle mainBundle] executablePath] stringByDeletingLastPathComponent].UTF8String;
-#ifdef AIVERSE_STUDIO_BUILD_TOOL
-        core_->session().setBuildTool(AIVERSE_STUDIO_BUILD_TOOL);
-#else
         core_->session().setBuildTool(aiverse::editor::findBuildTool(exeDir,root));
-#endif
         core_->session().setMcpTool(exeDir+"/aiversemcp");
         core_->setPendingProject(project);
         NSURL* bundled=[[NSBundle mainBundle] URLForResource:@"index" withExtension:@"html" subdirectory:@"studio-web"];

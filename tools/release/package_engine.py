@@ -94,6 +94,8 @@ def main():
             resources = ["AiverseStudio.exe", "WebView2Loader.dll", "studio-web", "engine/fonts", "engine/fx/physis"]
             binaries.extend(resources)
             studio_files.update(dict.fromkeys(resources + ["aiversemcp.exe"], directory))
+            if os.path.isfile(os.path.join(directory, "aiversebuild.exe")):
+                studio_files["aiversebuild.exe"] = directory
             if directory == os.path.join(nested, "Release"):
                 for binary in binaries:
                     if binary not in studio_files and os.path.isfile(os.path.join(a.bin, "Release", binary)):

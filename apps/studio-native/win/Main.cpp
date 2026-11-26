@@ -7,6 +7,7 @@
 #include "apps/studio-native/StudioNetworkPlay.h"
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/editor/core/BuildTool.h"
+#include "engine/platform/EngineDir.h"
 #include "engine/gfx/vulkan/Vulkan.h"
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -233,17 +234,13 @@ public:
             SetWindowLongPtrW(surfaces_[i], GWLP_USERDATA, LONG_PTR(i));
         }
 
-        const std::string root = AIVERSE_STUDIO_SOURCE_DIR;
+        const std::string root = aiverse::platform::resolveEngineDir(AIVERSE_STUDIO_SOURCE_DIR,nullptr);
         aiverse::platform::setEngineAssetsDir(narrow((exeDir() / L"engine").c_str()));
         core_ = std::make_unique<studio::StudioHost>(*this, root, false);
         if (listenPort_ && !core_->session().listenForAgent(listenPort_))
             throw std::runtime_error("Could not start the authenticated Studio agent listener");
         const std::string exe = exeDir().string();
-#ifdef AIVERSE_STUDIO_BUILD_TOOL
-        core_->session().setBuildTool(AIVERSE_STUDIO_BUILD_TOOL);
-#else
         core_->session().setBuildTool(aiverse::editor::findBuildTool(exe, root));
-#endif
         core_->session().setMcpTool(exe + "\\aiversemcp.exe");
         if (project_.empty()) project_ = lastProject();
         else rememberLastProject(project_);

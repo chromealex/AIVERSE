@@ -26,11 +26,6 @@ else()
     target_link_libraries(aiverse_studio PRIVATE aiverse_hosted_client SQLite::SQLite3 aiverse_lua aiverse_editor_core aiverse_runtime aiverse_fx aiverse_game_view AIVERSE::vivid_human AIVERSE::libraries "-framework Cocoa" "-weak_framework ScreenCaptureKit" "-framework WebKit" "-framework AVFoundation" "-framework Speech")
     target_sources(aiverse_studio PRIVATE $<TARGET_OBJECTS:aiverse_runtime>)
     target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
-    # Publish / Build panel: the packager built next to Studio.
-    if(TARGET aiversebuild)
-        add_dependencies(aiverse_studio aiversebuild)
-        target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_BUILD_TOOL="$<TARGET_FILE:aiversebuild>")
-    endif()
     set_source_files_properties(mac/Main.mm mac/StudioAssetSchemeHandler.mm ../editor/EditorSpeech_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
     set_target_properties(aiverse_studio PROPERTIES
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/mac/StudioInfo.plist.in"
@@ -57,6 +52,15 @@ else()
     endif()
 endif()
 if(TARGET aiverse_studio)
+    if(TARGET aiversebuild)
+        add_custom_target(aiverse_studio_build_tool
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:aiverse_studio>"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:aiversebuild>"
+                "$<TARGET_FILE_DIR:aiverse_studio>/$<TARGET_FILE_NAME:aiversebuild>"
+            DEPENDS aiversebuild
+            VERBATIM)
+        add_dependencies(aiverse_studio aiverse_studio_build_tool)
+    endif()
     if(TARGET aiverse_client)
         target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_GAME_CLIENT="$<TARGET_FILE:aiverse_client>")
         add_dependencies(aiverse_studio aiverse_client)

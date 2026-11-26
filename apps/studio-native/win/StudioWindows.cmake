@@ -88,11 +88,6 @@ if(AIVERSE_BUILD_TESTS)
     add_test(NAME studio_win_device_overlay COMMAND aiverse_studio_win_device_overlay_tests)
     set_tests_properties(studio_win_device_overlay PROPERTIES LABELS "EDITOR")
 endif()
-# Publish / Build panel: the packager built next to Studio.
-if(TARGET aiversebuild)
-    add_dependencies(aiverse_studio aiversebuild)
-    target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_BUILD_TOOL="$<TARGET_FILE:aiversebuild>")
-endif()
 # The UI and the WebView2 loader next to the exe; runs every build so UI-only changes are picked up.
 add_custom_target(aiverse_studio_web_assets
     COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:aiverse_studio>"
