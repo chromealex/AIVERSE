@@ -40,15 +40,6 @@ struct Options {
     bool noEditor = false;
 };
 
-std::string exeDir() {
-    std::error_code ec;
-#if defined(__linux__)
-    fs::path p = fs::read_symlink("/proc/self/exe", ec);
-    if (!ec) return p.parent_path().string();
-#endif
-    return fs::current_path(ec).string();
-}
-
 std::string findEditor(const Options& o, const std::string& self) {
     if (!o.editorPath.empty()) return o.editorPath;
     for (fs::path c : {fs::path(self) / "aiverse_editor", fs::path(self) / "AiverseEditor.app/Contents/MacOS/AiverseEditor",
@@ -275,7 +266,7 @@ int main(int argc, char** argv) {
     }
     std::error_code ec;
     opt.engine = fs::weakly_canonical(opt.engine, ec).string();
-    const std::string self = exeDir();
+    const std::string self = platform::hostExecutablePath(argv[0]).parent_path().string();
 
     Workspace local;                      // used when no editor is reachable
     local.engineDir = opt.engine;
