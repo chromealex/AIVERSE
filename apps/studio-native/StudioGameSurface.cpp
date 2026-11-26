@@ -474,6 +474,11 @@ Json StudioGameSurface::editRuntime(const Json& params){
     runtimeDebugEdited_=true;
     Json out=Json::object();out.set("field",changed);out.set("runtimeDebugEdited",Json::fromBool(true));return out;
 }
+Json StudioGameSurface::animationRuntimeStatus() const {
+    const auto* scripts=host_ && !actor_ && host_->inMatch()?host_->viewScripts():nullptr;
+    return game::animationRuntimeStatus(scripts?scripts->entityFx().get():nullptr);
+}
+
 Json StudioGameSurface::scriptLog(bool errorsOnly) const {
     Json rows = Json::array();
     auto* sim = liveSimulation();

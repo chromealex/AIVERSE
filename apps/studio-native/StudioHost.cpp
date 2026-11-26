@@ -110,6 +110,12 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
     // The project opens asynchronously after the UI loads (splash and progress).
     session_ = std::make_unique<StudioSession>(engineRoot, std::string());
     for(const bool rig:{false,true}){
+        session_->workspace().registerOp({rig?"rig_runtime_status":"animation_runtime_status",
+            "Read animation contact and climbing diagnostics from the current play-test.",Json::object(),
+            [this](const Json&){
+                if(!game_ || game_->launchPlan().project!=session_->workspace().project.dir)return Json::array();
+                return game_->animationRuntimeStatus();
+            },true});
         session_->workspace().registerOp({rig?"rig_editor_open":"animation_editor_open",
             "Open a saved or inline animation graph; refuses replacement of unsaved edits.",
             Json::parse(R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"}}})"),
@@ -3613,6 +3619,11 @@ bool StudioHost::handleHostMethod(const Json& req) {
         sendReply(reply);
         return true;
     };
+    if(method=="studio.animationRuntime")return answer([&]{
+        auto& ws=session_->workspace();
+        if(params.getStr("project")!=ws.project.dir)throw std::runtime_error("Play-test project changed");
+        return ws.call(params.getStr("panel")=="rig"?"rig_runtime_status":"animation_runtime_status",Json::object());
+    });
     if(method=="studio.animationEditorState")return answer([&]{
         const auto panel=params.getStr("panel");
         if((panel!="rig" && panel!="graph") || params.getStr("project")!=session_->workspace().project.dir)

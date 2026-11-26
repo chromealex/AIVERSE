@@ -440,3 +440,5 @@ Packaged Mac Studio and its external MCP sidecar verified animation_editor_statu
 Standalone graph opening: port animation_editor_open and rig_editor_open for saved assets and inline documents; preserve dirty refusal, revision checks and independent panel routing.
 
 Standalone animation_editor_open and rig_editor_open passed packaged macOS linked acceptance for named and inline documents, default untitled, explicit save, dirty refusal and conflicting on-disk revisions.
+
+Play-test animation diagnostics: port the legacy runtime status queries onto the active hosted client's entity animation store. Show matching entity/contact/locomotion rows from both standalone HTML animation panels and verify separation from their asset previews.

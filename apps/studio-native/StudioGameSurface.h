@@ -23,6 +23,7 @@ public:
     void frame(int width,int height,float pointsW,float pointsH,double dt,bool focused);
     void suspend();
     void event(const platform::Event& event);
+    Json animationRuntimeStatus() const;
     Json scriptLog(bool errorsOnly) const;
     Json state(bool includeScriptErrors = false) const;
     std::function<Json(uint64_t)> buildingGraphReader();

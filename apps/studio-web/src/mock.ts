@@ -182,6 +182,7 @@ export async function mockInvoke(method: StudioMethod, params: StudioParams[Stud
     { id: 'pkg:skirmish', name: 'Iron and Gold', description: 'Classic base building in the style of Warcraft and Red Alert: base, army, towers.', genre: 'game', maps: 4, source: 'catalog', official: true, version: '1.0.0', size: 1400000 },
     { id: 'pkg:community-arena', name: 'Community Arena', description: 'A template from the catalog community.', genre: 'game', maps: 1, source: 'catalog', official: false, version: '0.2.0', size: 2600000 },
   ] } as StudioResult['studio.hubTemplates'];
+  if (method === 'studio.animationRuntime') return [];
   if (method === 'studio.hubOpen' || method === 'studio.hubCreate') throw new Error('Open the native Studio');
   if (method === 'studio.ops') return { panel: String((params as { panel?: string })?.panel ?? ''), ops: [] } as StudioResult['studio.ops'];
   if (method === 'studio.op' && String((params as { op?: string })?.op ?? '').startsWith('package_')) return mockPackageOp(params as StudioParams['studio.op']) as StudioResult['studio.op'];

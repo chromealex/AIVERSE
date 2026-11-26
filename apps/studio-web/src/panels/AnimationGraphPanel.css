@@ -48,3 +48,7 @@
  .motion-preview--model .asset-native-surface,.motion-preview--model .motion-preview-stage svg{height:clamp(180px,29vh,300px)}
  .motion-preview--model .motion-preview-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:start}
 }
+
+.anim-runtime{overflow:auto;min-width:0}
+.anim-runtime table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.anim-runtime th,.anim-runtime td{text-align:left;white-space:nowrap;padding:.55rem .75rem;border-bottom:1px solid var(--studio-border)}

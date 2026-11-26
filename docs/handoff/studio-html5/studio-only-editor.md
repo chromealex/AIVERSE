@@ -953,3 +953,5 @@ Upcoming standalone open stage: share Workspace animation_graph_get/list and nat
 Detached run at 4b754a83e6fa78733bc18cbd3f937b9b0a0fe58d opened and edited the inline graph in the correct native Rig window. The runner used an invalid window notification prefix and stopped before the final ownership assertion (docs/evidence/studio-linked-detached-rig-open.json). Repeat with the documented ui. event prefix.
 
 Detached acceptance for 62ac479d83fc8129b52025b16b515416819e6d0e passed: docs/evidence/studio-detached-rig-open-verified.json. The external request opened in the restored native Rig window, dirty status tracked its field edit, another request was refused, and the main dock contained no duplicate Rig. For runtime diagnostics use StudioGameSurface's hosted ViewScripts::entityFx() (legacy Editor.h identifies the play-test view script store); verify a real animated entity and a stopped session.
+
+Planned runtime status stage: reuse the view-script EntityFxStore and the old editor's sorted 256-entity contract; register linked graph/rig aliases and display data for the current play session in Studio. Verify active entities, independent asset panels and stop.

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { DraftHistory } from '../graphs/graphFramework';
 import { invoke } from '../bridge';
+import AnimationRuntimePanel from './AnimationRuntimePanel';
 import AnimationSkeletonPreview from './AnimationSkeletonPreview';
 import RigInspector, {type RigUnit,type ItemPresets} from './RigInspector';
 import './graphSurface.css';
@@ -36,7 +37,7 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route}:{r
  const [nodeName,setNodeName]=useState(''),[pickedBone,setPickedBone]=useState('');
  useEffect(()=>setPickedBone(''),[name,draft?.model]);
  useEffect(()=>setNodeName(selection),[selection]);
- const [kind,setKind]=useState('clip'),[tab,setTab]=useState<'nodes'|'states'|'rig'|'preview'|'tools'>(rigMode?'rig':'nodes');
+ const [kind,setKind]=useState('clip'),[tab,setTab]=useState<'nodes'|'states'|'rig'|'preview'|'runtime'|'tools'>(rigMode?'rig':'nodes');
  const [stateId,setStateId]=useState(''),[stateName,setStateName]=useState('');
  const [parameter,setParameter]=useState(''),[notice,setNotice]=useState('');
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -117,9 +118,9 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route}:{r
     const id=newName;const initial=await op('edit',{action:'new'});await op('set',{name:id,graph:initial.graph});
     setNames((await op('list')).graphs);await load(id);setNewName('');
    })}>Create graph</button></header>
-  <nav aria-label="Graph views">{(['nodes','states','rig','preview','tools'] as const).map(t=><button key={t} aria-pressed={t===tab} onClick={()=>setTab(t)}>{t==='nodes'?'Pose graph':t==='states'?'States':t==='rig'?'Rig units':t==='preview'?'Skeleton preview':'Operations'}</button>)}</nav>
+  <nav aria-label="Graph views">{(['nodes','states','rig','preview','runtime','tools'] as const).map(t=><button key={t} aria-pressed={t===tab} onClick={()=>setTab(t)}>{t==='nodes'?'Pose graph':t==='states'?'States':t==='rig'?'Rig units':t==='preview'?'Skeleton preview':t==='runtime'?'Live entities':'Operations'}</button>)}</nav>
   {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
-  {tab==='tools'?tools:!graph?<p>{projectPath?'Open or create an animation graph.':'Open a project to edit animation graphs.'}</p>:<>
+  {tab==='runtime'?<AnimationRuntimePanel project={projectPath} rig={rigMode}/>:tab==='tools'?tools:!graph?<p>{projectPath?'Open or create an animation graph.':'Open a project to edit animation graphs.'}</p>:<>
    <div className="anim-actions"><select aria-label="Graph scope" value={scope} disabled={busy} onChange={e=>{setScope(e.target.value);select('');setStateId('');}}>
     <option value="">Root graph</option>{Object.keys(draft?.graphs??{}).map(s=><option key={s}>{s}</option>)}</select>
     <label>Model<input value={draft?.model??''} disabled={busy} placeholder="content/model.glb" onChange={e=>{if(draft)change({...draft,model:e.target.value});}}/></label>
