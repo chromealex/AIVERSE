@@ -1,0 +1,10 @@
+{
+  "sha": "734995a17452b75f2abc6a71dd72f3e13688f6cf",
+  "argv": [
+    "bash",
+    "/tmp/water-shore-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-water-bank-desktop.log.txt",
+  "sha256": "ea03f12a2b03433556f5c5e7d8fd2235a2bc3daf671a5058b9a0ee6b4d78d633"
+}
