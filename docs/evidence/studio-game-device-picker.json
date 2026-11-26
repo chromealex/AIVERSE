@@ -1,0 +1,10 @@
+{
+  "sha": "cac311133ed2e0d703fa494642566ea163526c80",
+  "argv": [
+    "bash",
+    "/tmp/game-device-evidence.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-game-device-picker.log.txt",
+  "sha256": "1e38f0605f52b21605d0cac4a31cab5961dfcc469d5762746f10683c41531e5d"
+}
