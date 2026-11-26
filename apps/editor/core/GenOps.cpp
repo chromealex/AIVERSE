@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iterator>
 #include "engine/game/gen/MapGen.h"
+#include "engine/game/gen/GenSeed.h"
 #include "engine/game/Tiles.h"
 
 namespace aiverse::editor {
@@ -13,7 +14,7 @@ Json str(const std::string& s) { return Json::string(s); }
 GenOptions optionsFrom(const Json& p) {
     GenOptions o;
     o.preset = p.getStr("preset", o.preset);
-    o.seed = uint64_t(p.getInt("seed", 1));
+    o.seed = uint64_t(gen::integerSeed(p["seed"],1));
     if(p.has("seedText")){
         const auto text=p.getStr("seedText");
         int64_t seed=0;
@@ -111,7 +112,7 @@ void registerGenOps(Workspace& ws) {
             if(start.isObject()){
                 Json setting=Json::object();
                 setting.set("preset",str(start.getStr("preset")));
-                setting.set("seed",str(start["seed"].isNumber()?std::to_string(start.getInt("seed")):start.getStr("seed","match")));
+                setting.set("seed",str(start["seed"].isNumber()?start["seed"].numberLiteral():start.getStr("seed","match")));
                 r.set("matchStart",std::move(setting));
             }
             r.set("presets", gen::presetList(w->project.rulesJson));
