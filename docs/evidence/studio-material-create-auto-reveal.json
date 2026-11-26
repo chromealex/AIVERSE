@@ -1,0 +1,10 @@
+{
+  "sha": "e8cf4c9c90053a12469ff08787726937c1fb30a4",
+  "argv": [
+    "bash",
+    "../material-show.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-material-create-auto-reveal.log.txt",
+  "sha256": "3c9b93720af9ab01d6186a8f8c4681c73a69b20a0f95a230e7480d6a8c4eb8bb"
+}
