@@ -2563,9 +2563,12 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
     const bool current = estimateProject_ == ws_.project.dir && estimateTarget_ == target &&
         estimateRun_ == ws_.runCount() && !ws_.building() && ws_.buildResult()==0 && estimateManifest_==manifest.dump();
     const auto& excluded=rep["atlas"]["excluded"];
+    const auto bytes=excluded.dump(-1);
+    const auto hash=pack::sha256(bytes.data(),bytes.size());
+    const auto token=pack::toHex(hash.data(),hash.size());
     if (method=="studio.buildAtlasFixSizes") {
         if (!current || params.getStr("project")!=ws_.project.dir || params.getInt("run",-1)!=estimateRun_ ||
-            params["excluded"].dump()!=excluded.dump()) throw std::runtime_error("Run a new size estimate before applying texture sizes.");
+            params.getStr("token")!=token) throw std::runtime_error("Run a new size estimate before applying texture sizes.");
         const auto& existing=manifest["packaging"]["targets"][target]["files"];
         const auto rules=editor::atlasSizeFixRules(existing,excluded);
         if (!rules.size() || rules.dump()==existing.dump()) return snapshot();
@@ -2574,7 +2577,7 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
         if (saved.has("error")) throw std::runtime_error(saved.getStr("error"));
         return snapshot();
     }
-    if(current) out.set("fixRun",num(int64_t(estimateRun_)));
+    if(current) {out.set("fixRun",num(int64_t(estimateRun_)));out.set("fixToken",str(token));}
     out.set("target", str(target));
     out.set("pack", rep["pack"]); out.set("atlas", rep["atlas"]);
     if (rep.has("split")) out.set("split", rep["split"]);

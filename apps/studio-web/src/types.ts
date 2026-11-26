@@ -650,7 +650,7 @@ export interface StudioParams {
   /** A floating window names itself (its active tab). */
   'studio.windowTitle': { title: string };
   'studio.buildAtlasEnabled': {project: string; original: boolean; enabled: boolean};
-  'studio.buildAtlasFixSizes': {project: string; target: string; run: number; excluded: {path: string; reason: string; fixMaxSize?: number}[]};
+  'studio.buildAtlasFixSizes': {project: string; target: string; run: number; token: string};
   'studio.buildAtlasPage': { project: string; original: number | Record<string, number> | null; target: string; size: number | null };
   'studio.buildInfo': Record<string,never>;
   'studio.entitiesAlign': { entityIds: string[]; mode: StudioAlignMode };
@@ -1083,7 +1083,7 @@ export interface StudioToolchainRequirement { id: string; name: string; required
 export interface StudioToolchain { target: string; host: string; hostSupported: boolean; hostNote?: string; ok: boolean; missing: string[];
   requirements: StudioToolchainRequirement[] }
 export interface StudioBuildLog { run:number; from: number; next: number; text: string; size: number; running: boolean; label: string; exitCode: number; runs: number; logFile: string }
-export interface StudioBuildEstimate { fixRun?: number; target: string; pack: Record<string, unknown>; atlas?: { enabled?: boolean; atlased?: number; pages?: number; occupancyPercent?: number; bytesSaved?: number;
+export interface StudioBuildEstimate { fixRun?: number; fixToken?: string; target: string; pack: Record<string, unknown>; atlas?: { enabled?: boolean; atlased?: number; pages?: number; occupancyPercent?: number; bytesSaved?: number;
     gpuBytesBefore?: number; gpuBytesAfter?: number; textureBindsBefore?: number; textureBindsAfter?: number;
     excluded?: { path: string; reason: string; fixMaxSize?: number }[] } | null; split?: Record<string, unknown>;
   heaviest: Array<{ path?: string; file?: string; bytes?: number; storedBytes?: number }> }

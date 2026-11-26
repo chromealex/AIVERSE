@@ -208,10 +208,10 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
               {!!item.fixMaxSize && <span> · Suggested maximum {item.fixMaxSize} px</span>}</li>)}</ul>
             {atlas.excluded.some(item => (item.fixMaxSize ?? 0)>0) &&
               <StudioButton disabled={atlasDisabled || estimate?.fixRun == null} onClick={async () => {
-                if (estimate?.fixRun == null || !atlas.excluded) return;
+                if (estimate?.fixRun == null || !estimate.fixToken) return;
                 setSavingAtlas(true);setError('');
                 try {
-                  commitSnapshot(await invoke('studio.buildAtlasFixSizes',{project:projectPath,target,run:estimate.fixRun,excluded:atlas.excluded}));
+                  commitSnapshot(await invoke('studio.buildAtlasFixSizes',{project:projectPath,target,run:estimate.fixRun,token:estimate.fixToken}));
                   await start('estimate');
                 } catch (err) {setError(message(err));}
                 finally {setSavingAtlas(false);}
