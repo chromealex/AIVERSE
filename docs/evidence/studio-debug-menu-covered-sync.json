@@ -1,0 +1,10 @@
+{
+  "sha": "6e5b39039091111859289ee98b94aea5bba28d8e",
+  "argv": [
+    "bash",
+    "/tmp/debug-sync.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-debug-menu-covered-sync.log.txt",
+  "sha256": "ef0792284941b22d4221a910b88bd5c67d787a4cd552ab50c1fecdc0775ba4fa"
+}
