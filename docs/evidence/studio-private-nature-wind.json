@@ -1,0 +1,10 @@
+{
+  "sha": "f199ef76f4cdf85146c274163a7aff8ff7eaa2aa",
+  "argv": [
+    "bash",
+    "/tmp/private-wind-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-private-nature-wind.log.txt",
+  "sha256": "2bcdb9ee4ccd3f279eb5599195a85a82aaf720d29df3d24a35ac84e861b3381d"
+}
