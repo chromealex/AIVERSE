@@ -618,3 +618,5 @@ Render the forest skeleton from the encoded wind rig and actual per-instance dra
 Expose the TerraWeave forest LOD scale and horizon in the private PHYSIS viewport. Verify controls, projection range and terrain-map persistence on macOS.
 
 Switch private forest tree geometry and hierarchical wind masks using the existing TerraWeave prototypes. Preserve simulation and camera during GPU rebuild.
+
+Route the original view_wind MCP schema to the PHYSIS viewport and validate the legacy arguments before updating presentation state.

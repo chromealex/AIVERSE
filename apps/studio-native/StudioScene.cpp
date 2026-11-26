@@ -3401,6 +3401,7 @@ Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,con
     if(view.ignition!=state.ignitionRevision)state.overlay.dirty=true;
     view.ignition=state.ignitionRevision;
     view.display.settings=state.preview.settings;
+    view.display.settings.enabled=state.showNature && state.preview.settings.enabled;
     auto& particles=view.particles_;
     device_->beginFrame(width,height);StudioFrameScope frame{*device_};
     renderer_.beginScene(camera,width,height);

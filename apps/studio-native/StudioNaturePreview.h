@@ -12,6 +12,7 @@ struct StudioNaturePreview {
     std::string epoch;
     std::uint64_t revision;
     std::uint64_t ignitionRevision=0;
+    bool showNature=true;
     bool forestEnabled=false;
     bool hierarchical=true;
     std::string treeGeometry="auto";

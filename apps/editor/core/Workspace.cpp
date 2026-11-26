@@ -1027,6 +1027,7 @@ void Workspace::registerCoreOps() {
         registerOp({name,desc,schema(sch),std::move(fn),false,true});
     };
     const auto requireStudioLink=[](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");};
+    addLinked("view_wind","Control forest and nature in the private PHYSIS viewport.",windShowcaseSchema,requireStudioLink);
     addLinked("physis_nature_preview","Inspect or control the PHYSIS nature preview in linked Studio.",
         physisNatureCommandSchema,requireStudioLink);
     for(const char* name:{"animation_runtime_status","rig_runtime_status"})

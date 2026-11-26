@@ -113,6 +113,8 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
     : platform_(platform), engineRoot_(engineRoot), htmlComposite_(htmlComposite) {
     // The project opens asynchronously after the UI loads (splash and progress).
     session_ = std::make_unique<StudioSession>(engineRoot, std::string());
+    session_->workspace().registerOp({"view_wind","Control forest and nature in the private PHYSIS viewport.",
+        Json::parse(editor::windShowcaseSchema),[this](const Json& params){return natureCommand(params,true);},true});
     session_->workspace().registerOp({"physis_nature_preview","Control the PHYSIS panel's private nature simulation.",
         Json::parse(editor::physisNatureCommandSchema),[this](const Json& params){return natureCommand(params);},true});
     auto& workspace=session_->workspace();
@@ -789,13 +791,13 @@ StudioScene* StudioHost::activeHumanRenderer(){
     if(characterSurface_.placement.visible&&characterSurface_.renderer)return characterSurface_.renderer.get();
     return appearanceSurface_.placement.visible?appearanceSurface_.renderer.get():nullptr;
 }
-Json StudioHost::natureCommand(const Json& p) {
+Json StudioHost::natureCommand(const Json& p,bool showcase) {
     const auto& ws=session_->workspace();
     const auto epoch=session_->graphDocumentScope().getStr("epoch");
     if (projectLoading_ || ws.project.dir.empty() || epoch.empty()) throw std::runtime_error("Open a project first.");
     if (naturePreview_ && (naturePreview_->epoch!=epoch || naturePreview_->revision!=ws.map.revision))
         naturePreview_.reset();
-    const auto live=game_ && game_->launchPlan().project==ws.project.dir?game_->physisTick():std::nullopt;
+    const auto live=!showcase && game_ && game_->launchPlan().project==ws.project.dir?game_->physisTick():std::nullopt;
     if (live && liveNatureView_ && (liveNatureEpoch_!=game_->runtimeEpoch() ||
         liveNatureView_->epoch!=epoch || liveNatureView_->revision!=ws.map.revision))liveNatureView_.reset();
     auto& target=live?liveNatureView_:naturePreview_;
@@ -808,9 +810,32 @@ Json StudioHost::natureCommand(const Json& p) {
         const double v=p[key].toDouble();
         if (!p[key].isNumber() || !std::isfinite(v) || (integer && v!=std::floor(v)))
             throw std::invalid_argument(std::string("Invalid nature setting: ")+key);
+        if (showcase && (v<lo || v>hi)) throw std::invalid_argument(std::string("Out of range: ")+key);
         return std::clamp(v,lo,hi);
     };
-    settings.enabled=p.getBool("enabled",settings.enabled);
+    Json displayPatch=Json::object();
+    bool showNature=target?target->showNature && settings.enabled:false;
+    if (showcase) {
+        for (const char* key:{"forest","hierarchical","horizon","nature"})
+            if (p.has(key) && p[key].type()!=Json::Type::Bool) throw std::invalid_argument(std::string("Expected boolean: ")+key);
+        for (const char* key:{"forest","hierarchical","horizon","treeGeometry","lodScale"})
+            if (p.has(key)) displayPatch.set(key,p[key]);
+        if (p.has("debug")) displayPatch.set("forestMask",p["debug"]);
+        if (p.has("grassQuality")) displayPatch.set("quality",p["grassQuality"]);
+        // Validate the full display patch before replacing a simulation or changing playback.
+        StudioNaturePreview validation(epoch,ws.map,0,settings,false);
+        validation.setDisplay(displayPatch);
+        if (p.has("grassMeadow")) {
+            const auto& value=p["grassMeadow"];
+            if (!value.isString() && !value.isObject()) throw std::invalid_argument("Expected grass meadow preset or object");
+            auto meadow=value.isString()?value.str():value.dump(0);
+            if (meadow.empty()) meadow="auto";
+            if (meadow!="auto") (void)terraweave::parseGrassMeadow(meadow.front()=='{'?Json::parse(meadow):Json::string(meadow),"grassMeadow");
+            settings.grassMeadow=meadow;
+        }
+        showNature=p.getBool("nature",showNature);
+        settings.enabled=showNature || p.getBool("forest",target && target->forestEnabled);
+    } else settings.enabled=p.getBool("enabled",settings.enabled);
     settings.playing=p.getBool("playing",settings.playing);
     settings.grass=p.getBool("grass",settings.grass);
     settings.flames=p.getBool("flames",settings.flames);
@@ -847,6 +872,8 @@ Json StudioHost::natureCommand(const Json& p) {
         }
         auto& state=*target;
         state.preview.settings=settings;
+        if (showcase) state.setDisplay(displayPatch);
+        state.showNature=showcase?showNature:true;
         if (!live) {
             const bool playing=settings.enabled && (p.has("playing") || !wasEnabled?settings.playing:wasPlaying);
             if (rebuild || playing!=wasPlaying) state.commandTime=std::chrono::steady_clock::now();
@@ -867,7 +894,7 @@ Json StudioHost::natureCommand(const Json& p) {
         if (!settings.enabled)state.presentation=Json::object();
         Json event=Json::object();event.set("epoch",Json::string(epoch));
         if (p.has("enabled")) event.set("enabled",Json::fromBool(settings.enabled));
-        if (p.getBool("enabled")) event.set("openSource",Json::string(live?"game":"map"));
+        if (p.getBool("enabled") || (showcase && settings.enabled)) event.set("openSource",Json::string(live?"game":"map"));
         sendEventPayload("nature.command",event);
     }
     const auto frame=!live && target?target->read(Json::object()):Json{};
@@ -877,6 +904,15 @@ Json StudioHost::natureCommand(const Json& p) {
     out.set("tick",Json::number(live?int64_t(*live):frame.getInt("tick")));
     for (const char* key:{"flames","smoke","voices","burningAreaM2"}) out.set(key,display.has(key)?display[key]:Json::number(int64_t(0)));
     out.set("grassPatches",Json::number(display.getInt("patches")));
+    if (showcase) {
+        out.set("forest",Json::fromBool(target && target->forestEnabled));
+        out.set("hierarchical",Json::fromBool(!target || target->hierarchical));
+        out.set("forestInstances",Json::number(display.getInt("forestInstances")));
+        out.set("horizon",Json::fromBool(target && target->forestHorizon));
+        out.set("nature",Json::fromBool(showNature));
+        out.set("grassMeadow",Json::string(settings.grassMeadow));
+        out.set("summary",Json::string("Ветер: "+std::to_string(int(settings.windSpeed))+" м/с"));
+    }
     if (settings.enabled) out.set("next",Json::string(R"(view_screenshot {"window":"physis"})"));
     return out;
 }
