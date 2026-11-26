@@ -1,0 +1,10 @@
+{
+  "sha": "3ae8209ffcea6b6259abcf0f07bddeb73f200ffa",
+  "argv": [
+    "bash",
+    "/tmp/studio-icons-evidence.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-overlay-icon-textures.log.txt",
+  "sha256": "d31c778532159c33db2fcfe00853478537196dafc28d693087ae87d4a066a340"
+}
