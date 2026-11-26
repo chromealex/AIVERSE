@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { DraftHistory } from '../graphs/graphFramework';
 import { invoke } from '../bridge';
+import AnimationPoseCanvas from './AnimationPoseCanvas';
 import AnimationProperties from './AnimationProperties';
 import type {Value} from './RigInspector';
 import AnimationRuntimePanel from './AnimationRuntimePanel';
@@ -20,7 +21,6 @@ export interface GraphOpenRoute {request?:GraphOpenRequest;consume:()=>void}
 const drafts=new Map<string,{name:string;history:DraftHistory<Graph>;saved:Graph|null;revision:string;inline:boolean}>();
 const kinds=['bind','clip','blend','additive','twoBoneIK','rig','stack','subgraph','motionMatching','native'];
 const ports=(n:Node):('a'|'b'|'input')[]=>n.kind==='additive'||n.kind==='blend'?['a','b']:n.input!==undefined?['input']:[];
-const position=(n:Node,i:number)=>({x:n.position?.[0]??24+190*(i%3),y:n.position?.[1]??24+90*Math.floor(i/3)});
 const nodeOptions=(nodes:Node[])=>nodes.map(n=><option key={n.id}>{n.id}</option>);
 
 export default function AnimationGraphPanel({projectPath,tools,rigMode,route,historyVersion,openAttachments}:{historyVersion?:number|string;openAttachments:()=>void;route:GraphOpenRoute;projectPath:string;tools:ReactNode;rigMode:boolean}){
@@ -47,12 +47,12 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route,his
  },[projectPath,historyVersion]);
  const [names,setNames]=useState<string[]>([]),[name,setName]=useState(restored?.name??''),[newName,setNewName]=useState('');
  const history=useRef(restored?.history);
- const [committed,setDraft]=useState<Graph|null>(restored?.history.current()??null),[saved,setSaved]=useState<Graph|null>(restored?.saved??null);
- const [dragPreview,setDragPreview]=useState<Graph|null>(null);
- const draft=dragPreview??committed;
+ const [draft,setDraft]=useState<Graph|null>(restored?.history.current()??null),[saved,setSaved]=useState<Graph|null>(restored?.saved??null);
  const [inline,setInline]=useState(restored?.inline??false);
  const [revision,setRevision]=useState(restored?.revision??'');
- const [requestedScope,setScope]=useState(''),[selection,select]=useState('');
+ const [requestedScope,setScope]=useState(''),[selectedNodes,setSelectedNodes]=useState<string[]>([]);
+ const selection=selectedNodes.at(-1)??'';
+ const select=(id:string)=>setSelectedNodes(id?[id]:[]);
  const [nodeName,setNodeName]=useState(''),[pickedBone,setPickedBone]=useState('');
  useEffect(()=>setPickedBone(''),[name,draft?.model]);
  useEffect(()=>setNodeName(selection),[selection]);
@@ -75,11 +75,10 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route,his
  const [preview,setPreview]=useState({token:0,error:''});
  useEffect(()=>{
   if(!projectPath)return;
-  void invoke('studio.animationEditorState',{project:projectPath,panel:rigMode?'rig':'graph',graph:committed,
-   dirty:!!committed&&JSON.stringify(saved)!==JSON.stringify(committed),token:preview.token,error:error||preview.error})
+  void invoke('studio.animationEditorState',{project:projectPath,panel:rigMode?'rig':'graph',graph:draft,
+   dirty:!!draft&&JSON.stringify(saved)!==JSON.stringify(draft),token:preview.token,error:error||preview.error})
    .catch(e=>console.warn('Animation editor status:',e));
- },[projectPath,rigMode,committed,saved,preview,error]);
- const drag=useRef<{id:string;x:number;y:number;left:number;top:number;before:Graph;latest:Graph}|null>(null);
+ },[projectPath,rigMode,draft,saved,preview,error]);
  useEffect(()=>{
   if(history.current&&(inline||dirty||history.current.canUndo()||history.current.canRedo()))
    drafts.set(cacheKey,{name,history:history.current,saved,revision,inline});
@@ -149,10 +148,7 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route,his
  async function edit(action:string,params:Record<string,unknown>){
   const r=await op('edit',{action,graph:draft,scope,...params});change(r.graph);
  }
- const positions=new Map(graph?.nodes.map((n,i)=>[n.id,position(n,i)]));
- const xs=[...positions.values()].map(p=>p.x),ys=[...positions.values()].map(p=>p.y);
- const left=Math.min(0,...xs)-12,top=Math.min(0,...ys)-12;
- const width=Math.max(360,...xs.map(x=>x+180))-left,height=Math.max(155,...ys.map(y=>y+70))-top;
+ const nodeIds=new Set(graph?.nodes.map(n=>n.id));
  return <section className="anim-editor" aria-label={title}>
   <header><strong>{title}</strong><select aria-label="Animation graph asset" value={name} disabled={busy||dirty} onChange={e=>void run(()=>load(e.target.value))}>
    <option value="" disabled>Select graph</option>{name&&!names.includes(name)&&<option>{name}</option>}{names.map(n=><option key={n}>{n}</option>)}</select>
@@ -188,23 +184,17 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route,his
    </div>
    {tab==='preview'&&draft?<AnimationSkeletonPreview onStatus={setPreview} projectPath={projectPath} graph={draft} scope={scope} panel={rigMode?'rig':'graph'} onPick={setPickedBone} busy={busy}
     onKeep={controls=>{if(graph)change(inScope({...graph,parameters:{...graph.parameters,...controls}}));}}/>:tab==='nodes'?<>
-    <div className="anim-canvas graph-surface"><svg width={width} height={height} viewBox={left+' '+top+' '+width+' '+height} aria-label="Pose node connections">
-     {graph.nodes.flatMap(n=>ports(n).map((port,i)=>{const start=positions.get(n[port]??''),end=positions.get(n.id);
-      if(!start||!end)return null;const x=start.x+144,y=start.y+26,v=end.y+18+i*18;
-      return <path key={n.id+port} className="graph-wire" d={`M${x} ${y} C${x+48} ${y} ${end.x-48} ${v} ${end.x} ${v}`}/>;}))}
-     {graph.nodes.map(n=>{const p=positions.get(n.id)!;return <g key={n.id} transform={`translate(${p.x} ${p.y})`} role="button" tabIndex={0} aria-label={'Select '+n.id} aria-pressed={selection===n.id} className="graph-draggable"
-       onClick={()=>select(n.id)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();select(n.id);}}}
-       onPointerDown={e=>{if(busy||!draft||e.button!==0)return;select(n.id);e.currentTarget.setPointerCapture(e.pointerId);drag.current={id:n.id,x:e.clientX,y:e.clientY,left:p.x,top:p.y,before:draft,latest:draft};}}
-       onPointerMove={e=>{const d=drag.current;if(!d||d.id!==n.id)return;const dx=e.clientX-d.x,dy=e.clientY-d.y;d.latest=(!dx&&!dy)?d.before:inScope({...graph,nodes:graph.nodes.map(v=>v.id===n.id?{...v,position:[Math.round(d.left+dx),Math.round(d.top+dy)]}:v)});setDragPreview(d.latest);}}
-       onLostPointerCapture={()=>{const d=drag.current;drag.current=null;setDragPreview(null);if(d&&d.before!==d.latest)change(d.latest);}}>
-      <title>{n.id} · {n.kind}</title><rect className="graph-node-body" width="144" height="52" rx="6"/><path className="graph-node-accent" data-source={n.id===graph.output} d="M2 10 V34"/><text className="graph-node-operation" x="12" y="21">{n.id}</text>
-      <text className="graph-node-id" x="12" y="41">{n.kind}{graph.output===n.id?' · output':''}</text>
-      <circle className="anim-port" cx="144" cy="26" r="3"/>{ports(n).map((port,i)=><circle className="anim-port" key={port} cx="0" cy={18+i*18} r="3"/>)}</g>;})}</svg></div>
+    <AnimationPoseCanvas key={JSON.stringify([name,scope])} graph={graph} selection={selectedNodes} busy={busy}
+     select={setSelectedNodes} connect={(from,to)=>void run(()=>edit('connect',{source:from.node,id:to.node,port:to.port}))}
+     move={updates=>{
+      const byId=new Map(updates.map(n=>[n.id,n]));
+      change(inScope({...graph,nodes:graph.nodes.map(n=>{const update=byId.get(n.id);return update?{...n,position:[update.x,update.y]}:n;})}));
+     }}/>
     <fieldset disabled={busy}><label>Node type<select value={kind} onChange={e=>setKind(e.target.value)}>{kinds.map(k=><option key={k}>{k}</option>)}</select></label>
-     <button onClick={()=>void run(async()=>{let i=1;while(positions.has(kind+i))i++;const id=kind+i;
+     <button onClick={()=>void run(async()=>{let i=1;while(nodeIds.has(kind+i))i++;const id=kind+i;
       await edit('add',{kind,id});select(id);})}>Add node</button>
      {current&&<><label>Node name<input value={nodeName} onChange={e=>setNodeName(e.target.value)}/></label>
-      <button disabled={!nodeName.trim()||positions.has(nodeName.trim())} onClick={()=>void run(async()=>{const id=nodeName.trim();await edit('rename',{id:current.id,name:id});select(id);})}>Rename</button>{ports(current).map(port=><label key={port}>{port}<select value={current[port]??''} onChange={e=>void run(()=>edit('connect',{source:e.target.value,id:current.id,port}))}>{nodeOptions(graph.nodes.filter(n=>n.id!==current.id))}</select></label>)}
+      <button disabled={!nodeName.trim()||nodeIds.has(nodeName.trim())} onClick={()=>void run(async()=>{const id=nodeName.trim();await edit('rename',{id:current.id,name:id});select(id);})}>Rename</button>{ports(current).map(port=><label key={port}>{port}<select value={current[port]??''} onChange={e=>void run(()=>edit('connect',{source:e.target.value,id:current.id,port}))}>{nodeOptions(graph.nodes.filter(n=>n.id!==current.id))}</select></label>)}
       {current.kind==='subgraph'&&<>
        <label>Child graph<select aria-label="Referenced subgraph" value={current.graph??''} disabled={busy}
         onChange={e=>void run(()=>edit('setSubgraph',{id:current.id,name:e.target.value}))}>
@@ -230,7 +220,7 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route,his
       <button onClick={()=>void run(async()=>{await edit('remove',{id:current.id});select('');})}>Remove node</button></>}
     </fieldset>
    </>:tab==='rig'?<RigInspector pickedBone={pickedBone} presets={itemPresets} nodes={graph.nodes.filter(n=>n.kind==='rig')} selected={selection} select={select} busy={busy}
-    addRig={()=>void run(async()=>{let i=1;while(positions.has('rig'+i))i++;await edit('add',{kind:'rig',id:'rig'+i});select('rig'+i);})}
+    addRig={()=>void run(async()=>{let i=1;while(nodeIds.has('rig'+i))i++;await edit('add',{kind:'rig',id:'rig'+i});select('rig'+i);})}
     nativeEdit={(action,params)=>void run(()=>edit(action,params))}
     update={(id,units)=>patchNode(id,{units})}/>:<fieldset disabled={busy} className="anim-states">
     <label>New state<input value={stateName} onChange={e=>setStateName(e.target.value)}/></label>

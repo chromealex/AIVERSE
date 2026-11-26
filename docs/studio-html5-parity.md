@@ -456,3 +456,5 @@ Packaged Mac HTML Studio verified creating and undoing a named child, restoring 
 Port the legacy recursive node-property editor and typed graph parameter defaults into standalone Graph and Rig authoring. Keep node identity, connections and subgraph selection under their existing editors and verify editing beyond the original short list of HTML fields.
 
 Standalone animation node inspector: packaged macOS verification covered editing and adding nested clip notify events, speed and loop, retaining unrelated node metadata, removing fields with Undo/Redo, vector and boolean graph defaults, native validation and reopening the saved asset.
+
+Standalone pose canvas: reuse the shared Studio GraphCanvas for zoom, fit, panning, minimap and direct port wiring. Keep native connection validation, grouped movement history and existing signed document coordinates.

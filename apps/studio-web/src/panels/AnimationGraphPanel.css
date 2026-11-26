@@ -4,9 +4,8 @@
 .anim-editor input{width:10em}.anim-editor input[type=number]{width:6em}.anim-editor label{display:grid;gap:3px;color:var(--au-text-soft)}
 .anim-editor button:enabled{cursor:pointer}.anim-editor button:disabled{opacity:.45}.anim-editor button[aria-pressed=true]{background:var(--au-active);border-color:var(--au-accent)}
 .anim-editor>p{padding:0 10px}.anim-editor [role=alert]{color:var(--au-danger)}
-.anim-canvas{min-height:155px;flex:1;overflow:auto}.anim-canvas svg{display:block}.anim-canvas g[role=button]{touch-action:none;cursor:grab}.anim-port{fill:var(--au-accent)}.anim-transition{width:100%;border-top:1px solid var(--au-line)}
+.anim-transition{width:100%;border-top:1px solid var(--au-line)}
 .anim-condition{display:flex;flex-wrap:wrap;align-items:center;gap:6px;border-left:2px solid var(--au-accent);padding-left:8px}
-.anim-canvas.graph-surface{background-color:var(--au-canvas);background-image:radial-gradient(circle,var(--au-line-strong) 1px,transparent 1px);background-size:20px 20px}
 .anim-editor>fieldset.rig-editor{display:block;min-width:0}
 .rig-bar,.rig-unit header,.rig-fields{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 .rig-bar{margin-bottom:10px;align-items:end}.rig-unit{padding:9px;margin-bottom:8px;border:1px solid var(--au-line);border-radius:5px;background:var(--au-panel-raised)}
@@ -58,3 +57,5 @@
 .animation-properties{display:grid;gap:.4rem;padding:.4rem .6rem;border-left:1px solid var(--au-line)}
 .animation-property,.animation-property-add{display:flex;align-items:baseline;flex-wrap:wrap;gap:.5rem}
 .animation-property>details,.animation-property>label{flex:1;min-width:0}
+
+.anim-editor>.au-graph-workspace{flex:1 0 240px;min-height:180px}

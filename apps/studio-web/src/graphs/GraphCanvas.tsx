@@ -14,12 +14,12 @@ export interface GraphCanvasProps {
  view:GraphView; heat?:Readonly<Record<string,number>>; highlighted?:readonly string[]; selected:string; label:string; disabled?:boolean; readOnly?:boolean;
  pendingOutput?:PortRef|null; onOutput?:(port:PortRef)=>void; onInput?:(port:PortRef)=>void;
  commands?:readonly GraphCommand[]; onCancel?:()=>void;
- enhancedNavigation?:boolean; typedPorts?:boolean; onAddMenu?:()=>void;
+ moveLimit?:number; enhancedNavigation?:boolean; typedPorts?:boolean; onAddMenu?:()=>void;
  onConnect?:(from:PortRef,to:PortRef)=>void; groups?:readonly {id:string;title:string;members:string[]}[];
  selection?:readonly string[]; onSelection?:(ids:string[])=>void; onMoveGroup?:(positions:Positioned[])=>void;
  onSelect:(id:string)=>void; onMove:(id:string,x:number,y:number)=>void;
 }
-export default function GraphCanvas({view,heat,highlighted,selected,label,disabled,readOnly,pendingOutput,onOutput,onInput,onSelect,onMove,selection,onSelection,onMoveGroup,commands,onCancel,enhancedNavigation=false,typedPorts=false,onAddMenu,onConnect,groups=[]}:GraphCanvasProps) {
+export default function GraphCanvas({view,heat,highlighted,selected,label,disabled,readOnly,pendingOutput,onOutput,onInput,onSelect,onMove,selection,onSelection,onMoveGroup,commands,onCancel,moveLimit=2000,enhancedNavigation=false,typedPorts=false,onAddMenu,onConnect,groups=[]}:GraphCanvasProps) {
  const svg=useRef<SVGSVGElement>(null);
  const scroll=useRef<HTMLDivElement>(null);
  const drag=useRef<{pointer:number;origin:Point;nodes:Positioned[]}|null>(null);
@@ -64,7 +64,7 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
   const d=drag.current;if(!d||d.pointer!==event.pointerId)return;
   drag.current=null;setPreview([]);
   if(commit&&!disabled&&p&&(p.x!==d.origin.x||p.y!==d.origin.y)){
-   const next=moveGroup(d.nodes,p.x-d.origin.x,p.y-d.origin.y);
+   const next=moveGroup(d.nodes,p.x-d.origin.x,p.y-d.origin.y,moveLimit);
    if(onMoveGroup)onMoveGroup(next);else for(const n of next)onMove(n.id,n.x,n.y);
   }
  };
@@ -114,7 +114,7 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
     const p=point(event);if(!p||disabled)return;
     setCursor(p);
     const b=box.current;if(b?.pointer===event.pointerId)setRect(selectionRect(b.origin,p));
-    const d=drag.current;if(d?.pointer===event.pointerId)setPreview(moveGroup(d.nodes,p.x-d.origin.x,p.y-d.origin.y));
+    const d=drag.current;if(d?.pointer===event.pointerId)setPreview(moveGroup(d.nodes,p.x-d.origin.x,p.y-d.origin.y,moveLimit));
    }} onPointerUp={e=>end(e,true)} onPointerCancel={e=>end(e,false)} onLostPointerCapture={e=>end(e,false)}>
    {groups.map(g=>{const members=geometry.nodes.filter(n=>g.members.includes(n.id));if(!members.length)return null;const x=Math.max(0,Math.min(...members.map(n=>n.x))-12),y=Math.max(0,Math.min(...members.map(n=>n.y))-24),w=Math.max(...members.map(n=>n.x+nodeWidth))+12-x,h=Math.max(...members.map(n=>n.y+n.height))+12-y;return <g key={g.id} pointerEvents="none"><rect x={x} y={y} width={w} height={h} rx="8" fill="var(--au-accent)" fillOpacity=".08" stroke="var(--au-accent)" strokeDasharray="5 4"/><text x={x+8} y={y+15} fill="var(--au-text-soft)" fontSize="11">{g.title}</text></g>;})}
    {geometry.wires.map(edge=><path key={edge.id} className="graph-wire" data-emphasis={ids.length ? (ids.includes(edge.from)||ids.includes(edge.to) ? 'active' : 'quiet') : undefined} d={curve(edge.x1,edge.y1,edge.x2,edge.y2)} fill="none" stroke="var(--au-accent)" strokeWidth="2" pointerEvents="none"/>)}
