@@ -61,7 +61,34 @@ void registerAnimationOps(Workspace& ws){auto schema=Json::parse(R"({"type":"obj
             }
             if(!graph||!(*graph)["nodes"].isArray())throw std::runtime_error("Unknown animation graph scope");
             const auto id=p.getStr("id");
-            if(action=="connect")animation::connect(*graph,p.getStr("source"),id,p.getStr("port"));
+            if(action=="addSubgraph"){
+                const auto name=p.getStr("name");
+                if(name.empty()||draft["graphs"].has(name))throw std::runtime_error("Enter a unique subgraph name");
+                if(draft["graphs"].size()>=64)throw std::runtime_error("At most 64 subgraphs are supported");
+                draft.member("graphs").set(name,animation::makeGraph());
+            }else if(action=="setSubgraph"){
+                const auto name=p.getStr("name");
+                const auto& children=draft["graphs"];
+                if(!children.has(name))throw std::runtime_error("Unknown subgraph");
+                std::vector<std::string> pending{name};std::set<std::string> visited;
+                while(!pending.empty()){
+                    const auto child=pending.back();pending.pop_back();
+                    if(child==scope)throw std::runtime_error("Recursive subgraph reference");
+                    if(!visited.insert(child).second)continue;
+                    for(const auto& node:children[child]["nodes"].items()){
+                        const auto next=node.getStr("graph");
+                        if(node.getStr("kind")=="subgraph" && children.has(next))pending.push_back(next);
+                    }
+                }
+                auto& nodes=graph->member("nodes").itemsMut();
+                const auto node=std::find_if(nodes.begin(),nodes.end(),[&](const Json& n){return n.getStr("id")==id;});
+                if(node==nodes.end()||node->getStr("kind")!="subgraph")throw std::runtime_error("Select a subgraph node");
+                node->set("graph",Json::string(name));
+                Json bindings=Json::object();
+                for(const auto& [key,value]:(*node)["bindings"].members())
+                    if(children[name]["parameters"].has(key))bindings.set(key,value);
+                node->set("bindings",std::move(bindings));
+            }else if(action=="connect")animation::connect(*graph,p.getStr("source"),id,p.getStr("port"));
             else if(action=="remove")animation::remove(*graph,id);
             else if(action=="rename")animation::rename(*graph,id,p.getStr("name"));
             else if(action=="addUnit"||action=="addContacts"){

@@ -448,3 +448,5 @@ Graph and Rig now read the running hosted game's procedural animation diagnostic
 Graph and Rig authoring: restore rule-type model selection, explicit save and apply to the selected type, and direct Attachments navigation. Preserve graph revision checks and authored type overrides for inherited models.
 
 Packaged Mac Studio verified applying an animation to a child type with an inherited model, rejecting a missing model before asset save and rejecting an externally changed graph before apply. Authored child settings, base type and sibling type were checked on disk. Attachments opens from the Rig header.
+
+Standalone Graph/Rig subgraphs: create named children in the draft, open child scopes, connect a subgraph node to a child and expose its parameter bindings. Keep graph history and reject recursive links before applying them.

@@ -7,7 +7,7 @@ import RigInspector, {type RigUnit,type ItemPresets} from './RigInspector';
 import './graphSurface.css';
 import './AnimationGraphPanel.css';
 
-type Node = {id:string;kind:string;position?:number[];a?:string;b?:string;input?:string;clip?:string;units?:RigUnit[];weight?:number};
+type Node = {graph?:string;bindings?:Record<string,string>;id:string;kind:string;position?:number[];a?:string;b?:string;input?:string;clip?:string;units?:RigUnit[];weight?:number};
 type Condition = {parameter:string;op?:string;value?:number};
 type Transition = {to:string;fade?:number;after?:number;when:Condition[]|Record<string,never>};
 type State = {id:string;output:string;transitions?:Transition[]};
@@ -50,7 +50,7 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route,his
  const draft=dragPreview??committed;
  const [inline,setInline]=useState(restored?.inline??false);
  const [revision,setRevision]=useState(restored?.revision??'');
- const [scope,setScope]=useState(''),[selection,select]=useState('');
+ const [requestedScope,setScope]=useState(''),[selection,select]=useState('');
  const [nodeName,setNodeName]=useState(''),[pickedBone,setPickedBone]=useState('');
  useEffect(()=>setPickedBone(''),[name,draft?.model]);
  useEffect(()=>setNodeName(selection),[selection]);
@@ -58,6 +58,9 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route,his
  const [stateId,setStateId]=useState(''),[stateName,setStateName]=useState('');
  const [parameter,setParameter]=useState(''),[notice,setNotice]=useState('');
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
+ const [childName,setChildName]=useState('');
+ const children=draft?.graphs??{};
+ const scope=Object.hasOwn(children,requestedScope)?requestedScope:'';
  const scoped=scope?draft?.graphs?.[scope]:draft;
  const graph=scoped&&Array.isArray(scoped.nodes)?scoped:null;
  const scalars=Object.keys(graph?.parameters??{}).filter(k=>!Array.isArray(graph?.parameters?.[k]));
@@ -105,7 +108,7 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route,his
  }
  function openDocument(id:string,doc:Graph,version:string,isInline:boolean){
   history.current=new DraftHistory(doc,40);setDraft(doc);setSaved(doc);setRevision(version);setInline(isInline);
-  setName(id);setSelectionTarget({id:'',model:''});setScope('');select('');setStateId('');setError('');setNotice('');
+  setName(id);setChildName('');setSelectionTarget({id:'',model:''});setScope('');select('');setStateId('');setError('');setNotice('');
  }
  async function load(id:string){
   const r=await op('get',{name:id});if(!Array.isArray(r.graph?.nodes))throw new Error('Asset has no pose graph');
@@ -160,6 +163,9 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route,his
   {tab==='runtime'?<AnimationRuntimePanel project={projectPath} rig={rigMode}/>:tab==='tools'?tools:!graph?<p>{projectPath?'Open or create an animation graph.':'Open a project to edit animation graphs.'}</p>:<>
    <div className="anim-actions"><select aria-label="Graph scope" value={scope} disabled={busy} onChange={e=>{setScope(e.target.value);select('');setStateId('');}}>
     <option value="">Root graph</option>{Object.keys(draft?.graphs??{}).map(s=><option key={s}>{s}</option>)}</select>
+    <input aria-label="New subgraph name" placeholder="Subgraph name" value={childName} onChange={e=>setChildName(e.target.value)}/>
+    <button disabled={busy||!childName.trim()||Object.hasOwn(children,childName.trim())||Object.keys(children).length>=64}
+     onClick={()=>void run(async()=>{const child=childName.trim();await edit('addSubgraph',{name:child});setScope(child);select('');setStateId('');setChildName('');})}>Add subgraph</button>
     <label>Model<input value={draft?.model??''} disabled={busy} placeholder="content/model.glb" onChange={e=>{if(draft)change({...draft,model:e.target.value});}}/></label>
     <button disabled={busy||!draft?.model} onClick={()=>void run(async()=>{await op('validate',{graph:draft});setNotice('Graph compiled against '+draft?.model);})}>Validate</button>
     <button disabled={busy||!history.current?.canUndo()} onClick={()=>{if(history.current)setDraft(history.current.undo());}}>Undo</button>
@@ -194,6 +200,17 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route,his
       await edit('add',{kind,id});select(id);})}>Add node</button>
      {current&&<><label>Node name<input value={nodeName} onChange={e=>setNodeName(e.target.value)}/></label>
       <button disabled={!nodeName.trim()||positions.has(nodeName.trim())} onClick={()=>void run(async()=>{const id=nodeName.trim();await edit('rename',{id:current.id,name:id});select(id);})}>Rename</button>{ports(current).map(port=><label key={port}>{port}<select value={current[port]??''} onChange={e=>void run(()=>edit('connect',{source:e.target.value,id:current.id,port}))}>{nodeOptions(graph.nodes.filter(n=>n.id!==current.id))}</select></label>)}
+      {current.kind==='subgraph'&&<>
+       <label>Child graph<select aria-label="Referenced subgraph" value={current.graph??''} disabled={busy}
+        onChange={e=>void run(()=>edit('setSubgraph',{id:current.id,name:e.target.value}))}>
+        <option value="" disabled>Select subgraph</option>{Object.keys(children).filter(id=>id!==scope).map(id=><option key={id}>{id}</option>)}
+       </select></label>
+       {Object.entries(children[current.graph??'']?.parameters??{}).map(([child,value])=><label key={child}>{child}
+        <select aria-label={'Bind '+child} value={current.bindings?.[child]??''} disabled={busy} onChange={e=>{
+         const bindings={...current.bindings};if(e.target.value)bindings[child]=e.target.value;else delete bindings[child];patchNode(current.id,{bindings});
+        }}><option value="">Child default</option>{Object.entries(graph.parameters??{}).filter(([,v])=>Array.isArray(v)===Array.isArray(value)).map(([key])=><option key={key}>{key}</option>)}</select>
+       </label>)}
+      </>}
       {current.kind==='clip'&&<label>Clip<input value={current.clip??''} onChange={e=>patchNode(current.id,{clip:e.target.value})}/></label>}
       {current.weight!==undefined&&<label>Weight<input type="number" min="0" max="1" step=".05" value={current.weight} onChange={e=>{if(e.target.validity.valid&&Number.isFinite(e.target.valueAsNumber))patchNode(current.id,{weight:e.target.valueAsNumber});}}/></label>}
       <button disabled={current.id===graph.output} onClick={()=>change(inScope({...graph,output:current.id}))}>Use as output</button>
