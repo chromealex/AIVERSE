@@ -1,0 +1,10 @@
+{
+  "sha": "39dd7396d218f57fb079afcc466303ffd7287336",
+  "argv": [
+    "bash",
+    "/tmp/game-standalone-evidence.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-game-standalone.log.txt",
+  "sha256": "a19a2e77b69bb0b4771c12c5b66220712a18fd66a77cb77a432a66ef1f0dd9eb"
+}
