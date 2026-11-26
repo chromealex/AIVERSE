@@ -567,6 +567,7 @@
     "docs/evidence/studio-panel-maximize-native.json",
     "docs/evidence/studio-linked-animation-graph.json",
     "docs/evidence/studio-animation-graph-rig-history.json",
-    "docs/evidence/studio-linked-editor-status-discovery.json"
+    "docs/evidence/studio-linked-editor-status-discovery.json",
+    "docs/evidence/studio-linked-editor-status-pose.json"
   ]
 }
