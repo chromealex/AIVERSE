@@ -241,7 +241,12 @@
 .studio-assets-items--grid .studio-assets-item[data-kind="material"] .studio-assets-name{white-space:normal;overflow-wrap:anywhere}
 .studio-assets-type{font-size:var(--au-font-xs);color:var(--au-text-muted)}
 
+.project-directory{container:project-directory / inline-size}
 .project-directory .studio-assets-toolbar{flex-wrap:wrap}
+@container project-directory (max-width:340px){
+  .project-directory .studio-assets-toolbar{justify-content:flex-end}
+  .project-directory .studio-assets-breadcrumb{flex:1 0 100%}
+}
 .project-directory .studio-assets-breadcrumb{min-width:70px}
 .project-directory>.studio-assets-search{margin:6px 8px;width:auto}
 .project-directory-content,.project-directory footer button{font:inherit;background:var(--au-field);color:var(--au-text);border:1px solid var(--au-line);border-radius:var(--au-radius-sm);padding:4px 8px}

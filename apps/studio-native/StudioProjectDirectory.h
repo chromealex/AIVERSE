@@ -6,9 +6,10 @@
 namespace aiverse::studio {
 
 // One directory of names only. The asset catalog owns imports and content metadata.
-inline Json studioProjectDirectory(const std::filesystem::path& root,const std::string& folder){
+inline Json studioProjectDirectory(const std::string& project,const std::string& folder){
     namespace fs=std::filesystem;
-    const fs::path relative=fs::u8path(folder);
+    const fs::path root{std::u8string(project.begin(),project.end())};
+    const fs::path relative{std::u8string(folder.begin(),folder.end())};
     if(relative.has_root_path() || folder.find('\0')!=std::string::npos)
         throw std::runtime_error("Expected a project-relative folder");
     fs::path current=root;

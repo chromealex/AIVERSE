@@ -3784,7 +3784,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             if(ws_.project.dir.empty() || params.getStr("expectedProject")!=ws_.project.dir)
                 throw std::runtime_error("The open project changed");
             if(!params["folder"].isString())throw std::runtime_error("Expected a project-relative folder");
-            reply.set("result",studioProjectDirectory(std::filesystem::u8path(ws_.project.dir),params.getStr("folder")));
+            reply.set("result",studioProjectDirectory(ws_.project.dir,params.getStr("folder")));
         } else if (method == "studio.assets") {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
             // Browser input cannot specify a filesystem directory. This scan
