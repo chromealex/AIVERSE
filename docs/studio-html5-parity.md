@@ -584,3 +584,5 @@ Transfer NEREID river direction and bank gizmos to the Scene overlays menu, for 
 Packaged macOS Studio verified the selected-river and all-rivers controls, direction and bank rendering, hidden entity filtering, and unchanged map files. [River overlay evidence](evidence/studio-river-flow-desktop.json).
 
 Transfer TERRA downhill arrows at the selected terrain tile or camera target. Use the same displayed ground sampler as linked view_ground. Verify both modes, field spacing and clean output.
+
+Packaged macOS Studio verified terrain slope arrows on selected imported tile meshes and around the camera target. Radius and spacing are controlled in Scene overlays. Clean Scene captures omit these arrows. [Desktop and geometry checks](evidence/studio-terrain-slope-verified.json).
