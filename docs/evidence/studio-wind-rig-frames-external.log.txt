@@ -1,0 +1,10 @@
+2026-11-27 01:50:21.970 AiverseStudioHTML5[29601:86588266] [studio-web] JS: CROSS main DONE_1
+2026-11-27 01:50:21.970 AiverseStudioHTML5[29601:86588266] [studio-web] JS: CROSS main VERIFIED wind rig options and document history
+Traceback (most recent call last):
+  File "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/rig-client.py", line 74, in <module>
+    baseline=pixels('off')
+  File "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/rig-client.py", line 69, in pixels
+    subprocess.run(['sips','-s','format','bmp',str(out/(state+'.png')),'--out',str(path)],capture_output=True,check=True)
+  File "/Library/Frameworks/Python.framework/Versions/3.8/lib/python3.8/subprocess.py", line 512, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['sips', '-s', 'format', 'bmp', '/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-wind-modes-DZtDr0/off.png', '--out', '/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-wind-modes-DZtDr0/off.bmp']' returned non-zero exit status 13.
