@@ -3414,8 +3414,9 @@ Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,con
     particles.setView(camera,renderer_.viewProj(),width,height);
     auto retire=[&](auto& model){if(model)renderer_.invalidateModelCachesFor(model.get());sparseTerrainRetirement_.retireModel(*device_,model);};
     (void)sparseTerrainRetirement_.collectWithoutIdle(*device_);
-    view.display.draw(*device_,renderer_,particles,view.read,map,&source,camera,
-        std::chrono::duration<double>(now.time_since_epoch()).count(),heightAt,retire);
+    const double seconds=std::chrono::duration<double>(now.time_since_epoch()).count();
+    view.display.draw(*device_,renderer_,particles,view.read,map,&source,camera,seconds,heightAt,retire);
+    renderer_.setSceneWind(view.display.sceneWind(seconds));
     particles.update(dt);
     std::vector<fx::FxPointLight> lights;
     particles.collectLights(lights);
