@@ -639,6 +639,7 @@
     "docs/evidence/studio-prisma-viewport-tiers.json",
     "docs/evidence/studio-game-viewport-screenshot.json",
     "docs/evidence/studio-full-window-screenshot.json",
-    "docs/evidence/studio-clean-scene-export.json"
+    "docs/evidence/studio-clean-scene-export.json",
+    "docs/evidence/studio-scene-scoped-focus-verified.json"
   ]
 }

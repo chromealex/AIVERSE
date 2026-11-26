@@ -1,0 +1,10 @@
+2026-11-26 14:34:02.436 AiverseStudioHTML5[33712:84998670] [studio-web] JS: CROSS main DONE_1
+2026-11-26 14:33:59.408 AiverseStudioHTML5[33712:84998670] [studio-web] JS: CROSS main FOCUS {"x":7,"y":3,"z":11,"distance":18,"yaw":0.25,"pitch":0.8,"ortho":false,"fov":0.75}
+2026-11-26 14:34:00.371 AiverseStudioHTML5[33712:84998670] [studio-web] JS: CROSS main SECOND {"x":-2,"y":0,"z":20,"distance":18,"yaw":0.25,"pitch":0.8,"ortho":false,"fov":0.75}
+2026-11-26 14:34:02.436 AiverseStudioHTML5[33712:84998670] [studio-web] JS: CROSS main VERIFIED focus, retained distance, unchanged history and hidden panel
+Same-map reopen canceled the queued PNG, retry returned 513x389. Focus: {'ok': True}
+2026-11-26 14:34:19.735 AiverseStudioHTML5[34108:85000606] [studio-web] JS: CROSS main DONE_1
+2026-11-26 14:34:16.888 AiverseStudioHTML5[34108:85000606] [studio-web] JS: CROSS main FOCUS {"x":7.527,"y":18.173,"z":-3.615,"distance":18,"yaw":2.01846,"pitch":1.14008,"ortho":false,"fov":0.75}
+2026-11-26 14:34:17.670 AiverseStudioHTML5[34108:85000606] [studio-web] JS: CROSS main SECOND {"x":-11.547,"y":11.547,"z":11.547,"distance":18,"yaw":-0.7854,"pitch":0.61548,"ortho":false,"fov":0.75}
+2026-11-26 14:34:19.735 AiverseStudioHTML5[34108:85000606] [studio-web] JS: CROSS main VERIFIED focus, retained distance, unchanged history and hidden panel
+Same-map reopen canceled the queued PNG, retry returned 513x389. Focus: {'body': 'p', 'face': 2, 'ok': True}

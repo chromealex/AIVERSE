@@ -568,3 +568,5 @@ Route Scene exports through the current map render pass with a separate color/de
 Packaged macOS HTML Studio exported planar and planetary Scene PNGs at 511 × 511, 1536 × 864, the current viewport and 4096 × 2048. A per-shot orbit produced a different image on both maps. The live camera parameters, game manifest and map bytes matched after each sequence. [Scene export evidence](evidence/studio-clean-scene-export.json).
 
 Scope Scene capture to the map accepted by the agent link and its matching render snapshot. Transfer linked view_focus for world coordinates and current planetary face cells.
+
+Packaged macOS confirmed linked view_focus on the flat map and the planetary face under the viewport center. A same-poll reopen or alternate-map switch canceled the preceding screenshot. A fresh request then exported at 513 × 389. [Scoped capture and camera verification](evidence/studio-scene-scoped-focus-verified.json).
