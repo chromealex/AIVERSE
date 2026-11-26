@@ -410,3 +410,5 @@ SpectraFX inspector: expose the canonical module field schema, edit and remove i
 SpectraFX function libraries: import a reusable package into the current draft and export local definitions with a checked disk revision. Keep selected properties visible beside the canvas when space allows.
 
 SpectraFX value nodes: edit numeric, vector, boolean, color and parameter literals in the selected-node inspector while preserving connected inputs.
+
+Modeling to Attachments: route the active model editor to the shared attachment panel and retain its unsaved graph while switching tabs.

@@ -132,7 +132,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'models':
       case 'fields': case 'physis': case 'raid': case 'balance': case 'modeling':
       case 'model_anim':
-        return <ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
+        return <ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot} openAttachments={()=>ctx.showPanel('attachments')}/>;
       case 'fx_functions': return <SpectraGpuFiles key={snapshot?.project.path} project={snapshot?.project.path??''}
         tools={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
       case 'effects': return <EffectsPanel key={snapshot?.project.path} project={snapshot?.project.path ?? ''}

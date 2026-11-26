@@ -13,7 +13,7 @@ import type {Positioned} from './graphSelection';
 import {modelProjection,connectModelParent,modelingReply,object,replaceAnimationEntry,animationProjection,connectAnimationPose,addAnimationTransition,geometryProjection,connectGeometryOperand,setGeometryBoolean,moveGeometryModifier,geometryModifierKinds,addGeometryModifier,removeGeometryModifier,modelMaterialIds,bindModelMaterial} from './nativeGraphAdapters';
 import type {GraphObject} from './nativeGraphAdapters';
 
-export default function ModelGraphPanel({documentEpoch,projectPath}:{documentEpoch?:string;projectPath:string}){
+export default function ModelGraphPanel({documentEpoch,projectPath,openAttachments}:{documentEpoch?:string;projectPath:string;openAttachments?:()=>void}){
  const op=async(name:string,params:GraphObject={})=>(await invoke('studio.op',{op:name,params,expectedProject:projectPath,expectedDocumentEpoch:documentEpoch})).result;
  const [names,setNames]=useState<string[]>([]),[name,setName]=useState('');
  const [original,setOriginal]=useState<GraphObject|null>(null),[draft,setDraft]=useState<GraphObject|null>(null);
@@ -106,6 +106,7 @@ export default function ModelGraphPanel({documentEpoch,projectPath}:{documentEpo
    <StudioButton size="sm" disabled={!dirty||busy} onClick={()=>reset(original,revision)}>Discard</StudioButton>
    <StudioButton size="sm" disabled={busy||!history.current?.canUndo()} onClick={()=>{if(history.current)setDraft(history.current.undo());setPending(null)}}>Undo</StudioButton>
    <StudioButton size="sm" disabled={busy||!history.current?.canRedo()} onClick={()=>{if(history.current)setDraft(history.current.redo());setPending(null)}}>Redo</StudioButton>
+   {draft&&openAttachments&&<StudioButton size="sm" disabled={busy} onClick={openAttachments}>Attachments</StudioButton>}
    {name&&<span>Revision {revision}{dirty?' · Draft':''}</span>}
   </div>
   {error&&<StudioAlert tone="danger">{error}</StudioAlert>}{status&&<StudioAlert tone="success">{status}</StudioAlert>}

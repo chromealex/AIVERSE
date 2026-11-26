@@ -895,3 +895,5 @@ SpectraFX inspector: expose the canonical module field schema, edit and remove i
 SpectraFX value nodes: edit numeric, vector, boolean, color and parameter literals in the selected-node inspector while preserving connected inputs.
 
 a706bf84b2301882f03c61df05b8f09d6cc5858a. SpectraLiteralEditor.tsx and SpectraNodeProperties.tsx expose typed graph constants. Packaged macOS Studio edited Float, Integer, Bool, Vec2/3/4, RGB, alpha and a parameter reference. It retained alpha during RGB editing, the connected input, unrelated node properties and the published graph. Undo/redo and reopening the saved draft passed. 299 web tests, TypeScript and Vite passed. Receipt docs/evidence/studio-spectra-literals.json; capture docs/evidence/studio-project-catalog/spectrafx-vector-editor.png. Next port the Modeling-to-Attachments navigation. Windows and merged-tree acceptance remain pending.
+
+Modeling to Attachments: route the active model editor to the shared attachment panel and retain its unsaved graph while switching tabs.

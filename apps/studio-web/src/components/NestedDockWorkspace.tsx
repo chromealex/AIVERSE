@@ -50,6 +50,14 @@ function draggedPanel(event: DragEvent<HTMLElement>, dragging: StudioPanel | nul
 }
 // Only the tab MIME (never plain text: asset drags carry text/plain too).
 const carriesTab = (event: DragEvent<HTMLElement>) => Array.from(event.dataTransfer.types).includes(MIME);
+// The modeling graph owns its unsaved draft and undo history until its tab closes.
+function ModelingTab({active,renderPanel}:{active:boolean;renderPanel:Properties['renderPanel']}){
+  const [visited,setVisited]=useState(active);
+  useEffect(()=>{if(active)setVisited(true);},[active]);
+  if(!active&&!visited)return null;
+  return <div style={{display:active?'contents':'none'}}>{renderPanel('modeling')}</div>;
+}
+
 function DockTabs({ node, tree, setTree, renderPanel, dragging, setDragging,
                     stacks, onFloat, onAdopt, onDockBack, foreign, setForeign, beginDrag }: BranchProperties & { node: DockStack }) {
   const [hover, setHover] = useState<DockEdge | 'center' | null>(null);
@@ -157,7 +165,8 @@ function DockTabs({ node, tree, setTree, renderPanel, dragging, setDragging,
     {menu && <StudioContextMenu x={menu.x} y={menu.y} label="Dock actions"
       items={dockMenu(menu.panel)} onClose={()=>setMenu(null)}/>}
     <div className="nested-stack-body studio-page" data-panel={node.active} role="tabpanel" aria-label={node.active ? STUDIO_PANEL_TITLES[node.active] : 'Empty dock'}>
-      {node.active ? renderPanel(node.active) : <div className="nested-empty">Drop a panel here</div>}
+      {node.tabs.includes('modeling')&&<ModelingTab active={node.active==='modeling'} renderPanel={renderPanel}/>}
+      {node.active ? node.active!=='modeling'&&renderPanel(node.active) : <div className="nested-empty">Drop a panel here</div>}
       {showEdges && <div className="nested-drop-zones">
         {(['left','right','top','bottom'] as const).map(edge=><div key={edge}
           data-dock="edge" data-edge={edge} data-stack={node.id}

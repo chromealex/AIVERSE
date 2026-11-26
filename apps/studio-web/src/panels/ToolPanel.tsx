@@ -95,8 +95,8 @@ function OpCard({ op, prefix, initiallyOpen, onDone }: { op: ToolOpInfo; prefix:
 }
 
 /** A legacy editor window as an HTML panel: its current state on top, then one card per operation. */
-export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
-  panel: ToolPanelId; snapshot: StudioSnapshot | null; commitSnapshot: (s: StudioSnapshot) => void;
+export default function ToolPanel({ panel, snapshot, commitSnapshot, openAttachments }: {
+  panel: ToolPanelId; openAttachments?:()=>void; snapshot: StudioSnapshot | null; commitSnapshot: (s: StudioSnapshot) => void;
 }) {
   const spec = TOOL_PANELS[panel];
   const graphDomain=panel==='fx_graph'?'spectrafx':panel==='anim_graph'?'motionweave':null;
@@ -146,7 +146,7 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
   return <div className="tool">
     {hasGraph&&<div className="au-row"><StudioButton size="sm" disabled={graphMode} onClick={()=>setGraphMode(true)}>Graph</StudioButton><StudioButton size="sm" disabled={!graphMode} onClick={()=>setGraphMode(false)}>Native operations</StudioButton></div>}
     {graphDomain&&<div hidden={!graphMode} style={{flex:1,minHeight:0,overflow:"auto"}}><NativeGraphPanel key={snapshot?.graphDocument?.epoch} documentEpoch={snapshot?.graphDocument?.epoch} domain={graphDomain} projectPath={projectPath}/></div>}
-    {modelGraph&&<div hidden={!graphMode} style={{flex:1,minHeight:0,overflow:"auto"}}><ModelGraphPanel key={snapshot?.graphDocument?.epoch} documentEpoch={snapshot?.graphDocument?.epoch} projectPath={projectPath}/></div>}
+    {modelGraph&&<div hidden={!graphMode} style={{flex:1,minHeight:0,overflow:"auto"}}><ModelGraphPanel openAttachments={openAttachments} key={snapshot?.graphDocument?.epoch} documentEpoch={snapshot?.graphDocument?.epoch} projectPath={projectPath}/></div>}
     <div hidden={hasGraph&&graphMode} style={{flex:1,minHeight:0,overflow:"auto"}}>
     <div className="tool__head">
       <p>{spec.intro}</p>
