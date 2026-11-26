@@ -11,7 +11,7 @@ import './SpectraDockViewport.css';
  * No fake browser pixels, WebGL duplicate or bitmap transport.
  */
 export default function SpectraDockViewport({id='fx',label='Native GPU particle preview',onRect}:{
-  id?:'fx'|'shader'|'material'|'facialRig'|'character'|'appearance'|'animationGraph'|'animationRig'|'attachments'|'lensCamera'|'lighting'|'effectFile'|'gpuEmitter';label?:string;onRect?:(rect:{x:number;y:number;width:number;height:number})=>void
+  id?:'sourceModel'|'fx'|'shader'|'material'|'facialRig'|'character'|'appearance'|'animationGraph'|'animationRig'|'attachments'|'lensCamera'|'lighting'|'effectFile'|'gpuEmitter';label?:string;onRect?:(rect:{x:number;y:number;width:number;height:number})=>void
 }={}){
   const ref=useRef<HTMLDivElement>(null);
   const native=nativeConnected();
@@ -20,13 +20,13 @@ export default function SpectraDockViewport({id='fx',label='Native GPU particle 
     const element=ref.current;
     if(!element)return;
     // These surfaces are presented by their own native host even when WebKit throttles the document.
-    const nativeVisibility=id==='gpuEmitter'||id==='attachments';
+    const nativeVisibility=id==='gpuEmitter'||id==='attachments'||id==='sourceModel';
     let disposed=false,frame=0;
     const measure=()=>{
       frame=0;
       if(disposed)return;
       const viewport=element.getBoundingClientRect();
-      const scroller=element.closest('.spectra-di__editor,.graph-inspector,.attachment-body,.lens-layout,.effects-files,.lighting-scroll,.materials-editor,.anim-editor,.au-panel__body');
+      const scroller=element.closest('.spectra-di__editor,.tool__scroll,.graph-inspector,.attachment-body,.lens-layout,.effects-files,.lighting-scroll,.materials-editor,.anim-editor,.au-panel__body');
       const clipped=fxViewportRect(viewport,
         scroller?.getBoundingClientRect()??viewport,
         window.devicePixelRatio||1,

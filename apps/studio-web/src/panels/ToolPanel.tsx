@@ -16,6 +16,7 @@ import './ToolPanel.css';
 import { StudioLoader, StudioButton } from '../ui';
 import NativeGraphPanel from '../graphs/NativeGraphPanel';
 import ModelGraphPanel from '../graphs/ModelGraphPanel';
+import SourceModelPreview from './SourceModelPreview';
 import MaterialTechniquePanel from './MaterialTechniquePanel';
 import StrataAnalysisPanel from '../graphs/StrataAnalysisPanel';
 
@@ -155,6 +156,7 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot, openAttachm
     </div>
     {error && <div className="tool__error" role="alert">{error}</div>}
     <div className="tool__scroll">
+      {panel==='models'&&<SourceModelPreview key={'source:'+projectPath} project={projectPath}/>}
       {panel==='models'&&<MaterialTechniquePanel key={projectPath} projectPath={projectPath}/>}
       {panel==='models'&&<StrataAnalysisPanel projectPath={projectPath}/>}
       {panel==='generate' && snapshot?.graphDocument && <MapGeneratorPanel key={snapshot.graphDocument.epoch} scope={snapshot.graphDocument} onChanged={()=>done(true)}/>}

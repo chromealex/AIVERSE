@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/panels/SourceModelPreview.tsx",
     "apps/studio-web/src/graphs/ModelGraphPanel.tsx",
     "apps/studio-web/src/components/NestedDockWorkspace.tsx",
     "apps/studio-web/src/panels/SpectraLiteralEditor.tsx",
