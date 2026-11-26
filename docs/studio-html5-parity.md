@@ -402,3 +402,5 @@ Detached emitter: the visible native preview window reported hidden in its embed
 SpectraFX graph migration: open v1 assets, explicitly upgrade in memory, discard or save drafts, guard both draft and published replacements. Verify conflict isolation and retained graph topology.
 
 SpectraFX local edit history: share DraftHistory across node edits, moves, curves and parameter changes. Commit one edit per drag and keep the original disk revision independent from undo/redo.
+
+SpectraFX canvas connections: port the legacy output/input selection with native execution and value validation. Verify wiring, undo, redo and persisted destination ports.

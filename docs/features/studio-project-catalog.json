@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/panels/SpectraGraphCanvas.css",
     "apps/studio-web/src/panels/SpectraGraphCanvas.tsx",
     "apps/studio-web/src/panels/SpectraDataInterfacesPanel.tsx",
     "apps/studio-web/src/panels/SpectraDockViewport.tsx",
@@ -537,6 +538,7 @@
     "docs/evidence/studio-emitter-step-backends.json",
     "docs/evidence/studio-emitter-window-placement.json",
     "docs/evidence/studio-spectra-v1-roundtrip.json",
-    "docs/evidence/studio-spectra-v1-published.json"
+    "docs/evidence/studio-spectra-v1-published.json",
+    "docs/evidence/studio-spectra-graph-history.json"
   ]
 }
