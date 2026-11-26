@@ -308,3 +308,5 @@ Game transfer: choose a playable map seat or watch bots in hosted local play. Ch
 Game device acceptance: show the oriented safe-area distances, keep physical screen corners and camera cutouts opaque and verify both orientations over a paused Metal game.
 
 Windows Game device chrome: layer a click-through hardware mask and safe-area guide on the native Game child. Verify premultiplied pixels in both orientations, independent input and window lifetime.
+
+Game transfer: expose local first-person map play in the Game panel and verify actor pause, step and restart on the selected map.

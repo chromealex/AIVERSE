@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/panels/GamePanel.tsx",
     "apps/studio-native/tests/StudioWindowsDeviceOverlayTests.cpp",
     "apps/studio-native/win/GameDeviceOverlay.h",
     "apps/studio-native/StudioDeviceMask.h",
@@ -16,7 +17,6 @@
     "apps/client/HostedClient.cpp",
     "apps/studio-web/src/panels/GameSpeedSlider.tsx",
     "apps/studio-native/StudioGameDevice.h",
-    "apps/studio-web/src/panels/GamePanel.tsx",
     "apps/studio-web/src/panels/GamePanel.css",
     "apps/studio-web/src/panels/GameDevicePicker.tsx",
     "apps/studio-native/StudioBuildingPanelPreview.h",

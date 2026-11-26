@@ -17,6 +17,7 @@ export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelC
   const [reviewOpen,setReviewOpen]=useState(false),[review,setReview]=useState<StudioPlayReview|null>(null);
   const [positions,setPositions]=useState(true),[amounts,setAmounts]=useState(true),[removeDead,setRemoveDead]=useState(false);
   const [kept,setKept]=useState('');
+  const actorSession=!!snapshot?.project.actorSession;
   const projectPath=snapshot?.project.path??'';
   useEffect(()=>{setReview(null);setReviewOpen(false);setKept('');},[projectPath,state?.epoch]);
   const [devices,setDevices]=useState<StudioGameDeviceOption[]>([]);
@@ -130,10 +131,10 @@ export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelC
   return <StudioPanel title="Game" className="studio-game" flush
     actions={<>
       {/* Play / Pause / Step / Stop live in the title bar (⌘P); only what it lacks is here. */}
-      <StudioButton disabled={!loaded||busy||!!state?.active} onClick={()=>void act('menu')} title="Start from the project's own menus"><Menu size={14}/>Project menu</StudioButton>
+      {!actorSession && <StudioButton disabled={!loaded||busy||!!state?.active} onClick={()=>void act('menu')} title="Start from the project's own menus"><Menu size={14}/>Project menu</StudioButton>}
       <StudioButton disabled={!loaded||busy} onClick={()=>void launchStandalone()} title="Open the saved project in AiverseGame"><ExternalLink size={14}/>Standalone player</StudioButton>
       <StudioButton disabled={!state?.active||busy} onClick={()=>void control('restart')}><RotateCcw size={14}/>Restart</StudioButton>
-      <StudioButton disabled={!state?.active||busy} onClick={()=>{setReviewOpen(v=>!v);setReview(null)}}>Review changes</StudioButton>
+      {!actorSession && <StudioButton disabled={!state?.active||busy} onClick={()=>{setReviewOpen(v=>!v);setReview(null)}}>Review changes</StudioButton>}
     </>}
     footer={<>{state?.roleLabel && <StudioBadge>{state.roleLabel}</StudioBadge>}<StudioBadge>{state?.active?(state.loading?`Loading ${Math.round(state.progress*100)}%`:state.inMatch?`${state.paused?'Paused':'Running'} · tick ${state.tick}`:'Project menu'):'Stopped'}</StudioBadge><span>Native game client · click the viewport to focus input</span></>}>
     {(error||state?.error) && <StudioAlert tone="danger">{error||state?.error}</StudioAlert>}
@@ -169,7 +170,7 @@ export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelC
     <div ref={area} className="studio-game__area">
     <div style={surfaceStyle} ref={surface} className={'studio-game__surface'+(framed?' studio-game__surface--device':'')}
       data-orientation={device?.landscape?'landscape':'portrait'} aria-label="Native Game viewport">
-      {!state?.active && loaded && !snapshot?.project.actorSession && snapshot?.graphDocument
+      {!state?.active && loaded && !actorSession && snapshot?.graphDocument
         ? <GameRoleLaunch key={JSON.stringify(snapshot.graphDocument)} scope={snapshot.graphDocument} busy={busy}
             launch={async (seat,scope)=>{
               setBusy(true);setError('');
@@ -177,6 +178,9 @@ export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelC
               catch(e){setError(e instanceof Error?e.message:String(e));}
               finally{setBusy(false);}
             }}/>
+        : !state?.active && loaded && actorSession
+        ? <StudioEmptyState title="First-person play" description="Play the saved map in this window. Click the viewport to control your character."
+            action={<StudioButton variant="primary" disabled={busy} onClick={()=>void act('map')}>Play map</StudioButton>}/>
         : !state?.active && <StudioEmptyState title={loaded?'Ready to play':'Open a project'}
         description={loaded?'Run the saved map or open the project’s own menus. Stop returns to authoring without copying runtime changes into the map.':'Play uses the native game client and renderer.'}/>}
     </div>
