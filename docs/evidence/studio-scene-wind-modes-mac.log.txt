@@ -1,0 +1,1 @@
+bash: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/rig-ui.sh: No such file or directory
