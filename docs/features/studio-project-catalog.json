@@ -585,6 +585,7 @@
     "docs/evidence/studio-graph-rule-type-apply.json",
     "docs/evidence/studio-animation-subgraph-authoring.json",
     "docs/evidence/studio-nested-animation-inspector.json",
-    "docs/evidence/studio-standalone-pose-canvas.json"
+    "docs/evidence/studio-standalone-pose-canvas.json",
+    "docs/evidence/studio-pose-pointer-capture.json"
   ]
 }
