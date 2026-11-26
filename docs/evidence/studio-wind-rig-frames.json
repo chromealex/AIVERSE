@@ -1,0 +1,10 @@
+{
+  "sha": "f7caecc2724b5846bac43cec0c5e3c31b3683475",
+  "argv": [
+    "bash",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/rig-ui.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-wind-rig-frames.log.txt",
+  "sha256": "2f51050a266aba13e8fa9cf356becc4d361c6405a52044255be291fd78870b7c"
+}
