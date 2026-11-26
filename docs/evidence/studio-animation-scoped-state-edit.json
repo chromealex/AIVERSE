@@ -1,0 +1,10 @@
+{
+  "sha": "523200e0eaba1053fe9dd7ad8c2c4a3d7ecd6184",
+  "argv": [
+    "bash",
+    "/tmp/studio-state-edit.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-animation-scoped-state-edit.log.txt",
+  "sha256": "be5ec0995514ee807f83f7424b6519604fc1e6ac4032c6577e63bdb05dce0924"
+}

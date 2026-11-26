@@ -464,3 +464,5 @@ Packaged macOS standalone animation canvas verified against a saved graph with s
 Fix Escape during a captured port drag. Verify with trusted browser pointer input and grouped selection.
 
 Port state rename and removal to the existing scoped animation document editor. Preserve transition metadata and allow returning to a stateless pose graph. Verify native save, compile and draft undo.
+
+Standalone States inspector: rename and remove verified in the packaged Mac host with nested scope, incoming and self transitions, history, saved data and a return to the default pose graph.
