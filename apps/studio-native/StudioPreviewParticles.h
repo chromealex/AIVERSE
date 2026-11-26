@@ -4,6 +4,7 @@
 #include "engine/fx/SpectraSdfFileIO.h"
 #include "engine/render/Renderer3D.h"
 #include "engine/render/TextureCache.h"
+#include "engine/platform/Platform.h"
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -39,8 +40,15 @@ public:
         particles_.setFileReader(read);
         particles_.setMeshLoader([this](const auto& name,auto& out){return fx::meshFromModelFile(name,read,out);});
         particles_.setTextureLoader([this](const std::string& name,fx::FxTexture& out){
-            if(asset(name).empty())return false;
-            const auto ref=textures_.resolve(name,false,project_.string()+"/");
+            auto base=project_.string()+"/";
+            auto file=name;
+            if(asset(name).empty()){
+                if((name!="engine/fx/physis/flame_16x4.png" && name!="engine/fx/physis/smoke_8x8.png") ||
+                   platform::engineAssetsDir().empty())return false;
+                file=name.substr(7);
+                base=platform::engineAssetsDir()+"/";
+            }
+            const auto ref=textures_.resolve(file,false,base);
             if(!ref.valid())return false;
             out={ref.tex,ref.u0,ref.v0,ref.u1,ref.v1};return true;
         });

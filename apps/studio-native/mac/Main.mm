@@ -703,6 +703,7 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
         htmlComposite_=composite && [WKWebView instancesRespondToSelector:NSSelectorFromString(@"_setDrawsBackground:")];
         if(composite && !htmlComposite_) NSLog(@"[studio-web] Transparent page canvas unavailable; using native Scene input");
         const std::string root=AIVERSE_STUDIO_SOURCE_DIR;
+        aiverse::platform::setEngineAssetsDir([[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:@"engine"].UTF8String);
         platform_=std::make_unique<MacPlatform>(self);
         core_=std::make_unique<studio::StudioHost>(*platform_,root,htmlComposite_);
         const std::string exeDir=[[[NSBundle mainBundle] executablePath] stringByDeletingLastPathComponent].UTF8String;

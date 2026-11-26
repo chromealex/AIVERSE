@@ -11,6 +11,10 @@ set(AIVERSE_STUDIO_WEB_DIST "${PROJECT_SOURCE_DIR}/apps/studio-web/dist" CACHE P
 if(NOT EXISTS "${AIVERSE_STUDIO_WEB_DIST}/index.html")
     message(FATAL_ERROR "HTML5 bundle missing: build apps/studio-web (npm run build) or set AIVERSE_STUDIO_WEB_DIST")
 endif()
+set(STUDIO_NATURE_TEXTURES
+    "${PROJECT_SOURCE_DIR}/engine/assets/fx/physis/flame_16x4.png"
+    "${PROJECT_SOURCE_DIR}/engine/assets/fx/physis/smoke_8x8.png"
+    "${PROJECT_SOURCE_DIR}/engine/assets/fx/physis/LICENSE-fx.txt")
 if(WIN32)
     list(APPEND AIVERSE_STUDIO_SOURCES ../editor/EditorSpeech.cpp)
     include(win/StudioWindows.cmake)
@@ -41,6 +45,8 @@ else()
             COMMAND "${CMAKE_COMMAND}" -E copy_directory
                 "${AIVERSE_STUDIO_WEB_DIST}"
                 "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/Resources/studio-web"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/Resources/engine/fx/physis"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${STUDIO_NATURE_TEXTURES} "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/Resources/engine/fx/physis"
             VERBATIM)
         add_dependencies(aiverse_studio aiverse_studio_web_assets)
     else()

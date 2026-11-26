@@ -234,6 +234,7 @@ public:
         }
 
         const std::string root = AIVERSE_STUDIO_SOURCE_DIR;
+        aiverse::platform::setEngineAssetsDir(narrow((exeDir() / L"engine").c_str()));
         core_ = std::make_unique<studio::StudioHost>(*this, root, false);
         const std::string exe = exeDir().string();
 #ifdef AIVERSE_STUDIO_BUILD_TOOL
