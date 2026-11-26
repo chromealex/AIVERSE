@@ -76,7 +76,7 @@ function Diagnostics({projectPath,source,epoch,route}:{projectPath:string;source
     workspace.current?.querySelector('.asset-native-surface')?.scrollIntoView({block:'center',inline:'nearest'});
     route.consume();
   },[route?.request,showNature,!!frame,map]);
-  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback'|'grid'|'presentation',next:View,selection:number|{cellX:number;cellZ:number}|undefined=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}|{cellMeters:number;humidity:number;shoreSand:number}|{quality?:number;volume?:number;igniteOnClick?:boolean;grass?:boolean;flames?:boolean;sound?:boolean},background=false){
+  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback'|'grid'|'presentation',next:View,selection:number|{cellX:number;cellZ:number}|undefined=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}|{cellMeters:number;humidity:number;shoreSand:number}|{overlayRadius?:number;overlayStride?:number;overlayAlpha?:number;overlayVolumes?:boolean;quality?:number;volume?:number;igniteOnClick?:boolean;grass?:boolean;flames?:boolean;sound?:boolean},background=false){
     const id=++requestId.current;
     const sameArea=next.size===view.size&&next.stride===view.stride&&next.centerX===view.centerX&&next.centerZ===view.centerZ;
     const rebuild=action==='reset'||action==='grid';
@@ -143,7 +143,7 @@ function Diagnostics({projectPath,source,epoch,route}:{projectPath:string;source
     document.addEventListener('visibilitychange',visibility);
     return ()=>{clearInterval(timer);document.removeEventListener('visibilitychange',visibility);};
   },[playing]);
-  function change(key:keyof View,value:number){void request('view',{...view,[key]:value});}
+  function change(key:keyof View,value:number){void request(showNature&&frame?.presentation?'presentation':'view',{...view,[key]:value});}
   return <>
     <header><h3>Field diagnostics</h3>{frame&&<output>Tick {frame.tick}</output>}</header>
     <fieldset ref={workspace} disabled={busy} className={frame?'physis-workspace':undefined}>
@@ -161,12 +161,26 @@ function Diagnostics({projectPath,source,epoch,route}:{projectPath:string;source
           <StudioButton aria-pressed={showNature} onClick={()=>setShowNature(true)}>3D nature</StudioButton>
         </div>}{(map||frame.canShowNature)&&showNature?<><SpectraDockViewport id="nature" liveNature={live} label="3D nature preview"/>
           {frame.presentation&&<div className="physis-display-options">
-            {([['igniteOnClick','Ignite on click'],['grass','Grass'],['flames','Fire and smoke'],['sound','Sound']] as const).filter(([key])=>map||key!=='igniteOnClick').map(([key,label])=>
+            {([['igniteOnClick','Ignite on click'],['fieldOverlay','Field overlay'],['grass','Grass'],['flames','Fire and smoke'],['sound','Sound']] as const).filter(([key])=>map||key!=='igniteOnClick').map(([key,label])=>
               <label key={key}><input type="checkbox" checked={frame.presentation![key]}
                 onChange={event=>void request('presentation',view,cell,{[key]:event.target.checked})}/>{label}</label>)}
           </div>}{frame.presentation&&<PhysisDisplaySettings
             key={frame.presentation.quality+'/'+frame.presentation.volume+'/'+frame.presentation.grass+'/'+frame.presentation.sound}
             settings={frame.presentation} apply={(quality,volume)=>void request('presentation',view,cell,{quality,volume})}/>}
+          {frame.presentation?.fieldOverlay&&<form aria-label="3D field overlay" className="physis-controls"
+            key={[frame.presentation.overlayRadius,frame.presentation.overlayStride,frame.presentation.overlayAlpha,frame.presentation.overlayVolumes].join('/')}
+            onSubmit={e=>{
+              e.preventDefault();
+              const fields=new FormData(e.currentTarget);
+              void request('presentation',view,cell,{overlayRadius:Number(fields.get('radius')),overlayStride:Number(fields.get('stride')),
+                overlayAlpha:Number(fields.get('opacity'))/100,overlayVolumes:fields.has('volumes')});
+            }}>
+            <label>Radius (cells)<StudioInput name="radius" type="number" min={6} max={24} required defaultValue={frame.presentation.overlayRadius}/></label>
+            <label>Sample stride<StudioInput name="stride" type="number" min={1} max={4} required defaultValue={frame.presentation.overlayStride}/></label>
+            <label>Opacity (%)<StudioInput name="opacity" type="number" min={10} max={80} required defaultValue={Math.round(100*(frame.presentation.overlayAlpha??.35))}/></label>
+            <label><input name="volumes" type="checkbox" defaultChecked={frame.presentation.overlayVolumes}/>Field outlines</label>
+            <StudioButton type="submit">Apply overlay</StudioButton>
+          </form>}
           <p>Drag to orbit · Scroll to zoom</p></>:<FieldMap key={[view.centerX,view.centerZ,view.size,view.stride].join('/')} frame={frame} cell={cell} pick={live||map?index=>void request('view',view,index):pick} contours={contours} label={layers[view.layer]}/>}</div>
         <div className="physis-options">{map&&<label className="physis-playback-speed">Playback speed · {speed.toFixed(1)}×
           <input type="range" name="playbackSpeed" min="0.1" max="6" step="0.1" value={speed}

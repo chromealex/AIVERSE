@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/editor/core/PhysisOverlayTiles.h",
     "apps/studio-native/StudioPhysisRemoteFields.h",
     "apps/studio-native/StudioPhysisFieldEdit.h",
     "apps/studio-web/src/panels/PhysisLiveFields.tsx",

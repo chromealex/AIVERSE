@@ -761,7 +761,10 @@ Json StudioHost::natureCommand(const Json& p) {
             const bool playing=settings.enabled && (p.has("playing") || !wasEnabled?settings.playing:wasPlaying);
             if (rebuild || playing!=wasPlaying) state.commandTime=std::chrono::steady_clock::now();
             state.commandPlaying=playing;
-            if (p.has("windSpeed") || p.has("windDirection")) state.preview.applyWindSettings();
+            if (p.has("windSpeed") || p.has("windDirection")) {
+                state.preview.applyWindSettings();
+                state.overlay.dirty=true;
+            }
             if (p.has("ignite")) {
                 std::string reason;
                 const bool ok=state.preview.ignite(float(at["x"].toDouble()),float(at["z"].toDouble()),&reason);

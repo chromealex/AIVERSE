@@ -1085,3 +1085,5 @@ Transfer grass, fire/smoke and audio layer controls, quality and gain to the loc
 Separate the MCP live viewport lifecycle from the private preview world; verify disable, enable, hidden capture and preserved presentation settings and ticks across both sources.
 
 0233387b92f1d8452fdf941aec2137f6fba26608 isolated the live viewport lifecycle in apps/studio-native/StudioHost.cpp. Packaged Mac Studio closed and reopened the live surface at paused tick 4, applied gain 0.35 while hidden, restored High quality, and retained the private world at tick 1, Medium and gain 0.8. Resume reached tick 28. MCP captured 499 × 405 pixels. Both focused CTests passed. Receipt docs/evidence/studio-physis-live-cycle.json and capture docs/evidence/studio-project-catalog/physis-live-cycle.png. Next port the camera-centered diagnostic tiles and wind, active storm and gravity outlines from apps/editor/PhysisSceneOverlay.h to the dedicated nature surface. Windows and merged-tree certification remain pending.
+
+Share the legacy PHYSIS camera-centered diagnostic sampler with HTML Studio and draw the selected field in the dedicated nature viewport.

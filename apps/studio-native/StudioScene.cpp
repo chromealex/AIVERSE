@@ -3280,6 +3280,7 @@ Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,con
     view.renderedCamera=camera;
     if(view.ignition!=state.ignitionRevision || view.display.settings.grass!=state.preview.settings.grass)
         view.display.invalidateFrame();
+    if(view.ignition!=state.ignitionRevision)state.overlay.dirty=true;
     view.ignition=state.ignitionRevision;
     view.display.settings=state.preview.settings;
     auto& particles=view.particles_;
@@ -3296,6 +3297,33 @@ Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,con
     std::vector<fx::FxPointLight> lights;
     particles.collectLights(lights);
     for(const auto& light:lights)renderer_.lights.add(light.pos,light.radius,light.color,light.intensity);
+    int overlayTiles=0, overlayVolumes=0;
+    if (state.overlay.enabled) {
+        editor::updatePhysisOverlayTiles(state.overlay,source,camera.target.x,camera.target.z);
+        for (const auto& tile:state.overlay.tiles) {
+            float3 corners[4];
+            for (int i=0;i<4;++i) {
+                const auto& p=tile.corners[i];
+                corners[i]={float(p.x.toDouble()),float(p.y.toDouble()),float(p.z.toDouble())};
+            }
+            const auto color=rgba(tile.color.r,tile.color.g,tile.color.b,int(state.overlay.alpha*tile.color.a));
+            renderer_.triangle(corners[0],corners[1],corners[2],color);
+            renderer_.triangle(corners[0],corners[2],corners[3],color);
+            ++overlayTiles;
+        }
+        if (state.overlay.drawVolumes) {
+            editor::eachPhysisOverlayVolume(source,view.display.tick(),[&](Vec3 center,Fixed radius,physis::DebugColor c){
+                if (overlayVolumes>=32 || radius<=Fixed{}) return;
+                const float r=float(radius.toDouble()), y=float(center.y.toDouble());
+                const auto point=[&](int i){
+                    const float angle=float(i%48)*6.28318530718f/48.f;
+                    return float3{float(center.x.toDouble())+r*std::cos(angle),y,float(center.z.toDouble())+r*std::sin(angle)};
+                };
+                for (int i=0;i<48;++i) renderer_.line(point(i),point(i+1),rgba(c.r,c.g,c.b,c.a));
+                ++overlayVolumes;
+            });
+        }
+    }
     gfx::PassDesc pass;pass.clearColor[0]=.09f;pass.clearColor[1]=.12f;pass.clearColor[2]=.14f;
     renderer_.render(pass);particles.render({renderer_.lighting.fogColor,0});
     Json stats=Json::object();
@@ -3303,6 +3331,8 @@ Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,con
     stats.set("yaw",Json::number(double(camera.yaw)));
     stats.set("pitch",Json::number(double(camera.pitch)));
     stats.set("distance",Json::number(double(camera.distance)));
+    stats.set("overlayVolumesDrawn",Json::number(int64_t(overlayVolumes)));
+    stats.set("overlayTiles",Json::number(int64_t(overlayTiles)));
     stats.set("patches",Json::number(int64_t(view.display.grassPatches())));
     stats.set("flames",Json::number(int64_t(view.display.flames())));
     stats.set("smoke",Json::number(int64_t(view.display.smoke())));

@@ -1,6 +1,7 @@
 #pragma once
 #include <chrono>
 #include "StudioTerrainGeometry.h"
+#include "apps/editor/core/PhysisOverlayTiles.h"
 #include "apps/editor/PhysisNaturePreview.h"
 #include "apps/editor/core/PhysisDiagnosticFrame.h"
 
@@ -13,6 +14,7 @@ struct StudioNaturePreview {
     bool commandPlaying=false;
     std::chrono::steady_clock::time_point commandTime{};
     float yaw=.6f,pitch=.55f,distance=0;
+    editor::PhysisSceneOverlayState overlay;
     Json presentation=Json::object();
     fx::ParticleSystem particles;
     editor::PhysisNaturePreview preview;
@@ -32,6 +34,11 @@ struct StudioNaturePreview {
 
     Json displayStatus() const {
         auto status=presentation;
+        status.set("overlayRadius",Json::number(int64_t(overlay.radiusCells)));
+        status.set("overlayStride",Json::number(int64_t(overlay.stride)));
+        status.set("overlayAlpha",Json::number(double(overlay.alpha)));
+        status.set("overlayVolumes",Json::fromBool(overlay.drawVolumes));
+        status.set("fieldOverlay",Json::fromBool(overlay.enabled));
         status.set("igniteOnClick",Json::fromBool(preview.settings.igniteOnClick));
         status.set("quality",Json::number(int64_t(preview.settings.grassQuality)));
         status.set("volume",Json::number(double(preview.settings.volume)));
@@ -42,7 +49,7 @@ struct StudioNaturePreview {
     }
 
     void setDisplay(const Json& params) {
-        for (const char* key:{"grass","flames","sound","igniteOnClick"})
+        for (const char* key:{"grass","flames","sound","igniteOnClick","fieldOverlay","overlayVolumes"})
             if (params.has(key) && params[key].type()!=Json::Type::Bool)
                 throw std::runtime_error("Invalid nature presentation setting");
         const double quality=params["quality"].toDouble(preview.settings.grassQuality);
@@ -51,6 +58,30 @@ struct StudioNaturePreview {
             quality!=std::floor(quality) || quality<0 || quality>2 ||
             (params.has("volume") && !params["volume"].isNumber()) || !std::isfinite(volume) || volume<0 || volume>1)
             throw std::runtime_error("Invalid grass quality or preview volume.");
+        const auto layer=params.getInt("layer",int(overlay.layer));
+        const auto palette=params.getInt("palette",int(overlay.palette));
+        if (layer<0 || layer>int(physis::DiagnosticLayer::LocalFloodMeters) ||
+            palette<0 || palette>int(physis::DebugPalette::Ocean))
+            throw std::runtime_error("Unknown diagnostic field or palette.");
+        const auto setting=[&](const char* name,double current,double min,double max,bool integral){
+            if (!params.has(name)) return current;
+            const double value=params[name].toDouble();
+            if (!params[name].isNumber() || !std::isfinite(value) || value<min || value>max ||
+                (integral && value!=std::floor(value)))
+                throw std::runtime_error(std::string("Invalid diagnostic setting: ")+name);
+            return value;
+        };
+        const auto radius=setting("overlayRadius",overlay.radiusCells,6,24,true);
+        const auto stride=setting("overlayStride",overlay.stride,1,4,true);
+        const auto alpha=setting("overlayAlpha",overlay.alpha,.1,.8,false);
+        overlay.radiusCells=int(radius);
+        overlay.stride=int(stride);
+        overlay.alpha=float(alpha);
+        if (params.has("overlayVolumes")) overlay.drawVolumes=params.getBool("overlayVolumes");
+        if (params.has("fieldOverlay")) overlay.enabled=params.getBool("fieldOverlay");
+        if (layer!=int(overlay.layer) || palette!=int(overlay.palette)) overlay.dirty=true;
+        overlay.layer=static_cast<physis::DiagnosticLayer>(layer);
+        overlay.palette=static_cast<physis::DebugPalette>(palette);
         preview.settings.grassQuality=int(quality);
         preview.settings.volume=float(volume);
         if (params.has("igniteOnClick")) preview.settings.igniteOnClick=params.getBool("igniteOnClick");
@@ -105,6 +136,7 @@ struct StudioNaturePreview {
             preview.settings.windSpeed=float(s);
             preview.settings.windDirectionDeg=float(d);
             preview.applyWindSettings();
+            overlay.dirty=true;
         } else if (action=="presentation") {
             setDisplay(params);
         } else if (action=="ignite") {

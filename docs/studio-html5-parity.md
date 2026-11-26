@@ -548,3 +548,5 @@ Transfer grass, fire/smoke and audio layer controls, quality and gain to the loc
 Separate the MCP live viewport lifecycle from the private preview world; verify disable, enable, hidden capture and preserved presentation settings and ticks across both sources.
 
 Packaged macOS PHYSIS preview lifecycle verified on both world sources in [the live-cycle receipt](evidence/studio-physis-live-cycle.json). The legacy camera-centered diagnostic tiles and field outlines still require transfer to the dedicated viewport.
+
+Share the legacy PHYSIS camera-centered diagnostic sampler with HTML Studio and draw the selected field in the dedicated nature viewport.
