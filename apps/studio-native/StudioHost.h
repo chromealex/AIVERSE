@@ -49,6 +49,7 @@ public:
     // The Game view has keyboard focus (input goes to the game).
     virtual void humanReference(StudioSurface,const Json&) {}
     virtual bool gameFocused() = 0;
+    virtual void captureStudioWindow(gfx::Device::CaptureFn done) = 0;
     // studio.viewportRect: move / show / hide the native view over the panel's DOM rect, in the web view that sent it.
     // Fill `out` (pixel size for the drawable). False: a stale report from a window that no longer hosts the view.
     virtual bool placeSurface(StudioSurface surface, const ViewportRect& rect, NativeViewportPlacement& out) = 0;
@@ -333,6 +334,7 @@ private:
     double lensCaptureStarted_ = 0;
     void captureLensFrame(int64_t cameraId);
     void finishLensCapture();
+    double windowShotDeadline_=0;
     double gameShotDeadline_=0;
     uint64_t gameShotEpoch_=0;
     double natureShotDeadline_=0;

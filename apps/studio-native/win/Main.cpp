@@ -284,6 +284,33 @@ public:
         HWND host = GetParent(child);
         return IsWindowVisible(child) && host && IsWindowVisible(host) && !IsIconic(host);
     }
+    void captureStudioWindow(aiverse::gfx::Device::CaptureFn done) override {
+        RECT rect{};
+        if (!IsWindowVisible(main_) || IsIconic(main_) || !GetWindowRect(main_,&rect)) {done(0,0,{});return;}
+        const int w=rect.right-rect.left,h=rect.bottom-rect.top;
+        if (w<=0 || h<=0 || int64_t(w)*h>32*1024*1024) {done(0,0,{});return;}
+        BITMAPINFO info{};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
+        info.bmiHeader.biWidth=w;info.bmiHeader.biHeight=-h;info.bmiHeader.biPlanes=1;
+        info.bmiHeader.biBitCount=32;info.bmiHeader.biCompression=BI_RGB;
+        HDC dc=CreateCompatibleDC(nullptr);
+        void* bytes=nullptr;
+        HBITMAP bitmap=dc?CreateDIBSection(dc,&info,DIB_RGB_COLORS,&bytes,nullptr,0):nullptr;
+        HGDIOBJ previous=bitmap?SelectObject(dc,bitmap):nullptr;
+        std::vector<uint8_t> pixels;
+        if (previous && bytes && PrintWindow(main_,dc,2 /* PW_RENDERFULLCONTENT */)) {
+            GdiFlush();
+            const auto* bgra=static_cast<const uint8_t*>(bytes);
+            pixels.resize(size_t(w)*h*4);
+            for (size_t i=0;i<pixels.size();i+=4) {
+                pixels[i]=bgra[i+2];pixels[i+1]=bgra[i+1];pixels[i+2]=bgra[i];pixels[i+3]=255;
+            }
+        }
+        if (previous) SelectObject(dc,previous);
+        if (bitmap) DeleteObject(bitmap);
+        if (dc) DeleteDC(dc);
+        if (pixels.empty()) done(0,0,{});
+        else done(w,h,std::move(pixels));
+    }
     void gameDeviceChanged(const Json& state) override {
         if (!gameChrome_.update(surfaces_[index(studio::StudioSurface::Game)],state["device"]))
             logLine("Could not update the Game device overlay");

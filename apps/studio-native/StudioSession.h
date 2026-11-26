@@ -106,6 +106,7 @@ public:
     Json extensionGizmos() { return ws_.project.dir.empty() ? Json::array() : lua_.gizmos(ws_.project.dir,luaContext()); }
     bool agentScreenshotPending() const { return !agentShots_.empty(); }
     bool agentNatureScreenshotPending() const { return agentScreenshotPending() && agentShots_.front().window=="physis"; }
+    bool agentWindowScreenshotPending() const { return agentScreenshotPending() && agentShots_.front().window=="all"; }
     bool agentGameScreenshotPending() const { return agentScreenshotPending() && agentShots_.front().window=="game"; }
     const std::string& agentScreenshotDevice() const { return agentShots_.front().device; }
     void finishAgentScreenshot(const std::string& pngBase64, int width, int height, const std::string& error);

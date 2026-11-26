@@ -3,6 +3,7 @@
 // (shared with the Windows shell, win/Main.cpp).
 #import <AppKit/AppKit.h>
 #import <WebKit/WebKit.h>
+#import <ScreenCaptureKit/ScreenCaptureKit.h>
 #import <QuartzCore/CAMetalLayer.h>
 #import <QuartzCore/CATransaction.h>
 #import "StudioAssetSchemeHandler.h"
@@ -228,6 +229,40 @@ public:
         view.photoY=std::clamp(input["y"].toDouble(),-1.,1.);
         view.photoMirror=input.getBool("mirror");
         view.needsLayout=YES;
+    }
+    void captureStudioWindow(aiverse::gfx::Device::CaptureFn done) override {
+        NSWindow* window=shell_->window_;
+        if (!window.isVisible || window.isMiniaturized) { done(0,0,{});return; }
+        const CGWindowID target=CGWindowID(window.windowNumber);
+        if (@available(macOS 14.4,*)) {
+            [SCShareableContent getCurrentProcessShareableContentWithCompletionHandler:^(SCShareableContent* content,NSError* error){
+                SCWindow* selected=nil;
+                for (SCWindow* candidate in content.windows) if (candidate.windowID==target) {selected=candidate;break;}
+                if (error || !selected) {done(0,0,{});return;}
+                SCContentFilter* filter=[[SCContentFilter alloc] initWithDesktopIndependentWindow:selected];
+                SCStreamConfiguration* config=[[SCStreamConfiguration alloc] init];
+                const CGRect rect=filter.contentRect;
+                if (rect.size.width<1 || rect.size.height<1) {done(0,0,{});return;}
+                const double scale=std::min({double(filter.pointPixelScale),1280./rect.size.width,2560./rect.size.height});
+                config.width=std::max(1,int(std::round(rect.size.width*scale)));
+                config.height=std::max(1,int(std::round(rect.size.height*scale)));
+                config.showsCursor=NO;config.ignoreShadowsSingleWindow=YES;
+                [SCScreenshotManager captureImageWithFilter:filter configuration:config completionHandler:^(CGImageRef image,NSError* captureError){
+                    if (captureError || !image) {done(0,0,{});return;}
+                    const size_t w=CGImageGetWidth(image),h=CGImageGetHeight(image);
+                    if (!w || !h || w>4096 || h>4096) {done(0,0,{});return;}
+                    std::vector<uint8_t> pixels(w*h*4);
+                    CGColorSpaceRef space=CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+                    CGContextRef context=CGBitmapContextCreate(pixels.data(),w,h,8,w*4,space,
+                        kCGImageAlphaPremultipliedLast|kCGBitmapByteOrder32Big);
+                    CGColorSpaceRelease(space);
+                    if (!context) {done(0,0,{});return;}
+                    CGContextDrawImage(context,CGRectMake(0,0,w,h),image);
+                    CGContextRelease(context);
+                    done(int(w),int(h),std::move(pixels));
+                }];
+            }];
+        } else done(0,0,{});
     }
     bool gameFocused() override {
         NSWindow* window=shell_->gameViewport_.window ?: shell_->window_;

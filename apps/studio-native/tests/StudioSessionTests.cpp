@@ -1691,10 +1691,11 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"Fixture co
        // view_screenshot waits for the host's capture; the host answers through finishAgentScreenshot.
        client.send(R"({"id":3,"method":"call","params":{"name":"view_screenshot","arguments":{}}})");
        for(int i=0;i<100 && !session.agentScreenshotPending();++i){session.pollAgentLink();std::this_thread::sleep_for(std::chrono::milliseconds(5));}
-       AIVERSE_TEST_CHECK(session.agentScreenshotPending());
+       AIVERSE_TEST_CHECK(session.agentWindowScreenshotPending() && !session.agentGameScreenshotPending());
        session.finishAgentScreenshot("iVBORw0KGgo=",2,2,"");
        std::string shot;client.recv(shot,1000);
        AIVERSE_TEST_CHECK(!shot.empty() && Json::parse(shot)["result"].getStr("png_base64")=="iVBORw0KGgo=" && !session.agentScreenshotPending());
+       AIVERSE_TEST_CHECK(Json::parse(shot)["result"].getStr("view")=="HTML Studio window");
        client.close();
        AIVERSE_TEST_CHECK(call("studio.agentStart",R"({"prompt":""})").has("error"));
    }

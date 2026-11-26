@@ -619,6 +619,12 @@ void StudioHost::finishLensCapture() {
 void StudioHost::tickAgentScreenshot() {
     const bool nature=session_->agentNatureScreenshotPending();
     const bool game=session_->agentGameScreenshotPending();
+    const bool window=session_->agentWindowScreenshotPending();
+    if (window && agentShot_ && !agentShot_->done.load() && platform_.now()>=windowShotDeadline_) {
+        session_->finishAgentScreenshot("",0,0,"Studio window capture timed out.");
+        agentShot_.reset();
+        return;
+    }
     if (game) {
         const auto fail=[&](const std::string& message){
             session_->finishAgentScreenshot("",0,0,message);
@@ -668,7 +674,7 @@ void StudioHost::tickAgentScreenshot() {
     if (agentShot_) {
         // The capture callback may run on a GPU completion thread; it encodes there and flags done.
         if (!agentShot_->done.load()) return;
-        if (agentShot_->png.empty()) session_->finishAgentScreenshot("", 0, 0, game?"Game capture failed":nature?"PHYSIS capture failed":"Scene capture failed");
+        if (agentShot_->png.empty()) session_->finishAgentScreenshot("", 0, 0, window?"Studio window capture unavailable":game?"Game capture failed":nature?"PHYSIS capture failed":"Scene capture failed");
         else session_->finishAgentScreenshot(editor::base64Encode(agentShot_->png), agentShot_->w, agentShot_->h, "");
         natureShotDeadline_=0;gameShotDeadline_=0;agentShot_.reset();
         return;
@@ -676,7 +682,7 @@ void StudioHost::tickAgentScreenshot() {
     if (!session_->agentScreenshotPending()) return;
     auto* renderer=nature?natureSurface_.renderer.get():preview_.get();
     if (nature && (!renderer || !natureSurface_.placement.visible || !platform_.surfaceDrawable(StudioSurface::Nature))) return;
-    if (!game && !nature && (!renderer || !placement_.visible)) {
+    if (!window && !game && !nature && (!renderer || !placement_.visible)) {
         session_->finishAgentScreenshot("", 0, 0, "The Scene panel is not visible in Studio; ask the user to show it");
         return;
     }
@@ -698,7 +704,10 @@ void StudioHost::tickAgentScreenshot() {
         }
         shot->done.store(true);
     };
-    if (game) game_->captureNextFrame(std::move(capture));
+    if (window) {
+        windowShotDeadline_=platform_.now()+8;
+        platform_.captureStudioWindow(std::move(capture));
+    } else if (game) game_->captureNextFrame(std::move(capture));
     else onScene([&]{renderer->captureNextFrame(std::move(capture));});
 }
 // Agent snapshot handshake (MCP studio_character_snapshot): the tool writes
