@@ -91,7 +91,7 @@ jobs:
         run: |
           cmake -S . -B build/studio-native-ci \
             -DCMAKE_BUILD_TYPE=Debug \
-            -DAIVERSE_BUILD_EDITOR=ON \
+            -DAIVERSE_BUILD_EDITOR=OFF \
             -DAIVERSE_BUILD_CLIENT=OFF \
             -DAIVERSE_BUILD_TOOLS=ON \
             -DAIVERSE_BUILD_TESTS=ON \
@@ -103,7 +103,7 @@ jobs:
             --parallel 3
       # studio_metal_lighting is left out: it opens an NSWindow and needs a Metal device.
       - name: Run native contract tests
-        run: ctest --test-dir build/studio-native-ci --output-on-failure --no-tests=error -R '^studio_(content_directory|asset_catalog|asset_transfers|move_journal|visual_picking|model_picking|session|shader_graph_name|shader_graph_draft|pbr_adapter|material_validation|material_schema|lighting_validation|light_preview_math|authored_lights|fps_lighting_contract|fps_lighting_document|scene_nodes|document_visuals|viewport_layout|terrain_geometry|render_lighting|owner_history|mcp_registry)$'
+        run: ctest --test-dir build/studio-native-ci --output-on-failure --no-tests=error -R '^studio_(standalone_bundle|content_directory|asset_catalog|asset_transfers|move_journal|visual_picking|model_picking|session|shader_graph_name|shader_graph_draft|pbr_adapter|material_validation|material_schema|lighting_validation|light_preview_math|authored_lights|fps_lighting_contract|fps_lighting_document|scene_nodes|document_visuals|viewport_layout|terrain_geometry|render_lighting|owner_history|mcp_registry)$'
 
   windows-native:
     name: Windows HTML5 + Vulkan native host (MSVC)
