@@ -34,6 +34,7 @@
 #include "engine/render/TerraWeaveBotanicalForest.h"
 #include "engine/world/TerraWeaveForestSpeciesManifest.h"
 #include "apps/studio-native/StudioFont6x11.h"
+#include "apps/studio-native/StudioCaptionFont.h"
 #include "engine/render/CameraPng.h"
 #include "engine/render/EnvironmentIbl.h"
 #include "engine/render/EnvironmentIblGpu.h"
@@ -4501,10 +4502,20 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                 },[&](float3 centre,const std::string& text,uint32_t color){
                     float2 at;
                     if(!project(centre,at)||at.x<0||at.y<0||at.x>overlay.W||at.y>overlay.H)return;
-                    const float cell=std::max(1.3f,std::min(overlay.W,overlay.H)/650.f);
-                    const float left=at.x-float(text.size())*3*cell,top=at.y-5.5f*cell;
-                    overlay.segment(left-4,at.y,2*at.x-left+4,at.y,13*cell,rgba(0,0,0,160));
-                    overlay.bitmapText(left,top,cell,text,color);
+                    // Engine font bytes and glyph masks stay on the render thread.
+                    thread_local StudioCaptionFont font(platform::engineAssetsDir());
+                    const float scale=std::max(.95f,std::min(overlay.W,overlay.H)/850.f);
+                    const auto caption=font.layout(text);
+                    if(caption.glyphs.empty())return;
+                    const float left=at.x-caption.advance*scale*.5f;
+                    const float baseline=at.y+font.baselineOffset()*scale;
+                    overlay.segment(left-5,at.y,2*at.x-left+5,at.y,21*scale,rgba(0,0,0,190));
+                    for(const auto& item:caption.glyphs)for(const auto& run:item.glyph->runs){
+                        const float x=left+(item.x+run.x)*scale;
+                        const float y=baseline+(run.y+.5f)*scale;
+                        const uint32_t ink=(color&0xffffff)|((((color>>24)*run.alpha)/255)<<24);
+                        overlay.segment(x,y,x+run.width*scale,y,scale,ink);
+                    }
                 });
             }
         }

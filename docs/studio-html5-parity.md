@@ -598,3 +598,5 @@ Packaged macOS Studio verified circular and polygonal erosion zone outlines, coe
 Expose map-scoped erosion zone highlighting in the Scene overlay menu. Verify none, one, all and stale document rejection without changing map history.
 
 Packaged macOS Studio verified highlighting one or all authored erosion zones and clearing the highlight on map switch. [Native highlight evidence](evidence/studio-erosion-highlight.json). Unicode native caption rendering remains open.
+
+Render UTF-8 erosion zone captions using the packaged engine UI font. Verify distinct Cyrillic names in exported Scene images and preserve clean exports.

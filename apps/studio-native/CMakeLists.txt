@@ -11,6 +11,7 @@ set(AIVERSE_STUDIO_WEB_DIST "${PROJECT_SOURCE_DIR}/apps/studio-web/dist" CACHE P
 if(NOT EXISTS "${AIVERSE_STUDIO_WEB_DIST}/index.html")
     message(FATAL_ERROR "HTML5 bundle missing: build apps/studio-web (npm run build) or set AIVERSE_STUDIO_WEB_DIST")
 endif()
+set(STUDIO_CAPTION_FONT "${PROJECT_SOURCE_DIR}/engine/assets/fonts/ui.ttf" "${PROJECT_SOURCE_DIR}/engine/assets/fonts/LICENSE-ui.txt")
 set(STUDIO_NATURE_TEXTURES
     "${PROJECT_SOURCE_DIR}/engine/assets/fx/physis/flame_16x4.png"
     "${PROJECT_SOURCE_DIR}/engine/assets/fx/physis/smoke_8x8.png"
@@ -47,6 +48,8 @@ else()
                 "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/Resources/studio-web"
             COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/Resources/engine/fx/physis"
             COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${STUDIO_NATURE_TEXTURES} "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/Resources/engine/fx/physis"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/Resources/engine/fonts"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${STUDIO_CAPTION_FONT} "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/Resources/engine/fonts"
             VERBATIM)
         add_dependencies(aiverse_studio aiverse_studio_web_assets)
     else()
@@ -60,7 +63,7 @@ if(TARGET aiverse_studio)
     endif()
     target_sources(aiverse_studio PRIVATE ../fps/client.cpp)
     target_compile_definitions(aiverse_studio PRIVATE AIVERSE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
-    target_link_libraries(aiverse_studio PRIVATE aiverse_authority aiverse_render2d aiverse_roads_view AIVERSE::MotionWeave AIVERSE::View)
+    target_link_libraries(aiverse_studio PRIVATE aiverse_ui aiverse_authority aiverse_render2d aiverse_roads_view AIVERSE::MotionWeave AIVERSE::View)
 endif()
 # Portable Studio image codec contract: compile the actual private stb
 # implementation using diagnostics as errors, not a globally disabled -W
@@ -94,7 +97,7 @@ if(AIVERSE_BUILD_TESTS AND APPLE)
     set_tests_properties(studio_building_preview PROPERTIES LABELS "EDITOR;GPU;Metal" TIMEOUT 90)
     add_executable(aiverse_studio_metal_lighting_tests tests/StudioMetalLightingTests.mm StudioScene.cpp StudioFacialGpuPreview.cpp StudioAssetCatalog.cpp)
     target_include_directories(aiverse_studio_metal_lighting_tests PRIVATE "${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/third_party/box3d/include")
-    target_link_libraries(aiverse_studio_metal_lighting_tests PRIVATE aiverse_audio SQLite::SQLite3 aiverse_editor_core aiverse_runtime aiverse_fx aiverse_game_view AIVERSE::libraries "-framework Cocoa")
+    target_link_libraries(aiverse_studio_metal_lighting_tests PRIVATE aiverse_ui aiverse_audio SQLite::SQLite3 aiverse_editor_core aiverse_runtime aiverse_fx aiverse_game_view AIVERSE::libraries "-framework Cocoa")
     target_sources(aiverse_studio_metal_lighting_tests PRIVATE $<TARGET_OBJECTS:aiverse_runtime>)
     add_test(NAME studio_metal_lighting COMMAND aiverse_studio_metal_lighting_tests "${CMAKE_CURRENT_BINARY_DIR}/metal-lighting-captures")
     set_tests_properties(studio_metal_lighting PROPERTIES LABELS "EDITOR;LIGHTING" TIMEOUT 90 PASS_REGULAR_EXPRESSION "Studio Metal lighting PASS" FAIL_REGULAR_EXPRESSION "Studio Metal lighting FAIL")
@@ -105,7 +108,7 @@ if(AIVERSE_BUILD_TESTS AND APPLE)
         StudioFacialGpuPreview.cpp StudioAssetCatalog.cpp)
     target_include_directories(aiverse_studio_spectrafx_preview_tests
         PRIVATE "${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/third_party/box3d/include")
-    target_link_libraries(aiverse_studio_spectrafx_preview_tests PRIVATE
+    target_link_libraries(aiverse_studio_spectrafx_preview_tests PRIVATE aiverse_ui
         SQLite::SQLite3 aiverse_editor_core aiverse_runtime aiverse_fx
         aiverse_game_view AIVERSE::vivid_human AIVERSE::libraries "-framework Cocoa")
     target_sources(aiverse_studio_spectrafx_preview_tests
