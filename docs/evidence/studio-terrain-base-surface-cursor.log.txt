@@ -1,0 +1,17 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+    Start 585: studio_terrain_geometry
+1/2 Test #585: studio_terrain_geometry ..........   Passed    1.61 sec
+    Start 589: studio_session
+2/2 Test #589: studio_session ...................   Passed   11.07 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Label Time Summary:
+EDITOR    =  12.68 sec*proc (2 tests)
+
+Total Test time (real) =  12.71 sec
+2026-11-26 07:30:36.790 AiverseStudioHTML5[70707:83303939] [studio-web] JS: CROSS main DONE_1
+2026-11-26 07:30:36.790 AiverseStudioHTML5[70707:83303939] [studio-web] JS: CROSS main VERIFIED base pick 3.40812 m and detail pick -3.25 m at same screen coordinate, restored terrain after disarm, unchanged undo and clean saved document
+disk minima/maxima in metres: detail -3.25 0.0 base 0.0 5.0
+mean Scene pixel change 19.14893715770909 after restore 0.39305439524737773
