@@ -545,6 +545,7 @@
     "docs/evidence/studio-spectra-graph-history.json",
     "docs/evidence/studio-spectra-canvas-ports.json",
     "docs/evidence/studio-spectra-property-inspector.json",
-    "docs/evidence/studio-spectra-function-library.json"
+    "docs/evidence/studio-spectra-function-library.json",
+    "docs/evidence/studio-spectra-literals.json"
   ]
 }
