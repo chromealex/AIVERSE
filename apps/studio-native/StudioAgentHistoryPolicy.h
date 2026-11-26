@@ -31,7 +31,7 @@ inline const char* studioAgentHistoryPolicy(const std::string& op){
     if(op=="studio_play_review_apply")return "map";
     if(op=="play_start"||op=="play_stop"||op=="studio_runtime_edit"||op=="studio_runtime_profile"||op=="physis_nature_preview")return "runtime";
     if(reads.count(op))return "read";
-    if(op=="editor_theme" || op=="editor_window" || op=="view_wind" || op=="view_postfx" || studioSceneViewAgentOperation(op))return "view";
+    if(op=="editor_select" || op=="editor_theme" || op=="editor_window" || op=="view_wind" || op=="view_postfx" || studioSceneViewAgentOperation(op))return "view";
     if(map.count(op))return "map";
     if(project.count(op))return "project";
     if(assets.count(op))return "assets";
