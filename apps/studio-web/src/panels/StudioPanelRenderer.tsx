@@ -72,6 +72,8 @@ import CavernsPanel from './generated/CavernsPanel';
 import CatalogPanel from './generated/CatalogPanel';
 import FeatureReadinessPanel from './FeatureReadinessPanel';
 
+export type InspectorRecord = {kind:"player";slot:number} | {kind:"area";key:string};
+
 export interface StudioPanelContext {
   snapshot: StudioSnapshot | null;
   busy: boolean;
@@ -84,7 +86,7 @@ export interface StudioPanelContext {
   rows: Array<{node: StudioEntity; depth: number}>;
   selected: StudioEntity | undefined;
   inspector: StudioInspector | null;
-  requestedPlayer: {slot:number}|null;
+  inspectorRecord: InspectorRecord|null;
   inspectorPinned: boolean;
   toggleInspectorPin: () => void;
   select: (id: string | null, mode?: 'replace' | 'add' | 'toggle') => Promise<void>;

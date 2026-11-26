@@ -155,8 +155,8 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
             stopGame();
             return Json::parse(R"({"ok":true,"summary":"Тест остановлен"})");
         },true});
-    session_->workspace().registerOp({"editor_select","Inspect the map, a zero-based entity or a one-based player, or clear selection.",
-        Json::parse(R"({"properties":{"kind":{"type":"string","enum":["entity","player","map","none"]},"index":{"type":"integer","minimum":0}},"required":["kind"]})"),[this](const Json& input){
+    session_->workspace().registerOp({"editor_select","Inspect the map, a named area, a zero-based entity or a one-based player, or clear selection.",
+        Json::parse(R"({"properties":{"kind":{"type":"string","enum":["entity","player","area","map","none"]},"key":{"type":"string"},"index":{"type":"integer","minimum":0}},"required":["kind"]})"),[this](const Json& input){
             const auto kind=input.getStr("kind");
             const auto& map=session_->workspace().map;
             Json selection=Json::object();
@@ -165,6 +165,10 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
                 if (!(index>=0 && index<map.data.entities.size() && std::floor(index)==index))
                     throw std::runtime_error("Unknown map entity index");
                 selection.set("id",Json::string(studioDocumentId(map,editor::DocumentEntityRef::mapEntity(size_t(index)))));
+            } else if (kind=="area") {
+                const auto key=input.getStr("key");
+                if (map.data.worldSpace || key.empty() || !map.data.extra["areas"].has(key))
+                    throw std::runtime_error("Unknown map area");
             } else if (kind=="player") {
                 const double slot=input["index"].toDouble(-1);
                 if (map.data.worldSpace || !(slot>=1 && slot<=map.data.players.size() && std::floor(slot)==slot))

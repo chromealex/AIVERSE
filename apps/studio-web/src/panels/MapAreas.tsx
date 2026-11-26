@@ -21,10 +21,11 @@ function valid(fields:Fields){
     Number(fields.bounds[2])>0 && Number(fields.bounds[3])>0;
 }
 
-export function MapAreas({data,revision,busy,onApply}:{
+export function MapAreas({data,revision,busy,onApply,requestedArea}:{
+  requestedArea?:{key:string}|null;
   data:StudioMapProperties;revision:string;busy:boolean;onApply:(snapshot:StudioSnapshot)=>void;
 }){
-  const [selection,setSelection]=useState('');
+  const [selection,setSelection]=useState(requestedArea?.key??'');
   const [draft,setDraft]=useState<Draft>();
   const [deleting,setDeleting]=useState(false);
   const [pending,setPending]=useState(false);
@@ -42,6 +43,7 @@ export function MapAreas({data,revision,busy,onApply}:{
   const dirty=!!draft && (current===null || JSON.stringify(fields)!==JSON.stringify(readFields(base,current??'')));
   const duplicate=fields.name!==current && Object.hasOwn(base.areas,fields.name);
   const discard=()=>{setPickToken('');setDraft(undefined);setError('');setDeleting(false);setDrawing(false);setPreview(undefined);origin.current=undefined;};
+  useEffect(()=>{if(requestedArea){setSelection(requestedArea.key);discard();}},[requestedArea]);
   const edit=(values:Partial<Fields>)=>{
     setError('');
     setDraft(prev=>({base:prev?.base??base,original:prev?prev.original:current??null,

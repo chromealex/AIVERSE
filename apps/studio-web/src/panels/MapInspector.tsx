@@ -12,7 +12,7 @@ function form(data:StudioMapProperties){
 }
 
 interface Props {
-  requestedPlayer?:{slot:number}|null;
+  inspectorRecord?:import("./StudioPanelRenderer").InspectorRecord|null;
   scope:StudioGraphDocumentScope;
   onApply:(snapshot:StudioSnapshot)=>void;
   onSelect:(id:string)=>void;
@@ -20,7 +20,7 @@ interface Props {
   view:"object"|"map"|"players"|"areas";
 }
 
-export function MapInspector({scope,onApply,onSelect,busy,view,requestedPlayer}:Props){
+export function MapInspector({scope,onApply,onSelect,busy,view,inspectorRecord}:Props){
   const [data,setData]=useState<StudioMapProperties>();
   const [draft,setDraft]=useState<{base:StudioMapProperties;fields:ReturnType<typeof form>}>();
   const [error,setError]=useState('');
@@ -62,8 +62,8 @@ export function MapInspector({scope,onApply,onSelect,busy,view,requestedPlayer}:
     catch(e){setError(String(e));}
     finally{setPending(false);}
   };
-  if(view==="areas")return <MapAreas data={data} revision={scope.revision} busy={busy} onApply={onApply}/>;
-  if(view==="players")return <MapPlayers requestedPlayer={requestedPlayer} data={data} revision={scope.revision} busy={busy} onApply={onApply}/>;
+  if(view==="areas")return <MapAreas requestedArea={inspectorRecord?.kind==="area"?inspectorRecord:null} data={data} revision={scope.revision} busy={busy} onApply={onApply}/>;
+  if(view==="players")return <MapPlayers requestedPlayer={inspectorRecord?.kind==="player"?inspectorRecord:null} data={data} revision={scope.revision} busy={busy} onApply={onApply}/>;
   return <form className="insp-map" aria-label={data.worldSpace?"Scene properties":"Map properties"} onSubmit={e=>{e.preventDefault();void apply();}}>
     <header><MapIcon size={19}/><div><h2>{data.name || 'Untitled map'}</h2>
       <small>{data.worldSpace

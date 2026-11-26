@@ -154,7 +154,7 @@ function AddComponent({ entityId, busy, onPick }: { entityId: string; busy: bool
 }
 
 /** Unity-style Inspector: entity header + its document components. */
-export default function InspectorPanel({ inspector: primary, selected, busy, requestedPlayer, inspectorPinned, toggleInspectorPin,
+export default function InspectorPanel({ inspector: primary, selected, busy, inspectorRecord, inspectorPinned, toggleInspectorPin,
   select, changeProperty, setBusy, commitSnapshot, showPanel, reportError, snapshot }: StudioPanelContext) {
   // Multi-selection: read every selected object and show their common components.
   const ids = !inspectorPinned && snapshot?.selectedIds && snapshot.selectedIds.length > 1 ? snapshot.selectedIds.slice(-50) : null;
@@ -229,8 +229,8 @@ export default function InspectorPanel({ inspector: primary, selected, busy, req
     aria-pressed={inspectorPinned} disabled={!selected && !inspectorPinned} onClick={toggleInspectorPin}
     icon={inspectorPinned ? <Lock size={12}/> : <LockOpen size={12}/>}/>;
   const [mapView,setMapView]=useState<"object"|"map"|"players"|"areas"|"regions">("object");
-  useEffect(()=>setMapView(requestedPlayer && !selected ? "players" : "object"),
-    [selected?.id,snapshot?.graphDocument?.epoch,requestedPlayer]);
+  useEffect(()=>setMapView(!selected && inspectorRecord ? (inspectorRecord.kind==="area"?"areas":"players") : "object"),
+    [selected?.id,snapshot?.graphDocument?.epoch,inspectorRecord]);
   useEffect(()=>onNativeEvent((event,payload)=>{
     if(event==='inspector.selection')setMapView(payload && typeof payload==='object' && 'kind' in payload &&
       payload.kind==='map' ? 'map' : 'object');
@@ -245,7 +245,7 @@ export default function InspectorPanel({ inspector: primary, selected, busy, req
       <button type="button" aria-pressed={mapView==="areas"} onClick={()=>setMapView("areas")}>Areas</button></>}
       {snapshot?.scene.mapRegions && <button type="button" aria-pressed={mapView==="regions"} onClick={()=>setMapView("regions")}>Regions</button>}</nav>}
     {mapScope && mapView==="regions" ? <MapRegions key={JSON.stringify([mapScope.projectPath,mapScope.epoch,mapScope.mapPath])}
-      scope={mapScope} busy={busy} onApply={commitSnapshot}/> : showMap && mapView!=="regions" ? <MapInspector requestedPlayer={requestedPlayer} view={mapView} key={JSON.stringify([mapScope.projectPath,mapScope.epoch,mapScope.mapPath])} scope={mapScope} busy={busy}
+      scope={mapScope} busy={busy} onApply={commitSnapshot}/> : showMap && mapView!=="regions" ? <MapInspector inspectorRecord={inspectorRecord} view={mapView} key={JSON.stringify([mapScope.projectPath,mapScope.epoch,mapScope.mapPath])} scope={mapScope} busy={busy}
       onApply={commitSnapshot} onSelect={id=>{if(inspectorPinned)toggleInspectorPin();setMapView("object");void select(id);}}/> : !inspector ? <div className="insp__empty">
       {inspectorPinned && <div className="insp__empty-bar">{lock}</div>}
       <StudioEmptyState icon={selected ? <StudioLoader size={30}/> : undefined} title={selected ? 'Loading…' : 'Nothing selected'}
