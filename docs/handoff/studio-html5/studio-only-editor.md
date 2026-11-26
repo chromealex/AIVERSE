@@ -687,3 +687,5 @@ Effect ranges: inspect nine emitter parameters, edit constant and random bounds 
 5f1210070 built and passed 299 web tests. Desktop evidence docs/evidence/studio-effect-emission-curves.json stopped before edits: QA searched the entire emitter inspector for Minimum and selected Minimum quality. Next: scope selectors to the range editor and repeat.
 
 On 1a6d8f395, desktop editing and restart assertions passed (docs/evidence/studio-effect-emission-curves-desktop.json). Screenshot inspection showed appended midpoint keys listed after the endpoint; next stage sorts visible rows by curve time while edits still address the original source index.
+
+Verified chronological range controls at 78ef6eb9b in the packaged macOS app. Edited implicit default lifetime, reversed signed speed, shorthand and paired size curves, midpoint insertion/edit/removal, bounds and discard. Native save/reopen retained source comments. Time order 0, 0.5, 1 edited source slot 2 for midpoint and kept source slot 1 unchanged. Evidence docs/evidence/studio-effect-curve-time-order.json and docs/evidence/studio-project-catalog/effect-range-curve.png. Next: emitter modules and force field authoring.

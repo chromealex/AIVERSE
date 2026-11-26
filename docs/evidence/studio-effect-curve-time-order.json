@@ -1,0 +1,10 @@
+{
+  "sha": "78ef6eb9bfbf908140afca247887db2f44659ffa",
+  "argv": [
+    "bash",
+    "/tmp/fx-range-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-effect-curve-time-order.log.txt",
+  "sha256": "0db5ef0114fe58203cd1666b869756f3570ffa9e9a966b0e032ad01b029634b8"
+}

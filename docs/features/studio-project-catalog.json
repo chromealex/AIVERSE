@@ -381,6 +381,8 @@
     "docs/evidence/studio-tiles-atlas-brush.json",
     "docs/evidence/studio-water-bank-desktop.json",
     "docs/evidence/studio-generator-seed-roundtrip.json",
+    "docs/evidence/studio-effect-curve-time-order.json",
+    "docs/evidence/studio-effect-emission-curves-desktop.json",
     "docs/evidence/studio-effect-emitter-authoring.json",
     "docs/evidence/studio-effects-camera-metal-frames.json",
     "docs/evidence/studio-particle-effect-metal-frames.json",
