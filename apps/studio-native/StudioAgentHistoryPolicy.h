@@ -5,7 +5,7 @@
 #include <set>
 namespace aiverse::studio {
 inline bool studioSceneViewAgentOperation(const std::string& op){
-    return op=="view_pick"||op=="view_focus"||op=="studio_planet_forest_live"||op=="studio_planet_scene_get"||op=="studio_planet_scene_body_set"||op=="studio_planet_scene_camera_set";
+    return op=="view_ground"||op=="view_pick"||op=="view_focus"||op=="studio_planet_forest_live"||op=="studio_planet_scene_get"||op=="studio_planet_scene_body_set"||op=="studio_planet_scene_camera_set";
 }
 inline const char* studioAgentHistoryPolicy(const std::string& op){
     static const std::set<std::string> reads={
@@ -13,7 +13,7 @@ inline const char* studioAgentHistoryPolicy(const std::string& op){
         "animation_editor","overlay_preview","overlay_plan_preview","overlay_placement_preview",
         "lightbake_status","lightbake_get","mcp_registry","simulation_budget_plan","game_info","rules_get","rules_list",
         "region_list","map_list","map_info","map_ascii","map_get","map_validate","entity_list","planet_forest_get",
-        "view_pick","studio_planet_forest_live","studio_planet_scene_get",
+        "view_ground","view_pick","studio_planet_forest_live","studio_planet_scene_get",
         "project_history_status","build_status","studio_asset_history","studio_asset_catalog",
         "studio_history_capabilities","studio_asset_move_preview",
         "studio_asset_dependencies","studio_asset_recovery_storage","studio_asset_trash_list",

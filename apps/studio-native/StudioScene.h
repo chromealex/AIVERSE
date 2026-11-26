@@ -32,6 +32,7 @@
 #include "apps/studio-native/StudioPlanetGravityEditing.h"
 #include "apps/studio-native/StudioAuthoredLights.h"
 #include "apps/editor/core/MapDoc.h"
+#include "apps/editor/core/TerrainTileSurface.h"
 #include "apps/editor/core/SceneScreenshotOptions.h"
 #include "engine/gfx/Gfx.h"
 #include "engine/render/Renderer3D.h"
@@ -351,6 +352,7 @@ public:
     void look(float dx, float dy);
     void move(float right, float up, float forward);
     void focusSelected(const editor::MapDoc& map, bool fpsProject, const std::string& selectedId);
+    Json groundHeights(const Json& points,const editor::MapDoc& map);
     Json focusCoordinates(float x,float y,float z,float distance,const editor::MapDoc& map);
     void resetView();
     // Unity-style Scene view helpers: animated orbit to an axis view and the
@@ -431,6 +433,7 @@ public:
     // ids (outlined), hidden ids (not drawn, not picked), locked ids (not picked), hover.
     void setEditorState(std::set<std::string> selection, std::set<std::string> hidden,
                         std::set<std::string> locked, std::string hover) {
+        if(hidden_!=hidden)terrainTileSurface_.reset();
         selection_=std::move(selection); hidden_=std::move(hidden); locked_=std::move(locked); hover_=std::move(hover);
     }
     // Marquee rectangle in normalised view coordinates (0..1), drawn over the Scene.
@@ -720,6 +723,7 @@ private:
     std::set<std::string> rejectedDocumentModels_;
     std::map<std::string,std::filesystem::file_time_type> documentModelTimes_;
     std::vector<StudioModelPickInstance> modelInstances_;
+    std::optional<editor::TerrainTileSurface> terrainTileSurface_;
     bool pivotSnap_ = false;
     struct ThumbJob { std::string project, asset, file; };
     std::deque<ThumbJob> thumbJobs_;

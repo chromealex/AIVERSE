@@ -1943,7 +1943,7 @@ Json StudioHost::planetForestLiveRequest(){
 Json StudioHost::sceneViewAgentRequest(const std::string& name,const Json& params){
     if(projectLoading_||!session_||!preview_)throw std::runtime_error("Native Scene unavailable");
     const auto& ws=session_->workspace();
-    if(name=="view_pick" || name=="view_focus"){
+    if(name=="view_pick" || name=="view_focus" || name=="view_ground"){
         const auto width=placement_.pixelsW,height=placement_.pixelsH;
         if(!placement_.visible || !platform_.surfaceDrawable(StudioSurface::Scene) || width<2 || height<2)
             throw std::runtime_error("Show the Scene panel to inspect its viewport");
@@ -1951,6 +1951,7 @@ Json StudioHost::sceneViewAgentRequest(const std::string& name,const Json& param
         return onScene([&]{
             if(!renderedSceneDocument_ || *renderedSceneDocument_!=document || !preview_->hasSceneCamera())
                 throw std::runtime_error("Wait for the current map to render in Scene");
+            if(name=="view_ground")return preview_->groundHeights(params["points"],ws.map);
             if(name=="view_pick"){
                 const double u=params["u"].toDouble(),v=params["v"].toDouble();
                 if(!params["u"].isNumber() || !params["v"].isNumber() || !finite({u,v}) ||

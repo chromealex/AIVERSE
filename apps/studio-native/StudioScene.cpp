@@ -1,4 +1,5 @@
 #include "apps/editor/core/NatureFieldArrows.h"
+#include "apps/studio-native/StudioDocumentIds.h"
 #include "engine/render/BakedLighting.h"
 #include "engine/render/PrismaReportJson.h"
 #include "engine/render/StaticGeometryReport.h"
@@ -873,6 +874,7 @@ void StudioScene::clearDocumentModels() {
         if (model) releasePreviewModel(*model);
     shapeModels_.clear();shapesBuilt_=false;instanceTeams_.clear();
     modelInstances_.clear();
+    terrainTileSurface_.reset();
     documentModels_.clear();
     rejectedDocumentModels_.clear();
     documentModelTimes_.clear();
@@ -885,6 +887,7 @@ void StudioScene::syncDocumentModels(
     const editor::MapDoc& doc,const std::string& projectPath,
     const Json& rules,const std::vector<StudioDocumentProxy>& proxies) {
     modelInstances_.clear();
+    terrainTileSurface_.reset();
     instanceTeams_.clear();
     if (projectPath.empty()) { loadProgress_={}; modelsPending_=false; return; }
     // Streaming budget: always load at least one new model per frame, then stop
@@ -2973,6 +2976,38 @@ void StudioScene::move(float right, float up, float forward) {
                        -std::cos(yaw)*std::cos(camera_.pitch)};
     camera_.target += (side*right + float3{0,1,0}*up + ahead*forward)*speed;
 }
+Json StudioScene::groundHeights(const Json& points,const editor::MapDoc& map) {
+    if(!points.isArray())throw std::runtime_error("points must be [[x,z],...]");
+    std::vector<std::pair<float,float>> coordinates;
+    for(const auto& point:points.items()){
+        if(!point.isArray() || point.size()<2 || !point[0].isNumber() || !point[1].isNumber())
+            throw std::runtime_error("Each ground point requires numeric x and z");
+        const float x=float(point[0].toDouble()),z=float(point[1].toDouble());
+        if(!std::isfinite(x)||!std::isfinite(z))throw std::runtime_error("Ground coordinates must be finite");
+        coordinates.emplace_back(x,z);
+    }
+    std::optional<editor::TerrainTileSurface> dragSurface;
+    auto& tiles=drag_.id.empty()?terrainTileSurface_:dragSurface;
+    if(!tiles && !coordinates.empty() && map.data.extra.getStr("terrainPresentation")=="entities"){
+        for(const auto& instance:modelInstances_){
+            if(!instance.model || hidden_.count(instance.id))continue;
+            const int index=studioMapEntityIndex(instance.id,map);
+            if(index<0 || !editor::isTerrainTile(map.data.entities[size_t(index)]))continue;
+            if(!tiles)tiles.emplace(map.data.w,map.data.h);
+            const auto world=instance.id==drag_.id ? dragPreview()*instance.world : instance.world;
+            tiles->add(*instance.model,world);
+        }
+    }
+    Json heights=Json::array();
+    for(const auto& [x,z]:coordinates){
+        const float base=terrainMeshHeight(map.data,x,z,terrainLevelHeight_,baseTerrainView_);
+        heights.push(Json::number(double(tiles?tiles->sample(x,z,base):base),3));
+    }
+    Json result=Json::object();
+    result.set("heights",heights);
+    return result;
+}
+
 Json StudioScene::focusCoordinates(float x,float y,float z,float distance,const editor::MapDoc& map) {
     float3 target{x,y,z};
     float yaw=camera_.yaw,pitch=camera_.pitch;

@@ -31,6 +31,7 @@
 #include "engine/world/NereidManifestHost.h"
 #include "TerraWeaveSparsePreview.h"
 #include "core/FileAssoc.h"
+#include "core/TerrainTileSurface.h"
 #include "core/Net.h"
 #include "core/Workspace.h"
 #include "core/FieldOps.h"
@@ -578,8 +579,7 @@ private:
     AuthoredWaterQuery authoredWater_;
     uint64_t authoredWaterRevision_ = ~uint64_t(0);
     const MapDoc* authoredWaterMap_ = nullptr;
-    mutable std::vector<float> surfaceGrid_;
-    mutable int surfaceGridW_=0, surfaceGridH_=0;
+    mutable std::optional<TerrainTileSurface> surfaceHeights_;
     mutable uint64_t surfaceHeightCacheKey_=0;
     TerraWeaveSparsePreview terraWeaveSparsePreview_;
 

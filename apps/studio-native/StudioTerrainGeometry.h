@@ -68,6 +68,24 @@ inline float terrainPreviewHeight(const editor::MapData& d, float x, float z, fl
     return (a * (1-tx) + b * tx) * (1-tz) + (e * (1-tx) + c * tx) * tz;
 }
 
+inline float terrainMeshHeight(const editor::MapData& d, float x, float z, float levelHeight = 1.5f, bool baseGrid=false) {
+    if (d.w <= 0 || d.h <= 0) return 0;
+    x = std::clamp(x, 0.0f, float(d.w));
+    z = std::clamp(z, 0.0f, float(d.h));
+    const int detail=baseGrid ? 0 : terrainDetailScale(d);
+    const int scale=std::max(1,detail);
+    const int width=d.w*scale,height=d.h*scale;
+    const int step=std::max(1,(std::max(width,height)+255)/256);
+    const float sx=x*scale,sz=z*scale;
+    const int ix=std::min(int(sx),width-1)/step*step,iz=std::min(int(sz),height-1)/step*step;
+    const int ex=std::min(ix+step,width),ez=std::min(iz+step,height);
+    const auto corner=[&](int a,int b){
+        return detail ? d.detail[size_t(b)*(width+1)+a]/16.f : terrainPreviewCorner(d,a,b,levelHeight);
+    };
+    return game::terrain::quadSurface(corner(ix,iz),corner(ex,iz),corner(ix,ez),corner(ex,ez),
+                                      (sx-ix)/(ex-ix),(sz-iz)/(ez-iz));
+}
+
 inline uint32_t terrainPreviewColor(char kind) {
     using render::rgba;
     switch (kind) {

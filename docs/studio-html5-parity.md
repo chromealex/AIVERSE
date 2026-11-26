@@ -574,3 +574,5 @@ Packaged macOS confirmed linked view_focus on the flat map and the planetary fac
 Transfer normalized read-only view_pick to the HTML Scene mouse-picking path. Verify both map topologies, entity identity, misses, hidden Scene, stale frames and unchanged selection.
 
 Packaged macOS Studio verified linked view_pick against the HTML Scene selection path on planar and planetary maps. Mouse selection and a normalized off-center query identified the same authored entity, while the query itself preserved selection and history. [Desktop picking verification](evidence/studio-linked-view-pick-desktop.json).
+
+Transfer the batched view_ground query with transformed terrain tile meshes and heightfield fallback.

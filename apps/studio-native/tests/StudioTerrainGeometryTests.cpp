@@ -1,3 +1,4 @@
+#include "apps/editor/core/TerrainTileSurface.h"
 #include "apps/studio-native/StudioTerrainGeometry.h"
 #include "apps/studio-native/StudioPlanetGlobe.h"
 #include "apps/studio-native/StudioSpectraFields.h"
@@ -18,6 +19,36 @@ using namespace aiverse::render;
 #include "apps/studio-native/StudioMapAreaBounds.h"
 
 int main() {
+    {
+        Model model;
+        model.vertices.resize(3);
+        model.vertices[0].pos={0,0,0};
+        model.vertices[1].pos={2,2,0};
+        model.vertices[2].pos={0,0,2};
+        model.indices={0,1,2};
+        model.meshes.resize(1);
+        model.meshes.front().primitives.push_back({0,3});
+        model.nodes.resize(1);
+        model.nodes.front().mesh=0;
+        model.bindWorld.push_back(mat4::translate({0,1,0}));
+        editor::TerrainTileSurface tiles(12,12);
+        const auto world=mat4::translate({4,2,4});
+        tiles.add(model,world);
+        AIVERSE_TEST_CHECK(tiles.sample(4.25f,4.5f,-2)==3.25f);
+        tiles.add(model,world,{mat4::translate({0,4,0})});
+        tiles.add(model,world);
+        AIVERSE_TEST_CHECK(tiles.sample(4.25f,4.5f,-2)==6.25f);
+        AIVERSE_TEST_CHECK(tiles.sample(3.75f,4.f,-2)==6.f);
+        AIVERSE_TEST_CHECK(tiles.sample(2,2,-2)==-2);
+        AIVERSE_TEST_CHECK(tiles.sample(1e30f,4,-2)==-2);
+    }
+    {
+        editor::MapData slope;
+        slope.w=1;slope.h=1;slope.corners={0,0,0,32};
+        AIVERSE_TEST_CHECK(terrainMeshHeight(slope,.5f,.5f)==1.f);
+        slope.w=257;slope.corners.assign(258*2,0);slope.corners[1]=48;
+        AIVERSE_TEST_CHECK(terrainMeshHeight(slope,1,0)==0.f);
+    }
     {
         editor::MapData map;map.w=2;map.h=2;map.detailScale=4;map.detail.assign(81,0);
         map.detail[10]=48;map.corners.assign(9,-32);

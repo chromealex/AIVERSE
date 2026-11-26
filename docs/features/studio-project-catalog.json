@@ -3,6 +3,10 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-native/tests/StudioTerrainGeometryTests.cpp",
+    "apps/editor/Editor.cpp",
+    "apps/editor/Editor.h",
+    "apps/editor/core/TerrainTileSurface.h",
     "apps/studio-native/StudioDocumentIds.h",
     "apps/studio-native/StudioSceneDocument.h",
     "docs/native-scene-capture.md",
