@@ -1,0 +1,5 @@
+2026-11-26 13:26:34.095 AiverseStudioHTML5[6006:84782874] [studio-web] JS: CROSS main DONE_1
+2026-11-26 13:26:30.121 AiverseStudioHTML5[6006:84782874] [studio-web] JS: CROSS main VERIFIED live layer switches zero patches, particles and voices; quality cap 4608 and native gain 0.25; untouched pause and private display settings; invalid and stale edits refused
+2026-11-26 13:26:30.846 AiverseStudioHTML5[6006:84782874] [studio-web] JS: CROSS main VERIFIED MCP disabled and reopened live surface on tick 4; retained high quality and updated gain while hidden; private source kept medium, gain 0.8 and tick 1
+2026-11-26 13:26:34.095 AiverseStudioHTML5[6006:84782874] [studio-web] JS: CROSS main VERIFIED read-only local PHYSIS Metal surface matched paused game tick 4 and resumed tick 28, patches 4, separate private tick 1, stopped drawable removed
+Linked MCP reported read-only game, rejected ignite and step, captured live PNG 499 405

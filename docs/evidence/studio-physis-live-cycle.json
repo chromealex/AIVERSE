@@ -1,0 +1,10 @@
+{
+  "sha": "0233387b92f1d8452fdf941aec2137f6fba26608",
+  "argv": [
+    "bash",
+    "/tmp/physis-cycle-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-physis-live-cycle.log.txt",
+  "sha256": "83819c0fdd0cb4f4f4ad14cee0c107d1b207c003d43d530b514837bfde9a7b11"
+}
