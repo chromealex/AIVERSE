@@ -1502,7 +1502,12 @@ bool StudioSession::pollAgentLink() {
         if(name=="view_screenshot"){
             // Answered by the host with the Scene's next frame (finishAgentScreenshot).
             if(!agentShots_.empty()){agentServer_.send(m.client,reply(id,error("another screenshot is pending; retry after its reply")).dump(-1));continue;}
-            agentShots_.push_back({m.client,id});
+            const bool nature=args.getStr("window")=="physis";
+            if(nature && args.size()!=1){
+                agentServer_.send(m.client,reply(id,error("PHYSIS capture uses the panel camera and current viewport size")).dump(-1));
+                continue;
+            }
+            agentShots_.push_back({m.client,id,nature});
             agentLines_.push_back("→ view_screenshot");
             continue;
         }
@@ -1935,7 +1940,7 @@ void StudioSession::finishAgentScreenshot(const std::string& pngBase64, int widt
         else {
             result.set("png_base64",str(pngBase64));
             result.set("width",num(int64_t(width)));result.set("height",num(int64_t(height)));
-            result.set("view",str("Studio Scene panel as the user sees it (camera unchanged)"));
+            result.set("view",str(shot.nature?"PHYSIS 3D nature viewport":"Studio Scene panel as the user sees it (camera unchanged)"));
         }
         r.set("id",shot.id);r.set("result",std::move(result));
         agentServer_.send(shot.client,r.dump(-1));

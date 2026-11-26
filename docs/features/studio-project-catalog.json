@@ -269,7 +269,7 @@
   "checks": {
     "implementation": {
       "status": "pass",
-      "note": "Project catalog and HTML Studio parity, including private PHYSIS grid, shoreline rebuilds and linked window activation.",
+      "note": "Project catalog and HTML Studio parity, including private PHYSIS grid, shoreline rebuilds and linked window activation and capture.",
       "evidence": [
         "apps/studio-web/src/panels/generated/ProjectPanel.tsx"
       ]

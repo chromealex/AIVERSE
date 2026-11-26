@@ -587,22 +587,38 @@ void StudioHost::finishLensCapture() {
     sendEventPayload("lens.capture",status);
 }
 void StudioHost::tickAgentScreenshot() {
+    const bool nature=session_->agentNatureScreenshotPending();
+    if (nature) {
+        if (!natureShotDeadline_) {
+            natureShotDeadline_=platform_.now()+4;
+            natureShotSource_=naturePreview_;
+        }
+        if (!naturePreview_ || natureShotSource_.lock()!=naturePreview_ || !naturePreview_->preview.settings.enabled ||
+            naturePreview_->epoch!=session_->graphDocumentScope().getStr("epoch") ||
+            naturePreview_->revision!=session_->workspace().map.revision || platform_.now()>=natureShotDeadline_) {
+            session_->finishAgentScreenshot("",0,0,"Open the current map's PHYSIS 3D nature viewport and retry.");
+            natureShotDeadline_=0;agentShot_.reset();
+            return;
+        }
+    }
     if (agentShot_) {
         // The capture callback may run on a GPU completion thread; it encodes there and flags done.
         if (!agentShot_->done.load()) return;
-        if (agentShot_->png.empty()) session_->finishAgentScreenshot("", 0, 0, "Scene capture failed");
+        if (agentShot_->png.empty()) session_->finishAgentScreenshot("", 0, 0, nature?"PHYSIS capture failed":"Scene capture failed");
         else session_->finishAgentScreenshot(editor::base64Encode(agentShot_->png), agentShot_->w, agentShot_->h, "");
-        agentShot_.reset();
+        natureShotDeadline_=0;agentShot_.reset();
         return;
     }
     if (!session_->agentScreenshotPending()) return;
-    if (!preview_ || !placement_.visible) {
+    auto* renderer=nature?natureSurface_.renderer.get():preview_.get();
+    if (nature && (!renderer || !natureSurface_.placement.visible || !platform_.surfaceDrawable(StudioSurface::Nature))) return;
+    if (!nature && (!renderer || !placement_.visible)) {
         session_->finishAgentScreenshot("", 0, 0, "The Scene panel is not visible in Studio; ask the user to show it");
         return;
     }
     auto shot = std::make_shared<AgentShot>();
     agentShot_ = shot;
-    onScene([&] { preview_->captureNextFrame([shot](int w, int h, std::vector<uint8_t> rgba) {
+    onScene([&] { renderer->captureNextFrame([shot](int w, int h, std::vector<uint8_t> rgba) {
         if (w > 0 && h > 0 && rgba.size() >= size_t(w) * size_t(h) * 4) {
             // At most 1280 px wide: enough for the agent, small for the MCP answer.
             const int ow = std::min(w, 1280), oh = std::max(1, int(int64_t(h) * ow / w));
@@ -752,6 +768,7 @@ Json StudioHost::natureCommand(const Json& p) {
     out.set("tick",Json::number(live?int64_t(*live):frame.getInt("tick")));
     for (const char* key:{"flames","smoke","voices","burningAreaM2"}) out.set(key,display.has(key)?display[key]:Json::number(int64_t(0)));
     out.set("grassPatches",Json::number(display.getInt("patches")));
+    if (settings.enabled && !live) out.set("next",Json::string(R"(view_screenshot {"window":"physis"})"));
     return out;
 }
 

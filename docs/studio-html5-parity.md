@@ -522,3 +522,5 @@ f43d8fb393c85b1c9a45a01cd8739a1b40919bfb verified with packaged aiversemcp and d
 Route explicit MCP enable to the owning PHYSIS window, including a closed dock, and select the active source. Validate that status reads do not open a panel.
 
 75f83a3817cc07e80f3d5b3e08fcaf9328fe877a verified with packaged macOS Studio and linked MCP. A read preserved the console-only dock. Explicit enable opened PHYSIS, selected Current map preview and rendered tick 13. After detaching using the dock menu and switching to Map zones, enable activated the detached viewport at tick 19. No duplicate in main, map bytes identical. TypeScript, Vite, native build and 299 web checks passed. Receipt docs/evidence/studio-physis-open-panel.json and capture docs/evidence/studio-project-catalog/physis-open-panel.png. Next wire PHYSIS GPU surface readback to view_screenshot, classify transient commands in agent history and complete read-only live preview.
+
+Capture the PHYSIS panel GPU surface through linked view_screenshot, including detached panels and closed Scene. Preserve existing Scene capture and keep nature commands transient in agent history.

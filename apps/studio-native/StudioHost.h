@@ -323,6 +323,8 @@ private:
     double lensCaptureStarted_ = 0;
     void captureLensFrame(int64_t cameraId);
     void finishLensCapture();
+    double natureShotDeadline_=0;
+    std::weak_ptr<StudioNaturePreview> natureShotSource_;
     std::shared_ptr<AgentShot> agentShot_; // agent view_screenshot capture on its way
     struct FxShot {
         uint64_t id=0;

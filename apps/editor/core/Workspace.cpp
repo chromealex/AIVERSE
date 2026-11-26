@@ -2090,8 +2090,8 @@ void Workspace::registerCoreOps() {
         Op op{name, desc, schema(sch), [](const Json&) -> Json { throw std::runtime_error("this tool needs the editor window (start aiverse_editor)"); }, true};
         registerOp(std::move(op));
     };
-    gui("view_screenshot", "Scene screenshot defaults to clean render-texture capture; clean:false keeps viewport UI. Optional width/height render256..4096 up to8MP, pitch -89..89; camera inspection never changes the map.",
-        R"({"properties": {"window": {"type": "string", "enum": ["all", "scene", "game"]}, "device": {"type": "string", "description": "device preset id (see device_list) or 'none'"}, "clean":{"type":"boolean"}, "width":{"type":"integer"}, "height":{"type":"integer"}, "x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"}, "distance": {"type": "number"}, "pitch": {"type": "number"}, "yaw": {"type": "number"}}})");
+    gui("view_screenshot", "HTML Studio window physis captures the visible 3D nature viewport. Scene screenshot defaults to clean render-texture capture; clean:false keeps viewport UI. Optional width/height render256..4096 up to8MP, pitch -89..89; camera inspection never changes the map.",
+        R"({"properties": {"window": {"type": "string", "enum": ["all", "scene", "game", "physis"]}, "device": {"type": "string", "description": "device preset id (see device_list) or 'none'"}, "clean":{"type":"boolean"}, "width":{"type":"integer"}, "height":{"type":"integer"}, "x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"}, "distance": {"type": "number"}, "pitch": {"type": "number"}, "yaw": {"type": "number"}}})");
     gui("view_focus", "Move the editor camera to look at x,y,z (y and distance optional).",
         R"({"properties": {"x": {"type": "number"}, "y": {"type": "number"}, "z": {"type": "number"}, "distance": {"type": "number"}}, "required": ["x", "z"]})");
     gui("play_start", "Play-test the open map inside the editor window (bots on all sides unless 'human' is set). The user watches live.",
