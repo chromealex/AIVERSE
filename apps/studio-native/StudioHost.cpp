@@ -155,6 +155,10 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
             stopGame();
             return Json::parse(R"({"ok":true,"summary":"Тест остановлен"})");
         },true});
+    session_->workspace().registerOp({"world_entity","Inspect a world object by reference or map index.",Json::parse(R"({"properties":{"ref":{"type":"integer","minimum":1},"doc":{"type":"integer","minimum":0}}})"),[this](const Json& params){
+        if(game_ && gameState().getBool("inMatch"))return game_->inspectWorldEntity(session_->workspace(),params);
+        return session_->inspectEditWorldEntity(params);
+    },true});
     session_->workspace().registerOp({"editor_select","Select map entities by docs with optional focus, inspect a project rule by key, the map, a named area, a region letter, a zero-based entity or a one-based player, or clear selection.",
         Json::parse(R"({"properties":{"docs":{"type":"array","items":{"type":"integer","minimum":0}},"refs":{"type":"array","items":{"type":["integer","string"]}},"epoch":{"type":"string"},"focus":{"type":"boolean"},"kind":{"type":"string","enum":["entity","player","area","region","type","resource","tech","faction","map","none"]},"key":{"type":"string"},"index":{"type":"integer","minimum":0}}})"),[this](const Json& input){
             const auto kind=input.getStr("kind");

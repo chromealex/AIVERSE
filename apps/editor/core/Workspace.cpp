@@ -2109,6 +2109,7 @@ void Workspace::registerCoreOps() {
     addLinked("geometry_stats","Read the last rendered Studio Scene geometry counters and completed GPU timings.","{}",requireStudioLink);
     addLinked("editor_theme","Set Studio theme and accent.",R"({"properties":{"mode":{"type":"string","enum":["dark","light"]},"accent":{"type":"string","enum":["blue","violet","teal","orange"]}}})",requireStudioLink);
     addLinked("editor_window","Open or close a panel, switch workspace or restore the layout.", R"({"properties":{"id":{"type":"string"},"open":{"type":"boolean"},"resetLayout":{"type":"boolean"},"workspace":{"type":"string","enum":["scene","world","look","animate","character","logic","publish"]}}})",requireStudioLink);
+    addLinked("world_entity","Inspect a world object by reference or map index.",R"({"properties":{"ref":{"type":"integer","minimum":1},"doc":{"type":"integer","minimum":0}}})",requireStudioLink);
     addLinked("editor_windows","List HTML Studio panels and their open state.", "{}",requireStudioLink);
     addLinked("play_status", "Current Studio play-test time, players, resources, units and result.", "{}",requireStudioLink);
     gui("play_units", "Live objects of the running play-test: id (for play_command), map name, type, owner, position, hp, orders, statuses. "

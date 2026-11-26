@@ -132,12 +132,14 @@ public:
     void setSceneViewAgentProvider(SceneViewAgentProvider provider){sceneViewAgent_=std::move(provider);}
     Json previewExternalAssets(const std::vector<std::filesystem::path>& files,
                                const std::string& destination); // native picker ONLY
+    Json inspectEditWorldEntity(const Json& params);
     Json graphDocumentScope() const;
 private:
     Json snapshot() const;
 
     Json mapPlayer(const Json& params);
     Json mapProperties(const Json& params,bool write);
+    bool prepareHierarchyPreview(const editor::WorldConfig& config,bool refresh);
     Json hierarchyGroups(const Json& params);
     editor::WorldPreview hierarchyPreview_;
     std::string hierarchyPreviewVersion_;

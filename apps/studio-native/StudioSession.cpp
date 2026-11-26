@@ -919,24 +919,43 @@ Json StudioSession::mapPlayer(const Json& params){
     if(result.has("error"))throw std::runtime_error(result.getStr("error"));
     return snapshot();
 }
+bool StudioSession::prepareHierarchyPreview(const editor::WorldConfig& config,bool refresh) {
+    const auto version=graphDocumentScope().dump(-1)+"|"+ws_.project.historyVersion();
+    if(version!=hierarchyPreviewVersion_ || refresh){
+        editor::startDocumentWorldPreview(hierarchyPreview_,ws_.map,ws_.project,config);
+        hierarchyPreviewVersion_=version;
+    }
+    hierarchyPreview_.poll();
+    if(hierarchyPreview_.busy())return false;
+    auto* sim=hierarchyPreview_.sim();
+    auto* module=hierarchyPreview_.module();
+    if(!sim || !module || !hierarchyPreview_.error().empty())throw std::runtime_error("Hierarchy preview: "+hierarchyPreview_.error());
+    return true;
+}
+Json StudioSession::inspectEditWorldEntity(const Json& params) {
+    if(ws_.project.dir.empty())throw std::runtime_error("Open a project first");
+    const auto config=studioHierarchyConfig(ws_.project.manifest);
+    if(!prepareHierarchyPreview(config,false))throw std::runtime_error("Hierarchy preview is loading; retry");
+    auto& sim=*hierarchyPreview_.sim();
+    auto& module=*hierarchyPreview_.module();
+    editor::WorldModel world;
+    editor::readWorld(sim,module,config,hierarchyPreview_.links(),hierarchyPreview_.setupRefs(),&ws_.map.data,world);
+    auto details=editor::inspectWorldRow(sim,module,world,ws_.project.rulesJson,&ws_.map.data,params);
+    if(details["row"].has("doc"))details.set("map",ws_.map.toJson()["entities"][size_t(details["row"].getInt("doc"))]);
+    return details;
+}
 Json StudioSession::hierarchyGroups(const Json& params) {
     if(ws_.project.dir.empty() || params.getStr("expectedProject")!=ws_.project.dir ||
        !sameDocumentScope(params["scope"],graphDocumentScope()))throw std::runtime_error("Hierarchy document changed");
     const auto config=studioHierarchyConfig(ws_.project.manifest);
     const auto index=params.getInt("group",-1);
     if(params.has("group") && (index<0 || size_t(index)>=config.groupings.size()))throw std::runtime_error("Unknown Hierarchy grouping");
-    const auto version=graphDocumentScope().dump(-1)+"|"+ws_.project.historyVersion();
-    if(version!=hierarchyPreviewVersion_ || params.getBool("refresh")){
-        editor::startDocumentWorldPreview(hierarchyPreview_,ws_.map,ws_.project,config);
-        hierarchyPreviewVersion_=version;
-    }
-    hierarchyPreview_.poll();
     Json result=Json::object();
-    result.set("pending",Json::fromBool(hierarchyPreview_.busy()));
-    if(hierarchyPreview_.busy())return result;
+    const bool ready=prepareHierarchyPreview(config,params.getBool("refresh"));
+    result.set("pending",Json::fromBool(!ready));
+    if(!ready)return result;
     auto* sim=hierarchyPreview_.sim();
     auto* module=hierarchyPreview_.module();
-    if(!sim || !module || !hierarchyPreview_.error().empty())throw std::runtime_error("Hierarchy preview: "+hierarchyPreview_.error());
     editor::WorldModel world;
     editor::readWorld(*sim,*module,config,hierarchyPreview_.links(),hierarchyPreview_.setupRefs(),&ws_.map.data,world);
     std::unordered_map<uint64_t,std::string> ids;

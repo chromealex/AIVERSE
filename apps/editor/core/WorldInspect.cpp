@@ -674,6 +674,41 @@ std::string worldGroupValue(const WorldModel& m, const Rules& R, const WorldRow&
     return {};
 }
 
+Json inspectWorldRow(Simulation& sim, game::GameCore& module,const WorldModel& world,const Json& rulesJson,const MapData* doc,const Json& params) {
+    const WorldRow* row=nullptr;
+    if(params.has("ref")){
+        const auto& value=params["ref"];
+        const auto ref=value.integer(0);
+        if(value.isNumber() && ref>0 && value.toDouble()==double(ref))row=world.find(uint64_t(ref));
+    }else{
+        const double index=params["doc"].toDouble(-1);
+        if(params["doc"].isNumber() && index>=0 && index<world.byDoc.size() && std::floor(index)==index)
+            row=world.findDoc(int(index));
+    }
+    if(!row)throw std::runtime_error("No such object in the world tree");
+    auto details=inspectEntity(sim,module,row->e,rulesJson);
+    details.set("row",worldRowJson(world,module.rules(),doc,*row));
+    return details;
+}
+Json worldRowJson(const WorldModel& m, const Rules& rules, const MapData* doc, const WorldRow& r) {
+        Json j = Json::object();
+        j.set("ref", Json::number(int64_t(r.ref)));
+        j.set("index", Json::number(int64_t(r.e.index)));
+        if (r.doc >= 0) j.set("doc", Json::number(int64_t(r.doc)));
+        j.set("name", Json::string(worldRowName(m, rules, doc, r)));
+        if (r.type >= 0) j.set("type", Json::string(rules.types[size_t(r.type)].id));
+        j.set("owner", Json::number(int64_t(r.owner)));
+        j.set("kind", Json::string(worldKindId(r.kind)));
+        j.set("origin", Json::string(r.origin == WorldOrigin::Map ? "map" : r.origin == WorldOrigin::Setup ? "setup" : "runtime"));
+        if (r.hasPos) { Json p = Json::array(); p.push(Json::number(double(r.x), 2)); p.push(Json::number(double(r.z), 2)); j.set("pos", p); }
+        if (r.maxHp > 0) { j.set("hp", Json::number(double(r.hp), 1)); j.set("maxHp", Json::number(double(r.maxHp), 1)); }
+        if (r.parent) { j.set("parent", Json::number(int64_t(r.parent))); j.set("parentRelation", Json::string(r.parentRel)); }
+        if (!r.label.empty()) j.set("label", Json::string(r.label));
+        Json c = Json::array();
+        r.eachComp([&](int k) { c.push(Json::string(worldComponents()[size_t(k)].id)); });
+        j.set("components", c);
+        return j;
+}
 std::string worldRowName(const WorldModel& m, const Rules& R, const MapData* doc, const WorldRow& r) {
     (void)m;
     // Author-provided display names are metadata, not fabricated ECS fields.

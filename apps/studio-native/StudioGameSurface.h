@@ -36,6 +36,7 @@ public:
     std::optional<render::float3> selectedEntityPosition() const;
     size_t selectEntities(const Json& docs,const Json& refs,const std::string& epoch);
     void selectEntity(const std::string& epoch,const std::string& ref);
+    Json inspectWorldEntity(const editor::Workspace& ws,const Json& params);
     Json inspect(const std::string& epoch,const std::string& ref);
     Json editRuntime(const Json& params);
     // Keep play changes: where each map entity is now (index into the map's entities), or removed:true.
