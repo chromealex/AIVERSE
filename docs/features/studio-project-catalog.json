@@ -584,6 +584,7 @@
     "docs/evidence/studio-live-entity-animation-owners.json",
     "docs/evidence/studio-graph-rule-type-apply.json",
     "docs/evidence/studio-animation-subgraph-authoring.json",
-    "docs/evidence/studio-nested-animation-inspector.json"
+    "docs/evidence/studio-nested-animation-inspector.json",
+    "docs/evidence/studio-standalone-pose-canvas.json"
   ]
 }

@@ -458,3 +458,5 @@ Port the legacy recursive node-property editor and typed graph parameter default
 Standalone animation node inspector: packaged macOS verification covered editing and adding nested clip notify events, speed and loop, retaining unrelated node metadata, removing fields with Undo/Redo, vector and boolean graph defaults, native validation and reopening the saved asset.
 
 Standalone pose canvas: reuse the shared Studio GraphCanvas for zoom, fit, panning, minimap and direct port wiring. Keep native connection validation, grouped movement history and existing signed document coordinates.
+
+Packaged macOS standalone animation canvas verified against a saved graph with signed coordinates, direct port reassignment, movement history and navigation. Native physical pointer capture remains to verify.
