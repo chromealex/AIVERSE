@@ -1,0 +1,10 @@
+{
+  "sha": "5790a335153f8c0bd260d2844e63b3304fb8e6ba",
+  "argv": [
+    "bash",
+    "../build-atlas.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-build-atlas-report.log.txt",
+  "sha256": "1fcda2d5d92a3ae496f8f5a6eb5df8dc5af9cc7852ffbfd299afa1d39dd8e462"
+}
