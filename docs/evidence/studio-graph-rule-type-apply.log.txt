@@ -1,0 +1,3 @@
+2026-11-26 10:45:48.652 AiverseStudioHTML5[90617:83942439] [studio-web] JS: CROSS main DONE_1
+2026-11-26 10:45:48.652 AiverseStudioHTML5[90617:83942439] [studio-web] JS: CROSS main VERIFIED inherited model selection, validation before saving, save and apply, clean stale revision refusal, Attachments from Rig
+Persisted authored child override, inherited model and sibling isolation verified.

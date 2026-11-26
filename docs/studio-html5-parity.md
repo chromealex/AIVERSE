@@ -446,3 +446,5 @@ Play-test animation diagnostics: port the legacy runtime status queries onto the
 Graph and Rig now read the running hosted game's procedural animation diagnostics through animation_runtime_status and rig_runtime_status. A packaged Mac run verified two different entities, the active attached climbing stance, and empty data after stopping. Evidence: docs/evidence/studio-live-entity-animation-owners.json.
 
 Graph and Rig authoring: restore rule-type model selection, explicit save and apply to the selected type, and direct Attachments navigation. Preserve graph revision checks and authored type overrides for inherited models.
+
+Packaged Mac Studio verified applying an animation to a child type with an inherited model, rejecting a missing model before asset save and rejecting an externally changed graph before apply. Authored child settings, base type and sibling type were checked on disk. Attachments opens from the Rig header.

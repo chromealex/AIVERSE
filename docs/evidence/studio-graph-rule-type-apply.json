@@ -1,0 +1,10 @@
+{
+  "sha": "8d942bb80b1b396f54313c59c6aef446c563a6da",
+  "argv": [
+    "bash",
+    "/tmp/studio-type-apply.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-graph-rule-type-apply.log.txt",
+  "sha256": "dcfc416ed986f133838e8f126b30705411a83afff0df7c6e1f742b721af5f82b"
+}
