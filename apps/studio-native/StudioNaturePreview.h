@@ -11,6 +11,7 @@ struct StudioNaturePreview {
     std::string epoch;
     std::uint64_t revision;
     std::uint64_t ignitionRevision=0;
+    bool forestEnabled=false;
     bool commandPlaying=false;
     std::chrono::steady_clock::time_point commandTime{};
     float yaw=.6f,pitch=.55f,distance=0;
@@ -34,6 +35,7 @@ struct StudioNaturePreview {
 
     Json displayStatus() const {
         auto status=presentation;
+        status.set("forest",Json::fromBool(forestEnabled));
         status.set("overlayRadius",Json::number(int64_t(overlay.radiusCells)));
         status.set("overlayStride",Json::number(int64_t(overlay.stride)));
         status.set("overlayAlpha",Json::number(double(overlay.alpha)));
@@ -49,7 +51,7 @@ struct StudioNaturePreview {
     }
 
     void setDisplay(const Json& params) {
-        for (const char* key:{"grass","flames","sound","igniteOnClick","fieldOverlay","overlayVolumes"})
+        for (const char* key:{"forest","grass","flames","sound","igniteOnClick","fieldOverlay","overlayVolumes"})
             if (params.has(key) && params[key].type()!=Json::Type::Bool)
                 throw std::runtime_error("Invalid nature presentation setting");
         const double quality=params["quality"].toDouble(preview.settings.grassQuality);
@@ -74,6 +76,7 @@ struct StudioNaturePreview {
         const auto radius=setting("overlayRadius",overlay.radiusCells,6,24,true);
         const auto stride=setting("overlayStride",overlay.stride,1,4,true);
         const auto alpha=setting("overlayAlpha",overlay.alpha,.1,.8,false);
+        if (params.has("forest")) forestEnabled=params.getBool("forest");
         overlay.radiusCells=int(radius);
         overlay.stride=int(stride);
         overlay.alpha=float(alpha);

@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "id": "studio-project-catalog",
+  "wind_showcase_stage": "Private nature viewport forest submission and visibility control",
   "owner": "HTML5 Studio",
   "changed_paths": [
     "apps/studio-native/StudioNatureLayers.h",

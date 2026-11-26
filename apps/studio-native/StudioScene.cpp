@@ -1,6 +1,7 @@
 #include "apps/editor/core/NatureFieldArrows.h"
 #include "apps/editor/core/RiverFlowGizmos.h"
 #include "apps/editor/core/TerrainSlopeArrows.h"
+#include "apps/editor/TerraWeaveForestPreview.h"
 #include "apps/editor/core/TreeWindGizmo.h"
 #include "apps/editor/core/ErosionZoneGizmo.h"
 #include "apps/studio-native/StudioDocumentIds.h"
@@ -444,13 +445,15 @@ bool axisParameter(float3 pivot,float3 a,float3 o,float3 d,float& t){
 struct StudioScene::NatureView : StudioPreviewParticles {
     render::Camera renderedCamera;
     editor::PhysisNaturePreview display;
+    editor::TerraWeaveForestPreview forest;
     std::chrono::steady_clock::time_point last{};
     std::uint64_t ignition=0;
     NatureView(gfx::Device& device, render::RenderDeviceLifetime::Lease lease,const std::string& project,const editor::MapDoc& map)
         :StudioPreviewParticles(device,std::move(lease),project) {
+        forest.setProjectDir(project);
         display.setWater(editor::AuthoredWaterQuery::fromDoc(map));
     }
-    ~NatureView(){display.release(device_,particles_);}
+    ~NatureView(){forest.release(device_);display.release(device_,particles_);}
     using StudioPreviewParticles::particles_;
     using StudioPreviewParticles::read;
 };
@@ -3402,6 +3405,12 @@ Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,con
     renderer_.beginScene(camera,width,height);
     renderer_.lighting.skyColor={.7f,.8f,.95f};renderer_.lighting.fogDensity=0;
     if(terrain_.vb.valid() && terrain_.ib.valid())renderer_.drawMesh(terrain_,mat4{},{1,1,1,1},kDrawNoCastShadow);
+    view.forest.setEnabled(state.forestEnabled);
+    if (state.forestEnabled) {
+        const auto eye=renderer_.cameraPos();
+        view.forest.draw(*device_,renderer_,map,std::llround(eye.x*100.),std::llround(eye.z*100.),
+            [&](int64_t x,int64_t z){return int32_t(std::llround(heightAt(float(x)*.01f,float(z)*.01f)*100.));});
+    }
     particles.setView(camera,renderer_.viewProj(),width,height);
     auto retire=[&](auto& model){if(model)renderer_.invalidateModelCachesFor(model.get());sparseTerrainRetirement_.retireModel(*device_,model);};
     (void)sparseTerrainRetirement_.collectWithoutIdle(*device_);
@@ -3447,6 +3456,7 @@ Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,con
     stats.set("distance",Json::number(double(camera.distance)));
     stats.set("overlayVolumesDrawn",Json::number(int64_t(overlayVolumes)));
     stats.set("overlayTiles",Json::number(int64_t(overlayTiles)));
+    stats.set("forestInstances",Json::number(int64_t(state.forestEnabled?view.forest.visibleInstances():0)));
     stats.set("patches",Json::number(int64_t(view.display.grassPatches())));
     stats.set("flames",Json::number(int64_t(view.display.flames())));
     stats.set("smoke",Json::number(int64_t(view.display.smoke())));
