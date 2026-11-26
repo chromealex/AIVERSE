@@ -75,6 +75,11 @@ struct TerrainLook {
 enum CellKind : uint8_t { kKindGrass, kKindSand, kKindRamp, kKindRock, kKindBlocked, kKindLakebed, kKindShallows, kKindDug };
 const char* cellKindName(int k);
 int terrainCellKind(uint8_t flags,bool dug=false);
+LegacyWaterLayout mapWaterLayout(const MapGrid& grid, const TerrainLook& look,
+                                 bool heightfield, bool detailSurface,
+                                 const std::function<float(float,float)>& groundAt,
+                                 const std::function<float(int,int)>& cornerAt);
+
 void applyTerrainLook(TerrainLook& look,const Json& settings);
 // Map key "terrainMaterial" (rows of '0'..'3', other chars = by cell kind) -> per cell layer (255 = by kind).
 std::vector<uint8_t> parseMaterialRows(const Json& rows, int w, int h);

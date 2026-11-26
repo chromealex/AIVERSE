@@ -635,3 +635,5 @@ Restore editor_theme using shared HTML theme preferences, Window menu controls a
 Expose geometry_stats from the rendered Scene and its completed GPU queries through the linked MCP registry.
 
 Share STRATA selection, refusal, cache, upload and preparation statistics between geometry_stats and static geometry reports.
+
+Share the game terrain water-cell layout builder with HTML Scene so sheet, connected-body and shore levels come from one implementation.

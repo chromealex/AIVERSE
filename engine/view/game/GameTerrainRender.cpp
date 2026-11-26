@@ -1163,13 +1163,16 @@ void TerrainRenderer::buildApron(gfx::Device& dev, const MapGrid& g) {
 // corner, so lakes on plateaus and heightfield valleys hold water at their own level.
 // The water layout both renderers share: the legacy mesh below and the NEREID
 // conversion (GameWaterNereid.h) read the same bodies, cells and levels.
-LegacyWaterLayout TerrainRenderer::legacyWaterLayout(const MapGrid& g, bool flatDig) const {
+LegacyWaterLayout mapWaterLayout(const MapGrid& g, const TerrainLook& look,
+                                 bool heightfield, bool detailSurface,
+                                 const std::function<float(float,float)>& groundAt,
+                                 const std::function<float(int,int)>& cornerAt) {
     LegacyWaterLayout out;
     const int W = g.w, H = g.h;
     out.width = W; out.height = H; out.apron = float(kApron);
-    out.sheet = look_.water==TerrainLook::Water::Sheet ||
-        (look_.water==TerrainLook::Water::Auto && !heightfield_);
-    out.sheetY = look_.waterOffset;
+    out.sheet = look.water==TerrainLook::Water::Sheet ||
+        (look.water==TerrainLook::Water::Auto && !heightfield);
+    out.sheetY = look.waterOffset;
     for (auto f : g.flags) if ((f & kCellWater) && !(f & kCellGround)) { out.any = true; break; }
     if (out.sheet) return out;
     std::vector<int> body(size_t(W * H), -1);
@@ -1196,16 +1199,16 @@ LegacyWaterLayout TerrainRenderer::legacyWaterLayout(const MapGrid& g, bool flat
                     size_t ni = size_t(g.index(nx, ny));
                     if (isWater(nx, ny)) { if (body[ni] < 0) { body[ni] = id; stack.push_back(int(ni)); } continue; }
                     // shore: the ground of the land cell next to the water (its centre; corners dip into the lake)
-                    rim = std::min(rim, detailOn_ ? detail_.sample(float(nx) + 0.5f, float(ny) + 0.5f) : terrain::heightAt(g, lh_, float(nx) + 0.5f, float(ny) + 0.5f));
+                    rim = std::min(rim, groundAt(float(nx) + 0.5f, float(ny) + 0.5f));
                 }
-                for (int cy = 0; cy <= 1; ++cy) for (int cx = 0; cx <= 1; ++cx) top = std::max(top, terrain::gridCorner(g, lh_, x + cx, y + cy, flatDig));
+                for (int cy = 0; cy <= 1; ++cy) for (int cx = 0; cx <= 1; ++cx) top = std::max(top, cornerAt(x + cx, y + cy));
             }
-            if (!deep && look_.water == TerrainLook::Water::Auto && !heightfield_) continue; // shallows alone: no surface
+            if (!deep && look.water == TerrainLook::Water::Auto && !heightfield) continue; // shallows alone: no surface
             LegacyWaterLayout::Body b;
-            b.level = (rim < 1e8f ? rim : top) + look_.waterOffset;
+            b.level = (rim < 1e8f ? rim : top) + look.waterOffset;
             b.water = cells;
             // detail surface: the water reaches one cell under the shore, the smooth bank cuts its outline
-            if (detailOn_) {
+            if (detailSurface) {
                 std::vector<int> grown = cells;
                 std::vector<uint8_t> in(size_t(W * H), 0);
                 for (int c : cells) in[size_t(c)] = 1;
@@ -1222,6 +1225,12 @@ LegacyWaterLayout TerrainRenderer::legacyWaterLayout(const MapGrid& g, bool flat
             out.bodies.push_back(std::move(b));
         }
     return out;
+}
+
+LegacyWaterLayout TerrainRenderer::legacyWaterLayout(const MapGrid& g, bool flatDig) const {
+    return mapWaterLayout(g, look_, heightfield_, detailOn_,
+        [&](float x, float z) { return waterGroundAt(g, x, z); },
+        [&](int x, int z) { return terrain::gridCorner(g, lh_, x, z, flatDig); });
 }
 
 TerrainLook::WaterRenderer TerrainRenderer::waterRenderer() const {
