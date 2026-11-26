@@ -76,7 +76,7 @@ export default function EffectRangeEditor({emitter,patch}:{emitter:Record<string
   </details>;
 }
 
-export function EffectRangeValue({emitter,p,patch,selector}:{emitter:Record<string,unknown>;p:typeof properties[number];patch:Patch;selector?:ReactNode}){
+export function EffectRangeValue({emitter,p,patch,selector,rangeLabel="Random range"}:{rangeLabel?:string;emitter:Record<string,unknown>;p:typeof properties[number];patch:Patch;selector?:ReactNode}){
   const raw=emitter[p.key]??p.initial;
   const obj=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw as Record<string,unknown>:undefined;
   const mode=numeric(raw)?'constant':pair(raw)?'range':keys(raw)||obj?.curve!==undefined?'curve':'invalid';
@@ -99,7 +99,7 @@ export function EffectRangeValue({emitter,p,patch,selector}:{emitter:Record<stri
       {selector}
       <label>Value mode<StudioSelect value={mode} onChange={e=>changeMode(e.target.value)}>
         {mode==='invalid'&&<option value="invalid">Invalid source</option>}
-        <option value="constant">Constant</option><option value="range">Random range</option><option value="curve">Curve</option>
+        <option value="constant">Constant</option><option value="range">{rangeLabel}</option><option value="curve">Curve</option>
       </StudioSelect></label>
     </div>
     <div className="effects-emitter-fields" key={p.key+mode}>

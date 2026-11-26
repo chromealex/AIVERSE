@@ -1,12 +1,12 @@
 import {StudioAlert,StudioButton,StudioInput} from '../ui';
 import {EffectNumber} from './EffectRangeEditor';
 
-type Color=string|number[];
+export type Color=string|number[];
 type Stop=[number,Color];
-type Patch=(path:(string|number)[],value:unknown)=>void;
+export type Patch=(path:(string|number)[],value:unknown)=>void;
 const defaultFade:Stop[]=[[0,'#ffffffff'],[1,'#ffffff00']];
 const clamp=(n:number)=>Math.min(1,Math.max(0,n));
-function isColor(value:unknown):value is Color {
+export function isColor(value:unknown):value is Color {
   if(typeof value==='string')return /^#[\da-f]{6}([\da-f]{2})?$/i.test(value);
   return Array.isArray(value)&&(value.length===3||value.length===4)&&value.every(Number.isFinite);
 }
@@ -17,7 +17,19 @@ function rgba(color:Color):number[] {
 function hex(channels:number[]){
   return '#'+channels.map(n=>Math.round(clamp(n)*255).toString(16).padStart(2,'0')).join('');
 }
-function Gradient({name,label,value,patch}:{name:string;label:string;value:unknown;patch:Patch}){
+export function ColorFields({color,change}:{color:Color;change:(value:Color)=>void}){
+  const channels=rgba(color);
+  return <>
+    <label>Color<StudioInput type="color" value={hex(channels.slice(0,3))} onChange={e=>{
+      const next=rgba(e.target.value);next[3]=channels[3];
+      change(Array.isArray(color)?next:hex(next));
+    }}/></label>
+    <EffectNumber label="Opacity" min={0} max={1} value={channels[3]} change={alpha=>{
+      change([...channels.slice(0,3),alpha]);
+    }}/>
+  </>;
+}
+export function Gradient({name,label,value,patch,positionLabel='Particle age'}:{positionLabel?:string;name:string;label:string;value:unknown;patch:Patch}){
   const constant=isColor(value);
   const stops:Stop[]=constant?[[0,value]]:value===undefined?defaultFade:Array.isArray(value)?value:[];
   if(!stops.length||!stops.every(s=>Array.isArray(s)&&s.length===2&&Number.isFinite(s[0])&&isColor(s[1])))
@@ -41,16 +53,9 @@ function Gradient({name,label,value,patch}:{name:string;label:string;value:unkno
   return <fieldset className="effects-key-list"><legend>{label}</legend>
     <div className="effects-color-ramp"><div style={{background:rows.length===1?ramp[0].split(' ')[0]:'linear-gradient(to right,'+ramp.join(',')+')'}}/></div>
     {rows.map(({age,color,index})=>{
-      const channels=rgba(color);
       return <div className="effects-color-stop" key={index}>
-        <EffectNumber label="Particle age" min={0} max={1} value={age} change={v=>change(index,0,v)}/>
-        <label>Color<StudioInput type="color" value={hex(channels.slice(0,3))} onChange={e=>{
-          const next=rgba(e.target.value);next[3]=channels[3];
-          change(index,1,Array.isArray(color)?next:hex(next));
-        }}/></label>
-        <EffectNumber label="Opacity" min={0} max={1} value={channels[3]} change={alpha=>{
-          change(index,1,[...channels.slice(0,3),alpha]);
-        }}/>
+        <EffectNumber label={positionLabel} min={0} max={1} value={age} change={v=>change(index,0,v)}/>
+        <ColorFields color={color} change={v=>change(index,1,v)}/>
         <StudioButton disabled={stops.length===1} onClick={()=>{
           if(value===undefined)patch([name],stops.filter((_,i)=>i!==index));
           else patch([name,index],undefined);

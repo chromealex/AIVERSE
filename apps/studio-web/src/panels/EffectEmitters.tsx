@@ -1,5 +1,6 @@
 import {useMemo,useState} from 'react';
 import {applyEdits,createScanner,findNodeAtLocation,getNodeValue,modify,parseTree,type Node,type ParseError} from 'jsonc-parser';
+import EffectParticleColor from './EffectParticleColor';
 import EffectLifetimeColor from './EffectLifetimeColor';
 import EffectShape from './EffectShape';
 import EffectBursts from './EffectBursts';
@@ -91,6 +92,7 @@ export default function EffectEmitters({source,edit,busy}:{source:string;edit:(d
       patch(['emitters',index,...path],value,base);
     }}/>}
     {emitter&&<EffectRangeEditor key={index} emitter={emitter} patch={(path,value)=>patch(['emitters',index,...path],value)}/>}
+    {emitter&&<EffectParticleColor key={'particle-color-'+index} emitter={emitter} patch={(path,value)=>patch(['emitters',index,...path],value)}/>}
     {emitter&&<EffectLifetimeColor key={'color-'+index} emitter={emitter} patch={(path,value)=>patch(['emitters',index,...path],value)}/>}
     {emitter&&<EffectBursts key={'bursts-'+index} source={source} emitterIndex={index} emitter={emitter}
       schedule={findNodeAtLocation(node,['bursts'])} patch={patch} remove={removeEntry}/>}
