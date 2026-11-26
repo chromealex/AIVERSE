@@ -1569,7 +1569,7 @@ bool StudioSession::pollAgentLink() {
         if(ws_.map.data.entities.size()!=entities){clearSelection();dropOrdinalFlags();}
         const bool dirty=ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty;
         const std::string policy=studioAgentHistoryPolicy(name);
-        const bool readOnly=policy=="read"||policy=="runtime"||(name=="terraweave_caverns_paint"&&args.getStr("mode")=="get");
+        const bool readOnly=policy=="read"||policy=="view"||policy=="runtime"||(name=="terraweave_caverns_paint"&&args.getStr("mode")=="get");
         // Known native asset no-ops do not invent an untracked mutation.
         const bool nativeNoop=(name=="studio_asset_meta_patch"||
             (name=="studio_asset_move_commit"&&!result["files"].size()&&!result["issues"].size()))&&

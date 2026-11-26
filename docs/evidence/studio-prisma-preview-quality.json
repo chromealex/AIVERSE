@@ -1,0 +1,10 @@
+{
+  "sha": "985d2e6b6d26fac26c927e433fabaf0cd0ae0058",
+  "argv": [
+    "bash",
+    "/tmp/pfx-tier-ui.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-prisma-preview-quality.log.txt",
+  "sha256": "b6192f596822d5083af5c6e1a401eb4eaf523e1cbf51c589057df34d2145e685"
+}

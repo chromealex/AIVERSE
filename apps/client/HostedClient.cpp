@@ -347,7 +347,11 @@ void HostedClient::setPostQuality(render::PrismaQuality quality) {
     if (client_ && currentEpochValid()) client_->setHostPostQuality(quality);
 }
 Json HostedClient::prismaFrameReports() const {
-    return currentEpochValid() && inMatch() ? render::prismaViewReports(client_->prismaDiagnostics()) : Json::array();
+    if (!currentEpochValid() || !inMatch()) return Json::array();
+    const auto& pipeline=client_->prismaDiagnostics();
+    // Off bypasses resolve, so its last completed view report belongs to the previous tier.
+    if (pipeline.quality()==render::PrismaQuality::Off) return Json::array();
+    return render::prismaViewReports(pipeline);
 }
 bool HostedClient::inMatch() const { return client_ && step_ >= kSteps && client_->inMatch(); }
 std::optional<size_t> HostedClient::currentMapIndex() const {
