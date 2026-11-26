@@ -147,7 +147,7 @@ public:
     void selectionAction(const std::string& method);
     bool scenePickerArmed() const { return !scenePickerToken_.empty(); }
     bool brushArmed() const;
-    bool resolveBrushPoint(double x,double y,double w,double h,render::float3& at,std::string* error=nullptr);
+    bool resolveBrushPoint(double x,double y,double w,double h,render::float3& at,std::string* error=nullptr,std::string* planetBody=nullptr,double* elevation=nullptr);
     bool updateBrushCursor(double x, double y, double w, double h);
     void brushAdjust(double factor, bool disarm);
     bool splineDrag(int phase, double x, double y, double w, double h);

@@ -424,6 +424,7 @@ public:
     bool groundPoint(float x, float y, float width, float height, render::float3& out) const;
     std::optional<Json> forestPick(float x,float y,float w,float h,const std::string& project,const std::string& path,uint64_t revision) const;
     void setForestSelection(Json selection){forestSelection_=std::move(selection);}
+    bool planetBrushPoint(double x,double y,double w,double h,const editor::MapDoc& doc,render::float3& hit,std::string& body,double& elevation)const;
     std::optional<Json> forestGroundPlacement(float x,float y,float w,float h,const std::string& path,uint64_t revision) const;
     bool beginPlanetRegionDrag(const editor::MapDoc& doc,const std::string& id,float x,float y,float width,float height);
     std::optional<Json> updatePlanetRegionDrag(const editor::MapDoc& doc,float x,float y,float width,float height,bool symmetric,bool snap,bool finish);

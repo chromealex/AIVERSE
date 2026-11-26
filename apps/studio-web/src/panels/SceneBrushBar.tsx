@@ -238,7 +238,7 @@ export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS, tileCatalog,
   const field = fields.find(f => f.id === brush.field);
   const stamping = kind==='terrain' && brush.op==='stamp';
   const detailOnly = (op:StudioSceneBrush['op']) => op==='erode' || op==='stamp';
-  const usesDetail = brush.terrainGrid==='detail' || (brush.terrainGrid==='auto' && (kind==='paint' || brush.detailScale>0 || detailOnly(brush.op)));
+  const usesDetail = !(brush.planet && kind==='paint') && (brush.terrainGrid==='detail' || (brush.terrainGrid==='auto' && (kind==='paint' || brush.detailScale>0 || detailOnly(brush.op))));
   const continuous = kind === 'terrain' || kind === 'sparse' || kind === 'paint' || kind === 'tiles' || kind === 'region' || kind === 'field' || kind === 'objects';
   return <div className={'tbrush' + (brush.armed ? ' is-armed' : '')}>
     {kinds.includes('terrain') && <h3 className="terrain-brush-heading">Terrain brush</h3>}
@@ -271,18 +271,18 @@ export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS, tileCatalog,
       }}>Create chunk at camera target</button>
       <small>Paint beyond the map edge. Hold Shift to reverse raise and lower.</small>
     </fieldset>}
-    {(kind==='terrain' || kind==='paint') && <label className="ptp__row"><span>Terrain grid</span>
+    {(kind==='terrain' || (kind==='paint' && !brush.planet)) && <label className="ptp__row"><span>Terrain grid</span>
       <select className="au-input" value={brush.terrainGrid} onChange={e=>{
         const terrainGrid=e.target.value as StudioSceneBrush['terrainGrid'];
         set({terrainGrid,...(terrainGrid==='base' && detailOnly(brush.op)?{op:'raise' as const}:{})});
       }}>
-        <option value="auto">Automatic ({kind==='paint' || brush.detailScale>0 || detailOnly(brush.op)?'detail':'base'})</option>
+        <option value="auto">{brush.planet?'Automatic (body grid)':<>Automatic ({kind==='paint' || brush.detailScale>0 || detailOnly(brush.op)?'detail':'base'})</>}</option>
         <option value="base">Base cells</option><option value="detail">Detail samples</option>
       </select></label>}
-    {(kind==='terrain' || kind==='paint') && brush.terrainGrid==='base' && brush.detailScale>0 &&
+    {(kind==='terrain' || kind==='paint') && !brush.planet && brush.terrainGrid==='base' && brush.detailScale>0 &&
       <small>{brush.armed?'Scene shows the base grid. Turn the brush off to see the detail surface.':'Turn the brush on to see and edit the base grid.'}</small>}
     {kind === 'terrain' && <div className="ptp__seg" role="radiogroup" aria-label="Sculpt operation">
-      {OPS.filter(([id])=>brush.terrainGrid!=='base' || !detailOnly(id)).map(([id, label]) => <button key={id} type="button" role="radio" aria-checked={brush.op === id}
+      {OPS.filter(([id])=>(!brush.planet && brush.terrainGrid!=='base') || !detailOnly(id)).map(([id, label]) => <button key={id} type="button" role="radio" aria-checked={brush.op === id}
         className={brush.op === id ? 'is-on' : ''} onClick={() => set({ op: id })}>{label}</button>)}</div>}
     {kind === 'terrain' && brush.op==='set' && <fieldset className="tbrush__stamp"><legend>Target elevation</legend>
       <label className="ptp__row"><span>Height (m)</span><input className="au-input" type="number" step="any" min={-2048} max={2047.9375}
@@ -306,6 +306,7 @@ export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS, tileCatalog,
     </fieldset>}
     {(kind==='terrain' || kind==='paint') && usesDetail && <Slider label="Hardness" min={0} max={0.95} step={0.05}
       value={brush.hardness} onCommit={hardness=>set({hardness})}/>}
+    {brush.planet && (kind==='paint' || kind==='terrain') && <small>Paint the visible body in Scene. Radius is measured in surface cells.</small>}
     {kind==='paint' && !usesDetail && <small>Hold Shift while painting to restore the cell material.</small>}
     {kind === 'paint' && <Slider label="Layer" value={brush.layer} min={0} max={3} step={1} onCommit={v => set({ layer: v })}/>}
     {kind === 'region' && <label className="ptp__row"><span>Region</span>

@@ -1708,6 +1708,7 @@ Json StudioSession::sceneBrushJson() const {
     o.set("armed",Json::fromBool(b.armed));o.set("kind",str(b.kind));o.set("op",str(b.op));
     o.set("radius",Json::number(b.radius,3));o.set("strength",Json::number(b.kind=="terrain" && b.op=="stamp"?b.stampHeight:b.strength,3));
     const auto& sparse=ws_.map.data.extra["terraweaveSparse"];
+    o.set("planet",Json::fromBool(ws_.map.data.planet()));
     o.set("terrainGrid",str(b.terrainGrid));
     o.set("detailScale",num(int64_t(ws_.map.data.detailScale)));
     o.set("targetHeight",Json::number(b.targetHeight,6));o.set("pickHeight",Json::fromBool(b.pickHeight));
@@ -1766,19 +1767,30 @@ bool StudioSession::strokeCancel(){
     stroking_=false;strokeTransaction_.reset();strokePoints_=Json::array();
     clearSelection();dropOrdinalFlags();syncHistoryLabels();return true;
 }
-bool StudioSession::strokeDab(double x,double z,std::string* error,double y,bool shift){
+bool StudioSession::strokeDab(double x,double z,std::string* error,double y,bool shift,const std::string& body){
     if(!stroking_)return false;
     try{
         if(!std::isfinite(x)||!std::isfinite(y)||!std::isfinite(z)||std::abs(x)>1e7||std::abs(y)>1e7||std::abs(z)>1e7)
             throw std::runtime_error("Invalid stroke coordinates");
-        if(strokeDabImpl(x,z,error,y,shift))return true;
+        if(strokeDabImpl(x,z,error,y,shift,body))return true;
     }catch(const std::exception& e){if(error)*error=e.what();}
     strokeCancel();return false;
 }
-bool StudioSession::strokeDabImpl(double x, double z, std::string* error,double y,bool shift) {
+bool StudioSession::strokeDabImpl(double x, double z, std::string* error,double y,bool shift,const std::string& body) {
     if(!stroking_)return false;
     const auto& b=brush_;
-    const double d=b.kind=="caverns"?std::hypot(x-strokeX_,y-strokeHeight_,z-strokeY_):std::hypot(x-strokeX_,z-strokeY_);
+    const bool planet=ws_.map.data.planet() && (b.kind=="terrain" || b.kind=="paint");
+    if(body!=strokeBody_ || planet!=!body.empty())throw std::runtime_error("Terrain brush body changed");
+    Json direction=Json::array();
+    if(planet){
+        const int index=ws_.map.data.findBody(body);
+        const double length=std::hypot(x,y,z);
+        if(index<0 || length<1e-6)throw std::runtime_error("Unknown planet brush surface");
+        const double scale=ws_.map.data.bodies[size_t(index)].faceSize/1.5707963267948966;
+        for(double coordinate:{x,y,z})direction.push(Json::number(coordinate/length,8));
+        x=x/length*scale;y=y/length*scale;z=z/length*scale;
+    }
+    const double d=(planet || b.kind=="caverns")?std::hypot(x-strokeX_,y-strokeHeight_,z-strokeY_):std::hypot(x-strokeX_,z-strokeY_);
     if(brushPathKind(b.kind)){
         // Path tools: a point every two cells; the op runs once on release.
         if(d<2.0 && strokePoints_.size()>0)return true;
@@ -1819,7 +1831,7 @@ bool StudioSession::strokeDabImpl(double x, double z, std::string* error,double 
         p.set("depthCm",num(int64_t(b.depthCm)));
         p.set("radiusCm",num(std::llround(b.radius*100)));
     }
-    else if(b.kind=="paint" && b.terrainGrid=="base"){
+    else if(b.kind=="paint" && (planet || b.terrainGrid=="base")){
         op="terrain_material";
         p.set("layer",num(int64_t(shift?-1:b.layer)));
         p.set("x",num(int64_t(std::floor(x))));
@@ -1859,12 +1871,16 @@ bool StudioSession::strokeDabImpl(double x, double z, std::string* error,double 
         p.set("x",Json::number(x,3));p.set("z",Json::number(z,3));
         if(b.count>1){p.set("count",num(int64_t(b.count)));p.set("spread",Json::number(b.spread,3));}}
     else {if(error)*error="Unknown brush";return false;}
+    if(planet){
+        p.set("body",str(body));p.set("dir",std::move(direction));
+        p.set("radius",Json::number(b.radius,3));p.erase("x");p.erase("y");
+    }
     const Json r=ws_.call(op,p,"editor");   // "editor": no Console line per dab; one line per stroke at the end
     if(r.has("error")){if(error)*error=r.getStr("error");return false;}
     strokeX_=x;strokeY_=z;strokeHeight_=y;++strokeDabs_;
     return true;
 }
-bool StudioSession::strokeBegin(double x, double z, std::string* error,double y,bool shift) {
+bool StudioSession::strokeBegin(double x, double z, std::string* error,double y,bool shift,const std::string& body) {
     if(!brush_.armed||brush_.pickHeight||ws_.project.dir.empty()||stroking_)return false;
     const auto& b=brush_;
     if((b.kind=="tiles"&&b.tile.empty())||(b.kind=="field"&&b.field.empty())||(b.kind=="objects"&&b.type.empty())||(b.kind=="road"&&b.roadType.empty())){
@@ -1876,7 +1892,8 @@ bool StudioSession::strokeBegin(double x, double z, std::string* error,double y,
         strokeTransaction_=std::make_unique<editor::MapDoc::CompoundEdit>(ws_.map);
         strokeHistoryMark_=ws_.map.historyMark();stroking_=true;strokeDabs_=0;strokePoints_=Json::array();
         strokeX_=x+1e9;strokeY_=z+1e9;
-        return strokeDab(x,z,error,y,shift);
+        strokeBody_=body;
+        return strokeDab(x,z,error,y,shift,body);
     }catch(const std::exception& e){if(error)*error=e.what();strokeCancel();return false;}
 }
 bool StudioSession::strokeEnd(std::string* error) {
@@ -4851,7 +4868,11 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             if(params.has("caveDepth"))b.caveDepth=number("caveDepth",.01,10000);
             if (params.has("armed")) b.armed=params.getBool("armed")&&!ws_.project.dir.empty();
             if(!b.armed || b.kind!="terrain" || b.op!="set")b.pickHeight=false;
-            if(b.armed && b.kind=="terrain" && (b.op=="stamp" || b.op=="set") && (ws_.map.data.worldSpace || ws_.map.data.planet()))
+            if(b.kind=="terrain" && ws_.map.data.planet() && (b.op=="erode" || b.op=="stamp")){
+                if(params.has("op"))throw std::runtime_error("Erosion and stamps require a flat detail surface");
+                b.op="raise";
+            }
+            if(b.armed && b.kind=="terrain" && (b.op=="stamp" || b.op=="set") && ws_.map.data.worldSpace && !ws_.map.data.planet())
                 throw std::runtime_error("This terrain brush requires a flat heightmap");
             if(b.armed && b.kind=="region" && (ws_.map.data.worldSpace || ws_.map.data.planet()))
                 throw std::runtime_error("Region painting requires a flat map");

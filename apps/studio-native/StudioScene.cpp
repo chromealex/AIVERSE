@@ -2129,6 +2129,24 @@ std::optional<Json> StudioScene::forestPick(float x,float y,float w,float h,cons
     result.set("key",Json::number(int64_t(chosen->key)));result.set("direct",Json::fromBool(chosen->direct));
     result.set("body",Json::string(planetPreview_->bodyId));return result;
 }
+bool StudioScene::planetBrushPoint(double x,double y,double w,double h,const editor::MapDoc& doc,float3& hit,std::string& body,double& elevation)const{
+    if(!planetMode_ || !planetPreview_ || !cameraInitialized_ || planetMapPath_!=doc.path ||
+       planetRevision_!=doc.revision || planetLiveTerrainVisible_)return false;
+    float3 origin,ray;
+    if(!viewCamera().screenRay(float(x),float(y),float(w),float(h),origin,ray))return false;
+    const auto t=planetPreview_->terrainHit(origin,ray,visiblePlanetTerrain());
+    if(!std::isfinite(t))return false;
+    hit=origin+ray*t;
+    body=planetPreview_->bodyId;
+    const int index=doc.data.findBody(body);
+    if(index<0 || dot(hit,hit)<1e-8f)return false;
+    const auto unit=normalize(hit);
+    game::CubeSphere cube(planetPreview_->faceSize);
+    int face;Fixed a,b;
+    cube.faceFromDir({StudioPlanetPreview::fixed(unit.x),StudioPlanetPreview::fixed(unit.y),StudioPlanetPreview::fixed(unit.z)},face,a,b);
+    elevation=StudioPlanetPreview::height(doc.data.bodies[size_t(index)],face,float(a.toDouble()),float(b.toDouble()));
+    return true;
+}
 std::optional<Json> StudioScene::forestGroundPlacement(float x,float y,float w,float h,const std::string& path,uint64_t revision)const{
     if(planetLiveSnapshot_["forest"].getBool("active")&&planetLivePath_==path&&planetLiveRevision_==revision)return {};
     if(!planetMode_||!planetPreview_||!cameraInitialized_||planetMapPath_!=path||planetRevision_!=revision||
@@ -5088,6 +5106,24 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                 const auto hit=eye+normalize(dir*planetPreview_->radius-eye)*t;
                 renderer_.drawMesh(cube_,mat4::translate(hit+dir*.6f)*mat4::scale({.6f,.6f,.6f}),{.25f,.9f,.8f,1},kDrawNoCastShadow);
             }
+        }
+    }
+    if(brushVisible_ && planetPreview_ && dot(brushCenter_,brushCenter_)>1e-6f){
+        const auto up=normalize(brushCenter_);
+        const auto east=normalize(cross(up,std::abs(up.y)<.9f?float3{0,1,0}:float3{1,0,0}));
+        const auto north=cross(up,east);
+        const float angle=std::min(3.1415f,brushRadius_*1.5707963f/planetPreview_->faceSize);
+        const auto& body=doc.data.bodies[size_t(doc.data.findBody(planetPreview_->bodyId))];
+        game::CubeSphere cube(body.faceSize);
+        float3 previous{};
+        for(int i=0;i<=64;++i){
+            const float phase=i*6.2831853f/64;
+            const auto dir=up*std::cos(angle)+(east*std::cos(phase)+north*std::sin(phase))*std::sin(angle);
+            int face;Fixed a,b;
+            cube.faceFromDir({StudioPlanetPreview::fixed(dir.x),StudioPlanetPreview::fixed(dir.y),StudioPlanetPreview::fixed(dir.z)},face,a,b);
+            const auto point=dir*(planetPreview_->radius+StudioPlanetPreview::height(body,face,float(a.toDouble()),float(b.toDouble()))+.05f);
+            if(i)renderer_.line(previous,point,rgba(120,200,255,230));
+            previous=point;
         }
     }
     drawPlanetRegionHandles(view,width,height,doc);

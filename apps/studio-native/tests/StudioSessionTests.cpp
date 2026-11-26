@@ -1758,6 +1758,24 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"Fixture co
        for(int i=0;i<4;++i)AIVERSE_TEST_CHECK(!call("studio.undo").has("error"));
        AIVERSE_TEST_CHECK(session.workspace().map.undoDepth()==heightDepth);
        AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"terrainGrid":"auto"})").has("error"));
+       {
+           aiverse::editor::MapDoc globe;
+           AIVERSE_TEST_CHECK(globe.loadJson(Json::parse(R"({"world":{"bodies":[{"id":"a","faceSize":8},{"id":"b","faceSize":8}]}})"),&err));
+           auto& map=session.workspace().map;
+           map.data.bodies.swap(globe.data.bodies);
+           const auto start=map.toJson();
+           AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"kind":"terrain","op":"set","targetHeight":4,"terrainGrid":"base"})").has("error"));
+           AIVERSE_TEST_CHECK(!session.strokeBegin(1,0,&err,0,false));
+           AIVERSE_TEST_CHECK(session.strokeBegin(1,0,&err,0,false,"b"));
+           AIVERSE_TEST_CHECK(!session.strokeDab(0,1,&err,0,false,"a"));
+           AIVERSE_TEST_CHECK(map.toJson()==start);
+           AIVERSE_TEST_CHECK(session.strokeBegin(1,0,&err,.98,false,"b") && session.strokeDab(.98,0,&err,1,false,"b") && session.strokeEnd(&err));
+           const auto& body=map.data.bodies[1];
+           AIVERSE_TEST_CHECK(std::count_if(body.corners.begin(),body.corners.end(),[](auto h){return h>0;})>0);
+           AIVERSE_TEST_CHECK(map.data.bodies[0].corners!=body.corners);
+           AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && map.toJson()==start);
+           map.data.bodies.swap(globe.data.bodies);
+       }
        const auto sparseDepth=session.workspace().map.undoDepth();
        AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"kind":"sparse","sparseMode":"raise","chunkMetres":16,"depthCm":80,"radius":2})").has("error"));
        AIVERSE_TEST_CHECK(session.strokeBegin(-32,-40,&err) && session.strokeDab(-48,-40,&err) && session.strokeEnd(&err));

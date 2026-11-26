@@ -372,3 +372,5 @@ Terrain target height: transfer the signed Set brush and one-click Scene surface
 Terrain grid transfer: choose automatic, base-cell or detail-sample routing for sculpt and material strokes. Check layer isolation, base material erase, undo and persistence.
 
 Terrain base-surface inspection: show and pick the editable corner surface while an explicit base brush is armed in the map Scene. Check return to detail on disarm and that inspection never rewrites either layer.
+
+Planetary Terrain transfer: pick the visible body mesh, route sculpt and cell materials through the shared spherical operations, and keep one body per undoable stroke. Verify body isolation, radial height sampling and real macOS Scene input.

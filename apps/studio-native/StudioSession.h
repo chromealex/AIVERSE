@@ -95,8 +95,8 @@ public:
     Json splineHandles();   // {handles:[{id,x,z}], segments:[[x0,z0,x1,z1],...]}
     bool splineMove(const std::string& id, double x, double z, std::string* error);
     bool caveBrushPoint(double ox,double oy,double oz,double dx,double dy,double dz,double& x,double& y,double& z,std::string* error);
-    bool strokeBegin(double x, double z, std::string* error,double y=0,bool shift=false);
-    bool strokeDab(double x, double z, std::string* error,double y=0,bool shift=false);
+    bool strokeBegin(double x, double z, std::string* error,double y=0,bool shift=false,const std::string& body={});
+    bool strokeDab(double x, double z, std::string* error,double y=0,bool shift=false,const std::string& body={});
     bool strokeEnd(std::string* error = nullptr);
     bool strokeActive() const noexcept{return stroking_;}
     bool strokeCancel();
@@ -212,9 +212,10 @@ private:
     Json strokePoints_=Json::array(); int strokeDabs_=0;
     double sceneFrameMs_=0; uint64_t sceneFrames_=0;
     std::unique_ptr<editor::MapDoc::CompoundEdit> strokeTransaction_;
+    std::string strokeBody_;
     uint64_t strokeHistoryMark_=0; bool stroking_=false; double strokeX_=0, strokeY_=0, strokeHeight_=0;
     std::string wizardArtDir_;
-    bool strokeDabImpl(double x,double z,std::string* error,double y,bool shift);
+    bool strokeDabImpl(double x,double z,std::string* error,double y,bool shift,const std::string& body);
     Json agentRequest(const std::string& method, const Json& params);
     Json agentLinkedCall(const std::string& name,const Json& args);
     Json agentHistoryLink(Json change) const;

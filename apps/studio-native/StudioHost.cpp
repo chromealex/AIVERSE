@@ -1418,17 +1418,24 @@ void StudioHost::selectionAction(const std::string& method) {
     sendEvent("selection.changed", "");
 }
 // Ring under the cursor while the Scene brush is armed (radius; river: half its width; road: a dot).
-bool StudioHost::resolveBrushPoint(double x,double y,double w,double h,render::float3& at,std::string* error) {
+bool StudioHost::resolveBrushPoint(double x,double y,double w,double h,render::float3& at,std::string* error,std::string* planetBody,double* elevation) {
     if(!preview_||x<0||y<0||w<2||h<2||x>=w||y>=h)return false;
     const auto& brush=session_->sceneBrush();
     const auto& map=session_->workspace().map;
+    if(map.data.planet() && (brush.kind=="terrain" || brush.kind=="paint")){
+        std::string body;double height=0;
+        if(!onScene([&]{return preview_->planetBrushPoint(x,y,w,h,map,at,body,height);}))return false;
+        if(planetBody)*planetBody=body;
+        if(elevation)*elevation=height;
+        return true;
+    }
     if((brush.editsBaseGrid() || (brush.kind=="terrain" && (brush.op=="stamp" || brush.op=="set"))) && !map.data.worldSpace && !map.data.planet()){
         const auto hit=onScene([&]() -> std::optional<render::float3> {
             if(preview_->baseTerrainView()!=brush.editsBaseGrid())return {};
             return preview_->flatMapPoint(float(x),float(y),float(w),float(h),map,brush.pickHeight);
         });
         if(!hit)return false;
-        at=*hit;return true;
+        at=*hit;if(elevation)*elevation=at.y;return true;
     }
     if(session_->sceneBrush().kind!="caverns")
         return onScene([&]{return preview_->groundPoint(float(x),float(y),float(w),float(h),at);});
@@ -2388,7 +2395,8 @@ bool StudioHost::terrainStroke(int phase, double x, double y, double w, double h
         return true;
     }
     render::float3 at{};
-    if (!resolveBrushPoint(x,y,w,h,at,&error)) {
+    std::string planetBody;
+    if (!resolveBrushPoint(x,y,w,h,at,&error,&planetBody)) {
         if(!error.empty())report();
         onScene([&]{preview_->setBrushCursor(false,{},0);});
         return phase != 0;
@@ -2396,7 +2404,7 @@ bool StudioHost::terrainStroke(int phase, double x, double y, double w, double h
     const auto& brush=session_->sceneBrush();
     const float radius=brush.kind=="road"?.6f:brush.kind=="river"?float(brush.width*.5):float(brush.radius);
     onScene([&]{preview_->setBrushCursor(true,at,radius,brush.kind=="caverns",brush.caveMode=="fill");});
-    const bool ok = phase == 0 ? session_->strokeBegin(at.x, at.z, &error,at.y,shift) : session_->strokeDab(at.x, at.z, &error,at.y,shift);
+    const bool ok = phase == 0 ? session_->strokeBegin(at.x, at.z, &error,at.y,shift,planetBody) : session_->strokeDab(at.x, at.z, &error,at.y,shift,planetBody);
     if (phase==0&&ok)sendEvent("document.changed", ""); // History controls observe stroke ownership immediately.
     if (!ok && !error.empty()) {report();if(!session_->strokeActive())sendEvent("document.changed", "");}
     return ok;
@@ -2677,9 +2685,10 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
         if(!mods.alt && brushArmed() && session_->sceneBrush().pickHeight){
             m.active=false;
             render::float3 hit{};
-            if(resolveBrushPoint(x,y,w,h,hit)){
+            double elevation=0;
+            if(resolveBrushPoint(x,y,w,h,hit,nullptr,nullptr,&elevation)){
                 Json params=Json::object();
-                params.set("targetHeight",Json::number(std::clamp(double(hit.y),-2048.,2047.9375),6));
+                params.set("targetHeight",Json::number(std::clamp(elevation,-2048.,2047.9375),6));
                 params.set("pickHeight",Json::fromBool(false));
                 const auto reply=request("studio.sceneBrush",params);
                 if(reply.has("result"))sendEventPayload("brush.changed",reply["result"]);
