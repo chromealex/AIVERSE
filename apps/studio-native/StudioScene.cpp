@@ -2,6 +2,7 @@
 #include "apps/editor/core/RiverFlowGizmos.h"
 #include "apps/editor/core/TerrainSlopeArrows.h"
 #include "apps/editor/core/TreeWindGizmo.h"
+#include "apps/editor/core/ErosionZoneGizmo.h"
 #include "apps/studio-native/StudioDocumentIds.h"
 #include "engine/render/BakedLighting.h"
 #include "engine/render/PrismaReportJson.h"
@@ -298,6 +299,24 @@ struct Overlay2D {
     bool at(float x,float y,float3& out) const {
         float3 o,d; if(!view.screenRay(x,y,W,H,o,d))return false;
         out=o+d*depth; return true;
+    }
+    void bitmapText(float left,float top,float cell,const std::string& text,uint32_t color) const {
+        for(int pass=0;pass<2;++pass){
+            const uint32_t col=pass==0?rgba(0,0,0,170):color;const float off=pass==0?cell*0.6f:0;
+            float cx=left;
+            for(unsigned char ch:text){
+                if(ch<32||ch>126)ch='?';
+                const unsigned char* g=kStudioFont6x11[ch-32];
+                for(int row=0;row<11;++row)for(int col0=0;col0<6;){
+                    if(!((g[row]>>col0)&1)){++col0;continue;}
+                    int col1=col0;while(col1<6&&((g[row]>>col1)&1))++col1;
+                    const float y=top+row*cell+cell*0.5f+off;
+                    segment(cx+col0*cell+off,y,cx+col1*cell+off,y,cell,col);
+                    col0=col1;
+                }
+                cx+=6*cell;
+            }
+        }
     }
     void arrow(float3 a,float3 b,float thickness,uint32_t color) const {
         float2 start,end;
@@ -2433,22 +2452,7 @@ void StudioScene::drawBrushCursor(const Camera& view,int width,int height) {
         if(s.kind==4){
             // Bitmap text (6x11 glyphs), one horizontal run per lit row segment, with a dark outline pass.
             const float cell=std::max(1.f,px*1.4f);
-            for(int pass=0;pass<2;++pass){
-                const uint32_t col=pass==0?rgba(0,0,0,170):color;const float off=pass==0?cell*0.6f:0;
-                float cx=a.x+6*cell;
-                for(unsigned char ch:s.text.substr(0,64)){
-                    if(ch<32||ch>126)ch='?';
-                    const unsigned char* g=kStudioFont6x11[ch-32];
-                    for(int row=0;row<11;++row)for(int col0=0;col0<6;){
-                        if(!((g[row]>>col0)&1)){++col0;continue;}
-                        int col1=col0;while(col1<6&&((g[row]>>col1)&1))++col1;
-                        const float y=a.y-6*cell+row*cell+cell*0.5f+off;
-                        o.segment(cx+col0*cell+off,y,cx+col1*cell+off,y,cell,col);
-                        col0=col1;
-                    }
-                    cx+=6*cell;
-                }
-            }
+            o.bitmapText(a.x+6*cell,a.y-6*cell,cell,s.text.substr(0,64),color);
             continue;
         }
         if(s.kind==1&&view.worldToScreen(s.b,W,H,b))o.segment(a.x,a.y,b.x,b.y,t,color);
@@ -4475,6 +4479,33 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                 renderer_.line(edge.a,edge.b,color);
             }
         }
+        if(!planetaryChart && erosionZonesVisible_ && map.extra["erosionZones"].isArray() && map.extra["erosionZones"].size()){
+            Overlay2D overlay{renderer_,view,float(framebufferWidth),float(framebufferHeight),view.ortho?.5f:view.zNear*1.4f};
+            std::optional<editor::TerrainTileSurface> dragSurface;
+            const auto* tiles=groundTiles(doc,dragSurface);
+            const auto height=[&](float x,float z){
+                const float base=terrainMeshHeight(map,x,z,levelHeight,baseTerrainView_);
+                return tiles?tiles->sample(x,z,base):base;
+            };
+            const auto project=[&](float3 p,float2& pixel){
+                return view.worldToScreen(p,overlay.W,overlay.H,pixel) && std::isfinite(pixel.x) && std::isfinite(pixel.y);
+            };
+            for(const auto& zone:map.extra["erosionZones"].items()){
+                editor::erosionZoneGizmo(zone,false,height,[&](float3 a,float3 b,uint32_t color){
+                    float2 start,end;
+                    if(!project(a,start)||!project(b,end))return;
+                    overlay.segment(start.x,start.y,end.x,end.y,3.5f,rgba(0,0,0,120));
+                    overlay.segment(start.x,start.y,end.x,end.y,2.f,color);
+                },[&](float3 centre,const std::string& text,uint32_t color){
+                    float2 at;
+                    if(!project(centre,at)||at.x<0||at.y<0||at.x>overlay.W||at.y>overlay.H)return;
+                    const float cell=std::max(1.3f,std::min(overlay.W,overlay.H)/650.f);
+                    const float left=at.x-float(text.size())*3*cell,top=at.y-5.5f*cell;
+                    overlay.segment(left-4,at.y,2*at.x-left+4,at.y,13*cell,rgba(0,0,0,160));
+                    overlay.bitmapText(left,top,cell,text,color);
+                });
+            }
+        }
         if(!planetaryChart && treeWindVisible_ && !selectedId.empty() && !hidden_.count(selectedId)){
             const int index=studioMapEntityIndex(selectedId,doc);
             if(index>=0 && editor::isWindGizmoTree(map.entities[size_t(index)])){
@@ -5740,7 +5771,7 @@ uint64_t StudioScene::frameSignature(int width,int height,const editor::MapDoc& 
     vec(camera_.target);value(camera_.distance);value(camera_.pitch);value(camera_.yaw);value(camera_.fovY);
     value(camera_.ortho);value(autoIso_);value(tween_.active);
     ids(selection_);ids(hidden_);text(hover_);
-    value(treeWindVisible_);value(tileSlope_);value(cameraSlope_);value(riverFlowVisible_);value(allRiverFlows_);value(tool_);value(localSpace_);value(gizmosVisible_);value(natureRadius_);value(natureSpacing_);value(natureWind_);value(natureFire_);value(natureFrame_.get());value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
+    value(erosionZonesVisible_);value(treeWindVisible_);value(tileSlope_);value(cameraSlope_);value(riverFlowVisible_);value(allRiverFlows_);value(tool_);value(localSpace_);value(gizmosVisible_);value(natureRadius_);value(natureSpacing_);value(natureWind_);value(natureFire_);value(natureFrame_.get());value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
     value(drag_.axis);value(drag_.tool);text(drag_.id);vec(drag_.moveOffset);value(drag_.value);
     value(drag_.accumulated);value(drag_.lastAngle);value(drag_.snapping);
     value(marquee_.on);value(marquee_.x0);value(marquee_.y0);value(marquee_.x1);value(marquee_.y1);

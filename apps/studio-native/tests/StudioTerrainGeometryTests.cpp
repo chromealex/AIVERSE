@@ -1,3 +1,4 @@
+#include "apps/editor/core/ErosionZoneGizmo.h"
 #include "apps/editor/core/TreeWindGizmo.h"
 #include "apps/editor/core/TerrainSlopeArrows.h"
 #include "apps/editor/core/RiverFlowGizmos.h"
@@ -22,6 +23,21 @@ using namespace aiverse::render;
 #include "apps/studio-native/StudioMapAreaBounds.h"
 
 int main() {
+    {
+        const auto slope=[](float x,float z){return x*.5f-z*.25f;};
+        const auto verify=[&](const char* json,int segments,const std::string& expected,uint32_t expectedColor){
+            int edges=0,labels=0;
+            editor::erosionZoneGizmo(Json::parse(json),false,slope,[&](auto a,auto b,uint32_t color){
+                AIVERSE_TEST_CHECK(std::abs(a.y-slope(a.x,a.z)-.3f)<1e-5f && std::abs(b.y-slope(b.x,b.z)-.3f)<1e-5f);
+                AIVERSE_TEST_CHECK(color==expectedColor);++edges;
+            },[&](auto p,const std::string& text,uint32_t){
+                AIVERSE_TEST_CHECK(std::abs(p.y-slope(p.x,p.z)-1.3f)<1e-4f && text==expected);++labels;
+            });
+            AIVERSE_TEST_CHECK(edges==segments && labels==1);
+        };
+        verify(R"({"id":"bank","x":3,"z":5,"radius":2,"coefficient":0,"soil":"rock"})",48,"bank x0 rock",rgba(90,160,255,210));
+        verify(R"({"id":"bed","points":[[0,0],[8,0],[8,4],[0,4]],"coefficient":3,"soil":"sand"})",12,"bed x3 sand",rgba(255,40,20,210));
+    }
     {
         editor::DocEntity tree;
         tree.x=4;tree.z=6;

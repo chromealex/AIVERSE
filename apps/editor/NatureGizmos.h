@@ -17,6 +17,7 @@
 #include "apps/editor/core/RiverFlowGizmos.h"
 #include "apps/editor/core/TerrainSlopeArrows.h"
 #include "apps/editor/core/TreeWindGizmo.h"
+#include "apps/editor/core/ErosionZoneGizmo.h"
 #include "engine/render/Math3D.h"
 #include <algorithm>
 #include <cmath>
@@ -165,60 +166,20 @@ inline void drawNatureGizmos(Editor& ed, const Viewport& vp, const render::Camer
             const std::string selectedKey = ed.selection.kind == Selection::MapBlock ? ed.selection.key : std::string();
             for (size_t i = 0; i < zones.size(); ++i) {
                 const Json& zone = zones[i];
-                const float k = float(zone["coefficient"].toDouble(1.0));
                 const bool picked = selectedKey == "erosionZones[" + std::to_string(i) + "]" ||
                                     selectedKey == "erosionZones";
-                // 0 = protected (blue), 1 = default (yellow), >= 3 = fast (red).
-                const float t = std::clamp(k / 3.f, 0.f, 1.f);
-                const int r = k <= 0.f ? 90 : int(230 + 25 * t), g = k <= 0.f ? 160 : int(210 - 170 * t),
-                          b = k <= 0.f ? 255 : int(60 - 40 * t);
-                const ImU32 line = IM_COL32(r, g, b, picked ? 255 : 210);
-                std::vector<render::float3> ring;
-                if (zone.getStr("shape", zone.has("points") ? "polygon" : "circle") == "polygon") {
-                    for (const auto& p : zone["points"].items())
-                        if (p.isArray() && p.size() == 2) {
-                            const float x = float(p[0].toDouble(0)), z = float(p[1].toDouble(0));
-                            ring.push_back({x, ground(ed, x, z) + 0.3f, z});
-                        }
-                } else {
-                    const float zx = float(zone["x"].toDouble(0)), zz = float(zone["z"].toDouble(0));
-                    const float rad = std::max(0.5f, float(zone["radius"].toDouble(1)));
-                    for (int a = 0; a < 48; ++a) {
-                        const float ang = float(a) * 6.2831853f / 48.f;
-                        const float x = zx + std::cos(ang) * rad, z = zz + std::sin(ang) * rad;
-                        ring.push_back({x, ground(ed, x, z) + 0.3f, z});
-                    }
-                }
-                if (ring.size() < 3) continue;
-                // Densify edges so outlines follow the terrain.
-                render::float3 centre{0, 0, 0};
-                for (size_t a = 0; a < ring.size(); ++a) {
-                    const auto& p0 = ring[a];
-                    const auto& p1 = ring[(a + 1) % ring.size()];
-                    const int steps = std::clamp(int(std::hypot(p1.x - p0.x, p1.z - p0.z) / 2.f), 1, 64);
-                    render::float3 prev = p0;
-                    for (int s2 = 1; s2 <= steps; ++s2) {
-                        const float f = float(s2) / float(steps);
-                        const float x = p0.x + (p1.x - p0.x) * f, z = p0.z + (p1.z - p0.z) * f;
-                        const render::float3 cur{x, ground(ed, x, z) + 0.3f, z};
-                        paint.line(prev, cur, IM_COL32(0, 0, 0, 120), picked ? 5.f : 3.5f);
-                        paint.line(prev, cur, line, picked ? 3.f : 2.f);
-                        prev = cur;
-                    }
-                    centre.x += p0.x; centre.y += p0.y; centre.z += p0.z;
-                }
-                centre.x /= float(ring.size()); centre.y /= float(ring.size()); centre.z /= float(ring.size());
-                ImVec2 at;
-                if (paint.project({centre.x, centre.y + 1.f, centre.z}, at)) {
-                    char label[96];
-                    const std::string soil = zone.getStr("soil", "");
-                    std::snprintf(label, sizeof label, "%s x%.2g%s%s", zone.getStr("id", "zone").c_str(), double(k),
-                                  soil.empty() ? "" : " ", soil.c_str());
-                    const ImVec2 size = ImGui::CalcTextSize(label);
-                    draw->AddRectFilled({at.x - size.x * .5f - 4, at.y - size.y * .5f - 2},
-                                        {at.x + size.x * .5f + 4, at.y + size.y * .5f + 2}, IM_COL32(0, 0, 0, 160), 4.f);
-                    draw->AddText({at.x - size.x * .5f, at.y - size.y * .5f}, line, label);
-                }
+                erosionZoneGizmo(zone,picked,[&](float x,float z){return ground(ed,x,z);},
+                    [&](auto a,auto b,auto color){
+                        paint.line(a,b,IM_COL32(0,0,0,120),picked?5.f:3.5f);
+                        paint.line(a,b,color,picked?3.f:2.f);
+                    },[&](auto centre,const std::string& text,auto color){
+                        ImVec2 at;
+                        if(!paint.project(centre,at))return;
+                        const ImVec2 size=ImGui::CalcTextSize(text.c_str());
+                        draw->AddRectFilled({at.x-size.x*.5f-4,at.y-size.y*.5f-2},
+                                            {at.x+size.x*.5f+4,at.y+size.y*.5f+2},IM_COL32(0,0,0,160),4);
+                        draw->AddText({at.x-size.x*.5f,at.y-size.y*.5f},color,text.c_str());
+                    });
             }
         }
     }

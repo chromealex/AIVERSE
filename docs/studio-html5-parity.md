@@ -590,3 +590,5 @@ Packaged macOS Studio verified terrain slope arrows on selected imported tile me
 Transfer the selected TerraWeave tree crown wind marker, including a calm ring, renderer wind direction, terrain-relative placement and the Scene overlay toggle. Verify against the packaged HTML toolbar and Wind state.
 
 Verified selected-tree crown wind in packaged macOS Studio with a reversed heading, disabled wind and cleared selection. [Desktop and geometry evidence](evidence/studio-tree-crown-wind.json).
+
+Transfer the terrain-following erosion zone outlines, coefficient colours and labels to the Scene overlays menu. Verify circles and polygons on sloping ground.

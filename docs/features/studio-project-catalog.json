@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/editor/core/ErosionZoneGizmo.h",
     "apps/editor/core/TreeWindGizmo.h",
     "apps/editor/core/TerrainSlopeArrows.h",
     "apps/editor/core/RiverFlowGizmos.h",
