@@ -383,6 +383,7 @@
     "docs/evidence/studio-tiles-atlas-brush.json",
     "docs/evidence/studio-water-bank-desktop.json",
     "docs/evidence/studio-generator-seed-roundtrip.json",
+    "docs/evidence/studio-effect-burst-schedule.json",
     "docs/evidence/studio-effect-force-fields.json",
     "docs/evidence/studio-effect-field-metal-response.json",
     "docs/evidence/studio-effect-curve-time-order.json",
