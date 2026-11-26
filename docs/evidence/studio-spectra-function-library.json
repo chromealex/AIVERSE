@@ -1,0 +1,10 @@
+{
+  "sha": "748db521d158a389ca6cdf5092282648f7f1c88c",
+  "argv": [
+    "bash",
+    "/tmp/studio-fn-transfer.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-spectra-function-library.log.txt",
+  "sha256": "d0ec2d742bc14d1113f4d1d101c6d45cc85f9d2bd8aa5e9f8380f7940b91c8b5"
+}
