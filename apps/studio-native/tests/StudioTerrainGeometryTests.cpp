@@ -249,6 +249,25 @@ int main() {
         AIVERSE_TEST_CHECK(StudioPlanetPreview::height(surface,0,2.25f,3.25f)==3.f);
         AIVERSE_TEST_CHECK(StudioPlanetPreview::height(surface,0,2.25f,3.25f,true)==0.f);
         surface.detail.clear();surface.detailScale=0;
+        editor::MapDoc large;
+        auto& odd=large.data.bodies.emplace_back();
+        odd.id="odd";odd.faceSize=65;odd.corners.assign(6*66*66,0);
+        const auto capped=StudioPlanetPreview::build(large,0);
+        AIVERSE_TEST_CHECK(capped && capped->mesh.indices().size()==6*64*64*6);
+        // Every sampled boundary point is shared by at least two faces.
+        std::map<std::array<int,3>,unsigned> boundaries;
+        for(int face=0;face<6;++face){
+            std::set<std::array<int,3>> unique;
+            for(size_t i=size_t(face)*64*64*4;i<size_t(face+1)*64*64*4;++i){
+                const auto p=capped->mesh.vertices()[i].pos;
+                const auto m=std::max({std::abs(p.x),std::abs(p.y),std::abs(p.z)});
+                if(int(std::abs(std::abs(p.x)-m)<1e-4f)+int(std::abs(std::abs(p.y)-m)<1e-4f)+int(std::abs(std::abs(p.z)-m)<1e-4f)>=2)
+                    unique.insert({int(std::round(p.x*1000)),int(std::round(p.y*1000)),int(std::round(p.z*1000))});
+            }
+            for(const auto& key:unique)++boundaries[key];
+        }
+        AIVERSE_TEST_CHECK(boundaries.size()==12*63+8);
+        for(const auto& item:boundaries)AIVERSE_TEST_CHECK(item.second>=2);
     }
     Json grid=Json::parse(R"({"body":"terra","faceSize":8,"radius":64,"step":2,"side":5})");
     Json coarse=Json::array();for(int i=0;i<6*25;++i)coarse.push(Json::number(int64_t(0)));grid.set("corners",coarse);

@@ -81,21 +81,23 @@ struct StudioPlanetPreview {
         const int detail=baseGrid?0:detailScale(body);
         const int scale=std::max(1,detail),side=n*scale;
         const int budget=detail?128:64;
-        const int step=std::max(1,(side+budget-1)/budget);
+        // A cube seam can reverse the parameter direction. Uniformly spaced
+        // face vertices still coincide there when the preview is decimated.
+        const int segments=std::min(side,budget);
         const auto point=[&](int face,float x,float y){
             const auto dir=f3(cube.dirFromFace(face,fixed(x),fixed(y)));
             return dir*(out.radius+height(body,face,x,y,baseGrid));
         };
-        for(int f=0;f<6;++f)for(int sy=0;sy<side;sy+=step)for(int sx=0;sx<side;sx+=step){
-            const float x=float(sx)/scale,y=float(sy)/scale;
-            const float xx=float(std::min(side,sx+step))/scale,yy=float(std::min(side,sy+step))/scale;
+        for(int f=0;f<6;++f)for(int sy=0;sy<segments;++sy)for(int sx=0;sx<segments;++sx){
+            const float x=float(sx*n)/segments,y=float(sy*n)/segments;
+            const float xx=float((sx+1)*n)/segments,yy=float((sy+1)*n)/segments;
             std::array<render::float3,4> p{point(f,x,y),point(f,xx,y),point(f,xx,yy),point(f,x,yy)};
             auto normal=render::cross(p[1]-p[0],p[2]-p[0]);
             if(render::dot(normal,p[0])<0){std::swap(p[1],p[3]);normal=normal*-1.f;}
             const auto slope=detail && render::dot(normal,normal)>1e-12f ?
                 render::normalize(normal)-render::normalize(p[0]+p[1]+p[2]+p[3]) : render::float3{};
             const auto offset=uint32_t(out.mesh.vertexCount());
-            const size_t ci=body.cellIndex(f,sx/scale,sy/scale);
+            const size_t ci=body.cellIndex(f,int(x),int(y));
             const auto color=terrainPreviewColor(ci<body.cells.size()?body.cells[ci]:'.');
             for(const auto& v:p){
                 const float length=std::sqrt(render::dot(v,v));
