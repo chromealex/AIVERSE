@@ -599,6 +599,7 @@
     "docs/evidence/studio-scene-diagnostic-layers.json",
     "docs/evidence/studio-flat-scene-marquee-handlers.json",
     "docs/evidence/studio-live-nature-directions.json",
-    "docs/evidence/studio-physis-sampling-controls.json"
+    "docs/evidence/studio-physis-sampling-controls.json",
+    "docs/evidence/studio-private-map-nature-preview.json"
   ]
 }
