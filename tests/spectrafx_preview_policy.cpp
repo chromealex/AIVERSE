@@ -3,7 +3,7 @@
 #include <cmath>
 #include <cstdio>
 #include <limits>
-#include "apps/editor/windows/SpectraFxGpuPreviewPolicy.h"
+#include "apps/editor/core/SpectraFxGpuPreviewPolicy.h"
 
 using aiverse::editor::SpectraFxGpuPreviewPolicy;
 namespace {

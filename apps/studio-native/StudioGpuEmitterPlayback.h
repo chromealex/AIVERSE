@@ -1,5 +1,5 @@
 #pragma once
-#include "apps/editor/windows/SpectraFxGpuPreviewPolicy.h"
+#include "apps/editor/core/SpectraFxGpuPreviewPolicy.h"
 #include "engine/fx/SpectraFxSceneHost.h"
 #include "engine/render/Renderer3D.h"
 #include <chrono>
@@ -59,14 +59,14 @@ public:
         camera_.pitch=std::clamp(camera_.pitch+float(std::clamp(p["orbitY"].toDouble(),-250.,250.))*.01f,.05f,1.5f);
         camera_.distance=std::clamp(camera_.distance*float(std::pow(.9,std::clamp(p["zoom"].toDouble(),-50.,50.))),2.f,60.f);
         auto result=Json::object();
-        result.set("paused",Json::fromBool(policy_.paused()));result.set("time",Json::number(time_));
+        result.set("paused",Json::fromBool(policy_.paused()));result.set("time",Json::number(time_,8));
         result.set("error",Json::string(error_));result.set("distance",Json::number(double(camera_.distance)));
         result.set("yaw",Json::number(double(camera_.yaw)));result.set("pitch",Json::number(double(camera_.pitch)));
         const auto* playback=host_.playback();
         if(playback){
             const auto stats=playback->backendSnapshot();
             result.set("gpu",Json::number(int64_t(stats.dedicatedGpu)));
-            result.set("cpu",Json::number(int64_t(stats.dedicatedCpu)));
+            result.set("cpu",Json::number(int64_t(stats.dedicatedCpu+stats.dedicatedCpuTwin)));
         }
         return result;
     }
