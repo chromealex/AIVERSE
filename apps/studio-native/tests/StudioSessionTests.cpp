@@ -10,6 +10,7 @@
 #include "engine/actor/Project.h"
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/studio-native/StudioGameDevice.h"
+#include "apps/studio-native/StudioDeviceMask.h"
 #include "apps/studio-native/StudioRuntimeInspect.h"
 #include "apps/studio-native/StudioMoveJournal.h"
 #include "apps/studio-native/StudioAgentHistoryPolicy.h"
@@ -2430,6 +2431,22 @@ int main() {
     AIVERSE_TEST_CHECK(phone.insets().left==44 && phone.insets().bottom==21);
     phone.safeArea=false;AIVERSE_TEST_CHECK(phone.insets().left==0);
     phone.id="none";AIVERSE_TEST_CHECK(phone.size(800,600)==std::make_pair(800.f,600.f));
+    // The composited Game window uses the same oriented device profile as the runtime.
+    for (bool rotated : {false,true}) {
+        const int width=rotated?852:393, height=rotated?393:852;
+        std::vector<uint32_t> pixels(size_t(width)*height);
+        auto at=[&](int x,int y){return pixels[size_t(y)*width+x];};
+        for (bool safe : {false,true}) {
+            studio::StudioGameDevice device{"iphone-15",rotated,safe};
+            studio::drawDeviceMask(pixels.data(),width,height,1,device.json());
+            AIVERSE_TEST_CHECK(at(0,0)==0xff0c0c0e && at(width/2,height/2)==0);
+            AIVERSE_TEST_CHECK(at(rotated?29:196,rotated?196:29)==0xff000000);
+            AIVERSE_TEST_CHECK(at(rotated?40:110,rotated?90:40)==(safe?0x46461310u:0u));
+            AIVERSE_TEST_CHECK(at(rotated?59:110,rotated?90:59)==(safe?0xe6e6bd48u:0u));
+        }
+        studio::drawDeviceMask(pixels.data(),width,height,2,studio::StudioGameDevice{}.json());
+        AIVERSE_TEST_CHECK(std::all_of(pixels.begin(),pixels.end(),[](uint32_t pixel){return pixel==0;}));
+    }
     bool badProfile=false;try {studio::StudioGameDevice::parse(Json::parse(R"({"id":"unknown","landscape":true,"safeArea":true})"));}catch(...){badProfile=true;}
     AIVERSE_TEST_CHECK(badProfile);
     AIVERSE_TEST_CHECK(studio::studioGameKey("w")==platform::Key::W);

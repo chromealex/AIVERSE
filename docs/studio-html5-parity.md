@@ -306,3 +306,5 @@ Game transfer: launch the saved project in a separate AiverseGame process from t
 Game transfer: choose a playable map seat or watch bots in hosted local play. Check actual view-script identity, replayable seat setup, restart and map isolation.
 
 Game device acceptance: show the oriented safe-area distances, keep physical screen corners and camera cutouts opaque and verify both orientations over a paused Metal game.
+
+Windows Game device chrome: layer a click-through hardware mask and safe-area guide on the native Game child. Verify premultiplied pixels in both orientations, independent input and window lifetime.

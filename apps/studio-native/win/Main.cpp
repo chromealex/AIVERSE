@@ -16,6 +16,7 @@
 #endif
 #include <windows.h>
 #include <windowsx.h>
+#include "GameDeviceOverlay.h"
 #include <dwmapi.h>
 #include <objbase.h>
 #include <shellapi.h>
@@ -281,6 +282,10 @@ public:
         HWND child = surfaces_[index(surface)];
         HWND host = GetParent(child);
         return IsWindowVisible(child) && host && IsWindowVisible(host) && !IsIconic(host);
+    }
+    void gameDeviceChanged(const Json& state) override {
+        if (!gameChrome_.update(surfaces_[index(studio::StudioSurface::Game)],state["device"]))
+            logLine("Could not update the Game device overlay");
     }
     bool gameFocused() override {
         HWND host = GetParent(surfaces_[1]);
@@ -1339,6 +1344,7 @@ private:
 
     std::string project_;
     bool dev_ = false;
+    studio::GameDeviceOverlay gameChrome_;
     HWND main_ = nullptr;
     HWND surfaces_[int(studio::StudioSurface::Count)] = {}; // Scene, Game, FX
     Com<ICoreWebView2Controller> controller_;
