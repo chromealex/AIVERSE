@@ -564,10 +564,9 @@ public:
         }
         std::map<const render::Model*, std::optional<render::wind::ModelWindRigView>> rigs;
         std::vector<render::wind::WindDebugLine> lines;
-        // Bound CPU debug geometry on dense maps while still drawing every tree.
+        // Isolate branch lines from opaque foliage and bound dense-map debug geometry.
         constexpr size_t maxLines = 16384;
         forEachDraw(batches, origin, [&](const render::ModelDraw& draw) {
-            renderer.drawModel(draw);
             if (!draw.model || lines.size() + 4 > maxLines) return;
             auto [it, inserted] = rigs.try_emplace(draw.model);
             if (inserted) it->second = render::wind::findWindRig(*draw.model);
