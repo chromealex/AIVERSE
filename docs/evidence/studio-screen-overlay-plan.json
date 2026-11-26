@@ -1,0 +1,10 @@
+{
+  "sha": "692bcd8161fc554e806842a6b5d23d78054b5d5f",
+  "argv": [
+    "bash",
+    "/tmp/studio-screen-overlay-evidence.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-screen-overlay-plan.log.txt",
+  "sha256": "ce24325149eae566012386816584321712c2d737ff2aba21fcc273daa8170184"
+}
