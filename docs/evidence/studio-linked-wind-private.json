@@ -1,0 +1,10 @@
+{
+  "sha": "9f914b9dacc113a37e7dd497f07ecb907e68dd4e",
+  "argv": [
+    "bash",
+    "/tmp/linked-wind.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-linked-wind-private.log.txt",
+  "sha256": "d0fb4f3bbc960ab44720a9e9ae647543c906934b6760f340e9e497673747160d"
+}
