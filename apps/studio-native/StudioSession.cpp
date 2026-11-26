@@ -24,6 +24,7 @@
 #include "engine/game/MapGrid.h"
 #include "apps/editor/EditorWorldEdit.h"
 #include "apps/studio-native/StudioContentDirectory.h"
+#include "apps/studio-native/StudioProjectDirectory.h"
 #include "apps/studio-native/StudioAssetCatalog.h"
 #include "apps/studio-native/StudioBuildingGeneration.h"
 #include "apps/studio-native/StudioBuildingMaterialPublish.h"
@@ -3779,6 +3780,11 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 throw std::runtime_error("Dependency traversal requires an asset path");
             }
             reply.set("result",studioReferenceGraphJson(refs));
+        } else if (method == "studio.projectDirectory") {
+            if(ws_.project.dir.empty() || params.getStr("expectedProject")!=ws_.project.dir)
+                throw std::runtime_error("The open project changed");
+            if(!params["folder"].isString())throw std::runtime_error("Expected a project-relative folder");
+            reply.set("result",studioProjectDirectory(std::filesystem::u8path(ws_.project.dir),params.getStr("folder")));
         } else if (method == "studio.assets") {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
             // Browser input cannot specify a filesystem directory. This scan

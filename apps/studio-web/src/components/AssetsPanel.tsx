@@ -13,6 +13,7 @@ import type {
   StudioAssetConflictAction, StudioAssetTransferItem, StudioDependencyPage
 } from '../types';
 import AssetThumb from './AssetThumb';
+import ProjectDirectory, {absoluteChildPath} from './ProjectDirectory';
 import { assetKind, assetFolders, assetFileName, assetBreadcrumbs,
   childFolders, visibleAssetFiles, safeAssetPath } from '../assetTree';
 import type { AssetFolder, AssetKind } from '../assetTree';
@@ -132,6 +133,7 @@ function allFolders(catalog:StudioAssetList):AssetFolder[]{
 }
 /** Assets are always relative to project/content; no arbitrary JS filesystem IO. */
 export default function AssetsPanel({projectPath}:{projectPath:string}){
+  const [projectFiles,setProjectFiles]=useState(false);
   const [catalog,setCatalog]=useState<StudioAssetList>(EMPTY);
   const [folder,setFolder]=useState('');
   const [selected,setSelected]=useState<string|null>(null);
@@ -213,7 +215,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
        typeof payload==='object' && 'token' in payload && 'items' in payload){
       const candidate=payload as StudioAssetTransferPlan;
       if(typeof candidate.token==='string' && Array.isArray(candidate.items)){
-        setError('');setMessage('');setPlan(candidate);
+        setProjectFiles(false);setError('');setMessage('');setPlan(candidate);
       }
     }
     if(event==='assets.importError' && payload &&
@@ -225,7 +227,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     window.addEventListener('studio:assets-changed',reload);
     return ()=>window.removeEventListener('studio:assets-changed',reload);
   },[reload]);
-  useEffect(()=>{setFolder('');setSelected(null);setPinnedAssetGuid(null);setSearch('');setPlan(null);setRenameTarget(null);setDeleteTarget(null);setTrashOpen(false);setMentions(null);setReferenceLoading(false);++referenceRequest.current;},[projectPath]);
+  useEffect(()=>{setProjectFiles(false);setFolder('');setSelected(null);setPinnedAssetGuid(null);setSearch('');setPlan(null);setRenameTarget(null);setDeleteTarget(null);setTrashOpen(false);setMentions(null);setReferenceLoading(false);++referenceRequest.current;},[projectPath]);
   // Command palette (# assets) reveals a file: open its folder and select it.
   useEffect(()=>{
     if(!projectPath)return;
@@ -237,7 +239,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       if(typeof path!=='string'||!safeAssetPath(path))return;
       if(localStorage.getItem(key)===path)localStorage.removeItem(key);
       const cut=path.lastIndexOf('/');
-      setSearch('');setFolder(cut>0?path.slice(0,cut):'');setSelected(path);
+      setProjectFiles(false);setSearch('');setFolder(cut>0?path.slice(0,cut):'');setSelected(path);
     };
     const onStorage=(event:StorageEvent)=>{if(event.key===key && event.newValue)reveal();};
     reveal();
@@ -381,8 +383,9 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     onDrop:(event:DragEvent<HTMLElement>)=>dropInternal(event,target)
   });
 
-  const copyPath=(path:string)=>{
-    const text='content/'+path;
+  const copyPath=(path:string,absolute=false)=>{
+    const relative=path?'content/'+path:'content/';
+    const text=absolute?absoluteChildPath(projectPath,relative):relative;
     void copyText(text).then(ok=>ok?setMessage('Copied '+text):setError('Clipboard unavailable'));
   };
   const createMaterial=async()=>{
@@ -404,6 +407,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       onSelect:()=>{setCreatingMaterial(true);setMaterialName('')}},
     {id:'import',label:'Import Assets…',icon:<Upload size={13}/>,separator:true,disabled:!native||!projectPath||busy,onSelect:()=>void externalImport()},
     {id:'copy',label:'Copy Folder Path',icon:<Search size={13}/>,separator:true,onSelect:()=>copyPath(folder)},
+    {id:'copy-absolute',label:'Copy Absolute Folder Path',disabled:!native,onSelect:()=>copyPath(folder,true)},
     {id:'reload',label:'Reload',icon:<RefreshCw size={13}/>,onSelect:reload},
   ];
   const openMaterial=(path:string)=>{
@@ -419,6 +423,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     {id:'delete',label:'Move to Trash…',disabled:!native||!projectPath||busy,onSelect:()=>void reviewDelete(target.path)},
     {id:'rename',label:'Rename…',disabled:!native||!projectPath||busy,onSelect:()=>{setRenameTarget(target.path);setRenameName(assetFileName(target.path));}},
     {id:'copy',label:'Copy Path',icon:<Search size={13}/>,onSelect:()=>copyPath(target.path)},
+    {id:'copy-absolute',label:'Copy Absolute Path',disabled:!native,onSelect:()=>copyPath(target.path,true)},
     {id:'refs',label:'Find References',icon:<Link2 size={13}/>,disabled:!native||!projectPath,
       onSelect:()=>void findReferences(target.path)},
     {id:'folder',label:'New Folder Here',icon:<FolderPlus size={13}/>,separator:true,disabled:!native||!projectPath||busy,
@@ -433,10 +438,15 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     setMenu({x:event.clientX,y:event.clientY,path,directory});
   };
 
+  if(projectFiles && projectPath)return <ProjectDirectory key={projectPath} project={projectPath} onContent={()=>{goTo('');setProjectFiles(false);}}/>;
   return <section className="studio-assets" aria-label="Project Assets"
       data-content-drop-root="true" data-content-drop-target={folder}>
     <div className="studio-assets-toolbar">
       <div className="studio-assets-breadcrumb" aria-label="Asset location">
+        {native&&projectPath&&<span className="studio-assets-crumb">
+          <button type="button" aria-label="Browse project files" disabled={busy||!!plan} onClick={()=>setProjectFiles(true)}>Project</button>
+          <ChevronRight size={13} aria-hidden="true"/>
+        </span>}
         {crumbs.map((part,index)=><span className="studio-assets-crumb" key={part.path}>
           {index>0&&<ChevronRight size={13} aria-hidden="true"/>}
           <button type="button" title={part.path?'content/'+part.path:'content/ root'}

@@ -240,3 +240,16 @@
 .studio-assets-item[data-kind="material"] .studio-assets-icon{color:var(--au-accent-secondary)}
 .studio-assets-items--grid .studio-assets-item[data-kind="material"] .studio-assets-name{white-space:normal;overflow-wrap:anywhere}
 .studio-assets-type{font-size:var(--au-font-xs);color:var(--au-text-muted)}
+
+.project-directory .studio-assets-toolbar{flex-wrap:wrap}
+.project-directory .studio-assets-breadcrumb{min-width:70px}
+.project-directory>.studio-assets-search{margin:6px 8px;width:auto}
+.project-directory-content,.project-directory footer button{font:inherit;background:var(--au-field);color:var(--au-text);border:1px solid var(--au-line);border-radius:var(--au-radius-sm);padding:4px 8px}
+.project-directory-list{min-height:0;flex:1;overflow:auto;padding:0 8px}
+.project-directory-list ul{list-style:none;margin:0;padding:0}
+.project-directory-list li{display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--au-line)}
+.project-directory-entry{flex:1;display:flex;align-items:center;gap:8px;min-width:0;padding:7px 4px;text-align:start;color:var(--au-text);font:inherit;background:none;border:0}
+.project-directory-entry svg{flex:none;color:var(--au-text-muted)}
+.project-directory-entry span{overflow-wrap:anywhere}
+button.project-directory-entry:hover{background:var(--au-hover);cursor:pointer}
+.project-directory footer{display:flex;align-items:center;gap:8px;padding:5px 8px;border-top:1px solid var(--au-line);color:var(--au-text-muted);flex-wrap:wrap;overflow-wrap:anywhere}
