@@ -408,6 +408,7 @@
     "docs/evidence/studio-raid-map-receipts.json",
     "docs/evidence/studio-postfx-local-volumes.json",
     "docs/evidence/studio-postfx-camera-placement.json",
+    "docs/evidence/studio-postfx-lens-scene-reports.json",
     "docs/evidence/studio-physis-map-plan.json",
     "docs/evidence/studio-physis-zone-authoring.json",
     "docs/evidence/studio-physis-local-playtest.json",
