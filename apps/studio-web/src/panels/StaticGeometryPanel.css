@@ -3,4 +3,10 @@
 .static-geometry span,.static-geometry strong{min-width:0;overflow-wrap:anywhere}
 .static-geometry small{display:block;opacity:.75;margin-top:3px}
 .static-geometry label{display:grid;grid-template-columns:minmax(0,1fr) 74px}
-.static-geometry header button,.static-geometry select{font:inherit;color:var(--au-text);background:var(--studio-background);border:1px solid var(--au-line);border-radius:4px;padding:4px 7px}
+.static-geometry header button{font:inherit;color:var(--au-text);background:var(--studio-background);border:1px solid var(--au-line);border-radius:4px;padding:4px 7px}
+
+.static-geometry details{margin:12px 0}
+.static-geometry summary{cursor:pointer;font-weight:600}
+.static-geometry dl{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px}
+.static-geometry dd{margin:0;font-variant-numeric:tabular-nums}
+.static-geometry ul{padding-inline-start:1.25em;overflow-wrap:anywhere}

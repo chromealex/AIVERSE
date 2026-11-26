@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '../bridge';
+import StaticGeometryDiagnostics from './StaticGeometryDiagnostics';
+import {StudioSelect} from '../ui';
 import './StaticGeometryPanel.css';
 interface Instance { id:string; model:string; mode:'auto'|'strata'|'lod' }
 interface Scene { file:string; instances:Instance[] }
@@ -37,9 +39,10 @@ export default function StaticGeometryPanel({projectPath}:{projectPath:string}) 
     {busy&&!scene&&<p role="status">Loading static geometry…</p>}
     {scene&&!scene.instances.length&&<p>No static objects in this scene.</p>}
     {scene?.instances.map(row=><label key={row.id}><span><b>{row.id}</b><small>{row.model}</small></span>
-      <select aria-label={'Rendering mode for '+row.id} disabled={busy||!row.id} value={row.mode}
+      <StudioSelect aria-label={'Rendering mode for '+row.id} disabled={busy||!row.id} value={row.mode}
         onChange={event=>void changeMode(row.id,event.target.value)}>
         <option value="auto">Auto</option><option value="strata">STRATA</option><option value="lod">LOD</option>
-      </select></label>)}
+      </StudioSelect></label>)}
+    <StaticGeometryDiagnostics project={projectPath}/>
   </section>;
 }

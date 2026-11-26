@@ -4022,7 +4022,14 @@ bool StudioHost::handleHostMethod(const Json& req) {
                 wpLiveSnapshot_=Json();wpLiveRefresh_=0;rebuildOverlay();
             }
         }
-        return gameState(method == "studio.gameState" && params.getBool("scriptErrors"));
+        auto state = gameState(method == "studio.gameState" && params.getBool("scriptErrors"));
+        if (method == "studio.gameState" && params.has("geometryProject")) {
+            const auto& project = session_->workspace().project.dir;
+            if (params.getStr("geometryProject") != project) throw std::runtime_error("Geometry project changed");
+            if (game_ && game_->launchPlan().project == project)
+                state.set("geometry", game_->staticGeometryReport());
+        }
+        return state;
     });
     if(method=="studio.portFolder"){
         const auto id=req["id"];

@@ -63,6 +63,7 @@ public:
     bool capturing() const { return captured_; }
     Simulation* simulation();
     const game::ViewScripts* viewScripts() const;
+    Json staticGeometryReport() const;
     Json prismaFrameReports() const;
     bool inMatch() const;
     // Forward editor-authored cave SDF into the SAME GameClient used by Play.

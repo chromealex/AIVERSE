@@ -35,6 +35,7 @@ public:
     // Keep play changes: where each map entity is now (index into the map's entities), or removed:true.
     Json mapEntityStates();
     Json ecologyState(const StudioWorldProcessLiveOptions& options={},const std::string& focusBody={},const std::optional<StudioForestCameraFocus>& camera={},Json* forestRender=nullptr);
+    Json staticGeometryReport() const { return host_ ? host_->staticGeometryReport() : Json{}; }
     Json prismaFrameReports() const { return host_ ? host_->prismaFrameReports() : Json::array(); }
     Json physisFrame(const Json& params) const;
     Json planetForestState(const std::string& focusBody={},const std::optional<StudioForestCameraFocus>& camera={});

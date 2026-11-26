@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/panels/StaticGeometryDiagnostics.tsx",
     "engine/view/game/GameTerrainLook.cpp",
     "engine/view/game/GameTerrainRender.h",
     "engine/view/game/GameTerrainRender.cpp",

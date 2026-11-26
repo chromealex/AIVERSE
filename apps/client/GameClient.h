@@ -183,6 +183,7 @@ public:
         startCamera_[0] = x; startCamera_[1] = z; startCamera_[2] = distance; startCamera_[3] = pitchDeg; startCamera_[4] = yawDeg;
         hasStartCamera_ = true;
     }
+    const render::GeometryScene& staticGeometry() const { return view_.geometryScene(); }
     const render::Prisma& prismaDiagnostics() const { return prisma_; }
     bool inMatch() const { return !mapLoading_ && sim_ != nullptr && (screen_ == Screen::Playing || screen_ == Screen::Paused || screen_ == Screen::Over); }
     const std::string& errorText() const { return error_; }
