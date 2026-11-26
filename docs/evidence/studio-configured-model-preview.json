@@ -1,0 +1,10 @@
+{
+  "sha": "d85e998e79f619929e1a3ae8004445426e5aaa7f",
+  "argv": [
+    "bash",
+    "/tmp/studio-configured.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-configured-model-preview.log.txt",
+  "sha256": "7fda112de20eaf616034120eb1e7a55116f338e5730544c10e82bc2aaa65b180"
+}
