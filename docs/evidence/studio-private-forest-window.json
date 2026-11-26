@@ -1,0 +1,10 @@
+{
+  "sha": "6aea5c4ce74042d7f5f9da740c32fcc36c606427",
+  "argv": [
+    "bash",
+    "/tmp/forest-panel-ui.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-private-forest-window.log.txt",
+  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

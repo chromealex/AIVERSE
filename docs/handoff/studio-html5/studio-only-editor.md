@@ -1173,3 +1173,4 @@ Route linked view_gizmos to the same Scene layer state as the HTML toolbar. Veri
 Verified 3fa45fc5b1c75b570329832d9f608873f4aa5a12 in the desktop app. Both studio_owner_history and studio_terrain_geometry passed. The MCP and open HTML menu agreed on all eight flags, both sampling controls and selection. Invalid calls preserved state. The river overlay added 3248 blue pixels. See docs/evidence/studio-linked-view-gizmos.json, its adjacent log and docs/evidence/studio-project-catalog/linked-view-gizmos.png. Next parity item is view_wind. Windows and merged-tree Mac verification remain open.
 
 Wind showcase stage in progress: wire the existing TerraWeave forest owner to the private nature viewport and presentation settings.
+Mac build at 6aea5c4ce74042d7f5f9da740c32fcc36c606427 succeeded. Desktop test docs/evidence/studio-private-forest-window.json timed out: a persisted detached physis-detail window opened. Retry with a fresh isolated test layout.
