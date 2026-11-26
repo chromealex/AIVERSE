@@ -28,6 +28,16 @@ struct StudioNaturePreview {
         wind.set("speed",Json::number(double(preview.settings.windSpeed)));
         wind.set("direction",Json::number(double(preview.settings.windDirectionDeg)));
         frame.set("previewWind",std::move(wind));
+        const auto& config=preview.previewWorld()->resourceConst<physis::State>()->settings;
+        Json grid=Json::object();
+        grid.set("requestedMeters",Json::number(int64_t(preview.settings.previewCellMeters)));
+        grid.set("humidity",Json::number(double(preview.settings.humidity)));
+        grid.set("mapAvailable",Json::fromBool(preview.hasAuthoredGrid()));
+        grid.set("meters",Json::number(int64_t(config.cellSizeMeters)));
+        grid.set("width",Json::number(int64_t(config.width)));
+        grid.set("height",Json::number(int64_t(config.height)));
+        grid.set("baseHumidity",Json::number(config.baseHumidity));
+        frame.set("previewGrid",std::move(grid));
         return frame;
     }
 

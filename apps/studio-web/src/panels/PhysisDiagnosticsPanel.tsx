@@ -2,6 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import type {StudioPhysisFrame as Frame} from '../types';
 import {invoke} from '../bridge';
 import {StudioAlert,StudioButton,StudioInput,StudioSelect} from '../ui';
+import PhysisPreviewGrid from './PhysisPreviewGrid';
 import PhysisPreviewWind from './PhysisPreviewWind';
 import PhysisCellReading from './PhysisCellReading';
 import './PhysisDiagnosticsPanel.css';
@@ -62,13 +63,14 @@ function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:strin
   const requestId=useRef(0), pending=useRef(false);
   const [playing,setPlaying]=useState(false),[speed,setSpeed]=useState(1);
   const workspace=useRef<HTMLFieldSetElement>(null);
-  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback',next:View,selection=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}){
+  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback'|'grid',next:View,selection=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}|{cellMeters:number;humidity:number}){
     const id=++requestId.current;
     const sameArea=next.size===view.size&&next.stride===view.stride&&next.centerX===view.centerX&&next.centerZ===view.centerZ;
-    const selected=sameArea&&action!=='reset'?selection:undefined;
+    const rebuild=action==='reset'||action==='grid';
+    const selected=sameArea&&!rebuild?selection:undefined;
     const coords=frame&&selected!==undefined?{cellX:frame.originX+(selected%frame.width)*frame.stride,cellZ:frame.originZ+Math.floor(selected/frame.width)*frame.stride}:{};
     pending.current=true;
-    if(action==='reset')setPlaying(false);
+    if(rebuild)setPlaying(false);
     if(action!=='playback')setBusy(true);
     setError('');
     try{
@@ -124,6 +126,8 @@ function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:strin
             <StudioInput type="number" name={k} defaultValue={view[k]} min={min} max={max} step={1} required/></label>)}
           <StudioButton type="submit">Apply area</StudioButton>
         </form></details>
+        {map&&frame.previewGrid&&<PhysisPreviewGrid key={frame.previewGrid.requestedMeters+'/'+frame.previewGrid.humidity}
+          grid={frame.previewGrid} apply={(cellMeters,humidity)=>void request('grid',view,undefined,{cellMeters,humidity})}/>}
         {map&&frame.previewWind&&<PhysisPreviewWind key={frame.previewWind.speed+'/'+frame.previewWind.direction}
           wind={frame.previewWind} apply={(windSpeed,windDirection)=>void request('wind',view,cell,{windSpeed,windDirection})}/>}
         {cell!==undefined&&<PhysisCellReading key={[frame.tick,cell,frame.originX,frame.originZ,frame.stride].join('/')}

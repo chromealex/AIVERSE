@@ -3848,9 +3848,23 @@ bool StudioHost::handleHostMethod(const Json& req) {
         if (naturePreview_ && (naturePreview_->epoch!=epoch || naturePreview_->revision!=ws.map.revision))
             naturePreview_.reset();
         const auto action=params.getStr("action");
-        if (action=="reset") {
+        if (action=="reset" || action=="grid") {
             if (ws.map.data.planet()) throw std::runtime_error("Nature preview requires a terrain map.");
-            const auto settings=naturePreview_?naturePreview_->preview.settings:editor::PhysisNaturePreviewSettings{};
+            auto settings=naturePreview_?naturePreview_->preview.settings:editor::PhysisNaturePreviewSettings{};
+            if (action=="grid") {
+                if (!naturePreview_) throw std::runtime_error("Create the map preview first.");
+                const auto& size=params["cellMeters"];
+                const auto& humidity=params["humidity"];
+                const double meters=size.toDouble(), fraction=humidity.toDouble();
+                if (!size.isNumber() || !std::isfinite(meters) || meters!=std::floor(meters) ||
+                    meters<0 || meters>16 || !humidity.isNumber() || !std::isfinite(fraction) ||
+                    fraction<0 || fraction>1)
+                    throw std::runtime_error("Choose a cell size of 1–16 m or the map grid, and humidity from 0 to 100%.");
+                if (meters==0 && !naturePreview_->preview.hasAuthoredGrid())
+                    throw std::runtime_error("The current map has no enabled PHYSIS grid.");
+                settings.previewCellMeters=int(meters);
+                settings.humidity=float(fraction);
+            }
             auto next=std::make_shared<StudioNaturePreview>(epoch,ws.map,float(ws.project.rules.levelHeight.toDouble()),settings);
             auto frame=next->read(params);
             naturePreview_=std::move(next);

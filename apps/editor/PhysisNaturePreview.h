@@ -69,6 +69,7 @@ public:
     PhysisNaturePreviewSettings settings;
 
     bool usingLive() const { return usingLive_; }
+    bool hasAuthoredGrid() const { return hasAuthoredGrid_; }
     bool hasPreviewWorld() const { return bool(world_); }
     // Private preview World for read-only diagnostics (heatmap overlay).
     const World* previewWorld() const { return settings.enabled && !usingLive_ ? world_.get() : nullptr; }
@@ -292,6 +293,7 @@ private:
         std::optional<physis::InstallOptions> options;
         try { options = physis::optionsFromMap(map); }
         catch (const std::exception& e) { status_ = std::string("map PHYSIS: ") + e.what(); }
+        hasAuthoredGrid_ = options.has_value();
         physis::Settings grid;
         grid.seed = options ? options->climate.seed : 1;
         grid.baseTemperature = options ? options->climate.baseTemperature : Fixed::fromInt(24);
@@ -490,6 +492,7 @@ private:
     bool usingLive_ = false, resetRequested_ = false, frameDirty_ = true;
     bool fxReady_ = false, active_ = false, retireSet_ = false, hasStorms_ = false;
     double lastTime_ = -1;
+    bool hasAuthoredGrid_ = false;
     float accumulator_ = 0, frameX_ = 0, frameZ_ = 0;
     terraweave::GrassPatchRenderer grass_;
     std::vector<terraweave::GrassPatch> patches_;
