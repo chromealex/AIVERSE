@@ -1,0 +1,17 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+    Start 585: studio_terrain_geometry
+1/1 Test #585: studio_terrain_geometry ..........Subprocess aborted***Exception:   1.97 sec
+libc++abi: terminating due to uncaught exception of type aiverse::JsonError: JSON error at 1:155: expected ',' or '}'
+
+
+0% tests passed, 1 tests failed out of 1
+
+Label Time Summary:
+EDITOR    =   1.97 sec*proc (1 test)
+
+Total Test time (real) =   2.01 sec
+
+The following tests FAILED:
+	585 - studio_terrain_geometry (Subprocess aborted)
+Errors while running CTest
