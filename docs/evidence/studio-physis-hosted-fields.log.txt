@@ -1,0 +1,7 @@
+2026-11-26 06:08:11.287 AiverseStudioHTML5[16163:83037805] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/physis-live-ui-3kbUaF/Catalog.app/Contents/Resources/studio-web
+2026-11-26 06:08:11.435 AiverseStudioHTML5[16163:83037805] [studio-web] served index.html (7729 bytes)
+2026-11-26 06:08:11.440 AiverseStudioHTML5[16163:83037805] [studio-web] served assets/index-_r6lL8g6.js (1619637 bytes)
+2026-11-26 06:08:11.471 AiverseStudioHTML5[16163:83037805] [studio-web] JS: CROSS main boot
+2026-11-26 06:08:11.479 AiverseStudioHTML5[16163:83037805] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 06:08:12.763 AiverseStudioHTML5[16163:83037805] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 06:08:25.666 AiverseStudioHTML5[16163:83037805] [studio-web] JS: CROSS main FAIL @aiverse-studio://shell/index.html:97:37 Error: PHYSIS live grid [false,null,{"device":{"id":"none","landscape":true,"safeArea":true,"width":0,"height":0,"touch":false,"chrome":{"corner":0,"insets":{"left":0,"top":0,"right":0,"bottom":0}}},"active":true,"epoch":"1","paused":false,"runtimeDebugEdited":false,"canControl":false,"canStep":false,"loading":true,"progress":0.65,"inMatch":false,"error":"","tick":0,"canReviewPlayChanges":false}]
