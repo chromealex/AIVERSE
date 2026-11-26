@@ -1,0 +1,10 @@
+{
+  "sha": "daa9643e77ce29558124ea34ba973d470b10f36a",
+  "argv": [
+    "bash",
+    "/tmp/planet-layer-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-planet-material-tint.log.txt",
+  "sha256": "74828c126d281b4239ac37b01809ff9be32d045355cc2e40ae47812a47b48135"
+}
