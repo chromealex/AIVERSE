@@ -151,6 +151,7 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
         <StudioButton size="sm" variant="ghost" onClick={()=>setZoom(1)} title="Reset zoom"><Maximize2 size={14}/></StudioButton>
       </div>
     </div>
+    <div className={'spectra-canvas__workspace'+(chosen?' has-inspector':'')}>
     <div className="spectra-canvas__viewport graph-surface" role="region" aria-label="SpectraFX graph topology and node arrangement">
       <div className="spectra-canvas__extent" style={{width:width*zoom,height:height*zoom}}>
         <div className="spectra-canvas__world" style={{width,height,transform:`scale(${zoom})`}}>
@@ -210,6 +211,38 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
         </div>
       </div>
     </div>
+    {chosen&&<div className="spectra-canvas__selected">
+      <strong>{chosen.type}: {chosen.id}</strong>
+      {isVolumeNode?<div>
+        <StudioField label="Volume property">
+          <StudioSelect value={volumeProperty} onChange={e=>{
+            const k=e.target.value;setVolumeProperty(k);
+            const v=chosen.properties?.[k]??fields[k];
+            setVolumeValue(v===undefined?'':String(v));
+            if(Array.isArray(v))setVolumeVector(v.map(String));
+          }}>
+            <option value="">Choose a property…</option>
+            {Object.keys(fields).filter(k=>k!=='duration'||chosen.properties?.mode==='impulse').map(k=><option key={k} value={k}>{k}</option>)}
+          </StudioSelect>
+        </StudioField>
+        {Array.isArray(fieldDefault)?<div className="spectra-canvas__connect">
+          {volumeVector.map((v,i)=><StudioField key={i} label={['X / R','Y / G','Z / B'][i]}><StudioInput type="number" step="any" value={v} disabled={disabled||working} onChange={e=>setVolumeVector(old=>old.map((x,j)=>j===i?e.target.value:x))}/></StudioField>)}
+        </div>:typeof fieldDefault==='boolean'?<StudioField label="Enabled"><StudioSelect value={volumeValue} onChange={e=>setVolumeValue(e.target.value)}><option value="true">Yes</option><option value="false">No</option></StudioSelect></StudioField>:volumeProperty==='shape'?<StudioField label="Volume shape"><StudioSelect value={volumeValue} onChange={e=>setVolumeValue(e.target.value)}>{['sphere','ellipsoid','box','capsule'].map(x=><option key={x} value={x}>{x}</option>)}</StudioSelect></StudioField>:volumeProperty==='attachment'?<StudioField label="Volume attachment"><StudioSelect value={volumeValue} onChange={e=>setVolumeValue(e.target.value)}><option value="world">World fixed</option><option value="follow">Follow source</option><option value="trail">Leave a trail</option></StudioSelect></StudioField>:volumeProperty==='mode'?<StudioField label="Emission mode"><StudioSelect value={volumeValue} onChange={e=>setVolumeValue(e.target.value)}><option value="continuous">Continuous</option><option value="impulse">Impulse</option></StudioSelect></StudioField>:
+        <StudioField label={volumeProperty==='obstacle'?'Project SDF path (content/*.sdfbin)':'Value'}>
+          <StudioInput type={typeof fieldDefault==='number'?'number':'text'} step={typeof fieldDefault==='number'?'any':undefined} value={volumeValue} onChange={e=>setVolumeValue(e.target.value)} disabled={disabled||working||!volumeProperty}/>
+        </StudioField>}
+        <StudioButton size="sm" disabled={disabled||working||!volumeProperty} onClick={()=>{
+          const value=Array.isArray(fieldDefault)?volumeVector.map(Number):typeof fieldDefault==='number'?Number(volumeValue):typeof fieldDefault==='boolean'?volumeValue==='true':volumeValue;
+          if((Array.isArray(value)&&value.some((x,i)=>!Number.isFinite(x)||volumeVector[i].trim()===''))||(typeof value==='number'&&(!Number.isFinite(value)||volumeValue.trim()===''))){onError('Invalid volume value');return;}
+          void execute({action:'setProperty',node:chosen.id,property:volumeProperty,value});
+        }}>Apply volume property</StudioButton>
+        <small>Native validation on save/preview. Reload to apply authored changes.</small>
+      </div>:null}
+      <SpectraNodeProperties key={chosen.id} node={chosen} fields={catalog.find(item=>item.type===chosen.type)?.fields??[]}
+        functions={graph.functions} disabled={disabled||working} edit={params=>void execute(params)}
+        replace={properties=>onEdit({...graph,nodes:graph.nodes.map(node=>node.id===chosen.id?{...node,properties}:node)})}/>
+    </div>}
+    </div>
     {pending&&<div className="spectra-canvas__pending" role="status">
       <span>Select an input for <strong>{pending.id}</strong>.</span>
       <StudioButton size="sm" variant="ghost" onClick={cancelWire}>Cancel connection</StudioButton>
@@ -247,37 +280,7 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
             if(params)void execute(params);}}>Disconnect</StudioButton>
       </div>)}
     </div>
-    {chosen&&<div className="spectra-canvas__selected">
-      <strong>{chosen.type}: {chosen.id}</strong>
-      {isVolumeNode?<div>
-        <StudioField label="Volume property">
-          <StudioSelect value={volumeProperty} onChange={e=>{
-            const k=e.target.value;setVolumeProperty(k);
-            const v=chosen.properties?.[k]??fields[k];
-            setVolumeValue(v===undefined?'':String(v));
-            if(Array.isArray(v))setVolumeVector(v.map(String));
-          }}>
-            <option value="">Choose a property…</option>
-            {Object.keys(fields).filter(k=>k!=='duration'||chosen.properties?.mode==='impulse').map(k=><option key={k} value={k}>{k}</option>)}
-          </StudioSelect>
-        </StudioField>
-        {Array.isArray(fieldDefault)?<div className="spectra-canvas__connect">
-          {volumeVector.map((v,i)=><StudioField key={i} label={['X / R','Y / G','Z / B'][i]}><StudioInput type="number" step="any" value={v} disabled={disabled||working} onChange={e=>setVolumeVector(old=>old.map((x,j)=>j===i?e.target.value:x))}/></StudioField>)}
-        </div>:typeof fieldDefault==='boolean'?<StudioField label="Enabled"><StudioSelect value={volumeValue} onChange={e=>setVolumeValue(e.target.value)}><option value="true">Yes</option><option value="false">No</option></StudioSelect></StudioField>:volumeProperty==='shape'?<StudioField label="Volume shape"><StudioSelect value={volumeValue} onChange={e=>setVolumeValue(e.target.value)}>{['sphere','ellipsoid','box','capsule'].map(x=><option key={x} value={x}>{x}</option>)}</StudioSelect></StudioField>:volumeProperty==='attachment'?<StudioField label="Volume attachment"><StudioSelect value={volumeValue} onChange={e=>setVolumeValue(e.target.value)}><option value="world">World fixed</option><option value="follow">Follow source</option><option value="trail">Leave a trail</option></StudioSelect></StudioField>:volumeProperty==='mode'?<StudioField label="Emission mode"><StudioSelect value={volumeValue} onChange={e=>setVolumeValue(e.target.value)}><option value="continuous">Continuous</option><option value="impulse">Impulse</option></StudioSelect></StudioField>:
-        <StudioField label={volumeProperty==='obstacle'?'Project SDF path (content/*.sdfbin)':'Value'}>
-          <StudioInput type={typeof fieldDefault==='number'?'number':'text'} step={typeof fieldDefault==='number'?'any':undefined} value={volumeValue} onChange={e=>setVolumeValue(e.target.value)} disabled={disabled||working||!volumeProperty}/>
-        </StudioField>}
-        <StudioButton size="sm" disabled={disabled||working||!volumeProperty} onClick={()=>{
-          const value=Array.isArray(fieldDefault)?volumeVector.map(Number):typeof fieldDefault==='number'?Number(volumeValue):typeof fieldDefault==='boolean'?volumeValue==='true':volumeValue;
-          if((Array.isArray(value)&&value.some((x,i)=>!Number.isFinite(x)||volumeVector[i].trim()===''))||(typeof value==='number'&&(!Number.isFinite(value)||volumeValue.trim()===''))){onError('Invalid volume value');return;}
-          void execute({action:'setProperty',node:chosen.id,property:volumeProperty,value});
-        }}>Apply volume property</StudioButton>
-        <small>Native validation on save/preview. Reload to apply authored changes.</small>
-      </div>:null}
-      <SpectraNodeProperties key={chosen.id} node={chosen} fields={catalog.find(item=>item.type===chosen.type)?.fields??[]}
-        functions={graph.functions} disabled={disabled||working} edit={params=>void execute(params)}
-        replace={properties=>onEdit({...graph,nodes:graph.nodes.map(node=>node.id===chosen.id?{...node,properties}:node)})}/>
-    </div>}
+
 
   </div>;
 }

@@ -44,3 +44,12 @@
 .spectra-property-control input:not([type=checkbox]){width:100%;min-width:0}
 .spectra-property-source summary{cursor:pointer;padding-block:6px}
 .spectra-property-source textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,monospace}
+.spectra-canvas{container-type:inline-size}
+.spectra-canvas__workspace{display:grid;gap:12px;min-width:0}
+.spectra-canvas__workspace>.spectra-canvas__viewport{min-width:0}
+.spectra-canvas__selected{padding:12px;gap:10px;background:var(--au-panel);border:1px solid var(--au-line);border-radius:var(--au-radius-md);min-width:0}
+.spectra-function-library{display:grid;gap:8px;margin-top:12px}
+@container (min-width:760px){
+  .spectra-canvas__workspace.has-inspector{grid-template-columns:minmax(0,1fr) minmax(250px,32%);align-items:start}
+  .spectra-canvas__selected{max-height:min(560px,48vh);overflow:auto;box-sizing:border-box}
+}
