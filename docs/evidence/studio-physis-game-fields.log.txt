@@ -1,0 +1,8 @@
+2026-11-26 06:09:05.124 AiverseStudioHTML5[16927:83041740] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/physis-live-ui-o4lMco/Catalog.app/Contents/Resources/studio-web
+2026-11-26 06:09:05.256 AiverseStudioHTML5[16927:83041740] [studio-web] served index.html (8082 bytes)
+2026-11-26 06:09:05.261 AiverseStudioHTML5[16927:83041740] [studio-web] served assets/index-_r6lL8g6.js (1619637 bytes)
+2026-11-26 06:09:05.292 AiverseStudioHTML5[16927:83041740] [studio-web] JS: CROSS main boot
+2026-11-26 06:09:05.300 AiverseStudioHTML5[16927:83041740] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 06:09:06.584 AiverseStudioHTML5[16927:83041740] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 06:09:06.756 AiverseStudioHTML5[16927:83041740] [studio-web] JS: CROSS main placed native Game at actual panel bounds for occluded QA window
+2026-11-26 06:09:41.120 AiverseStudioHTML5[16927:83041740] [studio-web] JS: CROSS main FAIL @aiverse-studio://shell/index.html:100:37 Error: PHYSIS live grid [false,null,{"device":{"id":"none","landscape":true,"safeArea":true,"width":0,"height":0,"touch":false,"chrome":{"corner":0,"insets":{"left":0,"top":0,"right":0,"bottom":0}}},"active":true,"epoch":"1","paused":false,"runtimeDebugEdited":false,"canControl":false,"canStep":false,"loading":false,"progress":1,"inMatch":false,"error":"PHYSIS grid and climate objects required","tick":0,"canReviewPlayChanges":false}]

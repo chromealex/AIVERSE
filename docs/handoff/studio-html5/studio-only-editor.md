@@ -737,3 +737,5 @@ PHYSIS cell probe a84220872. Shared samplePhysisCell in apps/editor/PhysisDiagno
 PHYSIS live transfer: select the local play-test, capture a committed native field raster with optional cell vectors in the same read, and verify isolation from demo stepping and the authored map.
 
 Local play-test PHYSIS d5384d17a. apps/editor/core/PhysisDiagnosticFrame.h and PhysisOps.cpp share read-only sampling with StudioGameSurface/StudioHost; HTML selects demo or game. Typecheck, Vite, 299 web tests, app build and 40 PHYSIS CTests passed. First Mac GUI run recorded docs/evidence/studio-physis-hosted-fields.json: the game remained loading at 65%, tick 0 while the occluded WebView had only sent its viewport rectangle once. No live visual acceptance yet. Repeat with measured Game bounds throughout loading.
+
+Hosted diagnostics test correction for d5384d17a. The repeat with measured Game bounds reached the native menu; the launched fixture lacked its required PHYSIS climate object. docs/evidence/studio-physis-game-fields.json. Supply a valid 8×8 map climate block and repeat the packaged test.

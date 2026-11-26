@@ -1,0 +1,10 @@
+{
+  "sha": "686cdc86877c0d0d9452acd90ca3583680128c8b",
+  "argv": [
+    "bash",
+    "/tmp/physis-live-ui.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-physis-game-fields.log.txt",
+  "sha256": "65b7490cc7c4499c6868875e332d0c8d46790b89739d856154755984bb8a8fc8"
+}
