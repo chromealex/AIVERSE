@@ -1,0 +1,6 @@
+2026-11-26 05:24:36.944 AiverseStudioHTML5[86824:82892516] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/fx-range-ui-8neXKq/Catalog.app/Contents/Resources/studio-web
+2026-11-26 05:24:37.083 AiverseStudioHTML5[86824:82892516] [studio-web] served index.html (8410 bytes)
+2026-11-26 05:24:37.089 AiverseStudioHTML5[86824:82892516] [studio-web] served assets/index-BccrfFxY.js (1593456 bytes)
+2026-11-26 05:24:37.119 AiverseStudioHTML5[86824:82892516] [studio-web] JS: CROSS main boot
+2026-11-26 05:24:37.127 AiverseStudioHTML5[86824:82892516] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 05:24:38.767 AiverseStudioHTML5[86824:82892516] [studio-web] JS: CROSS main FAIL @aiverse-studio://shell/index.html:103:81 Error: incorrect missing lifetime

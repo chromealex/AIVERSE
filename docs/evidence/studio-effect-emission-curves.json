@@ -1,0 +1,10 @@
+{
+  "sha": "5f12100703d5bd63c217acf01d1f121472be494f",
+  "argv": [
+    "bash",
+    "/tmp/fx-range-ui.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-effect-emission-curves.log.txt",
+  "sha256": "34604afda26654713d73d89a176011cc71d94d9f3c17a8d7f6b7e0ff1096c964"
+}
