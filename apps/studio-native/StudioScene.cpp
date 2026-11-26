@@ -2146,14 +2146,14 @@ std::optional<Json> StudioScene::playerStartPlacement(float x,float y,float w,fl
     start.push(Json::number(std::min(double(doc.data.h)-.5,std::round(double(hit->z)*2)/2)));
     return start;
 }
-std::optional<float3> StudioScene::flatMapPoint(float x,float y,float w,float h,const editor::MapDoc& doc)const{
+std::optional<float3> StudioScene::flatMapPoint(float x,float y,float w,float h,const editor::MapDoc& doc,bool requireSurface)const{
     if(!cameraInitialized_||planetMode_||doc.data.worldSpace||doc.data.planet()||terrainRevision_!=doc.revision||
        !(x>=0 && y>=0 && x<w && y<h && w>=2 && h>=2))return {};
     float3 origin,direction,at;
     if(!viewCamera().screenRay(x,y,w,h,origin,direction))return {};
     const float t=studioRayMesh(origin,direction,terrainCpu_);
     if(std::isfinite(t))at=origin+direction*t;
-    else if(!groundPoint(x,y,w,h,at))return {};
+    else if(requireSurface || !groundPoint(x,y,w,h,at))return {};
     if(at.x<0||at.z<0||at.x>=doc.data.w||at.z>=doc.data.h)return {};
     return at;
 }

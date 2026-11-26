@@ -1416,8 +1416,8 @@ void StudioHost::selectionAction(const std::string& method) {
 // Ring under the cursor while the Scene brush is armed (radius; river: half its width; road: a dot).
 bool StudioHost::resolveBrushPoint(double x,double y,double w,double h,render::float3& at,std::string* error) {
     if(!preview_||x<0||y<0||w<2||h<2||x>=w||y>=h)return false;
-    if(session_->sceneBrush().kind=="terrain" && session_->sceneBrush().op=="stamp"){
-        const auto hit=onScene([&]{return preview_->flatMapPoint(float(x),float(y),float(w),float(h),session_->workspace().map);});
+    if(session_->sceneBrush().kind=="terrain" && (session_->sceneBrush().op=="stamp" || session_->sceneBrush().op=="set")){
+        const auto hit=onScene([&]{return preview_->flatMapPoint(float(x),float(y),float(w),float(h),session_->workspace().map,session_->sceneBrush().pickHeight);});
         if(!hit)return false;
         at=*hit;return true;
     }
@@ -2665,6 +2665,18 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
         if(!projectLoading_&&session_->strokeCancel())sendEvent("document.changed", "");
         m = {};
         m.active = true; m.pressX = x; m.pressY = y;
+        if(!mods.alt && brushArmed() && session_->sceneBrush().pickHeight){
+            m.active=false;
+            render::float3 hit{};
+            if(resolveBrushPoint(x,y,w,h,hit)){
+                Json params=Json::object();
+                params.set("targetHeight",Json::number(std::clamp(double(hit.y),-2048.,2047.9375),6));
+                params.set("pickHeight",Json::fromBool(false));
+                const auto reply=request("studio.sceneBrush",params);
+                if(reply.has("result"))sendEventPayload("brush.changed",reply["result"]);
+            }
+            return;
+        }
         if(!scenePickerToken_.empty()&&!mods.alt&&!mods.command&&!mods.ctrl&&(pickingRoad_||!mods.shift)){m.playerStart=true;if(pickingArea_)updateAreaPick(0,x,y,w,h);return;}
         if(forestPlantArm_.isObject()&&!mods.alt&&!mods.command&&!mods.ctrl&&!mods.shift){m.forest=true;return;}
         // Explicit authored World Processes handles have priority only when

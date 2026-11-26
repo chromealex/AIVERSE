@@ -1732,6 +1732,14 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"Fixture co
        AIVERSE_TEST_CHECK(session.workspace().map.data.detail!=stamped && session.workspace().map.data.detail!=originalDetail);
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error"));
        AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"op":"raise"})")["result"]["strength"].toDouble()==1);
+       const auto heightDepth=session.workspace().map.undoDepth();
+       AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"op":"set","targetHeight":-3.25,"pickHeight":true})").has("error"));
+       AIVERSE_TEST_CHECK(!session.strokeBegin(4,4,&err) && session.workspace().map.undoDepth()==heightDepth);
+       AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"pickHeight":false})").has("error"));
+       AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err) && session.strokeEnd(&err));
+       const auto& heightMap=session.workspace().map.data;
+       AIVERSE_TEST_CHECK(heightMap.corners[size_t(4*(heightMap.w+1)+4)]==-52);
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && session.workspace().map.undoDepth()==heightDepth);
        const auto sparseDepth=session.workspace().map.undoDepth();
        AIVERSE_TEST_CHECK(!call("studio.sceneBrush",R"({"kind":"sparse","sparseMode":"raise","chunkMetres":16,"depthCm":80,"radius":2})").has("error"));
        AIVERSE_TEST_CHECK(session.strokeBegin(-32,-40,&err) && session.strokeDab(-48,-40,&err) && session.strokeEnd(&err));

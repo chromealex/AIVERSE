@@ -411,7 +411,7 @@ public:
     // Ray through (x, y) onto the ground plane y = 0 (asset drops).
     bool caveScreenRay(float x,float y,float width,float height,render::float3& origin,render::float3& direction)const;
     std::optional<Json> playerStartPlacement(float x,float y,float w,float h,const editor::MapDoc& doc) const;
-    std::optional<render::float3> flatMapPoint(float x,float y,float w,float h,const editor::MapDoc& doc) const;
+    std::optional<render::float3> flatMapPoint(float x,float y,float w,float h,const editor::MapDoc& doc,bool requireSurface=false) const;
     void showAreaBounds(std::optional<StudioMapAreaBounds> rect){areaBounds_=rect;}
     bool groundPoint(float x, float y, float width, float height, render::float3& out) const;
     std::optional<Json> forestPick(float x,float y,float w,float h,const std::string& project,const std::string& path,uint64_t revision) const;

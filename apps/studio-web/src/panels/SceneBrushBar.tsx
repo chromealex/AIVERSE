@@ -9,7 +9,7 @@ export type BrushKind = StudioSceneBrush['kind'];
 const KIND_LABEL: Record<BrushKind, string> = {
   terrain: 'Sculpt', sparse: 'Open world', paint: 'Paint', objects: 'Objects', tiles: 'Tiles', region: 'Regions', field: 'Field', road: 'Draw road', river: 'Draw river', caverns: 'Caverns',
 };
-const OPS: Array<[StudioSceneBrush['op'], string]> = [['raise', 'Raise'], ['lower', 'Lower'], ['smooth', 'Smooth'], ['flatten', 'Flatten'], ['noise', 'Noise'], ['erode', 'Erode'], ['stamp','Stamp']];
+const OPS: Array<[StudioSceneBrush['op'], string]> = [['raise', 'Raise'], ['lower', 'Lower'], ['smooth', 'Smooth'], ['flatten', 'Flatten'], ['set','Set height'], ['noise', 'Noise'], ['erode', 'Erode'], ['stamp','Stamp']];
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 const op = async (name: string, params: Record<string, unknown> = {}) => (await invoke('studio.op', { op: name, params })).result as Record<string, any>;
 
@@ -272,6 +272,15 @@ export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS, tileCatalog,
     {kind === 'terrain' && <div className="ptp__seg" role="radiogroup" aria-label="Sculpt operation">
       {OPS.map(([id, label]) => <button key={id} type="button" role="radio" aria-checked={brush.op === id}
         className={brush.op === id ? 'is-on' : ''} onClick={() => set({ op: id })}>{label}</button>)}</div>}
+    {kind === 'terrain' && brush.op==='set' && <fieldset className="tbrush__stamp"><legend>Target elevation</legend>
+      <label className="ptp__row"><span>Height (m)</span><input className="au-input" type="number" step="any" min={-2048} max={2047.9375}
+        key={brush.targetHeight} defaultValue={brush.targetHeight} onBlur={e=>{
+          if(e.target.value!=='' && e.target.validity.valid)set({targetHeight:e.target.valueAsNumber});
+          else e.target.value=String(brush.targetHeight);
+        }} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur();}}/></label>
+      <button type="button" className="au-button au-button--sm" aria-pressed={brush.pickHeight}
+        onClick={()=>set({armed:true,pickHeight:!brush.pickHeight})}>{brush.pickHeight?'Cancel height pick':'Pick height from Scene'}</button>
+    </fieldset>}
     {kind === 'terrain' && brush.op==='stamp' && <fieldset className="tbrush__stamp"><legend>Terrain stamp</legend>
       <label className="ptp__row"><span>Shape</span><select className="au-input" value={brush.stamp}
         onChange={e=>set({stamp:e.target.value as StudioSceneBrush['stamp']})}>
@@ -317,10 +326,11 @@ export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS, tileCatalog,
     {kind === 'region' && <Slider label="Radius (cells)" value={Math.floor(brush.radius)} min={0} max={24} step={1} onCommit={v => set({ radius: v || 0.5 })}/>}
     {kind === 'field' && <Slider label="Radius (cells)" value={Math.round(brush.radius)} min={0} max={24} step={1} onCommit={v => set({ radius: v || 0.25 })}/>}
     {continuous && kind !== 'region' && kind !== 'field' && !(kind==='sparse' && brush.sparseMode==='create') && <Slider label={kind === 'objects' ? 'Spacing' : 'Radius'} value={brush.radius} min={stamping?0.25:0.5} max={stamping?32:24} step={stamping?0.25:0.5} onCommit={v => set({ radius: v })}/>}
-    {(kind === 'terrain' || kind === 'paint') && <Slider label={stamping?'Stamp height':'Strength'} value={brush.strength} min={stamping?-6:0.05}
+    {((kind === 'terrain' && brush.op!=='set') || kind === 'paint') && <Slider label={stamping?'Stamp height':'Strength'} value={brush.strength} min={stamping?-6:0.05}
       max={kind === 'paint' || brush.op === 'smooth' || brush.op === 'flatten' || brush.op === 'erode' ? 1 : 6} step={0.05} onCommit={v => set({ strength: v })}/>}
     {editing && <p className="ptp__hint">Drag a {kind === 'road' ? 'road node' : 'river point'} in the Scene to move it</p>}
-    {brush.armed && <p className="ptp__hint">{kind==='terrain' && brush.op==='stamp' ? 'Click in the Scene to place one stamp' : continuous ? 'Drag in the Scene to paint' : 'Drag the path in the Scene; it is built on release'} · one History step per stroke · [ ] size · Esc stops</p>}
+    {brush.pickHeight && <p className="ptp__hint">Click the terrain to sample its elevation · Esc cancels</p>}
+    {brush.armed && !brush.pickHeight && <p className="ptp__hint">{kind==='terrain' && brush.op==='stamp' ? 'Click in the Scene to place one stamp' : continuous ? 'Drag in the Scene to paint' : 'Drag the path in the Scene; it is built on release'} · one History step per stroke · [ ] size · Esc stops</p>}
     {(kinds.includes('terrain') || kinds.includes('region') || kind === 'river') && <details><summary>World overlays</summary><EcologyLayerPicker/></details>}
     {error && <div className="tool__error" role="alert">{error}</div>}
   </div>;

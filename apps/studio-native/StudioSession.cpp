@@ -1147,7 +1147,7 @@ Json StudioSession::saveMapAs(const std::string& path) {
 }
 Json StudioSession::openProject(const std::string& path) {
     if(agentRun_.running())throw std::runtime_error("Stop the running agent before opening a project");
-    strokeCancel();brush_.armed=false;brush_.fixedTile=-1;brush_.regionBorders=false;
+    strokeCancel();brush_.armed=false;brush_.pickHeight=false;brush_.fixedTile=-1;brush_.regionBorders=false;
     agentHistoryUnsafe_=true;agentBatchFenced_=true;
     if (path.empty()) throw std::runtime_error("Project path is empty");
     const auto directory=recoveredProjectDir(ws_,path);
@@ -1708,6 +1708,7 @@ Json StudioSession::sceneBrushJson() const {
     o.set("armed",Json::fromBool(b.armed));o.set("kind",str(b.kind));o.set("op",str(b.op));
     o.set("radius",Json::number(b.radius,3));o.set("strength",Json::number(b.kind=="terrain" && b.op=="stamp"?b.stampHeight:b.strength,3));
     const auto& sparse=ws_.map.data.extra["terraweaveSparse"];
+    o.set("targetHeight",Json::number(b.targetHeight,6));o.set("pickHeight",Json::fromBool(b.pickHeight));
     o.set("sparseMode",str(b.sparseMode));
     o.set("chunkMetres",num(sparse.getInt("chunkMetres",b.chunkMetres)));
     o.set("sparseChunks",num(int64_t(sparse["chunks"].size())));
@@ -1789,12 +1790,20 @@ bool StudioSession::strokeDabImpl(double x, double z, std::string* error,double 
     const double spacing=b.kind=="objects"?std::max(1.0,b.radius):b.kind=="tiles"||b.kind=="field"?std::max(1.0,b.radius*0.5):b.radius*0.33;
     if(strokeDabs_>0 && (d<spacing || (b.kind=="terrain" && b.op=="stamp")))return true;
     Json p=Json::object();std::string op;
-    if(b.kind=="terrain"){op="terrain_sculpt";p.set("op",str(b.op));p.set("x",Json::number(x,3));p.set("y",Json::number(z,3));
+    if(b.kind=="terrain"){
+        op="terrain_sculpt";
+        auto mode=b.op;
+        if(shift && mode=="raise")mode="lower";
+        else if(shift && mode=="lower")mode="raise";
+        double strength=b.strength;
+        if(mode=="set")strength=b.targetHeight;
+        if(mode=="stamp")strength=shift?-b.stampHeight:b.stampHeight;
+        p.set("op",str(mode));p.set("x",Json::number(x,3));p.set("y",Json::number(z,3));
         if (b.op=="stamp") {
             p.set("stamp",str(b.stamp));p.set("angle",Json::number(b.angle,2));
             p.set("seed",num(int64_t(b.seed)));p.set("hardness",Json::number(b.hardness,3));
         }
-        p.set("radius",Json::number(b.radius,3));p.set("strength",Json::number(b.op=="stamp"?b.stampHeight:b.strength,3));}
+        p.set("radius",Json::number(b.radius,3));p.set("strength",Json::number(strength,6));}
     else if(b.kind=="sparse"){
         op="terraweave_sparse_paint";
         auto mode=b.sparseMode;
@@ -1845,7 +1854,7 @@ bool StudioSession::strokeDabImpl(double x, double z, std::string* error,double 
     return true;
 }
 bool StudioSession::strokeBegin(double x, double z, std::string* error,double y,bool shift) {
-    if(!brush_.armed||ws_.project.dir.empty()||stroking_)return false;
+    if(!brush_.armed||brush_.pickHeight||ws_.project.dir.empty()||stroking_)return false;
     const auto& b=brush_;
     if((b.kind=="tiles"&&b.tile.empty())||(b.kind=="field"&&b.field.empty())||(b.kind=="objects"&&b.type.empty())||(b.kind=="road"&&b.roadType.empty())){
         if(error)*error=std::string("choose a ")+(b.kind=="tiles"?"tile terrain":b.kind=="field"?"field":b.kind=="objects"?"type":"road type")+" first";
@@ -2472,7 +2481,7 @@ Json StudioSession::assetHistoryJson() const {
 Json StudioSession::dispatch(const Json& request) {
     const std::string method=request.getStr("method");
     const bool switching=method=="studio.openProject"||method=="studio.openMap"||method=="studio.newMap"||method=="studio.hubOpen"||method=="studio.hubCreate";
-    if(switching){strokeCancel();brush_.fixedTile=-1;brush_.armed=false;brush_.regionBorders=false;agentHistoryUnsafe_=true;agentBatchFenced_=true;}
+    if(switching){strokeCancel();brush_.fixedTile=-1;brush_.armed=false;brush_.pickHeight=false;brush_.regionBorders=false;agentHistoryUnsafe_=true;agentBatchFenced_=true;}
     if(stroking_){
         // The stroke owns the MapDoc transaction across frames. Only explicit
         // observational requests can enter; other edits retry after release.
@@ -4735,7 +4744,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             const std::string k=params.getStr("kind");
             if (k!="road"&&k!="river"&&!k.empty()) throw std::runtime_error("Unknown spline kind");
             splineEdit_=ws_.project.dir.empty()?std::string():k;
-            if (!splineEdit_.empty()) brush_.armed=false;
+            if (!splineEdit_.empty()) {brush_.armed=false;brush_.pickHeight=false;}
             reply.set("result",splineHandles());
         } else if (method == "studio.sceneBrush") {
             // Arm / disarm the Scene brush and set its tool and settings (session only).
@@ -4744,7 +4753,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 throw std::runtime_error("Map changed. Reload the region before painting.");
             auto next=brush_;auto& b=next;
             static const std::set<std::string> kinds={"sparse","terrain","paint","tiles","region","field","objects","road","river","caverns"};
-            static const std::set<std::string> ops={"raise","lower","smooth","flatten","noise","erode","stamp"};
+            static const std::set<std::string> ops={"set","raise","lower","smooth","flatten","noise","erode","stamp"};
             static const std::set<std::string> modes={"set","add","max","erase"};
             auto number=[&](const char* k,double lo,double hi){const double v=params[k].toDouble();
                 if(!params[k].isNumber()||!std::isfinite(v)||v<lo||v>hi)throw std::runtime_error(std::string(k)+" must be "+std::to_string(lo)+".."+std::to_string(hi));return v;};
@@ -4765,6 +4774,11 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 if(params.has("depthCm"))b.depthCm=integer("depthCm",1,20000);
             }
             if (params.has("op")) { const std::string op=params.getStr("op"); if(!ops.count(op))throw std::runtime_error("Unknown brush op"); b.op=op; }
+            if(params.has("targetHeight"))b.targetHeight=number("targetHeight",-2048,2047.9375);
+            if(params.has("pickHeight")){
+                if(params["pickHeight"].type()!=Json::Type::Bool)throw std::runtime_error("Invalid height picker flag");
+                b.pickHeight=params.getBool("pickHeight");
+            }
             if (params.has("radius")) b.radius=number("radius",0.25,64);
             if (params.has("strength")) {
                 if (b.kind=="terrain" && b.op=="stamp") b.stampHeight=number("strength",-20,20);
@@ -4818,8 +4832,9 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             if(params.has("caveSurface"))b.caveSurface=params.getBool("caveSurface");
             if(params.has("caveDepth"))b.caveDepth=number("caveDepth",.01,10000);
             if (params.has("armed")) b.armed=params.getBool("armed")&&!ws_.project.dir.empty();
-            if(b.armed && b.kind=="terrain" && b.op=="stamp" && (ws_.map.data.worldSpace || ws_.map.data.planet()))
-                throw std::runtime_error("Terrain stamps require a flat heightmap");
+            if(!b.armed || b.kind!="terrain" || b.op!="set")b.pickHeight=false;
+            if(b.armed && b.kind=="terrain" && (b.op=="stamp" || b.op=="set") && (ws_.map.data.worldSpace || ws_.map.data.planet()))
+                throw std::runtime_error("This terrain brush requires a flat heightmap");
             if(b.armed && b.kind=="region" && (ws_.map.data.worldSpace || ws_.map.data.planet()))
                 throw std::runtime_error("Region painting requires a flat map");
             if(b.armed&&b.kind=="caverns"){

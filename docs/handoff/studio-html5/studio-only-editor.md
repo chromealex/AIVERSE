@@ -789,3 +789,5 @@ Terrain layout and recessed stamps 4b7815087. TypeScript, Vite, 299 web tests, s
 Sparse Terrain transfer: expose chunk creation and signed-world sculpting in the HTML Terrain brush. Check compound undo, reversed depth, camera placement and persisted chunks.
 
 Sparse terrain brush 502e618d8db9944c3ba13d6ec3d998386adddcbb. TypeScript, Vite, 299 web tests, studio_session and studio_terrain_geometry passed. On macOS the Open world controls created a 16 m chunk at the Scene camera target. An AppKit stroke produced four negative-coordinate chunks in one undo step. Redo, save and reopen restored the count, and disk inspection found 61 height samples with a 167 cm maximum. Receipt docs/evidence/studio-terrain-open-world.json; capture docs/evidence/studio-project-catalog/terrain-open-world.png. Next: regular Terrain target height, Scene eyedropper, detail/base and planet sculpting. Windows and merged-tree Mac quick gate remain open.
+
+Terrain target height: transfer the signed Set brush and one-click Scene surface sampler. Verify that sampling preserves the document and history, then verify painting and persistence.
