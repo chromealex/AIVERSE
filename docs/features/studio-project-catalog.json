@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "tools/mcp/main.cpp",
     "apps/studio-web/src/panels/AnimationSkeletonPreview.tsx",
     "apps/editor/core/AnimationPreviewSession.h",
     "apps/studio-web/src/panels/AnimationGraphPanel.tsx",

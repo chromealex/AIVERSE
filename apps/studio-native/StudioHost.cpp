@@ -116,7 +116,8 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
                 const auto& ws=session_->workspace();
                 std::lock_guard lock(animationEditorMutex_);
                 const auto& state=animationEditors_[rig?1:0];
-                const bool current=state.getStr("project")==ws.project.dir;
+                const bool current=state.getStr("project")==ws.project.dir &&
+                    state.getStr("lifetime")==std::to_string(ws.projectLifetime());
                 auto result=ws.animationPreviews->editorStatus(ws.project.dir,rig,current?state.getInt("token",-1):-1);
                 result.set("graph",current?state["graph"]:Json{});
                 result.set("dirty",Json::fromBool(current && state.getBool("dirty")));
@@ -3579,7 +3580,9 @@ bool StudioHost::handleHostMethod(const Json& req) {
         if(!params["graph"].isNull() && (!params["graph"].isObject() || params["graph"].dump().size()>256*1024))
             throw std::runtime_error("Invalid animation editor document");
         std::lock_guard lock(animationEditorMutex_);
-        animationEditors_[panel=="rig"?1:0]=params;
+        auto& state=animationEditors_[panel=="rig"?1:0];
+        state=params;
+        state.set("lifetime",Json::string(std::to_string(session_->workspace().projectLifetime())));
         return Json::object();
     });
     if (method == "studio.windowDrag" || method == "studio.windowZoom" ||

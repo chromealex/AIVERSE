@@ -173,9 +173,11 @@ void replyError(const Json& id, int code, const std::string& msg) {
 }
 
 // Tool result -> MCP content. Screenshots come back as images the model can look at.
-Json toContent(const Json& result) {
+Json toContent(const std::string& name,const Json& result) {
     Json content = Json::array();
-    bool isError = result.has("error");
+    // These status documents include the preview's error string even on a successful read.
+    const bool editorStatus=(name=="animation_editor_status" || name=="rig_editor_status") && result["ready"].isBool();
+    const bool isError=result.has("error") && !editorStatus;
     if (result.has("png_base64")) {
         Json img = Json::object();
         img.set("type", Json::string("image"));
@@ -321,7 +323,7 @@ int main(int argc, char** argv) {
                 if (!viaEditor && !link.lastError().empty())
                     std::fprintf(stderr, "aiversemcp: editor link: %s\n", link.lastError().c_str());
                 if (!viaEditor) result = local.call(name, args, "agent");
-                reply(id, toContent(result));
+                reply(id, toContent(name,result));
             } else if (method == "ping") {
                 reply(id, Json::object());
             } else if (isRequest) {

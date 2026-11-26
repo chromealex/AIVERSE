@@ -1025,15 +1025,18 @@ void Workspace::registerCoreOps() {
     auto addLinked=[this](const char* name,const char* desc,const char* sch,OpFn fn){
         registerOp({name,desc,schema(sch),std::move(fn),false,true});
     };
-    const auto noLinkedForest=[](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");};
+    const auto requireStudioLink=[](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");};
+    for(const char* name:{"animation_editor_status","rig_editor_status"})
+        addLinked(name,"Read the linked editor draft, evaluated local pose and contact diagnostics.",
+            R"({"type":"object","properties":{},"additionalProperties":false})",requireStudioLink);
     addLinked("studio_planet_forest_live","Read the completed local ECS forest snapshot for the current saved planetary map. No remote simulation, no mutation.",
-        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"mapPath":{"type":"string"},"expectedRevision":{"type":"string"}},"required":["expectedProject","mapPath","expectedRevision"],"additionalProperties":false})",noLinkedForest);
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"mapPath":{"type":"string"},"expectedRevision":{"type":"string"}},"required":["expectedProject","mapPath","expectedRevision"],"additionalProperties":false})",requireStudioLink);
     addLinked("studio_planet_scene_get","Read desired and rendered surface body and the current Scene orbit camera, with project/map/revision guards.",
-        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"mapPath":{"type":"string"},"expectedRevision":{"type":"string"}},"required":["expectedProject","mapPath","expectedRevision"],"additionalProperties":false})",noLinkedForest);
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"mapPath":{"type":"string"},"expectedRevision":{"type":"string"}},"required":["expectedProject","mapPath","expectedRevision"],"additionalProperties":false})",requireStudioLink);
     addLinked("studio_planet_scene_body_set","Select a surface body in linked Studio, or empty body for Auto. Changes only transient Scene state; wait for activeBody before camera edits.",
-        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"mapPath":{"type":"string"},"expectedRevision":{"type":"string"},"body":{"type":"string"}},"required":["expectedProject","mapPath","expectedRevision","body"],"additionalProperties":false})",noLinkedForest);
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"mapPath":{"type":"string"},"expectedRevision":{"type":"string"},"body":{"type":"string"}},"required":["expectedProject","mapPath","expectedRevision","body"],"additionalProperties":false})",requireStudioLink);
     addLinked("studio_planet_scene_camera_set","Set the current planetary Scene orbit camera in body-local metres and radians. Transient view only; no ECS or document mutation.",
-        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"mapPath":{"type":"string"},"expectedRevision":{"type":"string"},"body":{"type":"string"},"target":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3},"distance":{"type":"number","minimum":2,"maximum":8192},"yaw":{"type":"number","minimum":-1000,"maximum":1000},"pitch":{"type":"number","minimum":-1.5707963,"maximum":1.5707963},"ortho":{"type":"boolean"}},"required":["expectedProject","mapPath","expectedRevision","body","target","distance","yaw","pitch","ortho"],"additionalProperties":false})",noLinkedForest);
+        R"({"type":"object","properties":{"expectedProject":{"type":"string"},"mapPath":{"type":"string"},"expectedRevision":{"type":"string"},"body":{"type":"string"},"target":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3},"distance":{"type":"number","minimum":2,"maximum":8192},"yaw":{"type":"number","minimum":-1000,"maximum":1000},"pitch":{"type":"number","minimum":-1.5707963,"maximum":1.5707963},"ortho":{"type":"boolean"}},"required":["expectedProject","mapPath","expectedRevision","body","target","distance","yaw","pitch","ortho"],"additionalProperties":false})",requireStudioLink);
     addLinked("studio_asset_history","Read current linked Studio asset history and project identity.",
         R"({"type":"object","properties":{},"additionalProperties":false})",[](const Json&)->Json{
             throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");
