@@ -1,0 +1,10 @@
+{
+  "sha": "74e11f9315b002a46061903e15ea09759b1b25ec",
+  "argv": [
+    "bash",
+    "/tmp/fx-shape-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-effect-emitter-geometry.log.txt",
+  "sha256": "35ac775189d0d5ff3e8561e83af82b3c340e406cf2d2e23bc6fd2b8b47eec59e"
+}
