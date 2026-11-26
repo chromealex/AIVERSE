@@ -420,3 +420,5 @@ Models: inspect the authored game type through the shared GameView with owner co
 Model Animation: choose an imported model and clip, sample its native pose, play, pause and scrub on an independent panel surface.
 
 Animation authoring navigation: implement animation_editor in the HTML host, reveal project-scoped clips or the embedded model graph, preserve edited drafts and verify linked requests.
+
+Dock panels: add Maximize and Restore to the shared ellipsis menu; keep split ratios, mounted panel state and native preview placement across both actions.

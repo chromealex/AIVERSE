@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AppWindow, Columns2, MoreVertical, Plus, Rows2, X } from 'lucide-react';
+import { AppWindow, Columns2, Maximize2, Minimize2, MoreVertical, Plus, Rows2, X } from 'lucide-react';
 import { StudioContextMenu, type StudioMenuItem } from '../ui';
 import type { Dispatch, DragEvent, PointerEvent as ReactPointerEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode, SetStateAction } from 'react';
 import { concealNativeViews, setDockDrag } from '../nativeOverlay';
@@ -8,6 +8,7 @@ import {
   moveTab, panelStack, reopenTab, resizeDockSplit, splitDockRoot, splitDockStack
 } from '../nestedDock';
 import type { DockEdge, DockNode, DockSplit, DockStack, DockTree, StudioPanel } from '../nestedDock';
+import {nativeConnected, nativeWindowAction} from '../bridge';
 import './NestedDockWorkspace.css';
 
 const MIME = 'application/x-aiverse-studio-tab';
@@ -33,6 +34,8 @@ interface BranchProperties extends Properties {
   /** A tab from another Studio window is being dragged over this one. */
   foreign: boolean;
   setForeign: (value: boolean) => void;
+  maximized: string | null;
+  toggleMaximize: (stack: DockStack, panel: StudioPanel) => void;
   actionsPanel: StudioPanel | null;
   showActions: (panel: StudioPanel) => void;
   /** Pointer drag: HTML5 drag dies when the cursor crosses the native Scene window. */
@@ -59,7 +62,7 @@ function ModelingTab({active,renderPanel}:{active:boolean;renderPanel:Properties
 }
 
 function DockTabs({ node, tree, setTree, renderPanel, dragging, setDragging,
-                    stacks, onFloat, onAdopt, onDockBack, foreign, setForeign, beginDrag }: BranchProperties & { node: DockStack }) {
+                    stacks, onFloat, onAdopt, onDockBack, foreign, setForeign, beginDrag, maximized, toggleMaximize }: BranchProperties & { node: DockStack }) {
   const [hover, setHover] = useState<DockEdge | 'center' | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; panel: StudioPanel } | null>(null);
   const stackRef = useRef<HTMLElement>(null);
@@ -80,6 +83,9 @@ function DockTabs({ node, tree, setTree, renderPanel, dragging, setDragging,
       ({ id: 'split-' + edge, label, icon, separator, disabled: !many,
          onSelect: () => setTree(t => splitDockStack(t, panel, node.id, edge)) });
     return [
+      {id:'maximize',label:nativeConnected()&&stacks.length===1?'Maximize / Restore window':maximized===node.id?'Restore':'Maximize',
+        icon:maximized===node.id?<Minimize2 size={13}/>:<Maximize2 size={13}/>,
+        onSelect:()=>toggleMaximize(node,panel)},
       ...(onFloat ? [{ id: 'float', label: 'Open in New Window', icon: <AppWindow size={13}/>,
         onSelect: () => onFloat(panel, false) } as StudioMenuItem] : []),
       ...(onDockBack ? [{ id: 'dock-back', label: 'Move to Main Window', icon: <AppWindow size={13}/>,
@@ -130,7 +136,7 @@ function DockTabs({ node, tree, setTree, renderPanel, dragging, setDragging,
     setTree(current => activateTab(current, node.id, node.tabs[next]));
   };
   const showEdges = foreign || (dragging !== null && (panelStack(tree, dragging) !== node.id || node.tabs.length > 1));
-  return <section ref={stackRef} className="nested-stack" aria-label={'Dock '+node.id} data-stack={node.id}
+  return <section ref={stackRef} className="nested-stack" aria-label={'Dock '+node.id} data-stack={node.id} data-maximized={maximized===node.id||undefined}
     onDragOver={event => {event.preventDefault();event.dataTransfer.dropEffect='move';}}
     onDrop={event => transfer(event)}>
     <div className="dock-tab-bar">
@@ -178,7 +184,7 @@ function DockTabs({ node, tree, setTree, renderPanel, dragging, setDragging,
   </section>;
 }
 function DockSplitNode({ node, tree, setTree, renderPanel, dragging, setDragging,
-                         stacks, actionsPanel, showActions, onFloat, onAdopt, onDockBack, foreign, setForeign, beginDrag }: BranchProperties & { node: DockSplit }) {
+                         stacks, actionsPanel, showActions, onFloat, onAdopt, onDockBack, foreign, setForeign, beginDrag, maximized, toggleMaximize }: BranchProperties & { node: DockSplit }) {
   const horizontal=node.axis==='horizontal';
   const adjust=(ratio:number)=>setTree(t=>resizeDockSplit(t,node.id,ratio));
   const resize=(event: ReactPointerEvent<HTMLDivElement>)=>{
@@ -209,7 +215,7 @@ function DockSplitNode({ node, tree, setTree, renderPanel, dragging, setDragging
       event.preventDefault();adjust(event.key==='Home'?.12:.88);
     }
   };
-  const shared={tree,setTree,renderPanel,dragging,setDragging,stacks,actionsPanel,showActions,onFloat,onAdopt,onDockBack,foreign,setForeign,beginDrag};
+  const shared={tree,setTree,renderPanel,maximized,toggleMaximize,dragging,setDragging,stacks,actionsPanel,showActions,onFloat,onAdopt,onDockBack,foreign,setForeign,beginDrag};
   return <div className={'nested-split '+(horizontal?'nested-horizontal':'nested-vertical')}>
     <div className="nested-child" style={{flex:node.ratio+' 1 0%'}}>
       <DockBranch node={node.first} {...shared}/>
@@ -287,6 +293,15 @@ export default function NestedDockWorkspace({ tree, setTree, renderPanel, onFloa
   const foreignTimer=useRef(0);
   const [actionsPanel,setActionsPanel]=useState<StudioPanel|null>(null);
   const stacks=dockStacks(tree);
+  const [expanded,setExpanded]=useState<{stack:string;tree:DockTree}|null>(null);
+  const maximized=expanded?.tree===tree?expanded.stack:null;
+  function toggleMaximize(stack:DockStack,panel:StudioPanel){
+    if(nativeConnected()&&stacks.length===1){nativeWindowAction('studio.windowZoom');return;}
+    if(maximized===stack.id){setExpanded(null);return;}
+    const next=stack.active===panel?tree:activateTab(tree,stack.id,panel);
+    if(next!==tree)setTree(next);
+    setExpanded({stack:stack.id,tree:next});
+  }
   const [rootHover,setRootHover]=useState<DockEdge|null>(null);
   const currentStackId=actionsPanel ? panelStack(tree,actionsPanel) : null;
   const currentStack=stacks.find(stack=>stack.id===currentStackId);
@@ -445,7 +460,7 @@ export default function NestedDockWorkspace({ tree, setTree, renderPanel, onFloa
     </div>}
     <div className="nested-workspace-body">
     <DockBranch node={tree.root} tree={tree} setTree={setTree} renderPanel={renderPanel} onFloat={onFloat}
-      onAdopt={onAdopt} onDockBack={onDockBack} foreign={foreign} setForeign={setForeign}
+      onAdopt={onAdopt} onDockBack={onDockBack} maximized={maximized} toggleMaximize={toggleMaximize} foreign={foreign} setForeign={setForeign}
       dragging={dragging} setDragging={setDragging} stacks={stacks} beginDrag={beginDrag}
       actionsPanel={actionsPanel} showActions={panel=>setActionsPanel(current=>
         current===panel?null:panel)}/>

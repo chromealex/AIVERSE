@@ -921,3 +921,5 @@ d5d1aea9643dc3c7bed2cb2f8339374ceaa5b817. ImportedClipPreview.tsx, StudioHost an
 Animation authoring navigation: implement animation_editor in the HTML host, reveal project-scoped clips or the embedded model graph, preserve edited drafts and verify linked requests.
 
 dfbd5c4f9bc8a412c6c081306521b6288456e3dd. Linked animation_editor clips request opened walker and displayed its clips in packaged Studio. The graph request opened the Modeling panel but its model remained unselected; linked graph acceptance failed. Receipt docs/evidence/studio-linked-animation-editor.json. Resume routing diagnosis after the requested shared Maximize menu change.
+
+Dock panels: add Maximize and Restore to the shared ellipsis menu; keep split ratios, mounted panel state and native preview placement across both actions.
