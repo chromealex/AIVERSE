@@ -2455,6 +2455,28 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
     namespace fs = std::filesystem;
     if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
     const fs::path builds = fs::path(ws_.project.dir) / "Builds";
+    const Json& manifest = ws_.project.manifest;
+    const Json& pages = manifest["atlas"]["maxPage"];
+    if (method == "studio.buildAtlasPage") {
+        if (params.getStr("project") != ws_.project.dir || !params.has("original") ||
+            params["original"].dump() != pages.dump())
+            throw std::runtime_error("Atlas settings changed. Refresh the Build panel.");
+        const auto target = params.getStr("target");
+        if (!knownBuildTarget(target) || ws_.building()) throw std::runtime_error("Build settings unavailable");
+        const auto& size = params["size"];
+        if (!params.has("size") || (!size.isNull() && (!size.isNumber() ||
+            (size.toDouble()!=1024 && size.toDouble()!=2048 && size.toDouble()!=4096 && size.toDouble()!=8192))))
+            throw std::runtime_error("Invalid atlas page size");
+        Json next = pages.isObject() ? pages : Json::object();
+        if (pages.isNumber()) next.set("default",pages);
+        if (size.isNull()) {
+            if (!next.erase(target)) return snapshot();
+        } else next.set(target,size);
+        Json patch=Json::object();patch.set("path",str("atlas.maxPage"));patch.set("value",next);
+        const auto saved=ws_.call("set_manifest",patch);
+        if (saved.has("error")) throw std::runtime_error(saved.getStr("error"));
+        return snapshot();
+    }
     if (method == "studio.buildInfo") {
         Json out = Json::object(), targets = Json::array();
         for (const auto& t : kBuildTargets) {
@@ -2464,6 +2486,8 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
             v.set("built", Json::fromBool(fs::is_directory(builds / t[0], ec)));
             targets.push(std::move(v));
         }
+        out.set("project", str(ws_.project.dir));
+        out.set("atlasPages", pages);
         out.set("targets", targets);
         std::error_code ec;
         const bool toolFound = !ws_.buildTool.empty() && fs::is_regular_file(ws_.buildTool, ec);
@@ -5043,7 +5067,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             reply.set("result",sceneBrushJson());
         } else if (method == "studio.agentInfo" || method == "studio.agentStart" || method == "studio.agentStop" || method == "studio.agentReset") {
             reply.set("result", agentRequest(method, params));
-        } else if (method == "studio.buildInfo" || method == "studio.buildToolchain" || method == "studio.buildStart" ||
+        } else if (method == "studio.buildInfo" || method == "studio.buildAtlasPage" || method == "studio.buildToolchain" || method == "studio.buildStart" ||
                    method == "studio.buildLog" || method == "studio.buildEstimate") {
             reply.set("result", buildRequest(method, params));
         } else if(method=="studio.worldProcessAreaBatchResize"){

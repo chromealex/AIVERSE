@@ -18,6 +18,7 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
   const [info, setInfo] = useState<StudioBuildInfo | null>(null);
   const [target, setTarget] = useState(() => window.localStorage.getItem('aiverse.studio.build.target') || 'macos');
   const [config, setConfig] = useState<'Release' | 'Debug'>('Release');
+  const [savingAtlas, setSavingAtlas] = useState(false);
   const [audio, setAudio] = useState('auto');
   const [installMissing, setInstallMissing] = useState(false);
   const [toolchain, setToolchain] = useState<StudioToolchain | null>(null);
@@ -92,6 +93,10 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
   const selected = info?.targets.find(t => t.id === target);
   const pack = estimate?.pack as { packBytes?: number; rawBytes?: number; entries?: number; duplicates?: number } | undefined;
   const atlas = estimate?.atlas;
+  const pages = info?.atlasPages;
+  const inheritedPage = typeof pages === 'number' ? pages : pages?.default ?? (['web','android'].includes(target) ? 2048 : 4096);
+  const pageOverride = pages && typeof pages === 'object' ? pages[target] : undefined;
+  const pageSizes = [1024,2048,4096,8192];
   return <div className="build">
     <aside className="build__side">
       {info && <section className="build__identity" aria-label="Game">
@@ -108,6 +113,21 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
       <StudioField label="Configuration" htmlFor="build-config">
         <StudioSelect id="build-config" value={config} disabled={state.running} onChange={e => setConfig(e.target.value as 'Release' | 'Debug')}>
           <option value="Release">Release</option><option value="Debug">Debug</option>
+        </StudioSelect>
+      </StudioField>
+      <StudioField label="Atlas page limit" htmlFor="build-atlas-page">
+        <StudioSelect id="build-atlas-page" value={pageOverride ?? ''} disabled={state.running || savingAtlas || info?.project !== projectPath}
+          onChange={async e => {
+            const value = e.currentTarget.value;
+            setSavingAtlas(true);setError('');
+            try {
+              commitSnapshot(await invoke('studio.buildAtlasPage',{project:projectPath,original:pages ?? null,target,size:value ? Number(value) : null}));
+            } catch (err) { setError(message(err)); }
+            finally { await refreshInfo();setSavingAtlas(false); }
+          }}>
+          <option value="">Project default ({inheritedPage} px)</option>
+          {pageOverride != null && !pageSizes.includes(pageOverride) && <option value={pageOverride}>{pageOverride} px</option>}
+          {pageSizes.map(size => <option key={size} value={size}>{size} px</option>)}
         </StudioSelect>
       </StudioField>
       <StudioField label="Audio profile" htmlFor="build-audio">
