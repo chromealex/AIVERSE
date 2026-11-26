@@ -1,0 +1,10 @@
+{
+  "sha": "76dba48230e0830fdd93b6a24ccc07f2833b90d0",
+  "argv": [
+    "bash",
+    "../tracked.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-world-regions-tracked-match.log.txt",
+  "sha256": "56217de4214e6d4c15bca3f70467519efd43e71c06679f3f96387af6f0dbae56"
+}
