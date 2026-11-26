@@ -1,0 +1,10 @@
+{
+  "sha": "a84220872f29f3ae22eac859e23bf418a1644a7b",
+  "argv": [
+    "bash",
+    "/tmp/physis-probe-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-physis-cell-probe.log.txt",
+  "sha256": "c604f3923cc6643cf7d171682cff4e612e0442dc31c7b3bf66061d566b4c658c"
+}
