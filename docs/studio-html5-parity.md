@@ -454,3 +454,5 @@ Standalone Graph/Rig subgraphs: create named children in the draft, open child s
 Packaged Mac HTML Studio verified creating and undoing a named child, restoring it with Redo, binding its scalar input to a parent control, saving, reopening, validating and stepping the nested preview. Duplicate creation and indirect recursive linking were rejected. Evidence: docs/evidence/studio-animation-subgraph-authoring.json.
 
 Port the legacy recursive node-property editor and typed graph parameter defaults into standalone Graph and Rig authoring. Keep node identity, connections and subgraph selection under their existing editors and verify editing beyond the original short list of HTML fields.
+
+Standalone animation node inspector: packaged macOS verification covered editing and adding nested clip notify events, speed and loop, retaining unrelated node metadata, removing fields with Undo/Redo, vector and boolean graph defaults, native validation and reopening the saved asset.

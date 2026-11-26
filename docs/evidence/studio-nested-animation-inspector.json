@@ -1,0 +1,10 @@
+{
+  "sha": "1bd9a9e42170f0c442c7684cddee46f230b06807",
+  "argv": [
+    "bash",
+    "/tmp/studio-anim-props.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-nested-animation-inspector.log.txt",
+  "sha256": "d7770f439ac167f3c64bf5a6f0fbedc834d588b46cd6ad8df7d5a4af56f7ea51"
+}
