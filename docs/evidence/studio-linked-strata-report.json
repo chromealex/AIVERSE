@@ -1,0 +1,10 @@
+{
+  "sha": "30eac912ba14b6a02617dd3ece8b50870ca88d95",
+  "argv": [
+    "bash",
+    "/tmp/strata-test.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-linked-strata-report.log.txt",
+  "sha256": "9982938d1c187532a73a002e0e453ce1be2666527e242dd500979cfa2aaa7fec"
+}
