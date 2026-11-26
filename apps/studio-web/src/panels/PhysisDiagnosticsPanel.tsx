@@ -65,12 +65,13 @@ function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:strin
   const requestId=useRef(0), pending=useRef(false);
   const [playing,setPlaying]=useState(false),[speed,setSpeed]=useState(1);
   const workspace=useRef<HTMLFieldSetElement>(null);
-  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback'|'grid'|'presentation',next:View,selection=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}|{cellMeters:number;humidity:number}|{igniteOnClick?:boolean;grass?:boolean;flames?:boolean;sound?:boolean}){
+  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback'|'grid'|'presentation',next:View,selection:number|{cellX:number;cellZ:number}|undefined=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}|{cellMeters:number;humidity:number}|{igniteOnClick?:boolean;grass?:boolean;flames?:boolean;sound?:boolean}){
     const id=++requestId.current;
     const sameArea=next.size===view.size&&next.stride===view.stride&&next.centerX===view.centerX&&next.centerZ===view.centerZ;
     const rebuild=action==='reset'||action==='grid';
-    const selected=sameArea&&!rebuild?selection:undefined;
-    const coords=frame&&selected!==undefined?{cellX:frame.originX+(selected%frame.width)*frame.stride,cellZ:frame.originZ+Math.floor(selected/frame.width)*frame.stride}:{};
+    const selected=sameArea&&!rebuild&&typeof selection==='number'?selection:undefined;
+    const target=typeof selection==='object'?selection:undefined;
+    const coords=target??(frame&&selected!==undefined?{cellX:frame.originX+(selected%frame.width)*frame.stride,cellZ:frame.originZ+Math.floor(selected/frame.width)*frame.stride}:{});
     pending.current=true;
     if(rebuild)setPlaying(false);
     if(action!=='playback')setBusy(true);
@@ -79,7 +80,10 @@ function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:strin
       const result=map?await invoke('studio.physisNature',{...next,...coords,...options,action,expectedProject:projectPath,expectedDocumentEpoch:epoch}):live?await invoke('studio.physisLive',{...next,...coords,expectedProject:projectPath}):
         (await invoke('studio.op',{op:'physis_demo',params:{action,...next},expectedProject:projectPath})).result as Frame|{active:false};
       if(id!==requestId.current)return;
-      pick(result.active?selected:undefined);
+      if(result.active&&target){
+        const x=(target.cellX-result.originX)/result.stride,z=(target.cellZ-result.originZ)/result.stride;
+        pick(Number.isInteger(x)&&Number.isInteger(z)&&x>=0&&z>=0&&x<result.width&&z<result.height?z*result.width+x:undefined);
+      }else pick(result.active?selected:undefined);
       setFrame(result.active?result:undefined);setView(next);
     }catch(e){if(id===requestId.current){setPlaying(false);setError(String(e));}}
     finally{if(id===requestId.current){pending.current=false;setBusy(false);}}
@@ -92,8 +96,8 @@ function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:strin
       else if(hit.epoch===epoch&&frame){
         const x=(hit.cellX-frame.originX)/frame.stride,z=(hit.cellZ-frame.originZ)/frame.stride;
         const visible=Number.isInteger(x)&&Number.isInteger(z)&&x>=0&&z>=0&&x<frame.width&&z<frame.height;
-        if(visible)void request('view',view,z*frame.width+x);
-        else void request('view',{...view,centerX:hit.cellX,centerZ:hit.cellZ,stride:1});
+        const next=visible?view:{...view,centerX:Math.max(-1000000,Math.min(1000000,hit.cellX)),centerZ:Math.max(-1000000,Math.min(1000000,hit.cellZ)),stride:1};
+        void request('view',next,{cellX:hit.cellX,cellZ:hit.cellZ});
       }
     }
     if(event==='nature.previewError'&&showNature){
