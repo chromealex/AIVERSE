@@ -127,3 +127,9 @@
 .effects-vector legend { padding:0 0 4px; font-weight:600; }
 .effects-bursts { border-top:1px solid var(--au-line); padding-block-start:8px; }
 .effects-bursts>.au-row { margin-top:10px; }
+
+.effects-color-ramp { margin:4px 0 10px; border:1px solid var(--au-line); border-radius:var(--au-radius-sm); overflow:hidden; background:repeating-conic-gradient(#344256 0 25%,#1b2533 0 50%) 0 0/12px 12px; }
+.effects-color-ramp > div { height:20px; }
+.effects-color-stop { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,80px),1fr)); gap:8px; align-items:end; margin-bottom:8px; }
+.effects-color-stop label { display:grid; gap:4px; min-width:0; }
+.effects-color-stop input { width:100%; min-width:0; }

@@ -705,3 +705,5 @@ Burst panel layout at 2ac3d48df verified by repeating both macOS desktop phases,
 Emitter geometry stage: shape-specific dimensions, mesh source, arc sampling and source-space transforms in the HTML effect draft. Verify conditional controls, native persistence and independent Metal preview.
 
 Emitter geometry 74e11f931. apps/studio-web/src/panels/EffectShape.tsx and EffectVector.tsx. TypeScript, Vite, native web assets and 299 web tests passed. The packaged Mac Studio saved and reopened the authored effect and retained source comments. Point and donut produced gold-particle widths of 1 and 86 pixels under the same preview conditions. Locked desktop QA supplied measured viewport bounds. Evidence docs/evidence/studio-effect-emitter-geometry.json and docs/evidence/studio-project-catalog/emitter-{geometry,point,donut}.png. Next: remaining emitter modules including lifetime color, then pointer and Windows acceptance.
+
+Effects lifetime color: edit RGBA stops, normalized particle age and optional second gradient in a visual inspector. Verify native save and reopen.
