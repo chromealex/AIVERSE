@@ -1,0 +1,23 @@
+
+> @aiverse/studio-web@0.1.0 typecheck
+> tsc --noEmit
+
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+299 web tests, 0 failed
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+    Start 589: studio_session
+1/1 Test #589: studio_session ...................   Passed   11.06 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+EDITOR    =  11.06 sec*proc (1 test)
+
+Total Test time (real) =  11.09 sec
+2026-11-26 04:41:22.801 AiverseStudioHTML5[62444:82764949] [studio-web] JS: CROSS main DONE_1
+2026-11-26 04:41:22.801 AiverseStudioHTML5[62444:82764949] [studio-web] JS: CROSS main VERIFIED manual atlas tile 7 at 10,6 on stone, automatic neighbour mask 6 resolved tile 14, Undo and Redo, save and reopen
