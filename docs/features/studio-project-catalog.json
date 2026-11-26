@@ -3,6 +3,8 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/panels/AnimationSkeletonPreview.tsx",
+    "apps/editor/core/AnimationPreviewSession.h",
     "apps/studio-web/src/panels/AnimationGraphPanel.tsx",
     "apps/studio-web/src/components/NestedDockWorkspace.css",
     "apps/studio-web/src/panels/ImportedClipPreview.tsx",

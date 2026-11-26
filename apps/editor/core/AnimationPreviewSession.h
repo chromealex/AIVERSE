@@ -99,6 +99,31 @@ public:
         }
         return result;
     }
+    Json editorStatus(const std::string& project,bool rig,int64_t token) {
+        std::lock_guard lock(mutex_);
+        const auto& slot=panels_[rig?1:0];
+        const bool ready=slot && slot->project==project && slot->token==token;
+        Json result=Json::object(),translations=Json::array();
+        if(ready)for(const auto& local:slot->pose)translations.push(vector(local.t));
+        result.set("translations",std::move(translations));
+        result.set("ready",Json::fromBool(ready));
+        const auto contacts=ready?slot->player.contactReport():render::AnimationContactReport{};
+        const auto climb=ready?slot->player.locomotionReport():render::SurfaceLocomotionReport{};
+        result.set("climbing",Json::fromBool(climb.active));
+        result.set("attached",Json::fromBool(climb.attached));
+        result.set("stanceFeet",Json::number(int64_t(climb.supports)));
+        result.set("steppingFeet",Json::number(int64_t(climb.stepping)));
+        result.set("footError",Json::number(double(climb.footError)));
+        result.set("climbPenetration",Json::number(double(climb.penetration)));
+        result.set("bodyPosition",vector(climb.position));
+        result.set("supported",Json::fromBool(contacts.supported));
+        result.set("stable",Json::fromBool(contacts.stable));
+        result.set("supports",Json::number(int64_t(contacts.supports)));
+        result.set("penetration",Json::number(double(contacts.penetration)));
+        result.set("balanceError",Json::number(double(contacts.balanceError)));
+        result.set("supportError",Json::number(double(contacts.supportError)));
+        return result;
+    }
     Json command(const Workspace& ws,const Json& params) {
         const auto panel=params.getStr("panel"),action=params.getStr("action");
         if(panel!="graph"&&panel!="rig")throw std::runtime_error("Unknown animation preview panel");

@@ -43,6 +43,13 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode}:{project
  const current=graph?.nodes.find(n=>n.id===selection),states=graph?.states??[];
  const state=states.find(s=>s.id===stateId)??states[0];
  const dirty=JSON.stringify(saved)!==JSON.stringify(draft);
+ const [preview,setPreview]=useState({token:0,error:''});
+ useEffect(()=>{
+  if(!projectPath)return;
+  void invoke('studio.animationEditorState',{project:projectPath,panel:rigMode?'rig':'graph',graph:committed,
+   dirty:!!committed&&JSON.stringify(saved)!==JSON.stringify(committed),token:preview.token,error:error||preview.error})
+   .catch(e=>console.warn('Animation editor status:',e));
+ },[projectPath,rigMode,committed,saved,preview,error]);
  const drag=useRef<{id:string;x:number;y:number;left:number;top:number;before:Graph;latest:Graph}|null>(null);
  useEffect(()=>{
   if(history.current&&(dirty||history.current.canUndo()||history.current.canRedo()))
@@ -106,7 +113,7 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode}:{project
     <button disabled={busy||!dirty} onClick={()=>{history.current=saved?new DraftHistory(saved,40):undefined;setDraft(saved);setScope('');select('');setError('');}}>Discard</button>
     <button disabled={busy||!dirty} onClick={()=>void run(async()=>{const r=await op('set',{name,graph:draft,expectedRevision:revision});history.current=new DraftHistory(r.graph,40);setDraft(r.graph);setSaved(r.graph);setRevision(r.revision);})}>Save graph</button>
    </div>
-   {tab==='preview'&&draft?<AnimationSkeletonPreview projectPath={projectPath} graph={draft} scope={scope} panel={rigMode?'rig':'graph'} onPick={setPickedBone} busy={busy}
+   {tab==='preview'&&draft?<AnimationSkeletonPreview onStatus={setPreview} projectPath={projectPath} graph={draft} scope={scope} panel={rigMode?'rig':'graph'} onPick={setPickedBone} busy={busy}
     onKeep={controls=>{if(graph)change(inScope({...graph,parameters:{...graph.parameters,...controls}}));}}/>:tab==='nodes'?<>
     <div className="anim-canvas graph-surface"><svg width={width} height={height} viewBox={left+' '+top+' '+width+' '+height} aria-label="Pose node connections">
      {graph.nodes.flatMap(n=>ports(n).map((port,i)=>{const start=positions.get(n[port]??''),end=positions.get(n.id);

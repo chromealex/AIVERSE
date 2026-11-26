@@ -256,6 +256,8 @@ private:
     std::string engineRoot_;
     bool htmlComposite_ = false;
     std::unique_ptr<StudioSession> session_;
+    std::mutex animationEditorMutex_;
+    std::array<Json,2> animationEditors_;
     // Separate GPU owner. One outstanding camera request; no main Scene
     // access and no UI-thread GPU readback during orbit.
     struct BuildingPreviewJob {Json id;uint64_t token;float yaw,pitch,zoom,panX,panY;};

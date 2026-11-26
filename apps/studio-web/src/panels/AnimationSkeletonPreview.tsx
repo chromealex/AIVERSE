@@ -38,7 +38,7 @@ function bounds(points:Point[],plane:Plane){
  return {left:(left+right-span)/2-pad,top:(top+bottom-span)/2-pad,width:span+2*pad,height:span+2*pad};
 }
 
-export default function AnimationSkeletonPreview({projectPath,graph,scope,panel,onPick,onKeep,busy}:{projectPath:string;graph:object;scope:string;panel:'rig'|'graph';onPick:(bone:string)=>void;onKeep:(controls:Inputs)=>void;busy:boolean}){
+export default function AnimationSkeletonPreview({projectPath,graph,scope,panel,onPick,onKeep,busy,onStatus}:{projectPath:string;graph:object;scope:string;panel:'rig'|'graph';onStatus:(state:{token:number;error:string})=>void;onPick:(bone:string)=>void;onKeep:(controls:Inputs)=>void;busy:boolean}){
  const [bind,setBind]=useState(false),[restart,setRestart]=useState(0),[playing,setPlaying]=useState(false);
  const [opened,setOpened]=useState<Opened|null>(null),[frame,setFrame]=useState<Frame|null>(null);
  const [plane,setPlane]=useState<Plane>('Front'),[fit,setFit]=useState<Point[]>([]),[selected,select]=useState(-1);
@@ -70,14 +70,14 @@ export default function AnimationSkeletonPreview({projectPath,graph,scope,panel,
      if(active)setFrame(next);
     }
     if(active)timer=window.setTimeout(tick,33);
-   }catch(e){if(active){setError(String(e));running.current=false;setPlaying(false);setOpened(null);}}
+   }catch(e){if(active){onStatus({token:0,error:String(e)});setError(String(e));running.current=false;setPlaying(false);setOpened(null);}}
   }
   void command<Opened>({action:'open',graph,scope,bindPose:bind}).then(next=>{
    if(!active){release(next.token);return;}
-   token=next.token;setOpened(next);setFrame(next);setFit(poseAndControls(next.points,next.inputs));setInputs(next.inputs);last=performance.now();void tick();
-  }).catch(e=>{if(active)setError(String(e));});
-  return ()=>{active=false;window.clearTimeout(timer);if(token)release(token);};
- },[projectPath,graph,scope,panel,bind,restart]);
+   token=next.token;onStatus({token,error:''});setOpened(next);setFrame(next);setFit(poseAndControls(next.points,next.inputs));setInputs(next.inputs);last=performance.now();void tick();
+  }).catch(e=>{if(active){onStatus({token:0,error:String(e)});setError(String(e));}});
+  return ()=>{active=false;onStatus({token:0,error:''});window.clearTimeout(timer);if(token)release(token);};
+ },[projectPath,graph,scope,panel,bind,restart,onStatus]);
  function pick(index:number){
   select(index);if(opened?.bones[index])onPick(opened.bones[index].name);
  }

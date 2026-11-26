@@ -432,3 +432,5 @@ Packaged macOS Studio verified external animation_editor requests at startup for
 Standalone Animation Graph and Rig parity audit: both legacy panels expose undo and redo. HTML currently loses redo and draft history when switching dock tabs. Restore both via the existing graph draft-history owner and verify graph and rig histories stay independent.
 
 macOS Graph and Rig now have verified independent Undo/Redo across dock tab switches, including when Undo returned to the saved document. Discard clears both directions. Evidence at docs/evidence/studio-animation-graph-rig-history.json.
+
+Standalone animation editor status: expose the graph or rig panel's authored document and dirty state to a linked client together with the matching native preview's evaluated local bone translations, contacts and locomotion report, without advancing playback.

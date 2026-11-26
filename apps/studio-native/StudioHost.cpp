@@ -109,6 +109,21 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
     : platform_(platform), engineRoot_(engineRoot), htmlComposite_(htmlComposite) {
     // The project opens asynchronously after the UI loads (splash and progress).
     session_ = std::make_unique<StudioSession>(engineRoot, std::string());
+    for(const bool rig:{false,true}){
+        session_->workspace().registerOp({rig?"rig_editor_status":"animation_editor_status",
+            "Read the HTML editor draft, evaluated local pose and contact diagnostics.",Json::object(),
+            [this,rig](const Json&){
+                const auto& ws=session_->workspace();
+                std::lock_guard lock(animationEditorMutex_);
+                const auto& state=animationEditors_[rig?1:0];
+                const bool current=state.getStr("project")==ws.project.dir;
+                auto result=ws.animationPreviews->editorStatus(ws.project.dir,rig,current?state.getInt("token",-1):-1);
+                result.set("graph",current?state["graph"]:Json{});
+                result.set("dirty",Json::fromBool(current && state.getBool("dirty")));
+                result.set("error",Json::string(current?state.getStr("error"):""));
+                return result;
+            },true});
+    }
     session_->workspace().registerOp({"animation_editor","Open an authoring model's clips or embedded graph in HTML Studio.",
         Json::parse(R"({"type":"object","properties":{"name":{"type":"string","default":"robot"},"tab":{"enum":["clips","graph"],"type":"string"}}})"),
         [this](const Json& params){
@@ -3557,6 +3572,16 @@ bool StudioHost::handleHostMethod(const Json& req) {
         sendReply(reply);
         return true;
     };
+    if(method=="studio.animationEditorState")return answer([&]{
+        const auto panel=params.getStr("panel");
+        if((panel!="rig" && panel!="graph") || params.getStr("project")!=session_->workspace().project.dir)
+            throw std::runtime_error("Animation editor scope changed");
+        if(!params["graph"].isNull() && (!params["graph"].isObject() || params["graph"].dump().size()>256*1024))
+            throw std::runtime_error("Invalid animation editor document");
+        std::lock_guard lock(animationEditorMutex_);
+        animationEditors_[panel=="rig"?1:0]=params;
+        return Json::object();
+    });
     if (method == "studio.windowDrag" || method == "studio.windowZoom" ||
         method == "studio.windowMinimize" || method == "studio.windowResize") {
         try { (void)platform_.windowRequest(method, params); } catch (const std::exception&) {}
