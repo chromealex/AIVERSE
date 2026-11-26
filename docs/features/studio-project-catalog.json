@@ -603,6 +603,7 @@
     "docs/evidence/studio-live-nature-directions.json",
     "docs/evidence/studio-physis-sampling-controls.json",
     "docs/evidence/studio-private-map-nature-preview.json",
-    "docs/evidence/studio-private-nature-wind.json"
+    "docs/evidence/studio-private-nature-wind.json",
+    "docs/evidence/studio-private-physis-playback.json"
   ]
 }

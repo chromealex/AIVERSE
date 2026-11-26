@@ -1,0 +1,2 @@
+2026-11-26 12:03:31.526 AiverseStudioHTML5[50216:84421797] [studio-web] JS: CROSS main DONE_1
+2026-11-26 12:03:31.526 AiverseStudioHTML5[50216:84421797] [studio-web] JS: CROSS main VERIFIED ticks over two 1.3 s intervals {"normal":9,"fast":58}; paused, stepped once, left source, reset, malformed values rejected
