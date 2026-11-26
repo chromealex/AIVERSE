@@ -131,6 +131,13 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
   if (!projectPath) return <div className="tool__empty">Open a project to use this panel.</div>;
   const q = filter.trim().toLowerCase();
   const shown = ops.filter(o => !o.name.startsWith('material_techniques_') && !spec.state.includes(o.name) && (!q || opLabel(o.name, spec.prefix).toLowerCase().includes(q) || o.name.includes(q) || o.description.toLowerCase().includes(q)));
+  const operationCards=<>
+      {Object.entries(state).map(([name, value]) => <div key={name} className="tool__state">
+        <JsonTree value={value} name={opLabel(name, spec.prefix)} open={false}/>
+      </div>)}
+      {q && !shown.length && <p role="status" className="tool__empty">No matching operations.</p>}
+      {shown.map(op => <OpCard key={op.name + projectPath} op={op} prefix={spec.prefix} initiallyOpen={spec.open.includes(op.name)} onDone={done}/>)}
+  </>;
   return <div className="tool">
     {hasGraph&&<div className="au-row"><StudioButton size="sm" disabled={graphMode} onClick={()=>setGraphMode(true)}>Graph</StudioButton><StudioButton size="sm" disabled={!graphMode} onClick={()=>setGraphMode(false)}>Native operations</StudioButton></div>}
     {graphDomain&&<div hidden={!graphMode} style={{flex:1,minHeight:0,overflow:"auto"}}><NativeGraphPanel key={snapshot?.graphDocument?.epoch} documentEpoch={snapshot?.graphDocument?.epoch} domain={graphDomain} projectPath={projectPath}/></div>}
@@ -147,11 +154,9 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
       {panel==='models'&&<StrataAnalysisPanel projectPath={projectPath}/>}
       {panel==='water' && snapshot?.graphDocument && <WaterShorePanel key={snapshot.graphDocument.epoch} scope={snapshot.graphDocument} onChanged={()=>done(true)}/>}
       {BRUSHES[panel] && <SceneBrushBar project={projectPath} tileCatalog={state.tileset_list as Parameters<typeof SceneBrushBar>[0]['tileCatalog']} kinds={BRUSHES[panel]!} fields={(state.field_list as {fields?:BrushField[]} | undefined)?.fields}/>}
-      {Object.entries(state).map(([name, value]) => <div key={name} className="tool__state">
-        <JsonTree value={value} name={opLabel(name, spec.prefix)} open={false}/>
-      </div>)}
-      {q && !shown.length && <p role="status" className="tool__empty">No matching operations.</p>}
-      {shown.map(op => <OpCard key={op.name + projectPath} op={op} prefix={spec.prefix} initiallyOpen={spec.open.includes(op.name)} onDone={done}/>)}
+      {panel==='water' ? <details className="water-shores__operations" open={q ? true : undefined}>
+        <summary>Water operations</summary>{operationCards}
+      </details> : operationCards}
     </div>
     </div>
   </div>;

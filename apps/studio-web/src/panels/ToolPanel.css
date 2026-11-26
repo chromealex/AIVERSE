@@ -79,4 +79,6 @@
 .water-shores__bank { margin-block:12px; }
 .water-shores__bank h4 { margin:0 0 4px; color:var(--au-text); }
 .water-shores__segment { padding-block:4px; border-top:1px solid var(--au-line); font-variant-numeric:tabular-nums; }
-.water-shores__segment small { display:block; color:var(--au-muted); }
+.water-shores__segment small { display:block; color:var(--au-text-muted); }
+.water-shores__operations { margin-top:12px; }
+.water-shores__operations > summary { cursor:pointer; padding-block:8px; color:var(--au-text-muted); }
