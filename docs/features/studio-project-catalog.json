@@ -632,6 +632,7 @@
     "docs/evidence/studio-physis-live-display.json",
     "docs/evidence/studio-physis-live-cycle.json",
     "docs/evidence/studio-physis-viewport-overlay.json",
-    "docs/evidence/studio-physis-storm-gravity-rings.json"
+    "docs/evidence/studio-physis-storm-gravity-rings.json",
+    "docs/evidence/studio-prisma-viewport-tiers.json"
   ]
 }
