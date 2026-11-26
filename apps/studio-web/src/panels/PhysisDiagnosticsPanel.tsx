@@ -167,7 +167,7 @@ function Diagnostics({projectPath,source,epoch,route}:{projectPath:string;source
           </div>}{frame.presentation?.forest&&<label>Wind mask
             <StudioSelect value={frame.presentation.forestMask??'off'} onChange={e=>void request('presentation',view,cell,{forestMask:e.target.value})}>
               <option value="off">Off</option><option value="parts">Tree parts</option>
-              <option value="depth">Branch depth</option><option value="weight">Wind weight</option>
+              <option value="depth">Branch depth</option><option value="weight">Wind weight</option><option value="skeleton">Skeleton</option>
             </StudioSelect></label>}{frame.presentation&&<PhysisDisplaySettings
             key={frame.presentation.quality+'/'+frame.presentation.volume+'/'+frame.presentation.grass+'/'+frame.presentation.sound}
             settings={frame.presentation} apply={(quality,volume)=>void request('presentation',view,cell,{quality,volume})}/>}

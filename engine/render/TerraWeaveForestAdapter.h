@@ -556,9 +556,28 @@ public:
             origin.x + static_cast<int64_t>(std::llround(relativeXcm)),
             origin.z + static_cast<int64_t>(std::llround(relativeZcm))
         };
+        if (renderer.windRigDebugView() != render::wind::WindDebugView::Skeleton) {
+            forEachDraw(batches, origin, [&](const render::ModelDraw& draw) {
+                renderer.drawModel(draw);
+            }, cameraCm);
+            return;
+        }
+        std::map<const render::Model*, std::optional<render::wind::ModelWindRigView>> rigs;
+        std::vector<render::wind::WindDebugLine> lines;
+        // Bound CPU debug geometry on dense maps while still drawing every tree.
+        constexpr size_t maxLines = 16384;
         forEachDraw(batches, origin, [&](const render::ModelDraw& draw) {
             renderer.drawModel(draw);
+            if (!draw.model || lines.size() + 4 > maxLines) return;
+            auto [it, inserted] = rigs.try_emplace(draw.model);
+            if (inserted) it->second = render::wind::findWindRig(*draw.model);
+            if (!it->second) return;
+            const auto params = render::wind::windRigParamsForDraw(renderer.sceneWind(), draw.world);
+            render::wind::windRigDebugLines(*it->second, draw.world, params, lines, 4,
+                                             (maxLines - lines.size()) / 4);
         }, cameraCm);
+        for (const auto& line : lines)
+            renderer.line({line.a.x,line.a.y,line.a.z}, {line.b.x,line.b.y,line.b.z}, line.rgba);
     }
 
 private:

@@ -613,3 +613,5 @@ Frame the private forest above the canopy on first enable and preserve subsequen
 Feed the private viewport renderer from the sampled PHYSIS wind after the nature frame is prepared. Verify forest motion with fixed camera and other animated layers disabled.
 
 Expose the Parts, Depth and Weight GPU forest masks in PHYSIS. Skeleton line rendering requires separate geometry.
+
+Render the forest skeleton from the encoded wind rig and actual per-instance draw transform. Verify the fifth dropdown mode in the independent PHYSIS viewport.
