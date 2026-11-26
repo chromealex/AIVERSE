@@ -1,0 +1,3 @@
+Chromium: 14 pointer moves created one undo step, redo restored final coordinates, cancelled drag restored start.
+2026-11-26 09:08:29.714 AiverseStudioHTML5[29880:83599955] [studio-web] JS: CROSS main DONE_1
+2026-11-26 09:08:29.713 AiverseStudioHTML5[29880:83599955] [studio-web] JS: CROSS main VERIFIED native execution and named value socket wiring, cancel, undo and redo, saved links and reopened draft

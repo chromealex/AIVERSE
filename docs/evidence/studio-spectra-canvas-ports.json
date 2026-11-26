@@ -1,0 +1,10 @@
+{
+  "sha": "bf82ce6f9954a917f059742e78d17619d1f099b0",
+  "argv": [
+    "bash",
+    "/tmp/studio-socket-acceptance.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-spectra-canvas-ports.log.txt",
+  "sha256": "6a1e5f986bfa9fff7b77c286b2ab8d892705259f27a8aa284700212866c878c9"
+}

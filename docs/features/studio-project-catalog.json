@@ -539,6 +539,7 @@
     "docs/evidence/studio-emitter-window-placement.json",
     "docs/evidence/studio-spectra-v1-roundtrip.json",
     "docs/evidence/studio-spectra-v1-published.json",
-    "docs/evidence/studio-spectra-graph-history.json"
+    "docs/evidence/studio-spectra-graph-history.json",
+    "docs/evidence/studio-spectra-canvas-ports.json"
   ]
 }
