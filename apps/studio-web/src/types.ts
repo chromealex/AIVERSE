@@ -235,7 +235,16 @@ export interface StudioCavernsPreview {
   activeStrataArenaBytes?:string; stagedStrataArenaBytes?:string; retiredStrataArenaBytes?:string;
   pageTransfers?:string; pageDeferrals?:string;
 }
-export interface StudioGpuStats { history: Array<[number, number]>; frames: number; drawCalls?: number; error?: string; gpu?: { textures: StudioGpuTexture[]; totalBytes: number } }
+export interface PrismaViewReport {
+  id:string; sequence:string; quality:string; width:number; height:number; hdr:boolean; sceneReady:boolean;
+  compositorPasses:number; shaderGraphTextures:number; shaderGraphFallback:boolean;
+  autoExposureTextureSlot:number; autoExposureHighlightRejection:number; autoExposureFrozen:boolean;
+  autoExposureRegionMetered:boolean; autoExposureBoxMetered:boolean; manualExposureEncoded:boolean; manualExposureEV:number;
+  reactiveInputSupplied:boolean; reactiveInputAccepted:boolean; objectVelocityInputAccepted:boolean;
+  reactiveWithoutObjectVelocity:boolean; motionBlurReactiveEdgesEnabled:boolean;
+  effects:{type:string;requested:boolean;pipelinePrepared:boolean;encoded:boolean;degraded:boolean;reason:string}[];
+}
+export interface StudioGpuStats { prisma?:Record<string,PrismaViewReport[]>; history: Array<[number, number]>; frames: number; drawCalls?: number; error?: string; gpu?: { textures: StudioGpuTexture[]; totalBytes: number } }
 export interface StudioExtensionWidget { kind: string; id?: string; label?: string; value?: string | number | boolean; min?: number; max?: number; step?: number; children?: StudioExtensionWidget[] }
 export interface StudioExtensions { path: string; exists: boolean; error?: string; widgets?: StudioExtensionWidget[]; gizmos?: unknown[] }
 export interface StudioAttachmentItem { model: string; socket: string; enabled?: boolean; id?: string; animated?: boolean; animationGraph?: string; local?: number[]; childWorld?: number[] }
@@ -662,7 +671,7 @@ export interface StudioParams {
   'studio.hubCreate': { template: string; name: string };
   'studio.stats': Record<string,never>;
   'studio.cavernsPreview': { expectedProject:string; expectedMap:string; enabled?:boolean; isolate?:boolean; paging?:boolean; budgets?:StudioCavernsBudgets; globeBody?:string };
-  'studio.gpuStats': { textures?: boolean };
+  'studio.gpuStats': { textures?: boolean; prisma?: boolean; project?: string };
   'studio.previewPlayChanges': {expectedProject:string;positions:boolean;amounts:boolean;removeDead:boolean};
   'studio.keepPlayChanges': {expectedProject:string;token:string};
   'studio.extensions': Record<string,never>;

@@ -1,4 +1,5 @@
 #include "engine/render/BakedLighting.h"
+#include "engine/render/PrismaReportJson.h"
 #include "apps/editor/core/LightBakeCapture.h"
 #include "engine/render/LightmapUv.h"
 #include <future>
@@ -2987,6 +2988,10 @@ void StudioScene::finishReplayTransaction() {
         rollbackReplayTransaction("failed",reason.empty()?"Replay candidate failed":reason);
     }
 }
+Json StudioScene::prismaFrameReports(const std::string& project, const std::string& map) const {
+    if (project.empty() || prismaReportProject_ != project || prismaReportMap_ != map) return Json::array();
+    return render::prismaViewReports(post_);
+}
 Json StudioScene::lensViewPose() const {
     if (!cameraInitialized_) throw std::runtime_error("Open Scene to copy its camera");
     const auto view = viewCamera();
@@ -3025,7 +3030,7 @@ Json StudioScene::configureLensCamera(const Json& params) {
         if (lens && lens->physicalFov && render::validCameraLens(*lens))
             selected.camera.fovY = 2.f * std::atan(float(lens->sensorHeightMm.toDouble()/(2.*lens->focalLengthMm.toDouble())));
         if(params.getBool("useInScene")) pendingSceneLens_=selected.camera;
-        else lensCamera_=selected.camera;
+        else { lensCamera_=selected.camera; prismaReportProject_.clear(); }
         lastFrameSignature_ = 0;
         sceneCacheValid_ = false;
         return Json::object();
@@ -4054,12 +4059,19 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             return particles.valid()?particles:base;
         });
     }
+    const auto* previousReport = post_.effectReport(post_.viewId());
+    const auto previousSequence = previousReport ? previousReport->sequence : 0;
     renderer_.render(pass,useLighting?lightingRuntime_.pipeline(post_):static_cast<PostProcess*>(&post_));
     // Renderer3D keeps the HDR scene pass open; GPU/CPU FX draw here,
     // before PRISMA resolves it and before the frame/pass are retired.
     if(spectraPreview_->active())spectraPreview_->draw();
     spectraSources_.draw();
     renderer_.resolvePrisma();
+    const auto* report = post_.effectReport(post_.viewId());
+    if (report && report->sequence != previousSequence) {
+        prismaReportProject_ = projectPath;
+        prismaReportMap_ = doc.path;
+    } else prismaReportProject_.clear();
     spectraSources_.finish();
     lightingRuntime_.presented();
 

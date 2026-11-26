@@ -4358,6 +4358,19 @@ void StudioHost::handleMessage(const std::string& json) {
                 o.push(Json::number(int64_t(f.second)));
                 history.push(std::move(o));
             }
+            if (req["params"].getBool("prisma")) {
+                const auto& ws=session_->workspace();
+                if(req["params"].getStr("project")!=ws.project.dir)throw std::runtime_error("PostFX project changed");
+                Json sources=Json::object();
+                if (game_ && game_->launchPlan().project==ws.project.dir)
+                    sources.set("Game", game_->prismaFrameReports());
+                onScene([&]{
+                    if (preview_ && placement_.visible) sources.set("Scene", preview_->prismaFrameReports(ws.project.dir,ws.map.path));
+                    if (lensSurface_.renderer && lensSurface_.placement.visible && lensProject_==ws.project.dir)
+                        sources.set("LENS "+std::to_string(lensCameraId_),lensSurface_.renderer->prismaFrameReports(ws.project.dir,ws.map.path));
+                });
+                result.set("prisma", std::move(sources));
+            }
             result.set("history", history);
             result.set("frames", Json::number(int64_t(sceneFrameCount_)));
             if (preview_) {

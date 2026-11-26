@@ -3,6 +3,7 @@ import { Eye, EyeOff, Plus, Trash2, Wrench } from 'lucide-react';
 import { invoke } from '../bridge';
 import type { StudioSnapshot } from '../types';
 import ToolPanel from './ToolPanel';
+import PrismaFrameDiagnostics from './PrismaFrameDiagnostics';
 import PrismaVolumeEditor from './PrismaVolumeEditor';
 import PrismaCompositorEditor from './PrismaCompositorEditor';
 import './ToolPanel.css';
@@ -85,6 +86,7 @@ export default function PostFxPanel({ snapshot, commitSnapshot }: { snapshot: St
           <span>{t.device}</span><b>{t.ms.toFixed(2)} ms</b><small>60 → {t.fpsAt60.toFixed(0)} fps</small>
           <i style={{ width: Math.min(100, (t.ms / (budget * 2)) * 100) + '%' }}/></div>;
       })}</div>
+      <PrismaFrameDiagnostics key={JSON.stringify([path,snapshot?.graphDocument?.epoch])} project={path}/>
       {scope === 'map' && <p className="ptp__hint">Map effects override the game's chain for this map only.</p>}
       {state && snapshot?.graphDocument && <PrismaVolumeEditor key={JSON.stringify([path,snapshot.graphDocument.epoch,scope])}
         scope={scope} catalog={catalog?.effects??[]} project={path} stored={scope==='map'?state.mapVolumes:state.gameVolumes}

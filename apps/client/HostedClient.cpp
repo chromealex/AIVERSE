@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include "imgui.h"
 #include "apps/client/GameClient.h"
+#include "engine/render/PrismaReportJson.h"
 
 namespace aiverse::client {
 
@@ -335,6 +336,9 @@ bool HostedClient::updateCavernsVisual(const Json& authored) {
     return client_->updateCavernsVisual(authored);
 }
 
+Json HostedClient::prismaFrameReports() const {
+    return currentEpochValid() && inMatch() ? render::prismaViewReports(client_->prismaDiagnostics()) : Json::array();
+}
 bool HostedClient::inMatch() const { return client_ && step_ >= kSteps && client_->inMatch(); }
 std::optional<size_t> HostedClient::currentMapIndex() const {
     return inMatch()?std::optional<size_t>(client_->hostMapIndex()):std::nullopt;

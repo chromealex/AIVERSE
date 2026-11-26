@@ -773,3 +773,5 @@ Volume profiles 58aef55ba passed TypeScript, Vite and 299 web tests. First Mac U
 Camera fixture 422265c18 reached the rendered WebKit Scene panel but the native surface remained uninitialized. Receipt docs/evidence/studio-postfx-volume-camera.json. Publish the measured Scene rectangle via the platform bridge in the desktop harness, as used in the Scene/lighting tests.
 
 Verified 58aef55ba in packaged WKWebView. Applied the actual native camera eye, authored bloom threshold 2.5 and tint [1.5,1,1], removed intensity and activation overrides, checked game/map isolation, Undo/Redo and disk/reopen. Harness published the measured Scene surface rectangle before sampling the pose. Capture docs/evidence/studio-project-catalog/postfx-volume-profile.png and receipt docs/evidence/studio-postfx-camera-placement.json. Next: native per-camera frame diagnostics. Windows and merged-tree quick gate pending.
+
+PostFX diagnostic stage: expose native per-view execution receipts for Scene, published LENS and Game in HTML Studio. Check actual encoded effects and stopped-source clearing.

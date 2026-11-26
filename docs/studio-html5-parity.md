@@ -360,3 +360,5 @@ Raid window: provide an extraction point form, readable objectives and bot recei
 PostFX transfer: edit local camera volume bounds and effect profiles in game and map scopes. Verify that map edits survive reopening and respect Undo.
 
 PostFX volume profiles: catalog-driven parameter overrides, inheritance, and placement from the native Scene camera pose. Verify authored masks and persisted coordinates.
+
+PostFX diagnostic stage: expose native per-view execution receipts for Scene, published LENS and Game in HTML Studio. Check actual encoded effects and stopped-source clearing.
