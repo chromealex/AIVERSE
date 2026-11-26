@@ -86,6 +86,7 @@ export interface StudioPanelContext {
   rows: Array<{node: StudioEntity; depth: number}>;
   selected: StudioEntity | undefined;
   inspector: StudioInspector | null;
+  projectRecord: {group:import("../types").ProjectRuleGroup;key:string}|null;
   inspectorRecord: InspectorRecord|null;
   inspectorPinned: boolean;
   toggleInspectorPin: () => void;

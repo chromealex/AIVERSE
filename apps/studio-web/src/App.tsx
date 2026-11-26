@@ -148,6 +148,7 @@ export default function App() {
     const stored = Number(window.localStorage.getItem('aiverse.studio.uiScale'));
     return Number.isFinite(stored) && stored >= 0.75 && stored <= 2 ? stored : 1;
   });
+  const [projectRecord,setProjectRecord]=useState<{group:import("./types").ProjectRuleGroup;key:string}|null>(null);
   const [inspectorRecord,setInspectorRecord]=useState<import('./panels/StudioPanelRenderer').InspectorRecord|null>(null);
   const [inspectorPin, setInspectorPin] = useState<{
     entity: StudioEntity; inspector: StudioInspector | null;
@@ -274,6 +275,9 @@ export default function App() {
       } else if (!FLOAT && (event === 'ui.showPanel' || event === 'ui.dockPanel')) {
         const panel = field(payload, 'panel');
         if (knownPanel(panel)) window.dispatchEvent(new CustomEvent(event === 'ui.dockPanel' ? 'studio:dock-panel' : 'studio:show-panel', { detail: panel }));
+      } else if (event === 'project.selection') {
+        const group=field(payload,'group'),key=field(payload,'key');
+        if ((group==='types'||group==='resources'||group==='techs'||group==='factions') && typeof key==='string') setProjectRecord({group,key});
       } else if (event === 'inspector.selection') {
         const slot=field(payload,'index');
         const kind=field(payload,'kind'),key=field(payload,'key');
@@ -396,12 +400,13 @@ export default function App() {
   const selected = inspectorPin?.entity ??
     snapshot?.scene.entities.find(entity => entity.id === snapshot.selectedId);
   const inspector = inspectorPin ? inspectorPin.inspector : snapshot?.inspector ?? null;
+  useEffect(()=>setProjectRecord(null),[snapshot?.project.path]);
   useEffect(()=>setInspectorRecord(null),[snapshot?.graphDocument?.epoch]);
   const toggleInspectorPin = () => setInspectorPin(current => current ? null :
     selected ? {entity: {...selected}, inspector: snapshot?.inspector ? structuredClone(snapshot.inspector) : null} : null);
   const renderPanel = (panel: StudioPanel) => <PanelErrorBoundary key={panel} name={STUDIO_PANEL_TITLES[panel]}>{renderStudioPanel(panel, {
     snapshot, busy, connected, search, setSearch, rows, selected,
-    inspector, inspectorRecord, inspectorPinned: !!inspectorPin, toggleInspectorPin,
+    inspector, projectRecord, inspectorRecord, inspectorPinned: !!inspectorPin, toggleInspectorPin,
     select, selectIds, hoverId, changeProperty, openProject, updateSnapshot: value => {
       setInspectorPin(null); // create/delete/duplicate or map replacement invalidates positional pins
       setSnapshot(value);

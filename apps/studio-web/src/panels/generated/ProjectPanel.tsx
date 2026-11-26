@@ -13,7 +13,7 @@ const sections = {maps:'Maps',types:'Types',resources:'Resources',techs:'Technol
 type Section = keyof typeof sections;
 type Draft = { id:string; original:string|null; text:string; initial:string };
 
-export default function ProjectPanel({snapshot,busy,connected,openProject,updateSnapshot,setBusy,showPanel}:StudioPanelContext) {
+export default function ProjectPanel({projectRecord,snapshot,busy,connected,openProject,updateSnapshot,setBusy,showPanel}:StudioPanelContext) {
   const path=snapshot?.project.path ?? '';
   const [project,setProject]=useState<StudioProjectState|null>(null);
   const [section,setSection]=useState<Section>('maps');
@@ -52,9 +52,13 @@ export default function ProjectPanel({snapshot,busy,connected,openProject,update
       const {text:original}=await invoke('studio.projectRule',{project:path,group,id});
       if(version!==request.current)return;
       const text=JSON.stringify(JSON.parse(original),null,2);
+      setSection(group);setQuery('');setNewMap(false);
       setDraft({id,original,text,initial:text});
     }catch(e){if(version===request.current)setError(String(e));}
   };
+  useEffect(()=>{
+    if(projectRecord && path)void edit(projectRecord.group,projectRecord.key);
+  },[projectRecord,path]);
   const createRule=()=>{
     if(!leave())return;
     ++request.current;

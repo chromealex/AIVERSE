@@ -155,11 +155,25 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
             stopGame();
             return Json::parse(R"({"ok":true,"summary":"Тест остановлен"})");
         },true});
-    session_->workspace().registerOp({"editor_select","Inspect the map, a named area, a region letter, a zero-based entity or a one-based player, or clear selection.",
-        Json::parse(R"({"properties":{"kind":{"type":"string","enum":["entity","player","area","region","map","none"]},"key":{"type":"string"},"index":{"type":"integer","minimum":0}},"required":["kind"]})"),[this](const Json& input){
+    session_->workspace().registerOp({"editor_select","Inspect a project rule by key, the map, a named area, a region letter, a zero-based entity or a one-based player, or clear selection.",
+        Json::parse(R"({"properties":{"kind":{"type":"string","enum":["entity","player","area","region","type","resource","tech","faction","map","none"]},"key":{"type":"string"},"index":{"type":"integer","minimum":0}},"required":["kind"]})"),[this](const Json& input){
             const auto kind=input.getStr("kind");
             const auto& map=session_->workspace().map;
             Json selection=Json::object();
+            if (kind=="type" || kind=="resource" || kind=="tech" || kind=="faction") {
+                const auto group=kind+"s", key=input.getStr("key");
+                const auto& project=session_->workspace().project;
+                if (project.dir.empty() || key.empty() || !project.rulesJson[group].has(key))
+                    throw std::runtime_error("Unknown project rule: "+group+"/"+key);
+                Json target=Json::object();
+                target.set("group",Json::string(group));
+                target.set("key",Json::string(key));
+                sendEventPayload("project.selection",target);
+                sendEventPayload("ui.showPanel",Json::parse(R"({"panel":"project"})"));
+                target.set("ok",Json::fromBool(true));
+                target.set("kind",Json::string(kind));
+                return target;
+            }
             if (kind=="entity") {
                 const double index=input["index"].toDouble(-1);
                 if (!(index>=0 && index<map.data.entities.size() && std::floor(index)==index))
