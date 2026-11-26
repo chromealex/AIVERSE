@@ -476,3 +476,5 @@ Port flat Scene world axes, object bounds and separate selection-box visibility 
 Port live flat-map PHYSIS wind and fire direction overlays. Share the legacy field sampling rules and read completed game ECS frames only for the matching authored map. Verify the rendered Scene and clearing on stop.
 
 The Scene overlays menu shows PHYSIS wind and fire direction from a running local flat-map play-test. The native Mac comparison used a paused game with 64 PHYSIS cells and an authored wind field and ignition. The source map remained byte-identical after stop. A standalone edit-mode nature preview, authored radius/spacing controls and Windows visual acceptance remain open.
+
+Restore adjustable nature-field radius (8–200 m) and spacing (2–32 m) in the Scene overlays menu. Verify actual frame differences, preference persistence and input bounds.

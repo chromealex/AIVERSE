@@ -392,7 +392,9 @@ public:
         if(regionBorderLetter_!=letter){regionBorderLetter_=letter;regionBordersDirty_=true;}
     }
     void setNatureFrame(std::shared_ptr<const world::NaturePresentationFrame> frame) { natureFrame_=std::move(frame); }
-    void setNatureLayers(bool wind,bool fire) { natureWind_=wind;natureFire_=fire; }
+    void setNatureLayers(bool wind,bool fire,float radius,float spacing) {
+        natureWind_=wind;natureFire_=fire;natureRadius_=radius;natureSpacing_=spacing;
+    }
     void setWorldAxes(bool visible) { worldAxes_ = visible; }
     void setObjectBounds(bool visible) { objectBounds_ = visible; }
     void setSelectionBox(bool visible) { selectionBoxVisible_ = visible; }
@@ -761,6 +763,7 @@ private:
     char regionBorderLetter_=0;
     bool regionBordersDirty_=true;
     std::shared_ptr<const world::NaturePresentationFrame> natureFrame_;
+    float natureRadius_=48.f,natureSpacing_=6.f;
     bool natureWind_=false,natureFire_=false;
     bool worldAxes_ = false, objectBounds_ = false, selectionBoxVisible_ = true;
     bool localSpace_ = false, gizmosVisible_ = true, snapEnabled_ = false;

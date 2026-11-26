@@ -291,6 +291,7 @@ private:
     bool textureGraphWork_=false;
     std::string textureGraphScope_,textureGraphError_;
     std::mutex renderIoMutex_;                         // guards renderInputs_ / renderOutputs_
+    float natureRadius_=48.f,natureSpacing_=6.f;
     bool natureWind_=false,natureFire_=false;
     double nextNatureSample_=0;
     std::shared_ptr<const world::NaturePresentationFrame> natureFrame_;

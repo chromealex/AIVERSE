@@ -4216,9 +4216,9 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         }
     }
     if(natureFrame_&&!planetaryChart){
-        constexpr float step=6.f;
+        const float step=natureSpacing_;
         editor::natureFieldArrows(*natureFrame_,std::floor(view.target.x/step)*step,std::floor(view.target.z/step)*step,
-            48,step,natureWind_,natureFire_,[&](float x,float z,float dx,float dz,bool fire,float strength){
+            natureRadius_,step,natureWind_,natureFire_,[&](float x,float z,float dx,float dz,bool fire,float strength){
                 if(!map.worldSpace&&(x<0||z<0||x>=map.w||z>=map.h))return;
                 const float y=(showTerrain?terrainPreviewHeight(map,x,z,levelHeight):0.f)+(fire?1.8f:1.2f);
                 const uint32_t color=fire?rgba(255,int(150-110*strength),40):rgba(80+175*strength,210,255-130*strength);
@@ -5393,7 +5393,7 @@ uint64_t StudioScene::frameSignature(int width,int height,const editor::MapDoc& 
     vec(camera_.target);value(camera_.distance);value(camera_.pitch);value(camera_.yaw);value(camera_.fovY);
     value(camera_.ortho);value(autoIso_);value(tween_.active);
     ids(selection_);ids(hidden_);text(hover_);
-    value(tool_);value(localSpace_);value(gizmosVisible_);value(natureWind_);value(natureFire_);value(natureFrame_.get());value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
+    value(tool_);value(localSpace_);value(gizmosVisible_);value(natureRadius_);value(natureSpacing_);value(natureWind_);value(natureFire_);value(natureFrame_.get());value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
     value(drag_.axis);value(drag_.tool);text(drag_.id);vec(drag_.moveOffset);value(drag_.value);
     value(drag_.accumulated);value(drag_.lastAngle);value(drag_.snapping);
     value(marquee_.on);value(marquee_.x0);value(marquee_.y0);value(marquee_.x1);value(marquee_.y1);

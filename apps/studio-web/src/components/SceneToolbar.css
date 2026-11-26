@@ -30,3 +30,9 @@
 
 .scene-toolbar__layers{min-width:150px;left:auto;right:0}
 .scene-toolbar__layers label{display:flex;align-items:center;gap:8px;padding:5px 8px;color:var(--au-text);cursor:pointer}
+
+.scene-toolbar__sampling {min-width:160px;margin:5px 0 0;padding:5px 8px;border:0;border-top:1px solid var(--au-line)}
+.scene-toolbar__sampling legend {color:var(--au-text-soft);font-size:11px}
+.scene-toolbar__sampling label {display:grid;grid-template-columns:1fr auto;padding:4px 0;gap:3px}
+.scene-toolbar__sampling output {font-variant-numeric:tabular-nums}
+.scene-toolbar__sampling input {grid-column:1/-1;width:100%;margin:0}

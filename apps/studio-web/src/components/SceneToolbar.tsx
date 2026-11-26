@@ -5,9 +5,9 @@ import { invoke, onNativeEvent } from '../bridge';
 import './SceneToolbar.css';
 
 export type SceneTool = 'view' | 'move' | 'rotate' | 'scale';
-export interface SceneToolState { tool: SceneTool; local: boolean; snap: boolean; snapMove: number; snapRotate: number; snapScale: number; gizmos: boolean; natureWind:boolean; natureFire:boolean; worldAxes:boolean; objectBounds:boolean; selectionBox:boolean; surface: boolean }
+export interface SceneToolState { tool: SceneTool; local: boolean; snap: boolean; snapMove: number; snapRotate: number; snapScale: number; gizmos: boolean; natureRadius:number; natureSpacing:number; natureWind:boolean; natureFire:boolean; worldAxes:boolean; objectBounds:boolean; selectionBox:boolean; surface: boolean }
 const KEY = 'aiverse.studio.sceneTools';
-const DEFAULTS: SceneToolState = { tool: 'move', local: false, snap: false, snapMove: 1, snapRotate: 15, snapScale: 0.1, gizmos: true, natureWind:false, natureFire:false, worldAxes:false, objectBounds:false, selectionBox:true, surface: false };
+const DEFAULTS: SceneToolState = { tool: 'move', local: false, snap: false, snapMove: 1, snapRotate: 15, snapScale: 0.1, gizmos: true, natureRadius:48, natureSpacing:6, natureWind:false, natureFire:false, worldAxes:false, objectBounds:false, selectionBox:true, surface: false };
 const TOOLS: Array<{ id: SceneTool; key: string; label: string; icon: typeof Hand }> = [
   { id: 'view', key: 'Q', label: 'Hand — drag to pan', icon: Hand },
   { id: 'move', key: 'W', label: 'Move', icon: Move3d },
@@ -23,7 +23,7 @@ export function readSceneTools(): SceneToolState {
     const v = JSON.parse(window.localStorage.getItem(KEY) ?? '{}') as Partial<SceneToolState>;
     const tool = TOOLS.some(t => t.id === v.tool) ? v.tool as SceneTool : DEFAULTS.tool;
     const num = (x: unknown, d: number) => typeof x === 'number' && Number.isFinite(x) && x > 0 ? x : d;
-    return { tool, local: v.local === true, snap: v.snap === true, gizmos: v.gizmos !== false, natureWind:v.natureWind===true, natureFire:v.natureFire===true, worldAxes:v.worldAxes===true, objectBounds:v.objectBounds===true, selectionBox:v.selectionBox!==false, surface: v.surface === true,
+    return { tool, local: v.local === true, snap: v.snap === true, gizmos: v.gizmos !== false, natureRadius:Math.min(200,Math.max(8,num(v.natureRadius,48))), natureSpacing:Math.min(32,Math.max(2,num(v.natureSpacing,6))), natureWind:v.natureWind===true, natureFire:v.natureFire===true, worldAxes:v.worldAxes===true, objectBounds:v.objectBounds===true, selectionBox:v.selectionBox!==false, surface: v.surface === true,
       snapMove: num(v.snapMove, 1), snapRotate: num(v.snapRotate, 15), snapScale: num(v.snapScale, 0.1) };
   } catch { return DEFAULTS; }
 }
@@ -140,6 +140,12 @@ export default function SceneToolbar({ enabled, projectPath = '' }: { enabled: b
       {layersOpen&&<div className="scene-toolbar__marks-menu scene-toolbar__layers" data-native-overlay role="group" aria-label="Scene overlays">
        {([['worldAxes','World axes'],['objectBounds','Object bounds'],['selectionBox','Selection box'],['natureWind','Play-test wind'],['natureFire','Play-test fire spread']] as const).map(([key,label])=>
         <label key={key}><input type="checkbox" checked={state[key]} onChange={e=>set({[key]:e.target.checked})}/>{label}</label>)}
+       {(state.natureWind||state.natureFire)&&<fieldset className="scene-toolbar__sampling"><legend>Field sampling</legend>
+        {([['natureRadius','Radius',8,200],['natureSpacing','Spacing',2,32]] as const).map(([key,label,min,max])=>
+         <label key={key}>{label}<output>{state[key]} m</output>
+          <input aria-label={label+' in metres'} type="range" min={min} max={max} value={state[key]} onChange={e=>set({[key]:e.currentTarget.valueAsNumber})}/>
+         </label>)}
+       </fieldset>}
       </div>}
     </div>
     <button type="button" className="scene-toolbar__toggle" disabled={!enabled} title="Frame all objects (⇧F)"

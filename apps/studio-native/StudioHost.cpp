@@ -1251,7 +1251,7 @@ void StudioHost::tickScene() {
     if((natureWind_||natureFire_)&&game_&&!map.data.planet()&&game_->launchedMapCurrent()&&studioPlaySourceMatches(game_->launchPlan(),ws)){
         if(now>=nextNatureSample_){
             const auto camera=onScene([&]{return preview_->cameraState();});
-            natureFrame_=game_->natureFrame(camera.target.x,camera.target.z);
+            natureFrame_=game_->natureFrame(std::floor(camera.target.x/natureSpacing_)*natureSpacing_,std::floor(camera.target.z/natureSpacing_)*natureSpacing_,natureRadius_);
             nextNatureSample_=now+.25;
         }
         in.nature=natureFrame_;
@@ -3454,12 +3454,22 @@ Json StudioHost::viewportInput(const Json& input) {
         // Scene toolbar: tool, Global/Local, snapping, gizmo visibility.
         static const char* names[4] = {"view", "move", "rotate", "scale"};
         const std::string t = input.getStr("tool");
+        auto fieldDistance=[&](const char* key,float current,float low,float high){
+            if(!input.has(key))return current;
+            const double v=input[key].toDouble();
+            if(!input[key].isNumber()||!std::isfinite(v)||v<low||v>high)
+                throw std::runtime_error(std::string("Invalid Scene field distance: ")+key);
+            return float(v);
+        };
+        const float radius=fieldDistance("natureRadius",natureRadius_,8,200);
+        const float spacing=fieldDistance("natureSpacing",natureSpacing_,2,32);
+        if(radius!=natureRadius_||spacing!=natureSpacing_){natureRadius_=radius;natureSpacing_=spacing;nextNatureSample_=0;}
         if(realBool("natureWind"))natureWind_=input["natureWind"].boolean();
         if(realBool("natureFire"))natureFire_=input["natureFire"].boolean();
         onScene([&] {
             for (int i = 0; i < 4; ++i) if (t == names[i]) preview_->setTransformTool(StudioScene::TransformTool(i));
             if (realBool("local")) preview_->setLocalSpace(input["local"].boolean());
-            preview_->setNatureLayers(natureWind_,natureFire_);
+            preview_->setNatureLayers(natureWind_,natureFire_,natureRadius_,natureSpacing_);
             if (realBool("worldAxes")) preview_->setWorldAxes(input["worldAxes"].boolean());
             if (realBool("objectBounds")) preview_->setObjectBounds(input["objectBounds"].boolean());
             if (realBool("selectionBox")) preview_->setSelectionBox(input["selectionBox"].boolean());

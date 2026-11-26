@@ -149,14 +149,21 @@ Simulation* StudioGameSurface::liveSimulation() const {
 bool StudioGameSurface::paused() const {return actor_?actor_->paused():host_->paused();}
 bool StudioGameSurface::canControl() const {return actor_ || host_->canControl();}
 bool StudioGameSurface::canStep() const {return actor_?actor_->paused():host_->canStep();}
-std::shared_ptr<const world::NaturePresentationFrame> StudioGameSurface::natureFrame(float x,float z) const {
+std::shared_ptr<const world::NaturePresentationFrame> StudioGameSurface::natureFrame(float x,float z,float radius) {
     const auto* sim=canControl()?liveSimulation():nullptr;
     if(!sim||sim->tick()==0)return {};
+    if(natureCache_.epoch==runtimeEpoch_&&natureCache_.tick==sim->tick()&&
+       natureCache_.x==x&&natureCache_.z==z&&natureCache_.radius==radius){
+        if(auto cached=natureCache_.frame.lock())return cached;
+    }
     world::NaturePresentationPolicy policy;
-    policy.centerX=x;policy.centerZ=z;policy.radiusMeters=54;policy.maxRegionCells=112;
+    policy.centerX=x;policy.centerZ=z;policy.radiusMeters=radius;policy.maxRegionCells=404;
     policy.maxFlames=0;policy.maxClusters=0;
     auto sample=world::buildNaturePresentation(sim->world(),policy);
-    return sample.valid?std::make_shared<const world::NaturePresentationFrame>(std::move(sample)):nullptr;
+    if(!sample.valid)return {};
+    auto frame=std::make_shared<const world::NaturePresentationFrame>(std::move(sample));
+    natureCache_={runtimeEpoch_,uint64_t(sim->tick()),x,z,radius,frame};
+    return frame;
 }
 Json StudioGameSurface::physisFrame(const Json& params) const {
     const auto* sim = canControl() ? liveSimulation() : nullptr;

@@ -14,6 +14,8 @@ void natureFieldArrows(const world::NaturePresentationFrame& frame,float cx,floa
         const float dx=ix*step-radius,dz=iz*step-radius;
         if(dx*dx+dz*dz>radius*radius)continue;
         const float x=cx+dx,z=cz+dz;
+        if(x<frame.originX*frame.cellSize||z<frame.originZ*frame.cellSize||
+           x>=(frame.originX+frame.width)*frame.cellSize||z>=(frame.originZ+frame.height)*frame.cellSize)continue;
         const auto at=frame.sample(x,z);
         if(!at.valid)continue;
         const float speed=std::hypot(at.windX,at.windZ);

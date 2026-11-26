@@ -39,7 +39,7 @@ public:
     Json ecologyState(const StudioWorldProcessLiveOptions& options={},const std::string& focusBody={},const std::optional<StudioForestCameraFocus>& camera={},Json* forestRender=nullptr);
     Json staticGeometryReport(const editor::Workspace& ws) const;
     Json prismaFrameReports() const { return host_ ? host_->prismaFrameReports() : Json::array(); }
-    std::shared_ptr<const world::NaturePresentationFrame> natureFrame(float x,float z) const;
+    std::shared_ptr<const world::NaturePresentationFrame> natureFrame(float x,float z,float radius);
     Json physisFrame(const Json& params) const;
     Json planetForestState(const std::string& focusBody={},const std::optional<StudioForestCameraFocus>& camera={});
     bool planetMatch() const;
@@ -64,6 +64,11 @@ private:
     StudioRuntimeInspect inspector_;
     std::vector<uint64_t> setupRefs_;
     StudioWorldProcessDiagnostics worldProcessDiagnostics_;
+    struct NatureCache {
+        uint64_t epoch=0,tick=0;
+        float x=0,z=0,radius=0;
+        std::weak_ptr<const world::NaturePresentationFrame> frame;
+    } natureCache_;
     uint64_t runtimeEpoch_=0;
     bool matchObserved_=false;
     bool runtimeDebugEdited_=false;
