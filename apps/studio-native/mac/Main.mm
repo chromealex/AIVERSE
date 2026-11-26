@@ -97,20 +97,23 @@ namespace studio = aiverse::studio;
         [p appendBezierPath:[NSBezierPath bezierPathWithRoundedRect:b xRadius:self.corner yRadius:self.corner]];
         p.windingRule=NSWindingRuleEvenOdd;[bezel setFill];[p fill];
     }
+    const NSEdgeInsets in=self.safe;
+    if (self.showSafe && (in.left>0 || in.top>0 || in.right>0 || in.bottom>0)) {
+        [NSGraphicsContext saveGraphicsState];
+        [[NSBezierPath bezierPathWithRoundedRect:b xRadius:self.corner yRadius:self.corner] addClip];
+        const NSRect inner=NSMakeRect(in.left,in.top,b.size.width-in.left-in.right,b.size.height-in.top-in.bottom);
+        NSBezierPath* shade=[NSBezierPath bezierPathWithRect:b];
+        [shade appendBezierPath:[NSBezierPath bezierPathWithRect:inner]];
+        shade.windingRule=NSWindingRuleEvenOdd;
+        [[NSColor colorWithSRGBRed:1 green:70/255.0 blue:60/255.0 alpha:70/255.0] setFill];[shade fill];
+        NSBezierPath* edge=[NSBezierPath bezierPathWithRect:NSInsetRect(inner,.75,.75)];
+        edge.lineWidth=1.5;[[NSColor colorWithSRGBRed:1 green:210/255.0 blue:80/255.0 alpha:.9] setStroke];[edge stroke];
+        [NSGraphicsContext restoreGraphicsState];
+    }
     if (self.cutout.size.width>0 && self.cutout.size.height>0) {
         [[NSColor blackColor] setFill];
         [[NSBezierPath bezierPathWithRoundedRect:self.cutout xRadius:self.cutoutRadius yRadius:self.cutoutRadius] fill];
     }
-    if (!self.showSafe) return;
-    const NSEdgeInsets in=self.safe;
-    if (in.left<=0 && in.top<=0 && in.right<=0 && in.bottom<=0) return;
-    const NSRect inner=NSMakeRect(in.left,in.top,b.size.width-in.left-in.right,b.size.height-in.top-in.bottom);
-    NSBezierPath* shade=[NSBezierPath bezierPathWithRect:b];
-    [shade appendBezierPath:[NSBezierPath bezierPathWithRect:inner]];
-    shade.windingRule=NSWindingRuleEvenOdd;
-    [[NSColor colorWithSRGBRed:1 green:70/255.0 blue:60/255.0 alpha:70/255.0] setFill];[shade fill];
-    NSBezierPath* edge=[NSBezierPath bezierPathWithRect:NSInsetRect(inner,.75,.75)];
-    edge.lineWidth=1.5;[[NSColor colorWithSRGBRed:1 green:210/255.0 blue:80/255.0 alpha:.9] setStroke];[edge stroke];
 }
 @end
 

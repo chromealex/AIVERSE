@@ -30,3 +30,8 @@
 
 .studio-game__role-launch { display:grid; align-content:center; justify-content:center; height:100%; overflow:auto; box-sizing:border-box; padding:12px; }
 .studio-game__role-launch form { display:flex; align-items:end; flex-wrap:wrap; gap:var(--au-space-2); }
+
+.studio-game__insets { display:flex; flex-wrap:wrap; gap:4px 12px; margin:0; font-size:var(--au-font-sm); }
+.studio-game__insets div { display:flex; gap:4px; }
+.studio-game__insets dt { text-transform:capitalize; color:var(--au-text-muted); }
+.studio-game__insets dd { margin:0; font-variant-numeric:tabular-nums; }

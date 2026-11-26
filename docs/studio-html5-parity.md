@@ -304,3 +304,5 @@ Game transfer: expose fractional local simulation speed in the Game toolbar, ret
 Game transfer: launch the saved project in a separate AiverseGame process from the HTML Game panel. Verify project identity in the standalone client and independent Studio lifetime.
 
 Game transfer: choose a playable map seat or watch bots in hosted local play. Check actual view-script identity, replayable seat setup, restart and map isolation.
+
+Game device acceptance: show the oriented safe-area distances, keep physical screen corners and camera cutouts opaque and verify both orientations over a paused Metal game.
