@@ -1,0 +1,11 @@
+{
+  "sha": "8d4b36f0ec9508e8666d61c1066b87921e6959c9",
+  "argv": [
+    "bash",
+    "-c",
+    "ctest --test-dir /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native --output-on-failure -R \"^studio_(model_picking|visual_picking|owner_history)$\" && bash /tmp/scene-pick-ui.sh && bash /tmp/planet-pick-ui.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-linked-view-pick.log.txt",
+  "sha256": "3e3505806ff235f3d1a8ae2cc0a77415fc6712d11eb2d6c050e83e4a519710d4"
+}
