@@ -59,29 +59,52 @@ function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:strin
   const [view,setView]=useState(initial),[frame,setFrame]=useState<Frame>();
   const [busy,setBusy]=useState(true),[error,setError]=useState(''),[contours,showContours]=useState(true);
   const [cell,pick]=useState<number>();
-  const requestId=useRef(0);
-  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind',next:View,selection=cell,wind?:{windSpeed:number;windDirection:number}){
+  const requestId=useRef(0), pending=useRef(false);
+  const [playing,setPlaying]=useState(false),[speed,setSpeed]=useState(1);
+  const workspace=useRef<HTMLFieldSetElement>(null);
+  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback',next:View,selection=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}){
     const id=++requestId.current;
     const sameArea=next.size===view.size&&next.stride===view.stride&&next.centerX===view.centerX&&next.centerZ===view.centerZ;
     const selected=sameArea&&action!=='reset'?selection:undefined;
     const coords=frame&&selected!==undefined?{cellX:frame.originX+(selected%frame.width)*frame.stride,cellZ:frame.originZ+Math.floor(selected/frame.width)*frame.stride}:{};
-    setBusy(true);setError('');
+    pending.current=true;
+    if(action==='reset')setPlaying(false);
+    if(action!=='playback')setBusy(true);
+    setError('');
     try{
-      const result=map?await invoke('studio.physisNature',{...next,...coords,...wind,action,expectedProject:projectPath,expectedDocumentEpoch:epoch}):live?await invoke('studio.physisLive',{...next,...coords,expectedProject:projectPath}):
+      const result=map?await invoke('studio.physisNature',{...next,...coords,...options,action,expectedProject:projectPath,expectedDocumentEpoch:epoch}):live?await invoke('studio.physisLive',{...next,...coords,expectedProject:projectPath}):
         (await invoke('studio.op',{op:'physis_demo',params:{action,...next},expectedProject:projectPath})).result as Frame|{active:false};
       if(id!==requestId.current)return;
       pick(result.active?selected:undefined);
       setFrame(result.active?result:undefined);setView(next);
-    }catch(e){if(id===requestId.current)setError(String(e));}
-    finally{if(id===requestId.current)setBusy(false);}
+    }catch(e){if(id===requestId.current){setPlaying(false);setError(String(e));}}
+    finally{if(id===requestId.current){pending.current=false;setBusy(false);}}
   }
   useEffect(()=>{void request('view',initial);return ()=>{requestId.current++;};},[projectPath]);
+  const advance=useRef((elapsed:number)=>{});
+  useEffect(()=>{
+    advance.current=elapsed=>{if(!pending.current)void request('playback',view,cell,{speed,elapsed});};
+  });
+  useEffect(()=>{
+    if(!playing)return;
+    let previous=performance.now();
+    const timer=window.setInterval(()=>{
+      if(document.hidden || !workspace.current?.getClientRects().length){setPlaying(false);return;}
+      const now=performance.now();
+      advance.current(Math.min(0.25,(now-previous)/1000));
+      previous=now;
+    },100);
+    const visibility=()=>{if(document.hidden)setPlaying(false);};
+    document.addEventListener('visibilitychange',visibility);
+    return ()=>{clearInterval(timer);document.removeEventListener('visibilitychange',visibility);};
+  },[playing]);
   function change(key:keyof View,value:number){void request('view',{...view,[key]:value});}
   return <>
     <header><h3>Field diagnostics</h3>{frame&&<output>Tick {frame.tick}</output>}</header>
-    <fieldset disabled={busy} className={frame?'physis-workspace':undefined}>
+    <fieldset ref={workspace} disabled={busy} className={frame?'physis-workspace':undefined}>
       <div className="au-row">{live?<StudioButton onClick={()=>void request('view',view)}>Refresh play-test</StudioButton>:<><StudioButton onClick={()=>void request('reset',{...view,centerX:0,centerZ:0})}>{map?(frame?'Reset map preview':'Create map preview'):(frame?'Reset demo':'Create demo')}</StudioButton>
-        {frame&&<><StudioButton onClick={()=>void request('step',view)}>Step 1 tick</StudioButton><StudioButton onClick={()=>void request('step60',view)}>Step 60 ticks</StudioButton>{map&&<StudioButton disabled={!frame.cell?.available} onClick={()=>void request('ignite',view)}>Ignite selected cell</StudioButton>}</>}</>}
+        {frame&&<>{map&&<StudioButton onClick={()=>setPlaying(!playing)}>{playing?'Pause preview':'Play preview'}</StudioButton>}
+          <StudioButton disabled={playing} onClick={()=>void request('step',view)}>Step 1 tick</StudioButton><StudioButton disabled={playing} onClick={()=>void request('step60',view)}>Step 60 ticks</StudioButton>{map&&<StudioButton disabled={!frame.cell?.available} onClick={()=>void request('ignite',view)}>Ignite selected cell</StudioButton>}</>}</>}
       </div>
       {!frame&&<p>{live?'Start a local play-test with PHYSIS enabled, then refresh.':map?'Preview the open map’s weather and fire. Changes stay in this preview.':'Create an isolated environment to inspect its weather and force fields.'}</p>}
       {frame&&<>
@@ -89,7 +112,10 @@ function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:strin
           <label>Palette<StudioSelect value={view.palette} onChange={e=>change('palette',Number(e.target.value))}>{['Thermal','High contrast','Ocean'].map((l,i)=><option key={l} value={i}>{l}</option>)}</StudioSelect></label>
         </div>
         <div className="physis-figure"><FieldMap key={[view.centerX,view.centerZ,view.size,view.stride].join('/')} frame={frame} cell={cell} pick={live||map?index=>void request('view',view,index):pick} contours={contours} label={layers[view.layer]}/></div>
-        <div className="physis-options"><label className="physis-toggle"><input type="checkbox" checked={contours} onChange={e=>showContours(e.target.checked)}/>Volume contours</label>
+        <div className="physis-options">{map&&<label className="physis-playback-speed">Playback speed · {speed.toFixed(1)}×
+          <input type="range" name="playbackSpeed" min="0.1" max="6" step="0.1" value={speed}
+            onChange={event=>setSpeed(event.currentTarget.valueAsNumber)}/>
+        </label>}<label className="physis-toggle"><input type="checkbox" checked={contours} onChange={e=>showContours(e.target.checked)}/>Volume contours</label>
         <details><summary>Map area</summary><form className="physis-controls" key={[view.size,view.stride,view.centerX,view.centerZ].join('/')} onSubmit={e=>{
           e.preventDefault();const data=new FormData(e.currentTarget);
           void request('view',{...view,size:Number(data.get('size')),stride:Number(data.get('stride')),centerX:Number(data.get('centerX')),centerZ:Number(data.get('centerZ'))});

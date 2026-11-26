@@ -1017,3 +1017,5 @@ PHYSIS Diagnostics: migrate the private map simulation, single and 60-tick stepp
 Migrate private prevailing-wind speed and direction. Verify field measurements after advancing, bounds, reset and map isolation.
 
 f199ef76f4cdf85146c274163a7aff8ff7eaa2aa: StudioNaturePreview.h and PhysisPreviewWind.tsx transfer the speed and direction controls. Real macOS HTML5 Studio measured tick-60 cell wind [15.926,1.596,-0.512] before steering and [8.266,1.596,17.788] after setting 21.5 m/s towards 90°. Tested invalid inputs, retained settings after remount and reset, unchanged map bytes and closed Scene. Receipt docs/evidence/studio-private-nature-wind.json; screenshot docs/evidence/studio-project-catalog/private-nature-wind.png. TypeScript, Vite, native Studio build and 299 web checks passed. Next transfer continuous preview playback with pause and speed scaling. Grass/FX/audio and full retirement gates remain outstanding.
+
+Transfer private PHYSIS playback using its existing fixed-tick scheduler. Exercise play, speed, pause, hidden panels and stepping.

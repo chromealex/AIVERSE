@@ -13,6 +13,7 @@
 .physis-legend { flex-wrap:wrap; margin-top:6px; }
 .physis-legend i { width:10px; height:10px; border:2px solid; border-radius:50%; }
 .physis-toggle { margin-block:8px; }
+.physis-playback-speed { display:grid; gap:4px; max-width:260px; }
 
 .physis-diagnostics header,.physis-workspace { max-width:1080px; margin-inline:auto; }
 .physis-workspace > .au-row { flex-wrap:wrap; }

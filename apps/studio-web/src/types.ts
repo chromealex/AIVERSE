@@ -632,7 +632,7 @@ export interface StudioParams {
   'studio.planetForestPlant': {mapPath:string;expectedRevision:string;species:number;habit:'tree'|'shrub';at:{body:string;face:number;x:number;y:number}};
   'studio.planetForest': Record<string, never>;
   'studio.planetForestSet': {mapPath:string;expectedRevision:string;forest:unknown;catalog:unknown};
-  'studio.physisNature': StudioParams['studio.physisLive'] & {action:'view'|'reset'|'step'|'step60'|'ignite'|'wind';windSpeed?:number;windDirection?:number;expectedDocumentEpoch:string};
+  'studio.physisNature': StudioParams['studio.physisLive'] & {action:'view'|'reset'|'step'|'step60'|'ignite'|'wind'|'playback';elapsed?:number;speed?:number;windSpeed?:number;windDirection?:number;expectedDocumentEpoch:string};
   'studio.physisLive': {expectedProject:string;layer:number;palette:number;size:number;stride:number;centerX:number;centerZ:number;cellX?:number;cellZ?:number};
   'studio.planetForestLive': Record<string, never>;
   'studio.rules': Record<string, never>;

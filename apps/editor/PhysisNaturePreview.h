@@ -147,16 +147,7 @@ public:
         lastTime_ = timeSeconds;
 
         const World* source = prepareSource(ps, doc, live, heightAt);
-        if (!usingLive_ && settings.playing && world_) {
-            accumulator_ += dt * std::clamp(settings.speed, 0.f, 8.f) *
-                            std::clamp(settings.ticksPerSecond, 1.f, 60.f);
-            int steps = 0;
-            while (accumulator_ >= 1.f && steps < 8) {
-                stepPreview();
-                accumulator_ -= 1.f; ++steps; frameDirty_ = true;
-            }
-            if (steps == 8) accumulator_ = 0;
-        }
+        if (settings.playing) advanceElapsed(dt);
         if (!source) return;
 
         // ---- presentation frame (rebuilt per tick or when the camera moved)
@@ -238,6 +229,16 @@ public:
             resetPresentation(ps);
         }
         return world_.get();
+    }
+
+    void advanceElapsed(float seconds) {
+        if (usingLive_ || !world_ || !std::isfinite(seconds)) return;
+        const float dt = std::clamp(seconds, 0.f, 0.25f);
+        accumulator_ += dt * std::clamp(settings.speed, 0.f, 8.f) *
+                        std::clamp(settings.ticksPerSecond, 1.f, 60.f);
+        const int steps = std::min(8, int(accumulator_));
+        advance(steps);
+        accumulator_ = steps == 8 ? 0.f : accumulator_ - float(steps);
     }
 
     // Advance the private preview by N committed ticks (agents/tests).

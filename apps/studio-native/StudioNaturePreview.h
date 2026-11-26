@@ -36,6 +36,15 @@ struct StudioNaturePreview {
         if (action=="view") return frame;
         if (action=="step" || action=="step60") {
             preview.advance(action=="step"?1:60);
+        } else if (action=="playback") {
+            const auto& elapsed=params["elapsed"];
+            const auto& speed=params["speed"];
+            const double dt=elapsed.toDouble(), rate=speed.toDouble();
+            if (!elapsed.isNumber() || !speed.isNumber() || !std::isfinite(dt) || !std::isfinite(rate) ||
+                dt<0 || dt>0.25 || rate<0.1 || rate>6)
+                throw std::runtime_error("Invalid nature preview playback interval or speed.");
+            preview.settings.speed=float(rate);
+            preview.advanceElapsed(float(dt));
         } else if (action=="wind") {
             const auto& speed=params["windSpeed"];
             const auto& direction=params["windDirection"];

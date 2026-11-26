@@ -40,6 +40,16 @@ void privatePreview() {
     CHECK(nature.prepareSource(ps, doc, nullptr, flat)->resourceConst<physis::State>()->tick == 30);
     nature.requestReset();
     CHECK(nature.prepareSource(ps, doc, nullptr, flat)->resourceConst<physis::State>()->tick == 0);
+    const auto* restarted = nature.previewWorld()->resourceConst<physis::State>();
+    nature.advanceElapsed(0.0625f);
+    CHECK(restarted->tick == 0);
+    nature.advanceElapsed(0.0625f);
+    CHECK(restarted->tick == 1);
+    nature.settings.speed = 6;
+    nature.advanceElapsed(0.25f);
+    CHECK(restarted->tick == 9); // bounded catch-up
+    nature.advanceElapsed(0);
+    CHECK(restarted->tick == 9);
     // Wind slider steers the private World.
     nature.settings.windDirectionDeg = 90;
     nature.applyWindSettings();
