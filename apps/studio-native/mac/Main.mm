@@ -56,6 +56,7 @@ namespace studio = aiverse::studio;
 @end
 
 @interface StudioFxView : StudioMetalView
+@property(nonatomic) studio::StudioSurface surface;
 @end
 @interface StudioCharacterSurface : NSView
 @property(nonatomic,strong) CALayer* photo;
@@ -581,17 +582,17 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
 - (void)otherMouseDown:(NSEvent*)event {(void)event;}
 - (void)otherMouseUp:(NSEvent*)event {(void)event;}
 - (void)mouseDragged:(NSEvent*)event {
-    if (auto* core=[self core])core->fxCameraOrbit(event.deltaX,event.deltaY);
+    if (auto* core=[self core])core->fxCameraOrbit(self.surface,event.deltaX,event.deltaY);
 }
 - (void)rightMouseDragged:(NSEvent*)event {
-    if (auto* core=[self core])core->fxCameraOrbit(event.deltaX,event.deltaY);
+    if (auto* core=[self core])core->fxCameraOrbit(self.surface,event.deltaX,event.deltaY);
 }
 - (void)otherMouseDragged:(NSEvent*)event {
-    if (auto* core=[self core])core->fxCameraOrbit(event.deltaX,event.deltaY);
+    if (auto* core=[self core])core->fxCameraOrbit(self.surface,event.deltaX,event.deltaY);
 }
 - (void)scrollWheel:(NSEvent*)event {
     const CGFloat wheel=event.scrollingDeltaY*(event.hasPreciseScrollingDeltas?.12:1.0);
-    if(auto* core=[self core])core->fxCameraZoom(wheel);
+    if(auto* core=[self core])core->fxCameraZoom(self.surface,wheel);
 }
 - (void)mouseMoved:(NSEvent*)event {(void)event;}
 - (void)mouseExited:(NSEvent*)event {(void)event;}
@@ -756,11 +757,15 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
     [window_.contentView addSubview:viewport_
         positioned:(htmlComposite_ ? NSWindowBelow : NSWindowAbove) relativeTo:web_];
     fxViewport_=[[StudioFxView alloc] initWithFrame:NSZeroRect];
-    fxViewport_.shell=self;fxViewport_.hidden=YES;
+    fxViewport_.surface=studio::StudioSurface::Fx;fxViewport_.shell=self;fxViewport_.hidden=YES;
     [window_.contentView addSubview:fxViewport_
         positioned:(htmlComposite_?NSWindowBelow:NSWindowAbove) relativeTo:web_];
     for(int i=0;i<int(studio::StudioSurface::Count)-int(studio::StudioSurface::Material);++i){
-        NSView* view=i>=3&&i<=4?[[StudioCharacterSurface alloc] initWithFrame:NSZeroRect]:[[NSView alloc] initWithFrame:NSZeroRect];
+        NSView* view;
+        if(i==int(studio::StudioSurface::EffectFile)-int(studio::StudioSurface::Material)){
+            StudioFxView* effect=[[StudioFxView alloc] initWithFrame:NSZeroRect];
+            effect.surface=studio::StudioSurface::EffectFile;effect.shell=self;view=effect;
+        }else view=i>=3&&i<=4?[[StudioCharacterSurface alloc] initWithFrame:NSZeroRect]:[[NSView alloc] initWithFrame:NSZeroRect];
         view.wantsLayer=YES;view.layer=[CAMetalLayer layer];view.hidden=YES;
         if(i>=3&&i<=4){
             StudioCharacterSurface* character=(StudioCharacterSurface*)view;

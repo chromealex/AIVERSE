@@ -101,8 +101,8 @@ public:
     bool humanPick(StudioSurface surface,double x,double y,double w,double h);
     void humanOrbit(StudioSurface surface,double dx,double dy);
     void humanZoom(StudioSurface surface,double amount);
-    void fxCameraOrbit(double dx,double dy);
-    void fxCameraZoom(double wheel);
+    void fxCameraOrbit(StudioSurface surface,double dx,double dy);
+    void fxCameraZoom(StudioSurface surface,double wheel);
     bool projectLoading() const { return projectLoading_; }
     bool htmlComposite() const { return htmlComposite_; }
 

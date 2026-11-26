@@ -808,17 +808,31 @@ void StudioHost::tickFx() {
         try{onScene([&]{fxPreview_.reset();});}catch(const std::exception&){}
     }
 }
-void StudioHost::fxCameraOrbit(double dx,double dy) {
-    if(!fxPreview_ || !fxPlacement_.visible)return;
+void StudioHost::fxCameraOrbit(StudioSurface surface,double dx,double dy) {
     if(!finite({dx,dy})||std::abs(dx)>250||std::abs(dy)>250)return;
+    if(surface==StudioSurface::EffectFile){
+        if(projectLoading_||!effectFileSurface_.renderer||!effectFileSurface_.placement.visible)return;
+        Json input=Json::object();
+        input.set("orbitX",Json::number(dx));input.set("orbitY",Json::number(dy));
+        onScene([&]{effectFileSurface_.renderer->effectFileCommand(effectFileProject_,input);});
+        return;
+    }
+    if(surface!=StudioSurface::Fx||!fxPreview_ || !fxPlacement_.visible)return;
     onScene([&]{
         if(!fxPreview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),session_->workspace().project.dir).getBool("replayPending"))
             fxPreview_->orbit(float(dx),float(dy));
     });
 }
-void StudioHost::fxCameraZoom(double wheel) {
-    if(!fxPreview_ || !fxPlacement_.visible)return;
+void StudioHost::fxCameraZoom(StudioSurface surface,double wheel) {
     if(!std::isfinite(wheel)||std::abs(wheel)>250)return;
+    if(surface==StudioSurface::EffectFile){
+        if(projectLoading_||!effectFileSurface_.renderer||!effectFileSurface_.placement.visible)return;
+        Json input=Json::object();
+        input.set("zoom",Json::number(wheel));
+        onScene([&]{effectFileSurface_.renderer->effectFileCommand(effectFileProject_,input);});
+        return;
+    }
+    if(surface!=StudioSurface::Fx||!fxPreview_ || !fxPlacement_.visible)return;
     onScene([&]{
         if(!fxPreview_->spectraPreviewCommand(Json::parse(R"({"action":"status"})"),session_->workspace().project.dir).getBool("replayPending"))
             fxPreview_->zoom(float(wheel));

@@ -324,3 +324,5 @@ Project Import transfer: scan an external project, carry its source into a backg
 Effects authoring stage: select a project particle effect or event bindings, edit the source with native validation and guard saves against stale files. GPU particle playback remains open.
 
 Effects playback stage: drive the engine ParticleSystem from the current effect source in a dedicated Effects surface, with replay, motion, looping, quality and playback speed.
+
+Effect camera stage: route drag and wheel input on the Effects native layer to its particle camera on Mac and Windows, with keyboard controls and reset in HTML. Verify distinct camera poses and unchanged source files.

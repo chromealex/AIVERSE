@@ -590,10 +590,10 @@ public:
         if (s && s->core_) {
             const int which = int(GetWindowLongPtrW(h, GWLP_USERDATA));
             if(which==int(studio::StudioSurface::Character)||which==int(studio::StudioSurface::Appearance))return s->characterInput(h,msg,wp,lp,static_cast<studio::StudioSurface>(which));
-            if(which>=3)return DefWindowProcW(h,msg,wp,lp);
+            if(which>=3 && which!=int(studio::StudioSurface::EffectFile))return DefWindowProcW(h,msg,wp,lp);
             const LRESULT handled = which==0?s->sceneInput(h,msg,wp,lp):
                 which==1?s->gameInput(h,msg,wp,lp):
-                s->fxInput(h,msg,wp,lp);
+                s->fxInput(h,msg,wp,lp,static_cast<studio::StudioSurface>(which));
             if (handled != LRESULT(-1)) return handled;
         }
         switch (msg) {
@@ -625,7 +625,7 @@ public:
         default:return DefWindowProcW(h,msg,wp,lp);
         }
     }
-    LRESULT fxInput(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
+    LRESULT fxInput(HWND h, UINT msg, WPARAM wp, LPARAM lp,studio::StudioSurface surface) {
         if(!core_)return -1;
         switch(msg) {
         case WM_LBUTTONDOWN:
@@ -635,7 +635,7 @@ public:
         case WM_MOUSEMOVE:
             if(GetCapture()==h && (wp&(MK_LBUTTON|MK_RBUTTON))) {
                 const POINT now{GET_X_LPARAM(lp),GET_Y_LPARAM(lp)};
-                core_->fxCameraOrbit(now.x-fxLast_.x,now.y-fxLast_.y);
+                core_->fxCameraOrbit(surface,now.x-fxLast_.x,now.y-fxLast_.y);
                 fxLast_=now;
             }
             return 0;
@@ -644,7 +644,7 @@ public:
             if(GetCapture()==h)ReleaseCapture();
             return 0;
         case WM_MOUSEWHEEL:
-            core_->fxCameraZoom(double(GET_WHEEL_DELTA_WPARAM(wp))/120.0*2.0);
+            core_->fxCameraZoom(surface,double(GET_WHEEL_DELTA_WPARAM(wp))/120.0*2.0);
             return 0;
         case WM_KEYDOWN:
         case WM_KEYUP:

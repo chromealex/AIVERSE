@@ -729,7 +729,7 @@ export interface StudioParams {
   'studio.shaderGraphValidate': { graph: StudioShaderGraphDocument['graph'] };
   'studio.shaderGraphSave': { name: string; graph: StudioShaderGraphDocument['graph']; expected?: string | StudioShaderGraphDocument['graph']; expectedProject?: string; expectedDocumentEpoch?:string };
   'studio.placementGhost': {placeType:string;x?:number;z?:number;expectedDocumentEpoch:string;expectedDocumentRevision:string};
-  'studio.effectFilePreview': {project:string;source?:string;speed?:number;loop?:boolean;moving?:boolean;quality?:number;close?:boolean};
+  'studio.effectFilePreview': {project:string;source?:string;speed?:number;loop?:boolean;moving?:boolean;quality?:number;orbitX?:number;orbitY?:number;zoom?:number;resetCamera?:boolean;close?:boolean};
   'studio.lightingPreview': {key:'weather';value:StudioPreviewWeather;expectedDocumentEpoch:string};
   'studio.renderLighting': Record<string, never>;
   'studio.renderLightingSet': { patch: Partial<RenderLightingSettings> };
@@ -990,7 +990,7 @@ export interface StudioResult {
   'studio.shaderGraphValidate': StudioShaderGraphDocument;
   'studio.shaderGraphSave': StudioShaderGraphDocument;
   'studio.placementGhost': {url:string};
-  'studio.effectFilePreview': {particles:number;drawCalls:number;time:number};
+  'studio.effectFilePreview': {particles:number;drawCalls:number;time:number;yaw:number;pitch:number;distance:number};
   'studio.lightingPreview': Record<string,never>;
   'studio.renderLighting': RenderLightingSettings;
   'studio.renderLightingSet': RenderLightingSettings;

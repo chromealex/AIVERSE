@@ -4,6 +4,10 @@ import type {StudioParams} from '../types';
 import {StudioAlert,StudioButton,StudioSelect} from '../ui';
 import SpectraDockViewport from './SpectraDockViewport';
 
+const cameraKeys:Record<string,{orbitX?:number;orbitY?:number;zoom?:number}> = {
+  ArrowLeft:{orbitX:-12},ArrowRight:{orbitX:12},ArrowUp:{orbitY:12},ArrowDown:{orbitY:-12},
+  '+':{zoom:1},'=':{zoom:1},'-':{zoom:-1}
+};
 export default function EffectPlayback({project,source}:{project:string;source:string}){
   const [open,setOpen]=useState(false),[busy,setBusy]=useState(false);
   const [speed,setSpeed]=useState(1),[loop,setLoop]=useState(true);
@@ -41,6 +45,10 @@ export default function EffectPlayback({project,source}:{project:string;source:s
     <div className="au-row">
       <StudioButton disabled={busy||!nativeConnected()} onClick={()=>void replay()}>{open?'Replay':'Preview effect'}</StudioButton>
       {open&&<StudioButton onClick={()=>{setOpen(false);void command({close:true}).catch(e=>setError(String(e)));}}>Close preview</StudioButton>}
+      {open&&<StudioButton onClick={()=>change({resetCamera:true})} onKeyDown={event=>{
+        const step=cameraKeys[event.key];
+        if(step){event.preventDefault();change(step);}
+      }} title="Drag to orbit, scroll to zoom. With this button focused, use arrow keys and + or −.">Reset camera</StudioButton>}
       {open&&<span>{stats}</span>}
     </div>
     {open&&<div className="effects-playback-options">

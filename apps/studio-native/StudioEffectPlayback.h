@@ -23,6 +23,9 @@ class StudioEffectPlayback {
     using Clock=std::chrono::steady_clock;
     Clock::time_point last_{};
 
+    void resetCamera(){
+        camera_.target={0,1,0};camera_.distance=10;camera_.pitch=.42f;camera_.yaw=.6f;
+    }
     std::filesystem::path asset(const std::string& name) const {
         namespace fs=std::filesystem;
         if(name.empty() || fs::path(name).is_absolute())return {};
@@ -53,7 +56,7 @@ public:
         particles_.setGpuDeviceLease(std::move(lease));
         if(!particles_.init(&device))throw std::runtime_error(particles_.lastError());
         particles_.setQuality(fx::FxQuality::High);
-        camera_.target={0,1,0};camera_.distance=10;camera_.pitch=.42f;camera_.yaw=.6f;
+        resetCamera();
     }
     ~StudioEffectPlayback(){particles_.shutdown();textures_.shutdown();}
 
@@ -72,7 +75,19 @@ public:
         if(p.has("quality"))particles_.setQuality(fx::FxQuality(std::clamp<int64_t>(p.getInt("quality"),0,3)));
         if(p.has("loop"))loop_=p.getBool("loop");
         if(p.has("moving"))moving_=p.getBool("moving");
+        if(p.getBool("resetCamera"))resetCamera();
+        if(p.has("orbitX")||p.has("orbitY")){
+            camera_.yaw-=float(std::clamp(p["orbitX"].toDouble(),-250.,250.))*.01f;
+            camera_.pitch=std::clamp(camera_.pitch+float(std::clamp(p["orbitY"].toDouble(),-250.,250.))*.01f,.05f,1.5f);
+        }
+        if(p.has("zoom")){
+            const auto steps=std::clamp(p["zoom"].toDouble(),-50.,50.);
+            camera_.distance=std::clamp(camera_.distance*float(std::pow(.9,steps)),2.f,60.f);
+        }
         Json result=Json::object();
+        result.set("yaw",Json::number(double(camera_.yaw)));
+        result.set("pitch",Json::number(double(camera_.pitch)));
+        result.set("distance",Json::number(double(camera_.distance)));
         result.set("particles",Json::number(int64_t(particles_.stats().particles)));
         result.set("drawCalls",Json::number(int64_t(particles_.stats().drawCalls)));
         result.set("time",Json::number(double(time_)));
