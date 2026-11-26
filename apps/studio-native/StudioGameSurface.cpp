@@ -26,6 +26,7 @@
 #include "engine/world/SimulationLod.h"
 #include "apps/studio-native/StudioRuntimeEdit.h"
 #include "apps/editor/core/PhysisDiagnosticFrame.h"
+#include "engine/world/PhysisNaturePresentation.h"
 #include <algorithm>
 #include <chrono>
 #include <stdexcept>
@@ -148,6 +149,15 @@ Simulation* StudioGameSurface::liveSimulation() const {
 bool StudioGameSurface::paused() const {return actor_?actor_->paused():host_->paused();}
 bool StudioGameSurface::canControl() const {return actor_ || host_->canControl();}
 bool StudioGameSurface::canStep() const {return actor_?actor_->paused():host_->canStep();}
+std::shared_ptr<const world::NaturePresentationFrame> StudioGameSurface::natureFrame(float x,float z) const {
+    const auto* sim=canControl()?liveSimulation():nullptr;
+    if(!sim||sim->tick()==0)return {};
+    world::NaturePresentationPolicy policy;
+    policy.centerX=x;policy.centerZ=z;policy.radiusMeters=54;policy.maxRegionCells=112;
+    policy.maxFlames=0;policy.maxClusters=0;
+    auto sample=world::buildNaturePresentation(sim->world(),policy);
+    return sample.valid?std::make_shared<const world::NaturePresentationFrame>(std::move(sample)):nullptr;
+}
 Json StudioGameSurface::physisFrame(const Json& params) const {
     const auto* sim = canControl() ? liveSimulation() : nullptr;
     return editor::readPhysisGameFrame(sim && sim->tick()>0 ? &sim->world() : nullptr,params);

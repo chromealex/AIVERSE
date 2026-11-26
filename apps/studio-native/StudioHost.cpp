@@ -1248,6 +1248,14 @@ void StudioHost::tickScene() {
     const auto ids = session_->selectedObjectIds();
     in.selection = std::set<std::string>(ids.begin(), ids.end());
     in.hidden = session_->hiddenIds(); in.locked = session_->lockedIds(); in.hover = hoverId_;
+    if((natureWind_||natureFire_)&&game_&&!map.data.planet()&&game_->launchedMapCurrent()&&studioPlaySourceMatches(game_->launchPlan(),ws)){
+        if(now>=nextNatureSample_){
+            const auto camera=onScene([&]{return preview_->cameraState();});
+            natureFrame_=game_->natureFrame(camera.target.x,camera.target.z);
+            nextNatureSample_=now+.25;
+        }
+        in.nature=natureFrame_;
+    }else{natureFrame_.reset();nextNatureSample_=0;}
     in.wind = session_->windPreview();
     {
         std::lock_guard<std::mutex> io(renderIoMutex_);
@@ -1280,6 +1288,7 @@ void StudioHost::renderSceneFrame() {
             preview_->setPlanetTerrainLook(in.planetLook);
             preview_->setBaseTerrainView(in.editBaseTerrain);
             preview_->setRegionBorders(in.regionBorderLetter);
+            preview_->setNatureFrame(in.nature);
             preview_->setWindPreview(in.wind);
             preview_->frame(in.width, in.height, *in.map, in.fps, in.selected, "", Json::object(), 0,
                             in.levelHeight, in.project, *in.rules, nullptr);
@@ -3445,9 +3454,12 @@ Json StudioHost::viewportInput(const Json& input) {
         // Scene toolbar: tool, Global/Local, snapping, gizmo visibility.
         static const char* names[4] = {"view", "move", "rotate", "scale"};
         const std::string t = input.getStr("tool");
+        if(realBool("natureWind"))natureWind_=input["natureWind"].boolean();
+        if(realBool("natureFire"))natureFire_=input["natureFire"].boolean();
         onScene([&] {
             for (int i = 0; i < 4; ++i) if (t == names[i]) preview_->setTransformTool(StudioScene::TransformTool(i));
             if (realBool("local")) preview_->setLocalSpace(input["local"].boolean());
+            preview_->setNatureLayers(natureWind_,natureFire_);
             if (realBool("worldAxes")) preview_->setWorldAxes(input["worldAxes"].boolean());
             if (realBool("objectBounds")) preview_->setObjectBounds(input["objectBounds"].boolean());
             if (realBool("selectionBox")) preview_->setSelectionBox(input["selectionBox"].boolean());

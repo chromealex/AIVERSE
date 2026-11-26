@@ -191,6 +191,7 @@ private:
         std::string selected, project, hover, geometryFile;
         float levelHeight = 1.5f;
         std::set<std::string> selection, hidden, locked;
+        std::shared_ptr<const world::NaturePresentationFrame> nature;
         StudioWindState wind;
     };
     // Results of the last finished Scene frame, consumed by the UI thread.
@@ -290,6 +291,9 @@ private:
     bool textureGraphWork_=false;
     std::string textureGraphScope_,textureGraphError_;
     std::mutex renderIoMutex_;                         // guards renderInputs_ / renderOutputs_
+    bool natureWind_=false,natureFire_=false;
+    double nextNatureSample_=0;
+    std::shared_ptr<const world::NaturePresentationFrame> natureFrame_;
     FrameInputs renderInputs_;
     FrameOutputs renderOutputs_;
     bool renderOutputsFresh_ = false;

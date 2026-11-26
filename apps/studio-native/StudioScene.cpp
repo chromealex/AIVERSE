@@ -1,3 +1,4 @@
+#include "apps/editor/core/NatureFieldArrows.h"
 #include "engine/render/BakedLighting.h"
 #include "engine/render/PrismaReportJson.h"
 #include "engine/render/StaticGeometryReport.h"
@@ -4214,6 +4215,26 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             renderer_.line(edge.a,edge.b,color);
         }
     }
+    if(natureFrame_&&!planetaryChart){
+        constexpr float step=6.f;
+        editor::natureFieldArrows(*natureFrame_,std::floor(view.target.x/step)*step,std::floor(view.target.z/step)*step,
+            48,step,natureWind_,natureFire_,[&](float x,float z,float dx,float dz,bool fire,float strength){
+                if(!map.worldSpace&&(x<0||z<0||x>=map.w||z>=map.h))return;
+                const float y=(showTerrain?terrainPreviewHeight(map,x,z,levelHeight):0.f)+(fire?1.8f:1.2f);
+                const uint32_t color=fire?rgba(255,int(150-110*strength),40):rgba(80+175*strength,210,255-130*strength);
+                const float3 tip{x+dx,y,z+dz};
+                if(dx||dz){
+                    renderer_.line({x,y,z},tip,color);
+                    renderer_.line(tip,{tip.x-.28f*dx-.15f*dz,y,tip.z-.28f*dz+.15f*dx},color);
+                    renderer_.line(tip,{tip.x-.28f*dx+.15f*dz,y,tip.z-.28f*dz-.15f*dx},color);
+                }else{
+                    for(int i=0;i<8;++i){
+                        const float a=i*.78539816f,b=(i+1)*.78539816f;
+                        renderer_.line({x+.5f*std::cos(a),y,z+.5f*std::sin(a)},{x+.5f*std::cos(b),y,z+.5f*std::sin(b)},color);
+                    }
+                }
+            });
+    }
     if(worldAxes_&&!planetaryChart){
         renderer_.line({0,0,0},{4,0,0},rgba(234,96,96));
         renderer_.line({0,0,0},{0,4,0},rgba(105,206,119));
@@ -5372,7 +5393,7 @@ uint64_t StudioScene::frameSignature(int width,int height,const editor::MapDoc& 
     vec(camera_.target);value(camera_.distance);value(camera_.pitch);value(camera_.yaw);value(camera_.fovY);
     value(camera_.ortho);value(autoIso_);value(tween_.active);
     ids(selection_);ids(hidden_);text(hover_);
-    value(tool_);value(localSpace_);value(gizmosVisible_);value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
+    value(tool_);value(localSpace_);value(gizmosVisible_);value(natureWind_);value(natureFire_);value(natureFrame_.get());value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
     value(drag_.axis);value(drag_.tool);text(drag_.id);vec(drag_.moveOffset);value(drag_.value);
     value(drag_.accumulated);value(drag_.lastAngle);value(drag_.snapping);
     value(marquee_.on);value(marquee_.x0);value(marquee_.y0);value(marquee_.x1);value(marquee_.y1);

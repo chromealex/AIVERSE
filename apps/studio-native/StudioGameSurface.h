@@ -9,6 +9,7 @@
 #include "apps/studio-native/StudioWorldProcessLiveOptions.h"
 #include "apps/studio-native/StudioForestCameraFocus.h"
 
+namespace aiverse::world { struct NaturePresentationFrame; }
 namespace aiverse::studio {
 // Independent native surface; the authoring Scene keeps its own device/epoch.
 class StudioGameSurface final {
@@ -38,6 +39,7 @@ public:
     Json ecologyState(const StudioWorldProcessLiveOptions& options={},const std::string& focusBody={},const std::optional<StudioForestCameraFocus>& camera={},Json* forestRender=nullptr);
     Json staticGeometryReport(const editor::Workspace& ws) const;
     Json prismaFrameReports() const { return host_ ? host_->prismaFrameReports() : Json::array(); }
+    std::shared_ptr<const world::NaturePresentationFrame> natureFrame(float x,float z) const;
     Json physisFrame(const Json& params) const;
     Json planetForestState(const std::string& focusBody={},const std::optional<StudioForestCameraFocus>& camera={});
     bool planetMatch() const;

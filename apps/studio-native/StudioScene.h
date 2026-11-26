@@ -50,6 +50,7 @@
 #include "apps/studio-native/StudioSpectraSources.h"
 
 namespace aiverse::editor { class Workspace; class TextureGraphGpuPreview; }
+namespace aiverse::world { struct NaturePresentationFrame; }
 namespace aiverse::studio {
 class StudioScene final {
 public:
@@ -390,6 +391,8 @@ public:
     void setRegionBorders(char letter) {
         if(regionBorderLetter_!=letter){regionBorderLetter_=letter;regionBordersDirty_=true;}
     }
+    void setNatureFrame(std::shared_ptr<const world::NaturePresentationFrame> frame) { natureFrame_=std::move(frame); }
+    void setNatureLayers(bool wind,bool fire) { natureWind_=wind;natureFire_=fire; }
     void setWorldAxes(bool visible) { worldAxes_ = visible; }
     void setObjectBounds(bool visible) { objectBounds_ = visible; }
     void setSelectionBox(bool visible) { selectionBoxVisible_ = visible; }
@@ -757,6 +760,8 @@ private:
     StudioRegionBorders regionBorders_;
     char regionBorderLetter_=0;
     bool regionBordersDirty_=true;
+    std::shared_ptr<const world::NaturePresentationFrame> natureFrame_;
+    bool natureWind_=false,natureFire_=false;
     bool worldAxes_ = false, objectBounds_ = false, selectionBoxVisible_ = true;
     bool localSpace_ = false, gizmosVisible_ = true, snapEnabled_ = false;
     float snapMove_ = 1.0f, snapRotate_ = 15.0f, snapScale_ = 0.1f;

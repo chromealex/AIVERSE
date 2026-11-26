@@ -13,6 +13,7 @@
 //             with "xK soil" labels; the selected zone is highlighted.
 #pragma once
 #include "Editor.h"
+#include "apps/editor/core/NatureFieldArrows.h"
 #include "engine/render/Math3D.h"
 #include <algorithm>
 #include <cmath>
@@ -112,31 +113,13 @@ inline void drawNatureGizmos(Editor& ed, const Viewport& vp, const render::Camer
 
     // ---- PHYSIS: wind field and fire spread from the nature frame.
     if (const auto* frame = ed.physisNaturePreview().frame(); frame && frame->valid) {
-        const float maxWind = std::max(1.f, frame->maxWindSpeed);
-        for (float z = cz - radius; z <= cz + radius; z += step)
-            for (float x = cx - radius; x <= cx + radius; x += step) {
-                if ((x - cx) * (x - cx) + (z - cz) * (z - cz) > radius * radius) continue;
-                const auto at = frame->sample(x, z);
-                if (!at.valid) continue;
-                const float speed = std::sqrt(at.windX * at.windX + at.windZ * at.windZ);
-                const float y = ground(ed, x, z) + 1.2f;
-                if (cfg.physisWind && speed > 0.05f) {
-                    const float len = step * 0.75f * std::clamp(speed / maxWind, 0.25f, 1.f);
-                    paint.arrow({x, y, z}, {x + at.windX / speed * len, y, z + at.windZ / speed * len},
-                                speedColor(speed / 20.f, 200), 1.6f);
-                }
-                if (cfg.physisFire && at.fire > 0.05f) {
-                    // Fire runs downwind; a calm fire just glows (ring).
-                    const float len = step * (0.6f + 0.8f * std::clamp(at.fire, 0.f, 1.f));
-                    const ImU32 fire = IM_COL32(255, int(150 - 110 * std::clamp(at.fire, 0.f, 1.f)), 40, 240);
-                    if (speed > 0.3f)
-                        paint.arrow({x, y + 0.6f, z}, {x + at.windX / speed * len, y + 0.6f, z + at.windZ / speed * len}, fire, 3.f);
-                    else {
-                        ImVec2 p;
-                        if (paint.project({x, y + 0.6f, z}, p)) draw->AddCircle(p, 6.f, fire, 12, 2.5f);
-                    }
-                }
-            }
+        natureFieldArrows(*frame,cx,cz,radius,step,cfg.physisWind,cfg.physisFire,
+            [&](float x,float z,float dx,float dz,bool fire,float strength){
+                const float y=ground(ed,x,z)+(fire?1.8f:1.2f);
+                const auto color=fire?IM_COL32(255,int(150-110*strength),40,240):speedColor(strength,200);
+                if(dx||dz)paint.arrow({x,y,z},{x+dx,y,z+dz},color,fire?3.f:1.6f);
+                else {ImVec2 p;if(paint.project({x,y,z},p))draw->AddCircle(p,6.f,color,12,2.5f);}
+            });
     }
 
     const auto& doc = ed.doc();
