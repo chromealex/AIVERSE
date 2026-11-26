@@ -334,6 +334,8 @@ private:
     double lensCaptureStarted_ = 0;
     void captureLensFrame(int64_t cameraId);
     void finishLensCapture();
+    double sceneShotDeadline_=0;
+    Json sceneShotScope_;
     double windowShotDeadline_=0;
     double gameShotDeadline_=0;
     uint64_t gameShotEpoch_=0;

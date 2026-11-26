@@ -562,3 +562,5 @@ Restore whole-window MCP capture in HTML Studio, including simultaneous browser 
 An explicit all or default view_screenshot now captures the main HTML Studio window. Packaged macOS included WKWebView controls and a live Metal Game layer. Switching to Console replaced the game region while retaining the Post FX panel. [Whole-window verification](evidence/studio-full-window-screenshot.json).
 
 Transfer clean Scene screenshot dimensions and camera arguments through a shared request parser before wiring the isolated render target.
+
+Route Scene exports through the current map render pass with a separate color/depth output and a temporary camera projection. Verify the resulting PNG on Metal.

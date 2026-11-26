@@ -5,6 +5,7 @@
 #include <cmath>
 #include <optional>
 #include <stdexcept>
+#include <utility>
 
 namespace aiverse::editor {
 inline float cameraNumber(const Json& args,const char* key,float fallback) {
@@ -46,6 +47,12 @@ struct SceneScreenshotOptions {
         options.x=number("x");options.y=number("y");options.z=number("z");
         options.distance=number("distance");options.pitch=number("pitch");options.yaw=number("yaw");
         return options;
+    }
+
+    static std::pair<int,int> boundedViewportSize(int width,int height) {
+        const double scale=std::min({1.0,4096.0/std::max(1,std::max(width,height)),
+            std::sqrt(8388608.0/std::max(1.0,double(width)*height))});
+        return {std::max(1,int(width*scale)),std::max(1,int(height*scale))};
     }
 
     render::Camera camera(render::Camera base) const {

@@ -142,9 +142,7 @@ std::pair<int,int> Editor::sceneCaptureSize(int width,int height) const {
         const int requested=int(shot.metadata.getInt("requested_width"));
         if(requested>0)return {requested,int(shot.metadata.getInt("requested_height"))};
         // Default: current viewport resolution, bounded for readback payloads.
-        const double scale=std::min({1.0,4096.0/std::max(1,std::max(width,height)),
-            std::sqrt(8388608.0/std::max(1.0,double(width)*height))});
-        return {std::max(1,int(width*scale)),std::max(1,int(height*scale))};
+        return SceneScreenshotOptions::boundedViewportSize(width,height);
     }
     return {width,height};
 }

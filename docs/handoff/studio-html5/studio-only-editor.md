@@ -1113,3 +1113,5 @@ fabceff527e6ea9f7f8b9f4f36e9780b4b482487 implemented whole-window routing in Stu
 Transfer clean Scene screenshot dimensions and camera arguments through a shared request parser before wiring the isolated render target.
 
 Stage 966bcc4fdf0fd2824cbdb9f07463c9ba14056088 extracts apps/editor/core/SceneScreenshotOptions.h and passes validated options through StudioSession. The KINGSTON native aiverse_studio_session_tests executable passed with eight malformed authenticated Scene requests and a valid 2048 × 4096 request including target, pitch, yaw and distance. clang++ -std=c++20 -fsyntax-only on apps/editor/EditorAgent.cpp passed. Feature manifest structural check passed. No capture pixels were tested in this stage. StudioHost still takes the live Scene drawable, so the next stage must render to an explicit target, suppress editor overlays, preserve the interactive camera and verify the actual PNG dimensions and composition.
+
+Route Scene exports through the current map render pass with a separate color/depth output and a temporary camera projection. Verify the resulting PNG on Metal.

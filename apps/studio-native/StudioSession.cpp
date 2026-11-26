@@ -1969,7 +1969,11 @@ void StudioSession::finishAgentScreenshot(const std::string& pngBase64, int widt
         else {
             result.set("png_base64",str(pngBase64));
             result.set("width",num(int64_t(width)));result.set("height",num(int64_t(height)));
-            result.set("view",str(shot.window=="all"?"HTML Studio window":shot.window=="game"?"Studio Game viewport":shot.window=="physis"?"PHYSIS 3D nature viewport":"Studio Scene panel as the user sees it (camera unchanged)"));
+            if(shot.window=="scene"){
+                result.set("clean",Json::fromBool(shot.scene.clean));
+                result.set("render_width",num(int64_t(width)));result.set("render_height",num(int64_t(height)));
+            }
+            result.set("view",str(shot.window=="all"?"HTML Studio window":shot.window=="game"?"Studio Game viewport":shot.window=="physis"?"PHYSIS 3D nature viewport":"Studio Scene viewport"));
         }
         r.set("id",shot.id);r.set("result",std::move(result));
         agentServer_.send(shot.client,r.dump(-1));

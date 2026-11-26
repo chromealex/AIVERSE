@@ -41,7 +41,8 @@ Existing ViewportGpuRetirement and capture lifetime token own GPU/shutdown safet
 Metal is asynchronous; GL's explicit captureTexture path can synchronously read
 pixels. GPU/backend parity must be tested separately.
 
-NativeEditor Metal and shared native Studio compilation were checked; this does
-not claim screenshot-operation parity in the separate HTML5 Studio renderer.
-Mouse/keyboard interaction remains a separate acceptance check when the Mac is
-unlocked. Preserve the Studio native Metal viewport and bridge allowlist.
+HTML Studio exports the active map with the Scene renderer on its render thread.
+The next scheduled map frame draws into a separate color and depth target.
+Camera arguments apply to the export projection. The interactive orbit still
+belongs to the Scene panel. A changed document, closed panel or expired
+capture returns an error. A later ordinary frame resumes the drawable.

@@ -2151,6 +2151,8 @@ StudioScene::~StudioScene() {
         (void)terrainRetirement_.completeForShutdown(*device_);
         sparseTerrainPreview_.release([&](auto& model){sparseTerrainRetirement_.retireModel(*device_,model);});
         (void)sparseTerrainRetirement_.completeForShutdown(*device_);
+        if (idle && captureColor_.valid()) device_->destroyTexture(captureColor_);
+        if (idle && captureDepth_.valid()) device_->destroyTexture(captureDepth_);
         if (thumbColor_.valid()) device_->destroyTexture(thumbColor_);
         if (thumbDepth_.valid()) device_->destroyTexture(thumbDepth_);
         nereid_.shutdown(*device_);
@@ -2308,12 +2310,13 @@ void StudioScene::frameAll(const editor::MapDoc& map,bool fpsProject) {
 }
 render::Camera StudioScene::viewCamera() const {
     if(lensCamera_)return *lensCamera_;
-    render::Camera view=camera_;
-    view.zNear=std::clamp(camera_.distance*0.002f,0.05f,0.5f);
-    view.zFar=std::max(1000.0f,camera_.distance*6.0f);
+    render::Camera view=captureOutput_?captureOutput_->options.camera(camera_):camera_;
+    const auto distance=view.distance;
+    view.zNear=std::clamp(distance*0.002f,0.05f,0.5f);
+    view.zFar=std::max(1000.0f,distance*6.0f);
     if(view.ortho) {
-        view.orthoHalfHeightOverride=std::max(0.01f,camera_.distance*std::tan(camera_.fovY*0.5f));
-        view.distance=std::min(camera_.distance,400.0f);
+        view.orthoHalfHeightOverride=std::max(0.01f,distance*std::tan(view.fovY*0.5f));
+        view.distance=std::min(distance,400.0f);
     }
     return view;
 }
@@ -3072,7 +3075,7 @@ void StudioScene::renderCaveGlobe(int width,int height,const editor::MapDoc& doc
     // No chart or flat-scene object submissions in overview mode.
     camera_.target={0,0,0};camera_.distance=std::clamp(camera_.distance,12.f,100.f);
     tween_.active=false;
-    device_->beginFrame(width,height);StudioFrameScope scope{*device_};
+    beginMapOutput(width,height);StudioFrameScope scope{*device_};
     renderer_.beginScene(viewCamera(),width,height);
     renderer_.clearDynamicGiOverlay();
     renderer_.lighting=render::Lighting{};
@@ -3085,7 +3088,9 @@ void StudioScene::renderCaveGlobe(int width,int height,const editor::MapDoc& doc
                 {.95f,.66f,.18f,1},kDrawNoCastShadow);
     }
     gfx::PassDesc pass;pass.clearColor[0]=.025f;pass.clearColor[1]=.035f;pass.clearColor[2]=.06f;pass.clearColor[3]=1.f;
+    setMapOutput(pass);
     renderer_.render(pass,&antialiasing_);renderer_.resolvePostFx();
+    readMapOutput();
     globeReady_=globe_.has_value()&&globeMesh_.vb.valid()&&globeMesh_.ib.valid();
     ++framesDrawn_;
 }
@@ -3496,6 +3501,51 @@ void StudioScene::frameSpectraDock(int framebufferWidth,int framebufferHeight) {
     while(fxFrameProvenance_->size()>64)fxFrameProvenance_->pop_front();
     // StudioFrameScope closes the native pass and frame on owner thread.
 }
+void StudioScene::renderMapOutput(int width,int height,const std::function<void(int,int)>& draw) {
+    if(!mapCapture_){draw(width,height);return;}
+    auto request=std::move(*mapCapture_);
+    mapCapture_.reset();
+    if(request.options.width){
+        width=request.options.width;height=request.options.height;
+    }else{
+        std::tie(width,height)=editor::SceneScreenshotOptions::boundedViewportSize(width,height);
+    }
+    captureOutput_=&request;
+    lastFrameSignature_=0;
+    try { draw(width,height); }
+    catch(const std::exception& e){std::fprintf(stderr,"Studio Scene export: %s\n",e.what());}
+    captureOutput_=nullptr;
+    lastFrameSignature_=0;
+    if(request.callback)request.callback(0,0,{});
+}
+
+void StudioScene::beginMapOutput(int width,int height) {
+    if(!captureOutput_){device_->beginFrame(width,height);return;}
+    if(width!=captureWidth_ || height!=captureHeight_ || !captureColor_.valid() || !captureDepth_.valid()){
+        if((captureColor_.valid() || captureDepth_.valid()) && !device_->waitForResourceIdle())
+            throw std::runtime_error("Scene export target is still in use");
+        if(captureColor_.valid())device_->destroyTexture(captureColor_);
+        if(captureDepth_.valid())device_->destroyTexture(captureDepth_);
+        captureColor_={};captureDepth_={};
+        gfx::TextureDesc texture;texture.width=width;texture.height=height;texture.renderTarget=true;
+        texture.format=gfx::PixelFormat::RGBA8;texture.label="Scene export color";
+        captureColor_=device_->createTexture(texture);
+        texture.format=gfx::PixelFormat::Depth;texture.label="Scene export depth";
+        captureDepth_=device_->createTexture(texture);
+        if(!captureColor_.valid() || !captureDepth_.valid())throw std::runtime_error("Scene export target allocation failed");
+        captureWidth_=width;captureHeight_=height;
+    }
+    if(!device_->beginOffscreenFrame())throw std::runtime_error("Scene export frame unavailable");
+}
+void StudioScene::setMapOutput(gfx::PassDesc& pass) const {
+    if(captureOutput_){pass.colorTarget=captureColor_;pass.depthTarget=captureDepth_;}
+}
+void StudioScene::readMapOutput() {
+    if(!captureOutput_)return;
+    device_->endPass();
+    if(device_->captureTexture(captureColor_,captureOutput_->callback))captureOutput_->callback={};
+}
+
 void StudioScene::frame(int framebufferWidth, int framebufferHeight, const editor::MapDoc& doc,
                              bool fpsProject, const std::string& selectedId,
                              const std::string& previewName, const Json& previewFactors,
@@ -4075,7 +4125,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         lastDrawn_=now; ++framesDrawn_;
     }
     // proxies/syncDocumentModels ran above: lighting needs modelInstances_ first.
-    device_->beginFrame(framebufferWidth, framebufferHeight);
+    beginMapOutput(framebufferWidth,framebufferHeight);
     StudioFrameScope scope{*device_};
     // Stage both preview owners before draw submission. Share the exact
     // surface plan pointer; neither half is drawn before its counterpart.
@@ -4084,7 +4134,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         try{
             if(sparseTerrainRetirement_.pending()>=128)throw std::runtime_error("Sparse terrain GPU retirement pressure");
             const auto cm=[](float v){return int64_t(std::llround(std::clamp(double(v),-9990000.,9990000.)*100.));};
-            sparseTerrainPreview_.prepare(*device_,doc,cm(camera_.target.x),cm(camera_.target.z),
+            sparseTerrainPreview_.prepare(*device_,doc,cm(view.target.x),cm(view.target.z),
                 retireSparse,cavernsPreview_.visible());
             sparsePrepared=true;sparseTerrainError_.clear();
         }catch(const std::exception& e){sparseTerrainError_=e.what();}
@@ -4094,7 +4144,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         ?planetCutPlan_:nullptr;
     cavernsPreview_.syncRimGroup(planetaryChart?chartGroup:surfaceGroup);
     cavernsPreview_.beforeRender(*device_,planetaryChart?view.eye():
-        brushVisible_&&brushVolume_?brushCenter_:camera_.target);
+        brushVisible_&&brushVolume_?brushCenter_:view.target);
     if(surfaceGroup&&!surfaceGroup->rims.empty()&&cavernsPreview_.rimRejected(surfaceGroup)){
         const auto why=cavernsPreview_.rimError();
         sparseTerrainPreview_.rejectSurfaceGroup(retireSparse,why.empty()?"Caverns matching volume unavailable":why);
@@ -4111,7 +4161,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         const float aspect=float(framebufferWidth)/float(framebufferHeight);
         const auto viewProj=view.proj(aspect,device_->info().clipDepthZeroToOne)*view.view();
         spectraPreview_->prepare(fx::SpectraFxView::fromCamera(
-            view,viewProj,framebufferWidth,framebufferHeight),camera_.target);
+            view,viewProj,framebufferWidth,framebufferHeight),view.target);
     }
     {
         const float aspect=float(framebufferWidth)/float(framebufferHeight);
@@ -4125,7 +4175,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     renderThumbnail(); // at most one Assets thumbnail, offscreen, before the scene pass
     if(bakedScene)renderer_.setBakedLighting(&sceneBake_->gpu);
     renderer_.beginScene(view, framebufferWidth, framebufferHeight);
-    renderer_.setSceneSelectionOutline(true); // editor-only depth-tested silhouette
+    renderer_.setSceneSelectionOutline(!cleanMapOutput()); // editor-only depth-tested silhouette
     {
         const double seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-windClock_).count();
         renderer_.setSceneWind(wind_.sceneWind(seconds));
@@ -4139,7 +4189,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     if(!planetaryChart&&(!lightingRuntime_.direct || !lightingRuntime_.direct->enabled))
         for(const auto& light:activeLights)renderer_.lights.add(light);
-    lightingRuntime_.update(*device_,renderer_,camera_.target);
+    lightingRuntime_.update(*device_,renderer_,view.target);
     if(lightingRuntime_.indirect || lightingRuntime_.direct)lightingStatus_=lightingRuntime_.status();
 
     if(staticScenery_ && staticScenery_->loaded && !cavernsPreview_.isolate() && !planetaryChart)
@@ -4167,9 +4217,9 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     const int xStep = std::max(1, map.w / 48);
     const int zStep = std::max(1, map.h / 48);
-    for (int x=0; !planetaryChart && !fpsProject && x<=map.w; x+=xStep)
+    for (int x=0; !cleanMapOutput() && !planetaryChart && !fpsProject && x<=map.w; x+=xStep)
         renderer_.line({float(x),.01f,0},{float(x),.01f,h},rgba(55,84,109,120));
-    for (int z=0; !planetaryChart && !fpsProject && z<=map.h; z+=zStep)
+    for (int z=0; !cleanMapOutput() && !planetaryChart && !fpsProject && z<=map.h; z+=zStep)
         renderer_.line({0,.01f,float(z)},{w,.01f,float(z)},rgba(55,84,109,120));
 
     } // external/Terra surface suppresses the default plane and grid
@@ -4218,7 +4268,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         const bool dragged=!drag_.id.empty() && entity.id==drag_.id;
         const mat4 preview=dragged?dragPreview():mat4{};
         const float3 offset=dragged&&drag_.tool==TransformTool::Move?drag_.moveOffset:float3{};
-        if(objectBounds_){
+        if(!cleanMapOutput() && objectBounds_){
             const auto lo=entity.boundsMin,hi=entity.boundsMax;
             float3 corners[8];
             for(int i=0;i<8;++i)
@@ -4248,16 +4298,16 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         // draws a PBR primitive Model; plain default cubes keep the cheap proxy path.
         if(!lightingModel_ && cached.primitive) {
             render::ModelDraw draw;draw.model=cached.primitive;draw.world=world;draw.materials=&cached.materials;
-            if(entity.id==selectedId||selection_.count(entity.id))draw.outline={.25f,.62f,1.0f,.035f};
-            else if(entity.id==hover_)draw.outline={.62f,.8f,1.0f,.02f};
+            if(!cleanMapOutput() && (entity.id==selectedId||selection_.count(entity.id)))draw.outline={.25f,.62f,1.0f,.035f};
+            else if(!cleanMapOutput() && entity.id==hover_)draw.outline={.62f,.8f,1.0f,.02f};
             renderer_.drawModel(draw);
             continue;
         }
         if(!lightingModel_ && !entity.light) {
-            if(entity.id==selectedId||selection_.count(entity.id)) renderer_.drawSelectionMesh(cube_,world,entity.color,{.25f,.62f,1.0f,1.0f});
-            else if(entity.id==hover_) renderer_.drawSelectionMesh(cube_,world,entity.color,{.62f,.8f,1.0f,.55f});
+            if(!cleanMapOutput() && (entity.id==selectedId||selection_.count(entity.id))) renderer_.drawSelectionMesh(cube_,world,entity.color,{.25f,.62f,1.0f,1.0f});
+            else if(!cleanMapOutput() && entity.id==hover_) renderer_.drawSelectionMesh(cube_,world,entity.color,{.62f,.8f,1.0f,.55f});
             else renderer_.drawMesh(cube_,world,entity.color,kDrawNoCastShadow);
-        } else if(entity.id==selectedId && entity.light) {
+        } else if(!cleanMapOutput() && entity.id==selectedId && entity.light) {
             const auto lo=entity.boundsMin+offset,hi=entity.boundsMax+offset;
             const float3 p[8]={{lo.x,lo.y,lo.z},{hi.x,lo.y,lo.z},
                 {hi.x,lo.y,hi.z},{lo.x,lo.y,hi.z},{lo.x,hi.y,lo.z},
@@ -4282,10 +4332,10 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             draw.materials=&custom->second.materials;
         if(graphPresentation_&&instance.model)draw.materials=graphPresentation_->materials(*instance.model,instance.id,draw.materials);
         if(auto team=instanceTeams_.find(instance.id);team!=instanceTeams_.end())draw.team=team->second;
-        if(instance.id!=selectedId && selection_.count(instance.id))draw.outline={.25f,.62f,1.0f,.035f};
-        else if(instance.id!=selectedId && instance.id==hover_)draw.outline={.62f,.8f,1.0f,.02f};
+        if(!cleanMapOutput() && instance.id!=selectedId && selection_.count(instance.id))draw.outline={.25f,.62f,1.0f,.035f};
+        else if(!cleanMapOutput() && instance.id!=selectedId && instance.id==hover_)draw.outline={.62f,.8f,1.0f,.02f};
         if(instance.id==selectedId) {
-            draw.outline={.25f,.62f,1.0f,.035f};
+            if(!cleanMapOutput())draw.outline={.25f,.62f,1.0f,.035f};
             if(instance.model)captureSelectedBox(draw.world,instance.model->boundsMin,instance.model->boundsMax);
         }
         renderer_.drawModel(draw);
@@ -4296,7 +4346,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             cachedRig=windRigs_.emplace(instance.model,render::wind::findWindRig(*instance.model)).first;
         if(const auto& rig=cachedRig->second) {
             ++riggedInstances_; riggedParts_+=rig->decoded.nodes.size();
-            if(wind_.debug==render::wind::WindDebugView::Skeleton &&
+            if(!cleanMapOutput() && wind_.debug==render::wind::WindDebugView::Skeleton &&
                (selectedId.empty() || instance.id==selectedId || riggedInstances_<=32)) {
                 std::vector<render::wind::WindDebugLine> lines;
                 const auto params=render::wind::windRigParamsForDraw(wind_.sceneWind(windSeconds),draw.world);
@@ -4309,75 +4359,77 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     if(!planetaryChart)nereid_.draw(renderer_);
     // Editor gizmos for authored lights; actual light contribution is passed through
     // Renderer3D::lights, not faked with an overlay screenshot.
-    if(!planetaryChart)for(const auto& light:activeLights) {
-        const auto at=light.pos;
-        const float extent=std::clamp(light.radius*.08f,.2f,2.f);
-        const uint32_t color=rgba(245,200,100);
-        renderer_.line({at.x-extent,at.y,at.z},{at.x+extent,at.y,at.z},color);
-        renderer_.line({at.x,at.y-extent,at.z},{at.x,at.y+extent,at.z},color);
-        renderer_.line({at.x,at.y,at.z-extent},{at.x,at.y,at.z+extent},color);
-    }
-    if(areaBounds_ && !fpsProject && !planetaryChart){
-        const auto [left,top,width,height]=*areaBounds_;
-        const auto point=[&](int x,int z){return float3{float(x),showTerrain?terrainPreviewCorner(map,x,z,levelHeight)+.08f:.08f,float(z)};};
-        const auto color=rgba(255,214,105);
-        for(int x=left;x<left+width;++x)for(int z:{top,top+height})
-            renderer_.line(point(x,z),point(x+1,z),color);
-        for(int z=top;z<top+height;++z)for(int x:{left,left+width})
-            renderer_.line(point(x,z),point(x,z+1),color);
-    }
-    if(regionBorderLetter_ && !fpsProject && !planetaryChart){
-        if(regionBordersDirty_)regionBorders_.measure(map,levelHeight,showTerrain);
-        const auto bounds=regionBorders_.visible(map,view,framebufferWidth,framebufferHeight);
-        if(regionBordersDirty_ || bounds!=regionBorders_.bounds){
-            regionBorders_.build(map,bounds,levelHeight,showTerrain,regionBorderLetter_);
-            regionBordersDirty_=false;
+    if(!cleanMapOutput()) {
+        if(!planetaryChart)for(const auto& light:activeLights) {
+            const auto at=light.pos;
+            const float extent=std::clamp(light.radius*.08f,.2f,2.f);
+            const uint32_t color=rgba(245,200,100);
+            renderer_.line({at.x-extent,at.y,at.z},{at.x+extent,at.y,at.z},color);
+            renderer_.line({at.x,at.y-extent,at.z},{at.x,at.y+extent,at.z},color);
+            renderer_.line({at.x,at.y,at.z-extent},{at.x,at.y,at.z+extent},color);
         }
-        for(const auto& edge:regionBorders_.edges){
-            const unsigned c=static_cast<unsigned char>(edge.letter);
-            const uint32_t color=edge.letter==regionBorderLetter_?rgba(125,215,255):
-                rgba(80+(c*47)%175,80+(c*91)%175,80+(c*23)%175);
-            renderer_.line(edge.a,edge.b,color);
+        if(areaBounds_ && !fpsProject && !planetaryChart){
+            const auto [left,top,width,height]=*areaBounds_;
+            const auto point=[&](int x,int z){return float3{float(x),showTerrain?terrainPreviewCorner(map,x,z,levelHeight)+.08f:.08f,float(z)};};
+            const auto color=rgba(255,214,105);
+            for(int x=left;x<left+width;++x)for(int z:{top,top+height})
+                renderer_.line(point(x,z),point(x+1,z),color);
+            for(int z=top;z<top+height;++z)for(int x:{left,left+width})
+                renderer_.line(point(x,z),point(x,z+1),color);
         }
-    }
-    if(natureFrame_&&!planetaryChart){
-        const float step=natureSpacing_;
-        editor::natureFieldArrows(*natureFrame_,std::floor(view.target.x/step)*step,std::floor(view.target.z/step)*step,
-            natureRadius_,step,natureWind_,natureFire_,[&](float x,float z,float dx,float dz,bool fire,float strength){
-                if(!map.worldSpace&&(x<0||z<0||x>=map.w||z>=map.h))return;
-                const float y=(showTerrain?terrainPreviewHeight(map,x,z,levelHeight):0.f)+(fire?1.8f:1.2f);
-                const uint32_t color=fire?rgba(255,int(150-110*strength),40):rgba(80+175*strength,210,255-130*strength);
-                const float3 tip{x+dx,y,z+dz};
-                if(dx||dz){
-                    renderer_.line({x,y,z},tip,color);
-                    renderer_.line(tip,{tip.x-.28f*dx-.15f*dz,y,tip.z-.28f*dz+.15f*dx},color);
-                    renderer_.line(tip,{tip.x-.28f*dx+.15f*dz,y,tip.z-.28f*dz-.15f*dx},color);
-                }else{
-                    for(int i=0;i<8;++i){
-                        const float a=i*.78539816f,b=(i+1)*.78539816f;
-                        renderer_.line({x+.5f*std::cos(a),y,z+.5f*std::sin(a)},{x+.5f*std::cos(b),y,z+.5f*std::sin(b)},color);
+        if(regionBorderLetter_ && !fpsProject && !planetaryChart){
+            if(regionBordersDirty_)regionBorders_.measure(map,levelHeight,showTerrain);
+            const auto bounds=regionBorders_.visible(map,view,framebufferWidth,framebufferHeight);
+            if(regionBordersDirty_ || bounds!=regionBorders_.bounds){
+                regionBorders_.build(map,bounds,levelHeight,showTerrain,regionBorderLetter_);
+                regionBordersDirty_=false;
+            }
+            for(const auto& edge:regionBorders_.edges){
+                const unsigned c=static_cast<unsigned char>(edge.letter);
+                const uint32_t color=edge.letter==regionBorderLetter_?rgba(125,215,255):
+                    rgba(80+(c*47)%175,80+(c*91)%175,80+(c*23)%175);
+                renderer_.line(edge.a,edge.b,color);
+            }
+        }
+        if(natureFrame_&&!planetaryChart){
+            const float step=natureSpacing_;
+            editor::natureFieldArrows(*natureFrame_,std::floor(view.target.x/step)*step,std::floor(view.target.z/step)*step,
+                natureRadius_,step,natureWind_,natureFire_,[&](float x,float z,float dx,float dz,bool fire,float strength){
+                    if(!map.worldSpace&&(x<0||z<0||x>=map.w||z>=map.h))return;
+                    const float y=(showTerrain?terrainPreviewHeight(map,x,z,levelHeight):0.f)+(fire?1.8f:1.2f);
+                    const uint32_t color=fire?rgba(255,int(150-110*strength),40):rgba(80+175*strength,210,255-130*strength);
+                    const float3 tip{x+dx,y,z+dz};
+                    if(dx||dz){
+                        renderer_.line({x,y,z},tip,color);
+                        renderer_.line(tip,{tip.x-.28f*dx-.15f*dz,y,tip.z-.28f*dz+.15f*dx},color);
+                        renderer_.line(tip,{tip.x-.28f*dx+.15f*dz,y,tip.z-.28f*dz-.15f*dx},color);
+                    }else{
+                        for(int i=0;i<8;++i){
+                            const float a=i*.78539816f,b=(i+1)*.78539816f;
+                            renderer_.line({x+.5f*std::cos(a),y,z+.5f*std::sin(a)},{x+.5f*std::cos(b),y,z+.5f*std::sin(b)},color);
+                        }
                     }
-                }
-            });
-    }
-    if(worldAxes_&&!planetaryChart){
-        renderer_.line({0,0,0},{4,0,0},rgba(234,96,96));
-        renderer_.line({0,0,0},{0,4,0},rgba(105,206,119));
-        renderer_.line({0,0,0},{0,0,4},rgba(105,154,239));
-    }
-    if(gizmosVisible_&&selectionBoxVisible_)drawSelectionBox(view,framebufferWidth,framebufferHeight);
-    drawBrushCursor(view,framebufferWidth,framebufferHeight);
-    drawTransformGizmo(view,framebufferWidth,framebufferHeight);
-    if(orientationGizmo_&&gizmosVisible_)drawOrientationGizmo(view,framebufferWidth,framebufferHeight);
-    if(marquee_.on) {
-        const float W=float(framebufferWidth),H=float(framebufferHeight);
-        Overlay2D o{renderer_,view,W,H,view.ortho?0.5f:view.zNear*1.4f};
-        const float x0=std::min(marquee_.x0,marquee_.x1)*W,x1=std::max(marquee_.x0,marquee_.x1)*W;
-        const float y0=std::min(marquee_.y0,marquee_.y1)*H,y1=std::max(marquee_.y0,marquee_.y1)*H;
-        o.tri(x0,y0,x1,y0,x1,y1,rgba(130,181,255,40));o.tri(x0,y0,x1,y1,x0,y1,rgba(130,181,255,40));
-        const float w=std::max(1.0f,std::min(W,H)*0.0015f);
-        o.segment(x0,y0,x1,y0,w,rgba(130,181,255,220));o.segment(x1,y0,x1,y1,w,rgba(130,181,255,220));
-        o.segment(x1,y1,x0,y1,w,rgba(130,181,255,220));o.segment(x0,y1,x0,y0,w,rgba(130,181,255,220));
+                });
+        }
+        if(worldAxes_&&!planetaryChart){
+            renderer_.line({0,0,0},{4,0,0},rgba(234,96,96));
+            renderer_.line({0,0,0},{0,4,0},rgba(105,206,119));
+            renderer_.line({0,0,0},{0,0,4},rgba(105,154,239));
+        }
+        if(gizmosVisible_&&selectionBoxVisible_)drawSelectionBox(view,framebufferWidth,framebufferHeight);
+        drawBrushCursor(view,framebufferWidth,framebufferHeight);
+        drawTransformGizmo(view,framebufferWidth,framebufferHeight);
+        if(orientationGizmo_&&gizmosVisible_)drawOrientationGizmo(view,framebufferWidth,framebufferHeight);
+        if(marquee_.on) {
+            const float W=float(framebufferWidth),H=float(framebufferHeight);
+            Overlay2D o{renderer_,view,W,H,view.ortho?0.5f:view.zNear*1.4f};
+            const float x0=std::min(marquee_.x0,marquee_.x1)*W,x1=std::max(marquee_.x0,marquee_.x1)*W;
+            const float y0=std::min(marquee_.y0,marquee_.y1)*H,y1=std::max(marquee_.y0,marquee_.y1)*H;
+            o.tri(x0,y0,x1,y0,x1,y1,rgba(130,181,255,40));o.tri(x0,y0,x1,y1,x0,y1,rgba(130,181,255,40));
+            const float w=std::max(1.0f,std::min(W,H)*0.0015f);
+            o.segment(x0,y0,x1,y0,w,rgba(130,181,255,220));o.segment(x1,y0,x1,y1,w,rgba(130,181,255,220));
+            o.segment(x1,y1,x0,y1,w,rgba(130,181,255,220));o.segment(x0,y1,x0,y0,w,rgba(130,181,255,220));
+        }
     }
     if(sparseTerrain&&sparsePrepared&&!cavernsPreview_.isolate())
         sparseTerrainPreview_.submit(renderer_,pairedRimReady,true);
@@ -4388,6 +4440,11 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     gfx::PassDesc pass;
     pass.clearColor[0] = 0.038f; pass.clearColor[1] = 0.064f;
     pass.clearColor[2] = 0.098f; pass.clearColor[3] = 1.0f;
+    if(cleanMapOutput()){
+        pass.clearColor[0]=environment.fogColor.x;
+        pass.clearColor[1]=environment.fogColor.y;
+        pass.clearColor[2]=environment.fogColor.z;
+    }
     if(skyShot_) {
         // Splash art: real PhysicalSky (atmosphere, clouds, god rays) lit by the requested sun.
         PhysicalSkySettings sky;sky.enabled=true;sky.clouds=true;sky.godRays=true;sky.coverage=skyShot_->coverage;
@@ -4407,12 +4464,14 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     }
     const auto* previousReport = post_.effectReport(post_.viewId());
     const auto previousSequence = previousReport ? previousReport->sequence : 0;
+    setMapOutput(pass);
     renderer_.render(pass,useLighting?lightingRuntime_.pipeline(post_):static_cast<PostProcess*>(&post_));
     // Renderer3D keeps the HDR scene pass open; GPU/CPU FX draw here,
     // before PRISMA resolves it and before the frame/pass are retired.
     if(spectraPreview_->active())spectraPreview_->draw();
     spectraSources_.draw();
     renderer_.resolvePrisma();
+    readMapOutput();
     const auto* report = post_.effectReport(post_.viewId());
     if (report && report->sequence != previousSequence) {
         prismaReportProject_ = projectPath;
@@ -4709,10 +4768,10 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
             }
         }
     }
-    device_->beginFrame(width,height);StudioFrameScope scope{*device_};
+    beginMapOutput(width,height);StudioFrameScope scope{*device_};
     renderThumbnail();
     const auto view=viewCamera();renderer_.beginScene(view,width,height);
-    renderer_.setSceneSelectionOutline(true);renderer_.lighting=Lighting{};renderer_.lighting.fogDensity=0;
+    renderer_.setSceneSelectionOutline(!cleanMapOutput());renderer_.lighting=Lighting{};renderer_.lighting.fogDensity=0;
     lightingStatus_="Planet authoring preview · rigid models and coarse surface";
     if(planetProcessOverlays_.invalidPhysis)lightingStatus_+=" · invalid PHYSIS fields";
     if(planetProcessOverlays_.truncated)lightingStatus_+=" · overlay budget reached";
@@ -4835,7 +4894,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                 }
                 if(!plant.foliagePermille)draw.materialMask=&barkOnly;
                 draw.useVertexParameters=true;draw.vertexParameters={0,0,0,0};draw.maxVertexOffsetMetres=.01f;
-                if(current&&forestSelection_.getInt("species")==int64_t(plant.species)&&forestSelection_.getInt("key")==int64_t(plant.key))
+                if(!cleanMapOutput()&&current&&forestSelection_.getInt("species")==int64_t(plant.species)&&forestSelection_.getInt("key")==int64_t(plant.key))
                     draw.outline={1.f,.8f,.2f,.025f};
                 renderer_.drawModel(draw);
             }
@@ -4850,18 +4909,18 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                 draw.world=dragPreview()*instance.world;
             if(auto custom=instanceMaterials_.find(instance.id);custom!=instanceMaterials_.end())draw.materials=&custom->second.materials;
             if(auto team=instanceTeams_.find(instance.id);team!=instanceTeams_.end())draw.team=team->second;
-            if(instance.id==selectedId||selection_.count(instance.id))draw.outline={.25f,.62f,1.f,.035f};
-            else if(instance.id==hover_)draw.outline={.62f,.8f,1.f,.02f};
+            if(!cleanMapOutput() && (instance.id==selectedId||selection_.count(instance.id)))draw.outline={.25f,.62f,1.f,.035f};
+            else if(!cleanMapOutput() && instance.id==hover_)draw.outline={.62f,.8f,1.f,.02f};
             renderer_.drawModel(draw);
         }
         for(const auto& marker:planetPreview_->markers){
             if(hidden_.count(marker.id)||renderedModels.count(marker.id))continue;
             const auto world=mat4::translate(marker.center)*mat4::scale(marker.half*2.f);
-            if(marker.id==selectedId||selection_.count(marker.id))
+            if(!cleanMapOutput() && (marker.id==selectedId||selection_.count(marker.id)))
                 renderer_.drawSelectionMesh(cube_,world,marker.color,{.25f,.62f,1.f,1.f});
             else renderer_.drawMesh(cube_,world,marker.color,kDrawNoCastShadow);
         }
-        if(gizmosVisible_){
+        if(!cleanMapOutput() && gizmosVisible_){
             if(!liveForest){
                 const bool current=forestSelection_.getStr("project")==projectPath&&forestSelection_.getStr("mapPath")==doc.path&&
                     forestSelection_.getStr("expectedRevision")==std::to_string(doc.revision);
@@ -5423,7 +5482,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
                 }
             }
         }
-        if(planetDragPlacement_.isObject()){
+        if(!cleanMapOutput() && planetDragPlacement_.isObject()){
             game::CubeSphere cube(planetPreview_->faceSize);
             const auto dir=StudioPlanetPreview::f3(cube.dirFromFace(int(planetDragPlacement_.getInt("face")),
                 planetDragPlacement_["x"].fx(),planetDragPlacement_["y"].fx()));
@@ -5436,7 +5495,7 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
             }
         }
     }
-    if(brushVisible_ && planetPreview_ && dot(brushCenter_,brushCenter_)>1e-6f){
+    if(!cleanMapOutput() && brushVisible_ && planetPreview_ && dot(brushCenter_,brushCenter_)>1e-6f){
         const auto up=normalize(brushCenter_);
         const auto east=normalize(cross(up,std::abs(up.y)<.9f?float3{0,1,0}:float3{1,0,0}));
         const auto north=cross(up,east);
@@ -5454,14 +5513,18 @@ void StudioScene::framePlanet(int width,int height,const editor::MapDoc& doc,con
             previous=point;
         }
     }
-    drawPlanetRegionHandles(view,width,height,doc);
-    drawPlanetGravityHandles(view,width,height);
-    if(tool_==TransformTool::Rotate||tool_==TransformTool::Scale)drawTransformGizmo(view,width,height);
-    if(orientationGizmo_&&gizmosVisible_)drawOrientationGizmo(view,width,height);
+    if(!cleanMapOutput()){
+        drawPlanetRegionHandles(view,width,height,doc);
+        drawPlanetGravityHandles(view,width,height);
+        if(tool_==TransformTool::Rotate||tool_==TransformTool::Scale)drawTransformGizmo(view,width,height);
+        if(orientationGizmo_&&gizmosVisible_)drawOrientationGizmo(view,width,height);
+    }
     gfx::PassDesc pass;pass.clearColor[0]=.038f;pass.clearColor[1]=.064f;pass.clearColor[2]=.098f;pass.clearColor[3]=1;
     const bool authoredPost=post_.enabled() && (!gamePostSettings_.isNull() || !mapPostSettings_.isNull());
+    setMapOutput(pass);
     renderer_.render(pass,authoredPost?static_cast<PostProcess*>(&post_):&antialiasing_);
     renderer_.resolvePostFx();
+    readMapOutput();
     if (authoredPost && post_.effectReport(post_.viewId())) {
         prismaReportProject_=projectPath;prismaReportMap_=doc.path;
     } else prismaReportProject_.clear();

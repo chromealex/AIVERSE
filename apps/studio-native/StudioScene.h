@@ -31,6 +31,7 @@
 #include "apps/studio-native/StudioPlanetGravityEditing.h"
 #include "apps/studio-native/StudioAuthoredLights.h"
 #include "apps/editor/core/MapDoc.h"
+#include "apps/editor/core/SceneScreenshotOptions.h"
 #include "engine/gfx/Gfx.h"
 #include "engine/render/Renderer3D.h"
 #include "engine/world/NereidManifestHost.h"
@@ -270,6 +271,11 @@ public:
         lastFrameSignature_=0;settleFrames_=30;
         return result;
     }
+    void requestMapCapture(editor::SceneScreenshotOptions options,gfx::Device::CaptureFn callback) {
+        mapCapture_=MapCapture{options,std::move(callback)};
+    }
+    void cancelMapCapture() { mapCapture_.reset(); }
+    void renderMapOutput(int width,int height,const std::function<void(int,int)>& draw);
     void captureNextFrame(gfx::Device::CaptureFn callback) { lastFrameSignature_=0; device_->captureNextFrame(std::move(callback)); }
     void setCaveGlobe(std::string body,const std::string& project,const std::string& map);
     bool caveGlobeRequested()const noexcept{return !globeBody_.empty();}
@@ -717,6 +723,15 @@ private:
     std::deque<ThumbJob> thumbJobs_;
     struct ThumbShared { std::mutex mutex; std::vector<std::string> done; };
     std::shared_ptr<ThumbShared> thumbShared_ = std::make_shared<ThumbShared>();
+    struct MapCapture { editor::SceneScreenshotOptions options; gfx::Device::CaptureFn callback; };
+    std::optional<MapCapture> mapCapture_;
+    MapCapture* captureOutput_=nullptr; // scoped to one render-thread frame
+    gfx::TextureHandle captureColor_,captureDepth_;
+    int captureWidth_=0,captureHeight_=0;
+    void beginMapOutput(int width,int height);
+    void setMapOutput(gfx::PassDesc& pass) const;
+    void readMapOutput();
+    bool cleanMapOutput() const { return captureOutput_ && captureOutput_->options.clean; }
     gfx::TextureHandle thumbColor_, thumbDepth_;
     std::map<std::string,std::unique_ptr<render::Model>> thumbModels_; // models not placed in the map
     void renderThumbnail();

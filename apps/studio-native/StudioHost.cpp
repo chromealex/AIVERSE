@@ -620,6 +620,14 @@ void StudioHost::tickAgentScreenshot() {
     const bool nature=session_->agentNatureScreenshotPending();
     const bool game=session_->agentGameScreenshotPending();
     const bool window=session_->agentWindowScreenshotPending();
+    const bool scene=session_->agentScreenshotPending() && !window && !game && !nature;
+    if(scene && agentShot_ && (!preview_ || !placement_.visible || !platform_.surfaceDrawable(StudioSurface::Scene) ||
+        !sameDocumentScope(sceneShotScope_,session_->graphDocumentScope()) || platform_.now()>=sceneShotDeadline_)){
+        if(preview_)onScene([&]{preview_->cancelMapCapture();});
+        session_->finishAgentScreenshot("",0,0,"Scene changed, closed or capture expired. Retry with the current map.");
+        agentShot_.reset();
+        return;
+    }
     if (window && agentShot_ && !agentShot_->done.load() && platform_.now()>=windowShotDeadline_) {
         session_->finishAgentScreenshot("",0,0,"Studio window capture timed out.");
         agentShot_.reset();
@@ -682,15 +690,22 @@ void StudioHost::tickAgentScreenshot() {
     if (!session_->agentScreenshotPending()) return;
     auto* renderer=nature?natureSurface_.renderer.get():preview_.get();
     if (nature && (!renderer || !natureSurface_.placement.visible || !platform_.surfaceDrawable(StudioSurface::Nature))) return;
-    if (!window && !game && !nature && (!renderer || !placement_.visible)) {
+    if (!window && !game && !nature && (!renderer || !placement_.visible || !platform_.surfaceDrawable(StudioSurface::Scene))) {
         session_->finishAgentScreenshot("", 0, 0, "The Scene panel is not visible in Studio; ask the user to show it");
         return;
     }
     auto shot = std::make_shared<AgentShot>();
     agentShot_ = shot;
-    auto capture=[shot](int w, int h, std::vector<uint8_t> rgba) {
+
+    auto capture=[shot,scene](int w, int h, std::vector<uint8_t> rgba) {
         if (w > 0 && h > 0 && rgba.size() >= size_t(w) * size_t(h) * 4) {
-            // At most 1280 px wide: enough for the agent, small for the MCP answer.
+            if(scene){
+                for(size_t i=3;i<rgba.size();i+=4)rgba[i]=255;
+                shot->png=encodePng(rgba,w,h);
+                shot->w=w;shot->h=h;
+                shot->done.store(true);
+                return;
+            }
             const int ow = std::min(w, 1280), oh = std::max(1, int(int64_t(h) * ow / w));
             std::vector<uint8_t> out(size_t(ow) * size_t(oh) * 4);
             for (int y = 0; y < oh; ++y) for (int x = 0; x < ow; ++x) {
@@ -708,6 +723,12 @@ void StudioHost::tickAgentScreenshot() {
         windowShotDeadline_=platform_.now()+8;
         platform_.captureStudioWindow(std::move(capture));
     } else if (game) game_->captureNextFrame(std::move(capture));
+    else if(scene){
+        sceneShotDeadline_=platform_.now()+12;
+        sceneShotScope_=session_->graphDocumentScope();
+        const auto options=session_->agentSceneScreenshotOptions();
+        onScene([&]{renderer->requestMapCapture(options,std::move(capture));});
+    }
     else onScene([&]{renderer->captureNextFrame(std::move(capture));});
 }
 // Agent snapshot handshake (MCP studio_character_snapshot): the tool writes
@@ -1563,8 +1584,10 @@ void StudioHost::renderSceneFrame() {
             preview_->setNatureFrame(in.nature);
             preview_->setWindPreview(in.wind);
             preview_->setPostPreview(in.project,*in.gamePost,in.map->data.extra["postfx"],in.postQuality,in.postVisible);
-            preview_->frame(in.width, in.height, *in.map, in.fps, in.selected, "", Json::object(), 0,
+            preview_->renderMapOutput(in.width,in.height,[&](int width,int height){
+                preview_->frame(width,height, *in.map, in.fps, in.selected, "", Json::object(), 0,
                             in.levelHeight, in.project, *in.rules, nullptr);
+            });
             out.lightingStatus = preview_->lightingStatus();
             out.load = preview_->modelLoadProgress();
             out.camera = preview_->cameraState();
