@@ -1,0 +1,10 @@
+{
+  "sha": "6af81e8ad19f90939bfd6ea293ec010a3b98f0c4",
+  "argv": [
+    "bash",
+    "/tmp/scene-zone-highlight-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-erosion-highlight.log.txt",
+  "sha256": "db7206fc812a10fb3a3e80c6639be835a151c537ad721a4b60e541adeb07e615"
+}

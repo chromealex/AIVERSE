@@ -596,3 +596,5 @@ Transfer the terrain-following erosion zone outlines, coefficient colours and la
 Packaged macOS Studio verified circular and polygonal erosion zone outlines, coefficient and soil labels, layer visibility and clean capture. [Desktop and geometry evidence](evidence/studio-erosion-zone-overlays.json). Individual zone highlighting and non-ASCII labels remain open.
 
 Expose map-scoped erosion zone highlighting in the Scene overlay menu. Verify none, one, all and stale document rejection without changing map history.
+
+Packaged macOS Studio verified highlighting one or all authored erosion zones and clearing the highlight on map switch. [Native highlight evidence](evidence/studio-erosion-highlight.json). Unicode native caption rendering remains open.
