@@ -1,0 +1,10 @@
+{
+  "sha": "234c7f1b9531600b133f58f548a0d88f60235c72",
+  "argv": [
+    "bash",
+    "/tmp/forest-skeleton.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-private-forest-skeleton-isolated.log.txt",
+  "sha256": "2544dfac2822598f8bdcf3a60216142d5464b60cc77e49ff64c476ce80255c39"
+}
