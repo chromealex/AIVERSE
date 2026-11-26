@@ -2105,6 +2105,7 @@ void Workspace::registerCoreOps() {
         R"({"properties":{"speed":{"type":"number"},"human":{"type":"integer"},"device":{"type":"string"},"client":{"type":"boolean"}}})",requireStudioLink);
     addLinked("play_stop", "Stop the Studio play-test and return to editing.", "{}",requireStudioLink);
     gui("region_ownership_diagnostics", "Read last successful live region ownership reconciliation; requires running editor simulation.", "{}");
+    addLinked("editor_window","Open or close a panel, switch workspace or restore the layout.", R"({"properties":{"id":{"type":"string"},"open":{"type":"boolean"},"resetLayout":{"type":"boolean"},"workspace":{"type":"string","enum":["scene","world","look","animate","character","logic","publish"]}}})",requireStudioLink);
     addLinked("editor_windows","List HTML Studio panels and their open state.", "{}",requireStudioLink);
     addLinked("play_status", "Current Studio play-test time, players, resources, units and result.", "{}",requireStudioLink);
     gui("play_units", "Live objects of the running play-test: id (for play_command), map name, type, owner, position, hp, orders, statuses. "

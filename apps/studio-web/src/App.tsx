@@ -495,6 +495,25 @@ export default function App() {
     window.addEventListener('studio:show-panel', run);
     return () => window.removeEventListener('studio:show-panel', run);
   });
+  useEffect(() => onNativeEvent((event, payload) => {
+    if (event === 'ui.closePanel' && FLOAT) {
+      const panel = field(payload, 'panel');
+      if (knownPanel(panel)) setDock(tree => panelStack(tree, panel) !== null ? closeTab(tree, panel) : tree);
+      return;
+    }
+    if (FLOAT || event !== 'layout.command') return;
+    if (field(payload, 'resetLayout') === true) {
+      setDock(workspaceDockTree(workspace));
+      return;
+    }
+    const next = WORKSPACES.find(id => id === field(payload, 'workspace'));
+    if (next) { switchWorkspace(next); return; }
+    const panel = field(payload, 'id');
+    if (!knownPanel(panel)) return;
+    if (field(payload, 'open') !== false) showPanelEvent(panel);
+    else if (floatOwner(floating, panel)) broadcast('ui.closePanel', { panel });
+    else setDock(tree => panelStack(tree, panel) !== null ? closeTab(tree, panel) : tree);
+  }), [workspace, switchWorkspace, floating]);
   const menus: StudioMenu[] = [
     { id: 'file', label: 'File', items: () => [
       { id: 'hub', label: 'Project Hub…', disabled: !connected || busy, onSelect: () => setHubOpen(true) },

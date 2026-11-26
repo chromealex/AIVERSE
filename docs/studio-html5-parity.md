@@ -627,3 +627,5 @@ Route linked play_stop through the same Game surface teardown as the HTML contro
 Route legacy play_start arguments to the shared HTML Studio Game launch path and open the Game tab on successful launch.
 
 Publish the live HTML dock and floating panel inventory to editor_windows using the same panel registry as the Window menu. Verify actual open-state changes.
+
+Route editor_window panel, workspace and reset requests to HTML Studio layout owners, including detached tabs.

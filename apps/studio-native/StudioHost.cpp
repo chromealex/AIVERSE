@@ -155,6 +155,25 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
             stopGame();
             return Json::parse(R"({"ok":true,"summary":"Тест остановлен"})");
         },true});
+    session_->workspace().registerOp({"editor_window","Open or close a panel, switch workspace or restore the layout.",
+        Json::parse(R"({"properties":{"id":{"type":"string"},"open":{"type":"boolean"},"resetLayout":{"type":"boolean"},"workspace":{"type":"string","enum":["scene","world","look","animate","character","logic","publish"]}}})"),[this](const Json& params){
+            if (!panelInventory_.isObject()) throw std::runtime_error("Studio layout is loading");
+            if (!params.getBool("resetLayout",false)) {
+                if (params.has("workspace")) {
+                    const auto name=params.getStr("workspace");
+                    if (name!="scene" && name!="world" && name!="look" && name!="animate" &&
+                        name!="character" && name!="logic" && name!="publish") throw std::runtime_error("unknown workspace");
+                } else {
+                    const auto id=params.getStr("id");
+                    bool found=false;
+                    for (const auto& panel:panelInventory_["windows"].items())
+                        if (panel.getStr("id")==id) {found=true;break;}
+                    if (!found) throw std::runtime_error("unknown window (see editor_windows)");
+                }
+            }
+            sendEventPayload("layout.command",params);
+            return Json::parse(R"({"ok":true,"summary":"Layout change requested"})");
+        },true});
     session_->workspace().registerOp({"editor_windows","List HTML Studio panels and their open state.",
         Json::object(),[this](const Json&){
             if (!panelInventory_.isObject()) throw std::runtime_error("Studio layout is loading");
