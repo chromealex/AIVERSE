@@ -2,6 +2,7 @@ import {useMemo,useState} from 'react';
 import {applyEdits,createScanner,findNodeAtLocation,getNodeValue,modify,parseTree,type Node,type ParseError} from 'jsonc-parser';
 import EffectParticleColor from './EffectParticleColor';
 import EffectLifetimeColor from './EffectLifetimeColor';
+import EffectSimulation from './EffectSimulation';
 import EffectShape from './EffectShape';
 import EffectBursts from './EffectBursts';
 import EffectForceFields from './EffectForceFields';
@@ -91,7 +92,12 @@ export default function EffectEmitters({source,edit,busy}:{source:string;edit:(d
       const base=path[0]==='shape'&&value==='mesh'&&!emitter.mesh?update(source,['emitters',index,'mesh'],'builtin:cube'):source;
       patch(['emitters',index,...path],value,base);
     }}/>}
-    {emitter&&<EffectRangeEditor key={index} emitter={emitter} patch={(path,value)=>patch(['emitters',index,...path],value)}/>}
+    {emitter&&<EffectSimulation key={'simulation-'+index} emitter={emitter} patch={(path,value)=>patch(['emitters',index,...path],value)}/>}
+    {emitter&&<EffectRangeEditor key={index} disableSizeAxes={()=>{
+      let draft=source;
+      for(const key of ['sizeY','sizeZ'])if(emitter[key]!==undefined)draft=update(draft,['emitters',index,key],undefined);
+      edit(draft);
+    }} emitter={emitter} patch={(path,value)=>patch(['emitters',index,...path],value)}/>}
     {emitter&&<EffectParticleColor key={'particle-color-'+index} emitter={emitter} patch={(path,value)=>patch(['emitters',index,...path],value)}/>}
     {emitter&&<EffectLifetimeColor key={'color-'+index} emitter={emitter} patch={(path,value)=>patch(['emitters',index,...path],value)}/>}
     {emitter&&<EffectBursts key={'bursts-'+index} source={source} emitterIndex={index} emitter={emitter}

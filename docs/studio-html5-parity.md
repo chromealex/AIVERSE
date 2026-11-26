@@ -340,3 +340,5 @@ Emitter geometry stage: shape-specific dimensions, mesh source, arc sampling and
 Effects lifetime color: edit RGBA stops, normalized particle age and optional second gradient in a visual inspector. Verify native save and reopen.
 
 Effects color modules: transfer constant, pair and gradient spawn sampling and speed-driven gradient authoring. Verify native save/reopen.
+
+Effects base emitter transfer: edit separate size/rotation axes, sprite aspect, gravity, space, texture, prewarm and particle limits. Verify native files and mode switches in the packaged Studio.

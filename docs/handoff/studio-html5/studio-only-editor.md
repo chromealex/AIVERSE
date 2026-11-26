@@ -715,3 +715,5 @@ Lifetime gradient layout 11dcc3abd. apps/studio-web/src/panels/ToolPanel.css. Pr
 Effects color modules: transfer constant, pair and gradient spawn sampling and speed-driven gradient authoring. Verify native save/reopen.
 
 Spawn and speed color 7e78ced05. apps/studio-web/src/panels/EffectParticleColor.tsx and EffectLifetimeColor.tsx. Typecheck, Vite, native asset build and 299 web tests passed. The Mac app converted a pair into a time-sampled gradient, authored the second gradient with fractional alpha, and saved and reopened the speed interval and red/green stops. Changing the first speed stop and replaying changed real stationary particles from red to green. Locked Mac supplied the measured Effects viewport. Source and screenshots: docs/evidence/studio-effect-spawn-speed-color.json, docs/evidence/studio-project-catalog/particle-color-{start,speed,red,green}.png. Next: size and rotation modules, then remaining parity checks.
+
+Effects base emitter transfer: edit separate size/rotation axes, sprite aspect, gravity, space, texture, prewarm and particle limits. Verify native files and mode switches in the packaged Studio.

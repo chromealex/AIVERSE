@@ -10,6 +10,7 @@ const properties=[
   {key:'delay',label:'Start delay (s)',min:0,max:60,initial:0},
   {key:'rotation',label:'Rotation (°)',min:-3600,max:3600,initial:0},
   {key:'spin',label:'Spin (°/s)',min:-36000,max:36000,initial:0},
+  {key:'gravityScale',label:'Gravity multiplier',min:-100,max:100,initial:1},
   {key:'drag',label:'Drag',min:0,max:50,initial:0},
 ];
 type Path=(string|number)[];
@@ -66,12 +67,34 @@ function CurveKeys({label,curve,path,min,max,patch}:{label:string;curve:unknown;
   </fieldset>;
 }
 
-export default function EffectRangeEditor({emitter,patch}:{emitter:Record<string,unknown>;patch:Patch}){
-  const [selected,setSelected]=useState('life');
-  const p=properties.find(prop=>prop.key===selected)!;
+export default function EffectRangeEditor({emitter,patch,disableSizeAxes}:{emitter:Record<string,unknown>;patch:Patch;disableSizeAxes:()=>void}){
+  const [selected,select]=useState('life');
+  const [component,setComponent]=useState('');
+  const property=properties.find(prop=>prop.key===selected)!;
+  const size=selected==='size';
+  const rotation=selected==='rotation';
+  const separate=size?emitter.sizeY!==undefined||emitter.sizeZ!==undefined:emitter.rotation3D!==undefined;
+  const components=[{...property,label:size&&separate?'X':rotation&&separate?'Z':property.label}];
+  if(size&&separate)components.push(...['Y','Z'].map(axis=>({...property,key:'size'+axis,label:axis,initial:1})));
+  if(size&&!separate)components.push({key:'aspect',label:'Length / width',min:.01,max:100,initial:1});
+  if(rotation&&separate)components.push(...['X','Y'].map(axis=>({...property,key:axis.toLowerCase(),label:axis})));
+  const p=components.find(item=>item.key===component)??components[0];
+  const nested=rotation&&(p.key==='x'||p.key==='y');
+  const axes=emitter.rotation3D as Record<string,unknown>|null|undefined;
   return <details className="effects-range"><summary>Emission and particle motion</summary>
-    <EffectRangeValue emitter={emitter} p={p} patch={patch} selector={<label>Parameter<StudioSelect value={selected} onChange={e=>setSelected(e.target.value)}>
-        {properties.map(prop=><option key={prop.key} value={prop.key}>{prop.label}</option>)}
+    <div className="effects-emitter-fields"><label>Parameter<StudioSelect value={selected} onChange={e=>{select(e.target.value);setComponent('');}}>
+      {properties.map(prop=><option key={prop.key} value={prop.key}>{prop.label}</option>)}
+    </StudioSelect></label></div>
+    {(size||rotation)&&<label className="effects-emitter-loop"><input type="checkbox" checked={separate} onChange={e=>{
+      setComponent('');
+      if(rotation)patch(['rotation3D'],e.target.checked?{}:undefined);
+      else if(e.target.checked)patch(['sizeY'],1);
+      else disableSizeAxes();
+    }}/>{size?'Separate size axes':'Rotate mesh on three axes'}</label>}
+    <EffectRangeValue emitter={nested?axes??{}:emitter} p={p}
+      patch={nested?(path,v)=>patch(['rotation3D',...path],v):patch}
+      selector={components.length>1&&<label>Component<StudioSelect value={p.key} onChange={e=>setComponent(e.target.value)}>
+        {components.map(c=><option key={c.key} value={c.key}>{c.label}</option>)}
       </StudioSelect></label>}/>
   </details>;
 }

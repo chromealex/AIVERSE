@@ -3,6 +3,7 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/panels/EffectSimulation.tsx",
     "apps/studio-web/src/panels/EffectParticleColor.tsx",
     "apps/studio-web/src/panels/EffectLifetimeColor.tsx",
     "apps/studio-web/src/panels/EffectShape.tsx",
