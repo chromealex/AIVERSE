@@ -1,0 +1,10 @@
+{
+  "sha": "8b7bc5da7cf6006597f2a88f35e028860bb0d975",
+  "argv": [
+    "bash",
+    "/tmp/physis-game3d-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-physis-live-nature.log.txt",
+  "sha256": "11407fe75fd5ea6b499297a8fd6e7805b5fbe367d94f6de76a678b83d198372a"
+}
