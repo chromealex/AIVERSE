@@ -92,6 +92,13 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
   const elapsed = startedAt ? Math.max(0, Math.round((now - startedAt) / 1000)) : 0;
   const selected = info?.targets.find(t => t.id === target);
   const pack = estimate?.pack as { packBytes?: number; rawBytes?: number; entries?: number; duplicates?: number } | undefined;
+  const saveAtlas = async (action: () => Promise<StudioSnapshot>) => {
+    setSavingAtlas(true);setError('');
+    try { commitSnapshot(await action()); }
+    catch (err) { setError(message(err)); }
+    finally { await refreshInfo();setSavingAtlas(false); }
+  };
+  const atlasDisabled = state.running || savingAtlas || info?.project !== projectPath;
   const atlas = estimate?.atlas;
   const pages = info?.atlasPages;
   const inheritedPage = typeof pages === 'number' ? pages : pages?.default ?? (['web','android'].includes(target) ? 2048 : 4096);
@@ -115,15 +122,16 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
           <option value="Release">Release</option><option value="Debug">Debug</option>
         </StudioSelect>
       </StudioField>
+      <StudioCheckbox label="Pack texture atlases" checked={info?.atlasEnabled ?? true} disabled={atlasDisabled}
+        onChange={e => {
+          const enabled = e.currentTarget.checked;
+          void saveAtlas(() => invoke('studio.buildAtlasEnabled',{project:projectPath,original:info?.atlasEnabled ?? true,enabled}));
+        }}/>
       <StudioField label="Atlas page limit" htmlFor="build-atlas-page">
-        <StudioSelect id="build-atlas-page" value={pageOverride ?? ''} disabled={state.running || savingAtlas || info?.project !== projectPath}
-          onChange={async e => {
+        <StudioSelect id="build-atlas-page" value={pageOverride ?? ''} disabled={atlasDisabled || info?.atlasEnabled === false}
+          onChange={e => {
             const value = e.currentTarget.value;
-            setSavingAtlas(true);setError('');
-            try {
-              commitSnapshot(await invoke('studio.buildAtlasPage',{project:projectPath,original:pages ?? null,target,size:value ? Number(value) : null}));
-            } catch (err) { setError(message(err)); }
-            finally { await refreshInfo();setSavingAtlas(false); }
+            void saveAtlas(() => invoke('studio.buildAtlasPage',{project:projectPath,original:pages ?? null,target,size:value ? Number(value) : null}));
           }}>
           <option value="">Project default ({inheritedPage} px)</option>
           {pageOverride != null && !pageSizes.includes(pageOverride) && <option value={pageOverride}>{pageOverride} px</option>}
