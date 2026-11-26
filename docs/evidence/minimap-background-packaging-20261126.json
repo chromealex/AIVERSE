@@ -1,0 +1,10 @@
+{
+  "sha": "7aaf3bf9a5f115e707cbcf19fe396960bfd3753e",
+  "argv": [
+    "/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-make/aiverse_tests",
+    "atlas_preserves_raw_minimap_backgrounds"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/minimap-background-packaging-20261126.log.txt",
+  "sha256": "09d107856a84b12f86c4e0f54c77b0f06e8f65bbf02ca712d72aa4c9d74068b9"
+}

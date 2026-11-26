@@ -10,7 +10,9 @@
     "docs/devlog/systems.json",
     "docs/agents/feature-policy.json",
     "docs/agent-handoffs/minimap-background-packaging-initial.md",
-    "docs/features/minimap-background-packaging.json"
+    "docs/features/minimap-background-packaging.json",
+    "docs/evidence/minimap-background-packaging-20261126.json",
+    "docs/evidence/minimap-background-packaging-20261126.log.txt"
   ],
   "traits": {
     "editable": false,
@@ -69,19 +71,23 @@
       "evidence": []
     },
     "performance": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "Offline pack scan only; image collection already scans all pack JSON and the new set lookup is per image.",
       "evidence": []
     },
     "platforms": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Mac pack regression passed; Windows, Linux and packaged client runtime not tested.",
+      "evidence": [
+        "docs/evidence/minimap-background-packaging-20261126.json"
+      ]
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Uses existing JSON scan, atlas configuration and PackWriter.",
+      "evidence": [
+        "tools/atlas/AtlasBuild.cpp"
+      ]
     },
     "headless": {
       "status": "not_applicable",
@@ -94,14 +100,18 @@
       "evidence": []
     },
     "tests": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Pack regression passed: 11 checks, 0 failed on 7aaf3bf9a.",
+      "evidence": [
+        "docs/evidence/minimap-background-packaging-20261126.json"
+      ]
     },
     "handoff": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Stage handoff records exact SHA and focused test result.",
+      "evidence": [
+        "docs/agent-handoffs/minimap-background-packaging-initial.md"
+      ]
     },
     "documentation": {
       "status": "pass",
@@ -122,5 +132,7 @@
     "studio_panels": [],
     "studio_methods": []
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/minimap-background-packaging-20261126.json"
+  ]
 }
