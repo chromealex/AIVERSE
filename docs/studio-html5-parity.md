@@ -354,3 +354,5 @@ PHYSIS authored zones: move native create, duplicate, edit and remove operations
 PHYSIS map zone plan: show native authored footprints and select or position a zone in X/Z, preserving Y. Verify map hit testing and one Undo.
 
 PHYSIS group transforms: select several authored zones, translate, rotate and scale around native pivot modes, duplicate or remove as one MapDoc transaction. Verify Undo, isolation and persistence.
+
+Raid window: provide an extraction point form, readable objectives and bot receipts. Validate candidate map overrides before committing undoable edits. Verify in packaged Studio.

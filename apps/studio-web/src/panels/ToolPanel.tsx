@@ -8,6 +8,7 @@ import JsonTree from './JsonTree';
 import MapGeneratorPanel from './MapGeneratorPanel';
 import PhysisZonesPanel from './PhysisZonesPanel';
 import PhysisDiagnosticsPanel from './PhysisDiagnosticsPanel';
+import RaidPanel, {type RaidInfo} from './RaidPanel';
 import WaterShorePanel from './WaterShorePanel';
 import SceneBrushBar, { type BrushKind, type BrushField } from './SceneBrushBar';
 import './ProjectToolPanels.css';
@@ -162,10 +163,11 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
         <button className="au-button" aria-pressed={zoneMode} onClick={()=>setZoneMode(true)}>Map zones</button></div>
         {zoneMode&&snapshot?.graphDocument?<PhysisZonesPanel key={snapshot.graphDocument.epoch} scope={snapshot.graphDocument} onChanged={()=>done(true)}/>:
           <PhysisDiagnosticsPanel key={snapshot?.graphDocument?.epoch??projectPath} projectPath={projectPath}/>}</>}
+      {panel==='raid' && snapshot?.graphDocument && <RaidPanel key={snapshot.graphDocument.epoch} scope={snapshot.graphDocument} info={state.raid_info as RaidInfo | undefined} onChanged={()=>done(true)}/>}
       {panel==='water' && snapshot?.graphDocument && <WaterShorePanel key={snapshot.graphDocument.epoch} scope={snapshot.graphDocument} onChanged={()=>done(true)}/>}
       {BRUSHES[panel] && <SceneBrushBar project={projectPath} tileCatalog={state.tileset_list as Parameters<typeof SceneBrushBar>[0]['tileCatalog']} kinds={BRUSHES[panel]!} fields={(state.field_list as {fields?:BrushField[]} | undefined)?.fields}/>}
-      {(panel==='water'||panel==='generate'||panel==='physis') ? <details className="water-shores__operations" open={q ? true : undefined}>
-        <summary>{panel==='water'?'Water operations':panel==='physis'?'Map configuration':'Map operations'}</summary>{operationCards}
+      {(panel==='water'||panel==='generate'||panel==='physis'||panel==='raid') ? <details className="water-shores__operations" open={q ? true : undefined}>
+        <summary>{panel==='raid'?'Advanced raid operations':panel==='water'?'Water operations':panel==='physis'?'Map configuration':'Map operations'}</summary>{operationCards}
       </details> : operationCards}
     </div>
     </div>
