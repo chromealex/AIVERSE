@@ -40,6 +40,7 @@ class StudioAttachmentPreview {
     render::Pose previewPose_;
     std::vector<render::mat4> previewMatrices_;
     float time_=0,yaw_=.6f,pitch_=.4f;
+    size_t clipIndex_=0;
     bool playing_=true;
     std::chrono::steady_clock::time_point last_{};
 
@@ -185,18 +186,30 @@ public:
             const size_t children = staged->animatedChildren.size() + (active ? active->bindings.children.size() : 0);
             result.set("children", Json::number(int64_t(children)));
             auto* model=staged->source->model;
+            Json clips=Json::array();
+            for(const auto& clip:model->clips){
+                Json row=Json::object();row.set("name",Json::string(clip.name));
+                row.set("duration",Json::number(double(clip.duration)));clips.push(std::move(row));
+            }
+            result.set("clips",std::move(clips));
             result.set("duration",Json::number(double(model->clips.empty()?0:model->clips.front().duration)));
             Json sockets=Json::array();for(const auto& node:model->nodes)if(!node.name.empty())sockets.push(Json::string(node.name));
             result.set("sockets",std::move(sockets));
             animatedSources_.clear();
             if(session_)retired_.push_back(std::move(session_));
-            session_=std::move(staged);time_=0;last_={};
+            session_=std::move(staged);clipIndex_=0;time_=0;last_={};
             return result;
         }catch(...){if(staged)retired_.push_back(std::move(staged));throw;}
     }
     bool ready()const{return bool(session_);}
     float time()const{return time_;}
     void controls(const Json& params){
+        if(params.has("clip")){
+            const auto index=params.getInt("clip",-1);
+            if(!session_||index<0||size_t(index)>=session_->source->model->clips.size())
+                throw std::runtime_error("Choose an available animation clip");
+            clipIndex_=size_t(index);time_=0;
+        }
         if(params.has("playing"))playing_=params.getBool("playing");
         if(params.has("time"))time_=float(std::clamp(params["time"].toDouble(),0.,86400.));
         if(params.has("yaw"))yaw_=float(params["yaw"].toDouble());
@@ -213,8 +226,9 @@ public:
         if(!rigRead)throw std::runtime_error("Parent model is unavailable");
         render::bindPose(*model,previewPose_);
         if(!session_->originalModel&&!model->clips.empty()){
-            const float duration=model->clips.front().duration;
-            if(duration>0){time_=dt?std::fmod(time_+dt,duration):std::min(time_,duration);render::sampleClip(model->clips.front(),time_,previewPose_);}
+            const auto& clip=model->clips.at(clipIndex_);
+            const float duration=clip.duration;
+            if(duration>0){time_=dt?std::fmod(time_+dt,duration):std::min(time_,duration);render::sampleClip(clip,time_,previewPose_);}
         }
         render::worldMatrices(*model,previewPose_,previewMatrices_);
         std::vector<view::AnimatedSceneAttachmentSources::Input> inputs;
