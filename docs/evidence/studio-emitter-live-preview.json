@@ -1,0 +1,10 @@
+{
+  "sha": "39c0aa650af6b18ad81e4bbf9b88584aff8c49ec",
+  "argv": [
+    "bash",
+    "/tmp/studio-emitter-acceptance.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-emitter-live-preview.log.txt",
+  "sha256": "1937b54b947a62b2916e1b198b29553fa745fa6c5b348db5e88b9f2632995d7a"
+}
