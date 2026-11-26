@@ -611,3 +611,5 @@ The legacy view_wind operation combines independent PHYSIS nature settings, Terr
 
 Frame the private forest above the canopy on first enable and preserve subsequent orbit and zoom. Compare the resulting macOS preview with the initial capture.
 Feed the private viewport renderer from the sampled PHYSIS wind after the nature frame is prepared. Verify forest motion with fixed camera and other animated layers disabled.
+
+Expose the Parts, Depth and Weight GPU forest masks in PHYSIS. Skeleton line rendering requires separate geometry.

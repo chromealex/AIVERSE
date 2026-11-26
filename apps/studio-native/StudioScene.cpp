@@ -3405,18 +3405,19 @@ Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,con
     renderer_.beginScene(camera,width,height);
     renderer_.lighting.skyColor={.7f,.8f,.95f};renderer_.lighting.fogDensity=0;
     if(terrain_.vb.valid() && terrain_.ib.valid())renderer_.drawMesh(terrain_,mat4{},{1,1,1,1},kDrawNoCastShadow);
-    view.forest.setEnabled(state.forestEnabled);
-    if (state.forestEnabled) {
-        const auto eye=renderer_.cameraPos();
-        view.forest.draw(*device_,renderer_,map,std::llround(eye.x*100.),std::llround(eye.z*100.),
-            [&](int64_t x,int64_t z){return int32_t(std::llround(heightAt(float(x)*.01f,float(z)*.01f)*100.));});
-    }
     particles.setView(camera,renderer_.viewProj(),width,height);
     auto retire=[&](auto& model){if(model)renderer_.invalidateModelCachesFor(model.get());sparseTerrainRetirement_.retireModel(*device_,model);};
     (void)sparseTerrainRetirement_.collectWithoutIdle(*device_);
     const double seconds=std::chrono::duration<double>(now.time_since_epoch()).count();
     view.display.draw(*device_,renderer_,particles,view.read,map,&source,camera,seconds,heightAt,retire);
     renderer_.setSceneWind(view.display.sceneWind(seconds));
+    renderer_.setWindRigDebugView(state.forestEnabled?state.forestMask:render::wind::WindDebugView::Off);
+    view.forest.setEnabled(state.forestEnabled);
+    if (state.forestEnabled) {
+        const auto eye=renderer_.cameraPos();
+        view.forest.draw(*device_,renderer_,map,std::llround(eye.x*100.),std::llround(eye.z*100.),
+            [&](int64_t x,int64_t z){return int32_t(std::llround(heightAt(float(x)*.01f,float(z)*.01f)*100.));});
+    }
     particles.update(dt);
     std::vector<fx::FxPointLight> lights;
     particles.collectLights(lights);

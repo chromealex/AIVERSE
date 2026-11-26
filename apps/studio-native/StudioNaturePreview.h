@@ -1,6 +1,7 @@
 #pragma once
 #include <chrono>
 #include "StudioTerrainGeometry.h"
+#include "StudioWindPreview.h"
 #include "apps/editor/core/PhysisOverlayTiles.h"
 #include "apps/editor/PhysisNaturePreview.h"
 #include "apps/editor/core/PhysisDiagnosticFrame.h"
@@ -13,6 +14,7 @@ struct StudioNaturePreview {
     std::uint64_t ignitionRevision=0;
     bool forestEnabled=false;
     bool forestFramed=false;
+    render::wind::WindDebugView forestMask=render::wind::WindDebugView::Off;
     bool commandPlaying=false;
     std::chrono::steady_clock::time_point commandTime{};
     float yaw=.6f,pitch=.55f,distance=0;
@@ -36,6 +38,7 @@ struct StudioNaturePreview {
 
     Json displayStatus() const {
         auto status=presentation;
+        status.set("forestMask",Json::string(windDebugName(forestMask)));
         status.set("forest",Json::fromBool(forestEnabled));
         status.set("overlayRadius",Json::number(int64_t(overlay.radiusCells)));
         status.set("overlayStride",Json::number(int64_t(overlay.stride)));
@@ -77,6 +80,12 @@ struct StudioNaturePreview {
         const auto radius=setting("overlayRadius",overlay.radiusCells,6,24,true);
         const auto stride=setting("overlayStride",overlay.stride,1,4,true);
         const auto alpha=setting("overlayAlpha",overlay.alpha,.1,.8,false);
+        if (params.has("forestMask")) {
+            const auto mode=parseWindDebugView(params["forestMask"]);
+            if (mode==render::wind::WindDebugView::Skeleton)
+                throw std::invalid_argument("Forest mask must be off, parts, depth or weight");
+            forestMask=mode;
+        }
         if (params.has("forest")) {
             forestEnabled=params.getBool("forest");
             if (forestEnabled && !forestFramed) {

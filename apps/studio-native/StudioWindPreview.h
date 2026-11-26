@@ -44,6 +44,17 @@ inline const char* windDebugName(render::wind::WindDebugView v) {
     }
 }
 
+inline render::wind::WindDebugView parseWindDebugView(const Json& value) {
+    const std::string v = value.str();
+    using V = render::wind::WindDebugView;
+    if (v == "off") return V::Off;
+    else if (v == "parts") return V::Parts;
+    else if (v == "depth") return V::Depth;
+    else if (v == "weight") return V::Weight;
+    else if (v == "skeleton") return V::Skeleton;
+    else throw std::invalid_argument("Wind 'debug' must be off|parts|depth|weight|skeleton");
+}
+
 inline Json studioWindStateJson(const StudioWindState& s) {
     Json j = Json::object();
     j.set("enabled", Json::fromBool(s.enabled));
@@ -75,14 +86,7 @@ inline void applyStudioWindPatch(StudioWindState& s, const Json& patch) {
         else if (key == "gust") next.gust = number(0, 1);
         else if (key == "scale") next.scale = number(0, 0.5f);
         else if (key == "debug") {
-            const std::string v = value.str();
-            using V = render::wind::WindDebugView;
-            if (v == "off") next.debug = V::Off;
-            else if (v == "parts") next.debug = V::Parts;
-            else if (v == "depth") next.debug = V::Depth;
-            else if (v == "weight") next.debug = V::Weight;
-            else if (v == "skeleton") next.debug = V::Skeleton;
-            else throw std::invalid_argument("Wind 'debug' must be off|parts|depth|weight|skeleton");
+            next.debug = parseWindDebugView(value);
         } else throw std::invalid_argument("Unknown wind setting '" + key + "'");
     }
     next.revision = s.revision + 1;
