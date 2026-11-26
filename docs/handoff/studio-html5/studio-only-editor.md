@@ -655,3 +655,5 @@ fd9911d69da1a59301d9db6872f9200484b176c3. Generate uses the native catalog and g
 8841a41bed486d9eae02dc846efbdb76eb9a2da8. Native studio_session passed with parseRequest regression for 9007199254740993, INT64_MAX and the match-seed sentinel. Evidence docs/evidence/studio-generator-native-seeds.json. This completes the macOS Generate window check. Next: Project Import scan/import/open workflow.
 
 Project Import transfer: scan an external project, carry its source into a background import, open the emitted destination and prepare an editable Agent brief. Verify a real conversion and existing drafts.
+
+Project Import at 47fc85553 built on macOS. Desktop conversion reached the result view. The test queried the snapshot during project loading and failed; retry after waiting for the new project. Evidence: docs/evidence/studio-project-import-workflow.json.
