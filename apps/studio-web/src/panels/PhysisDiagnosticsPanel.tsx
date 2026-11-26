@@ -76,7 +76,7 @@ function Diagnostics({projectPath,source,epoch,route}:{projectPath:string;source
     workspace.current?.querySelector('.asset-native-surface')?.scrollIntoView({block:'center',inline:'nearest'});
     route.consume();
   },[route?.request,showNature,!!frame,map]);
-  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback'|'grid'|'presentation',next:View,selection:number|{cellX:number;cellZ:number}|undefined=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}|{cellMeters:number;humidity:number;shoreSand:number}|{overlayRadius?:number;overlayStride?:number;overlayAlpha?:number;overlayVolumes?:boolean;quality?:number;volume?:number;igniteOnClick?:boolean;forest?:boolean;forestMask?:string;horizon?:boolean;lodScale?:number;grass?:boolean;flames?:boolean;sound?:boolean},background=false){
+  async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback'|'grid'|'presentation',next:View,selection:number|{cellX:number;cellZ:number}|undefined=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}|{cellMeters:number;humidity:number;shoreSand:number}|{overlayRadius?:number;overlayStride?:number;overlayAlpha?:number;overlayVolumes?:boolean;quality?:number;volume?:number;igniteOnClick?:boolean;forest?:boolean;forestMask?:string;treeGeometry?:string;hierarchical?:boolean;horizon?:boolean;lodScale?:number;grass?:boolean;flames?:boolean;sound?:boolean},background=false){
     const id=++requestId.current;
     const sameArea=next.size===view.size&&next.stride===view.stride&&next.centerX===view.centerX&&next.centerZ===view.centerZ;
     const rebuild=action==='reset'||action==='grid';
@@ -169,6 +169,13 @@ function Diagnostics({projectPath,source,epoch,route}:{projectPath:string;source
               <option value="off">Off</option><option value="parts">Tree parts</option>
               <option value="depth">Branch depth</option><option value="weight">Wind weight</option><option value="skeleton">Skeleton</option>
             </StudioSelect></label>
+            <label>Tree geometry
+              <StudioSelect value={frame.presentation.treeGeometry??'auto'} onChange={e=>void request('presentation',view,cell,{treeGeometry:e.target.value})}>
+                <option value="auto">Automatic</option><option value="merged">Merged tree</option><option value="perBranch">Individual branches</option>
+              </StudioSelect>
+            </label>
+            <label><input type="checkbox" checked={frame.presentation.hierarchical??true}
+              onChange={e=>void request('presentation',view,cell,{hierarchical:e.target.checked})}/>Hierarchical wind</label>
             <label>Tree detail distance
               <StudioSelect value={frame.presentation.lodScale??1} onChange={e=>void request('presentation',view,cell,{lodScale:Number(e.target.value)})}>
                 {Array.from(new Set([.25,.5,1,2,4,frame.presentation.lodScale??1])).sort((a,b)=>a-b).map(scale=><option key={scale} value={scale}>{scale}×</option>)}

@@ -616,3 +616,5 @@ Expose the Parts, Depth and Weight GPU forest masks in PHYSIS. Skeleton line ren
 
 Render the forest skeleton from the encoded wind rig and actual per-instance draw transform. Verify the fifth dropdown mode in the independent PHYSIS viewport.
 Expose the TerraWeave forest LOD scale and horizon in the private PHYSIS viewport. Verify controls, projection range and terrain-map persistence on macOS.
+
+Switch private forest tree geometry and hierarchical wind masks using the existing TerraWeave prototypes. Preserve simulation and camera during GPU rebuild.

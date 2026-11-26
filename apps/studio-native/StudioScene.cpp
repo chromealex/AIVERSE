@@ -3413,6 +3413,10 @@ Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,con
     view.display.draw(*device_,renderer_,particles,view.read,map,&source,camera,seconds,heightAt,retire);
     renderer_.setSceneWind(view.display.sceneWind(seconds));
     renderer_.setWindRigDebugView(state.forestEnabled?state.forestMask:render::wind::WindDebugView::Off);
+    using Geometry=terraweave::ArborTreeGeometry;
+    view.forest.setTreeGeometry(state.treeGeometry=="merged"?Geometry::Merged:
+                                state.treeGeometry=="perBranch"?Geometry::PerBranch:Geometry::Auto);
+    view.forest.setHierarchicalWind(state.hierarchical);
     view.forest.setLodScale(state.forestLodScale);
     view.forest.setHorizon(state.forestHorizon);
     view.forest.setEnabled(state.forestEnabled);

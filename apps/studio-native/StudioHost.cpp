@@ -917,6 +917,11 @@ void StudioHost::tickNaturePreview() {
             renderThread_=std::make_unique<StudioRenderThread>([this]{renderSceneFrame();},!(threaded&&std::string(threaded)=="0"));
         }
         onScene([&]{platform_.sceneThreadScope([&]{
+            if (natureRendererGeometry_!=shown->treeGeometry || natureRendererHierarchical_!=shown->hierarchical) {
+                surface.renderer.reset();
+                natureRendererGeometry_=shown->treeGeometry;
+                natureRendererHierarchical_=shown->hierarchical;
+            }
             if (!surface.renderer) surface.renderer=std::make_unique<StudioScene>(platform_.createDevice(StudioSurface::Nature));
             shown->presentation=surface.renderer->drawNature(surface.placement.pixelsW,surface.placement.pixelsH,
                 *shown,*source,ws.map,ws.project.dir,float(ws.project.rules.levelHeight.toDouble()));

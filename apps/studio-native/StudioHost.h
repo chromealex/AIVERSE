@@ -318,6 +318,8 @@ private:
     double nextMapSnapshot_ = 0, nextRulesCheck_ = 0;
     std::shared_ptr<StudioNaturePreview> naturePreview_,liveNatureView_;
     bool natureShowsGame_=false;
+    bool natureRendererHierarchical_=true;
+    std::string natureRendererGeometry_="auto";
     uint64_t liveNatureEpoch_=0;
     const auto& displayedNature() const { return natureShowsGame_?liveNatureView_:naturePreview_; }
     render::PrismaQuality postQuality_=render::PrismaQuality::High;

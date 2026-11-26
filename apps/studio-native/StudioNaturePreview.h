@@ -13,6 +13,8 @@ struct StudioNaturePreview {
     std::uint64_t revision;
     std::uint64_t ignitionRevision=0;
     bool forestEnabled=false;
+    bool hierarchical=true;
+    std::string treeGeometry="auto";
     bool forestHorizon=false;
     float forestLodScale=1;
     bool forestFramed=false;
@@ -42,6 +44,8 @@ struct StudioNaturePreview {
         auto status=presentation;
         status.set("horizon",Json::fromBool(forestHorizon));
         status.set("lodScale",Json::number(double(forestLodScale)));
+        status.set("treeGeometry",Json::string(treeGeometry));
+        status.set("hierarchical",Json::fromBool(hierarchical));
         status.set("forestMask",Json::string(windDebugName(forestMask)));
         status.set("forest",Json::fromBool(forestEnabled));
         status.set("overlayRadius",Json::number(int64_t(overlay.radiusCells)));
@@ -59,7 +63,7 @@ struct StudioNaturePreview {
     }
 
     void setDisplay(const Json& params) {
-        for (const char* key:{"forest","horizon","grass","flames","sound","igniteOnClick","fieldOverlay","overlayVolumes"})
+        for (const char* key:{"forest","horizon","hierarchical","grass","flames","sound","igniteOnClick","fieldOverlay","overlayVolumes"})
             if (params.has(key) && params[key].type()!=Json::Type::Bool)
                 throw std::runtime_error("Invalid nature presentation setting");
         const double quality=params["quality"].toDouble(preview.settings.grassQuality);
@@ -85,7 +89,13 @@ struct StudioNaturePreview {
         const auto stride=setting("overlayStride",overlay.stride,1,4,true);
         const auto alpha=setting("overlayAlpha",overlay.alpha,.1,.8,false);
         const auto lodScale=setting("lodScale",forestLodScale,.25,4,false);
+        const auto geometry=params.getStr("treeGeometry",treeGeometry);
+        if (params.has("treeGeometry") && (!params["treeGeometry"].isString() ||
+            (geometry!="auto" && geometry!="merged" && geometry!="perBranch")))
+            throw std::invalid_argument("Tree geometry must be auto, merged or perBranch");
         if (params.has("forestMask")) forestMask=parseWindDebugView(params["forestMask"]);
+        treeGeometry=geometry;
+        if (params.has("hierarchical")) hierarchical=params.getBool("hierarchical");
         forestLodScale=float(lodScale);
         if (params.has("horizon")) forestHorizon=params.getBool("horizon");
         if (params.has("forest")) {
