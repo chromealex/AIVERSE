@@ -12,6 +12,7 @@ struct StudioNaturePreview {
     std::uint64_t revision;
     std::uint64_t ignitionRevision=0;
     bool forestEnabled=false;
+    bool forestFramed=false;
     bool commandPlaying=false;
     std::chrono::steady_clock::time_point commandTime{};
     float yaw=.6f,pitch=.55f,distance=0;
@@ -76,7 +77,15 @@ struct StudioNaturePreview {
         const auto radius=setting("overlayRadius",overlay.radiusCells,6,24,true);
         const auto stride=setting("overlayStride",overlay.stride,1,4,true);
         const auto alpha=setting("overlayAlpha",overlay.alpha,.1,.8,false);
-        if (params.has("forest")) forestEnabled=params.getBool("forest");
+        if (params.has("forest")) {
+            forestEnabled=params.getBool("forest");
+            if (forestEnabled && !forestFramed) {
+                // Start above the canopy, within the near forest preview's culling range.
+                distance=std::max(distance,48.f);
+                pitch=std::max(pitch,.75f);
+                forestFramed=true;
+            }
+        }
         overlay.radiusCells=int(radius);
         overlay.stride=int(stride);
         overlay.alpha=float(alpha);
