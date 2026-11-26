@@ -41,7 +41,7 @@ Json savedResult(const Json& graph){
 void validate(const Workspace& w,const Json& g){auto m=loadAnimationModel(w,g.getStr("model"));render::AnimationGraph::compile(*m,g);}
 }
 std::unique_ptr<render::Model> loadAnimationModel(const Workspace& w,const std::string& file){if(file.empty())throw std::runtime_error("select a model");auto reader=[&w](const std::string& p,std::string& out){auto f=contained(w,p);std::ifstream stream(f,std::ios::binary);if(!stream)return false;out.assign(std::istreambuf_iterator<char>(stream),{});return true;};auto m=render::loadModel(file,reader);if(!m)throw std::runtime_error("cannot load animation model");return m;}
-void registerAnimationOps(Workspace& ws){auto schema=Json::parse(R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"expected":{"type":"object"},"expectedRevision":{"type":"string"},"target":{"type":"string"}}})");
+void registerAnimationOps(Workspace& ws){auto schema=Json::parse(R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"},"expected":{"type":"object"},"expectedRevision":{"type":"string"},"target":{"type":"string"},"expectedModel":{"type":"string"}}})");
     auto previews=ws.animationPreviews=std::make_shared<AnimationPreviewSessions>();
     ws.registerOp({"animation_graph_preview","Open a native pose graph preview, advance its clock, change inputs or release it.",
         Json::parse(R"({"type":"object","properties":{"action":{"type":"string","enum":["open","frame","close"]},"panel":{"type":"string","enum":["graph","rig"]},"graph":{"type":"object"},"scope":{"type":"string"},"bindPose":{"type":"boolean"},"token":{"type":"integer"},"dt":{"type":"number"},"ground":{"type":"number"},"yaw":{"type":"number"},"inputs":{"type":"object"}},"required":["action","panel"]})"),
@@ -113,7 +113,25 @@ void registerAnimationOps(Workspace& ws){auto schema=Json::parse(R"({"type":"obj
         if(!unchanged)throw std::runtime_error("asset changed; reload before saving");
     }else if(p.has("expectedRevision")||p.has("expected"))throw std::runtime_error("asset removed; reload before saving");
     auto text=g.dump(2)+"\n";if(text.size()>256*1024)throw std::runtime_error("asset exceeds 256 KiB");fs::create_directories(file.parent_path());auto temp=file;temp+=".tmp";if(fs::is_symlink(temp))throw std::runtime_error("temporary path is symlink");{std::ofstream f(temp,std::ios::binary);f<<text;f.close();if(!f)throw std::runtime_error("cannot save asset");}fs::rename(temp,file);return savedResult(g);}});
-    ws.registerOp({"animation_graph_apply","Validate saved asset against target type model and apply a graph snapshot through rules_set.",schema,[&ws](const Json& p){Json g=load(ws,p.getStr("name"));auto target=p.getStr("target");const auto& types=ws.project.rulesJson["types"];if(!types.has(target))throw std::runtime_error("unknown target type");auto view=types[target]["view"];std::string model=view.getStr("model");if(model.empty())throw std::runtime_error("target needs a single model");g.set("model",Json::string(model));validate(ws,g);view.set("animationGraph",g);view.set("programmableAnimation",Json::fromBool(true));Json q=Json::object();q.set("path",Json::string("types."+target+".view"));q.set("value",view);return ws.call("rules_set",q);}});
+    ws.registerOp({"animation_graph_apply","Validate the saved animation graph against the target model and apply it through rules_set.",schema,[&ws](const Json& p){
+        auto graph=load(ws,p.getStr("name"));
+        if(p.has("expectedRevision") && p.getStr("expectedRevision")!=graphRevision(graph))
+            throw std::runtime_error("Animation graph changed; reload before applying");
+        const auto target=p.getStr("target");
+        const auto& types=ws.project.rulesJson["types"];
+        if(!types.has(target))throw std::runtime_error("Unknown target type");
+        Json query=Json::object();query.set("path",Json::string("types"));query.set("resolved",Json::fromBool(true));
+        auto resolved=ws.call("rules_get",query);if(resolved.has("error"))return resolved;
+        const auto model=resolved["value"][target]["view"].getStr("model");
+        if(model.empty())throw std::runtime_error("Target needs a single model");
+        if(p.has("expectedModel") && p.getStr("expectedModel")!=model)
+            throw std::runtime_error("Target model changed; select the type again");
+        graph.set("model",Json::string(model));validate(ws,graph);
+        auto view=types[target]["view"];if(view.isNull())view=Json::object();
+        view.set("animationGraph",std::move(graph));view.set("programmableAnimation",Json::fromBool(true));
+        Json edit=Json::object();edit.set("path",Json::string("types."+target+".view"));edit.set("value",std::move(view));
+        return ws.call("rules_set",edit);
+    }});
 
     // Advanced animation authoring is reusable by the editor and its MCP agent.
     // All files are confined to project/animations/<kind>/<name>.json.

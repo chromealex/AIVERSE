@@ -21,11 +21,28 @@ const ports=(n:Node):('a'|'b'|'input')[]=>n.kind==='additive'||n.kind==='blend'?
 const position=(n:Node,i:number)=>({x:n.position?.[0]??24+190*(i%3),y:n.position?.[1]??24+90*Math.floor(i/3)});
 const nodeOptions=(nodes:Node[])=>nodes.map(n=><option key={n.id}>{n.id}</option>);
 
-export default function AnimationGraphPanel({projectPath,tools,rigMode,route}:{route:GraphOpenRoute;projectPath:string;tools:ReactNode;rigMode:boolean}){
+export default function AnimationGraphPanel({projectPath,tools,rigMode,route,historyVersion,openAttachments}:{historyVersion?:number|string;openAttachments:()=>void;route:GraphOpenRoute;projectPath:string;tools:ReactNode;rigMode:boolean}){
  const cacheKey=JSON.stringify([projectPath,rigMode]);
  const title=rigMode?'Animation Rig':'Animation Graph';
  const restored=drafts.get(cacheKey);
  const [itemPresets,setItemPresets]=useState<ItemPresets>({});
+ const [models,setModels]=useState<Record<string,string>>({});
+ const [selectionTarget,setSelectionTarget]=useState({id:'',model:''});
+ const target=models[selectionTarget.id]===selectionTarget.model?selectionTarget.id:'';
+ useEffect(()=>{
+  let active=true;
+  if(projectPath)void invoke('studio.rules',{}).then(r=>{
+   if(!active)return;
+   const next:Record<string,string>={};
+   for(const [id,type] of Object.entries(r.resolved)){
+    if(!type||typeof type!=='object'||!('view' in type))continue;
+    const view=type.view;
+    if(view&&typeof view==='object'&&'model' in view&&typeof view.model==='string'&&view.model)next[id]=view.model;
+   }
+   setModels(next);
+  }).catch(e=>{if(active)setError(String(e));});
+  return ()=>{active=false;};
+ },[projectPath,historyVersion]);
  const [names,setNames]=useState<string[]>([]),[name,setName]=useState(restored?.name??''),[newName,setNewName]=useState('');
  const history=useRef(restored?.history);
  const [committed,setDraft]=useState<Graph|null>(restored?.history.current()??null),[saved,setSaved]=useState<Graph|null>(restored?.saved??null);
@@ -88,7 +105,7 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route}:{r
  }
  function openDocument(id:string,doc:Graph,version:string,isInline:boolean){
   history.current=new DraftHistory(doc,40);setDraft(doc);setSaved(doc);setRevision(version);setInline(isInline);
-  setName(id);setScope('');select('');setStateId('');setError('');setNotice('');
+  setName(id);setSelectionTarget({id:'',model:''});setScope('');select('');setStateId('');setError('');setNotice('');
  }
  async function load(id:string){
   const r=await op('get',{name:id});if(!Array.isArray(r.graph?.nodes))throw new Error('Asset has no pose graph');
@@ -102,6 +119,25 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route}:{r
   openDocument(request.name,request.graph,request.revision,request.inline);
   setTab(rigMode?'rig':'nodes');
  },[route.request,projectPath,busy,dirty,rigMode]);
+ async function saveGraph(){
+  const r=await op('set',{name,graph:draft,...(revision?{expectedRevision:revision}:{})});
+  setInline(false);setNames(current=>current.includes(name)?current:[...current,name].sort());
+  history.current=new DraftHistory(r.graph,40);setDraft(r.graph);setSaved(r.graph);setRevision(r.revision);
+  return r.revision;
+ }
+ async function applyGraph(){
+  if(!draft||!target||!models[target])return;
+  await op('validate',{graph:{...draft,model:models[target]}});
+  const saveFirst=dirty||inline;
+  const version=saveFirst?await saveGraph():revision;
+  try{
+   await op('apply',{name,target,expectedRevision:version,expectedModel:models[target]});
+  }catch(e){
+   if(saveFirst)throw new Error('Graph saved. Could not apply to '+target+': '+String(e));
+   throw e;
+  }
+  setNotice('Applied '+name+' to '+target+'.');
+ }
  async function edit(action:string,params:Record<string,unknown>){
   const r=await op('edit',{action,graph:draft,scope,...params});change(r.graph);
  }
@@ -117,7 +153,8 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route}:{r
    <button disabled={busy||dirty||!projectPath||!/^[-\w]{1,64}$/.test(newName)||names.includes(newName)} onClick={()=>void run(async()=>{
     const id=newName;const initial=await op('edit',{action:'new'});await op('set',{name:id,graph:initial.graph});
     setNames((await op('list')).graphs);await load(id);setNewName('');
-   })}>Create graph</button></header>
+   })}>Create graph</button>
+   <button onClick={openAttachments}>Attachments</button></header>
   <nav aria-label="Graph views">{(['nodes','states','rig','preview','runtime','tools'] as const).map(t=><button key={t} aria-pressed={t===tab} onClick={()=>setTab(t)}>{t==='nodes'?'Pose graph':t==='states'?'States':t==='rig'?'Rig units':t==='preview'?'Skeleton preview':t==='runtime'?'Live entities':'Operations'}</button>)}</nav>
   {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
   {tab==='runtime'?<AnimationRuntimePanel project={projectPath} rig={rigMode}/>:tab==='tools'?tools:!graph?<p>{projectPath?'Open or create an animation graph.':'Open a project to edit animation graphs.'}</p>:<>
@@ -128,7 +165,15 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route}:{r
     <button disabled={busy||!history.current?.canUndo()} onClick={()=>{if(history.current)setDraft(history.current.undo());}}>Undo</button>
     <button disabled={busy||!history.current?.canRedo()} onClick={()=>{if(history.current)setDraft(history.current.redo());}}>Redo</button>
     <button disabled={busy||!dirty} onClick={()=>{history.current=saved?new DraftHistory(saved,40):undefined;setDraft(saved);setScope('');select('');setError('');}}>Discard</button>
-    <button disabled={busy||(!dirty&&!inline)} onClick={()=>void run(async()=>{const r=await op('set',{name,graph:draft,...(revision?{expectedRevision:revision}:{})});setInline(false);setNames(current=>current.includes(name)?current:[...current,name].sort());history.current=new DraftHistory(r.graph,40);setDraft(r.graph);setSaved(r.graph);setRevision(r.revision);})}>Save graph</button>
+    <button disabled={busy||(!dirty&&!inline)} onClick={()=>void run(async()=>{await saveGraph();})}>Save graph</button>
+   </div>
+   <div className="anim-actions">
+    <label>Target type<select aria-label="Animation target type" value={target} disabled={busy||!Object.keys(models).length}
+      onChange={e=>{const id=e.target.value;setSelectionTarget({id,model:models[id]??''});if(id&&draft&&draft.model!==models[id])change({...draft,model:models[id]});}}>
+     <option value="">{Object.keys(models).length?'Select a type':'No types with models'}</option>
+     {Object.keys(models).sort().map(id=><option key={id}>{id}</option>)}
+    </select></label>
+    <button disabled={busy||!models[target]} onClick={()=>void run(applyGraph)}>{dirty||inline?'Save and apply':'Apply to type'}</button>
    </div>
    {tab==='preview'&&draft?<AnimationSkeletonPreview onStatus={setPreview} projectPath={projectPath} graph={draft} scope={scope} panel={rigMode?'rig':'graph'} onPick={setPickedBone} busy={busy}
     onKeep={controls=>{if(graph)change(inScope({...graph,parameters:{...graph.parameters,...controls}}));}}/>:tab==='nodes'?<>
