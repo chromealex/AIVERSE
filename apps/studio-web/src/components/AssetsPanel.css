@@ -256,5 +256,6 @@
 .project-directory-entry{flex:1;display:flex;align-items:center;gap:8px;min-width:0;padding:7px 4px;text-align:start;color:var(--au-text);font:inherit;background:none;border:0}
 .project-directory-entry svg{flex:none;color:var(--au-text-muted)}
 .project-directory-entry span{overflow-wrap:anywhere}
+.project-directory-list li.is-selected{background:var(--au-active)}
 button.project-directory-entry:hover{background:var(--au-hover);cursor:pointer}
 .project-directory footer{display:flex;align-items:center;gap:8px;padding:5px 8px;border-top:1px solid var(--au-line);color:var(--au-text-muted);flex-wrap:wrap;overflow-wrap:anywhere}

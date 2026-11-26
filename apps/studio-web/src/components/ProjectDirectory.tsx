@@ -1,7 +1,9 @@
+import {createPortal} from 'react-dom';
 import {useEffect,useMemo,useState} from 'react';
 import {ArrowUp,ChevronRight,Copy,FileText,Folder,RefreshCw,Search} from 'lucide-react';
 import {invoke} from '../bridge';
 import {copyText} from '../clipboard';
+import {StudioContextMenu} from '../ui';
 import type {StudioResult} from '../types';
 
 export function absoluteChildPath(parent:string,child:string) {
@@ -17,6 +19,8 @@ export default function ProjectDirectory({project,onContent}:{project:string;onC
   const [listing,setListing]=useState<StudioResult['studio.projectDirectory']|null>(null);
   const [error,setError]=useState('');
   const [message,setMessage]=useState('');
+  const [selected,setSelected]=useState('');
+  const [menu,setMenu]=useState<{x:number;y:number;path:string;absolute:string;directory:boolean}|null>(null);
   useEffect(()=>{
     let live=true;
     setError('');setListing(null);
@@ -36,7 +40,7 @@ export default function ProjectDirectory({project,onContent}:{project:string;onC
   const parts=folder?folder.split('/'):[];
   function navigate(path:string){
     if(path==='content'){onContent();return;}
-    setListing(null);setFolder(path);setSearch('');setPage(0);setMessage('');setError('');
+    setListing(null);setFolder(path);setSearch('');setPage(0);setMessage('');setError('');setSelected('');setMenu(null);
     if(path===folder)setRefresh(n=>n+1);
   }
   async function copy(path:string){
@@ -56,16 +60,28 @@ export default function ProjectDirectory({project,onContent}:{project:string;onC
       <button className="project-directory-content" type="button" onClick={onContent}>Content assets</button>
     </div>
     <label className="studio-assets-search"><Search size={14}/><input aria-label="Filter project files" placeholder="Find in folder…" value={search}
-      onChange={e=>{setSearch(e.target.value);setPage(0);}}/></label>
+      onChange={e=>{setSearch(e.target.value);setPage(0);setSelected('');setMenu(null);}}/></label>
     <div className="project-directory-list">
       {error?<p role="alert">{error}</p>:!listing?<p role="status">Loading folder…</p>:!entries.length?
         <p>{search?'No matching files.':'This folder is empty.'}</p>:
         <ul>{entries.slice(current*perPage,(current+1)*perPage).map(row=>{
           const path=folder?folder+'/'+row.name:row.name;
           const absolute=absoluteChildPath(listing.absolute,row.name);
-          return <li key={row.name}>
-            {row.directory?<button type="button" className="project-directory-entry" title={absolute} onClick={()=>navigate(path)}>
-              <Folder size={16}/><span>{row.name}</span></button>:<span className="project-directory-entry" title={absolute}><FileText size={16}/><span>{row.name}</span></span>}
+          return <li key={row.name} className={selected===path?'is-selected':undefined}
+            onContextMenu={event=>{
+              event.preventDefault();setSelected(path);
+              setMenu({x:event.clientX,y:event.clientY,path,absolute,directory:row.directory});
+            }}>
+            <button type="button" className="project-directory-entry" title={absolute}
+              aria-pressed={row.directory?undefined:selected===path}
+              onClick={()=>row.directory?navigate(path):setSelected(path)}
+              onKeyDown={event=>{
+                if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='c'){
+                  event.preventDefault();void copy(absolute);
+                }
+              }}>
+              {row.directory?<Folder size={16}/>:<FileText size={16}/>}<span>{row.name}</span>
+            </button>
             <button type="button" className="studio-assets-tool-action" aria-label={'Copy absolute path for '+row.name} title="Copy absolute path"
               onClick={()=>void copy(absolute)}><Copy size={14}/></button>
           </li>;
@@ -75,5 +91,8 @@ export default function ProjectDirectory({project,onContent}:{project:string;onC
       {lastPage>0&&<><button disabled={!current} onClick={()=>setPage(current-1)}>Previous</button><span>{current+1} / {lastPage+1}</span>
         <button disabled={current===lastPage} onClick={()=>setPage(current+1)}>Next</button></>}
       <span role="status">{message}</span></footer>}
+    {menu&&createPortal(<StudioContextMenu x={menu.x} y={menu.y} label="Project file actions" onClose={()=>setMenu(null)}
+      items={[...(menu.directory?[{id:'open',label:'Open Folder',onSelect:()=>navigate(menu.path)}]:[]),
+        {id:'copy',label:'Copy Absolute Path',onSelect:()=>void copy(menu.absolute)}]}/>,document.body)}
   </section>;
 }
