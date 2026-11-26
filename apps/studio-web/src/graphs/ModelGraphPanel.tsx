@@ -24,6 +24,7 @@ export default function ModelGraphPanel({documentEpoch,projectPath,openAttachmen
  const [showBuilding,setShowBuilding]=useState(false);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[status,setStatus]=useState('');
  const history=useRef<DraftHistory<GraphObject>|null>(null),epoch=useRef(0),lock=useRef(false);
+ const [initializedEpoch,setInitializedEpoch]=useState(0);
  const dirty=!!draft&&!!original&&JSON.stringify(draft)!==JSON.stringify(original);
  const graph=draft&&object(draft.graph)?draft.graph:null;
  const view=draft?(mode==='model'?modelProjection(draft):mode==='geometry'?geometryProjection(draft):graph?animationProjection(graph,mode):{nodes:[],links:[]}):{nodes:[],links:[]};
@@ -44,7 +45,7 @@ export default function ModelGraphPanel({documentEpoch,projectPath,openAttachmen
    const result=await op('modeling_list');if(!live())return;
    if(!object(result)||!Array.isArray(result.models))throw new Error('Model list unavailable');
    setNames(result.models.filter((n):n is string=>typeof n==='string'));
-  });
+  }).then(()=>{if(epoch.current===token)setInitializedEpoch(token)});
   return ()=>{if(epoch.current===token)epoch.current++};
  },[projectPath,documentEpoch]);
  useEffect(()=>{setJson(entry?JSON.stringify(entry,null,2):'')},[entry]);
@@ -54,7 +55,7 @@ export default function ModelGraphPanel({documentEpoch,projectPath,openAttachmen
  });
  useEffect(()=>{
   const request=route?.request;
-  if(!request||request.tab!=='graph'||request.project!==projectPath||busy||lock.current)return;
+  if(!request||request.tab!=='graph'||request.project!==projectPath||initializedEpoch!==epoch.current||busy||lock.current)return;
   if(dirty&&name!==request.name){
    setStatus('Save or discard this draft to open '+request.name+'.');return;
   }
@@ -64,7 +65,7 @@ export default function ModelGraphPanel({documentEpoch,projectPath,openAttachmen
    const r=modelingReply(await op('modeling_get',{name:request.name}));if(!live())return;
    setName(request.name);reset(r.document,r.revision);setMode('pose');
   });
- },[route?.request,projectPath,busy,dirty,name]);
+ },[route?.request,projectPath,initializedEpoch,busy,dirty,name]);
  const connect=(to:PortRef)=>{
   if(!draft||!pending||busy)return;
   if(mode==='model'){

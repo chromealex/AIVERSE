@@ -424,3 +424,5 @@ Animation authoring navigation: implement animation_editor in the HTML host, rev
 Dock panels: add Maximize and Restore to the shared ellipsis menu; keep split ratios, mounted panel state and native preview placement across both actions.
 
 The dock menu supports Maximize and Restore throughout HTML Studio. A native window containing just one dock area uses system window zoom. Packaged macOS verification and screenshots are recorded in docs/evidence/studio-panel-maximize-native.json and docs/evidence/studio-project-catalog/panel-maximized.png.
+
+Linked graph parity also requires a graph request made during initial model-list loading to complete once that load settles.
