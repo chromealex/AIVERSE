@@ -4521,7 +4521,7 @@ void StudioHost::handleMessage(const std::string& json) {
                             }
                             if(params.has("yaw"))settings.set("yaw",params["yaw"]);
                             if(params.has("pitch"))settings.set("pitch",params["pitch"]);
-                            result=asset.renderer->attachmentCommand(project,settings);
+                            result=asset.renderer->attachmentCommand(project,settings,true);
                         } else result=asset.renderer->attachmentCommand(project,params);
                     });
                 });

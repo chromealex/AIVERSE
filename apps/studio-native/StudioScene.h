@@ -447,7 +447,7 @@ public:
     Json lensViewPose() const;
     Json configureLensCamera(const Json& params);
     bool lensCameraReady() const {return lensCamera_.has_value();}
-    Json attachmentCommand(const std::string& project,const Json& params);
+    Json attachmentCommand(const std::string& project,const Json& params,bool originalModel=false);
     Json gpuEmitterCommand(const std::string& project,const Json& params);
     void drawGpuEmitter(int width,int height);
     Json effectFileCommand(const std::string& project,const Json& params);

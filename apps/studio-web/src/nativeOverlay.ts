@@ -75,7 +75,7 @@ export function watchDockDrag(listener: () => void): () => void {
 /** Hide Scene and Game immediately. Waiting for the next React frame lets the cursor reach the native child, which then swallows the drag. */
 export function concealNativeViews(): void {
   setDockDrag(true);
-  for (const id of ['scene', 'game', 'fx', 'shader', 'material', 'facialRig', 'character', 'appearance', 'animationGraph', 'animationRig', 'attachments', 'lensCamera','lighting','effectFile','gpuEmitter'] as const) {
+  for (const id of ['scene', 'game', 'fx', 'shader', 'material', 'facialRig', 'character', 'appearance', 'animationGraph', 'animationRig', 'attachments', 'sourceModel', 'lensCamera','lighting','effectFile','gpuEmitter'] as const) {
     lastViewportRect.set(id, 'hidden');
     void invoke('studio.viewportRect', { id, x: 0, y: 0, width: 0, height: 0, dpr: 1, visible: false })
       .catch(() => { lastViewportRect.delete(id); });

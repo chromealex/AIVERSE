@@ -3128,10 +3128,10 @@ Json StudioScene::configureLensCamera(const Json& params) {
     }
     throw std::runtime_error("Select an existing camera");
 }
-Json StudioScene::attachmentCommand(const std::string& project,const Json& params){
+Json StudioScene::attachmentCommand(const std::string& project,const Json& params,bool originalModel){
     if(!attachmentPreview_)attachmentPreview_=std::make_unique<StudioAttachmentPreview>(*device_,renderer_,deviceLifetime_->lease());
     if(params.has("document")){
-        auto result=attachmentPreview_->publish(project,params["document"]);
+        auto result=attachmentPreview_->publish(project,params["document"],originalModel);
         attachmentPreview_->controls(params);
         return result;
     }

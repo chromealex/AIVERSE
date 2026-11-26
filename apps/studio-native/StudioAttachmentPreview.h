@@ -17,6 +17,7 @@ class StudioAttachmentPreview {
     using Imported=view::ImportedAttachmentAuthoring;
     using Registry=view::AppearanceAssetRegistry;
     struct Session {
+        bool originalModel=false;
         std::unique_ptr<render::ModelAssetProvider> provider;
         std::unique_ptr<Registry> registry;
         Registry::Snapshot source;
@@ -73,12 +74,19 @@ public:
         try{retire();}catch(...){}
         for(auto& session:retired_)(void)session.release();
     }
-    Json publish(const std::string& project,const Json& authored){
+    Json publish(const std::string& project,const Json& authored,bool originalModel){
         view::AttachmentLayout document;
         view::AttachmentLayoutCodec::read(authored,document);
         const auto root=std::filesystem::canonical(project);
         const auto withinProject=[&](const std::string& name){return resolve(root,name);};
-        const auto readAsset=[root](const std::string& path,std::string& bytes){
+        const auto parentPath=withinProject(document.parent);
+        // Preserve dependencies referenced by the file. Only project-authored
+        // sidecars attached to this source are excluded from the original view.
+        const auto readAsset=[root,parentPath,originalModel](const std::string& path,std::string& bytes){
+            if(originalModel && path.starts_with(parentPath)){
+                const auto suffix=std::string_view(path).substr(parentPath.size());
+                if(suffix==".batching.json"||suffix==".clips.json"||suffix==".wind.json"||suffix==".lmuv")return false;
+            }
             const auto file=std::filesystem::weakly_canonical(path);
             const auto local=file.lexically_relative(root);
             if(local.empty()||local.is_absolute()||*local.begin()=="..")return false;
@@ -99,7 +107,7 @@ public:
         staged->registry=std::make_unique<Registry>();
         std::string error;
         try {
-            const auto parentPath=withinProject(document.parent);
+            staged->originalModel=originalModel;
             auto* parent=staged->provider->load(device_,parentPath);
             if(!parent)
                 throw std::runtime_error("Parent Model import failed");
@@ -204,7 +212,7 @@ public:
         auto rigRead=session_->provider->resources().acquireModelRead(model);
         if(!rigRead)throw std::runtime_error("Parent model is unavailable");
         render::bindPose(*model,previewPose_);
-        if(!model->clips.empty()){
+        if(!session_->originalModel&&!model->clips.empty()){
             const float duration=model->clips.front().duration;
             if(duration>0){time_=dt?std::fmod(time_+dt,duration):std::min(time_,duration);render::sampleClip(model->clips.front(),time_,previewPose_);}
         }
