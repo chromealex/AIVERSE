@@ -575,6 +575,7 @@
     "docs/evidence/studio-linked-editor-status-discovery.json",
     "docs/evidence/studio-linked-editor-status-pose.json",
     "docs/evidence/studio-linked-editor-open.json",
-    "docs/evidence/studio-detached-rig-open-verified.json"
+    "docs/evidence/studio-detached-rig-open-verified.json",
+    "docs/evidence/studio-live-entity-animation-owners.json"
   ]
 }

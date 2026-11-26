@@ -442,3 +442,5 @@ Standalone graph opening: port animation_editor_open and rig_editor_open for sav
 Standalone animation_editor_open and rig_editor_open passed packaged macOS linked acceptance for named and inline documents, default untitled, explicit save, dirty refusal and conflicting on-disk revisions.
 
 Play-test animation diagnostics: port the legacy runtime status queries onto the active hosted client's entity animation store. Show matching entity/contact/locomotion rows from both standalone HTML animation panels and verify separation from their asset previews.
+
+Graph and Rig now read the running hosted game's procedural animation diagnostics through animation_runtime_status and rig_runtime_status. A packaged Mac run verified two different entities, the active attached climbing stance, and empty data after stopping. Evidence: docs/evidence/studio-live-entity-animation-owners.json.
