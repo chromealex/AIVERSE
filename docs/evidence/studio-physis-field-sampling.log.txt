@@ -1,0 +1,10 @@
+2026-11-26 11:42:42.018 AiverseStudioHTML5[36312:84324114] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-range-8v4z4h/Catalog.app/Contents/Resources/studio-web
+2026-11-26 11:42:42.231 AiverseStudioHTML5[36312:84324114] [studio-web] served index.html (7851 bytes)
+2026-11-26 11:42:42.237 AiverseStudioHTML5[36312:84324114] [studio-web] served assets/index-n71avTdP.js (1698949 bytes)
+2026-11-26 11:42:42.271 AiverseStudioHTML5[36312:84324114] [studio-web] JS: CROSS main boot
+2026-11-26 11:42:42.281 AiverseStudioHTML5[36312:84324114] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+[physis] nature presentation on
+2026-11-26 11:42:52.793 AiverseStudioHTML5[36312:84324114] [studio-web] JS: CROSS main paused tick 4
+2026-11-26 11:42:55.958 AiverseStudioHTML5[36312:84324114] [studio-web] JS: CROSS main SHOT_base
+2026-11-26 11:42:59.191 AiverseStudioHTML5[36312:84324114] [studio-web] JS: CROSS main SHOT_wind
+2026-11-26 11:43:00.842 AiverseStudioHTML5[36312:84324114] [studio-web] JS: CROSS main FAIL @aiverse-studio://shell/index.html:110:110 Error: default values
