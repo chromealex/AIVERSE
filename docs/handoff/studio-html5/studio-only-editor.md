@@ -709,3 +709,5 @@ Emitter geometry 74e11f931. apps/studio-web/src/panels/EffectShape.tsx and Effec
 Effects lifetime color: edit RGBA stops, normalized particle age and optional second gradient in a visual inspector. Verify native save and reopen.
 
 Lifetime color 9ddd3a49e. apps/studio-web/src/panels/EffectLifetimeColor.tsx. Typecheck, Vite, 299 web tests and native assets passed. Packaged Mac Studio verified midpoint insertion, age, RGB and fractional alpha editing, second ramp, stop deletion, explicit save, app restart and draft-only disabling. Evidence docs/evidence/studio-effect-lifetime-color.json and docs/evidence/studio-project-catalog/lifetime-color.png. Align second-gradient toggle with label, then continue remaining particle modules.
+
+Lifetime gradient layout 11dcc3abd. apps/studio-web/src/panels/ToolPanel.css. Production Vite and native assets rebuilt. Repeated both Mac save/reopen phases and refreshed docs/evidence/studio-project-catalog/lifetime-color.png. Evidence docs/evidence/studio-effect-lifetime-color-layout.json. Next: particle color by speed and starting color modes.

@@ -386,6 +386,7 @@
     "docs/evidence/studio-tiles-atlas-brush.json",
     "docs/evidence/studio-water-bank-desktop.json",
     "docs/evidence/studio-generator-seed-roundtrip.json",
+    "docs/evidence/studio-effect-lifetime-color-layout.json",
     "docs/evidence/studio-effect-lifetime-color.json",
     "docs/evidence/studio-effect-emitter-geometry.json",
     "docs/evidence/studio-effect-burst-panel.json",
