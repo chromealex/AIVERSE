@@ -155,6 +155,11 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
             stopGame();
             return Json::parse(R"({"ok":true,"summary":"Тест остановлен"})");
         },true});
+    session_->workspace().registerOp({"editor_windows","List HTML Studio panels and their open state.",
+        Json::object(),[this](const Json&){
+            if (!panelInventory_.isObject()) throw std::runtime_error("Studio layout is loading");
+            return panelInventory_;
+        },true});
     session_->workspace().registerOp({"play_status","Read the running Game window match.",
         Json::object(),[this](const Json&){return game_?game_->playStatus():Json::parse(R"({"playing":false})");},true});
     auto& workspace=session_->workspace();
@@ -4141,6 +4146,15 @@ bool StudioHost::handleHostMethod(const Json& req) {
         try { (void)platform_.windowRequest(method, params); } catch (const std::exception&) {}
         return true;
     }
+    if (method=="studio.panelInventory") return answer([&] {
+        if (!params["windows"].isArray() || params["windows"].size()>512) throw std::invalid_argument("Invalid panel inventory");
+        for (const auto& row:params["windows"].items())
+            if (row.getStr("id").empty() || row.getStr("title").empty() || row.getStr("group").empty() ||
+                row["open"].type()!=Json::Type::Bool) throw std::invalid_argument("Invalid panel");
+        panelInventory_=Json::object();
+        panelInventory_.set("windows",params["windows"]);
+        return Json::parse(R"({"ok":true})");
+    });
     if (method == "studio.webDiagnostic") {
         const std::string note = params.getStr("message");
         if (note.size() <= 1200) platform_.log("[studio-web] JS: " + note);

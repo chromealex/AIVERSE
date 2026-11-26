@@ -103,6 +103,17 @@ export default function App() {
   }),[dock,floating,snapshot?.graphDocument?.epoch]);
   const [scriptLocation,setScriptLocation] = useState<{project:string; path:string; line:number} | null>(null);
   const [connected] = useState(nativeConnected);
+  useEffect(() => {
+    if (!connected || FLOAT) return;
+    const windows=STUDIO_PANELS.map(id=>{
+      const group=WORKSPACES.find(key=>{
+        const {left,center,right,bottom}=WORKSPACE_INFO[key];
+        return [...left,...center,...right,...bottom].includes(id);
+      })??'service';
+      return {id,title:STUDIO_PANEL_TITLES[id],group,open:!!(panelStack(dock,id)||floatOwner(floating,id))};
+    });
+    void invoke('studio.panelInventory',{windows}).catch(console.warn);
+  },[connected,dock,floating]);
   const panelIds = useMemo(() => treePanels(dock), [dock]);
   const watchPlay = !FLOAT || panelIds.some(id => ['hierarchy','inspector','scripts','console'].includes(id));
   const [game,setGame] = useStudioGameState(connected && !!snapshot?.project.path && watchPlay,
