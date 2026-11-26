@@ -1,6 +1,6 @@
 import {useState} from 'react';
 
-type Value = string | number | boolean | null | Value[] | {[key:string]:Value};
+export type Value = string | number | boolean | null | Value[] | {[key:string]:Value};
 export type RigUnit = {op:string; [key:string]:Value};
 export type ItemPresets = Record<string,Value>;
 type RigNode = {id:string; units?:RigUnit[]};
@@ -30,7 +30,7 @@ function fieldsWithLists(fields:{[key:string]:Value},names:string[]){
  return result;
 }
 
-function Field({name,value,change,presets}:{name:string;value:Value;change:(v:Value)=>void;presets:ItemPresets}){
+export function Field({name,value,change,presets}:{name:string;value:Value;change:(v:Value)=>void;presets:ItemPresets}){
  const label=itemLabels[name];
  if(label&&(Array.isArray(value)||value===null||(typeof value==='object'&&!Object.keys(value).length))){
   const items=Array.isArray(value)?value:[];

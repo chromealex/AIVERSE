@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { DraftHistory } from '../graphs/graphFramework';
 import { invoke } from '../bridge';
+import AnimationProperties from './AnimationProperties';
+import type {Value} from './RigInspector';
 import AnimationRuntimePanel from './AnimationRuntimePanel';
 import AnimationSkeletonPreview from './AnimationSkeletonPreview';
 import RigInspector, {type RigUnit,type ItemPresets} from './RigInspector';
 import './graphSurface.css';
 import './AnimationGraphPanel.css';
 
-type Node = {graph?:string;bindings?:Record<string,string>;id:string;kind:string;position?:number[];a?:string;b?:string;input?:string;clip?:string;units?:RigUnit[];weight?:number};
+type Node = {loop?:boolean;speed?:number;graph?:string;bindings?:Record<string,string>;id:string;kind:string;position?:number[];a?:string;b?:string;input?:string;clip?:string;units?:RigUnit[];weight?:number};
 type Condition = {parameter:string;op?:string;value?:number};
 type Transition = {to:string;fade?:number;after?:number;when:Condition[]|Record<string,never>};
 type State = {id:string;output:string;transitions?:Transition[]};
@@ -65,6 +67,9 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route,his
  const graph=scoped&&Array.isArray(scoped.nodes)?scoped:null;
  const scalars=Object.keys(graph?.parameters??{}).filter(k=>!Array.isArray(graph?.parameters?.[k]));
  const current=graph?.nodes.find(n=>n.id===selection),states=graph?.states??[];
+ const managed=['id','kind','position',...(current?ports(current):[]),
+  ...(current?.kind==='clip'?['clip','loop','speed']:[]),...(current?.weight!==undefined?['weight']:[]),
+  ...(current?.kind==='subgraph'?['graph','bindings']:[]),...(current?.kind==='rig'?['units']:[])];
  const state=states.find(s=>s.id===stateId)??states[0];
  const dirty=JSON.stringify(saved)!==JSON.stringify(draft);
  const [preview,setPreview]=useState({token:0,error:''});
@@ -211,8 +216,16 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route,his
         }}><option value="">Child default</option>{Object.entries(graph.parameters??{}).filter(([,v])=>Array.isArray(v)===Array.isArray(value)).map(([key])=><option key={key}>{key}</option>)}</select>
        </label>)}
       </>}
-      {current.kind==='clip'&&<label>Clip<input value={current.clip??''} onChange={e=>patchNode(current.id,{clip:e.target.value})}/></label>}
+      {current.kind==='clip'&&<>
+       <label>Clip<input value={current.clip??''} onChange={e=>patchNode(current.id,{clip:e.target.value})}/></label>
+       <label>Playback speed<input type="number" min="0" step="any" value={current.speed??1} onChange={e=>{if(e.target.validity.valid&&Number.isFinite(e.target.valueAsNumber))patchNode(current.id,{speed:e.target.valueAsNumber});}}/></label>
+       <label><input type="checkbox" checked={current.loop??true} onChange={e=>patchNode(current.id,{loop:e.target.checked})}/>Loop clip</label>
+      </>}
       {current.weight!==undefined&&<label>Weight<input type="number" min="0" max="1" step=".05" value={current.weight} onChange={e=>{if(e.target.validity.valid&&Number.isFinite(e.target.valueAsNumber))patchNode(current.id,{weight:e.target.valueAsNumber});}}/></label>}
+      <AnimationProperties key={current.id} title="Node properties" reserved={managed}
+       fields={Object.fromEntries(Object.entries(current).filter(([key])=>!managed.includes(key))) as Record<string,Value>}
+       change={fields=>{const updated={...Object.fromEntries(Object.entries(current).filter(([key])=>managed.includes(key))),...fields} as Node;
+        change(inScope({...graph,nodes:graph.nodes.map(n=>n===current?updated:n)}));}}/>
       <button disabled={current.id===graph.output} onClick={()=>change(inScope({...graph,output:current.id}))}>Use as output</button>
       <button onClick={()=>void run(async()=>{await edit('remove',{id:current.id});select('');})}>Remove node</button></>}
     </fieldset>
@@ -222,6 +235,8 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode,route,his
     update={(id,units)=>patchNode(id,{units})}/>:<fieldset disabled={busy} className="anim-states">
     <label>New state<input value={stateName} onChange={e=>setStateName(e.target.value)}/></label>
     <button disabled={!stateName.trim()||states.some(s=>s.id===stateName.trim())||states.length>=64} onClick={()=>{const id=stateName.trim();change(inScope({...graph,states:[...states,{id,output:graph.output,transitions:[]}]}));setStateId(id);setStateName('');}}>Add state</button>
+    <AnimationProperties parameters title="Parameter defaults" fields={(graph.parameters??{}) as Record<string,Value>}
+      change={parameters=>change(inScope({...graph,parameters}))}/>
     <label>Scalar parameter<input value={parameter} placeholder="speed" onChange={e=>setParameter(e.target.value)}/></label>
     <button disabled={!parameter.trim()||Object.hasOwn(graph.parameters??{},parameter.trim())} onClick={()=>{change(inScope({...graph,parameters:{...graph.parameters,[parameter.trim()]:0}}));setParameter('');}}>Add parameter</button>
     {state&&<><label>State<select value={state.id} onChange={e=>setStateId(e.target.value)}>{states.map(s=><option key={s.id}>{s.id}</option>)}</select></label>

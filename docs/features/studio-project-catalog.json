@@ -3,6 +3,8 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/studio-web/src/panels/RigInspector.tsx",
+    "apps/studio-web/src/panels/AnimationProperties.tsx",
     "apps/editor/core/AnimationOps.cpp",
     "apps/studio-web/src/panels/AnimationGraphPanel.css",
     "apps/studio-web/src/panels/AnimationRuntimePanel.tsx",

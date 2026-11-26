@@ -52,3 +52,9 @@
 .anim-runtime{overflow:auto;min-width:0}
 .anim-runtime table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
 .anim-runtime th,.anim-runtime td{text-align:left;white-space:nowrap;padding:.55rem .75rem;border-bottom:1px solid var(--studio-border)}
+
+.animation-properties-section{flex-basis:100%;min-width:0}
+.animation-properties-section summary{cursor:pointer;padding:.4rem 0;font-weight:600}
+.animation-properties{display:grid;gap:.4rem;padding:.4rem .6rem;border-left:1px solid var(--au-line)}
+.animation-property,.animation-property-add{display:flex;align-items:baseline;flex-wrap:wrap;gap:.5rem}
+.animation-property>details,.animation-property>label{flex:1;min-width:0}
