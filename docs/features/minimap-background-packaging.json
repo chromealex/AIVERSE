@@ -1,0 +1,126 @@
+{
+  "schema": 1,
+  "id": "minimap-background-packaging",
+  "owner": "build",
+  "changed_paths": [
+    "tests/tests.cpp",
+    "tools/atlas/AtlasBuild.cpp",
+    "tools/atlas/AtlasBuild.h",
+    "docs/game-format.md",
+    "docs/devlog/systems.json",
+    "docs/agents/feature-policy.json",
+    "docs/agent-handoffs/minimap-background-packaging-initial.md",
+    "docs/features/minimap-background-packaging.json"
+  ],
+  "traits": {
+    "editable": false,
+    "simulation": false,
+    "visible": false,
+    "runtime": false
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Minimap image references remain standalone in packs.",
+      "evidence": [
+        "tools/atlas/AtlasBuild.cpp"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Reuses the existing PackWriter and AtlasConfig; no new image reader.",
+      "evidence": [
+        "tools/atlas/AtlasBuild.cpp"
+      ]
+    },
+    "native_api": {
+      "status": "not_applicable",
+      "note": "This packaging correction uses the existing atlas path and adds no new authoring or runtime surface.",
+      "evidence": []
+    },
+    "skill": {
+      "status": "not_applicable",
+      "note": "This packaging correction uses the existing atlas path and adds no new authoring or runtime surface.",
+      "evidence": []
+    },
+    "mcp": {
+      "status": "not_applicable",
+      "note": "This packaging correction uses the existing atlas path and adds no new authoring or runtime surface.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_applicable",
+      "note": "This packaging correction uses the existing atlas path and adds no new authoring or runtime surface.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_applicable",
+      "note": "This packaging correction uses the existing atlas path and adds no new authoring or runtime surface.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_applicable",
+      "note": "This packaging correction uses the existing atlas path and adds no new authoring or runtime surface.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "This packaging correction uses the existing atlas path and adds no new authoring or runtime surface.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "platforms": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "dependencies": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "headless": {
+      "status": "not_applicable",
+      "note": "This packaging correction uses the existing atlas path and adds no new authoring or runtime surface.",
+      "evidence": []
+    },
+    "examples": {
+      "status": "not_applicable",
+      "note": "This packaging correction uses the existing atlas path and adds no new authoring or runtime surface.",
+      "evidence": []
+    },
+    "tests": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "handoff": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "Documents pack behavior of minimapBackground.",
+      "evidence": [
+        "docs/game-format.md"
+      ]
+    },
+    "publishing": {
+      "status": "not_applicable",
+      "note": "This packaging correction uses the existing atlas path and adds no new authoring or runtime surface.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [],
+    "mcp_tools": [],
+    "studio_panels": [],
+    "studio_methods": []
+  },
+  "test_reports": []
+}

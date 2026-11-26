@@ -280,6 +280,7 @@ bool buildAtlas(const std::vector<SourceImage>& input, const AtlasConfig& cfg, A
         FileProps p = cfg.classify(s->path);
         if (p.group.empty() || !isImagePath(s->path)) continue;
         ++st.candidates;
+        if (cfg.standalone.count(s->path)) { st.excluded.push_back({s->path, "raw image reference"}); continue; }
         if (p.noAtlas) { st.excluded.push_back({s->path, "noAtlas"}); continue; }
         if (p.repeat) { st.excluded.push_back({s->path, "wrap: repeat"}); continue; }
         Image img;
@@ -513,7 +514,14 @@ void scanSheets(const pack::PackWriter& w, AtlasConfig& cfg) {
         if (!endsWith(lower(p), ".json")) continue;
         std::string text;
         if (!w.readInput(p, text)) continue;
-        try { collectSheets(Json::parse(text), cfg.sheets); } catch (const std::exception&) {} // not our file to validate
+        try {
+            const Json j = Json::parse(text);
+            collectSheets(j, cfg.sheets);
+            // A minimap background is decoded from its original file by Minimap::build.
+            // Inspect map JSON as well as game.json; both can declare this key.
+            if (j.isObject() && j.has("minimapBackground") && j["minimapBackground"].isString())
+                cfg.standalone.insert(pack::normalizePath(j["minimapBackground"].str()));
+        } catch (const std::exception&) {} // not our file to validate
     }
 }
 

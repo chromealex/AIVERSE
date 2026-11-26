@@ -3050,6 +3050,7 @@ are unchanged when this block is absent.
 Unit type `view.hitFlash` controls the additive highlight on a hit. Set it to `false` to disable it, or set `"hitFlash":{"strength":0.2,"duration":0.15,"color":[0.3,0.6,1]}`. Duration is in seconds. Linear RGB components are in [0,1]. With no override, the warm highlight starts at 0.3 strength and decays for 0.3 seconds. The scene light uses the separate hitLight setting.
 
 For a painted flat minimap, set `"minimapBackground":"maps/valley-overview.png"` in the map or in game.json. A map value overrides the game default, and an empty string selects terrain colours. The image spans the map rectangle with its top left at grid (0,0). Transparent pixels reveal terrain colours. Fog, units, overlay marks and the camera frame are drawn above it. Missing or unreadable images fall back to terrain colours.
+The packer keeps images referenced by `minimapBackground` as standalone files, including paths declared in map JSON, because the minimap decodes their original bytes.
 
 Set `hotkey` in a unit type or technology to show and activate its build, train, upgrade or research card action. Example: `"hotkey":"F5"`. If multiple enabled production buttons use the same key, the first in card order wins. Script commands take precedence.
 

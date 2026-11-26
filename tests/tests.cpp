@@ -2605,6 +2605,28 @@ TEST(atlas_sprite_sheets_are_never_trimmed) {
     CHECK(o && o->w == 50 && o->offsetX == 3);                             // standalone sprite trimmed
 }
 
+TEST(atlas_preserves_raw_minimap_backgrounds) {
+    using namespace aiverse;
+    pack::PackWriter w;
+    const std::string image = atlas::encodePng(atlasTestImage(16, 16, 0, 0, 16, 16, 41));
+    CHECK(w.addData("game.json", R"({"minimapBackground":"ui/global-map.png"})"));
+    CHECK(w.addData("maps/arena.json", R"({"minimapBackground":"ui/arena-map.png"})"));
+    CHECK(w.addData("ui/global-map.png", image));
+    CHECK(w.addData("ui/arena-map.png", image));
+    CHECK(w.addData("ui/icon.png", image));
+    atlas::AtlasStats st;
+    CHECK(atlas::applyAtlas(w, atlas::AtlasConfig::fromGame(Json::object(), "linux"), st));
+    std::string bytes;
+    CHECK(w.writeToString(bytes, pack::WriteOptions{}));
+    auto p = pack::Pack::open(pack::memorySource(bytes));
+    CHECK(p != nullptr);
+    if (!p) return;
+    std::string raw;
+    CHECK(p->read("ui/global-map.png", raw) && raw == image);
+    CHECK(p->read("ui/arena-map.png", raw) && raw == image);
+    CHECK(std::count_if(st.excluded.begin(), st.excluded.end(), [](const auto& e) { return e.second == "raw image reference"; }) == 2);
+}
+
 TEST(atlas_pack_integration_and_runtime_lookup) {
     using namespace aiverse;
     pack::PackWriter w;

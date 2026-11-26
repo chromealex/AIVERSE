@@ -3374,6 +3374,13 @@
       ],
       "roadmap": [
         {
+          "id": "minimap-background-packaging",
+          "status": "in-progress",
+          "target": null,
+          "title": "Сохранять фон миникарты в пакетах",
+          "titleEn": "Preserve minimap backgrounds in packaged builds"
+        },
+        {
           "id": "site-devlog-roadmap",
           "status": "done",
           "date": "2026-11-25",

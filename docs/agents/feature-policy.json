@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "features": {
+    "minimap-background-packaging": {"requires": [], "roadmap": {"system": "build", "id": "minimap-background-packaging"}, "api_paths": []},
     "native-sky-skill": {"requires": [], "roadmap": {"system": "prisma", "id": "native-sky-skill"}, "api_paths": []},
     "site-devlog-roadmap": {"requires": [], "roadmap": {"system": "build", "id": "site-devlog-roadmap"}, "api_paths": []},
     "encounter-phase-determinism": {"requires": [], "roadmap": {"system": "gameplay", "id": "encounter-phase-determinism"}, "api_paths": []},
