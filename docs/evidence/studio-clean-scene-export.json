@@ -1,0 +1,11 @@
+{
+  "sha": "ddaae7f98cf4f297823953c3dc88d6b8d2b7add7",
+  "argv": [
+    "bash",
+    "-c",
+    "bash /tmp/scene-export-ui.sh && bash /tmp/planet-export-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-clean-scene-export.log.txt",
+  "sha256": "afd9d3e32eb7e6b319a4d4a909be09039d56b0f1749bfcf9264e989e573501e7"
+}

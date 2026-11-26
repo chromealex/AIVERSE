@@ -564,3 +564,5 @@ An explicit all or default view_screenshot now captures the main HTML Studio win
 Transfer clean Scene screenshot dimensions and camera arguments through a shared request parser before wiring the isolated render target.
 
 Route Scene exports through the current map render pass with a separate color/depth output and a temporary camera projection. Verify the resulting PNG on Metal.
+
+Packaged macOS HTML Studio exported planar and planetary Scene PNGs at 511 × 511, 1536 × 864, the current viewport and 4096 × 2048. A per-shot orbit produced a different image on both maps. The live camera parameters, game manifest and map bytes matched after each sequence. [Scene export evidence](evidence/studio-clean-scene-export.json).
