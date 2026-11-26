@@ -1598,8 +1598,12 @@ bool GameClient::hostCheckpoint(bool restore) {
     hostStep_=false;
     return true;
 }
+double GameClient::simulationSpeed() const {
+    static const double defaultSimSpeed = [] { const char* v = std::getenv("AIVERSE_SIM_SPEED"); return v ? std::clamp(std::atof(v), 0.1, 16.0) : 1.0; }();
+    return hostCanControl()&&hostSpeed_>0?hostSpeed_:defaultSimSpeed;
+}
 bool GameClient::setHostSpeed(double speed) {
-    if(!hostCanControl()||!(speed>=1&&speed<=100))return false;
+    if(!hostCanControl()||!(speed>=0.25&&speed<=100))return false;
     hostSpeed_=speed;return true;
 }
 bool GameClient::setHostPaused(bool paused) {
@@ -1857,8 +1861,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         }
         else if (!netMatch_ && !topDownPaused() && (!hostFrozen || singleStep)) {   // single player: the escape preview pauses the match
             for (auto& b : bots_) b.update(*sim_);
-            static const double defaultSimSpeed = [] { const char* v = std::getenv("AIVERSE_SIM_SPEED"); return v ? std::clamp(std::atof(v), 0.1, 16.0) : 1.0; }();
-            const double simSpeed=hostCanControl()&&hostSpeed_>0?hostSpeed_:defaultSimSpeed;
+            const double simSpeed = simulationSpeed();
             if (singleStep) sim_->step();
             else if (simSpeed == 1.0) sim_->advance(dt);
             else sim_->advance(dt * simSpeed, int(8 * simSpeed + .5));   // testing: match time faster than real time

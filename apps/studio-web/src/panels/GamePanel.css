@@ -23,3 +23,7 @@
 .game-device-row:hover { background:var(--au-hover); }
 .game-device-row[aria-pressed=true] { background:var(--au-active); }
 .game-device-row:focus-visible { outline:2px solid var(--au-focus); outline-offset:-2px; }
+
+.studio-game__speed { display:flex; flex-wrap:wrap; align-items:center; gap:var(--au-space-3); padding:var(--au-space-2) var(--au-space-4); border-bottom:1px solid var(--au-line); }
+.studio-game__speed input { flex:1 1 90px; max-width:200px; min-width:0; }
+.studio-game__speed output { min-width:5ch; font-variant-numeric:tabular-nums; }

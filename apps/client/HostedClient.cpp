@@ -315,6 +315,7 @@ bool HostedClient::checkpoint(bool restore) {
     if(!canStep())return false;
     Scope scope(*this);return client_->hostCheckpoint(restore);
 }
+double HostedClient::simulationSpeed() const { return canControl() ? client_->simulationSpeed() : 1.0; }
 bool HostedClient::setSpeed(double speed) {
     if(!canControl())return false;
     Scope scope(*this);return client_->setHostSpeed(speed);

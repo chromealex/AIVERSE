@@ -298,3 +298,5 @@ Overlays transfer: render authored screen, ground and billboard icon textures in
 Overlays transfer: capture the project structure through GameView::drawGhost into the panel’s own GPU target, with validity tint and snapped map position. Verify blocked and buildable placements with Scene closed.
 
 Game transfer: expose the shared device catalog dimensions and pixel density in a searchable Game device chooser. Verify selection and orientation preservation on macOS.
+
+Game transfer: expose fractional local simulation speed in the Game toolbar, retain the existing fast-forward presets and verify pause, single step and restart.

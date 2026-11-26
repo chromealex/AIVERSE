@@ -205,6 +205,7 @@ public:
     bool hostCanStep() const;
     size_t hostMapIndex() const{return mapIndex_;}
     bool setHostPaused(bool paused);
+    double simulationSpeed() const;
     bool setHostSpeed(double speed);
     bool hostCheckpoint(bool restore);
 private:

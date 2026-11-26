@@ -19,6 +19,7 @@ public:
     void stop();
     void setDevice(const StudioGameDevice& device);
     void control(const std::string& action);
+    void setSimulationSpeed(double speed);
     void frame(int width,int height,float pointsW,float pointsH,double dt,bool focused);
     void suspend();
     void event(const platform::Event& event);

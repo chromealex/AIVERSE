@@ -603,3 +603,5 @@ Overlays transfer: capture the project structure through GameView::drawGhost int
 Game transfer: expose the shared device catalog dimensions and pixel density in a searchable Game device chooser. Verify selection and orientation preservation on macOS.
 
 cac311133ed2e0d703fa494642566ea163526c80. GameDevicePicker.tsx searches the native device catalog by name, group and ID. StudioGameDevice.h supplies the natural logical dimensions and display density. Packaged macOS Studio showed all 49 entries, filtered Samsung, displayed an empty search, selected Galaxy S24 Ultra by ID and preserved orientation and safe-area settings on native readback. The chooser reset its filter on reopening. Native build, TypeScript and 299 web tests passed. Evidence docs/evidence/studio-game-device-picker.json and docs/evidence/studio-project-catalog/game-device-picker.png. Next: Game simulation speed, player slot and standalone launch scenarios; Windows and merged-tree quick acceptance remain open.
+
+Game transfer: expose fractional local simulation speed in the Game toolbar, retain the existing fast-forward presets and verify pause, single step and restart.

@@ -55,6 +55,10 @@ void StudioGameSurface::stop() { actor_.reset();matchObserved_=false;runtimeDebu
 void StudioGameSurface::setDevice(const StudioGameDevice& profile) {
     (void)profile.profile();suspend();profile_=profile;
 }
+void StudioGameSurface::setSimulationSpeed(double speed) {
+    if (!(speed >= 0.25 && speed <= 16)) throw std::runtime_error("Game speed must be between 0.25 and 16");
+    if (actor_ || !host_->setSpeed(speed)) throw std::runtime_error("Speed requires a local match");
+}
 void StudioGameSurface::control(const std::string& action) {
     if (action=="restart") {
         if (!actor_ && !host_->active()) throw std::runtime_error("Start a game before restarting");
@@ -489,6 +493,7 @@ Json StudioGameSurface::state(bool includeScriptErrors) const {
     out.set("paused",Json::fromBool(paused()));
     out.set("runtimeDebugEdited",Json::fromBool(runtimeDebugEdited_));
     out.set("canControl",Json::fromBool(canControl()));
+    if (!actor_ && host_->canControl()) out.set("simulationSpeed",Json::number(host_->simulationSpeed()));
     out.set("canStep",Json::fromBool(canStep()));
     out.set("loading",Json::fromBool(!actor_ && host_->loading()));
     out.set("progress",Json::number(actor_?1.0:double(host_->progress())));

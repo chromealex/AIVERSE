@@ -5,6 +5,7 @@ import { invoke } from '../bridge';
 import type { StudioGameState, StudioGameDevice, StudioGameDeviceOption, StudioPlayReview } from '../types';
 import type { StudioPanelContext } from './StudioPanelRenderer';
 import { StudioPanel, StudioButton, StudioAlert, StudioEmptyState, StudioBadge, StudioCheckbox } from '../ui';
+import GameSpeedSlider from './GameSpeedSlider';
 import GameDevicePicker from './GameDevicePicker';
 import './GamePanel.css';
 import { gameViewportSize } from './gameViewport';
@@ -87,10 +88,10 @@ export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelC
     catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   };
-  const control=async(action:'pause'|'resume'|'step'|'restart')=>{
+  const control=async(command:'pause'|'resume'|'step'|'restart'|{action:'setSpeed';speed:number})=>{
     setReview(null);setReviewOpen(false);
     if(busy)return;setBusy(true);setError('');
-    try{setState(await invoke('studio.gameControl',{action}));}
+    try{setState(await invoke('studio.gameControl',typeof command==='string'?{action:command}:command));}
     catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   };
@@ -130,6 +131,8 @@ export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelC
       <StudioCheckbox label="Safe area" checked={device?.safeArea??true} disabled={!device?.width||busy} onChange={e=>void configure({safeArea:e.target.checked})}/>
       {!!device?.width && <StudioBadge>{device.width} × {device.height} · {device.touch?'Touch':'Mouse'}</StudioBadge>}
     </div>
+    {state?.simulationSpeed !== undefined && <GameSpeedSlider value={state.simulationSpeed} disabled={busy}
+      onCommit={speed => void control({action:"setSpeed",speed})}/>}
     {state?.runtimeDebugEdited&&<StudioAlert tone="warning">Local debug edits are outside command replay; Stop/Restart discards this runtime session.</StudioAlert>}
     {reviewOpen&&<div className="studio-game__review au-stack">
       <StudioAlert>Pause the local saved-map game. Only an unchanged launch map can receive changes. Stop or Restart does not copy anything automatically.</StudioAlert>

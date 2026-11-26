@@ -3887,6 +3887,8 @@ bool StudioHost::handleHostMethod(const Json& req) {
             const auto action=params.getStr("action");
             if(action=="restart"){
                 restartGame();
+            }else if(action=="setSpeed"){
+                game_->setSimulationSpeed(params["speed"].isNumber() ? params["speed"].toDouble() : 0);
             }else game_->control(action);
             if(action=="checkpointRestore"){
                 wpLiveSnapshot_=Json();wpLiveRefresh_=0;rebuildOverlay();

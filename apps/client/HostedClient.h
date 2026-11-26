@@ -74,6 +74,7 @@ public:
     bool paused() const;
     bool canStep() const;
     bool setPaused(bool paused);
+    double simulationSpeed() const;
     bool setSpeed(double speed);
     bool checkpoint(bool restore);
     bool stepOnce();
