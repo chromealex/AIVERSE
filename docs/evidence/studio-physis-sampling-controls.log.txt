@@ -1,0 +1,10 @@
+2026-11-26 11:44:22.143 AiverseStudioHTML5[38266:84336398] [studio-web] JS: CROSS main DONE_1
+2026-11-26 11:44:22.143 AiverseStudioHTML5[38266:84336398] [studio-web] JS: CROSS main VERIFIED radius and spacing controls on paused frame, native bounds validation, PHYSIS available cells 64
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-range-ecGRKP/Catalog.app/Contents/MacOS/aiversemcp: replacing existing signature
+/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-range-ecGRKP/Catalog.app: replacing existing signature
+2026-11-26 11:44:35.530 AiverseStudioHTML5[39849:84342163] [studio-web] JS: CROSS main DONE_2
+2026-11-26 11:44:35.530 AiverseStudioHTML5[39849:84342163] [studio-web] JS: CROSS main VERIFIED both sampling preferences after app relaunch
+Restored Scene changed sample count 0
+base wind changed Scene samples 553
+wind dense changed Scene samples 1627
+dense small changed Scene samples 707

@@ -1,0 +1,10 @@
+{
+  "sha": "1ed27b6db52bb957c2cb2070e8d5ddfaf663addf",
+  "argv": [
+    "bash",
+    "/tmp/studio-range.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-physis-sampling-controls.log.txt",
+  "sha256": "25c5b0ce5b069b275a0b73b0227a1f18486770a873caa433a0cff7540fd9b32a"
+}
