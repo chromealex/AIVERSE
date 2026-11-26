@@ -4541,8 +4541,8 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                 Overlay2D overlay{renderer_,view,float(framebufferWidth),float(framebufferHeight),view.ortho?.5f:view.zNear*1.4f};
                 for(const auto& line:lines){
                     float2 start,end;
-                    if(!view.worldToScreen(line.a,overlay.W,overlay.H,start) ||
-                       !view.worldToScreen(line.b,overlay.W,overlay.H,end))continue;
+                    if(!view.worldToScreen({line.a.x,line.a.y,line.a.z},overlay.W,overlay.H,start) ||
+                       !view.worldToScreen({line.b.x,line.b.y,line.b.z},overlay.W,overlay.H,end))continue;
                     overlay.segment(start.x,start.y,end.x,end.y,2.f,line.rgba);
                 }
             }
