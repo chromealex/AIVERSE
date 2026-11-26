@@ -19,6 +19,8 @@ export default function SpectraDockViewport({id='fx',label='Native GPU particle 
     if(!native)return;
     const element=ref.current;
     if(!element)return;
+    // These surfaces are presented by their own native host even when WebKit throttles the document.
+    const nativeVisibility=id==='gpuEmitter'||id==='attachments';
     let disposed=false,frame=0;
     const measure=()=>{
       frame=0;
@@ -28,7 +30,7 @@ export default function SpectraDockViewport({id='fx',label='Native GPU particle 
       const clipped=fxViewportRect(viewport,
         scroller?.getBoundingClientRect()??viewport,
         window.devicePixelRatio||1,
-        (id==='gpuEmitter'||document.visibilityState==='visible')&&!dockDragActive());
+        (nativeVisibility||document.visibilityState==='visible')&&!dockDragActive());
       const fit=visibleViewport({
         left:clipped.x,top:clipped.y,
         right:clipped.x+clipped.width,bottom:clipped.y+clipped.height
@@ -44,15 +46,15 @@ export default function SpectraDockViewport({id='fx',label='Native GPU particle 
     };
     const publish=()=>{
       // A floating native window can draw while its WebView throttles animation frames.
-      // AppKit and Win32 check the emitter surface and host window before each draw.
-      if(id==='gpuEmitter' && document.hidden){
+      // AppKit and Win32 check the native surface and host window before each draw.
+      if(nativeVisibility && document.hidden){
         if(frame)cancelAnimationFrame(frame);
         measure();
       }else if(!frame)frame=requestAnimationFrame(measure);
     };
     const ro=new ResizeObserver(publish);
     ro.observe(element);
-    const unsubscribeOverlay=watchOverlays(publish,id==='gpuEmitter');
+    const unsubscribeOverlay=watchOverlays(publish,nativeVisibility);
     const unsubscribeDrag=watchDockDrag(publish);
     window.addEventListener('resize',publish);
     window.addEventListener('scroll',publish,true);
