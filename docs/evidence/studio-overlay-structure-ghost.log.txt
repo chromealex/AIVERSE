@@ -1,0 +1,23 @@
+
+> @aiverse/studio-web@0.1.0 typecheck
+> tsc --noEmit
+
+299 web tests passed
+MCP discovery, panel reveal, shared UI selection, atomic failure, partial update and off passed
+2026-11-26 03:34:31.608 AiverseStudioHTML5[12058:82536519] [studio-web] JS: CROSS main VERIFIED native placement model pixels, allowed/blocked tint, house/tower selection and return to footprint; rotated loose icon, overlapping geometry, billboard orientation, reconstructed atlas HUD tint and missing asset isolation; minimap terrain/background, ring/disc pixels, cursor ping and release; map isolation and stale command rejection; screen HUD resizing, selection text, health bars, circle, rectangle, project colors, forced rings, concurrent overlays, water click, deselection and Hierarchy selection
+2026-11-26 03:34:38.757 AiverseStudioHTML5[12547:82538538] [studio-web] JS: CROSS main DONE_1
+2026-11-26 03:34:38.757 AiverseStudioHTML5[12547:82538538] [studio-web] JS: CROSS main VERIFIED native placement on ground, water and map boundary; rejects invalid coordinates; no Scene; revision unchanged
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+    Start 555: studio_building_preview
+1/1 Test #555: studio_building_preview ..........   Passed    0.24 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+EDITOR    =   0.24 sec*proc (1 test)
+GPU       =   0.24 sec*proc (1 test)
+Metal     =   0.24 sec*proc (1 test)
+
+Total Test time (real) =   0.27 sec
+Composited model visible on 104 scanlines

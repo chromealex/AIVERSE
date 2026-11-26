@@ -1,0 +1,10 @@
+{
+  "sha": "986b1d078bcb18a5aa824253c9f71ec9f144bea4",
+  "argv": [
+    "bash",
+    "/tmp/studio-ghost-evidence.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-overlay-structure-ghost.log.txt",
+  "sha256": "d7ec5c07ca4d64e08fc10253710d80fa28f04275f70b6809f6b909f2c7894ab3"
+}
