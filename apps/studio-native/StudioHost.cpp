@@ -592,9 +592,7 @@ void StudioHost::captureLensFrame(int64_t cameraId) {
             }
         } catch (const std::exception&) {}
         shot->done.store(true);
-    };
-    if (game) game_->captureNextFrame(std::move(capture));
-    else onScene([&]{renderer->captureNextFrame(std::move(capture));});
+    }); });
     lensShot_=std::move(shot);
     lensCaptureStarted_=platform_.now();
 }
@@ -699,7 +697,9 @@ void StudioHost::tickAgentScreenshot() {
             shot->w = ow; shot->h = oh;
         }
         shot->done.store(true);
-    }); });
+    };
+    if (game) game_->captureNextFrame(std::move(capture));
+    else onScene([&]{renderer->captureNextFrame(std::move(capture));});
 }
 // Agent snapshot handshake (MCP studio_character_snapshot): the tool writes
 // <project>/.aiverse/agent-requests/character-snapshot.json {id, view}; the
