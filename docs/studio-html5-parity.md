@@ -460,3 +460,5 @@ Standalone animation node inspector: packaged macOS verification covered editing
 Standalone pose canvas: reuse the shared Studio GraphCanvas for zoom, fit, panning, minimap and direct port wiring. Keep native connection validation, grouped movement history and existing signed document coordinates.
 
 Packaged macOS standalone animation canvas verified against a saved graph with signed coordinates, direct port reassignment, movement history and navigation. Native physical pointer capture remains to verify.
+
+Fix Escape during a captured port drag. Verify with trusted browser pointer input and grouped selection.
