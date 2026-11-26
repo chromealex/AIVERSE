@@ -188,7 +188,7 @@ private:
         bool brushArmed=false,editBaseTerrain=false;
         char regionBorderLetter=0;
         bool fps = false;
-        std::string selected, project, hover;
+        std::string selected, project, hover, geometryFile;
         float levelHeight = 1.5f;
         std::set<std::string> selection, hidden, locked;
         StudioWindState wind;

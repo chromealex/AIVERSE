@@ -380,3 +380,5 @@ Planetary sub-cell surface transfer: display explicit per-face detail heights, p
 Planetary material transfer: resolve face material overrides and inherited cell layers using the runtime terrain look. Verify painted tint, undo, redo and save/reopen in packaged Scene.
 
 Static Geometry diagnostics: show the active Game renderer’s STRATA/LOD decisions and cooked-source counts in HTML. Verify model selection and stop clearing on macOS.
+
+Authoring static geometry: load project scenery in the native map Scene, update routing after saved mode changes and expose renderer decisions before Play. Verify edited routing and drawn models in packaged Studio.

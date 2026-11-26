@@ -5,6 +5,7 @@
 #include "imgui.h"
 #include "apps/client/GameClient.h"
 #include "engine/render/PrismaReportJson.h"
+#include "engine/render/StaticGeometryReport.h"
 
 namespace aiverse::client {
 
@@ -339,18 +340,7 @@ bool HostedClient::updateCavernsVisual(const Json& authored) {
 Json HostedClient::staticGeometryReport() const {
     if (!currentEpochValid() || !inMatch()) return Json{};
     const auto& scene = client_->staticGeometry();
-    const auto& stats = scene.stats();
-    Json report = Json::object();
-    report.set("enabled", Json::fromBool(scene.strataPortableRenderingEnabled()));
-    report.set("instances", Json::number(int64_t(scene.instanceCount())));
-    report.set("autoStrataSources", Json::number(int64_t(stats.strataAutoStrataSources)));
-    report.set("autoLodSources", Json::number(int64_t(stats.strataAutoLodSources)));
-    report.set("cookedSources", Json::number(int64_t(stats.strataCookedSources)));
-    report.set("cookStaleSources", Json::number(int64_t(stats.strataCookStaleSources)));
-    Json decisions = Json::array();
-    for (const auto& line : scene.strataSelectDecisions()) decisions.push(Json::string(line));
-    report.set("select", std::move(decisions));
-    return report;
+    return render::staticGeometryReport(scene);
 }
 
 Json HostedClient::prismaFrameReports() const {

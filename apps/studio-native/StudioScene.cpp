@@ -1,5 +1,6 @@
 #include "engine/render/BakedLighting.h"
 #include "engine/render/PrismaReportJson.h"
+#include "engine/render/StaticGeometryReport.h"
 #include "apps/editor/core/LightBakeCapture.h"
 #include "engine/render/LightmapUv.h"
 #include <future>
@@ -616,24 +617,87 @@ std::vector<std::string> StudioScene::takeFinishedThumbnails() {
     std::lock_guard<std::mutex> lock(thumbShared_->mutex);
     return std::exchange(thumbShared_->done,{});
 }
-static bool readPreviewAsset(const std::filesystem::path& root,const std::string& name,std::string& out) {
+static std::filesystem::path previewAssetPath(const std::filesystem::path& root,const std::string& name) {
     namespace fs=std::filesystem;
     const fs::path rel(name);
-    if(name.empty()||name.size()>512||rel.is_absolute()||rel.has_root_name())return false;
+    if(name.empty()||name.size()>512||rel.is_absolute()||rel.has_root_name())return {};
     fs::path file=root;
     for(const auto& part:rel){
-        if(part.empty()||part=="."||part=="..")return false;
+        if(part.empty()||part=="."||part=="..")return {};
         file/=part;
         std::error_code ec;
-        if(fs::is_symlink(fs::symlink_status(file,ec))||ec)return false;
+        if(fs::is_symlink(fs::symlink_status(file,ec))||ec)return {};
     }
     std::error_code ec;
-    if(!fs::is_regular_file(file,ec))return false;
+    if(!fs::is_regular_file(file,ec))return {};
+    return file;
+}
+static bool readPreviewAsset(const std::filesystem::path& root,const std::string& name,std::string& out) {
+    namespace fs=std::filesystem;
+    const auto file=previewAssetPath(root,name);
+    if(file.empty())return false;
+    std::error_code ec;
     const auto size=fs::file_size(file,ec);
     if(ec||size>256ull*1024ull*1024ull)return false;
     std::ifstream input(file,std::ios::binary);if(!input)return false;
     out.resize(size_t(size));
     return bool(input.read(out.data(),std::streamsize(size)));
+}
+
+struct StudioScene::StaticScenery {
+    render::GeometryScene scene;
+    std::string project,file,error;
+    std::map<std::string,std::filesystem::file_time_type> inputs;
+    std::chrono::steady_clock::time_point nextCheck{};
+    bool loaded=false;
+};
+
+void StudioScene::syncStaticGeometry(const std::string& project,const std::string& file) {
+    if(!device_ || (!staticScenery_ && (file.empty() || project.empty())))return;
+    if(!staticScenery_)staticScenery_=std::make_unique<StaticScenery>();
+    auto& state=*staticScenery_;
+    state.scene.collectRetired(*device_);
+    const bool moved=state.project!=project || state.file!=file;
+    if(moved){
+        state.scene.clear(*device_);
+        state.project=project;state.file=file;state.inputs.clear();
+        state.loaded=false;state.error.clear();lastFrameSignature_=0;
+    }
+    if(file.empty()||project.empty())return;
+    const auto now=std::chrono::steady_clock::now();
+    if(!moved && now<state.nextCheck)return;
+    state.nextCheck=now+std::chrono::seconds(1);
+    const auto stamp=[project](const std::string& name){
+        const auto path=previewAssetPath(project,name);
+        std::error_code ec;
+        return path.empty()?std::filesystem::file_time_type::min():std::filesystem::last_write_time(path,ec);
+    };
+    if(!moved && std::none_of(state.inputs.begin(),state.inputs.end(),
+            [&](const auto& entry){return entry.second!=stamp(entry.first);}))return;
+    // Cooked STRATA may retain this reader after loadTransactional returns.
+    auto inputs=std::make_shared<decltype(state.inputs)>();
+    const auto read=[project,stamp,inputs](const std::string& name,std::string& bytes){
+        (*inputs)[name]=stamp(name);
+        return readPreviewAsset(project,name,bytes);
+    };
+    try {
+        std::string bytes;
+        if(!read(file,bytes))throw std::runtime_error("Cannot read static geometry: "+file);
+        auto scene=Json::parse(bytes);
+        // A replacement inherits owner configuration. A descriptor without STRATA uses LOD.
+        if(!scene.has("strata"))scene.set("strata",Json::object());
+        state.scene.loadTransactional(*device_,scene,read);
+        state.loaded=true;state.error.clear();
+    } catch(const std::exception& e){state.error=e.what();}
+    state.inputs=*inputs;
+    lastFrameSignature_=0;
+}
+
+Json StudioScene::staticGeometryReport(const std::string& project,const std::string& file) const {
+    if(!staticScenery_ || file.empty() || staticScenery_->project!=project || staticScenery_->file!=file)return {};
+    auto report=render::staticGeometryReport(staticScenery_->scene);
+    if(!staticScenery_->error.empty())report.set("error",Json::string(staticScenery_->error));
+    return report;
 }
 
 void StudioScene::syncSceneBake(const std::string& project,const std::string& mapPath) {
@@ -1988,6 +2052,13 @@ StudioScene::~StudioScene() {
     attachmentPreview_.reset();
     if (device_) {
         const bool idle=device_->waitForResourceIdle();
+        if(staticScenery_){
+            try { staticScenery_->scene.shutdown(*device_); }
+            catch(const std::exception& e){
+                std::fprintf(stderr,"Studio static geometry shutdown: %s\n",e.what());
+                (void)staticScenery_.release(); // Quarantine owners while submitted work is unresolved.
+            }
+        }
         effectFile_.reset();
         if(textureGraph_){
             if(idle||!device_->gpuHealthy())textureGraph_->shutdownAfterIdle(*device_);
@@ -3850,6 +3921,8 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     lightingRuntime_.update(*device_,renderer_,camera_.target);
     if(lightingRuntime_.indirect || lightingRuntime_.direct)lightingStatus_=lightingRuntime_.status();
 
+    if(staticScenery_ && staticScenery_->loaded && !cavernsPreview_.isolate() && !planetaryChart)
+        staticScenery_->scene.draw(renderer_);
     // Real map dimensions and positions from the active native Workspace.
     // Temporary primitive preview (NOT legacy editor terrain, animation or materials).
     const float w = float(std::max(map.w, 1));

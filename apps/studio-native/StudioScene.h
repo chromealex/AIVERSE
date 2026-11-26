@@ -373,6 +373,8 @@ public:
     void setLocalSpace(bool local) { localSpace_ = local; }
     bool localSpace() const { return localSpace_; }
     void setSnap(bool enabled, float move, float rotate, float scale);
+    void syncStaticGeometry(const std::string& project,const std::string& file);
+    Json staticGeometryReport(const std::string& project,const std::string& file) const;
     void setPlanetTerrainLook(const std::shared_ptr<const game::TerrainLook>& look){
         if(planetTerrainLook_!=look){planetTerrainLook_=look;planetRevision_=std::numeric_limits<uint64_t>::max();}
     }
@@ -514,6 +516,8 @@ private:
     render::Renderer3D renderer_;
     bake::CapturedBake collectLightBake(const editor::MapDoc& doc,const game::Rules& rules,
         const render::Lighting& environment,float levelHeight,bool terrain);
+    struct StaticScenery;
+    std::unique_ptr<StaticScenery> staticScenery_;
     struct SceneBake;
     std::unique_ptr<SceneBake> sceneBake_;
     void syncSceneBake(const std::string& project,const std::string& mapPath);

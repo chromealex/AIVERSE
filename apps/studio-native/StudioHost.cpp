@@ -1138,6 +1138,8 @@ void StudioHost::tickScene() {
     if(brush.armed && brush.kind=="region")in.regionBorderLetter=brush.regionLetter.front();
     else if(brush.regionBorders)in.regionBorderLetter='.';
     in.fps = ws.map.data.worldSpace;
+    if(!ws.map.data.planet())
+        in.geometryFile=in.fps ? ws.map.data.extra.getStr("geometryScene") : ws.project.manifest.getStr("geometryScene");
     in.selected = session_->selectedObjectId();
     in.levelHeight = float(ws.project.rules.levelHeight.toDouble());
     in.project = ws.project.dir;
@@ -1172,6 +1174,7 @@ void StudioHost::renderSceneFrame() {
         platform_.sceneThreadScope([&] {
             preview_->setEditorState(std::move(in.selection), std::move(in.hidden), std::move(in.locked), std::move(in.hover));
             if(!in.brushArmed)preview_->setBrushCursor(false,{},0);
+            preview_->syncStaticGeometry(in.project,in.geometryFile);
             preview_->setPlanetTerrainLook(in.planetLook);
             preview_->setBaseTerrainView(in.editBaseTerrain);
             preview_->setRegionBorders(in.regionBorderLetter);
@@ -4028,6 +4031,15 @@ bool StudioHost::handleHostMethod(const Json& req) {
             if (params.getStr("geometryProject") != project) throw std::runtime_error("Geometry project changed");
             if (game_ && game_->launchPlan().project == project)
                 state.set("geometry", game_->staticGeometryReport());
+            if (preview_ && placement_.visible && state["geometry"].isNull()) {
+                const auto& map=session_->workspace().map.data;
+                const auto file=map.planet()?std::string{}:map.worldSpace?map.extra.getStr("geometryScene"):session_->workspace().project.manifest.getStr("geometryScene");
+                auto authored=onScene([&]{return preview_->staticGeometryReport(project,file);});
+                if(!authored.isNull()) {
+                    state.set("geometrySource",Json::string("Scene"));
+                    state.set("geometry",std::move(authored));
+                }
+            }
         }
         return state;
     });
