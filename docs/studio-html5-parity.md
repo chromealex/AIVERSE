@@ -631,3 +631,5 @@ Publish the live HTML dock and floating panel inventory to editor_windows using 
 Route editor_window panel, workspace and reset requests to HTML Studio layout owners, including detached tabs.
 
 Restore editor_theme using shared HTML theme preferences, Window menu controls and linked MCP updates.
+
+Expose geometry_stats from the rendered Scene and its completed GPU queries through the linked MCP registry.

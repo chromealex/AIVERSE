@@ -155,6 +155,13 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
             stopGame();
             return Json::parse(R"({"ok":true,"summary":"Тест остановлен"})");
         },true});
+    session_->workspace().registerOp({"geometry_stats","Read the last Scene geometry counters and completed GPU timings.",
+        Json::object(),[this](const Json&){
+            if (!preview_ || !sceneFrameCount_) throw std::runtime_error("Scene has no rendered frame");
+            auto report=onScene([&]{return preview_->geometryStats();});
+            report.set("frameIntervalMs",Json::number(sceneFrameMs_));
+            return report;
+        },true});
     session_->workspace().registerOp({"editor_theme","Set Studio theme and accent.",
         Json::parse(R"({"properties":{"mode":{"type":"string","enum":["dark","light"]},"accent":{"type":"string","enum":["blue","violet","teal","orange"]}}})"),[this](const Json& params){
             const auto mode=params.getStr("mode"),accent=params.getStr("accent");

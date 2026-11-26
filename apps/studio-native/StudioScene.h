@@ -485,6 +485,7 @@ public:
         const game::Rules& rules,const Json& rulesJson,float levelHeight);
     void setBakedSceneEnabled(bool enabled);
     Json bakedSceneStatus() const;
+    Json geometryStats() const;
     uint32_t drawCalls() const { return renderer_.drawCalls(); }
     // Project extension gizmos (editor/extensions.lua scene_gizmos): world-space lines, circles (screen px), points.
     struct OverlayShape { int kind = 0; render::float3 a{}, b{}; float radius = 8, thickness = 2; uint8_t r = 90, g = 180, bl = 255; std::string text; };   // kind: 1 line, 2 circle, 3 point, 4 label

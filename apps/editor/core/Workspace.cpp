@@ -2105,6 +2105,7 @@ void Workspace::registerCoreOps() {
         R"({"properties":{"speed":{"type":"number"},"human":{"type":"integer"},"device":{"type":"string"},"client":{"type":"boolean"}}})",requireStudioLink);
     addLinked("play_stop", "Stop the Studio play-test and return to editing.", "{}",requireStudioLink);
     gui("region_ownership_diagnostics", "Read last successful live region ownership reconciliation; requires running editor simulation.", "{}");
+    addLinked("geometry_stats","Read the last rendered Studio Scene geometry counters and completed GPU timings.","{}",requireStudioLink);
     addLinked("editor_theme","Set Studio theme and accent.",R"({"properties":{"mode":{"type":"string","enum":["dark","light"]},"accent":{"type":"string","enum":["blue","violet","teal","orange"]}}})",requireStudioLink);
     addLinked("editor_window","Open or close a panel, switch workspace or restore the layout.", R"({"properties":{"id":{"type":"string"},"open":{"type":"boolean"},"resetLayout":{"type":"boolean"},"workspace":{"type":"string","enum":["scene","world","look","animate","character","logic","publish"]}}})",requireStudioLink);
     addLinked("editor_windows","List HTML Studio panels and their open state.", "{}",requireStudioLink);

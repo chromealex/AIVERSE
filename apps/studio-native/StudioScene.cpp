@@ -767,6 +767,38 @@ void StudioScene::syncStaticGeometry(const std::string& project,const std::strin
     lastFrameSignature_=0;
 }
 
+Json StudioScene::geometryStats() const {
+        const auto& s = renderer_.geometryStats(); Json r=Json::object();
+        r.set("clustersTested",Json::number(int64_t(s.clustersTested)));
+        r.set("clustersCulled",Json::number(int64_t(s.clustersCulled)));
+        r.set("coarseClusters",Json::number(int64_t(s.coarseClusters)));
+        r.set("occluded",Json::number(int64_t(s.occluded)));
+        r.set("occluderTriangles",Json::number(int64_t(s.occluderTriangles)));
+        r.set("drawCalls",Json::number(int64_t(renderer_.drawCalls())));
+        r.set("cameraModelTriangles",Json::number(int64_t(renderer_.profile().cameraModelTriangles)));
+        r.set("cameraMeshTriangles",Json::number(int64_t(renderer_.profile().cameraMeshTriangles)));
+        r.set("opaqueSceneCapture",Json::fromBool(renderer_.ssrActive()));
+        r.set("ssrRaymarch",Json::fromBool(renderer_.ssrActive() && renderer_.traceActive()));
+        r.set("nereidConfiguredSurfaces",Json::number(int64_t(nereid_.configuredSurfaces())));
+        r.set("nereidWaterDraws",Json::number(int64_t(nereid_.scene().drawStats().draws)));
+        r.set("nereidWaterTriangles",Json::number(int64_t(nereid_.scene().drawStats().triangles)));
+        r.set("sunShadowModelTriangles",Json::number(int64_t(renderer_.profile().triangles[0])));
+        if (staticScenery_) r.set("strata",render::staticGeometryReport(staticScenery_->scene));
+        const double frameGpu=device_?device_->gpuFrameMs():0;
+        if(std::isfinite(frameGpu)&&frameGpu>0)
+            r.set("completedGpuFrameMs",Json::number(frameGpu,6));
+        auto viewportGpu=Json::array();
+        for(const auto& timing:post_.viewGpuTimings()) {
+            auto sample=Json::object();
+            sample.set("viewId",Json::number(int64_t(timing.viewId)));
+            sample.set("milliseconds",Json::number(timing.lastGpuMs,6));
+            sample.set("sampleSequence",Json::number(int64_t(timing.sampleSequence)));
+            viewportGpu.push(sample);
+        }
+        r.set("viewportGpuTimings",viewportGpu);
+        const auto& model=renderer_.modelStats();auto levels=Json::array();for(auto count:model.cameraLodNodes)levels.push(Json::number(int64_t(count)));r.set("cameraLodNodes",levels);r.set("lodChains",Json::number(int64_t(model.cameraLodChains)));r.set("lodBlocked",Json::number(int64_t(model.cameraLodBlocked)));r.set("shadowLimitedLod",Json::number(int64_t(model.cameraShadowLimitedLod)));return r;
+}
+
 Json StudioScene::staticGeometryReport(const std::string& project,const std::string& file) const {
     if(!staticScenery_ || file.empty() || staticScenery_->project!=project || staticScenery_->file!=file)return {};
     auto report=render::staticGeometryReport(staticScenery_->scene);
