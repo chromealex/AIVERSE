@@ -558,7 +558,8 @@ Json StudioGameSurface::playStatus() const {
     const auto* module=dynamic_cast<const game::GameCore*>(&sim->module());
     if (client || !module) return out;
     const auto& rules=module->rules();
-    const auto& state=module->state(*sim);
+    const auto* state=sim->world().resourceConst<game::GameState>();
+    if (!state) return out;
     std::array<int,256> units{},structures{};
     sim->world().each<game::Unit,Owner>([&](Entity,game::Unit& unit,Owner& owner){
         (rules.types[unit.type].structure?structures:units)[owner.player]++;
@@ -571,7 +572,7 @@ Json StudioGameSurface::playStatus() const {
         row.set("units",Json::number(int64_t(units[player.slot])));
         row.set("structures",Json::number(int64_t(structures[player.slot])));
         for (size_t i=0;i<rules.resources.size();++i)
-            resources.set(rules.resources[i].id,Json::number(state.players[player.slot].stock[i].toInt()));
+            resources.set(rules.resources[i].id,Json::number(state->players[player.slot].stock[i].toInt()));
         row.set("resources",std::move(resources));
         players.push(std::move(row));
     }
