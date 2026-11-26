@@ -496,6 +496,7 @@
     "docs/evidence/studio-terrain-open-world.json",
     "docs/evidence/studio-terrain-target-height.json",
     "docs/evidence/studio-terrain-grid-routing.json",
-    "docs/evidence/studio-terrain-base-surface-cursor.json"
+    "docs/evidence/studio-terrain-base-surface-cursor.json",
+    "docs/evidence/studio-planet-terrain-body-edit.json"
   ]
 }
