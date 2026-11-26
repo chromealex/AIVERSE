@@ -769,3 +769,5 @@ PostFX 47e869efa. apps/editor/core/PrismaOps.cpp and apps/studio-web/src/panels/
 PostFX volume profiles: catalog-driven parameter overrides, inheritance, and placement from the native Scene camera pose. Verify authored masks and persisted coordinates.
 
 Volume profiles 58aef55ba passed TypeScript, Vite and 299 web tests. First Mac UI fixture requested the Scene pose before a camera was available. Receipt docs/evidence/studio-postfx-volume-profile.json. Retry after Scene readiness on the known camera fixture.
+
+Camera fixture 422265c18 reached the rendered WebKit Scene panel but the native surface remained uninitialized. Receipt docs/evidence/studio-postfx-volume-camera.json. Publish the measured Scene rectangle via the platform bridge in the desktop harness, as used in the Scene/lighting tests.
