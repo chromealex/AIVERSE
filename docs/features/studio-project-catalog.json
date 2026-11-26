@@ -510,6 +510,7 @@
     "docs/evidence/studio-planet-named-material.json",
     "docs/evidence/studio-static-geometry-game.json",
     "docs/evidence/studio-static-geometry-authoring.json",
-    "docs/evidence/studio-static-geometry-game-source.json"
+    "docs/evidence/studio-static-geometry-game-source.json",
+    "docs/evidence/studio-static-geometry-world-files.json"
   ]
 }
