@@ -1727,6 +1727,11 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"Fixture co
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && session.workspace().map.data.detail==originalDetail);
        AIVERSE_TEST_CHECK(!call("studio.redo").has("error") && session.workspace().map.data.detail==stamped);
        AIVERSE_TEST_CHECK(!call("studio.undo").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"strength":-2})")["result"]["strength"].toDouble()==-2);
+       AIVERSE_TEST_CHECK(session.strokeBegin(4,4,&err) && session.strokeEnd(&err));
+       AIVERSE_TEST_CHECK(session.workspace().map.data.detail!=stamped && session.workspace().map.data.detail!=originalDetail);
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error"));
+       AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"op":"raise"})")["result"]["strength"].toDouble()==1);
        const auto originalRegions=session.workspace().map.data.regions;
        const auto borderDepth=session.workspace().map.undoDepth();
        AIVERSE_TEST_CHECK(call("studio.sceneBrush",R"({"regionBorders":true})")["result"].getBool("regionBorders"));

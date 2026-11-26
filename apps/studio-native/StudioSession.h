@@ -78,7 +78,7 @@ public:
     struct SceneBrush {
         bool armed=false; std::string kind="terrain";
         std::string op="raise"; double radius=4, strength=1;   // terrain sculpt; paint uses radius/strength + layer
-        std::string stamp="crater"; double angle=0, hardness=.2; uint32_t seed=1;
+        std::string stamp="crater"; double angle=0, hardness=.2, stampHeight=1; uint32_t seed=1;
         int layer=0, fieldPlayer=1, fixedTile=-1; bool regionBorders=false; std::string regionLetter="A", tile, field, fieldMode="add"; double value=1;
         std::string type; int owner=0, count=1; double spread=1;
         std::string roadType; double width=6;

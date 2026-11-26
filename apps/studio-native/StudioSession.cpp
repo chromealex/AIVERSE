@@ -1706,7 +1706,7 @@ Json StudioSession::sceneBrushJson() const {
     const auto& b=brush_;
     Json o=Json::object();
     o.set("armed",Json::fromBool(b.armed));o.set("kind",str(b.kind));o.set("op",str(b.op));
-    o.set("radius",Json::number(b.radius,3));o.set("strength",Json::number(b.strength,3));
+    o.set("radius",Json::number(b.radius,3));o.set("strength",Json::number(b.kind=="terrain" && b.op=="stamp"?b.stampHeight:b.strength,3));
     o.set("stamp",str(b.stamp));o.set("angle",Json::number(b.angle,2));
     o.set("hardness",Json::number(b.hardness,3));o.set("seed",num(int64_t(b.seed)));
     o.set("layer",num(int64_t(b.layer)));o.set("tile",str(b.tile));o.set("fixedTile",num(int64_t(b.fixedTile)));o.set("field",str(b.field));o.set("fieldMode",str(b.fieldMode));o.set("fieldPlayer",num(int64_t(b.fieldPlayer)));
@@ -1789,7 +1789,7 @@ bool StudioSession::strokeDabImpl(double x, double z, std::string* error,double 
             p.set("stamp",str(b.stamp));p.set("angle",Json::number(b.angle,2));
             p.set("seed",num(int64_t(b.seed)));p.set("hardness",Json::number(b.hardness,3));
         }
-        p.set("radius",Json::number(b.radius,3));p.set("strength",Json::number(b.strength,3));}
+        p.set("radius",Json::number(b.radius,3));p.set("strength",Json::number(b.op=="stamp"?b.stampHeight:b.strength,3));}
     else if(b.kind=="paint"){op="terrain_paint_material";p.set("layer",num(int64_t(b.layer)));p.set("x",Json::number(x,3));p.set("y",Json::number(z,3));
         p.set("radius",Json::number(b.radius,3));p.set("strength",Json::number(std::min(1.0,b.strength),3));}
     else if(b.kind=="region"){
@@ -4736,7 +4736,10 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             if (params.has("kind")) { const std::string k=params.getStr("kind"); if(!kinds.count(k))throw std::runtime_error("Unknown brush tool"); b.kind=k; }
             if (params.has("op")) { const std::string op=params.getStr("op"); if(!ops.count(op))throw std::runtime_error("Unknown brush op"); b.op=op; }
             if (params.has("radius")) b.radius=number("radius",0.25,64);
-            if (params.has("strength")) b.strength=number("strength",0,20);
+            if (params.has("strength")) {
+                if (b.kind=="terrain" && b.op=="stamp") b.stampHeight=number("strength",-20,20);
+                else b.strength=number("strength",0,20);
+            }
             if (params.has("layer")) b.layer=int(number("layer",0,15));
             if (params.has("stamp")) {
                 const auto name=params.getStr("stamp");

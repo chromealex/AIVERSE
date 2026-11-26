@@ -235,12 +235,14 @@ export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS, tileCatalog,
   }, [kind, fields, tileset, options, brush?.fieldPlayer, brush?.tile, brush?.field, brush?.roadType, brush?.type]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!brush) return null;
   const field = fields.find(f => f.id === brush.field);
+  const stamping = kind==='terrain' && brush.op==='stamp';
   const continuous = kind === 'terrain' || kind === 'paint' || kind === 'tiles' || kind === 'region' || kind === 'field' || kind === 'objects';
   return <div className={'tbrush' + (brush.armed ? ' is-armed' : '')}>
-    {kind !== 'field' && kind !== 'river' && !kinds.includes('region') && <EcologyLayerPicker/>}
+    {kinds.includes('terrain') && <h3 className="terrain-brush-heading">Terrain brush</h3>}
+    {kind !== 'field' && kind !== 'river' && !kinds.includes('region') && !kinds.includes('terrain') && <EcologyLayerPicker/>}
     <div className="tbrush__row">
       <button type="button" className={'au-button au-button--sm' + (brush.armed ? ' au-button--primary' : '')} aria-pressed={brush.armed} disabled={!brush.armed && ((kind === 'tiles' && !tileset?.terrains?.length) || (kind === 'field' && (!field || (field.perPlayer && field.layers <= 1))))}
-        onClick={() => { set({ armed: !brush.armed, kind }); if (!brush.armed) setEditing(false); }} title="Drag in the Scene (Alt+drag orbits, [ ] size, Esc stops)">
+        onClick={() => { set({ armed: !brush.armed, kind }); if (!brush.armed) setEditing(false); }} title={kind==='terrain' && brush.op==='stamp'?'Click to stamp the Scene ([ ] size, Esc stops)':'Drag in the Scene (Alt+drag orbits, [ ] size, Esc stops)'}>
         <Brush size={13}/>{brush.armed ? 'Brush on' : 'Brush'}</button>
       {(kind === 'road' || kind === 'river') && <button type="button" className={'au-button au-button--sm' + (editing ? ' au-button--primary' : '')}
         aria-pressed={editing} title="Show the nodes in the Scene and drag them (each move is one History step)"
@@ -297,12 +299,12 @@ export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS, tileCatalog,
     {kind === 'river' && <Slider label="Width, m" value={brush.width} min={2} max={80} step={1} onCommit={v => set({ width: v })}/>}
     {kind === 'region' && <Slider label="Radius (cells)" value={Math.floor(brush.radius)} min={0} max={24} step={1} onCommit={v => set({ radius: v || 0.5 })}/>}
     {kind === 'field' && <Slider label="Radius (cells)" value={Math.round(brush.radius)} min={0} max={24} step={1} onCommit={v => set({ radius: v || 0.25 })}/>}
-    {continuous && kind !== 'region' && kind !== 'field' && <Slider label={kind === 'objects' ? 'Spacing' : 'Radius'} value={brush.radius} min={0.5} max={24} step={0.5} onCommit={v => set({ radius: v })}/>}
-    {(kind === 'terrain' || kind === 'paint') && <Slider label="Strength" value={brush.strength} min={0.05}
+    {continuous && kind !== 'region' && kind !== 'field' && <Slider label={kind === 'objects' ? 'Spacing' : 'Radius'} value={brush.radius} min={stamping?0.25:0.5} max={stamping?32:24} step={stamping?0.25:0.5} onCommit={v => set({ radius: v })}/>}
+    {(kind === 'terrain' || kind === 'paint') && <Slider label={stamping?'Stamp height':'Strength'} value={brush.strength} min={stamping?-6:0.05}
       max={kind === 'paint' || brush.op === 'smooth' || brush.op === 'flatten' || brush.op === 'erode' ? 1 : 6} step={0.05} onCommit={v => set({ strength: v })}/>}
     {editing && <p className="ptp__hint">Drag a {kind === 'road' ? 'road node' : 'river point'} in the Scene to move it</p>}
     {brush.armed && <p className="ptp__hint">{kind==='terrain' && brush.op==='stamp' ? 'Click in the Scene to place one stamp' : continuous ? 'Drag in the Scene to paint' : 'Drag the path in the Scene; it is built on release'} · one History step per stroke · [ ] size · Esc stops</p>}
-    {(kinds.includes('region') || kind === 'river') && <details><summary>World overlays</summary><EcologyLayerPicker/></details>}
+    {(kinds.includes('terrain') || kinds.includes('region') || kind === 'river') && <details><summary>World overlays</summary><EcologyLayerPicker/></details>}
     {error && <div className="tool__error" role="alert">{error}</div>}
   </div>;
 }

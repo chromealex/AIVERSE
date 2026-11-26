@@ -166,8 +166,8 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
       {panel==='raid' && snapshot?.graphDocument && <RaidPanel key={snapshot.graphDocument.epoch} scope={snapshot.graphDocument} info={state.raid_info as RaidInfo | undefined} onChanged={()=>done(true)}/>}
       {panel==='water' && snapshot?.graphDocument && <WaterShorePanel key={snapshot.graphDocument.epoch} scope={snapshot.graphDocument} onChanged={()=>done(true)}/>}
       {BRUSHES[panel] && <SceneBrushBar project={projectPath} tileCatalog={state.tileset_list as Parameters<typeof SceneBrushBar>[0]['tileCatalog']} kinds={BRUSHES[panel]!} fields={(state.field_list as {fields?:BrushField[]} | undefined)?.fields}/>}
-      {(panel==='water'||panel==='generate'||panel==='physis'||panel==='raid') ? <details className="water-shores__operations" open={q ? true : undefined}>
-        <summary>{panel==='raid'?'Advanced raid operations':panel==='water'?'Water operations':panel==='physis'?'Map configuration':'Map operations'}</summary>{operationCards}
+      {(panel==='water'||panel==='generate'||panel==='physis'||panel==='raid'||panel==='terrain') ? <details className="water-shores__operations" open={q ? true : undefined}>
+        <summary>{panel==='terrain'?'Terrain operations':panel==='raid'?'Advanced raid operations':panel==='water'?'Water operations':panel==='physis'?'Map configuration':'Map operations'}</summary>{operationCards}
       </details> : operationCards}
     </div>
     </div>

@@ -136,3 +136,5 @@
 
 .tbrush__stamp{display:grid;gap:var(--au-space-2);min-width:0;border:1px solid var(--au-line);border-radius:var(--au-radius-md);padding:var(--au-space-2)}
 .tbrush__stamp legend{padding-inline:4px;font-weight:600}
+
+.terrain-brush-heading{margin:0;font-size:var(--au-font-md);font-weight:600}
