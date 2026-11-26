@@ -527,6 +527,7 @@
     "docs/evidence/studio-static-geometry-source-final.json",
     "docs/evidence/studio-assets-project-navigation.json",
     "docs/evidence/studio-assets-project-actions.json",
-    "docs/evidence/studio-gpu-files.json"
+    "docs/evidence/studio-gpu-files.json",
+    "docs/evidence/studio-gpu-settings.json"
   ]
 }

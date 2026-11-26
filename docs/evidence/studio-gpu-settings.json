@@ -1,0 +1,10 @@
+{
+  "sha": "8afe51ff8938261f22922453ed3067db5bd23307",
+  "argv": [
+    "bash",
+    "/tmp/studio-gpu-settings-acceptance.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-gpu-settings.log.txt",
+  "sha256": "049b2b03021ceb89c03b4e25985a20464ea0b241f5988f450ec2f6e91e783f59"
+}
