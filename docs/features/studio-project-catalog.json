@@ -555,6 +555,7 @@
     "docs/evidence/studio-attachments-auto-placement.json",
     "docs/evidence/studio-original-model-preview.json",
     "docs/evidence/studio-original-model-source-isolation.json",
-    "docs/evidence/studio-configured-model-preview.json"
+    "docs/evidence/studio-configured-model-preview.json",
+    "docs/evidence/studio-models-responsive-preview.json"
   ]
 }
