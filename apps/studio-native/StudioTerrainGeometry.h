@@ -47,11 +47,11 @@ inline int terrainDetailScale(const editor::MapData& d) {
         (uint64_t(d.w)*k+1)*(uint64_t(d.h)*k+1)==d.detail.size() ? k : 0;
 }
 
-inline float terrainPreviewHeight(const editor::MapData& d, float x, float z, float levelHeight = 1.5f) {
+inline float terrainPreviewHeight(const editor::MapData& d, float x, float z, float levelHeight = 1.5f, bool baseGrid=false) {
     if (d.w <= 0 || d.h <= 0) return 0;
     x = std::clamp(x, 0.0f, float(d.w));
     z = std::clamp(z, 0.0f, float(d.h));
-    if (const int k=terrainDetailScale(d)) {
+    if (const int k=baseGrid ? 0 : terrainDetailScale(d)) {
         const int width=d.w*k, height=d.h*k;
         const float sx=x*k, sz=z*k;
         const int ix=int(sx), iz=int(sz), jx=std::min(ix+1,width), jz=std::min(iz+1,height);
@@ -127,13 +127,13 @@ inline size_t buildPlanetChartCutPreview(const terraweave::caverns::CaveSurfaceG
 }
 inline TerrainPreviewStats buildTerrainPreview(const editor::MapData& d,
                                                render::MeshBuilder& out,
-                                               float levelHeight = 1.5f) {
+                                               float levelHeight = 1.5f, bool baseGrid=false) {
     namespace cave=terraweave::caverns;
     using render::float3;
     TerrainPreviewStats stats;
     if(d.extra.getStr("terrainPresentation","legacy")=="entities")return stats;
     if (d.planet() || d.w <= 0 || d.h <= 0 || d.w > 200000 || d.h > 200000) return stats;
-    const int detail=terrainDetailScale(d);
+    const int detail=baseGrid ? 0 : terrainDetailScale(d);
     const int scale=std::max(1,detail);
     const int width=d.w*scale, height=d.h*scale;
     const int step=std::max(1,(std::max(width,height)+255)/256);

@@ -373,6 +373,14 @@ public:
     void setLocalSpace(bool local) { localSpace_ = local; }
     bool localSpace() const { return localSpace_; }
     void setSnap(bool enabled, float move, float rotate, float scale);
+    bool baseTerrainView()const {return baseTerrainView_;}
+    void setBaseTerrainView(bool base){
+        if(baseTerrainView_==base)return;
+        baseTerrainView_=base;
+        terrainRevision_=std::numeric_limits<uint64_t>::max();
+        lightingRevision_=std::numeric_limits<uint64_t>::max();
+        lastFrameSignature_=0;
+    }
     void setRegionBorders(char letter) {
         if(regionBorderLetter_!=letter){regionBorderLetter_=letter;regionBordersDirty_=true;}
     }
@@ -616,6 +624,7 @@ private:
     std::string sparseTerrainProject_;
     std::string planetChartIdentity_;
     std::string sparseTerrainError_;
+    bool baseTerrainView_=false;
     bool terrainWasShown_=false,terrainCavernsAuthored_=false;
     std::unique_ptr<class StudioEffectPlayback> effectFile_;
     std::unique_ptr<class StudioAttachmentPreview> attachmentPreview_;

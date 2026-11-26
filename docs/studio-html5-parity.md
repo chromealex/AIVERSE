@@ -370,3 +370,5 @@ Sparse Terrain transfer: expose chunk creation and signed-world sculpting in the
 Terrain target height: transfer the signed Set brush and one-click Scene surface sampler. Verify that sampling preserves the document and history, then verify painting and persistence.
 
 Terrain grid transfer: choose automatic, base-cell or detail-sample routing for sculpt and material strokes. Check layer isolation, base material erase, undo and persistence.
+
+Terrain base-surface inspection: show and pick the editable corner surface while an explicit base brush is armed in the map Scene. Check return to detail on disarm and that inspection never rewrites either layer.

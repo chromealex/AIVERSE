@@ -20,11 +20,15 @@ using namespace aiverse::render;
 int main() {
     {
         editor::MapData map;map.w=2;map.h=2;map.detailScale=4;map.detail.assign(81,0);
-        map.detail[10]=48;
+        map.detail[10]=48;map.corners.assign(9,-32);
         MeshBuilder mesh;
         const auto stats=buildTerrainPreview(map,mesh);
         AIVERSE_TEST_CHECK(stats.quads==64 && terrainPreviewHeight(map,.25f,.25f)==3.f);
         AIVERSE_TEST_CHECK(terrainPreviewHeight(map,.125f,.25f)==1.5f);
+        MeshBuilder baseMesh;
+        AIVERSE_TEST_CHECK(buildTerrainPreview(map,baseMesh,1.5f,true).quads==4);
+        AIVERSE_TEST_CHECK(terrainPreviewHeight(map,.25f,.25f,1.5f,true)==-2.f);
+        AIVERSE_TEST_CHECK(std::all_of(baseMesh.vertices().begin(),baseMesh.vertices().end(),[](const auto& v){return v.pos.y==-2.f;}));
         AIVERSE_TEST_CHECK(std::any_of(mesh.vertices().begin(),mesh.vertices().end(),[](const auto& v){
             return v.pos.x==.25f && v.pos.z==.25f && v.pos.y==3.f;
         }));

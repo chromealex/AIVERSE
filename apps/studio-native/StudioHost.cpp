@@ -1125,6 +1125,7 @@ void StudioHost::tickScene() {
     in.width = placement_.pixelsW; in.height = placement_.pixelsH;
     in.map = mapSnapshot_; in.rules = rulesSnapshot_;
     const auto& brush=session_->sceneBrush();
+    in.editBaseTerrain=brush.editsBaseGrid() && !map.data.worldSpace && !map.data.planet();
     if(brush.armed && brush.kind=="region")in.regionBorderLetter=brush.regionLetter.front();
     else if(brush.regionBorders)in.regionBorderLetter='.';
     in.fps = ws.map.data.worldSpace;
@@ -1161,6 +1162,7 @@ void StudioHost::renderSceneFrame() {
     try {
         platform_.sceneThreadScope([&] {
             preview_->setEditorState(std::move(in.selection), std::move(in.hidden), std::move(in.locked), std::move(in.hover));
+            preview_->setBaseTerrainView(in.editBaseTerrain);
             preview_->setRegionBorders(in.regionBorderLetter);
             preview_->setWindPreview(in.wind);
             preview_->frame(in.width, in.height, *in.map, in.fps, in.selected, "", Json::object(), 0,
@@ -1416,8 +1418,13 @@ void StudioHost::selectionAction(const std::string& method) {
 // Ring under the cursor while the Scene brush is armed (radius; river: half its width; road: a dot).
 bool StudioHost::resolveBrushPoint(double x,double y,double w,double h,render::float3& at,std::string* error) {
     if(!preview_||x<0||y<0||w<2||h<2||x>=w||y>=h)return false;
-    if(session_->sceneBrush().kind=="terrain" && (session_->sceneBrush().op=="stamp" || session_->sceneBrush().op=="set")){
-        const auto hit=onScene([&]{return preview_->flatMapPoint(float(x),float(y),float(w),float(h),session_->workspace().map,session_->sceneBrush().pickHeight);});
+    const auto& brush=session_->sceneBrush();
+    const auto& map=session_->workspace().map;
+    if((brush.editsBaseGrid() || (brush.kind=="terrain" && (brush.op=="stamp" || brush.op=="set"))) && !map.data.worldSpace && !map.data.planet()){
+        const auto hit=onScene([&]() -> std::optional<render::float3> {
+            if(preview_->baseTerrainView()!=brush.editsBaseGrid())return {};
+            return preview_->flatMapPoint(float(x),float(y),float(w),float(h),map,brush.pickHeight);
+        });
         if(!hit)return false;
         at=*hit;return true;
     }
@@ -2686,7 +2693,7 @@ void StudioHost::sceneMouse(int phase, int button, double x, double y, double dx
         // Spline handles (Roads / Water "Edit nodes"): LMB on a handle drags it.
         if (!mods.alt && splineDrag(0, x, y, w, h)) { m.spline = true; return; }
         // Scene brush armed: plain LMB paints; Alt still orbits.
-        if (!mods.alt && brushArmed()) { m.stroke = terrainStroke(0, x, y, w, h, mods.shift); if (m.stroke||session_->sceneBrush().kind=="caverns") { if(!m.stroke)m.active=false;return; } }
+        if (!mods.alt && brushArmed()) { m.stroke = terrainStroke(0, x, y, w, h, mods.shift); if (m.stroke||session_->sceneBrush().kind=="caverns"||session_->sceneBrush().editsBaseGrid()) { if(!m.stroke)m.active=false;return; } }
         // Plain LMB on a handle starts a Move / Rotate / Scale drag (Unity W/E/R tools).
         m.move = !mods.alt && moveBegin(x, y, w, h);
         return;

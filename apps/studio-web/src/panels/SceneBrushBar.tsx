@@ -279,7 +279,8 @@ export default function SceneBrushBar({ kinds, fields=EMPTY_FIELDS, tileCatalog,
         <option value="auto">Automatic ({kind==='paint' || brush.detailScale>0 || detailOnly(brush.op)?'detail':'base'})</option>
         <option value="base">Base cells</option><option value="detail">Detail samples</option>
       </select></label>}
-    {kind === 'terrain' && brush.terrainGrid==='base' && brush.detailScale>0 && <small>The detail surface covers the base grid in the Scene.</small>}
+    {(kind==='terrain' || kind==='paint') && brush.terrainGrid==='base' && brush.detailScale>0 &&
+      <small>{brush.armed?'Scene shows the base grid. Turn the brush off to see the detail surface.':'Turn the brush on to see and edit the base grid.'}</small>}
     {kind === 'terrain' && <div className="ptp__seg" role="radiogroup" aria-label="Sculpt operation">
       {OPS.filter(([id])=>brush.terrainGrid!=='base' || !detailOnly(id)).map(([id, label]) => <button key={id} type="button" role="radio" aria-checked={brush.op === id}
         className={brush.op === id ? 'is-on' : ''} onClick={() => set({ op: id })}>{label}</button>)}</div>}

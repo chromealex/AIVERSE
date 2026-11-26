@@ -3618,7 +3618,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         TerrainPreviewStats cutStats;
         Mesh replacement{};
         if(showTerrain){
-            cutStats=planetaryChart?buildPlanetChartPreview(map,source,doc.revision):buildTerrainPreview(map,source,levelHeight);
+            cutStats=planetaryChart?buildPlanetChartPreview(map,source,doc.revision):buildTerrainPreview(map,source,levelHeight,baseTerrainView_);
             if(!source.empty()){
                 replacement=source.upload(*device_);
                 if(!replacement.vb.valid()||!replacement.ib.valid()){
@@ -3741,7 +3741,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     if(pendingFocusLight_) {
         auto target=*pendingFocusLight_;
         pendingFocusLight_.reset();
-        if(!fpsProject)target.y+=terrainPreviewHeight(doc.data,target.x,target.z,levelHeight);
+        if(!fpsProject)target.y+=terrainPreviewHeight(doc.data,target.x,target.z,levelHeight,baseTerrainView_);
         startTween(target,14.f,camera_.yaw,camera_.pitch);
     }
     stepTween();
@@ -3882,7 +3882,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             const float3 side = float3{-delta.z, 0, delta.x} * (0.16f / distance);
             const int segments = int(std::ceil(std::min(distance * 2, float(2 * std::max(map.w,map.h) + 1))));
             auto surface = [&](float3 point) {
-                point.y = (showTerrain ? terrainPreviewHeight(map,point.x,point.z,levelHeight) : 0.f) + 0.055f;
+                point.y = (showTerrain ? terrainPreviewHeight(map,point.x,point.z,levelHeight,baseTerrainView_) : 0.f) + 0.055f;
                 return point;
             };
             const uint32_t color = (selectedId == aId || selectedId == bId) ? rgba(255,201,91) : rgba(212,170,104);
