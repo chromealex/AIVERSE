@@ -1,0 +1,10 @@
+{
+  "sha": "9326da8ec2c139869da4b5226eb03f7106e8608c",
+  "argv": [
+    "bash",
+    "/tmp/physis-pick.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-physis-nature-pointer.log.txt",
+  "sha256": "220fa16ad4d1b14e2c62dee2da5a662398f14bb43245718955453784e8d4d6a1"
+}
