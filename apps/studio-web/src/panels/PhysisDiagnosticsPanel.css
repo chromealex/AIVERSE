@@ -59,3 +59,9 @@
 @container (min-width:720px) {
   .physis-zone-editor { display:grid; grid-template-columns:minmax(260px,0.72fr) minmax(0,1.28fr); gap:18px; align-items:start; }
 }
+
+.physis-group-list { max-height:180px; overflow:auto; border:1px solid var(--au-line); border-radius:var(--au-radius-sm); }
+.physis-group-list .physis-toggle { display:inline-flex; margin:4px 12px 4px 0; }
+.physis-group-tools { padding:0; margin:0; min-width:0; border:0; }
+.physis-group-tools form { padding:12px 0; border-bottom:1px solid var(--au-line); margin-bottom:10px; }
+.physis-group-tools .effects-vector { margin:0 0 8px; }

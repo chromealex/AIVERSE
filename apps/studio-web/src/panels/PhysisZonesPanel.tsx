@@ -1,4 +1,5 @@
 import {useEffect,useState} from 'react';
+import PhysisZoneGroup from './PhysisZoneGroup';
 import PhysisZonePlan from './PhysisZonePlan';
 import {invoke} from '../bridge';
 import type {StudioGraphDocumentScope} from '../types';
@@ -54,6 +55,7 @@ function ZoneForm({zone,kind,save}:{zone:Zone;kind:Kind;save:(patch:Patch)=>void
 }
 export default function PhysisZonesPanel({scope,onChanged}:{scope:StudioGraphDocumentScope;onChanged:()=>void}){
   const [data,setData]=useState<{key:string;snapshot:Snapshot}>();
+  const [group,setGroup]=useState<string[]|null>(null);
   const [kind,setKind]=useState<Kind>('wind'),[selected,select]=useState('');
   const [busy,setBusy]=useState(false),[error,setError]=useState('');
   const {projectPath,epoch,revision}=scope;
@@ -69,15 +71,18 @@ export default function PhysisZonesPanel({scope,onChanged}:{scope:StudioGraphDoc
   const snapshot=data?.snapshot;
   const zones=(Object.keys(kinds) as Kind[]).flatMap(type=>(snapshot?.config?.[collection[type]]??[]).map(zone=>({type,zone})));
   const active=zones.find(z=>z.zone.id===selected)??zones[0];
-  async function apply(action:string,patch?:Patch){
+  const groupIds=group?.filter(id=>zones.some(z=>z.zone.id===id));
+  function toggle(id:string){setGroup(previous=>previous?.includes(id)?previous.filter(v=>v!==id):[...(previous??[]),id]);}
+  async function apply(action:string,patch?:Patch,batch=false){
     if(busy||!snapshot||key!==data?.key)return;
     setBusy(true);setError('');
     try{
-      const op=action==='initialize'?'physis_set':'physis_zone';
-      const params=action==='initialize'?{config:snapshot.defaultConfig}:{action,kind,id:active?.zone.id,patch};
+      const op=batch?'physis_zone_group':action==='initialize'?'physis_set':'physis_zone';
+      const params=batch?{action,ids:groupIds,...patch}:action==='initialize'?{config:snapshot.defaultConfig}:{action,kind,id:active?.zone.id,patch};
       const reply=await invoke('studio.op',{op,params:{...params,expectedRevision:snapshot.revision},...guard});
-      const result=reply.result as Snapshot&{id?:string};
-      if(result.id)select(result.id);
+      const result=reply.result as Snapshot&{id?:string;ids?:string[]};
+      if(result.id){select(result.id);setGroup(null);}
+      if(result.ids)setGroup(result.ids);
       setData({key,snapshot:{...result,defaultConfig:snapshot.defaultConfig}});onChanged();
     }catch(e){setError(String(e));}finally{setBusy(false);}
   }
@@ -88,17 +93,18 @@ export default function PhysisZonesPanel({scope,onChanged}:{scope:StudioGraphDoc
         <div className="physis-zone-sidebar"><div className="physis-zone-actions"><label>Zone type<StudioSelect value={kind} onChange={e=>setKind(e.target.value as Kind)}>
           {(Object.keys(kinds) as Kind[]).map(k=><option key={k} value={k}>{kinds[k]}</option>)}</StudioSelect></label>
           <StudioButton onClick={()=>void apply('add')}>Add zone</StudioButton></div>
-        {active&&<><div className="physis-zone-actions"><label>Selected zone<StudioSelect value={active.zone.id} onChange={e=>select(e.target.value)}>
+        {active&&<><label className="physis-toggle"><input type="checkbox" checked={group!==null} onChange={e=>setGroup(e.target.checked?[active.zone.id]:null)}/>Group selection</label>
+          {group===null&&<div className="physis-zone-actions"><label>Selected zone<StudioSelect value={active.zone.id} onChange={e=>select(e.target.value)}>
           {zones.map(({type,zone})=><option key={zone.id} value={zone.id}>{zone.id} · {kinds[type]}</option>)}</StudioSelect></label>
-          <StudioButton onClick={()=>void apply('duplicate')}>Duplicate</StudioButton><StudioButton onClick={()=>void apply('remove')}>Remove</StudioButton></div>
-          <PhysisZonePlan key={active.zone.id} selected={active.zone.id} select={select}
+          <StudioButton onClick={()=>void apply('duplicate')}>Duplicate</StudioButton><StudioButton onClick={()=>void apply('remove')}>Remove</StudioButton></div>}
+          <PhysisZonePlan key={active.zone.id+(group===null?'single':'group')} selected={active.zone.id} group={groupIds} select={groupIds?toggle:select}
             zones={zones.map(({type,zone})=>{
               const [x,,z]=Array.isArray(zone.center)?zone.center:[0,0,0];
               const defaultRadius=type==='wind'?100:type==='storm'?2000:0;
               return {id:zone.id,type,x,z,radius:Number(zone[type==='storm'?'outerRadiusMeters':'radiusMeters']??defaultRadius)};
             })} move={(x,z)=>void apply('edit',{center:[x,(active.zone.center as number[]|undefined)?.[1]??0,z]})}/>
         </>}</div>
-        {active&&<ZoneForm key={active.zone.id+':'+snapshot.revision} zone={active.zone} kind={active.type} save={p=>void apply('edit',p)}/>}
+        {active&&groupIds?<PhysisZoneGroup ids={zones.map(z=>z.zone.id)} selected={groupIds} toggle={toggle} apply={(action,params)=>void apply(action,params,true)}/>:active&&<ZoneForm key={active.zone.id+':'+snapshot.revision} zone={active.zone} kind={active.type} save={p=>void apply('edit',p)}/>}
       </>}
     </fieldset></section>;
 }

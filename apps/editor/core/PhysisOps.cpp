@@ -149,6 +149,74 @@ Json snapshot(const Workspace& w) {
     r.set("liveApplied", Json::fromBool(false));
     return r;
 }
+double groupNumber(const Json& value) {
+    if (!value.isNumber() || !std::isfinite(value.toDouble()))
+        throw std::invalid_argument("Expected a finite transform value");
+    return value.toDouble();
+}
+physis_authoring::FieldPivot groupPoint(const Json& value) {
+    if (!value.isArray() || value.size()!=3) throw std::invalid_argument("Expected three coordinates");
+    return {groupNumber(value[0]),groupNumber(value[1]),groupNumber(value[2])};
+}
+
+Json editZoneGroup(Workspace& w,const Json& p) {
+    using namespace physis_authoring;
+    requireRevision(w,p);
+    const Json& list=p["ids"];
+    if (!list.isArray() || list.size()==0 || list.size()>2048) throw std::invalid_argument("Select 1 to 2048 zones");
+    std::vector<std::string> ids;
+    for (const auto& item:list.items()) {
+        if (!item.isString() || item.str().empty()) throw std::invalid_argument("Invalid zone ID");
+        ids.push_back(item.str());
+    }
+    const auto before=w.map.revision;
+    const auto action=p.getStr("action");
+    const auto& config=read(w.map);
+    bool ok=false;
+    std::string error;
+    if (action=="move") {
+        const auto offset=groupPoint(p["offset"]);
+        std::set<std::string> selected(ids.begin(),ids.end());
+        std::vector<FieldPosition> positions;
+        for (const auto* key:{"windZones","storms","gravityFields"}) {
+            for (const auto& field:config[key].items()) {
+                auto id=field.getStr("id");
+                if (!selected.count(id)) continue;
+                const auto pos=groupPoint(field["center"]);
+                positions.push_back({id,pos.x+offset.x,pos.y+offset.y,pos.z+offset.z});
+            }
+        }
+        if (positions.size()!=ids.size()) throw std::invalid_argument("Unknown or duplicate selected zone");
+        ok=moveFields(w.map,positions,true,&error);
+    } else if (action=="transform") {
+        const std::map<std::string,FieldPivotMode> modes={{"active",FieldPivotMode::Active},{"mean",FieldPivotMode::Median},
+            {"bounds",FieldPivotMode::BoundsCenter},{"origin",FieldPivotMode::WorldOrigin},{"custom",FieldPivotMode::Custom}};
+        const auto mode=modes.find(p.getStr("pivot"));
+        if (mode==modes.end()) throw std::invalid_argument("Choose a transform pivot");
+        const double angle=groupNumber(p["yaw"]),scale=groupNumber(p["scale"]);
+        FieldPivot pivot,custom;
+        if (mode->second==FieldPivotMode::Custom) custom=groupPoint(p["point"]);
+        ok=computeFieldPivot(config,ids,ids.front(),mode->second,custom,pivot,&error) &&
+           transformFields(w.map,ids,pivot.x,pivot.y,pivot.z,angle,scale,&error);
+    } else if (action=="duplicate") {
+        std::vector<std::string> copies;
+        ok=duplicateFields(w.map,ids,0,0,0,copies,&error);
+        ids=std::move(copies);
+    } else if (action=="remove") {
+        ok=removeFields(w.map,ids,&error);
+        ids.clear();
+    } else throw std::invalid_argument("Unknown zone group action");
+    if (!ok) throw std::invalid_argument(error);
+    Json result=snapshot(w),selection=Json::array();
+    for (const auto& id:ids) selection.push(Json::string(id));
+    result.set("ids",std::move(selection));
+    result.set("changed",Json::fromBool(before!=w.map.revision));
+    if (before!=w.map.revision) {
+        Change change;change.kind=Change::Map;change.text="PHYSIS zone group updated";w.note(change);
+    }
+    return result;
+}
+
 }
 Json readPhysisGameFrame(const World* world, const Json& params) {
     const auto area = diagnosticArea(params);
@@ -187,6 +255,9 @@ void registerPhysisOps(Workspace& ws) {
             validateConfig(requiredConfig(p));
             Json r=Json::object(); r.set("ok",Json::fromBool(true)); return r;
         });
+    add("physis_zone_group","Transform, translate, duplicate or delete selected map zones as one validated Undo operation.",
+        R"({"properties":{"action":{"type":"string","enum":["transform","move","duplicate","remove"]},"ids":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":2048},"expectedRevision":{"type":"integer","minimum":0},"offset":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3},"pivot":{"type":"string","enum":["mean","bounds","active","origin","custom"]},"point":{"type":"array","items":{"type":"number"},"minItems":3,"maxItems":3},"yaw":{"type":"number"},"scale":{"type":"number"}},"required":["action","ids","expectedRevision"],"additionalProperties":false})",
+        [w](const Json& p){return editZoneGroup(*w,p);});
     add("physis_zone", "Create, duplicate, patch or remove one authored map zone with Undo and revision checking.",
         R"({"properties":{"action":{"type":"string","enum":["add","duplicate","edit","remove"]},"kind":{"type":"string","enum":["wind","storm","gravity"]},"id":{"type":"string"},"patch":{"type":"object"},"expectedRevision":{"type":"integer","minimum":0}},"required":["action","expectedRevision"],"additionalProperties":false})",
         [w](const Json& p) {

@@ -30,7 +30,7 @@ def main():
         request("initialize", dict(protocolVersion="2025-06-18", capabilities={}, clientInfo=dict(name="physis-test", version="1")))
         listed = request("tools/list", {})["tools"]
         names = [t["name"] for t in listed if t["name"].startswith("physis_")]
-        assert sorted(names) == ["physis_demo", "physis_get", "physis_set", "physis_validate", "physis_zone"], names
+        assert sorted(names) == ["physis_demo", "physis_get", "physis_set", "physis_validate", "physis_zone", "physis_zone_group"], names
         before = call("physis_get", {})
         assert not call("physis_demo", dict(action="view"))["active"]
         reset = call("physis_demo", dict(action="reset", size=8, stride=2))
@@ -68,6 +68,12 @@ def main():
         assert copied["id"] != added["id"] and len(copied["config"]["storms"]) == 2
         final = call("physis_zone",dict(action="remove",id=copied["id"],expectedRevision=copied["revision"]))
         assert final["config"] == updated["config"]
+        group = dict(action="move",ids=[added["id"]],offset=[4,3,2],expectedRevision=final["revision"])
+        moved = call("physis_zone_group",group)
+        assert moved["config"]["storms"][0]["center"] == [4,3,2]
+        call("physis_zone_group",group,error=True)
+        call("physis_zone_group",dict(group,ids=[added["id"],"missing"],expectedRevision=moved["revision"]),error=True)
+        assert call("physis_get",{})["revision"] == moved["revision"]
         proc.stdin.close()
         assert proc.wait(timeout=5) == 0
         print("PHYSIS MCP stdio: PASS (discovery, validate, set/read, conflict, rejection atomicity, removal)")

@@ -43,7 +43,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
         {"overlays", {"overlay_plan_preview", "overlay_placement_preview", "overlay_templates", "overlay_list", "overlay_get", "overlay_set", "overlay_delete", "overlay_preview"}},
         {"branding", {"branding_get", "branding_set", "splash_preview", "icons_preview"}},
         {"fields", {"field_list", "field_get", "field_paint", "field_set_rules", "region_paint", "territory_paint"}},
-        {"physis", {"physis_zone", "physis_demo", "physis_get", "physis_validate", "physis_set"}},
+        {"physis", {"physis_zone_group", "physis_zone", "physis_demo", "physis_get", "physis_validate", "physis_set"}},
         {"actor", {"actor_get", "actor_set", "lens_scene_get", "lens_camera_presets", "lens_scene_validate", "lens_scene_set", "lens_camera_set", "lens_camera_delete"}},
         {"raid", {"raid_info", "raid_set", "raid_point", "raid_run"}},
         {"balance", {"balance_stats", "balance_duel", "balance_matrix", "balance_batch", "match_run", "scenario_run", "rules_lint"}},

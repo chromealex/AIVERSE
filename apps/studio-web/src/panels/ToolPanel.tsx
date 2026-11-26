@@ -134,7 +134,7 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
   };
   if (!projectPath) return <div className="tool__empty">Open a project to use this panel.</div>;
   const q = filter.trim().toLowerCase();
-  const shown = ops.filter(o => o.name!=='physis_demo' && o.name!=='physis_zone' && !(panel==='project_import' && (o.name==='port_scan'||o.name==='port_import')) && !o.name.startsWith('material_techniques_') && !spec.state.includes(o.name) && (!q || opLabel(o.name, spec.prefix).toLowerCase().includes(q) || o.name.includes(q) || o.description.toLowerCase().includes(q)));
+  const shown = ops.filter(o => o.name!=='physis_demo' && !o.name.startsWith('physis_zone') && !(panel==='project_import' && (o.name==='port_scan'||o.name==='port_import')) && !o.name.startsWith('material_techniques_') && !spec.state.includes(o.name) && (!q || opLabel(o.name, spec.prefix).toLowerCase().includes(q) || o.name.includes(q) || o.description.toLowerCase().includes(q)));
   const operationCards=<>
       {Object.entries(state).map(([name, value]) => <div key={name} className="tool__state">
         <JsonTree value={value} name={opLabel(name, spec.prefix)} open={false}/>

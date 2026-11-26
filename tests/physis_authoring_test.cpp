@@ -41,7 +41,7 @@ void mcpAuthoring() {
     p.set("config",valid);p.set("expectedRevision",Json::number(int64_t(w.map.revision)));
     CHECK(w.call("physis_set",p).getBool("ok")); CHECK(w.map.toJson()["physis"]==valid);
     int count=0;for(const auto& op:w.ops())if(op.name.rfind("physis_",0)==0)++count;
-    CHECK(count==5);
+    CHECK(count==6);
     const auto liveWorld=makePhysisDiagnosticDemo();
     const auto liveParams=Json::parse(R"({"cellX":3,"cellZ":2,"layer":8,"action":"step60"})");
     const auto captured=readPhysisGameFrame(liveWorld.get(),liveParams);

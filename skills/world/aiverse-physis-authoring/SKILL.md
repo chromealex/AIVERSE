@@ -19,6 +19,8 @@ Launch the built server with `--engine <checkout>` and the intended editor's `--
 
 Use `physis_zone` with the revision from `physis_get` to add a wind, storm or gravity zone. The response includes its stable ID. Send `edit` with that ID and a property patch, or `duplicate` or `remove` with the ID. Each change uses map Undo history.
 
+Use `physis_zone_group` with a revision and ordered zone IDs for a single Undo transaction. Supply XYZ `offset` for `move`, or `yaw` (degrees), uniform `scale` and `pivot` for `transform`. The active pivot uses the first selected ID. The other pivot choices are mean, bounds, origin and custom XYZ point. Duplicate returns the new IDs; remove clears the selection.
+
 ## Authority and verification
 
 These operations do not tick, install, or modify a live simulation, remote server, Box3D body, fog volume or game visibility. Host integration uses `skills/world/aiverse-physis/SKILL.md`. Visual clouds/god rays and local volumetric fog use `skills/visuals/aiverse-prisma/SKILL.md` and its atmosphere reference.
