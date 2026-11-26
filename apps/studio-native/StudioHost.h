@@ -194,6 +194,7 @@ private:
         bool postVisible=true;
         std::shared_ptr<const Json> gamePost;
         char regionBorderLetter=0;
+        int erosionHighlight=-2;
         bool fps = false;
         std::string selected, project, hover, geometryFile;
         float levelHeight = 1.5f;
@@ -299,6 +300,8 @@ private:
     std::string textureGraphScope_,textureGraphError_;
     std::mutex renderIoMutex_;                         // guards renderInputs_ / renderOutputs_
     float natureRadius_=48.f,natureSpacing_=6.f;
+    std::optional<StudioSceneDocument> erosionHighlightDocument_;
+    int erosionHighlight_=-2; // -2 none, -1 all, otherwise a document-scoped zone index
     bool natureWind_=false,natureFire_=false;
     double nextNatureSample_=0;
     std::shared_ptr<const world::NaturePresentationFrame> natureFrame_;

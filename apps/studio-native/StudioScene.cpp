@@ -4490,12 +4490,14 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             const auto project=[&](float3 p,float2& pixel){
                 return view.worldToScreen(p,overlay.W,overlay.H,pixel) && std::isfinite(pixel.x) && std::isfinite(pixel.y);
             };
-            for(const auto& zone:map.extra["erosionZones"].items()){
-                editor::erosionZoneGizmo(zone,false,height,[&](float3 a,float3 b,uint32_t color){
+            const auto& zones=map.extra["erosionZones"];
+            for(size_t i=0;i<zones.size();++i){
+                const bool picked=erosionHighlight_==-1 || erosionHighlight_==int(i);
+                editor::erosionZoneGizmo(zones[i],picked,height,[&](float3 a,float3 b,uint32_t color){
                     float2 start,end;
                     if(!project(a,start)||!project(b,end))return;
-                    overlay.segment(start.x,start.y,end.x,end.y,3.5f,rgba(0,0,0,120));
-                    overlay.segment(start.x,start.y,end.x,end.y,2.f,color);
+                    overlay.segment(start.x,start.y,end.x,end.y,picked?5.f:3.5f,rgba(0,0,0,120));
+                    overlay.segment(start.x,start.y,end.x,end.y,picked?3.f:2.f,color);
                 },[&](float3 centre,const std::string& text,uint32_t color){
                     float2 at;
                     if(!project(centre,at)||at.x<0||at.y<0||at.x>overlay.W||at.y>overlay.H)return;
@@ -5771,7 +5773,7 @@ uint64_t StudioScene::frameSignature(int width,int height,const editor::MapDoc& 
     vec(camera_.target);value(camera_.distance);value(camera_.pitch);value(camera_.yaw);value(camera_.fovY);
     value(camera_.ortho);value(autoIso_);value(tween_.active);
     ids(selection_);ids(hidden_);text(hover_);
-    value(erosionZonesVisible_);value(treeWindVisible_);value(tileSlope_);value(cameraSlope_);value(riverFlowVisible_);value(allRiverFlows_);value(tool_);value(localSpace_);value(gizmosVisible_);value(natureRadius_);value(natureSpacing_);value(natureWind_);value(natureFire_);value(natureFrame_.get());value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
+    value(erosionHighlight_);value(erosionZonesVisible_);value(treeWindVisible_);value(tileSlope_);value(cameraSlope_);value(riverFlowVisible_);value(allRiverFlows_);value(tool_);value(localSpace_);value(gizmosVisible_);value(natureRadius_);value(natureSpacing_);value(natureWind_);value(natureFire_);value(natureFrame_.get());value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
     value(drag_.axis);value(drag_.tool);text(drag_.id);vec(drag_.moveOffset);value(drag_.value);
     value(drag_.accumulated);value(drag_.lastAngle);value(drag_.snapping);
     value(marquee_.on);value(marquee_.x0);value(marquee_.y0);value(marquee_.x1);value(marquee_.y1);

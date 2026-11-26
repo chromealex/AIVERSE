@@ -170,7 +170,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
         return <>
           <div className="viewport-toolbar">
             <div className="viewport-tools">
-              <SceneToolbar enabled={connected && sceneMode !== 'welcome'} projectPath={snapshot?.project.path ?? ''}/>
+              <SceneToolbar documentScope={snapshot?.graphDocument} enabled={connected && sceneMode !== 'welcome'} projectPath={snapshot?.project.path ?? ''}/>
               {connected && sceneMode !== 'welcome' && snapshot?.scene.mapRegions && snapshot.graphDocument &&
                 <MovementRoadTool key={snapshot.graphDocument.epoch+snapshot.graphDocument.mapPath} scope={snapshot.graphDocument}/>}
               <span className="toolbar-divider"/>

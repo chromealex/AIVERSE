@@ -594,3 +594,5 @@ Verified selected-tree crown wind in packaged macOS Studio with a reversed headi
 Transfer the terrain-following erosion zone outlines, coefficient colours and labels to the Scene overlays menu. Verify circles and polygons on sloping ground.
 
 Packaged macOS Studio verified circular and polygonal erosion zone outlines, coefficient and soil labels, layer visibility and clean capture. [Desktop and geometry evidence](evidence/studio-erosion-zone-overlays.json). Individual zone highlighting and non-ASCII labels remain open.
+
+Expose map-scoped erosion zone highlighting in the Scene overlay menu. Verify none, one, all and stale document rejection without changing map history.

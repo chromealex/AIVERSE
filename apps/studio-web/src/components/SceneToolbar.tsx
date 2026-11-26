@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Bookmark, Expand, Globe2, Hand, Magnet, Maximize, Mountain, Move3d, Rotate3d, Shapes, Layers, Box } from 'lucide-react';
 import { CAMERA_SLOTS, importBookmarks, readBookmarks, removeBookmark, saveBookmark, type CameraBookmark } from './sceneBookmarks';
 import { invoke, onNativeEvent } from '../bridge';
+import ErosionZoneHighlight from './ErosionZoneHighlight';
+import type { StudioGraphDocumentScope } from '../types';
 import './SceneToolbar.css';
 
 export type SceneTool = 'view' | 'move' | 'rotate' | 'scale';
@@ -29,7 +31,7 @@ export function readSceneTools(): SceneToolState {
 }
 
 /** Scene header: Q/W/E/R tools, Global/Local, snapping (Ctrl/Cmd inverts while dragging), gizmos. */
-export default function SceneToolbar({ enabled, projectPath = '' }: { enabled: boolean; projectPath?: string }) {
+export default function SceneToolbar({ enabled, projectPath = '', documentScope }: { enabled: boolean; projectPath?: string; documentScope?:StudioGraphDocumentScope }) {
   const [state, setState] = useState<SceneToolState>(readSceneTools);
   const [marks, setMarks] = useState<CameraBookmark[]>(() => readBookmarks(projectPath));
   const [layersOpen,setLayersOpen]=useState(false);
@@ -140,6 +142,7 @@ export default function SceneToolbar({ enabled, projectPath = '' }: { enabled: b
       {layersOpen&&<div className="scene-toolbar__marks-menu scene-toolbar__layers" data-native-overlay role="group" aria-label="Scene overlays">
        {([['worldAxes','World axes'],['objectBounds','Object bounds'],['selectionBox','Selection box'],['natureWind','Play-test wind'],['natureFire','Play-test fire spread'],['terraTreeWind','Wind at selected tree'],['erosionZones','Erosion zones']] as const).map(([key,label])=>
         <label key={key}><input type="checkbox" checked={state[key]} onChange={e=>set({[key]:e.target.checked})}/>{label}</label>)}
+       {state.erosionZones && documentScope && <ErosionZoneHighlight key={JSON.stringify([documentScope.projectPath,documentScope.mapPath,documentScope.epoch,documentScope.revision])} scope={documentScope}/>}
        <label><input type="checkbox" checked={state.nereidFlow} onChange={e=>set({nereidFlow:e.target.checked})}/>River flow</label>
        {state.nereidFlow&&<label><input type="checkbox" checked={state.nereidAllWater} onChange={e=>set({nereidAllWater:e.target.checked})}/>Show all rivers</label>}
        <label><input type="checkbox" checked={state.terraSlope} onChange={e=>set({terraSlope:e.target.checked})}/>Slope at selected tile</label>

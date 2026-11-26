@@ -1527,6 +1527,7 @@ void StudioHost::tickScene() {
     in.gamePost=gamePostSnapshot_;
     in.postQuality=postQuality_;in.postVisible=postInScene_;
     in.width = placement_.pixelsW; in.height = placement_.pixelsH;
+    if(erosionHighlightDocument_ && *erosionHighlightDocument_==document)in.erosionHighlight=erosionHighlight_;
     in.document=mapSnapshotDocument_;in.map = mapSnapshot_; in.rules = rulesSnapshot_;in.planetLook=planetLookSnapshot_;
     const auto& brush=session_->sceneBrush();
     in.brushArmed=brush.armed;
@@ -1581,6 +1582,7 @@ void StudioHost::renderSceneFrame() {
             preview_->setPlanetTerrainLook(in.planetLook);
             preview_->setBaseTerrainView(in.editBaseTerrain);
             preview_->setRegionBorders(in.regionBorderLetter);
+            preview_->setErosionHighlight(in.erosionHighlight);
             preview_->setNatureFrame(in.nature);
             preview_->setWindPreview(in.wind);
             preview_->setPostPreview(in.project,*in.gamePost,in.map->data.extra["postfx"],in.postQuality,in.postVisible);
@@ -3674,6 +3676,26 @@ Json StudioHost::viewportInput(const Json& input) {
                 humanPick(surface,x*rect.width,y*rect.height,rect.width,rect.height);
         }else throw std::runtime_error("Invalid character viewport input");
         return Json::object();
+    }
+    if(kind=="erosionHighlight"){
+        const auto document=session_->sceneDocument();
+        if(projectLoading_ || input.getStr("projectPath")!=document.project || input.getStr("mapPath")!=document.path ||
+           input.getStr("epoch")!=std::to_string(document.epoch) || input.getStr("revision")!=std::to_string(document.revision))
+            throw std::runtime_error("Map changed. Reopen Scene overlays.");
+        const auto& zones=session_->workspace().map.data.extra["erosionZones"];
+        const size_t count=zones.isArray()?zones.size():0;
+        if(input.has("index")){
+            const double index=input["index"].toDouble();
+            if(!input["index"].isNumber() || !std::isfinite(index) || index!=std::floor(index) || index< -2 || index>=double(count))
+                throw std::runtime_error("Unknown erosion zone");
+            erosionHighlight_=int(index);
+            erosionHighlightDocument_=document;
+        }
+        Json result=Json::object(),names=Json::array();
+        for(size_t i=0;i<count;++i)names.push(Json::string(zones[i].getStr("id")));
+        result.set("zones",std::move(names));
+        result.set("highlight",Json::number(int64_t(erosionHighlightDocument_ && *erosionHighlightDocument_==document?erosionHighlight_:-2)));
+        return result;
     }
     if(kind=="focusLight") {
         const auto id=input.getStr("entityId");
