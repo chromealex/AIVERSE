@@ -70,8 +70,21 @@ export default function App() {
   const [floating, setFloating] = useState<FloatingWindow[]>(() => FLOAT ? [] : readFloating());
   const [palette, setPalette] = useState<string | null>(null); // null = closed, else initial query
   const [paletteAssets, setPaletteAssets] = useState<StudioAsset[]>([]);
+  type GraphPanel='anim_graph'|'anim_rig';
+  type OpenGraph=import('./panels/AnimationGraphPanel').GraphOpenRequest;
+  const [graphRequests,setGraphRequests]=useState<Partial<Record<GraphPanel,OpenGraph>>>({});
   const [animationRequest,setAnimationRequest]=useState<import('./types').AnimationAuthoringRequest>();
   useEffect(()=>onNativeEvent((event,payload)=>{
+    if(event==='animation.graphOpen'){
+      const panel=field(payload,'panel'),project=field(payload,'project'),name=field(payload,'name'),graph=field(payload,'graph');
+      if((panel!=='anim_graph'&&panel!=='anim_rig')||typeof name!=='string'||typeof project!=='string'||!Array.isArray(field(graph,'nodes')))return;
+      if(FLOAT?panelStack(dock,panel)!==null:!floatOwner(floating,panel)){
+        const request={name,project,graph:graph as OpenGraph['graph'],revision:String(field(payload,'revision')??''),inline:field(payload,'inline')===true};
+        setGraphRequests(current=>({...current,[panel]:request}));
+      }
+      if(!FLOAT)showPanelEvent(panel);
+      return;
+    }
     if(event!=='animation.authoringOpen')return;
     const name=field(payload,'name'),project=field(payload,'project'),tab=field(payload,'tab');
     if(typeof name!=='string'||typeof project!=='string'||(tab!=='clips'&&tab!=='graph'))return;
@@ -348,6 +361,8 @@ export default function App() {
       setInspectorPin(null); // create/delete/duplicate or map replacement invalidates positional pins
       setSnapshot(value);
     }, setBusy, commitSnapshot: setSnapshot, showPanel: panel => showPanel(panel), reportError: setError,
+    graphRoute: key=>({request:graphRequests[key]?.project===snapshot?.project.path?graphRequests[key]:undefined,
+      consume:()=>setGraphRequests(current=>current[key]===graphRequests[key]?{...current,[key]:undefined}:current)}),
     animationRoute: {request:animationRequest?.project===snapshot?.project.path?animationRequest:undefined,
       consume:()=>setAnimationRequest(current=>current===animationRequest?undefined:current)},
     scriptLocation: scriptLocation?.project === snapshot?.project.path ? scriptLocation : null,

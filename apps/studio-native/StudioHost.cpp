@@ -110,6 +110,46 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
     // The project opens asynchronously after the UI loads (splash and progress).
     session_ = std::make_unique<StudioSession>(engineRoot, std::string());
     for(const bool rig:{false,true}){
+        session_->workspace().registerOp({rig?"rig_editor_open":"animation_editor_open",
+            "Open a saved or inline animation graph; refuses replacement of unsaved edits.",
+            Json::parse(R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"}}})"),
+            [this,rig](const Json& params){
+                auto& ws=session_->workspace();
+                if(ws.project.dir.empty())throw std::runtime_error("Open a project first");
+                {
+                    std::lock_guard lock(animationEditorMutex_);
+                    const auto& state=animationEditors_[rig?1:0];
+                    if(state.getStr("project")==ws.project.dir && state.getStr("lifetime")==std::to_string(ws.projectLifetime()) &&
+                       state.getBool("dirty"))throw std::runtime_error("Save or discard current edits");
+                }
+                const auto name=params.getStr("name","untitled");
+                if(name.empty() || name.size()>64 || name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")!=std::string::npos)
+                    throw std::runtime_error("Invalid animation asset name");
+                const bool supplied=!params["graph"].isNull();
+                Json request=Json::object();
+                request.set("name",Json::string(name));
+                Json graph=params["graph"];
+                bool exists=!supplied;
+                if(supplied){
+                    if(!graph.isObject() || graph.dump().size()>256*1024)throw std::runtime_error("Invalid animation graph");
+                    const auto list=ws.call("animation_graph_list",Json::object());
+                    if(list.has("error"))return list;
+                    for(const auto& entry:list["graphs"].items())if(entry.str()==name){exists=true;break;}
+                }
+                if(exists){
+                    const auto asset=ws.call("animation_graph_get",request);
+                    if(asset.has("error"))return asset;
+                    request.set("revision",asset["revision"]);
+                    if(!supplied)graph=asset["graph"];
+                }
+                editor::animation::sort(graph);
+                request.set("graph",std::move(graph));
+                request.set("inline",Json::fromBool(supplied));
+                request.set("project",Json::string(ws.project.dir));
+                request.set("panel",Json::string(rig?"anim_rig":"anim_graph"));
+                sendEventPayload("animation.graphOpen",request);
+                Json result=Json::object();result.set("ok",Json::fromBool(true));return result;
+            },true});
         session_->workspace().registerOp({rig?"rig_editor_status":"animation_editor_status",
             "Read the HTML editor draft, evaluated local pose and contact diagnostics.",Json::object(),
             [this,rig](const Json&){

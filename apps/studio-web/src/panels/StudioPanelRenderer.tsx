@@ -94,6 +94,7 @@ export interface StudioPanelContext {
   /** Apply a snapshot from an Inspector action without dropping the Inspector pin. */
   commitSnapshot: (value: StudioSnapshot) => void;
   /** A game runs in the Game panel: Hierarchy / Inspector offer the live view. */
+  graphRoute:(panel:'anim_graph'|'anim_rig')=>import('./AnimationGraphPanel').GraphOpenRoute;
   animationRoute:import('../types').AnimationAuthoringRoute;
   scriptLocation:{path:string;line:number} | null;
   openScript:(path:string,line:number)=>void;
@@ -143,7 +144,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'branding': return <BrandingPanel key={snapshot?.project.path} project={snapshot?.project.path ?? ''} advanced={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
       case 'anim_assets': return <AnimationAssetsPanel key={snapshot?.project.path} project={snapshot?.project.path??''} tools={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
       case 'actor': return <LensCameraPanel actorSession={!!snapshot?.project.actorSession} openScene={()=>ctx.showPanel('scene')} key={snapshot?.project.path} project={snapshot?.project.path??''} operations={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
-      case 'anim_graph': case 'anim_rig': return <AnimationGraphPanel key={panel+snapshot?.project.path} rigMode={panel==='anim_rig'} projectPath={snapshot?.project.path??''} tools={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
+      case 'anim_graph': case 'anim_rig': return <AnimationGraphPanel route={ctx.graphRoute(panel)} key={panel+snapshot?.project.path} rigMode={panel==='anim_rig'} projectPath={snapshot?.project.path??''} tools={<ToolPanel panel={panel} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>}/>;
       case 'fx_library': return <SpectraLibraryPanel key={snapshot?.project.path ?? ''} projectPath={snapshot?.project.path ?? ''} showPanel={ctx.showPanel}/>;
       case 'fx_graph': return <SpectraDataInterfacesPanel key={snapshot?.project.path} projectPath={snapshot?.project.path ?? ''}
         onSaved={()=>void invoke('studio.snapshot',{}).then(ctx.commitSnapshot).catch(()=>{})}/>;

@@ -11,14 +11,16 @@ type Condition = {parameter:string;op?:string;value?:number};
 type Transition = {to:string;fade?:number;after?:number;when:Condition[]|Record<string,never>};
 type State = {id:string;output:string;transitions?:Transition[]};
 type Graph = {nodes:Node[];output:string;model?:string;parameters?:Record<string,unknown>;states?:State[];initial?:string;graphs?:Record<string,Graph>};
+export interface GraphOpenRequest {project:string;name:string;graph:Graph;revision:string;inline:boolean}
+export interface GraphOpenRoute {request?:GraphOpenRequest;consume:()=>void}
 // Dock tabs unmount inactive panels. Retain active edit histories for this window.
-const drafts=new Map<string,{name:string;history:DraftHistory<Graph>;saved:Graph|null;revision:string}>();
+const drafts=new Map<string,{name:string;history:DraftHistory<Graph>;saved:Graph|null;revision:string;inline:boolean}>();
 const kinds=['bind','clip','blend','additive','twoBoneIK','rig','stack','subgraph','motionMatching','native'];
 const ports=(n:Node):('a'|'b'|'input')[]=>n.kind==='additive'||n.kind==='blend'?['a','b']:n.input!==undefined?['input']:[];
 const position=(n:Node,i:number)=>({x:n.position?.[0]??24+190*(i%3),y:n.position?.[1]??24+90*Math.floor(i/3)});
 const nodeOptions=(nodes:Node[])=>nodes.map(n=><option key={n.id}>{n.id}</option>);
 
-export default function AnimationGraphPanel({projectPath,tools,rigMode}:{projectPath:string;tools:ReactNode;rigMode:boolean}){
+export default function AnimationGraphPanel({projectPath,tools,rigMode,route}:{route:GraphOpenRoute;projectPath:string;tools:ReactNode;rigMode:boolean}){
  const cacheKey=JSON.stringify([projectPath,rigMode]);
  const title=rigMode?'Animation Rig':'Animation Graph';
  const restored=drafts.get(cacheKey);
@@ -28,6 +30,7 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode}:{project
  const [committed,setDraft]=useState<Graph|null>(restored?.history.current()??null),[saved,setSaved]=useState<Graph|null>(restored?.saved??null);
  const [dragPreview,setDragPreview]=useState<Graph|null>(null);
  const draft=dragPreview??committed;
+ const [inline,setInline]=useState(restored?.inline??false);
  const [revision,setRevision]=useState(restored?.revision??'');
  const [scope,setScope]=useState(''),[selection,select]=useState('');
  const [nodeName,setNodeName]=useState(''),[pickedBone,setPickedBone]=useState('');
@@ -52,10 +55,10 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode}:{project
  },[projectPath,rigMode,committed,saved,preview,error]);
  const drag=useRef<{id:string;x:number;y:number;left:number;top:number;before:Graph;latest:Graph}|null>(null);
  useEffect(()=>{
-  if(history.current&&(dirty||history.current.canUndo()||history.current.canRedo()))
-   drafts.set(cacheKey,{name,history:history.current,saved,revision});
+  if(history.current&&(inline||dirty||history.current.canUndo()||history.current.canRedo()))
+   drafts.set(cacheKey,{name,history:history.current,saved,revision,inline});
   else drafts.delete(cacheKey);
- },[cacheKey,name,dirty,draft,saved,revision]);
+ },[cacheKey,name,dirty,draft,saved,revision,inline]);
  async function op(method:string,params:Record<string,unknown>={}){
   const reply=await invoke('studio.op',{op:'animation_graph_'+method,params,expectedProject:projectPath});
   return reply.result as {graph:Graph;graphs:string[];rigItemPresets:ItemPresets;revision:string};
@@ -82,9 +85,22 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode}:{project
  function updateState(next:State){
   if(graph)change(inScope({...graph,states:states.map(s=>s.id===next.id?next:s)}));
  }
- async function load(id:string){
-  const r=await op('get',{name:id});if(!Array.isArray(r.graph?.nodes))throw new Error('Asset has no pose graph');history.current=new DraftHistory(r.graph,40);setDraft(r.graph);setSaved(r.graph);setRevision(r.revision);setName(id);setScope('');select('');setStateId('');
+ function openDocument(id:string,doc:Graph,version:string,isInline:boolean){
+  history.current=new DraftHistory(doc,40);setDraft(doc);setSaved(doc);setRevision(version);setInline(isInline);
+  setName(id);setScope('');select('');setStateId('');setError('');setNotice('');
  }
+ async function load(id:string){
+  const r=await op('get',{name:id});if(!Array.isArray(r.graph?.nodes))throw new Error('Asset has no pose graph');
+  openDocument(id,r.graph,r.revision,false);
+ }
+ useEffect(()=>{
+  const request=route.request;
+  if(!request||request.project!==projectPath||busy)return;
+  route.consume();
+  if(dirty){setNotice('Save or discard current edits before opening another graph.');return;}
+  openDocument(request.name,request.graph,request.revision,request.inline);
+  setTab(rigMode?'rig':'nodes');
+ },[route.request,projectPath,busy,dirty,rigMode]);
  async function edit(action:string,params:Record<string,unknown>){
   const r=await op('edit',{action,graph:draft,scope,...params});change(r.graph);
  }
@@ -94,7 +110,7 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode}:{project
  const width=Math.max(360,...xs.map(x=>x+180))-left,height=Math.max(155,...ys.map(y=>y+70))-top;
  return <section className="anim-editor" aria-label={title}>
   <header><strong>{title}</strong><select aria-label="Animation graph asset" value={name} disabled={busy||dirty} onChange={e=>void run(()=>load(e.target.value))}>
-   <option value="" disabled>Select graph</option>{names.map(n=><option key={n}>{n}</option>)}</select>
+   <option value="" disabled>Select graph</option>{name&&!names.includes(name)&&<option>{name}</option>}{names.map(n=><option key={n}>{n}</option>)}</select>
    <button aria-label="Reload animation graph" disabled={busy||dirty||!projectPath} onClick={()=>void run(async()=>{setNames((await op('list')).graphs);if(name)await load(name);})}>Reload</button>
    <input aria-label="New graph name" placeholder="New graph name" value={newName} onChange={e=>setNewName(e.target.value)}/>
    <button disabled={busy||dirty||!projectPath||!/^[-\w]{1,64}$/.test(newName)||names.includes(newName)} onClick={()=>void run(async()=>{
@@ -111,7 +127,7 @@ export default function AnimationGraphPanel({projectPath,tools,rigMode}:{project
     <button disabled={busy||!history.current?.canUndo()} onClick={()=>{if(history.current)setDraft(history.current.undo());}}>Undo</button>
     <button disabled={busy||!history.current?.canRedo()} onClick={()=>{if(history.current)setDraft(history.current.redo());}}>Redo</button>
     <button disabled={busy||!dirty} onClick={()=>{history.current=saved?new DraftHistory(saved,40):undefined;setDraft(saved);setScope('');select('');setError('');}}>Discard</button>
-    <button disabled={busy||!dirty} onClick={()=>void run(async()=>{const r=await op('set',{name,graph:draft,expectedRevision:revision});history.current=new DraftHistory(r.graph,40);setDraft(r.graph);setSaved(r.graph);setRevision(r.revision);})}>Save graph</button>
+    <button disabled={busy||(!dirty&&!inline)} onClick={()=>void run(async()=>{const r=await op('set',{name,graph:draft,...(revision?{expectedRevision:revision}:{})});setInline(false);setNames(current=>current.includes(name)?current:[...current,name].sort());history.current=new DraftHistory(r.graph,40);setDraft(r.graph);setSaved(r.graph);setRevision(r.revision);})}>Save graph</button>
    </div>
    {tab==='preview'&&draft?<AnimationSkeletonPreview onStatus={setPreview} projectPath={projectPath} graph={draft} scope={scope} panel={rigMode?'rig':'graph'} onPick={setPickedBone} busy={busy}
     onKeep={controls=>{if(graph)change(inScope({...graph,parameters:{...graph.parameters,...controls}}));}}/>:tab==='nodes'?<>

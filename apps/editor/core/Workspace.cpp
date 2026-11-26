@@ -1026,6 +1026,9 @@ void Workspace::registerCoreOps() {
         registerOp({name,desc,schema(sch),std::move(fn),false,true});
     };
     const auto requireStudioLink=[](const Json&)->Json{throw std::runtime_error("Requires an authenticated HTML5 Studio agent link");};
+    for(const char* name:{"animation_editor_open","rig_editor_open"})
+        addLinked(name,"Open a saved or inline animation graph in the linked editor.",
+            R"({"type":"object","properties":{"name":{"type":"string"},"graph":{"type":"object"}}})",requireStudioLink);
     for(const char* name:{"animation_editor_status","rig_editor_status"})
         addLinked(name,"Read the linked editor draft, evaluated local pose and contact diagnostics.",
             R"({"type":"object","properties":{},"additionalProperties":false})",requireStudioLink);

@@ -436,3 +436,5 @@ macOS Graph and Rig now have verified independent Undo/Redo across dock tab swit
 Standalone animation editor status: expose the graph or rig panel's authored document and dirty state to a linked client together with the matching native preview's evaluated local bone translations, contacts and locomotion report, without advancing playback.
 
 Packaged Mac Studio and its external MCP sidecar verified animation_editor_status and rig_editor_status for independent live previews, editor drafts, preview errors, contact fields and project changes. Evidence: docs/evidence/studio-linked-editor-status-discovery.json. Standalone editor open and per-entity runtime status remain separate gaps.
+
+Standalone graph opening: port animation_editor_open and rig_editor_open for saved assets and inline documents; preserve dirty refusal, revision checks and independent panel routing.
