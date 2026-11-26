@@ -1,0 +1,10 @@
+{
+  "sha": "391c7c28987408c61043e3144a33916978f5fc19",
+  "argv": [
+    "bash",
+    "../rig-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-wind-visible-skeleton.log.txt",
+  "sha256": "b57bfa719d5bc5f56e1edd33ca5db2298e4ef51215165a858ccf99d3bfddbe34"
+}
