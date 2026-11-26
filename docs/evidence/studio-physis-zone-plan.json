@@ -1,0 +1,10 @@
+{
+  "sha": "722c820709d3f8faa09ccc550180e93a5bb54875",
+  "argv": [
+    "bash",
+    "/tmp/physis-zoneplan-ui.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-physis-zone-plan.log.txt",
+  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}
