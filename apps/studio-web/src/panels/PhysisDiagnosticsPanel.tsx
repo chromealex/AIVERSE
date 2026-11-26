@@ -86,11 +86,20 @@ function Diagnostics({projectPath,source,epoch}:{projectPath:string;source:strin
   }
   useEffect(()=>{void request('view',initial);return ()=>{requestId.current++;};},[projectPath]);
   useEffect(()=>onNativeEvent((event,payload)=>{
-    if(event==='nature.ignition'&&showNature)setError(String((payload as {message?:string})?.message??''));
+    if(event==='nature.ignition'&&showNature){
+      const hit=payload as {epoch?:string;cellX:number;cellZ:number;message?:string};
+      if(hit.message)setError(hit.message);
+      else if(hit.epoch===epoch&&frame){
+        const x=(hit.cellX-frame.originX)/frame.stride,z=(hit.cellZ-frame.originZ)/frame.stride;
+        const visible=Number.isInteger(x)&&Number.isInteger(z)&&x>=0&&z>=0&&x<frame.width&&z<frame.height;
+        if(visible)void request('view',view,z*frame.width+x);
+        else void request('view',{...view,centerX:hit.cellX,centerZ:hit.cellZ,stride:1});
+      }
+    }
     if(event==='nature.previewError'&&showNature){
       setShowNature(false);setError(String((payload as {message?:string})?.message??payload));
     }
-  }),[showNature]);
+  }));
   const advance=useRef<(elapsed:number)=>void>(()=>{});
   useEffect(()=>{
     advance.current=elapsed=>{if(!pending.current)void request('playback',view,cell,{speed,elapsed});};

@@ -926,7 +926,13 @@ void StudioHost::natureClick(double x,double y,double width,double height) {
         sendEvent("nature.ignition",reason);return;
     }
     ++naturePreview_->ignitionRevision;
-    sendEvent("nature.ignition","");
+    const auto* state=naturePreview_->preview.previewWorld()->resourceConst<physis::State>();
+    const float meters=float(state->settings.cellSizeMeters);
+    Json picked=Json::object();
+    picked.set("epoch",Json::string(naturePreview_->epoch));
+    picked.set("cellX",Json::number(int64_t(std::floor(hit->x/meters))));
+    picked.set("cellZ",Json::number(int64_t(std::floor(hit->z/meters))));
+    sendEventPayload("nature.ignition",picked);
 }
 void StudioHost::fxCameraOrbit(StudioSurface surface,double dx,double dy) {
     if(!finite({dx,dy})||std::abs(dx)>250||std::abs(dy)>250)return;
