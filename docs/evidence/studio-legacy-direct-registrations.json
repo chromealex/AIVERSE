@@ -1,0 +1,10 @@
+{
+  "sha": "bb5a6a43fe96daca1d0547792b6abf2198941357",
+  "argv": [
+    "bash",
+    "/tmp/legacy-registration.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-legacy-direct-registrations.log.txt",
+  "sha256": "19480215b2c48cf5083433b4a9636071e578268a3ce50761a1015b31060f4fd9"
+}
