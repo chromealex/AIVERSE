@@ -334,3 +334,5 @@ Effect ranges: inspect nine emitter parameters, edit constant and random bounds 
 Effects force fields: edit effect-space field geometry and forces in the draft and the selected emitter’s external force multiplier. Verify add/remove, bounds, save/reopen and preserved unrelated source.
 
 Effects emission stage: schedule timed particle bursts in the selected emitter, retaining compact [time,count] and full sources and using the range/curve editor for the particle count. Verify save/reopen and playback.
+
+Emitter geometry stage: shape-specific dimensions, mesh source, arc sampling and source-space transforms in the HTML effect draft. Verify conditional controls, native persistence and independent Metal preview.

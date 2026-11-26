@@ -1,5 +1,6 @@
 import {useMemo,useState} from 'react';
 import {applyEdits,createScanner,findNodeAtLocation,getNodeValue,modify,parseTree,type Node,type ParseError} from 'jsonc-parser';
+import EffectShape from './EffectShape';
 import EffectBursts from './EffectBursts';
 import EffectForceFields from './EffectForceFields';
 import EffectRangeEditor,{EffectNumber} from './EffectRangeEditor';
@@ -10,7 +11,6 @@ const choices=[
   {key:'blend',label:'Blending',fallback:'additive',options:['alpha','additive','premultiplied','multiply','subtract','opaque']},
   {key:'align',label:'Alignment',fallback:'camera',options:['camera','velocity','ground','upright','world','local']},
   {key:'minQuality',label:'Minimum quality',fallback:'low',options:['off','low','medium','high']},
-  {key:'shape',label:'Emitter shape',fallback:'point',options:['point','sphere','disc','ring','hemisphere','cone','box','line','donut','mesh']},
 ];
 
 export default function EffectEmitters({source,edit,busy}:{source:string;edit:(draft:string)=>void;busy:boolean}){
@@ -27,8 +27,11 @@ export default function EffectEmitters({source,edit,busy}:{source:string;edit:(d
   const index=Math.min(selection,Math.max(0,nodes.length-1));
   const node=nodes[index];
   const emitter=node?.type==='object'?getNodeValue(node):undefined;
+  function update(base:string,path:(number|string)[],value:unknown){
+    return applyEdits(base,modify(base,path,value,{formattingOptions:{tabSize:2,insertSpaces:true,eol:base.includes('\r\n')?'\r\n':'\n'}}));
+  }
   function patch(path:(number|string)[],value:unknown,base=source){
-    edit(applyEdits(base,modify(base,path,value,{formattingOptions:{tabSize:2,insertSpaces:true,eol:source.includes('\r\n')?'\r\n':'\n'}})));
+    edit(update(base,path,value));
   }
   function duplicate(){
     const indent=source.slice(source.lastIndexOf('\n',node.offset-1)+1,node.offset).match(/^\s*/)?.[0]??'';
@@ -82,6 +85,10 @@ export default function EffectEmitters({source,edit,busy}:{source:string;edit:(d
         change={value=>patch(['emitters',index,'externalForces'],value)}/>
       <label className="effects-emitter-loop"><input type="checkbox" checked={emitter.loop===true} onChange={e=>patch(['emitters',index,'loop'],e.target.checked)}/>Loop emission</label>
     </div>}
+    {emitter&&<EffectShape key={'shape-'+index} emitter={emitter} patch={(path,value)=>{
+      const base=path[0]==='shape'&&value==='mesh'&&!emitter.mesh?update(source,['emitters',index,'mesh'],'builtin:cube'):source;
+      patch(['emitters',index,...path],value,base);
+    }}/>}
     {emitter&&<EffectRangeEditor key={index} emitter={emitter} patch={(path,value)=>patch(['emitters',index,...path],value)}/>}
     {emitter&&<EffectBursts key={'bursts-'+index} source={source} emitterIndex={index} emitter={emitter}
       schedule={findNodeAtLocation(node,['bursts'])} patch={patch} remove={removeEntry}/>}

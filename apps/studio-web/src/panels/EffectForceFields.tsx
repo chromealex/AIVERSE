@@ -1,6 +1,7 @@
 import {useState} from 'react';
 import {getNodeValue,type Node} from 'jsonc-parser';
 import {StudioAlert,StudioButton,StudioSelect} from '../ui';
+import EffectVector from './EffectVector';
 import {EffectNumber} from './EffectRangeEditor';
 
 type Patch=(path:(number|string)[],value:unknown)=>void;
@@ -22,10 +23,6 @@ export default function EffectForceFields({fields,busy,patch,remove}:{
   const field=node?.type==='object'?getNodeValue(node):undefined;
   const shape=field?.shape??'sphere';
   const path=['forceFields',index];
-  function setVector(key:string,axis:number,value:number){
-    if(Array.isArray(field[key])&&field[key].length===3)patch([...path,key,axis],value);
-    else patch([...path,key],[0,1,2].map(i=>i===axis?value:0));
-  }
   return <details className="effects-force-fields"><summary>Force fields{nodes.length?' · '+nodes.length:''}</summary>
     {fields&&fields.type!=='array'&&fields.type!=='null'?<StudioAlert tone="warning">Correct forceFields in Effect source to edit fields.</StudioAlert>:
     <fieldset disabled={busy}>
@@ -48,11 +45,8 @@ export default function EffectForceFields({fields,busy,patch,remove}:{
           {parameters.filter(p=>p.key!=='length'||shape==='cylinder').map(p=><EffectNumber key={p.key} label={p.label}
             min={p.min} max={p.max} value={field[p.key]??p.initial} change={v=>patch([...path,p.key],v)}/>)}
         </div>
-        {(['position','direction'] as const).map(key=><fieldset className="effects-vector" key={key}>
-          <legend>{key==='position'?'Position (m)':'Constant force'}</legend>
-          {['X','Y','Z'].map((axis,i)=><EffectNumber key={axis} label={axis} value={field[key]?.[i]??0} min={-1000} max={1000}
-            change={v=>setVector(key,i,v)}/>)}
-        </fieldset>)}
+        {(['position','direction'] as const).map(key=><EffectVector key={key} label={key==='position'?'Position (m)':'Constant force'}
+          value={field[key]} initial={[0,0,0]} min={-1000} max={1000} change={(axis,v)=>patch(axis===null?[...path,key]:[...path,key,axis],v)}/>)}
         <div className="effects-emitter-fields">
           {([['gravityFocus','Gravity focus'],['rotationAttraction','Vortex attraction']] as const).map(([key,label])=>
             <label key={key}>{label} · {field[key]??0}<input aria-label={label} type="range" min="0" max="1" step=".01"
