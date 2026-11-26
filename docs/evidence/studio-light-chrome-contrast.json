@@ -1,0 +1,10 @@
+{
+  "sha": "6cb860d1a334b6e1a3e6eb34c633c8184dd5876f",
+  "argv": [
+    "bash",
+    "/tmp/appearance-test.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-light-chrome-contrast.log.txt",
+  "sha256": "9a27bc27edbae8b9040c6458dc5dc1fe9928339e0c4df3a010a1dea3900a1da6"
+}
