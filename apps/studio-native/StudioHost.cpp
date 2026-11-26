@@ -591,11 +591,12 @@ void StudioHost::tickAgentScreenshot() {
     if (nature) {
         if (!natureShotDeadline_) {
             natureShotDeadline_=platform_.now()+4;
-            natureShotSource_=naturePreview_;
+            natureShotSource_=displayedNature();
         }
-        if (!naturePreview_ || natureShotSource_.lock()!=naturePreview_ || !naturePreview_->preview.settings.enabled ||
-            naturePreview_->epoch!=session_->graphDocumentScope().getStr("epoch") ||
-            naturePreview_->revision!=session_->workspace().map.revision || platform_.now()>=natureShotDeadline_) {
+        const auto& shown=displayedNature();
+        if (!shown || natureShotSource_.lock()!=shown || !shown->preview.settings.enabled ||
+            shown->epoch!=session_->graphDocumentScope().getStr("epoch") ||
+            shown->revision!=session_->workspace().map.revision || platform_.now()>=natureShotDeadline_) {
             session_->finishAgentScreenshot("",0,0,"Open the current map's PHYSIS 3D nature viewport and retry.");
             natureShotDeadline_=0;agentShot_.reset();
             return;
@@ -762,13 +763,13 @@ Json StudioHost::natureCommand(const Json& p) {
         sendEventPayload("nature.command",event);
     }
     const auto frame=naturePreview_?naturePreview_->read(Json::object()):Json{};
-    const auto& display=frame["presentation"];
+    const auto& display=live?(liveNatureView_?liveNatureView_->presentation:Json{}):frame["presentation"];
     out.set("ok",Json::fromBool(true));out.set("enabled",Json::fromBool(settings.enabled));
     out.set("source",Json::string(live?"live (read-only)":"preview"));
     out.set("tick",Json::number(live?int64_t(*live):frame.getInt("tick")));
     for (const char* key:{"flames","smoke","voices","burningAreaM2"}) out.set(key,display.has(key)?display[key]:Json::number(int64_t(0)));
     out.set("grassPatches",Json::number(display.getInt("patches")));
-    if (settings.enabled && !live) out.set("next",Json::string(R"(view_screenshot {"window":"physis"})"));
+    if (settings.enabled) out.set("next",Json::string(R"(view_screenshot {"window":"physis"})"));
     return out;
 }
 
@@ -783,8 +784,23 @@ void StudioHost::tickNaturePreview() {
     }
     if (!surface.placement.visible || !platform_.surfaceDrawable(StudioSurface::Nature)) return;
     const auto& ws=session_->workspace();
-    if (!naturePreview_ || !naturePreview_->preview.settings.enabled || naturePreview_->epoch!=session_->graphDocumentScope().getStr("epoch") ||
-        naturePreview_->revision!=ws.map.revision) {
+    const auto epoch=session_->graphDocumentScope().getStr("epoch");
+    const World* source=nullptr;
+    if (natureShowsGame_) {
+        if (game_ && !ws.map.data.planet() && game_->launchedMapCurrent() && studioPlaySourceMatches(game_->launchPlan(),ws))
+            source=game_->localPhysisWorld();
+        if (source && (!liveNatureView_ || liveNatureView_->epoch!=epoch || liveNatureView_->revision!=ws.map.revision)) {
+            if (surface.renderer) onScene([&]{surface.renderer.reset();});
+            liveNatureView_=std::make_shared<StudioNaturePreview>(epoch,ws.map,float(ws.project.rules.levelHeight.toDouble()),
+                editor::PhysisNaturePreviewSettings{},false);
+        }
+        if (!source) liveNatureView_.reset();
+        if (source && naturePreview_ && naturePreview_->epoch==epoch && naturePreview_->revision==ws.map.revision) {
+            liveNatureView_->preview.settings=naturePreview_->preview.settings;
+        }
+    } else if (naturePreview_) source=naturePreview_->preview.previewWorld();
+    const auto& shown=displayedNature();
+    if (!source || !shown || !shown->preview.settings.enabled || shown->epoch!=epoch || shown->revision!=ws.map.revision) {
         if (surface.renderer) onScene([&]{surface.renderer.reset();});
         return;
     }
@@ -795,8 +811,8 @@ void StudioHost::tickNaturePreview() {
         }
         onScene([&]{platform_.sceneThreadScope([&]{
             if (!surface.renderer) surface.renderer=std::make_unique<StudioScene>(platform_.createDevice(StudioSurface::Nature));
-            naturePreview_->presentation=surface.renderer->drawNature(surface.placement.pixelsW,surface.placement.pixelsH,
-                *naturePreview_,ws.map,ws.project.dir,float(ws.project.rules.levelHeight.toDouble()));
+            shown->presentation=surface.renderer->drawNature(surface.placement.pixelsW,surface.placement.pixelsH,
+                *shown,*source,ws.map,ws.project.dir,float(ws.project.rules.levelHeight.toDouble()));
         });});
     } catch (const std::exception& e) {
         platform_.log(std::string("PHYSIS preview: ")+e.what());
@@ -1020,7 +1036,7 @@ void StudioHost::tickFx() {
     }
 }
 void StudioHost::natureClick(double x,double y,double width,double height) {
-    if (!finite({x,y,width,height}) || width<=1 || height<=1 || projectLoading_ || !naturePreview_ ||
+    if (natureShowsGame_ || !finite({x,y,width,height}) || width<=1 || height<=1 || projectLoading_ || !naturePreview_ ||
         !naturePreview_->preview.settings.igniteOnClick || !natureSurface_.placement.visible || !natureSurface_.renderer ||
         naturePreview_->epoch!=session_->graphDocumentScope().getStr("epoch") ||
         naturePreview_->revision!=session_->workspace().map.revision)return;
@@ -1042,9 +1058,9 @@ void StudioHost::natureClick(double x,double y,double width,double height) {
 void StudioHost::fxCameraOrbit(StudioSurface surface,double dx,double dy) {
     if(!finite({dx,dy})||std::abs(dx)>250||std::abs(dy)>250)return;
     if(surface==StudioSurface::Nature){
-        if(!projectLoading_ && naturePreview_ && natureSurface_.placement.visible){
-            naturePreview_->yaw=std::remainder(naturePreview_->yaw-float(dx)*.01f,6.2831853f);
-            naturePreview_->pitch=std::clamp(naturePreview_->pitch+float(dy)*.01f,.08f,1.5f);
+        if(!projectLoading_ && displayedNature() && natureSurface_.placement.visible){
+            displayedNature()->yaw=std::remainder(displayedNature()->yaw-float(dx)*.01f,6.2831853f);
+            displayedNature()->pitch=std::clamp(displayedNature()->pitch+float(dy)*.01f,.08f,1.5f);
         }
         return;
     }
@@ -1066,8 +1082,8 @@ void StudioHost::fxCameraOrbit(StudioSurface surface,double dx,double dy) {
 void StudioHost::fxCameraZoom(StudioSurface surface,double wheel) {
     if(!std::isfinite(wheel)||std::abs(wheel)>250)return;
     if(surface==StudioSurface::Nature){
-        if(!projectLoading_ && naturePreview_ && natureSurface_.placement.visible)
-            naturePreview_->distance=std::clamp(naturePreview_->distance*float(std::pow(.9,wheel)),2.f,400.f);
+        if(!projectLoading_ && displayedNature() && natureSurface_.placement.visible)
+            displayedNature()->distance=std::clamp(displayedNature()->distance*float(std::pow(.9,wheel)),2.f,400.f);
         return;
     }
     if(surface==StudioSurface::EffectFile || surface==StudioSurface::GpuEmitter){
@@ -3479,6 +3495,11 @@ void StudioHost::applyViewport(const Json& params) {
         auto& asset=assetSurface(surface);
         NativeViewportPlacement placed;
         if(platform_.placeSurface(surface,rect,placed)){
+            if (surface==StudioSurface::Nature && placed.visible && natureShowsGame_!=params.getBool("liveNature")) {
+                natureShowsGame_=params.getBool("liveNature");
+                if (asset.renderer) onScene([&]{asset.renderer.reset();});
+                liveNatureView_.reset();
+            }
             asset.placement=placed;
             if(!placed.visible){asset.error.clear();if(surface!=StudioSurface::ImportedClip&&surface!=StudioSurface::SourceModel&&surface!=StudioSurface::GpuEmitter&&surface!=StudioSurface::EffectFile&&surface!=StudioSurface::LensCamera&&surface!=StudioSurface::Attachments&&asset.renderer)onScene([&]{asset.renderer.reset();});}
         }
@@ -4053,7 +4074,15 @@ bool StudioHost::handleHostMethod(const Json& req) {
         const auto& project=session_->workspace().project.dir;
         if(project.empty() || projectLoading_ || params.getStr("expectedProject")!=project)
             throw std::runtime_error("PHYSIS project changed; reopen the panel");
-        if(game_ && game_->launchPlan().project==project) return game_->physisFrame(params);
+        if(game_ && game_->launchPlan().project==project) {
+            auto frame=game_->physisFrame(params);
+            const auto& ws=session_->workspace();
+            const bool current=frame.getBool("active") && !ws.map.data.planet() && game_->launchedMapCurrent() && studioPlaySourceMatches(game_->launchPlan(),ws);
+            frame.set("canShowNature",Json::fromBool(current));
+            if (current && natureShowsGame_ && liveNatureView_ && natureSurface_.placement.visible)
+                frame.set("livePresentation",liveNatureView_->presentation);
+            return frame;
+        }
         Json out=Json::object();out.set("active",Json::fromBool(false));return out;
     });
     if(method=="studio.planetForestLive")return answer([&]{return planetForestLiveRequest();});

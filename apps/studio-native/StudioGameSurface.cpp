@@ -165,9 +165,13 @@ std::shared_ptr<const world::NaturePresentationFrame> StudioGameSurface::natureF
     natureCache_={runtimeEpoch_,uint64_t(sim->tick()),x,z,radius,frame};
     return frame;
 }
-std::optional<uint64_t> StudioGameSurface::physisTick() const {
+const World* StudioGameSurface::localPhysisWorld() const {
     const auto* sim=canControl()?liveSimulation():nullptr;
-    const auto* state=sim && sim->tick()>0?sim->world().resourceConst<physis::State>():nullptr;
+    return sim && sim->tick()>0 && sim->world().resourceConst<physis::State>()?&sim->world():nullptr;
+}
+std::optional<uint64_t> StudioGameSurface::physisTick() const {
+    const auto* world=localPhysisWorld();
+    const auto* state=world?world->resourceConst<physis::State>():nullptr;
     if (!state) return {};
     return state->tick;
 }

@@ -40,6 +40,7 @@ public:
     Json staticGeometryReport(const editor::Workspace& ws) const;
     Json prismaFrameReports() const { return host_ ? host_->prismaFrameReports() : Json::array(); }
     std::shared_ptr<const world::NaturePresentationFrame> natureFrame(float x,float z,float radius);
+    const World* localPhysisWorld() const;
     std::optional<uint64_t> physisTick() const;
     Json physisFrame(const Json& params) const;
     Json planetForestState(const std::string& focusBody={},const std::optional<StudioForestCameraFocus>& camera={});

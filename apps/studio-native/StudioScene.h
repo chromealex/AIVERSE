@@ -460,7 +460,7 @@ public:
     void drawGpuEmitter(int width,int height);
     Json effectFileCommand(const std::string& project,const Json& params);
     std::optional<render::float3> natureGroundPoint(float x,float y,float width,float height) const;
-    Json drawNature(int width,int height,struct StudioNaturePreview& state,const editor::MapDoc& map,
+    Json drawNature(int width,int height,struct StudioNaturePreview& state,const World& source,const editor::MapDoc& map,
                     const std::string& project,float levelHeight);
     void drawEffectFile(int width,int height);
     Json sourceModelCommand(const std::string& project,const Json& rules,const Json& params);

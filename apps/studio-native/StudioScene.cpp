@@ -3261,7 +3261,7 @@ std::optional<float3> StudioScene::natureGroundPoint(float x,float y,float width
     if(!std::isfinite(t))return {};
     return origin+direction*t;
 }
-Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,const editor::MapDoc& map,
+Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,const World& source,const editor::MapDoc& map,
                              const std::string& project,float levelHeight) {
     if(width<2 || height<2)return Json::object();
     if(!natureView_){
@@ -3290,7 +3290,7 @@ Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,con
     particles.setView(camera,renderer_.viewProj(),width,height);
     auto retire=[&](auto& model){if(model)renderer_.invalidateModelCachesFor(model.get());sparseTerrainRetirement_.retireModel(*device_,model);};
     (void)sparseTerrainRetirement_.collectWithoutIdle(*device_);
-    view.display.draw(*device_,renderer_,particles,view.read,map,state.preview.previewWorld(),camera,
+    view.display.draw(*device_,renderer_,particles,view.read,map,&source,camera,
         std::chrono::duration<double>(now.time_since_epoch()).count(),heightAt,retire);
     particles.update(dt);
     std::vector<fx::FxPointLight> lights;

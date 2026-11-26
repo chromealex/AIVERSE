@@ -66,14 +66,14 @@ function Diagnostics({projectPath,source,epoch,route}:{projectPath:string;source
   const [cell,pick]=useState<number>();
   const [showNature,setShowNature]=useState(false);
   useEffect(()=>{
-    if(route)setShowNature(map);
+    if(route)setShowNature(true);
   },[route?.request]);
   const requestId=useRef(0), pending=useRef(false);
   const [playing,setPlaying]=useState(false),[speed,setSpeed]=useState(1);
   const workspace=useRef<HTMLFieldSetElement>(null);
   useEffect(()=>{
-    if(!route || (map&&(!frame||!showNature)))return;
-    if(map)workspace.current?.querySelector('.asset-native-surface')?.scrollIntoView({block:'center',inline:'nearest'});
+    if(!route || (!frame||!showNature))return;
+    workspace.current?.querySelector('.asset-native-surface')?.scrollIntoView({block:'center',inline:'nearest'});
     route.consume();
   },[route?.request,showNature,!!frame,map]);
   async function request(action:'view'|'step'|'step60'|'reset'|'ignite'|'wind'|'playback'|'grid'|'presentation',next:View,selection:number|{cellX:number;cellZ:number}|undefined=cell,options?:{windSpeed:number;windDirection:number}|{speed:number;elapsed:number}|{cellMeters:number;humidity:number;shoreSand:number}|{quality?:number;volume?:number;igniteOnClick?:boolean;grass?:boolean;flames?:boolean;sound?:boolean}){
@@ -116,6 +116,13 @@ function Diagnostics({projectPath,source,epoch,route}:{projectPath:string;source
       setShowNature(false);setError(String((payload as {message?:string})?.message??payload));
     }
   }));
+  const refreshLive=useRef(()=>{});
+  refreshLive.current=()=>{if(!pending.current)void request('view',view);};
+  useEffect(()=>{
+    if(!live||!showNature)return;
+    const timer=window.setInterval(()=>refreshLive.current(),500);
+    return ()=>window.clearInterval(timer);
+  },[live,showNature]);
   const advance=useRef<(elapsed:number)=>void>(()=>{});
   useEffect(()=>{
     advance.current=elapsed=>{if(!pending.current)void request('playback',view,cell,{speed,elapsed});};
@@ -146,10 +153,10 @@ function Diagnostics({projectPath,source,epoch,route}:{projectPath:string;source
         <div className="physis-controls physis-layers"><label>Field<StudioSelect value={view.layer} onChange={e=>change('layer',Number(e.target.value))}>{layers.map((l,i)=><option key={l} value={i}>{l}</option>)}</StudioSelect></label>
           <label>Palette<StudioSelect value={view.palette} onChange={e=>change('palette',Number(e.target.value))}>{['Thermal','High contrast','Ocean'].map((l,i)=><option key={l} value={i}>{l}</option>)}</StudioSelect></label>
         </div>
-        <div className="physis-figure">{map&&<div className="physis-view-switch">
+        <div className="physis-figure">{(map||frame.canShowNature)&&<div className="physis-view-switch">
           <StudioButton aria-pressed={!showNature} onClick={()=>setShowNature(false)}>Field map</StudioButton>
           <StudioButton aria-pressed={showNature} onClick={()=>setShowNature(true)}>3D nature</StudioButton>
-        </div>}{map&&showNature?<><SpectraDockViewport id="nature" label="3D nature preview"/>
+        </div>}{(map||frame.canShowNature)&&showNature?<><SpectraDockViewport id="nature" liveNature={live} label="3D nature preview"/>
           {frame.presentation&&<div className="physis-display-options">
             {([['igniteOnClick','Ignite on click'],['grass','Grass'],['flames','Fire and smoke'],['sound','Sound']] as const).map(([key,label])=>
               <label key={key}><input type="checkbox" checked={frame.presentation![key]}

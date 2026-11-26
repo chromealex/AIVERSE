@@ -308,7 +308,9 @@ private:
     std::string rulesSnapshotProject_;
     size_t rulesSnapshotHash_ = 0;
     double nextMapSnapshot_ = 0, nextRulesCheck_ = 0;
-    std::shared_ptr<StudioNaturePreview> naturePreview_;
+    std::shared_ptr<StudioNaturePreview> naturePreview_,liveNatureView_;
+    bool natureShowsGame_=false;
+    const auto& displayedNature() const { return natureShowsGame_?liveNatureView_:naturePreview_; }
     std::unique_ptr<StudioGameSurface> game_;
     Json playReview_;
     Json agentPlayReview_;

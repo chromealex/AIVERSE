@@ -18,11 +18,12 @@ struct StudioNaturePreview {
     editor::PhysisNaturePreview preview;
 
     StudioNaturePreview(std::string scope, const editor::MapDoc& map, float levelHeight,
-                       editor::PhysisNaturePreviewSettings settings)
+                       editor::PhysisNaturePreviewSettings settings,bool privateWorld=true)
         : epoch(std::move(scope)), revision(map.revision) {
         distance=std::clamp(float(std::max(map.data.w,map.data.h))*.9f,8.f,50.f);
         preview.settings=settings;
         preview.settings.enabled=true;
+        if (!privateWorld) return;
         preview.setWater(editor::AuthoredWaterQuery::fromDoc(map));
         preview.prepareSource(particles,map,nullptr,[&](float x,float z) {
             return terrainPreviewHeight(map.data,x,z,levelHeight);
