@@ -1,5 +1,6 @@
 import {useMemo,useState} from 'react';
 import {applyEdits,createScanner,findNodeAtLocation,getNodeValue,modify,parseTree,type Node,type ParseError} from 'jsonc-parser';
+import EffectBursts from './EffectBursts';
 import EffectForceFields from './EffectForceFields';
 import EffectRangeEditor,{EffectNumber} from './EffectRangeEditor';
 import {StudioAlert,StudioButton,StudioInput,StudioSelect} from '../ui';
@@ -26,8 +27,8 @@ export default function EffectEmitters({source,edit,busy}:{source:string;edit:(d
   const index=Math.min(selection,Math.max(0,nodes.length-1));
   const node=nodes[index];
   const emitter=node?.type==='object'?getNodeValue(node):undefined;
-  function patch(path:(number|string)[],value:unknown){
-    edit(applyEdits(source,modify(source,path,value,{formattingOptions:{tabSize:2,insertSpaces:true,eol:source.includes('\r\n')?'\r\n':'\n'}})));
+  function patch(path:(number|string)[],value:unknown,base=source){
+    edit(applyEdits(base,modify(base,path,value,{formattingOptions:{tabSize:2,insertSpaces:true,eol:source.includes('\r\n')?'\r\n':'\n'}})));
   }
   function duplicate(){
     const indent=source.slice(source.lastIndexOf('\n',node.offset-1)+1,node.offset).match(/^\s*/)?.[0]??'';
@@ -76,11 +77,14 @@ export default function EffectEmitters({source,edit,busy}:{source:string;edit:(d
         const count=e.target.valueAsNumber;
         if(Number.isInteger(count)&&count>=0&&count<=2000)patch(['emitters',index,'burst'],count);
       }}/></label>
+      <EffectNumber label="Emitter duration (s)" value={emitter.duration??0} min={0} max={600} change={value=>patch(['emitters',index,'duration'],value)}/>
       <EffectNumber label="External force multiplier" value={emitter.externalForces??0} min={0} max={100}
         change={value=>patch(['emitters',index,'externalForces'],value)}/>
       <label className="effects-emitter-loop"><input type="checkbox" checked={emitter.loop===true} onChange={e=>patch(['emitters',index,'loop'],e.target.checked)}/>Loop emission</label>
     </div>}
     {emitter&&<EffectRangeEditor key={index} emitter={emitter} patch={(path,value)=>patch(['emitters',index,...path],value)}/>}
+    {emitter&&<EffectBursts key={'bursts-'+index} source={source} emitterIndex={index} emitter={emitter}
+      schedule={findNodeAtLocation(node,['bursts'])} patch={patch} remove={removeEntry}/>}
   </fieldset>
     <EffectForceFields fields={fields} busy={busy} patch={patch} remove={position=>{
       const entries=fields?.children??[];

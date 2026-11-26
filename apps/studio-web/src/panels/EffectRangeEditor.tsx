@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {useState,type ReactNode} from 'react';
 import {StudioAlert,StudioButton,StudioInput,StudioSelect} from '../ui';
 
 const properties=[
@@ -18,9 +18,9 @@ const numeric=(v:unknown):v is number=>typeof v==='number'&&Number.isFinite(v);
 const pair=(v:unknown):v is [number,number]=>Array.isArray(v)&&v.length===2&&v.every(numeric);
 const keys=(v:unknown):v is [number,number][]=>Array.isArray(v)&&v.length>0&&v.every(pair);
 
-export function EffectNumber({label,value,min,max,change}:{label:string;value:number;min:number;max:number;change:(v:number)=>void}){
+export function EffectNumber({label,value,min,max,change,step="any"}:{step?:number|"any";label:string;value:number;min:number;max:number;change:(v:number)=>void}){
   const [typing,setTyping]=useState<string|null>(null);
-  return <label>{label}<StudioInput type="number" step="any" min={min} max={max} value={typing??value}
+  return <label>{label}<StudioInput type="number" step={step} min={min} max={max} value={typing??value}
     onChange={e=>{
       setTyping(e.target.value);
       if(e.target.validity.valid && numeric(e.target.valueAsNumber))change(e.target.valueAsNumber);
@@ -69,6 +69,14 @@ function CurveKeys({label,curve,path,min,max,patch}:{label:string;curve:unknown;
 export default function EffectRangeEditor({emitter,patch}:{emitter:Record<string,unknown>;patch:Patch}){
   const [selected,setSelected]=useState('life');
   const p=properties.find(prop=>prop.key===selected)!;
+  return <details className="effects-range"><summary>Emission and particle motion</summary>
+    <EffectRangeValue emitter={emitter} p={p} patch={patch} selector={<label>Parameter<StudioSelect value={selected} onChange={e=>setSelected(e.target.value)}>
+        {properties.map(prop=><option key={prop.key} value={prop.key}>{prop.label}</option>)}
+      </StudioSelect></label>}/>
+  </details>;
+}
+
+export function EffectRangeValue({emitter,p,patch,selector}:{emitter:Record<string,unknown>;p:typeof properties[number];patch:Patch;selector?:ReactNode}){
   const raw=emitter[p.key]??p.initial;
   const obj=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw as Record<string,unknown>:undefined;
   const mode=numeric(raw)?'constant':pair(raw)?'range':keys(raw)||obj?.curve!==undefined?'curve':'invalid';
@@ -86,11 +94,9 @@ export default function EffectRangeEditor({emitter,patch}:{emitter:Record<string
     if(next==='range')patch([p.key],[anchor,anchor]);
     if(next==='curve')patch([p.key],{curve:[[0,anchor],[1,anchor]]});
   }
-  return <details className="effects-range"><summary>Emission and particle motion</summary>
+  return <>
     <div className="effects-emitter-fields">
-      <label>Parameter<StudioSelect value={selected} onChange={e=>setSelected(e.target.value)}>
-        {properties.map(prop=><option key={prop.key} value={prop.key}>{prop.label}</option>)}
-      </StudioSelect></label>
+      {selector}
       <label>Value mode<StudioSelect value={mode} onChange={e=>changeMode(e.target.value)}>
         {mode==='invalid'&&<option value="invalid">Invalid source</option>}
         <option value="constant">Constant</option><option value="range">Random range</option><option value="curve">Curve</option>
@@ -111,5 +117,5 @@ export default function EffectRangeEditor({emitter,patch}:{emitter:Record<string
       }}/>Random between two curves</label>
       {obj?.curveMin!==undefined&&<CurveKeys label="Minimum curve" curve={obj.curveMin} path={[p.key,'curveMin']} min={p.min} max={p.max} patch={patch}/>}
     </>}
-  </details>;
+  </>;
 }

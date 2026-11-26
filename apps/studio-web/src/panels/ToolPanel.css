@@ -125,3 +125,5 @@
 .effects-force-fields p { margin:0 0 8px; color:var(--au-text-muted); }
 .effects-vector { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; min-width:0; border:0; padding:0; margin:12px 0 0; }
 .effects-vector legend { padding:0 0 4px; font-weight:600; }
+.effects-bursts { border-top:1px solid var(--au-line); padding-block-start:8px; }
+.effects-bursts>.au-row { margin-top:10px; }
