@@ -1,0 +1,11 @@
+2026-11-26 09:00:03.461 AiverseStudioHTML5[25286:83575109] [studio-web] loading from bundled scheme, root=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-graph-migrate-EQgBVR/Catalog.app/Contents/Resources/studio-web
+2026-11-26 09:00:03.592 AiverseStudioHTML5[25286:83575109] [studio-web] served index.html (7341 bytes)
+2026-11-26 09:00:03.601 AiverseStudioHTML5[25286:83575109] [studio-web] served assets/index-D3mw5dgq.js (1665900 bytes)
+2026-11-26 09:00:03.633 AiverseStudioHTML5[25286:83575109] [studio-web] JS: CROSS main boot
+2026-11-26 09:00:03.641 AiverseStudioHTML5[25286:83575109] [studio-web] top-level navigation finished: aiverse-studio://shell/index.html
+2026-11-26 09:00:03.999 AiverseStudioHTML5[25286:83575109] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 09:00:04.370 AiverseStudioHTML5[25286:83575109] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 09:00:04.558 AiverseStudioHTML5[25286:83575109] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 09:00:04.735 AiverseStudioHTML5[25286:83575109] [studio-web] JS: CROSS main document.changed {"message":""}
+2026-11-26 09:00:04.735 AiverseStudioHTML5[25286:83575109] [studio-web] JS: CROSS main FAIL @aiverse-studio://shell/index.html:100:16 TypeError: undefined is not an object (evaluating 'btn('Publish').click')
+2026-11-26 09:00:04.735 AiverseStudioHTML5[25286:83575109] [studio-web] JS: CROSS main document.changed {"message":""}

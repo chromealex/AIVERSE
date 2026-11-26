@@ -1,0 +1,10 @@
+{
+  "sha": "a0cb8c2d096d72b6c8817b947db6121bc63583b2",
+  "argv": [
+    "bash",
+    "/tmp/studio-graph-migrate.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-spectra-v1-guarded.log.txt",
+  "sha256": "4658e3ac0a8acc62722d13a995922a18953ad482a45f9615a0e3892a9dc5cd1e"
+}
