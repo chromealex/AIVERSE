@@ -1,0 +1,10 @@
+{
+  "sha": "a00f24fb4fa1ae8b90c6c4b1534d3bea24e7c2db",
+  "argv": [
+    "bash",
+    "/tmp/fx-forces-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-effect-force-fields.log.txt",
+  "sha256": "45396ee0040aedd3c57d7da339340d94d3902024f6a70a5c43a9a7d6b1275b9b"
+}
