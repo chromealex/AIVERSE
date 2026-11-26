@@ -158,7 +158,7 @@ public:
     void event(const platform::Event& e);
     bool canShutdown() const noexcept { return !view_.modelMutationBlocked(); }
     void shutdown();
-    void autostart(size_t i) { startMatch(i); }
+    void autostart(size_t i, std::optional<uint8_t> localSeat={}) { startMatch(i,Json(),nullptr,false,localSeat); }
     void forceLanguage(std::string tag) { forcedLanguage_ = std::move(tag); }
     void spectate() { spectator_ = true; }
     void showHowto() { howtoOpen_ = true; }
@@ -221,7 +221,7 @@ private:
     enum class Screen { Menu, Lobby, Playing, Paused, Over };
     enum class Mode { Normal, AttackMove, Patrol, Place, Rally, Ability, Claim, Skill, Dig, Undig, Room, Road, Unroad, Drop, ScriptCmd, Repair, Reclaim };
 
-    bool startMatch(size_t idx, const Json& initialVars = Json(), const MatchFile* file = nullptr, bool playback = false);
+    bool startMatch(size_t idx, const Json& initialVars = Json(), const MatchFile* file = nullptr, bool playback = false, std::optional<uint8_t> localSeat = {});
     bool writeMatchFile(const std::string& slot, bool replay);
     bool openMatchFile(const std::string& slot, bool replay);
     std::vector<std::string> matchFileList(bool replay) const;

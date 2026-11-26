@@ -27,7 +27,7 @@ public:
     ~HostedClient();
     // projectDir: content root; engineAssets: folder with the engine's assets ("engine/..." paths)
     void start(gfx::Device& dev, const std::string& projectDir, const std::string& engineAssets,
-               render::RenderDeviceLifetime::Lease deviceLease={}, std::optional<size_t> initialMap={});
+               render::RenderDeviceLifetime::Lease deviceLease={}, std::optional<size_t> initialMap={}, std::optional<uint8_t> localSeat={});
     void stop();
     // "Play from here": the first match camera (see GameClient::setStartCamera); call after start().
     void setStartCamera(float x, float z, float distance, float pitchDeg, float yawDeg);
@@ -102,6 +102,7 @@ private:
     bool retiredEpochValid(const RetiredClient& item) const noexcept;
     int step_ = 0;
     std::optional<size_t> initialMap_;
+    std::optional<uint8_t> initialSeat_;
     float x_ = 0, y_ = 0, k_ = 1;
     bool focused_ = false, captured_ = false;
     bool finger_ = false;   // touch profile: the left button is down as finger 1 (event)

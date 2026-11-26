@@ -6,6 +6,7 @@ import type { StudioGameState, StudioGameDevice, StudioGameDeviceOption, StudioP
 import type { StudioPanelContext } from './StudioPanelRenderer';
 import { StudioPanel, StudioButton, StudioAlert, StudioEmptyState, StudioBadge, StudioCheckbox } from '../ui';
 import GameSpeedSlider from './GameSpeedSlider';
+import GameRoleLaunch from './GameRoleLaunch';
 import GameDevicePicker from './GameDevicePicker';
 import './GamePanel.css';
 import { gameViewportSize } from './gameViewport';
@@ -133,7 +134,7 @@ export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelC
       <StudioButton disabled={!state?.active||busy} onClick={()=>void control('restart')}><RotateCcw size={14}/>Restart</StudioButton>
       <StudioButton disabled={!state?.active||busy} onClick={()=>{setReviewOpen(v=>!v);setReview(null)}}>Review changes</StudioButton>
     </>}
-    footer={<><StudioBadge>{state?.active?(state.loading?`Loading ${Math.round(state.progress*100)}%`:state.inMatch?`${state.paused?'Paused':'Running'} · tick ${state.tick}`:'Project menu'):'Stopped'}</StudioBadge><span>Native game client · click the viewport to focus input</span></>}>
+    footer={<>{state?.roleLabel && <StudioBadge>{state.roleLabel}</StudioBadge>}<StudioBadge>{state?.active?(state.loading?`Loading ${Math.round(state.progress*100)}%`:state.inMatch?`${state.paused?'Paused':'Running'} · tick ${state.tick}`:'Project menu'):'Stopped'}</StudioBadge><span>Native game client · click the viewport to focus input</span></>}>
     {(error||state?.error) && <StudioAlert tone="danger">{error||state?.error}</StudioAlert>}
     <div className="studio-game__devices">
       <GameDevicePicker devices={devices} selected={device?.id ?? 'none'} disabled={!connected || busy}
@@ -163,7 +164,15 @@ export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelC
     <div ref={area} className="studio-game__area">
     <div style={surfaceStyle} ref={surface} className={'studio-game__surface'+(framed?' studio-game__surface--device':'')}
       data-orientation={device?.landscape?'landscape':'portrait'} aria-label="Native Game viewport">
-      {!state?.active && <StudioEmptyState title={loaded?'Ready to play':'Open a project'}
+      {!state?.active && loaded && !snapshot?.project.actorSession && snapshot?.graphDocument
+        ? <GameRoleLaunch key={JSON.stringify(snapshot.graphDocument)} scope={snapshot.graphDocument} busy={busy}
+            launch={async (seat,scope)=>{
+              setBusy(true);setError('');
+              try { setState(await invoke('studio.gameStart',{entry:'map',localSeat:seat,scope})); }
+              catch(e){setError(e instanceof Error?e.message:String(e));}
+              finally{setBusy(false);}
+            }}/>
+        : !state?.active && <StudioEmptyState title={loaded?'Ready to play':'Open a project'}
         description={loaded?'Run the saved map or open the project’s own menus. Stop returns to authoring without copying runtime changes into the map.':'Play uses the native game client and renderer.'}/>}
     </div>
     </div>

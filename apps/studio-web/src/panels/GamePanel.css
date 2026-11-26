@@ -27,3 +27,6 @@
 .studio-game__speed { display:flex; flex-wrap:wrap; align-items:center; gap:var(--au-space-3); padding:var(--au-space-2) var(--au-space-4); border-bottom:1px solid var(--au-line); }
 .studio-game__speed input { flex:1 1 90px; max-width:200px; min-width:0; }
 .studio-game__speed output { min-width:5ch; font-variant-numeric:tabular-nums; }
+
+.studio-game__role-launch { display:grid; align-content:center; justify-content:center; height:100%; overflow:auto; box-sizing:border-box; padding:12px; }
+.studio-game__role-launch form { display:flex; align-items:end; flex-wrap:wrap; gap:var(--au-space-2); }

@@ -65,7 +65,7 @@ HostedClient::~HostedClient() {
 }
 
 void HostedClient::start(gfx::Device& dev, const std::string& projectDir, const std::string& engineAssets,
-                       render::RenderDeviceLifetime::Lease deviceLease, std::optional<size_t> initialMap) {
+                       render::RenderDeviceLifetime::Lease deviceLease, std::optional<size_t> initialMap, std::optional<uint8_t> localSeat) {
     if(deviceLease.device() && !deviceLease.validFor(dev))
         throw std::logic_error("HostedClient GPU device generation mismatch");
     const bool pending=client_ || !retired_.empty();
@@ -86,6 +86,7 @@ void HostedClient::start(gfx::Device& dev, const std::string& projectDir, const 
     stop();
     dev_ = &dev;
     initialMap_ = initialMap;
+    initialSeat_ = localSeat;
     view_ = {};
     view_.contentRoot = projectDir;
     view_.engineAssets = engineAssets;
@@ -228,7 +229,7 @@ void HostedClient::frame(double dt, gfx::TextureHandle color, gfx::TextureHandle
         client_->initStep(*dev_, step_++);
         // AIVERSE_HOSTED_MAP=<index>: straight into a match of that map (automated tests / profiling, like the client's --map)
         if (step_ == kSteps) {
-            if (initialMap_) client_->autostart(*initialMap_);
+            if (initialMap_) client_->autostart(*initialMap_,initialSeat_);
             else if (const char* m = std::getenv("AIVERSE_HOSTED_MAP"); m && *m) client_->autostart(size_t(std::atoi(m)));
         }
         return;

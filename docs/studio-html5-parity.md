@@ -302,3 +302,5 @@ Game transfer: expose the shared device catalog dimensions and pixel density in 
 Game transfer: expose fractional local simulation speed in the Game toolbar, retain the existing fast-forward presets and verify pause, single step and restart.
 
 Game transfer: launch the saved project in a separate AiverseGame process from the HTML Game panel. Verify project identity in the standalone client and independent Studio lifetime.
+
+Game transfer: choose a playable map seat or watch bots in hosted local play. Check actual view-script identity, replayable seat setup, restart and map isolation.

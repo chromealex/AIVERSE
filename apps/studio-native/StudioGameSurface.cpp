@@ -48,7 +48,7 @@ void StudioGameSurface::start(const StudioGameLaunch& plan,const std::string& as
         return;
     }
     actor_.reset();
-    host_->start(*device_,plan.project,assets,lifetime_->lease(),plan.map);
+    host_->start(*device_,plan.project,assets,lifetime_->lease(),plan.map,plan.localSeat);
     if (plan.camera) { const auto& c=*plan.camera; host_->setStartCamera(c[0],c[1],c[2],c[3],c[4]); }
 }
 void StudioGameSurface::stop() { actor_.reset();matchObserved_=false;runtimeDebugEdited_=false;++runtimeEpoch_;worldProcessDiagnostics_.reset(); host_->suspendInput();host_->stop();host_->collectGpuRetirements(); }
@@ -500,6 +500,11 @@ Json StudioGameSurface::state(bool includeScriptErrors) const {
     out.set("inMatch",Json::fromBool(liveSimulation()!=nullptr));
     out.set("error",Json::string(error_));
     auto* sim=liveSimulation();
+    if (sim && launch_.localSeat) {
+        if (const auto* player=*launch_.localSeat ? sim->player(*launch_.localSeat) : nullptr)
+            out.set("roleLabel",Json::string(player->name));
+        else out.set("roleLabel",Json::string("Bots vs bots"));
+    }
     out.set("tick",Json::number(int64_t(sim?sim->tick():0)));
     const auto selected=inspector_.selectedRef(sim,std::to_string(runtimeEpoch_));
     if(!selected.empty())out.set("selectedLiveRef",Json::string(selected));

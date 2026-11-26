@@ -391,7 +391,9 @@ void StudioHost::restartGame() {
     if(!game_->state().getBool("active"))throw std::runtime_error("Start a game before restarting");
     buildingGraphOverlayScene_=0;session_->setBuildingGraphReader({});rebuildOverlay();
     const auto old=game_->launchPlan();
-    auto plan=studioGameLaunch(session_->workspace(),old.map.has_value());
+    if (old.localSeat && old.sourceMap!=session_->workspace().map.path)
+        throw std::runtime_error("Select a player on the current map before restarting");
+    auto plan=studioGameLaunch(session_->workspace(),old.map.has_value(),old.localSeat);
     plan.camera=old.camera;
     game_->start(plan,engineRoot_+"/engine/assets");gameFrameTime_=0;
     wpLivePlanetProject_=plan.project;
@@ -3873,7 +3875,15 @@ bool StudioHost::handleHostMethod(const Json& req) {
         } else if (method == "studio.gameStart") {
             const auto entry = params.getStr("entry");
             if (entry != "map" && entry != "menu") throw std::runtime_error("Invalid game entry");
-            auto plan = studioGameLaunch(session_->workspace(), entry == "map");
+            std::optional<uint8_t> seat;
+            if (params.has("localSeat")) {
+                if (!sameDocumentScope(params["scope"],session_->graphDocumentScope())) throw std::runtime_error("Map changed. Choose a player again.");
+                const double value=params["localSeat"].toDouble(-1);
+                if (!params["localSeat"].isNumber() || !(value>=0 && value<=255) || value!=std::floor(value))
+                    throw std::runtime_error("Invalid local seat");
+                seat=static_cast<uint8_t>(value);
+            }
+            auto plan = studioGameLaunch(session_->workspace(), entry == "map",seat);
             if (entry == "map" && params.getBool("fromScene") && preview_) {
                 const auto cam = onScene([&] { return preview_->cameraState(); });
                 plan.camera = std::array<float, 5>{cam.target.x, cam.target.z, cam.distance, float(cam.pitch * 57.29578), float(cam.yaw * 57.29578)};

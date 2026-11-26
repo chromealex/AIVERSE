@@ -660,7 +660,7 @@ bool GameClient::openMatchFile(const std::string& slot, bool replay) {
     return startMatch(size_t(map-maps_.begin()),Json(),&file,replay);
 }
 
-bool GameClient::startMatch(size_t idx, const Json& initialVars, const MatchFile* file, bool playback) {
+bool GameClient::startMatch(size_t idx, const Json& initialVars, const MatchFile* file, bool playback, std::optional<uint8_t> localSeat) {
     if (idx >= maps_.size() || netMatch_ || (file && city_)) return false;
     // A new map/game is a camera cut. Retire the old view's private
     // exposure + motion history without releasing shared render sizes.
@@ -681,6 +681,21 @@ bool GameClient::startMatch(size_t idx, const Json& initialVars, const MatchFile
             Json sets = Json::array();
             for (const auto& id : startRuleSets_) sets.push(Json::string(id));
             setup.set("ruleSets",std::move(sets));
+        }
+        if (localSeat) {
+            const auto& players = map["players"];
+            if (!players.isArray() || players.size()==0 || players.size()>255 || *localSeat>players.size() ||
+                (*localSeat && players[*localSeat-1].getBool("waves")))
+                throw std::runtime_error("The selected local seat is unavailable on this map");
+            Json controllers = Json::array();
+            for (size_t i=0; i<players.size(); ++i) {
+                Json row = Json::object();
+                row.set("controller", Json::string(controllerName(i+1==*localSeat ? SeatController::Human : SeatController::Computer)));
+                controllers.push(std::move(row));
+            }
+            setup.set("players",std::move(controllers));
+            setup.set("human",Json::number(int64_t(*localSeat ? *localSeat : 1)));
+            setup.set("spectator",Json::fromBool(*localSeat==0));
         }
         const int human = int(setup.getInt("human",1));
         if (human < 0 || human > 255) throw std::runtime_error("Invalid saved seat");
