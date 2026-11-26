@@ -1,0 +1,10 @@
+{
+  "sha": "4b754a83e6fa78733bc18cbd3f937b9b0a0fe58d",
+  "argv": [
+    "bash",
+    "/tmp/studio-float-open.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-linked-detached-rig-open.log.txt",
+  "sha256": "aa0d8be162e1acb51cfea6cf851be97e3c6c00021cb0616b55fbea560bbb4496"
+}
