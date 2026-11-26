@@ -1,0 +1,10 @@
+{
+  "sha": "5542d79c69e2cb16e7d090248ce1f8197e61ae56",
+  "argv": [
+    "bash",
+    "/tmp/mcp-start.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-linked-play-start.log.txt",
+  "sha256": "493827eb80d0113bf48181524d63ecc4a1adf2b66c4fd1d683aad93c1085577f"
+}
