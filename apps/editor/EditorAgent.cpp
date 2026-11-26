@@ -1,3 +1,4 @@
+#include "engine/render/StaticGeometryReport.h"
 #include "engine/world/RegionOwnershipDiagnostics.h"
 // Agent link: the editor serves MCP tool calls forwarded by aiversemcp over localhost, implements the
 // editor-only tools (screenshots, camera, play-test, device simulator, windows), and launches the
@@ -271,44 +272,7 @@ void Editor::registerGuiOps() {
         r.set("waterRenderer",Json::string(view_.terrainRenderer().waterRenderer()==game::TerrainLook::WaterRenderer::Nereid?"nereid":"legacy"));
         if(!view_.terrainRenderer().nereidWaterStatus().empty())r.set("nereidWaterRefused",Json::string(view_.terrainRenderer().nereidWaterStatus()));
         r.set("sunShadowModelTriangles",Json::number(int64_t(r3d_.profile().triangles[0])));
-        {   // Static geometry scene: opt-in STRATA virtual geometry counters.
-            const auto& g=view_.geometryScene().stats();auto st=Json::object();
-            st.set("enabled",Json::fromBool(view_.geometryScene().strataPortableRenderingEnabled()));
-            st.set("portableSources",Json::number(int64_t(g.strataPortableSources)));
-            st.set("portableDeclined",Json::number(int64_t(g.strataPortableDeclined)));
-            st.set("portableDraws",Json::number(int64_t(g.strataPortableDraws)));
-            st.set("portableFallbacks",Json::number(int64_t(g.strataPortableFallbacks)));
-            st.set("portableClusters",Json::number(int64_t(g.strataPortableClusters)));
-            st.set("nodes",Json::number(int64_t(g.strataNodes)));
-            st.set("failures",Json::number(int64_t(g.strataFailures)));
-            st.set("stagedSources",Json::number(int64_t(g.strataSources)));
-            st.set("skippedSources",Json::number(int64_t(g.strataSkippedSources)));
-            st.set("seamUnsafeDeclined",Json::number(int64_t(g.strataSeamUnsafeDeclined)));
-            st.set("globalBudgetDeclined",Json::number(int64_t(g.strataGlobalBudgetDeclined)));
-            st.set("instances",Json::number(int64_t(view_.geometryScene().instanceCount())));
-            st.set("sharedModels",Json::number(int64_t(g.strataPortableSharedModels)));
-            st.set("sharedReuses",Json::number(int64_t(g.strataPortableSharedReuses)));
-            st.set("autoLodSources",Json::number(int64_t(g.strataAutoLodSources)));
-            st.set("autoStrataSources",Json::number(int64_t(g.strataAutoStrataSources)));
-            {   // strata.select auto: one line per source, model and reason.
-                auto list=Json::array();
-                for(const auto& d:view_.geometryScene().strataSelectDecisions())list.push(Json::string(d));
-                st.set("select",list);
-                auto warn=Json::array();
-                for(const auto& w:view_.geometryScene().warnings())
-                    if(w.find("Strata")!=std::string::npos||w.find("STRATA")!=std::string::npos)warn.push(Json::string(w.substr(0,400)));
-                st.set("warnings",warn);
-                st.set("stageMs",Json::number(double(g.strataStageMs)));
-                st.set("cookedSources",Json::number(double(g.strataCookedSources)));
-                st.set("cookStaleSources",Json::number(double(g.strataCookStaleSources)));
-                st.set("cookWrittenSources",Json::number(double(g.strataCookWrittenSources)));
-                st.set("cookReadMs",Json::number(double(g.strataCookedLoadMs)));
-                st.set("buildMs",Json::number(double(g.strataBuildMs)));
-                st.set("compactUploads",Json::number(int64_t(g.strataCompactUploads)));
-                st.set("compactReuses",Json::number(int64_t(g.strataCompactReuses)));
-            }
-            r.set("strata",st);
-        }
+        r.set("strata",render::staticGeometryReport(view_.geometryScene()));
         // Reuse completed host-owned queries only; do not poll, wait or add
         // GPU timestamps from the agent callback. Keep viewport and whole
         // frame scopes separate and omit unsupported/absent samples.

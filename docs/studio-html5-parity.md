@@ -633,3 +633,5 @@ Route editor_window panel, workspace and reset requests to HTML Studio layout ow
 Restore editor_theme using shared HTML theme preferences, Window menu controls and linked MCP updates.
 
 Expose geometry_stats from the rendered Scene and its completed GPU queries through the linked MCP registry.
+
+Share STRATA selection, refusal, cache, upload and preparation statistics between geometry_stats and static geometry reports.
