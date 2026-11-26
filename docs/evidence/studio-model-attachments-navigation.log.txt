@@ -1,0 +1,2 @@
+2026-11-26 09:23:51.574 AiverseStudioHTML5[39478:83646225] [studio-web] JS: CROSS main DONE_1
+2026-11-26 09:23:51.574 AiverseStudioHTML5[39478:83646225] [studio-web] JS: CROSS main VERIFIED same-stack Attachments navigation, independent animated preview, return to original model with pending CSG edit, undo/redo and revision-checked native save
