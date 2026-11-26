@@ -1,0 +1,17 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+    Start 585: studio_terrain_geometry
+1/2 Test #585: studio_terrain_geometry ..........   Passed    0.09 sec
+    Start 589: studio_session
+2/2 Test #589: studio_session ...................   Passed   12.89 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Label Time Summary:
+EDITOR    =  12.98 sec*proc (2 tests)
+
+Total Test time (real) =  13.01 sec
+2026-11-26 08:01:46.710 AiverseStudioHTML5[85922:83388865] [studio-web] JS: CROSS main DONE_1
+2026-11-26 08:01:46.710 AiverseStudioHTML5[85922:83388865] [studio-web] JS: CROSS main VERIFIED native material brush on two-body map: layer 3, one step, undo/redo, save/reopen
+Saved face material override on p only
+red surface samples: before 49 painted 9925 undone 49 reopened 9925

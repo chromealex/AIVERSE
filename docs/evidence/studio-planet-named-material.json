@@ -1,0 +1,10 @@
+{
+  "sha": "f3394f2d95ba57dc76ebf0a5c36465cb08675e83",
+  "argv": [
+    "bash",
+    "/tmp/planet-named-layer-final.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-planet-named-material.log.txt",
+  "sha256": "d34a63f62b292a487d5227bdcd8cc9813b78bf1828224764d83f7d74b24bab69"
+}

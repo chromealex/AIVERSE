@@ -503,6 +503,7 @@
     "docs/evidence/studio-terrain-base-surface-cursor.json",
     "docs/evidence/studio-planet-terrain-body-edit.json",
     "docs/evidence/studio-planet-detail-seams.json",
-    "docs/evidence/studio-planet-material-tint.json"
+    "docs/evidence/studio-planet-material-tint.json",
+    "docs/evidence/studio-planet-named-material.json"
   ]
 }
