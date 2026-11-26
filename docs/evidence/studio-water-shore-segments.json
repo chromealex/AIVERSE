@@ -1,0 +1,10 @@
+{
+  "sha": "bdcc31f945788e326424371c6e61a3b7b2f93c4f",
+  "argv": [
+    "bash",
+    "/tmp/water-shore-check.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-water-shore-segments.log.txt",
+  "sha256": "93c251d1ac734a42f1afde8d28950957bf5e097b85b6e1e2b6838ce39cef5124"
+}
