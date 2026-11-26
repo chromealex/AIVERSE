@@ -254,7 +254,7 @@ public:
                     std::vector<uint8_t> pixels(w*h*4);
                     CGColorSpaceRef space=CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
                     CGContextRef context=CGBitmapContextCreate(pixels.data(),w,h,8,w*4,space,
-                        kCGImageAlphaPremultipliedLast|kCGBitmapByteOrder32Big);
+                        CGBitmapInfo(kCGImageAlphaPremultipliedLast)|CGBitmapInfo(kCGBitmapByteOrder32Big));
                     CGColorSpaceRelease(space);
                     if (!context) {done(0,0,{});return;}
                     CGContextDrawImage(context,CGRectMake(0,0,w,h),image);
