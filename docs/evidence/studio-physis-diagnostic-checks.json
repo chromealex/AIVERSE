@@ -1,0 +1,14 @@
+{
+  "sha": "16aa334d7ce68e8684ad0a4d5ce7f241e606c053",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native",
+    "-R",
+    "^physis_(diagnostics|editor_view|authoring)$",
+    "--output-on-failure"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-physis-diagnostic-checks.log.txt",
+  "sha256": "e867b8d1b25c3ce2c35ea7079aa566c4db07614650f91cf29d6039dbe41a1385"
+}
