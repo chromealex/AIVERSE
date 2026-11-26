@@ -358,6 +358,7 @@
     "docs/evidence/studio-game-standalone.json",
     "docs/evidence/studio-game-speed-runtime.json",
     "docs/evidence/studio-game-device-picker.json",
+    "docs/evidence/studio-hosted-actor-game.json",
     "docs/evidence/studio-overlay-structure-ghost.json",
     "docs/evidence/studio-overlay-icon-textures.json",
     "docs/evidence/studio-minimap-overlay-plan.json",
