@@ -1125,6 +1125,7 @@ void StudioHost::tickScene() {
     in.width = placement_.pixelsW; in.height = placement_.pixelsH;
     in.map = mapSnapshot_; in.rules = rulesSnapshot_;
     const auto& brush=session_->sceneBrush();
+    in.brushArmed=brush.armed;
     in.editBaseTerrain=brush.editsBaseGrid() && !map.data.worldSpace && !map.data.planet();
     if(brush.armed && brush.kind=="region")in.regionBorderLetter=brush.regionLetter.front();
     else if(brush.regionBorders)in.regionBorderLetter='.';
@@ -1162,6 +1163,7 @@ void StudioHost::renderSceneFrame() {
     try {
         platform_.sceneThreadScope([&] {
             preview_->setEditorState(std::move(in.selection), std::move(in.hidden), std::move(in.locked), std::move(in.hover));
+            if(!in.brushArmed)preview_->setBrushCursor(false,{},0);
             preview_->setBaseTerrainView(in.editBaseTerrain);
             preview_->setRegionBorders(in.regionBorderLetter);
             preview_->setWindPreview(in.wind);

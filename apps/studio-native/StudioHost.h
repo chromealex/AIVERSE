@@ -184,7 +184,7 @@ private:
         int width = 0, height = 0;
         std::shared_ptr<const editor::MapDoc> map;
         std::shared_ptr<const Json> rules;
-        bool editBaseTerrain=false;
+        bool brushArmed=false,editBaseTerrain=false;
         char regionBorderLetter=0;
         bool fps = false;
         std::string selected, project, hover;
