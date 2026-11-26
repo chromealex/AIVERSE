@@ -29,14 +29,14 @@ int voxelClientMain(int argc, char** argv);   // apps/voxel/client.cpp
 
 namespace {
 // The project's game.json "module": --project DIR, else the content root.
-std::string projectModule(int argc, char** argv) {
+std::string projectModule(const std::string& project) {
     std::string text;
-    for (int i = 1; i + 1 < argc; ++i)
-        if (std::string(argv[i]) == "--project") {
-            std::ifstream f(std::string(argv[i + 1]) + "/game.json");
-            std::stringstream ss; ss << f.rdbuf(); text = ss.str();
-        }
-    if (text.empty() && !platform::readContentFile("game.json", text)) return "";
+    if (!project.empty()) {
+        std::ifstream file(project + "/game.json");
+        std::stringstream contents;
+        contents << file.rdbuf();
+        text = contents.str();
+    } else if (!platform::readContentFile("game.json", text)) return "";
     try { return Json::parse(text).getStr("module", ""); } catch (const std::exception&) { return ""; }
 }
 }
@@ -44,13 +44,25 @@ std::string projectModule(int argc, char** argv) {
 int aiverseMain(int argc, char** argv) {
     using namespace aiverse::client;
     // One client for every project: the project's data picks the host, not the executable.
-    const std::string module = projectModule(argc, argv);
+    std::string project;
+    for (int i = 1; i + 1 < argc; ++i)
+        if (std::string(argv[i]) == "--project") project = argv[++i];
+    const std::string module = projectModule(project);
 #if defined(AIVERSE_CLIENT_ACTOR)
     if (module == "actor") return actorClientMain(argc, argv);
 #endif
 #if defined(AIVERSE_CLIENT_VOXEL)
     if (module == "voxel") return voxelClientMain(argc, argv);
 #endif
+    // The desktop platform resolves its content root during run(), before window configuration.
+    if (!project.empty()) {
+#ifdef _WIN32
+        const int error = _putenv_s("AIVERSE_CONTENT", project.c_str());
+#else
+        const int error = setenv("AIVERSE_CONTENT", project.c_str(), 1);
+#endif
+        if (error) { std::fprintf(stderr, "Could not select the project content directory\n"); return 1; }
+    }
 #if defined(AIVERSE_SOURCE_DIR)
     useEngineAssets(platform::resolveEngineDir(AIVERSE_SOURCE_DIR, argv[0]));   // the engine's loading screen art in dev runs on a project folder
 #endif

@@ -63,8 +63,8 @@ public:
     virtual void chooseFolder(const std::string& message, const std::string& startDir, std::function<void(std::string)> done) = 0;
     virtual void chooseSaveFile(const std::string& startDir, const std::string& defaultName, std::function<void(std::string)> done) = 0;
     virtual void chooseImportSources(const std::string& startDir, std::function<void(std::vector<std::filesystem::path>)> done) = 0;
-    using NetworkExitStatus = std::function<std::optional<int>()>;
-    virtual NetworkExitStatus launchNetworkPlayer(const std::vector<std::string>& args) = 0;
+    using PlayerExitStatus = std::function<std::optional<int>()>;
+    virtual PlayerExitStatus launchGamePlayer(const std::vector<std::string>& args) = 0;
     virtual void revealInFileManager(const std::filesystem::path& path, bool openFolder) = 0;
     // Per-user cache folder (asset thumbnails) and the last opened project (reopened on the next launch).
     virtual std::filesystem::path legacyEditorSettingsDir() { return {}; }
@@ -244,12 +244,12 @@ private:
     bool readImage(const std::filesystem::path& file, int& w, int& h, std::vector<uint8_t>& rgba);
     std::string imageDataUrl(const std::filesystem::path& file, int maxSide, bool jpeg);
 
-    struct NetworkPlayer {
+    struct LaunchedPlayer {
         std::string project,mode;
-        StudioHostPlatform::NetworkExitStatus exitStatus;
+        StudioHostPlatform::PlayerExitStatus exitStatus;
     };
-    std::vector<NetworkPlayer> networkPlayers_;
-    double nextNetworkPlayerCheck_=0;
+    std::vector<LaunchedPlayer> launchedPlayers_;
+    double nextPlayerCheck_=0;
     StudioHostPlatform& platform_;
     std::string engineRoot_;
     bool htmlComposite_ = false;

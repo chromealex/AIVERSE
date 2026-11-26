@@ -942,12 +942,18 @@ void StudioHost::tick() {
     publishBuildingPanelFrame();
     if (projectLoading_) return; // the background thread owns the session right now
     tickLightBake();
-    if(!networkPlayers_.empty() && platform_.now()>=nextNetworkPlayerCheck_){
-        nextNetworkPlayerCheck_=platform_.now()+0.5;
-        std::erase_if(networkPlayers_,[&](const NetworkPlayer& player){
+    if(!launchedPlayers_.empty() && platform_.now()>=nextPlayerCheck_){
+        nextPlayerCheck_=platform_.now()+0.5;
+        std::erase_if(launchedPlayers_,[&](const LaunchedPlayer& player){
             const auto status=player.exitStatus();
             if(!status)return false;
             if(*status && session_->workspace().project.dir==player.project){
+                if(player.mode=="standalone"){
+                    const auto message="AiverseGame exited with code "+std::to_string(*status);
+                    session_->workspace().log("play",message,true);
+                    sendEvent("standalonePlay.error",message);
+                    return true;
+                }
                 const std::string name=player.mode=="listen"?"Host":"Client";
                 const auto message=name+" exited with code "+std::to_string(*status)+
                     (player.mode=="listen"?". Check that ports 27100 and 27101 are available.":". Check the server address and project.");
@@ -3803,9 +3809,16 @@ bool StudioHost::handleHostMethod(const Json& req) {
     });
     if (method == "studio.spectraPreview")
         return answer([&]{return runSpectraPreview(params);});
-    if(method=="studio.networkPlay")return answer([&]{
-        auto status=platform_.launchNetworkPlayer(studioNetworkArguments(session_->workspace(),params));
-        networkPlayers_.push_back({params.getStr("project"),params.getStr("mode"),std::move(status)});
+    if(method=="studio.networkPlay" || method=="studio.standalonePlay")return answer([&]{
+        const auto& ws=session_->workspace();
+        const bool standalone=method=="studio.standalonePlay";
+        std::vector<std::string> args;
+        if (standalone) {
+            if (params.getStr("project")!=ws.project.dir) throw std::runtime_error("Project changed before launch");
+            args={"--project",studioGameLaunch(ws,false).project};
+        } else args=studioNetworkArguments(ws,params);
+        auto status=platform_.launchGamePlayer(args);
+        launchedPlayers_.push_back({ws.project.dir,standalone?"standalone":params.getStr("mode"),std::move(status)});
         return Json::object();
     });
     if (method == "studio.legacyCameraBookmarks") return answer([&] {

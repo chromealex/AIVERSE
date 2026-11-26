@@ -300,3 +300,5 @@ Overlays transfer: capture the project structure through GameView::drawGhost int
 Game transfer: expose the shared device catalog dimensions and pixel density in a searchable Game device chooser. Verify selection and orientation preservation on macOS.
 
 Game transfer: expose fractional local simulation speed in the Game toolbar, retain the existing fast-forward presets and verify pause, single step and restart.
+
+Game transfer: launch the saved project in a separate AiverseGame process from the HTML Game panel. Verify project identity in the standalone client and independent Studio lifetime.

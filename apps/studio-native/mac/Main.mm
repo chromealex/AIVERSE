@@ -293,7 +293,7 @@ public:
             (*cb)(std::move(sources));
         }];
     }
-    NetworkExitStatus launchNetworkPlayer(const std::vector<std::string>& args) override {
+    PlayerExitStatus launchGamePlayer(const std::vector<std::string>& args) override {
         const std::filesystem::path bundle=NSBundle.mainBundle.bundlePath.UTF8String;
         const auto exe=studio::studioNetworkPlayer(bundle.parent_path()/"AiverseGame.app/Contents/MacOS/AiverseGame");
         NSTask* task=[[NSTask alloc] init];

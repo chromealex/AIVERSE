@@ -3,6 +3,8 @@
   "id": "studio-project-catalog",
   "owner": "HTML5 Studio",
   "changed_paths": [
+    "apps/client/main.cpp",
+    "apps/studio-native/StudioHost.h",
     "apps/client/GameClient.h",
     "apps/client/GameClient.cpp",
     "apps/client/HostedClient.h",

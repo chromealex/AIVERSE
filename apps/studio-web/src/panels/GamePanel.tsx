@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { dockDragActive, watchDockDrag, watchOverlays, viewportRectChanged, forgetViewportRect, visibleViewport } from '../nativeOverlay';
-import { Menu, RotateCcw } from 'lucide-react';
-import { invoke } from '../bridge';
+import { ExternalLink, Menu, RotateCcw } from 'lucide-react';
+import { invoke, onNativeEvent } from '../bridge';
 import type { StudioGameState, StudioGameDevice, StudioGameDeviceOption, StudioPlayReview } from '../types';
 import type { StudioPanelContext } from './StudioPanelRenderer';
 import { StudioPanel, StudioButton, StudioAlert, StudioEmptyState, StudioBadge, StudioCheckbox } from '../ui';
@@ -33,6 +33,16 @@ export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelC
       const b=entries[0].contentRect;setAreaSize({width:b.width,height:b.height});
     });observer.observe(area.current);return ()=>observer.disconnect();
   },[]);
+  useEffect(()=>onNativeEvent((event,payload)=>{
+    if(event==='standalonePlay.error')setError((payload as {message:string}).message);
+  }),[]);
+  async function launchStandalone() {
+    if(busy || !projectPath)return;
+    setBusy(true);setError('');
+    try { await invoke('studio.standalonePlay',{project:projectPath}); }
+    catch(e){setError(e instanceof Error?e.message:String(e));}
+    finally{setBusy(false);}
+  }
   const device=state?.device;
   // A device preview is drawn as the device (legacy Game window): a bezel around the screen; the native
   // view draws the rounded screen corners, the camera cut-out and the safe area over the game.
@@ -119,6 +129,7 @@ export default function GamePanel({snapshot,connected,busy,setBusy}:StudioPanelC
     actions={<>
       {/* Play / Pause / Step / Stop live in the title bar (⌘P); only what it lacks is here. */}
       <StudioButton disabled={!loaded||busy||!!state?.active} onClick={()=>void act('menu')} title="Start from the project's own menus"><Menu size={14}/>Project menu</StudioButton>
+      <StudioButton disabled={!loaded||busy} onClick={()=>void launchStandalone()} title="Open the saved project in AiverseGame"><ExternalLink size={14}/>Standalone player</StudioButton>
       <StudioButton disabled={!state?.active||busy} onClick={()=>void control('restart')}><RotateCcw size={14}/>Restart</StudioButton>
       <StudioButton disabled={!state?.active||busy} onClick={()=>{setReviewOpen(v=>!v);setReview(null)}}>Review changes</StudioButton>
     </>}

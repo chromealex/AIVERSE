@@ -382,7 +382,7 @@ public:
             done(std::move(sources));
         });
     }
-    NetworkExitStatus launchNetworkPlayer(const std::vector<std::string>& args) override {
+    PlayerExitStatus launchGamePlayer(const std::vector<std::string>& args) override {
         const auto exe=studio::studioNetworkPlayer(exeDir()/L"AiverseGame.exe");
         // CreateProcess receives one command line. Escape quotes and trailing backslashes for the CRT.
         auto quote=[](const std::wstring& value){
