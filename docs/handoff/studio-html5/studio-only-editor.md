@@ -759,3 +759,5 @@ PHYSIS zone groups 81ec46e78. apps/editor/core/PhysisOps.cpp and apps/studio-web
 Raid window: provide an extraction point form, readable objectives and bot receipts. Validate candidate map overrides before committing undoable edits. Verify in packaged Studio.
 
 Raid stage 09f79e18e built for macOS. Typecheck, Vite and 299 web tests passed. Initial desktop capture timed out after persistence checks. Repeat after waiting for the reopened document UI to mount. Receipt docs/evidence/studio-raid-extraction-ui.json.
+
+Raid 09f79e18e verified with packaged Mac Studio. Created north-gate at (8,10), rejected both invalid map and point edits without polluting Undo, restored the point with Redo, saved/reopened, then ran a seeded bot raid and observed Player 1 extracted. Capture docs/evidence/studio-project-catalog/raid-extraction.png and receipt docs/evidence/studio-raid-map-receipts.json. Next: PostFX camera diagnostics and local volume authoring. Windows and merged-tree quick gate pending.

@@ -1,0 +1,10 @@
+{
+  "sha": "a7a4d8a0242648f876255e5c605d35c57c4e454d",
+  "argv": [
+    "bash",
+    "/tmp/raid-parity-ui.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-raid-map-receipts.log.txt",
+  "sha256": "82a3dbe872e2755619b96b25c33ac47869813a042ceed91cd54b1537a8f87b02"
+}
