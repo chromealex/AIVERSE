@@ -1,0 +1,15 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+Test project /Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/native
+    Start 333: spectrafx_preview_policy
+1/1 Test #333: spectrafx_preview_policy .........   Passed    0.51 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+Architecture    =   0.51 sec*proc (1 test)
+EDITOR          =   0.51 sec*proc (1 test)
+SpectraFX       =   0.51 sec*proc (1 test)
+
+Total Test time (real) =   0.53 sec
+2026-11-26 08:51:03.171 AiverseStudioHTML5[15594:83537311] [studio-web] JS: CROSS main DONE_1
+2026-11-26 08:51:03.170 AiverseStudioHTML5[15594:83537311] [studio-web] JS: CROSS main VERIFIED unsaved Metal GPU emitter, frozen time, exact single step, paused restart, resume, orbit/zoom/reset, CPU fallback selection, invalid draft and recovery, closed Scene, no disk write
