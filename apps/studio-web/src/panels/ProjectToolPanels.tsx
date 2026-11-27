@@ -312,6 +312,11 @@ export function InputPanel(ctx: Ctx) {
   const nextId = () => 1 + Math.max(0, ...asset.contexts.flatMap(c => c.mappings.map(m => m.id ?? 0)));
   return <div className="ptp">
     <div className="ptp__edhead">
+      {info?.presets && (['fps', 'rts'] as const).map(key =>
+        <button type="button" key={key} className="au-button au-button--sm" title="Replace the draft bindings. Save to write them to the project."
+          onClick={() => { edit(info.presets![key]); setStatus({ ok: true, text: key.toUpperCase() + ' defaults loaded into the draft.' }); }}>
+          Use {key.toUpperCase()} defaults
+        </button>)}
       <b>{info?.path ?? 'input/actions.json'}{!info?.exists && ' (new)'}{dirty && ' •'}</b>
       <button type="button" className="au-button au-button--sm au-button--primary" disabled={!dirty} onClick={() => void save()}><Save size={13}/>Save</button>
       <button type="button" className="au-button au-button--sm" disabled={!dirty} onClick={() => void load()}><RotateCcw size={13}/>Revert</button>

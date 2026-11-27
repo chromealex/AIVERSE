@@ -1,3 +1,4 @@
+#include "engine/platform/EnhancedInputPresets.h"
 #include "StudioHierarchyGroups.h"
 #include "apps/editor/core/BuildFixes.h"
 #include "StudioOrientedCollider.h"
@@ -4085,6 +4086,10 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 if (!ecfg::saveAssetFile(file,asset,&error)) throw std::runtime_error(error);
             }
             Json out=studioInputNames();
+            Json presets=Json::object();
+            presets.set("fps",ecfg::writeAsset(platform::enhanced_presets::fpsReference()));
+            presets.set("rts",ecfg::writeAsset(platform::enhanced_presets::rtsReference()));
+            out.set("presets",std::move(presets));
             std::error_code ec;
             const bool exists=std::filesystem::exists(file,ec);
             ecfg::Asset asset;

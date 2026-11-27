@@ -380,7 +380,7 @@ export interface StudioInputAsset {
   contexts: Array<{ name: string; priority?: number; active?: boolean;
     mappings: Array<{ id?: number; action: string; control: StudioInputControl; modifiers?: StudioInputModifier[]; triggers?: StudioInputTrigger[]; consume?: boolean }> }>;
 }
-export interface StudioInputInfo { asset: StudioInputAsset; exists: boolean; path: string; error?: string; keys: string[]; padButtons: string[]; padAxes: string[]; devices: string[] }
+export interface StudioInputInfo { presets?: { fps: StudioInputAsset; rts: StudioInputAsset }; asset: StudioInputAsset; exists: boolean; path: string; error?: string; keys: string[]; padButtons: string[]; padAxes: string[]; devices: string[] }
 export type HumanCreatorFieldKind = 'number' | 'integer' | 'string' | 'color' | 'bone' | 'bones';
 export interface HumanCreatorField { key:string; label:string; kind:HumanCreatorFieldKind; min?:number; max?:number; step?:number }
 export interface HumanCreatorSection { id:string; title:string; hint:string; fields:HumanCreatorField[] }
