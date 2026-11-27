@@ -60,18 +60,28 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Final all-target Mac build passed. Full quick gate failed in projectile save composition and default trail roundtrip; correcting before acceptance. GPU acceptance remains pending.",
+      "note": "Shared presentation and native four-scene captures are implemented. Earlier save regressions were corrected and historical 553-test gate passed; current Studio-enabled gate failed during KINGSTON I/O loss. Final gate and browser acceptance remain pending.",
       "evidence": []
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Simulation supplies explicit Emission/Split/Ricochet provenance. Shared view::ProjectilePresentation owns convergence; GameView adapts scene data and exposes one sampled position consumed by model, FX bridge and lights. No consumer-local continuation workaround remains.",
+      "evidence": [
+        "engine/view/ProjectilePresentation.h",
+        "engine/view/game/GameViewDraw.cpp",
+        "apps/client/ClientFx.cpp",
+        "engine/view/game/GameLights.cpp",
+        "engine/sim/ProjectileData.h"
+      ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "FlightSegment and FlightSample expose begin/evaluate/evaluateStraight/finish/sample. Native regression covers frame partitioning, non-emission origins, exact contact and terminal immutability; real imported-model Metal captures cover four flight kinds.",
+      "evidence": [
+        "engine/view/ProjectilePresentation.h",
+        "tests/tests.cpp",
+        "docs/evidence/issues-projectile-metal-20261127/custom-result.json"
+      ]
     },
     "skill": {
       "status": "not_run",
@@ -114,9 +124,14 @@
       "evidence": []
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Reviewed dependency direction: simulation owns deterministic projectile state and branch construction; view depends on shared projectile data and render math, FX receives sampled presentation points. Presentation floats do not feed flight integration.",
+      "evidence": [
+        "engine/sim/ProjectileData.h",
+        "engine/view/ProjectilePresentation.h",
+        "engine/game/ProjectilePrograms.cpp",
+        "apps/client/ClientFx.cpp"
+      ]
     },
     "headless": {
       "status": "not_run",
@@ -139,9 +154,14 @@
       "evidence": []
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Shared presentation API, authoritative provenance/save compatibility and trail retirement are documented with scope limits; four-scene example explains reproduction.",
+      "evidence": [
+        "docs/view.md",
+        "docs/ecs-mechanic-composition.md",
+        "docs/particles.md",
+        "demos/projectile-segments/README.md"
+      ]
     },
     "publishing": {
       "status": "not_run",
