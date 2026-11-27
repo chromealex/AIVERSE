@@ -1232,6 +1232,29 @@ private:
         w = double(r.right) / k;
         hgt = double(r.bottom) / k;
     }
+    void openSceneMenu(HWND scene, LPARAM location) {
+        const HWND host = GetParent(scene);
+        auto* controller = controller_.p;
+        auto* web = web_.p;
+        if (host != main_) {
+            auto pane = std::find_if(floats_.begin(), floats_.end(), [host](const auto& p) { return p->hwnd == host; });
+            if (pane == floats_.end()) return;
+            controller = (*pane)->controller.p;
+            web = (*pane)->web.p;
+        }
+        RECT bounds{};
+        POINT point{GET_X_LPARAM(location), GET_Y_LPARAM(location)};
+        if (!web || !controller || !GetClientRect(scene, &bounds) || !PtInRect(&bounds, point)) return;
+        // Relative surface coordinates remain valid across host DPI and WebView zoom changes.
+        const auto u = std::to_wstring(double(point.x) / bounds.right);
+        const auto v = std::to_wstring(double(point.y) / bounds.bottom);
+        const auto script = std::wstring(L"(()=>{const el=document.querySelector('.viewport');if(!el)return;"
+            L"const r=el.getBoundingClientRect();el.dispatchEvent(new MouseEvent('contextmenu',"
+            L"{bubbles:true,cancelable:true,shiftKey:true,button:2,clientX:r.left+r.width*") + u +
+            L",clientY:r.top+r.height*" + v + L"}));})()";
+        controller->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
+        web->ExecuteScript(script.c_str(), nullptr);
+    }
     // Returns -1 when the message is not the Scene's.
     LRESULT sceneInput(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         const double k = scale();
@@ -1248,6 +1271,23 @@ private:
         case WM_MBUTTONUP: button = 2; phase = 2; break;
         case WM_MOUSEMOVE: button = captured_ >= 0 ? captured_ : 0; phase = 1; break;
         default: break;
+        }
+        if (phase == 0 && button == 1 && (wp & MK_SHIFT) && captured_ < 0) {
+            SetFocus(h);
+            SetCapture(h);
+            sceneMenuPress_ = true;
+            return 0;
+        }
+        if (sceneMenuPress_) {
+            if (phase == 2 && button == 1) {
+                sceneMenuPress_ = false;
+                if (GetCapture() == h) ReleaseCapture();
+                openSceneMenu(h, lp);
+            } else if (msg == WM_CAPTURECHANGED || msg == WM_CANCELMODE) {
+                sceneMenuPress_ = false;
+                if (GetCapture() == h) ReleaseCapture();
+            }
+            if (phase >= 0 || msg == WM_CAPTURECHANGED || msg == WM_CANCELMODE) return 0;
         }
         if (phase >= 0) {
             double x = 0, y = 0;
@@ -1398,6 +1438,7 @@ private:
     Com<ICoreWebView2> web_;
     std::unique_ptr<studio::StudioHost> core_;
     int captured_ = -1;
+    bool sceneMenuPress_ = false;
     bool tracking_ = false;
     bool natureClickPending_=false;
     POINT fxLast_{0,0};
