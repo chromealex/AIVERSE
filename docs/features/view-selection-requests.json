@@ -22,7 +22,8 @@
       "evidence": [
         "docs/evidence/issues-client-controls-web-20261127/result.json",
         "docs/evidence/issues-client-controls-metal-20261127/result.json",
-        "tests/tests.cpp"
+        "tests/tests.cpp",
+        "docs/evidence/issues-selection-boundary-20261127/result.json"
       ]
     },
     "architecture": {
@@ -86,8 +87,10 @@
     },
     "performance": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Stress run of 257-scene entities and repeated 256-handle requests completed: 88 active view frames, max1667 VM instructions vs5M budget,0disabled,276463616-byte whole-process max RSS. VM counters exclude native work; isolated native latency/allocation budget not measured.",
+      "evidence": [
+        "docs/evidence/issues-selection-boundary-20261127/result.json"
+      ]
     },
     "platforms": {
       "status": "pass",

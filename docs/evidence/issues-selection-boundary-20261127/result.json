@@ -1,0 +1,31 @@
+{
+  "checkout": "d49324470",
+  "runtime_source": "4d6f08f19",
+  "exit_code": 0,
+  "handle": 70814,
+  "scenario": "257 live scouts; boundary checks once, 256-handle request every view update; 120 rendered frames",
+  "checks": [
+    "256 handles accepted",
+    "257 handles rejected without replacing existing selection",
+    "invalid handle rejected without replacing existing selection",
+    "append beyond cap rejected without replacing existing selection",
+    "duplicate handles collapse",
+    "empty array clears selection"
+  ],
+  "view_frames": 88,
+  "max_vm_instructions_per_frame": 1667,
+  "handler_budget": 5000000,
+  "disabled_frames": 0,
+  "metal_pipeline_failures": 0,
+  "whole_process": {
+    "wall_seconds": 15.77,
+    "user_seconds": 4.59,
+    "system_seconds": 0.3,
+    "max_rss_bytes": 276463616
+  },
+  "limits": [
+    "VM instruction counters exclude native C functions; not a native API latency measurement.",
+    "Process timings/RSS include loading and rendering and cannot be attributed solely to selection.",
+    "Initial launch attempt used wrong executable path and exited127; corrected app bundle invocation passed."
+  ]
+}
