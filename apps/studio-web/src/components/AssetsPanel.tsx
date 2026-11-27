@@ -615,11 +615,11 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       {selectedAsset&&native&&<AssetImportSettings key={selectedAsset.guid||selectedAsset.path}
         asset={selectedAsset} refreshToken={refreshToken} locked={pinnedAssetGuid!==null}
         onToggleLock={toggleAssetPin} onClose={()=>{setSelected(null);setPinnedAssetGuid(null)}}
-        onSaved={reload} onError={setError}/>}
+        onSaved={reload} onError={setError} onOpenMaterial={openMaterial}/>}
     </div>
     <footer className="studio-assets-footer">
-      {selected?.endsWith('.material.json')&&<button onClick={()=>openMaterial(selected)}>Edit material</button>}
-      <span>{catalog.files.length} assets</span>
+      {selected?.endsWith('.material.json')&&(!native||selectedAsset?.path!==selected)&&<button onClick={()=>openMaterial(selected)}>Edit material</button>}
+      <span>{catalog.files.length} {catalog.files.length===1?'asset':'assets'}</span>
       <span className="studio-assets-current">{selected?
         'content/'+selected:search?'Search in content/':folder?'content/'+folder:'content/'}</span>
     </footer>
