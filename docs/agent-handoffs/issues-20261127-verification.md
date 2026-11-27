@@ -180,3 +180,11 @@ Occluded display particle now gives 0.24951 vs expected 0.25. Graph, fog and
 resized output also passed. No live build/test process remains.
 Still pending: mesh/ribbon and graph-texture paths, remaining UI/capture
 acceptance for other issues, Windows #206, final full gate and integration.
+
+## Extended display geometry GPU cases
+
+Source 696969c6713f146dcf47d410b43df963783b5e06 extends the real-pixel fixture from 10 to 16 cases:
+mesh/non-indexed drawing and mesh occlusion; ribbon and trail generation;
+shader graph texture binding and occlusion with the additional sampler slot.
+All use deterministic authored geometry, white textures and independent expected
+blend values. Build/run NOT RUN yet. Next: focused cached rebuild and capture run.
