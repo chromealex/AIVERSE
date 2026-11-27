@@ -522,7 +522,7 @@ stays silent.
 }
 ```
 
-In `audio.json`, `types.scout.repeatSelect` can be `{"sound":"annoyed","count":3,"window":2}`. The third click on the same scout within two seconds and subsequent qualifying clicks use the repeat sound in place of its selection voice. Switching units or clearing selection resets the sequence. Bind a sound with variants to use the audio bank's normal variant selection.
+In `audio.json`, `types.scout.repeatSelect` can be `{"sound":"annoyed","count":3,"window":2}`. The third click on the same scout within two seconds and subsequent qualifying clicks use the repeat sound in place of its selection voice. Switching units, clearing selection or issuing an order resets the sequence. Bind a sound with variants to use the audio bank's normal variant selection.
 For ordered annoyed lines, use `{"sound":"annoyed","count":3,"order":"sequential","cycle":true}`. The variants play in file order from the third click, then the next click returns to the normal selection voice and starts the sequence again. A sequential sequence has no timeout unless `window` is positive; `window:0` also disables the timeout. Without `order:"sequential"`, the existing random-variant behavior remains.
 
 `volume`: mix level per bus, 0..4 (default 1); the player's own volume settings multiply on top

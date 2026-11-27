@@ -29,19 +29,30 @@
       "evidence": []
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Sequence state stays in the existing local GameAudio owner. The client forwards explicit clicks, selection changes and orders; AudioEngine owns actual playback and receives the requested variant index. No simulation state or alternate mixer added.",
+      "evidence": [
+        "engine/audio/GameAudio.cpp",
+        "engine/audio/GameAudio.h",
+        "apps/client/GameClient.cpp",
+        "apps/client/GameClient.h"
+      ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Existing onSelectionClick, resetSelectionClicks and onCommand form the native host API; the sequential path uses AudioEngine PlayParams.variant. New mixer regression is authored but awaits rebuilt execution.",
+      "evidence": [
+        "engine/audio/GameAudio.h",
+        "engine/audio/GameAudio.cpp",
+        "engine/audio/Audio.h"
+      ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Existing aiverse-audio recipe documents sequential/cycle/window semantics, game_file read/write and real capture rather than JSON-only acceptance. Catalog check previously validated303skills; no new skill introduced.",
+      "evidence": [
+        "skills/ui/aiverse-audio/SKILL.md"
+      ]
     },
     "mcp": {
       "status": "not_run",
@@ -64,9 +75,11 @@
       "evidence": []
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "This change extends scalar audio.json event-binding options. It introduces no authored graph, graph evaluator or node-editing workflow. Existing audio bank remains the data owner.",
+      "evidence": [
+        "engine/audio/GameAudio.cpp"
+      ]
     },
     "performance": {
       "status": "not_run",
@@ -79,14 +92,19 @@
       "evidence": []
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Reuses GameAudio and AudioEngine bank/variant selection; no new library, simulation dependency or platform-specific playback path.",
+      "evidence": [
+        "engine/audio/GameAudio.cpp",
+        "engine/audio/AudioEngine.cpp"
+      ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "Repeated selection is a local presentation event; there is no server-side selection or authoritative simulation capability. Offline mixer tests exercise audio without a device, not a server feature.",
+      "evidence": [
+        "engine/audio/GameAudio.h"
+      ]
     },
     "examples": {
       "status": "not_run",
@@ -104,9 +122,13 @@
       "evidence": []
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "English and Russian audio.json documentation and the existing audio skill describe sequential variants, cycle, optional window and command/selection reset. Example README gives an audible reproduction sequence.",
+      "evidence": [
+        "docs/game-format.md",
+        "docs/ru/game-format.md",
+        "demos/selection-voices/README.md"
+      ]
     },
     "publishing": {
       "status": "not_run",
@@ -115,8 +137,13 @@
     }
   },
   "integrations": {
-    "skills": [],
-    "mcp_tools": [],
+    "skills": [
+      "aiverse-audio"
+    ],
+    "mcp_tools": [
+      "game_file_read",
+      "game_file_write"
+    ],
     "studio_panels": [],
     "studio_methods": []
   },
