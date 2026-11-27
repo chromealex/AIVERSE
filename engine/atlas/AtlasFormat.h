@@ -143,6 +143,8 @@ public:
     // the original image: a region, or a framed sheet put back together from its frames
     bool atlased(std::string_view path) const { return manifest_.contains(path); }
     bool load(const std::string& path, Image& out);
+    // Logical CPU image access: atlas reconstruction or standalone file decoding.
+    bool loadImage(const std::string& path, Image& out);
     const Manifest& manifest() const { return manifest_; }
     void dropCache() { cachedPage_ = -1; cache_ = {}; }
 

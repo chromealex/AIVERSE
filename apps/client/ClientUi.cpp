@@ -188,6 +188,10 @@ void GameClient::initUi() {
         if (netMatch_) { leaveNetMatch(); return; }
         toMenu();
     });
+    c.BindEventCallback("quit", [this](Rml::DataModelHandle, Rml::Event&, VArgs) {
+        sound_.play(Cue::MenuClick);
+        platform::requestQuit();
+    });
     // net('connect'), net('create', i) ... -> Lobby.cpp
     c.BindEventCallback("net", [this](Rml::DataModelHandle, Rml::Event&, VArgs a) { sound_.play(Cue::MenuClick);
         if (!a.empty()) netAction(a[0].Get<Rml::String>(), a.size() > 1 ? a[1].Get<int>(-1) : -1);
@@ -392,6 +396,7 @@ void GameClient::buildSelectionShortcut(UiState& state) {
     button.label = config.has("label") ? loc_.text(config.getStr("label")) :
         type >= 0 ? rules_.types[size_t(type)].name : tr("hud.idle_worker");
     button.image = config.getStr("image");
+    button.hotkey = config.getStr("hotkey");
     button.enabled = shortcutUnit(type, idleWorker) != nullptr;
     button.id = addAction([this, type, idleWorker] {
         const auto* target = shortcutUnit(type, idleWorker);
@@ -407,6 +412,10 @@ void GameClient::buildSelectionShortcut(UiState& state) {
             acknowledgeSelectionClick(target->entity);
         }
     }, button.enabled);
+    if (button.enabled && !button.hotkey.empty()) {
+        const auto key = ClientGamepad::keyFromName(button.hotkey);
+        if (key != platform::Key::Unknown) cardKeys_.emplace(key, button.id);
+    }
     state.selectionShortcuts.push_back(std::move(button));
 }
 
@@ -773,18 +782,19 @@ void GameClient::buildCommandCard(UiState& s) {
         if (!t.weapons.empty()) anyWeapon = true;
         for (uint16_t b : t.builds) if (std::find(buildable.begin(), buildable.end(), b) == buildable.end()) buildable.push_back(b);
     }
-    if (anyMobile) {
+    if (anyMobile || anyWeapon) {
         UiSection sec{"", "row", {}};
         auto add = [&](const std::string& labelKey, const char* key, bool active, std::function<void()> fn) {
             UiAction a; applyCardSlot(a, manifest_["commandCard"]["buttons"][labelKey]);
             a.label = tr(labelKey); a.hotkey = key; a.active = active; a.id = addAction(std::move(fn));
             sec.actions.push_back(a);
         };
+        if (anyMobile) add("card.move", "M", mode_ == Mode::Move, [this] { mode_ = Mode::Move; });
         if (anyWeapon) add("card.attack", "A", mode_ == Mode::AttackMove, [this] { mode_ = Mode::AttackMove; });
         add("card.stop", "S", false, simple(kCmdStop, selection_));
-        add("card.hold", "H", false, simple(kCmdHold, selection_));
-        add("card.patrol", "P", mode_ == Mode::Patrol, [this] { mode_ = Mode::Patrol; });
-        if (const FieldOps* fo = mod().fieldOps()) {   // field operations (rules repair / reclaim / selfDestruct)
+        if (anyMobile) add("card.hold", "H", false, simple(kCmdHold, selection_));
+        if (anyMobile) add("card.patrol", "P", mode_ == Mode::Patrol, [this] { mode_ = Mode::Patrol; });
+        if (const FieldOps* fo = mod().fieldOps(); anyMobile && fo) {   // field operations (rules repair / reclaim / selfDestruct)
             if (!buildable.empty()) {
                 add("card.repair", "R", mode_ == Mode::Repair, [this] { mode_ = Mode::Repair; });
                 add("card.reclaim", "E", mode_ == Mode::Reclaim, [this] { mode_ = Mode::Reclaim; });
@@ -818,10 +828,16 @@ void GameClient::buildCommandCard(UiState& s) {
         UiSection sec{tr("ui.abilities"), "grid", {}};
         for (size_t i = 0; i < t0.abilities.size(); ++i) {
             const AbilityDef& ab = t0.abilities[i];
-            if (ab.aura) { s.selInfo.push_back(tr("card.aura", Args().str("name", ab.name))); continue; }
             UiAction a;
             applyCardSlot(a, ab.cardSlot);
             a.label = ab.name;
+            if (ab.aura) {
+                a.tip = tr("card.aura", Args().str("name", ab.name));
+                a.enabled = false;
+                a.id = addAction([] {}, false);
+                sec.actions.push_back(a);
+                continue;
+            }
             if (ab.energyCost.raw > 0) a.cost = tr("card.energy_cost", Args().num("count", ab.energyCost.toInt()));
             a.enabled = mod().canCast(*sim_, e0, int(i));
             a.active = mode_ == Mode::Ability && abilityIndex_ == int(i);
@@ -906,18 +922,19 @@ void GameClient::buildCommandCard(UiState& s) {
         }
     }
     UiSection special{"", "row", {}};
-    auto addSpecial = [&](const std::string& label, std::function<void()> fn) {
-        UiAction a; a.label = label; a.id = addAction(std::move(fn)); special.actions.push_back(a);
+    auto addSpecial = [&](const char* key, std::function<void()> fn) {
+        UiAction a; applyCardSlot(a, manifest_["commandCard"]["buttons"][key]);
+        a.label = tr(key); a.id = addAction(std::move(fn)); special.actions.push_back(a);
     };
-    if (t0.structure && t0.sellable && !w.has<Construction>(e0)) addSpecial(tr("card.sell"), simple(kCmdSell, {e0}));
-    if (t0.deploysTo != kNoType) addSpecial(tr("card.deploy"), simple(kCmdDeploy, {e0}));
+    if (t0.structure && t0.sellable && !w.has<Construction>(e0)) addSpecial("card.sell", simple(kCmdSell, {e0}));
+    if (t0.deploysTo != kNoType) addSpecial("card.deploy", simple(kCmdDeploy, {e0}));
     if (t0.members > 1) {
         s.selInfo.push_back(tr("card.squad", Args().num("alive", mod().membersAlive(*sim_, e0)).num("max", t0.members)));
-        addSpecial(tr("card.reinforce"), simple(kCmdReinforce, selection_));
+        addSpecial("card.reinforce", simple(kCmdReinforce, selection_));
     }
     if (auto* h = w.tryGet<Hero>(e0)) s.selInfo.push_back(tr("card.hero", Args().num("level", h->level).num("xp", h->xp.toInt())));
     if (t0.maxEnergy.raw > 0) s.selInfo.push_back(tr("card.energy", Args().num("energy", w.get<Unit>(e0).energy.toInt()).num("max", t0.maxEnergy.toInt())));
-    if (w.has<Construction>(e0)) addSpecial(tr("card.cancel_build"), simple(kCmdCancelTrain, {e0}));
+    if (w.has<Construction>(e0)) addSpecial("card.cancel_build", simple(kCmdCancelTrain, {e0}));
     if (!special.actions.empty()) pushSection(s, special);
     buildToolCard(s);
 }
@@ -996,7 +1013,7 @@ void GameClient::buildOverlays(UiState& s) {
     if (mode_ != Mode::Normal && screen_ == Screen::Playing) {
         std::string th = toolHint();
         if (th.empty()) th = scriptCommandHint();
-        s.modeHint = !th.empty() ? th : tr(mode_ == Mode::AttackMove ? "mode.attack" : mode_ == Mode::Patrol ? "mode.patrol"
+        s.modeHint = !th.empty() ? th : tr(mode_ == Mode::Move ? "mode.move" : mode_ == Mode::AttackMove ? "mode.attack" : mode_ == Mode::Patrol ? "mode.patrol"
                       : mode_ == Mode::Rally ? "mode.rally" : mode_ == Mode::Ability ? "mode.ability"
                       : mode_ == Mode::Claim ? "mode.claim" : "mode.place");
     }

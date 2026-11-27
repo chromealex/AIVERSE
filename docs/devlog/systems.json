@@ -1417,7 +1417,13 @@
           "titleEn": "Author pass chains and intermediate render textures",
           "id": "prisma-authored-compositor"
         },
-        {"id": "native-sky-skill", "status": "done", "date": "2026-11-25", "title": "Выбор штатного неба при оформлении карты", "titleEn": "Discover native sky when authoring a map"}
+        {
+          "id": "native-sky-skill",
+          "status": "done",
+          "date": "2026-11-25",
+          "title": "Выбор штатного неба при оформлении карты",
+          "titleEn": "Discover native sky when authoring a map"
+        }
       ],
       "taglineEn": "Post-processing and atmosphere",
       "essenceEn": "HDR, exposure and tone mapping, bloom, DoF, motion blur, TAA, AO and reflections, lens effects, anti-aliasing and upscaling, colour grading and screen-space atmosphere with quality profiles.",
@@ -1569,6 +1575,13 @@
           "target": null,
           "title": "Автоматическое подключение к RTS и FPS",
           "titleEn": "Automatic hookup to RTS and FPS"
+        },
+        {
+          "id": "fx-model-shadow-option",
+          "status": "in-progress",
+          "title": "fx-model-shadow-option",
+          "titleEn": "fx-model-shadow-option",
+          "target": null
         }
       ],
       "taglineEn": "Particle effects",
@@ -3212,7 +3225,15 @@
         "Connect Claude Code or another MCP client."
       ],
       "roadmap": [
-        {"id": "native-simulation-checks", "status": "done", "title": "Диагностика C++-модулей перед проверкой симуляции", "titleEn": "Report missing native modules before simulation checks", "text": "MCP перечисляет отсутствующие модули проекта перед запуском проверки.", "textEn": "MCP lists missing project modules before running a simulation check.", "date": "2026-11-25"},
+        {
+          "id": "native-simulation-checks",
+          "status": "done",
+          "title": "Диагностика C++-модулей перед проверкой симуляции",
+          "titleEn": "Report missing native modules before simulation checks",
+          "text": "MCP перечисляет отсутствующие модули проекта перед запуском проверки.",
+          "textEn": "MCP lists missing project modules before running a simulation check.",
+          "date": "2026-11-25"
+        },
         {
           "id": "feature-gate",
           "title": "Единый контракт готовности фич",
@@ -3552,6 +3573,13 @@
           "titleEn": "Direct3D 11 and Direct3D 9 backends for Windows",
           "id": "direct3d-renderer",
           "date": "2026-11-25"
+        },
+        {
+          "id": "projectile-trail-alignment",
+          "status": "in-progress",
+          "title": "projectile-trail-alignment",
+          "titleEn": "projectile-trail-alignment",
+          "target": null
         }
       ]
     },
@@ -3730,6 +3758,27 @@
           "titleEn": "Structure upgrade appearance",
           "text": "Модель нового типа с прогрессом улучшения.",
           "textEn": "Display the target model with upgrade progress."
+        },
+        {
+          "id": "client-command-controls",
+          "status": "in-progress",
+          "title": "client-command-controls",
+          "titleEn": "client-command-controls",
+          "target": null
+        },
+        {
+          "id": "view-selection-requests",
+          "status": "in-progress",
+          "title": "view-selection-requests",
+          "titleEn": "view-selection-requests",
+          "target": null
+        },
+        {
+          "id": "selection-voice-order",
+          "status": "in-progress",
+          "title": "selection-voice-order",
+          "titleEn": "selection-voice-order",
+          "target": null
         }
       ]
     }

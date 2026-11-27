@@ -171,6 +171,7 @@
   },
 
   "mode": {
+    "move": "Move: choose a point",
     "attack": "Attack: choose a target",
     "patrol": "Patrol: choose a point",
     "repair": "Repair: choose a damaged unit",
@@ -191,6 +192,7 @@
   },
 
   "card": {
+    "move": "Move",
     "hint_touch": "Tap one of your units",
     "hint_mouse": "Drag a box to select units",
     "all_army": "All army",
@@ -243,6 +245,7 @@
     "shadows_high": "Shadows: high",
     "restart": "Restart",
     "to_menu": "Main menu",
+    "quit": "Quit game",
     "sound": "Sound:",
     "music": "Music:",
     "off": "off",

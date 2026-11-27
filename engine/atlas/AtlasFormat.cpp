@@ -265,6 +265,18 @@ bool ImageSource::page(int index) {
     return true;
 }
 
+bool ImageSource::loadImage(const std::string& path, Image& out) {
+    Image decoded;
+    if (atlased(path)) {
+        if (!load(path, decoded)) return false;
+    } else {
+        std::string bytes;
+        if (!read_ || !read_(path, bytes) || !loadPageImage(bytes, decodePng_, decoded)) return false;
+    }
+    out = std::move(decoded);
+    return true;
+}
+
 bool ImageSource::load(const std::string& path, Image& out) {
     if (const Region* r = manifest_.find(path)) return page(r->page) && extractRegion(cache_, *r, out);
     const Sheet* sh = manifest_.findSheet(path);

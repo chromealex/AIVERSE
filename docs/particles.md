@@ -274,6 +274,7 @@ imported folder (dry runs kept outside the repo).
 ### Animated model effects
 
 An `fx/NAME.json` effect can contain a `model` alone or alongside its particle emitters. Use its name in event bindings, model anchors and view-script handles. Its duration is in seconds. A named skeletal clip is sampled across that duration and repeats when `loop` is true. Without a clip name the first clip plays, or the bind pose for a model with no clips.
+Set `"castShadow":false` in the model block for spell and impact models that should not cast a shadow. The default is true; the option does not alter material alpha or depth sorting.
 
 ```json
 {"model":{"source":"models/aura.glb","clip":"Pulse","duration":1.5,"loop":true,

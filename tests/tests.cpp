@@ -1397,6 +1397,25 @@ TEST(audio_repeated_selection_uses_entity_and_time_window) {
     CHECK(!sound.onSelectionClick(*sim, first));
 }
 
+TEST(audio_repeated_selection_sequential_cycles_without_window) {
+    auto sim = makeSimJson(R"({"types":{"scout":{"health":{"max":10}}}})",
+        flatMap(16,16,R"(,"entities":[{"type":"scout","owner":1,"pos":[3,3]}])"));
+    Entity scout;
+    sim->world().each<game::Unit>([&](Entity e, game::Unit&) { scout = e; });
+    CHECK(scout.valid());
+    auto audioEngine = offlineAudio();
+    const Json bank = Json::parse(R"({"sounds":{"repeat":{"synth":{}}},
+        "types":{"scout":{"repeatSelect":{"sound":"repeat","count":3,"order":"sequential","cycle":true}}}})");
+    CHECK(audioEngine->loadBank(bank, {}));
+    game::GameAudio sound;
+    CHECK(sound.init(*audioEngine, mod(*sim).rules(), bank) && sound.warnings().empty());
+    for (int i = 0; i < 3; ++i) CHECK(sound.onSelectionClick(*sim, scout));
+    CHECK(sound.played() == 1);
+    sound.update(*sim, 10.0); // no timeout when window is omitted
+    for (int i = 0; i < 3; ++i) CHECK(sound.onSelectionClick(*sim, scout));
+    CHECK(sound.played() == 2);
+}
+
 TEST(build_button_missing_resource_audio) {
     audio::AudioEngine audioEngine;
     audio::AudioConfig config;
@@ -2605,28 +2624,6 @@ TEST(atlas_sprite_sheets_are_never_trimmed) {
     CHECK(o && o->w == 50 && o->offsetX == 3);                             // standalone sprite trimmed
 }
 
-TEST(atlas_preserves_raw_minimap_backgrounds) {
-    using namespace aiverse;
-    pack::PackWriter w;
-    const std::string image = atlas::encodePng(atlasTestImage(16, 16, 0, 0, 16, 16, 41));
-    CHECK(w.addData("game.json", R"({"minimapBackground":"ui/global-map.png"})"));
-    CHECK(w.addData("maps/arena.json", R"({"minimapBackground":"ui/arena-map.png"})"));
-    CHECK(w.addData("ui/global-map.png", image));
-    CHECK(w.addData("ui/arena-map.png", image));
-    CHECK(w.addData("ui/icon.png", image));
-    atlas::AtlasStats st;
-    CHECK(atlas::applyAtlas(w, atlas::AtlasConfig::fromGame(Json::object(), "linux"), st));
-    std::string bytes;
-    CHECK(w.writeToString(bytes, pack::WriteOptions{}));
-    auto p = pack::Pack::open(pack::memorySource(bytes));
-    CHECK(p != nullptr);
-    if (!p) return;
-    std::string raw;
-    CHECK(p->read("ui/global-map.png", raw) && raw == image);
-    CHECK(p->read("ui/arena-map.png", raw) && raw == image);
-    CHECK(std::count_if(st.excluded.begin(), st.excluded.end(), [](const auto& e) { return e.second == "raw image reference"; }) == 2);
-}
-
 TEST(atlas_pack_integration_and_runtime_lookup) {
     using namespace aiverse;
     pack::PackWriter w;
@@ -2657,6 +2654,16 @@ TEST(atlas_pack_integration_and_runtime_lookup) {
     CHECK(src.atlased("units/a/walk.png") && src.load("units/a/walk.png", back) && sameImage(back, sprite));
     CHECK(src.load("tiles/t.png", back) && sameImage(back, tile));
     CHECK(!src.load("models/m.png", back));
+    CHECK(src.loadImage("units/a/walk.png", back) && sameImage(back, sprite));
+    CHECK(src.loadImage("models/m.png", back) && sameImage(back, tile));
+    CHECK(!src.loadImage("missing.png", back) && sameImage(back, tile));
+    atlas::ImageSource broken([&](const std::string& path, std::string& out) {
+        if (path == atlas::kManifestPath) return p->read(path, out);
+        if (path == "units/a/walk.png") { out = atlas::encodePng(tile); return true; }
+        return false;
+    }, atlas::decodeImageFile);
+    CHECK(!broken.loadImage("units/a/walk.png", back)); // corrupt atlas must not silently use stale raw pixels
+
 }
 
 // ---------------- models (models agent): loaders, animation, procedural ----------------
@@ -3741,11 +3748,12 @@ TEST(main_camera_shake_distance_pause_and_expiry) {
 }
 
 TEST(animated_model_effect_uses_existing_handle_lifecycle) {
-    const auto source = R"({"model":{"source":"models/aura.glb","clip":"idle","duration":0.5,"loop":true,
+    const auto source = R"({"model":{"source":"models/aura.glb","clip":"idle","duration":0.5,"loop":true,"castShadow":false,
         "materials":[{"material":"Glow","color":[[0,"#ffffff00"],[1,"#ff0000ff"]],"uvSpeed":[1,-2],"textures":["a","b"]}]}})";
     auto definition = fxParse(source);
     auto roundTrip = fxParse(fx::effectToJson(definition).dump().c_str());
     CHECK(roundTrip.model.source == definition.model.source);
+    CHECK(!definition.model.castShadow && !roundTrip.model.castShadow);
     CHECK(roundTrip.model.materials.size() == 1 && roundTrip.model.materials[0].textures.size() == 2);
     fx::ParticleSystem ps;
     CHECK(ps.init(nullptr));
@@ -12622,6 +12630,30 @@ TEST(script_command_map_click) {
 }
 
 // OpenWar presentation hooks (agent-openwar): game.json "playerColors", flat lighting, view camera API
+TEST(view_selection_request_is_local_and_bounded) {
+    Json rules = Json::parse(R"({"types":{"scout":{"health":{"max":10}}},"viewScripts":["scripts/view/select.lua"]})");
+    Json sources = Json::object();
+    sources.set("scripts/view/select.lua", Json::string(R"LUA(
+view.on_frame(function()
+ local e = game.units{owner=1,type='scout'}[1]
+ view.select({e})
+ view.select_add(e)
+ assert(#view.selection() == 1)
+end)
+)LUA"));
+    rules.set("$scriptSources", sources);
+    Json map = Json::parse(flatMap(8,8,R"(,"entities":[{"type":"scout","owner":1,"pos":[3,3]}])"));
+    Simulation sim(SimConfig{}, std::make_unique<game::GameCore>()); sim.setup(rules, map);
+    Entity scout;
+    sim.world().each<game::Unit>([&](Entity e, game::Unit&) { scout = e; });
+    game::ViewScripts view; CHECK(view.load(sim, rules, map, 1));
+    view.setSelection({}); view.update(sim, .016f);
+    std::vector<Entity> requested;
+    CHECK(view.takeSelectionRequest(requested));
+    CHECK(requested.size() == 1 && requested[0] == scout);
+    CHECK(!view.takeSelectionRequest(requested));
+}
+
 TEST(openwar_player_colors_flat_lighting_view_camera) {
     // playerColors: hex / 0..1 / 0..255 entries, null keeps the default, errors are reported, reset on reload
     const render::float4 def1 = game::overlayPlayerColor(1);

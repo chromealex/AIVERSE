@@ -37,11 +37,12 @@ void Minimap::build(gfx::Device& dev, const GameState& gs, const std::string& ba
     cellsPerPx_ = 1.0f / pxPerCell;
     w_ = std::max(1, int(std::ceil(float(gridW_) * pxPerCell)));
     h_ = std::max(1, int(std::ceil(float(gridH_) * pxPerCell)));
-    std::vector<uint8_t> image;
-    int iw = 0, ih = 0;
-    std::string bytes;
-    const bool painted = world::safeAssetPath(background) && platform::readContentFile(background, bytes) &&
-                         render::decodeImage(bytes, iw, ih, image) && iw > 0 && ih > 0;
+    atlas::Image backgroundImage;
+    const bool painted = world::safeAssetPath(background) &&
+                         render::loadContentImage(background, backgroundImage) &&
+                         backgroundImage.width > 0 && backgroundImage.height > 0;
+    const auto& image = backgroundImage.rgba;
+    const int iw = backgroundImage.width, ih = backgroundImage.height;
     base_.assign(size_t(w_) * size_t(h_), 0);
     for (int y = 0; y < h_; ++y)
         for (int x = 0; x < w_; ++x) {

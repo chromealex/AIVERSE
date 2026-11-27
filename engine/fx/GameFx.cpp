@@ -469,7 +469,7 @@ void GameFx::update(Simulation& sim, const std::vector<SceneObject>* scene, floa
                 const Binding& b = pr && su && pr->weapon>=0 && size_t(su->type)<types_.size() && size_t(pr->weapon)<types_[su->type].weapons.size() && types_[su->type].weapons[size_t(pr->weapon)].trail.set ? types_[su->type].weapons[size_t(pr->weapon)].trail : trailFor(su ? int(su->type) : -1);
                 if (!b.valid()) { trails_[key] = {{}, frame_}; continue; }   // remembered: no lookup every frame
                 float3 offset{}, muzzle, dir;
-                if (!fitted && !place_ && pr && attackOrigin_ && attackOrigin_(pr->source, muzzle, dir)) {
+                if (!fitted && !place_ && pr && !projectileContinuesFromContact(*pr) && attackOrigin_ && attackOrigin_(pr->source, muzzle, dir)) {
                     offset = muzzle - o.pos;
                     if (render::length(offset) > 8) offset = {};   // stale pose: do not start from afar
                 }

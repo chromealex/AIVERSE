@@ -104,6 +104,7 @@ struct SceneObject {
     float steer = 0;             // vehicles (rules "driving"): steering angle of the front wheels, rad, + = left
     render::float3 target;
     Entity source;               // projectiles: who fired (muzzle point)
+    bool projectileContinuation = false; // a split or ricochet starts at its contact point
     uint16_t shotTargetType = UINT16_MAX; // eligible straight flight; target holds interpolated ground coordinates
     uint16_t shooterType = UINT16_MAX; // projectiles: type of the unit that fired it (lights)
     // planets: body index and pos / facing / target body-local (origin = body centre); -1 = flat map
@@ -676,6 +677,7 @@ public:
     // facing; false when the unit is not drawn yet or its model has no muzzle (effects then use the simulation point).
     bool muzzleOf(Entity e, render::float3& pos, render::float3& dir) const;
     // Current fitted projectile point in particle space, sampled after the view draw.
+    bool projectileDrawPoint(Entity projectile, render::float3& point) const;
     bool projectileImpactPathPoint(Entity projectile, render::float3& point) const;
     // Named node in particle space; no model ownership escapes this query.
     bool effectNodeOf(Entity e, const std::string& node, render::mat4& frame) const;

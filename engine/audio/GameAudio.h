@@ -53,7 +53,7 @@ public:
     // Acknowledgements from the client's input.
     void onSelect(Simulation& sim, Entity unit);
     bool onSelectionClick(Simulation& sim, Entity unit);
-    void resetSelectionClicks() { clickedUnit_ = kNullEntity; selectionClicks_.clear(); }
+    void resetSelectionClicks() { clickedUnit_ = kNullEntity; selectionClicks_.clear(); selectionClickCount_ = 0; lastSelectionClick_ = -1e9; }
     void onCommand(Simulation& sim, Entity firstUnit, uint16_t commandType);
     void onMatchEnd(bool won);
     void onMissingResource(int64_t resource);
@@ -76,6 +76,7 @@ private:
         audio::SoundId constructionLoop = audio::kNoSound;
         int repeatCount = 3;
         double repeatWindow = 2;
+        bool repeatSequential = false, repeatCycle = false;
         std::vector<WeaponSounds> weapons;      // by weapon index
         std::vector<audio::SoundId> abilities;  // by ability index
     };
@@ -88,7 +89,7 @@ private:
     bool hasConstructionLoops_ = false;
     audio::SoundId resolve(const Json& name, const std::string& where);
     audio::SoundId cueFor(int type, Cue c) const;
-    bool playAt(audio::SoundId s, const Vec3& pos, bool positional, float height = 0);
+    bool playAt(audio::SoundId s, const Vec3& pos, bool positional, float height = 0, int variant = -1);
     // `worldSounds` = false still updates alerts and battle intensity, without playing the hit itself.
     void handle(Simulation& sim, const SimEvent& ev, bool worldSounds);
 
@@ -102,6 +103,8 @@ private:
     std::shared_ptr<Collector> collector_;
     Entity clickedUnit_ = kNullEntity;
     std::deque<double> selectionClicks_;
+    size_t selectionClickCount_ = 0;
+    double lastSelectionClick_ = -1e9;
     uint8_t viewer_ = 0;
     double time_ = 0, lastAlert_ = -1e9;
     float intensity_ = 0;

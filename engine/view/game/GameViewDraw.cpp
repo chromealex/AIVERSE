@@ -425,16 +425,24 @@ void GameView::drawTracers(Renderer3D& r, float dt, const MapGrid* grid) {
     tracers_.erase(std::remove_if(tracers_.begin(), tracers_.end(), [](const Tracer& s) { return s.age >= 1; }), tracers_.end());
 }
 
-bool GameView::projectileImpactPathPoint(Entity projectile, float3& point) const {
+bool GameView::projectileDrawPoint(Entity projectile, float3& point) const {
     const auto it = anims_.find(projectile.packed());
-    if (it == anims_.end() || !it->second.straightImpact || it->second.seen != frame_) return false;
+    if (it == anims_.end() || it->second.seen != frame_) return false;
     point = it->second.last.pos;
     return true;
+}
+
+bool GameView::projectileImpactPathPoint(Entity projectile, float3& point) const {
+    const auto it = anims_.find(projectile.packed());
+    return it != anims_.end() && it->second.straightImpact && projectileDrawPoint(projectile, point);
 }
 
 void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o, float dt,
                               float3 up, bool useMuzzle, const MapGrid* grid) {
     EntityAnim& ps = anims_[key];
+    // Once the shot has touched something, subsequent flight starts at that
+    // contact. A launch offset must not pull a ricochet back toward its source.
+    if (o.projectileContinuation) ps.launch = {};
     ps.seen = frame_;
     if(o.shooterType<looks_.size())ps.type=o.shooterType;
     const float step=std::max(0.f,dt);
@@ -444,7 +452,7 @@ void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o,
         ps.lastPos = o.pos;
         ps.launch = {0, 0, 0};
         auto src = o.source.valid() ? anims_.find(o.source.packed()) : anims_.end();
-        if (useMuzzle && src != anims_.end() && src->second.initialized && src->second.type < looks_.size() &&
+        if (useMuzzle && !o.projectileContinuation && src != anims_.end() && src->second.initialized && src->second.type < looks_.size() &&
             src->second.choice>=0 && size_t(src->second.choice)<looks_[src->second.type].models.size()) {
             const EntityAnim& s = src->second;
             const ModelChoice& ch = looks_[s.type].models[size_t(s.choice)];
@@ -477,7 +485,6 @@ void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o,
         const float3 muzzle = ps.lastPos + ps.launch;
         point = view_adapter::straightShotPoint(ps.lastPos, muzzle, o.pos, ps.last.target);
         direction = ps.last.target - muzzle;
-        ps.last.pos = point;
     }
     float size = 1;
     const TypeLook::ProjectileLook* appearance=nullptr;
@@ -488,6 +495,7 @@ void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o,
            SL.projectiles[size_t(o.shotWeapon)].model)
             appearance=&SL.projectiles[size_t(o.shotWeapon)];
     }
+    ps.last.pos = point;
     if(appearance) {
         const auto& cfg=appearance->config;
         if(cfg.scale>=0)size=cfg.scale;
@@ -498,6 +506,7 @@ void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o,
         // legacy ball's permanent muzzle-height offset.
         const float3 offset=useMuzzle?ps.launch*std::exp(-ps.phase*7.f):float3{};
         if (!ps.straightImpact) point = o.pos + offset;
+        ps.last.pos = point;
         if(length(direction)>1e-6f)ps.attackDirection=direction;
         draw.world=view_adapter::projectileFlightFrame(point,ps.attackDirection,up)*
             mat4::scale({size,size,size})*cfg.axisFix;

@@ -217,7 +217,7 @@ private:
         std::vector<std::span<const render::Material>>& roots)const;
     bool hostPaused_ = false, hostStep_ = false;
     enum class Screen { Menu, Lobby, Playing, Paused, Over };
-    enum class Mode { Normal, AttackMove, Patrol, Place, Rally, Ability, Claim, Skill, Dig, Undig, Room, Road, Unroad, Drop, ScriptCmd, Repair, Reclaim };
+    enum class Mode { Normal, Move, AttackMove, Patrol, Place, Rally, Ability, Claim, Skill, Dig, Undig, Room, Road, Unroad, Drop, ScriptCmd, Repair, Reclaim };
 
     bool startMatch(size_t idx, const Json& initialVars = Json(), const MatchFile* file = nullptr, bool playback = false);
     bool writeMatchFile(const std::string& slot, bool replay);

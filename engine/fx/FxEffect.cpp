@@ -1024,6 +1024,7 @@ bool parseEffect(const Json& j, const std::string& where, EffectDef& out, std::v
         model.source = m.getStr("source"); model.clip = m.getStr("clip");
         model.duration = float(m["duration"].toDouble(1));
         model.loop = m.getBool("loop");
+        model.castShadow = m.getBool("castShadow", true);
         if (model.source.empty() || !std::isfinite(model.duration) || model.duration <= 0)
             errors.push_back(where + ".model: expected source and positive duration");
         if (m.has("materials") && !m["materials"].isArray()) errors.push_back(where+".model.materials: expected array");
@@ -1175,6 +1176,7 @@ Json effectToJson(const EffectDef& def,bool includeSdf) {
         const auto& model = def.model;
         Json m = Json::object(), tracks = Json::array();
         m.set("source",Json::string(model.source)); m.set("duration",numJ(model.duration));
+        if (!model.castShadow) m.set("castShadow", Json::fromBool(false));
         if (model.loop) m.set("loop",Json::fromBool(true));
         if (!model.clip.empty()) m.set("clip",Json::string(model.clip));
         for (const auto& track : model.materials) {

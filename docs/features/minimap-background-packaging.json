@@ -3,37 +3,39 @@
   "id": "minimap-background-packaging",
   "owner": "build",
   "changed_paths": [
+    "apps/client/Minimap.cpp",
+    "docs/agent-handoffs/minimap-background-packaging-initial.md",
+    "docs/agents/feature-policy.json",
+    "docs/devlog/systems.json",
+    "docs/evidence/minimap-background-packaging-20261126.json",
+    "docs/evidence/minimap-background-packaging-20261126.log.txt",
+    "docs/features/minimap-background-packaging.json",
+    "docs/game-format.md",
+    "engine/atlas/AtlasFormat.cpp",
+    "engine/atlas/AtlasFormat.h",
+    "engine/atlas/TextureLibrary.cpp",
+    "engine/render/TextureCache.cpp",
+    "engine/render/TextureCache.h",
     "tests/tests.cpp",
     "tools/atlas/AtlasBuild.cpp",
-    "tools/atlas/AtlasBuild.h",
-    "docs/game-format.md",
-    "docs/devlog/systems.json",
-    "docs/agents/feature-policy.json",
-    "docs/agent-handoffs/minimap-background-packaging-initial.md",
-    "docs/features/minimap-background-packaging.json",
-    "docs/evidence/minimap-background-packaging-20261126.json",
-    "docs/evidence/minimap-background-packaging-20261126.log.txt"
+    "tools/atlas/AtlasBuild.h"
   ],
   "traits": {
     "editable": false,
     "simulation": false,
     "visible": false,
-    "runtime": false
+    "runtime": true
   },
   "checks": {
     "implementation": {
-      "status": "pass",
-      "note": "Minimap image references remain standalone in packs.",
-      "evidence": [
-        "tools/atlas/AtlasBuild.cpp"
-      ]
+      "status": "not_run",
+      "note": "Implementation changed to shared logical image loading; previous packaging evidence does not verify this revision.",
+      "evidence": []
     },
     "architecture": {
-      "status": "pass",
-      "note": "Reuses the existing PackWriter and AtlasConfig; no new image reader.",
-      "evidence": [
-        "tools/atlas/AtlasBuild.cpp"
-      ]
+      "status": "not_run",
+      "note": "Implementation changed to shared logical image loading; previous packaging evidence does not verify this revision.",
+      "evidence": []
     },
     "native_api": {
       "status": "not_applicable",
@@ -83,11 +85,9 @@
       ]
     },
     "dependencies": {
-      "status": "pass",
-      "note": "Uses existing JSON scan, atlas configuration and PackWriter.",
-      "evidence": [
-        "tools/atlas/AtlasBuild.cpp"
-      ]
+      "status": "not_run",
+      "note": "Implementation changed to shared logical image loading; previous packaging evidence does not verify this revision.",
+      "evidence": []
     },
     "headless": {
       "status": "not_applicable",
@@ -100,25 +100,19 @@
       "evidence": []
     },
     "tests": {
-      "status": "pass",
-      "note": "Pack regression passed: 11 checks, 0 failed on 7aaf3bf9a.",
-      "evidence": [
-        "docs/evidence/minimap-background-packaging-20261126.json"
-      ]
+      "status": "not_run",
+      "note": "Implementation changed to shared logical image loading; previous packaging evidence does not verify this revision.",
+      "evidence": []
     },
     "handoff": {
-      "status": "pass",
-      "note": "Stage handoff records exact SHA and focused test result.",
-      "evidence": [
-        "docs/agent-handoffs/minimap-background-packaging-initial.md"
-      ]
+      "status": "not_run",
+      "note": "Implementation changed to shared logical image loading; previous packaging evidence does not verify this revision.",
+      "evidence": []
     },
     "documentation": {
-      "status": "pass",
-      "note": "Documents pack behavior of minimapBackground.",
-      "evidence": [
-        "docs/game-format.md"
-      ]
+      "status": "not_run",
+      "note": "Implementation changed to shared logical image loading; previous packaging evidence does not verify this revision.",
+      "evidence": []
     },
     "publishing": {
       "status": "not_applicable",
@@ -132,7 +126,5 @@
     "studio_panels": [],
     "studio_methods": []
   },
-  "test_reports": [
-    "docs/evidence/minimap-background-packaging-20261126.json"
-  ]
+  "test_reports": []
 }

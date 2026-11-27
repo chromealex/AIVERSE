@@ -56,8 +56,6 @@ struct AtlasConfig {
     // over the whole image, so sheets are never trimmed or rotated, unless "frames" splits them
     // into frames. applyAtlas fills it from the pack inputs.
     std::map<std::string, std::pair<int, int>> sheets;
-    // Images read as raw bytes by the client must remain in the pack.
-    std::set<std::string> standalone;
     // Parses game.json["atlas"] for one profile; throws std::runtime_error with a readable message.
     static AtlasConfig fromGame(const Json& gameJson, const std::string& profile);
     FileProps classify(const std::string& packPath) const;

@@ -38,6 +38,7 @@ public:
             render::worldMatrices(*model,frame.pose,frame.nodes);
             render::ModelDraw draw;
             draw.model = model; draw.world = instance.world; draw.tint = instance.tint;
+            if (!effect.castShadow) draw.flags |= render::kDrawNoCastShadow;
             draw.nodeWorld = &frame.nodes; draw.pose = &frame.pose;
             if (!effect.materials.empty()) {
                 frame.materials = model->materials;

@@ -523,6 +523,7 @@ stays silent.
 ```
 
 In `audio.json`, `types.scout.repeatSelect` can be `{"sound":"annoyed","count":3,"window":2}`. The third click on the same scout within two seconds and subsequent qualifying clicks use the repeat sound in place of its selection voice. Switching units or clearing selection resets the sequence. Bind a sound with variants to use the audio bank's normal variant selection.
+For ordered annoyed lines, use `{"sound":"annoyed","count":3,"order":"sequential","cycle":true}`. The variants play in file order from the third click, then the next click returns to the normal selection voice and starts the sequence again. A sequential sequence has no timeout unless `window` is positive; `window:0` also disables the timeout. Without `order:"sequential"`, the existing random-variant behavior remains.
 
 `volume`: mix level per bus, 0..4 (default 1); the player's own volume settings multiply on top
 (client data model: `volume` master, `music`, `sfx` = every bus but music, percent; `musicOn` / `sfxOn` 1 / 0 switch
@@ -3050,7 +3051,7 @@ are unchanged when this block is absent.
 Unit type `view.hitFlash` controls the additive highlight on a hit. Set it to `false` to disable it, or set `"hitFlash":{"strength":0.2,"duration":0.15,"color":[0.3,0.6,1]}`. Duration is in seconds. Linear RGB components are in [0,1]. With no override, the warm highlight starts at 0.3 strength and decays for 0.3 seconds. The scene light uses the separate hitLight setting.
 
 For a painted flat minimap, set `"minimapBackground":"maps/valley-overview.png"` in the map or in game.json. A map value overrides the game default, and an empty string selects terrain colours. The image spans the map rectangle with its top left at grid (0,0). Transparent pixels reveal terrain colours. Fog, units, overlay marks and the camera frame are drawn above it. Missing or unreadable images fall back to terrain colours.
-The packer keeps images referenced by `minimapBackground` as standalone files, including paths declared in map JSON, because the minimap decodes their original bytes.
+CPU image consumers resolve logical content paths through the shared image loader, which reconstructs packed atlas regions (including trimming and rotation) or decodes standalone files. Minimap backgrounds use this same path.
 
 Set `hotkey` in a unit type or technology to show and activate its build, train, upgrade or research card action. Example: `"hotkey":"F5"`. If multiple enabled production buttons use the same key, the first in card order wins. Script commands take precedence.
 
@@ -3058,7 +3059,7 @@ In audio.json, `events.menuClick`, `events.topClick` and `events.cardClick` over
 
 Set `types.<type>.constructionLoop` in audio.json to a sound name. A visible construction site plays that sound at its world position until construction finishes, the site disappears, or the match ends. The voice fades out over 0.15 seconds.
 
-To put a unit shortcut beside the minimap, set `"selectionShortcut":{"type":"builder","label":"@hud.builder","image":"icons/builder.png"}` in game.json. Only the type is required. Alternatively use `{"idleWorker":true}` to select an own worker with an empty order queue; combine both keys to restrict the worker type. A second press with that unit selected centers the camera. Custom HUDs can bind `selectionShortcuts[]` and call `act(a.id)`.
+To put a unit shortcut beside the minimap, set `"selectionShortcut":{"type":"builder","label":"@hud.builder","image":"icons/builder.png","hotkey":"F5"}` in game.json. Only the type is required. Alternatively use `{"idleWorker":true}` to select an own worker with an empty order queue; combine both keys to restrict the worker type. Clicking or pressing the optional hotkey a second time with that unit selected centers the camera. Custom HUDs can bind `selectionShortcuts[]` and call `act(a.id)`.
 
 The game.json camera block accepts a shakes array. For example, `"shakes":[{"event":"unit_died","type":"fortress","amplitude":0.6,"frequency":10,"duration":0.5,"radius":30}]`. Events use view-script names. An ability event may filter by ability ID. The radius uses horizontal distance from the camera focus to the event.
 

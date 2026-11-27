@@ -79,7 +79,7 @@ inline ecfg::Asset fpsReference() {
 
 inline ecfg::Asset rtsReference() {
     ecfg::Asset result;
-    for(const char* action: {"AttackMove","Patrol","Repair","Reclaim","Stop","Hold","FocusCamera"})
+    for(const char* action: {"AttackMove","Patrol","Repair","Reclaim","Stop","Hold","FocusCamera","Move"})
         result.actions.push_back({action,ei::ValueType::Boolean});
     ei::MappingContext gameplay{"RTS.Gameplay"};
     const auto bind=[&](const char* action,Key key) {
@@ -92,6 +92,7 @@ inline ecfg::Asset rtsReference() {
     bind("Stop",Key::S);
     bind("Hold",Key::H);
     bind("FocusCamera",Key::Space);
+    bind("Move",Key::M);
     std::uint64_t id=1;
     for(auto& mapping:gameplay.mappings) mapping.id=id++;
     result.contexts.push_back({std::move(gameplay),0,true});

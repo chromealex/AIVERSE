@@ -349,6 +349,7 @@ struct AnimatedModelEffect {
     std::string source, clip;
     float duration = 1;
     bool loop = false;
+    bool castShadow = true;
     std::vector<ModelMaterialTrack> materials;
 };
 

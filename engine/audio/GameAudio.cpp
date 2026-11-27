@@ -115,16 +115,22 @@ bool GameAudio::init(audio::AudioEngine& engine, const Rules& rules, const Json&
                 hasConstructionLoops_ |= ts.constructionLoop != kNoSound;
             } else if (key == "repeatSelect") {
                 const auto count = v.getInt("count", 3);
-                const double window = v.has("window") ? v["window"].toDouble() : 2.0;
+                const std::string order = v.getStr("order");
+                const bool sequential = order == "sequential";
+                const double window = v.has("window") ? v["window"].toDouble() : sequential ? 0.0 : 2.0;
                 if (!v.isObject() || !v["sound"].isString() || count < 2 || count > 64 ||
                     (v.has("count") && (!v["count"].isNumber() || v["count"].toDouble() != count)) ||
-                    !(window > 0) || (v.has("window") && !v["window"].isNumber())) {
-                    warnings_.push_back(where + ": expected sound, count 2..64 and positive window in seconds");
+                    !std::isfinite(window) || window < 0 || (v.has("window") && !v["window"].isNumber()) ||
+                    (!order.empty() && order != "random" && !sequential) ||
+                    (v.has("cycle") && v["cycle"].type() != Json::Type::Bool)) {
+                    warnings_.push_back(where + ": expected sound, count 2..64, optional nonnegative window, order random/sequential and boolean cycle");
                     continue;
                 }
                 ts.repeatSound = resolve(v["sound"], where + ".sound");
                 ts.repeatCount = int(count);
                 ts.repeatWindow = window;
+                ts.repeatSequential = sequential;
+                ts.repeatCycle = v.getBool("cycle");
             } else if (key == "weapons") {
                 for (auto& [wid, wj] : v.members()) {
                     auto it = std::find_if(ut.weapons.begin(), ut.weapons.end(), [&](auto& w) { return w.id == wid; });
@@ -158,13 +164,14 @@ SoundId GameAudio::cueFor(int type, Cue c) const {
     return global_[size_t(c)];
 }
 
-bool GameAudio::playAt(SoundId s, const Vec3& pos, bool positional, float height) {
+bool GameAudio::playAt(SoundId s, const Vec3& pos, bool positional, float height, int variant) {
     if (s == kNoSound || !engine_) return false;
     audio::PlayParams p;
     p.positional = positional;
     p.x = fl(pos.x);
     p.y = height;
     p.z = fl(pos.z);
+    p.variant = variant;
     if (engine_->play(s, p) == audio::kNoVoice) return false;
     ++played_;
     return true;
@@ -389,7 +396,29 @@ bool GameAudio::onSelectionClick(Simulation& sim, Entity unit) {
     const auto& voice = types_[u->type];
     if (clickedUnit_ != unit) resetSelectionClicks();
     clickedUnit_ = unit;
-    while (!selectionClicks_.empty() && time_ - selectionClicks_.front() > voice.repeatWindow)
+    if (voice.repeatWindow > 0 && time_ - lastSelectionClick_ > voice.repeatWindow) {
+        selectionClicks_.clear();
+        selectionClickCount_ = 0;
+    }
+    lastSelectionClick_ = time_;
+    if (voice.repeatSequential) {
+        ++selectionClickCount_;
+        if (selectionClickCount_ < size_t(voice.repeatCount)) {
+            playAt(cueFor(int(u->type), Cue::Select), {}, false);
+            return true;
+        }
+        const auto* sound = engine_ ? engine_->sound(voice.repeatSound) : nullptr;
+        const size_t variants = sound ? std::max(size_t(1), sound->clips.size()) : 1;
+        size_t index = selectionClickCount_ - size_t(voice.repeatCount);
+        if (index >= variants && voice.repeatCycle) {
+            selectionClickCount_ = 1;
+            playAt(cueFor(int(u->type), Cue::Select), {}, false);
+            return true;
+        }
+        playAt(voice.repeatSound, {}, false, 0, int(std::min(index, variants - 1)));
+        return true;
+    }
+    while (voice.repeatWindow > 0 && !selectionClicks_.empty() && time_ - selectionClicks_.front() > voice.repeatWindow)
         selectionClicks_.pop_front();
     selectionClicks_.push_back(time_);
     if (selectionClicks_.size() > size_t(voice.repeatCount)) selectionClicks_.pop_front();
