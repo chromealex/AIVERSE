@@ -45,6 +45,15 @@ struct SimEvent {
     uint64_t subjectKey = UINT64_MAX; // stable source-side entity identity even after despawn/mirroring
     std::shared_ptr<const MatchMessage> message{};
     std::shared_ptr<const ChainJumpPresentation> chain{};
+    // Engine presentation lifecycle, independent of module-defined numeric events.
+    enum class Presentation : uint8_t { None, MotionFinished };
+    Presentation presentation = Presentation::None;
+    static SimEvent motionFinished(Entity subject, Vec3 endpoint, uint8_t owner = 0) {
+        SimEvent event;
+        event.presentation = Presentation::MotionFinished;
+        event.a = subject; event.pos = endpoint; event.player = owner;
+        return event;
+    }
 };
 
 struct PlayerInfo {

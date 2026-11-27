@@ -312,6 +312,16 @@ void GameFx::updateViewAnchors(const std::vector<ViewEffect>& effects) {
 }
 
 void GameFx::handle(Simulation& sim, const SimEvent& ev) {
+    if (ev.presentation == SimEvent::Presentation::MotionFinished) {
+        const auto it = trails_.find(ev.a.packed());
+        if (it == trails_.end()) return;
+        float3 point = toF(ev.pos), up;
+        if (it->second.clear) ps_->kill(it->second.h);
+        else if (!place_ || place_(point, -1e9f, point, up)) ps_->finish(it->second.h, point);
+        else ps_->stop(it->second.h);
+        trails_.erase(it);
+        return;
+    }
     auto* mod = dynamic_cast<GameCore*>(&sim.module());
     if (!mod) return;
     World& w = sim.world();

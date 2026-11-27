@@ -797,7 +797,9 @@ void GameCore::tickAreas(Simulation& sim) {
 void GameCore::impactProjectile(Simulation& sim, Entity p) {
     World& w = sim.world();
     Projectile pr = w.get<Projectile>(p);
-    const Vec3 at = flat(w.get<Transform>(p).pos);
+    const Vec3 endpoint = w.get<Transform>(p).pos;
+    const Vec3 at = flat(endpoint);
+    sim.emit(SimEvent::motionFinished(p, endpoint, pr.owner));
     w.destroyLater(p);
     if (pr.effList < 0) return;
     const EffectDef& e = rules_.payloads[size_t(pr.effList)][size_t(pr.effIndex)];

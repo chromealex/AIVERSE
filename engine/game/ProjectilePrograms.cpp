@@ -405,7 +405,10 @@ void GameCore::sysProjectilePrograms(Simulation& sim, const std::vector<Entity>&
         if (w.alive(entity) && w.has<Projectile>(entity)) {
             w.get<Projectile>(entity)=std::move(p);
             auto& tr=w.get<Transform>(entity); tr.prevPos=previous; tr.pos=position;
-            if (!alive) w.destroyLater(entity);
+            if (!alive) {
+                sim.emit(SimEvent::motionFinished(entity, position, w.get<Projectile>(entity).owner));
+                w.destroyLater(entity);
+            }
         }
     }
     // New projectiles never get a second movement update in their birth tick.

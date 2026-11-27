@@ -483,6 +483,7 @@ void GameCore::sysProjectiles(Simulation& sim) {
             [&](Entity target) {
                 dealDamage(sim, target, pr.damage, pr.damageType, pr.source, pr.owner, pwd);
             });
+        sim.emit(SimEvent::motionFinished(p, tr.pos, pr.owner));
         w.destroyLater(p);
     });
     sysProjectilePrograms(sim, programs);
