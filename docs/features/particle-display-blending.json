@@ -146,9 +146,13 @@
       ]
     },
     "performance": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Scoped macOS Debug/Rosetta acceptance: three480-frame scenes plus two720-frame linear/display loads (expected1024particles). Post-warmup CPU block means below16.67ms, sampled completed GPU frames below16.67ms and process peakRSS below512MiB. Allocation review records reusable particle buffers and recurring callback-list allocation; no zero-allocation, p95, leak or cross-device claim.",
+      "evidence": [
+        "docs/evidence/issues-material-performance-20261127/result.json",
+        "engine/fx/FxRender.cpp",
+        "engine/render/Renderer3D.cpp"
+      ]
     },
     "platforms": {
       "status": "not_run",
