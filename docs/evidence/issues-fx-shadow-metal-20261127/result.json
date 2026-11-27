@@ -1,0 +1,26 @@
+{
+  "binary_build_source": "99f71adcf8873f2743903ff40c53184d630c3a7d",
+  "review_checkout": "63373ba62",
+  "backend": "Metal",
+  "frames_per_run": 120,
+  "exit_codes": [
+    0,
+    0
+  ],
+  "command": "AIVERSE_CONTENT=<fixture> AIVERSE_BACKGROUND=1 AIVERSE_AUDIO=off AIVERSE_SHADOWS=high AIVERSE_SCREENSHOT=<capture>.ppm AIVERSE_EXIT_AFTER_FRAMES=120 <KINGSTON>/AiverseGame.app/Contents/MacOS/AiverseGame --map 0 --size 1280x720",
+  "observed": [
+    "Original: left effect model casts shadow; right effect model does not; both visible",
+    "Swapped only the two model.castShadow values: shadow now visible right and absent left",
+    "No material alpha modification; same model/position/lighting in both runs"
+  ],
+  "pipeline_failures": [
+    0,
+    0
+  ],
+  "limits": [
+    "Native Metal client only; not other backends or all model/alpha modes",
+    "Binary predates latest editor-only edits; FX source unchanged since this binary build",
+    "Web demo, Studio authoring and full gate pending"
+  ],
+  "fixture": "fixture contains original flag values; swap fx/shadow.json and fx/no_shadow.json model.castShadow booleans for control"
+}

@@ -1,0 +1,52 @@
+{
+  "victory": "keyUnits",
+  "fogOfWar": {
+    "mode": "none"
+  },
+  "types": {
+    "shadow": {
+      "name": "shadow",
+      "key": true,
+      "stance": "passive",
+      "health": {
+        "max": 100
+      },
+      "view": {
+        "model": "models/target.obj",
+        "height": 0.3,
+        "fx": [
+          {
+            "effect": "shadow",
+            "offset": [
+              0,
+              1,
+              0
+            ]
+          }
+        ]
+      }
+    },
+    "no_shadow": {
+      "name": "no_shadow",
+      "key": true,
+      "stance": "passive",
+      "health": {
+        "max": 100
+      },
+      "view": {
+        "model": "models/target.obj",
+        "height": 0.3,
+        "fx": [
+          {
+            "effect": "no_shadow",
+            "offset": [
+              0,
+              1,
+              0
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

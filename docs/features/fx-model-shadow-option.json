@@ -16,19 +16,31 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Native Metal A/B client captures show only the flagged effect casts a shadow; swapping only castShadow moves the shadow to the other identical model. Both remain visible with unchanged material alpha.",
+      "evidence": [
+        "docs/evidence/issues-fx-shadow-metal-20261127/result.json",
+        "docs/evidence/issues-fx-shadow-metal-20261127/original.png",
+        "docs/evidence/issues-fx-shadow-metal-20261127/swapped.png"
+      ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Existing FxModelEffect owns authored flag; AnimatedModelEffectView passes kDrawNoCastShadow to shared Renderer3D. No alternate shadow solver or consumer-specific material workaround.",
+      "evidence": [
+        "engine/fx/FxEffect.h",
+        "engine/fx/AnimatedModelEffectView.h",
+        "engine/render/Renderer3D.h"
+      ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "FxModelEffect.castShadow defaults true; shared model submit maps false to the established draw flag. Native client model effect path verified with paired flags.",
+      "evidence": [
+        "engine/fx/FxEffect.h",
+        "engine/fx/AnimatedModelEffectView.h",
+        "docs/evidence/issues-fx-shadow-metal-20261127/result.json"
+      ]
     },
     "skill": {
       "status": "not_run",
@@ -71,14 +83,18 @@
       "evidence": []
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Reuses ModelAssetProvider lifetime, ParticleSystem model instances and Renderer3D shadow admission. No new package or graphics dependency.",
+      "evidence": [
+        "engine/fx/AnimatedModelEffectView.h"
+      ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "This is presentation-only shadow submission, without simulation state or server rendering. Parser/serialization tests remain applicable.",
+      "evidence": [
+        "engine/fx/AnimatedModelEffectView.h"
+      ]
     },
     "examples": {
       "status": "not_run",
@@ -96,9 +112,11 @@
       "evidence": []
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Existing particles documentation describes false/default-true and preservation of material alpha/depth behavior.",
+      "evidence": [
+        "docs/particles.md"
+      ]
     },
     "publishing": {
       "status": "not_run",
