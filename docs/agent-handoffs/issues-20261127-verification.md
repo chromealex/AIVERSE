@@ -300,3 +300,5 @@ Visual inspection found the aura description clipped by the fixed cell's
 into hover/focus tips above the button, preserving the grid and applying to all
 actions. Fixture now hovers aura and captures visible tooltip. Corrected capture
 NOT RUN yet; next targeted rebuild and real client run. No issue closure.
+
+Tooltip run at 530764e8e passed behavior assertions, but tower capture failed visual acceptance: above-button popup clipped by card scrolling bounds. Correction f5c921ddda913589c03da4795b2d7eba0e891d96 expands description within the button and scrollable panel on hover/focus, leaves slot positions fixed. CSS-only; reuse fixture binary, no rebuild required. Next rerun and inspect tower capture.
