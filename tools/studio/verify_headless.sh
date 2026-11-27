@@ -36,8 +36,8 @@ for item in StudioViewportLayoutTests StudioLightingValidationTests \
   StudioMaterialValidationTests StudioShaderGraphValidationTests \
   StudioFpsLightingContractTests StudioLightPreviewMathTests
 do
-  echo "==== C++17 contract: $item ===="
-  c++ -std=c++17 -Wall -Wextra -Werror -pedantic -I . \
+  echo "==== C++20 contract: $item ===="
+  c++ -std=c++20 -Wall -Wextra -Werror -pedantic -I . \
     "apps/studio-native/tests/$item.cpp" -o "$TEMP_DIR/$item"
   "$TEMP_DIR/$item"
 done
