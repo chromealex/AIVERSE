@@ -11,6 +11,7 @@ struct StudioNatureLayers {
     bool physisWind=false,physisFire=false,nereidFlow=true,nereidAllWater=false;
     bool terraSlope=true,terraSlopeAtTarget=false,terraTreeWind=true,erosionZones=true;
     bool strataBounds=false,strataWire=false,strataFill=false,strataRoutes=false;
+    bool triggerAreas=true;
     unsigned char modelDebugMode=0;
     int strataColor=0;
     float radius=48,spacing=6;
@@ -29,6 +30,7 @@ struct StudioNatureLayers {
         {"terraSlope","terraSlope",&StudioNatureLayers::terraSlope},
         {"terraSlopeAtTarget","terraSlopeAtTarget",&StudioNatureLayers::terraSlopeAtTarget},
         {"terraTreeWind","terraTreeWind",&StudioNatureLayers::terraTreeWind},
+        {"triggerAreas","triggerAreas",&StudioNatureLayers::triggerAreas},
         {"erosionZones","erosionZones",&StudioNatureLayers::erosionZones}
     };
 
