@@ -234,10 +234,10 @@
   #root select:dir(rtl):not([multiple]):is(:not([size]), [size="0"], [size="1"]) {
     background-position: left 8px center, left 13px center;
   }
-  #root select:not(:disabled):hover {
+  #root select:not(:disabled):not([aria-invalid="true"]):hover {
     border-color: var(--au-accent);
   }
-  #root select[aria-invalid="true"] {
+  #root select:not([multiple]):is(:not([size]), [size="0"], [size="1"])[aria-invalid="true"] {
     border-color: var(--au-danger);
   }
   #root input[type="range"] {
@@ -297,6 +297,13 @@
   #root :is(select, input[type="range"]):focus-visible {
     outline: 2px solid var(--au-accent);
     outline-offset: 2px;
+  }
+}
+
+@media (pointer: coarse) {
+  #root select:not([multiple]):is(:not([size]), [size="0"], [size="1"]),
+  #root input[type="range"] {
+    min-block-size: 44px;
   }
 }
 
