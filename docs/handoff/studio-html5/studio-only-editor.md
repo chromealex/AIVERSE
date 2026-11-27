@@ -2038,3 +2038,5 @@ bc88119882097b4ebeb291a118a7e8851fb0c2c7 adds Shift+Left/Right key navigation an
 cf59da9c7b637769786bd602bc787d7eea600364 adapts AnimationTimeline.css to panel width. Web build passed. Detached macOS window verified skeleton above tracks, no horizontal body overflow, Play and Pause at 420px requested window width (../debug-keys-ao_1ciqr/live.log; captures/mac-animation-timeline-narrow.png).
 
 a63ec1f679a6286d58a9c1c2beeaff9b3f05f25d adds Open model graph to AnimationTimeline.tsx using the project-scoped animation_editor route. Web build passed. Detached Timeline selected walker and opened the main Modeling panel with Model asset=walker and Model graph view=pose (../debug-keys-2c_sbg3m/live.log).
+
+f148a03f462da48797e3a8d9f9e924cdc564b68b adds Open timeline in ModelGraphPanel.tsx for saved models with clips. Unsaved graph edits keep the command disabled. Web build and 113 graph tests passed. Packaged macOS opened walker in Modeling, then its timeline via the new button and verified walker remained selected with Attack present. Evidence ../debug-keys-_q2zk7fu/live.log.
