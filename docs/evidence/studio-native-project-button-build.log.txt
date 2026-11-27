@@ -1,0 +1,19 @@
+$ '/usr/local/bin/cmake' '-S' '/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/source' '-B' '/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-module-click-okew_258/Planet Demo/Builds/.temp/editor-macos' '-DCMAKE_BUILD_TYPE=Release' '-DAIVERSE_CONTENT_DIR=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-module-click-okew_258/Planet Demo' '-DAIVERSE_NATIVE_DIR=' '-DAIVERSE_BUILD_TESTS=OFF' '-DAIVERSE_BUILD_SERVER=OFF' '-DAIVERSE_BUILD_CLIENT=ON' '-DAIVERSE_CLIENT_BUNDLE_CONTENT=OFF' '-DAIVERSE_GAME_EXECUTABLE=AiverseGame' '-DAIVERSE_BUILD_STUDIO_HTML5=ON' '-DAIVERSE_BUILD_EDITOR=OFF' '-DAIVERSE_STUDIO_BUNDLE_ID=com.aiverse.studio.html5.project' '-DAIVERSE_STUDIO_WEB_DIST=/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-module-click-okew_258/Studio.app/Contents/Resources/studio-web' 2>&1 && '/usr/local/bin/cmake' '--build' '/Volumes/KINGSTON/AIVERSE-builds/studio-only-editor/studio-module-click-okew_258/Planet Demo/Builds/.temp/editor-macos' '--config' 'Release' '--target' 'aiverse_studio' 'aiverse_headless' 'aiverse_client' '--parallel' '4'
+[ 98%] Built target aiverse_client
+[100%] Built target aiverse_studio
+[100%] Built target aiverse_headless
+[100%] Built target aiverse_client
+=== OK ===
+
+Authenticated native_status from the resulting project executable:
+{
+  "required": [
+    "world_processes"
+  ],
+  "compiled": [
+    "world_processes"
+  ],
+  "missing": [],
+  "ready": true,
+  "built": true
+}
