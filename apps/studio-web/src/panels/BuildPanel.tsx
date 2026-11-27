@@ -405,7 +405,7 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
         </section>}
       </div>
       <div className="build__loghead"><ScrollText size={13}/><span>Log</span>
-        <button type="button" disabled={!state.runs} onClick={() => reveal({ log: true })}>Show log file</button></div>
+        <button type="button" disabled={!state.logFile} onClick={() => reveal({ log: true })}>Show log file</button></div>
       <pre ref={logBox} className="build__log" aria-label="Build log" tabIndex={0}
         onScroll={e => { const el = e.currentTarget; follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
         {log || 'No build yet.'}</pre>

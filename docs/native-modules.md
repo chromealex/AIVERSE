@@ -47,7 +47,7 @@ for the full contract and example.
 
 ## Editor with project modules
 
-On macOS and Windows, open **Build → Project C++ modules** in HTML Studio. The list shows each module required by the open project's rules and whether the running Studio contains it. Choose **Build Studio with project modules** to start a background build. Follow the output in the Build window or in the project's `logs/native-editor-*.log`.
+On macOS and Windows, open **Build → Project C++ modules** in HTML Studio. The list shows each module required by the open project's rules and whether the running Studio contains it. Choose **Build Studio with project modules** to start a background build. Follow the output in the Build window. Choose **Show log file** to locate the active transcript in the engine's `logs/native-editor-*.log`.
 
 The build configures the engine with `-DAIVERSE_CONTENT_DIR=<project>` in
 `<project>/Builds/.temp/editor-<platform>` and builds the Release targets
