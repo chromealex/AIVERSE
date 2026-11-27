@@ -20,6 +20,13 @@ export default function BuildOutput({ project }: { project: string }) {
     if (!values.at(-1)) values.pop();
     return values.map((text, index) => ({ text, number: index + 1, level: buildLineLevel(text) }));
   }, [state.text]);
+  const counts = useMemo(() => {
+    const totals = { All: lines.length, Errors: 0, Warnings: 0 };
+    for (const { level } of lines) {
+      if (level === 'Errors' || level === 'Warnings') totals[level]++;
+    }
+    return totals;
+  }, [lines]);
   const shown = useMemo(() => lines.filter(line => (filter === 'All' || line.level === filter)
     && line.text.toLowerCase().includes(query.toLowerCase())), [lines, filter, query]);
   const last = Math.max(0, Math.ceil(shown.length / pageSize) - 1);
@@ -34,8 +41,8 @@ export default function BuildOutput({ project }: { project: string }) {
     <div className="console__bar transcript-tools">
       <label className="console__search"><Search size={14}/><input aria-label="Search build output" placeholder="Search output" value={query}
         onChange={e => { setQuery(e.target.value); setPage(0); }}/></label>
-      {['All', 'Errors', 'Warnings'].map(level => <button type="button" key={level} className="console__level" aria-pressed={filter === level}
-        onClick={() => { setFilter(level); setPage(level === 'All' ? null : 0); }}>{level}</button>)}
+      {(['All', 'Errors', 'Warnings'] as const).map(level => <button type="button" key={level} className="console__level" aria-pressed={filter === level}
+        onClick={() => { setFilter(level); setPage(level === 'All' ? null : 0); }}>{level} ({counts[level]})</button>)}
       <span className="console__fill"/>
       <button className="console__level" disabled={!state.text || state.next < state.size} onClick={() => void copy(state.text)}><Copy size={13}/>Copy full log</button>
       <button className="console__level" disabled={!project} onClick={() => void invoke('studio.buildReveal', { logFolder: true }).catch(e => setNotice(String(e)))}><FolderOpen size={14}/>Open log folder</button>
