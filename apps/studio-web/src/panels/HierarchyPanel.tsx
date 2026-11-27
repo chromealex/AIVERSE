@@ -63,8 +63,20 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     return () => { current = false; };
   }, [needRecords, scope?.projectPath, scope?.mapPath, scope?.epoch, scope?.revision, snapshot?.scene.worldSpace]);
   const currentRecords = scope && records?.revision === scope.revision && records.epoch === scope.epoch ? records : undefined;
-  const selectRecord = (params: {kind:'player';index:number} | {kind:'area';key:string}) => {
-    if (scope && currentRecords) void invoke('studio.op', { op:'editor_select', expectedProject:scope.projectPath,
+  const [regionsOpen,setRegionsOpen] = useState(false);
+  const [regionList,setRegionList] = useState<{epoch:string;revision:string;items:{letter:string;name:string;cells:number}[]}>();
+  const needRegions = (searching || regionsOpen) && snapshot?.scene.mapRegions;
+  useEffect(() => {
+    if (!needRegions || !scope) return;
+    let current = true;
+    void invoke('studio.mapRegions',{scope,letter:'A'}).then(data=>{
+      if (current) setRegionList({epoch:scope.epoch,revision:scope.revision,items:data.regions.filter(r=>r.cells || r.name)});
+    }).catch(e=>{if(current)setError(String(e));});
+    return ()=>{current=false;};
+  },[needRegions,scope?.projectPath,scope?.mapPath,scope?.epoch,scope?.revision]);
+  const currentRegions = scope && regionList?.epoch===scope.epoch && regionList.revision===scope.revision ? regionList.items : undefined;
+  const selectRecord = (params: {kind:'player';index:number} | {kind:'area'|'region';key:string}) => {
+    if (scope && (params.kind==='region' ? currentRegions : currentRecords)) void invoke('studio.op', { op:'editor_select', expectedProject:scope.projectPath,
       expectedDocumentEpoch:scope.epoch, expectedDocumentRevision:scope.revision, params }).catch(e => setError(String(e)));
   };
   const mapEntities = !!catalog?.mapEntities;
@@ -79,6 +91,9 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     .filter(({name, index}) => matchesHierarchy({id:`player:${index}`, name, kind:'player', owner:index}, filter, selectedSet));
   const areas = (currentRecords?.areas ?? []).filter(name =>
     matchesHierarchy({id:`area:${name}`, name, kind:'area'}, filter, selectedSet));
+
+  const regions = (currentRegions ?? []).filter(({letter,name}) =>
+    matchesHierarchy({id:`region:${letter}`,name:letter+' '+name,kind:'region'},filter,selectedSet));
 
   const selectPreview=async(id:string)=>{
     if(!scope || !snapshot || busy)return;
@@ -226,7 +241,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     <div className="hier__toolbar">
       <label className="hier__search">
         <Search size={12} aria-hidden="true"/>
-        <input ref={searchRef} type="search" placeholder="Find objects, players, areas…" title="Search by name, t:type, owner:1 or is:hidden" aria-label="Search scene objects"
+        <input ref={searchRef} type="search" placeholder="Search hierarchy…" title="Search by name, t:type, owner:1 or is:hidden" aria-label="Search scene objects"
           value={search} onChange={event => setSearch(event.target.value)}
           onKeyDown={event => { if (event.key === 'Escape' && search) { event.stopPropagation(); setSearch(''); } }}/>
         {search && <button type="button" aria-label="Clear search" onClick={() => setSearch('')}><X size={11}/></button>}
@@ -259,7 +274,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
       onMouseLeave={() => hover('')}
       onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDrop(null); }}>
       {!project && <p className="hier__empty">Open a project to see its scene objects.</p>}
-      {project && matches.length === 0 && (!searching || (!players.length && !areas.length)) && <p className="hier__empty">{search ? 'No matching objects.' : 'The scene is empty.'}</p>}
+      {project && matches.length === 0 && (!searching || (!players.length && !areas.length && !regions.length)) && <p className="hier__empty">{search ? 'No matching objects.' : 'The scene is empty.'}</p>}
       {display.map(row => {
         if ('members' in row) {
           const documentMembers=row.members.filter(id=>!id.startsWith('preview:'));
@@ -340,6 +355,14 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
       {(areasOpen || searching) && currentRecords && (areas.length ? areas.map(key =>
         <StudioButton key={key} size="sm" disabled={busy} onClick={() => selectRecord({kind:'area',key})}>{key}</StudioButton>)
         : <span>No named areas</span>)}
+    </details>}
+    {scope && snapshot?.scene.mapRegions && (!searching || regions.length > 0) && <details className="hier__players" open={searching || regionsOpen}
+      onToggle={event => { if (!searching) setRegionsOpen(event.currentTarget.open); }}>
+      <summary>Map regions</summary>
+      {(regionsOpen || searching) && currentRegions && (regions.length ? regions.map(({letter,name,cells}) =>
+        <StudioButton key={letter} size="sm" disabled={busy} onClick={()=>selectRecord({kind:'region',key:letter})}>
+          {letter}{name && ' · '+name} ({cells})
+        </StudioButton>) : <span>No named or painted regions</span>)}
     </details>}
     <div className="hier__footer">{search ? `${matches.length} / ${allRows.length}` : allRows.length} objects{preview.length>0 && ` · ${preview.length} preview`}{selectedSet.size > 1 ? ` · ${selectedSet.size} selected` : ''}</div>
     {menu && <StudioContextMenu x={menu.x} y={menu.y} label="Entity actions"
