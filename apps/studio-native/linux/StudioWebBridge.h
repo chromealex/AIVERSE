@@ -14,17 +14,7 @@ public:
         : view_(WEBKIT_WEB_VIEW(g_object_ref(view))), receive_(std::move(receive)) {
         auto* manager=webkit_web_view_get_user_content_manager(view_);
         // Every Studio WebView, including detached docks, uses the same navigation policy.
-        policy_=g_signal_connect(view_,"decide-policy",G_CALLBACK(+[](WebKitWebView*,WebKitPolicyDecision* decision,
-        WebKitPolicyDecisionType type,gpointer)->gboolean {
-        if (type==WEBKIT_POLICY_DECISION_TYPE_RESPONSE) return FALSE;
-        if (type==WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION) {
-        auto* nav=webkit_navigation_policy_decision_get_navigation_action(WEBKIT_NAVIGATION_POLICY_DECISION(decision));
-        const char* uri=webkit_uri_request_get_uri(webkit_navigation_action_get_request(nav));
-        if (uri && std::string_view(uri).substr(0,std::strcspn(uri,"?#"))=="aiverse-studio://shell/index.html") return FALSE;
-        }
-        webkit_policy_decision_ignore(decision);
-        return TRUE;
-    }),nullptr);
+        policy_=g_signal_connect(view_,"decide-policy",G_CALLBACK(decidePolicy),nullptr);
         char* uuid=g_uuid_string_random();
         token_=uuid;
         g_free(uuid);
@@ -60,6 +50,17 @@ public:
             webkit_web_view_evaluate_javascript(view_,script.c_str(),script.size(),nullptr,nullptr,nullptr,nullptr,nullptr);
     }
 private:
+    static gboolean decidePolicy(WebKitWebView*, WebKitPolicyDecision* decision,
+                                 WebKitPolicyDecisionType type, gpointer) {
+        if (type==WEBKIT_POLICY_DECISION_TYPE_RESPONSE) return FALSE;
+        if (type==WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION) {
+            auto* nav=webkit_navigation_policy_decision_get_navigation_action(WEBKIT_NAVIGATION_POLICY_DECISION(decision));
+            const char* uri=webkit_uri_request_get_uri(webkit_navigation_action_get_request(nav));
+            if (uri && std::string_view(uri).substr(0,std::strcspn(uri,"?#"))=="aiverse-studio://shell/index.html") return FALSE;
+        }
+        webkit_policy_decision_ignore(decision);
+        return TRUE;
+    }
     static void onMessage(WebKitUserContentManager*,WebKitJavascriptResult* result,gpointer data) {
         auto& self=*static_cast<StudioWebBridge*>(data);
         auto* envelope=webkit_javascript_result_get_js_value(result);
