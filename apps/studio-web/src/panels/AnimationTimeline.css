@@ -17,7 +17,7 @@
 .anim__channel{display:grid;grid-template-columns:150px 1fr;align-items:center;gap:6px;font-size:var(--au-font-xs)}
 .anim__channel span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--au-text-muted)}
 .anim__channel small{color:var(--au-text-faint)}
-.anim__channel>div{position:relative;height:22px;margin:0 9px;background:linear-gradient(var(--au-line),var(--au-line)) center/100% 1px no-repeat}
+.anim__lane{cursor:pointer;position:relative;height:22px;margin:0 9px;background:linear-gradient(var(--au-line),var(--au-line)) center/100% 1px no-repeat}
 .anim__channel button{position:absolute;top:1px;width:18px;height:20px;transform:translateX(-50%);padding:0;border:0;background:transparent;cursor:pointer}
 .anim__channel button::after{content:'';display:block;margin:auto;width:6px;height:6px;transform:rotate(45deg);background:var(--au-text-muted)}
 .anim__channel button[aria-pressed=true]::after,.anim__channel button:hover::after{background:var(--au-accent)}

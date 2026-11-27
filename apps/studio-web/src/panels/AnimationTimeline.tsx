@@ -121,7 +121,7 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
       next = Math.min(key, times.length - 1);
     }
     const channels = current.channels.map((entry, index) => index === selection.channel ? {...entry, times, values} : entry);
-    const value = {...current, channels, duration: Math.max(current.duration ?? 0, ...times)};
+    const value = {...current, channels};
     setSaving(true); setPlaying(false); setError('');
     try {
       const response = await invoke('studio.op', {expectedProject:path, op:'animation_edit', params:{
@@ -184,7 +184,15 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
           </div>
           <div className="anim__channels">{current.channels.map((c, i) => <div key={i} className="anim__channel">
             <span title={c.node + '.' + (c.path ?? 'rotation')}>{c.node}<small>.{c.path ?? 'rotation'}</small></span>
-            <div>{(c.times ?? []).map((t: number, k: number) => <button key={k} type="button"
+            <div className="anim__lane" onClick={event => {
+              if (event.target !== event.currentTarget || !c.times?.length) return;
+              const bounds = event.currentTarget.getBoundingClientRect();
+              if (!bounds.width) return;
+              const target = (event.clientX - bounds.left) / bounds.width * duration;
+              const key = c.times.reduce((best, t, index, times) =>
+                Math.abs(t - target) < Math.abs(times[best] - target) ? index : best, 0);
+              setPlaying(false); setTime(c.times[key]); setSelection({channel:i, key});
+            }}>{(c.times ?? []).map((t: number, k: number) => <button key={k} type="button"
               aria-label={c.node + '.' + (c.path ?? 'rotation') + ' key ' + (k + 1) + ' at ' + t + ' s'}
               aria-pressed={selection?.channel === i && selection.key === k}
               style={{ left: (duration ? t / duration : 0) * 100 + '%' }}
