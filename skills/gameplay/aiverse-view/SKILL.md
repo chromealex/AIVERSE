@@ -122,3 +122,12 @@ handler `view.on("order", fn)`. The payload includes kind, target, queued flag a
 For an in-place structure upgrade set `view.showUpgradeTarget` on the source type. The active
 production item's progress drives the target type's existing construction appearance.
 See `demos/order-upgrade`, `docs/models.md` and `docs/scripting.md`.
+
+
+For an independent HUD or asset preview, reuse `view::ModelPreview` with
+`view::PortraitOptions`; do not add an Animator or another model loader.
+Provide the host's content reader and subject tint, prepare before submission,
+and shut down through the resource provider before destroying the device.
+For data-driven HUD portraits use `rules_set` at `types.<id>.view.portrait` or
+`set_manifest` ui.portrait defaults, and inspect the saved data before capturing
+the selected subject. See docs/game-format.md and docs/view.md.

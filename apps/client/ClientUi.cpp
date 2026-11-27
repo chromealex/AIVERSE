@@ -323,10 +323,13 @@ void GameClient::renderSelectionPortrait() {
             std::fprintf(stderr,"[ui] could not initialize the selected unit portrait\n");
             return;
         }
+        portraitModel_.setReader([](const std::string& path,std::string& bytes) {
+            return platform::readContentFile(path,bytes);
+        });
         ui_.setDynamicTexture("portrait",selectionPortrait_.texture(),portraitSize_,portraitSize_,true);
     }
     if (!sim_ || !portraitSubject_.valid() || !visibleSelectionUnit(portraitSubject_)) {
-        if (!portraitBlank_) selectionPortrait_.clear();
+        if (!portraitBlank_) {selectionPortrait_.clear();portraitModel_.reset();}
         portraitBlank_ = true;
         return;
     }
@@ -336,7 +339,13 @@ void GameClient::renderSelectionPortrait() {
     const auto& options = rules_.types[type].view["portrait"];
     const auto& defaults = manifest_["ui"]["portrait"];
     const auto look=::aiverse::view::PortraitOptions::resolve(options,defaults,GameView::playerColor(owner));
-    selectionPortrait_.render(view_,type,owner,time_,look.yaw,look.zoom,look.focusHeight,look.background);
+    const auto color=GameView::playerColor(owner);
+    const bool separate=!look.model.empty() && selectionPortrait_.renderModelPreview(
+        portraitModel_,look,{color.x,color.y,color.z},time_);
+    if(!separate) {
+        portraitModel_.reset();
+        selectionPortrait_.render(view_,type,owner,time_,look.yaw,look.zoom,look.focusHeight,look.background);
+    }
     portraitBlank_ = false;
 }
 

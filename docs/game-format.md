@@ -3120,3 +3120,14 @@ Malformed values retain the inherited background. With neither setting, the
 existing grey-blue background remains. The same background applies to static
 and animated world-model portrait paths. `yaw`, `zoom` and `focusHeight` follow
 the same per-type-over-project precedence.
+
+
+Set `view.portrait.model` to an alternate model asset path, for example
+`"portrait": {"model":"models/portrait.glb", "background":"player"}`.
+`ui.portrait.model` supplies a project default; an explicit empty string on a
+type restores its world model. The separate model uses its own bounds, the
+portrait camera settings and owner tint. It loops `Idle`, then `Stand`, or the
+first available clip; assets without clips use their bind pose. Animation runs
+through the shared View/MotionWeave presentation world. A missing or rejected
+asset falls back to the subject's existing world-model portrait. Switching back
+to a different source starts that preview's animation anew.

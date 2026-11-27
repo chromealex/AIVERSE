@@ -6,6 +6,7 @@
 #include <memory>
 #include "GameView.h"
 #include "engine/view/View.h"
+#include "engine/view/ModelPreview.h"
 #include "engine/render/ModelResourceCache.h"
 #include "engine/render/ModelAssetProvider.h"
 
@@ -19,6 +20,10 @@ public:
     void render(GameView& view, uint16_t type, uint8_t owner, double time, float yaw = -1, float zoom = 1, float focusHeight = .45f,
                 render::float4 background={.16f,.18f,.22f,1.f});
     void clear();
+    // Offscreen target adapter; the reusable preview owns its source and animation.
+    bool renderModelPreview(::aiverse::view::ModelPreview& preview,
+                            const ::aiverse::view::PortraitOptions& options,
+                            render::float3 team,double time);
     // A material (library name or override object, docs/models.md) on a sphere (shape 0) or a box
     // (shape 1), slowly turning; textures resolve like in rules.json.
     void renderPose(const render::Model&, const render::Pose&, float yaw=0.5f);

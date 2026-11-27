@@ -498,6 +498,7 @@ private:
     GameView view_;
     ClientSpine spine_;
     game::Portrait selectionPortrait_;
+    ::aiverse::view::ModelPreview portraitModel_;
     Entity portraitSubject_;
     int portraitSize_ = 192;
     bool showPortrait_ = false, portraitFailed_ = false, portraitBlank_ = false;

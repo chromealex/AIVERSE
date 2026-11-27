@@ -8,7 +8,13 @@
     "engine/view/game/GamePortrait.cpp",
     "engine/view/game/GamePortrait.h",
     "tests/tests.cpp",
-    "docs/game-format.md"
+    "docs/game-format.md",
+    "engine/view/ModelPreview.h",
+    "apps/client/GameClient.h",
+    "apps/client/GameClient.cpp",
+    "docs/view.md",
+    "skills/gameplay/aiverse-view/SKILL.md",
+    "tests/view/portrait_appearance_api.cpp"
   ],
   "traits": {
     "editable": true,
@@ -19,7 +25,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Background connected for static and animated world-model paths; alternate model rendering still pending. No runtime verification yet.",
+      "note": "Alternate source and background connected through ModelPreview/ModelAssetProvider/View. Source review only: tests, native capture, editing and final gate pending.",
       "evidence": []
     },
     "architecture": {
@@ -109,8 +115,13 @@
     }
   },
   "integrations": {
-    "skills": [],
-    "mcp_tools": [],
+    "skills": [
+      "skills/gameplay/aiverse-view/SKILL.md"
+    ],
+    "mcp_tools": [
+      "rules_set",
+      "set_manifest"
+    ],
     "studio_panels": [],
     "studio_methods": []
   },

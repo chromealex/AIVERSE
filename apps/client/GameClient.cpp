@@ -533,6 +533,7 @@ void GameClient::shutdown() {
     }
     ui_.setDynamicTexture("portrait",{},portraitSize_,portraitSize_);
     selectionPortrait_.shutdown();
+    portraitModel_.shutdown(*dev_);
     view_.shutdown(*dev_);
     prisma_.shutdown();
     r3d_.setBakedLighting(nullptr);

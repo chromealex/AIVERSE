@@ -3189,3 +3189,22 @@ Shared `AttachmentLayoutItem` now optionally marks a child with `animated:true` 
 New `view::AnimatedSceneAttachmentSources` uses a dedicated presentation `World` and source-neutral `MotionWeaveSourceBridge`, mapping `sceneId/objectKey/childId` to a monotonic child Source ID and the current child ECS Entity generation. `sync` validates real published parent+child Model cache leases, compiled child Graph and named source socket, then advances each child Graph ONCE per owner frame. `prepare` composes its own animated ModelDraw world transform from parent bone matrices plus two authored affine transforms, borrows its evaluated child Pose, clears `Object.graph`, and returns a move-only ModelReadLease scope valid through synchronous View rendering. Use a separate render-only View for prepared child objects if the parent uses colliding object IDs.
 
 Studio now edits independent child Graph source paths, actually publishes the compiled Graph from imported Model via AppearanceAssetRegistry, evaluates child players in pre-draw EditorWindow::update and draws them in the existing 3D viewport. ModelView persists but intentionally refuses enabled animated child mode until its own independent child Graph owner exists. No authoritative gameplay ECS, duplicate updater, genre semantics or GPU ownership is introduced. See [Stage 161 handoff](agent-handoffs/animation-stage161-independent-animated-child-graph-sources-2026-11-20.md) / [public API guide](animated-scene-attachments.md). **NOT RUN:** native C++/CTest, Studio/ModelView, Metal/Vulkan/GLES, sanitizers and performance.
+
+
+### Independent model previews
+
+`view::ModelPreview` (`engine/view/ModelPreview.h`) is a native presentation
+consumer for one independently animated asset. Set its content `FileReader`,
+then call `prepare(device, PortraitOptions, teamColor, time)` and, on success,
+use `camera()` and `submit(renderer)` within the host's offscreen scene pass.
+The host supplies the render target, background and final render/endPass.
+`PortraitOptions::resolve` handles project/default overrides without gameplay
+lookups; the caller resolves a subject colour before passing it in.
+
+Resources belong to the existing `ModelAssetProvider`; animation belongs to
+View/MotionWeave. `reset()` discards the subject's animation state while retaining
+cached assets. `shutdown(device)` releases resources through the provider's GPU
+lifetime barrier, and must precede device destruction. Do not destroy or reset
+the preview between submission and completion of the host's render call.
+The compatibility `game::Portrait::renderModelPreview` only adapts its existing
+offscreen target to this native API.
