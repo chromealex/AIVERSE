@@ -45,8 +45,14 @@ function DebugLayersMenu({children}:{children:ReactNode}) {
     const filter=()=>{
       let matches=0;
       for(const group of groups.querySelectorAll(':scope > fieldset')){
-        const text=(group.textContent??'').toLowerCase();
-        const visible=terms.every(term=>text.includes(term));
+        const heading=group.querySelector('legend')?.textContent??'';
+        const matchesQuery=(text:string)=>terms.every(term=>text.toLowerCase().includes(term));
+        let visible=matchesQuery(heading);
+        for(const row of group.querySelectorAll('label')){
+          const show=matchesQuery(heading+' '+(row.textContent??''));
+          row.toggleAttribute('hidden',!show);
+          visible ||= show;
+        }
         group.toggleAttribute('hidden',!visible);
         if(visible)matches++;
       }

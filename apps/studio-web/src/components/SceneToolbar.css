@@ -51,4 +51,4 @@
 
 .scene-toolbar__layers > input,.scene-toolbar__layers > p{grid-column:1/-1}
 .scene-toolbar__layer-groups{display:contents}
-.scene-toolbar__layer-groups > fieldset[hidden]{display:none}
+.scene-toolbar__layer-groups label[hidden],.scene-toolbar__layer-groups > fieldset[hidden]{display:none}
