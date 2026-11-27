@@ -650,6 +650,6 @@ Share STRATA selection, refusal, cache, upload and preparation statistics betwee
 
 Share the game terrain water-cell layout builder with HTML Scene so sheet, connected-body and shore levels come from one implementation.
 
-Expose Scene debug views directly in the toolbar: STRATA clusters and routes, model wind diagnostics, PHYSIS, TerraWeave and NEREID.
+Expose Scene debug views directly in the toolbar: STRATA clusters and routes, model wind diagnostics, PHYSIS, TerraWeave and NEREID. Mac render evidence covers [STRATA geometry](evidence/studio-strata-obj-frame-images.log.txt), [model wind rig modes](evidence/studio-wind-visible-skeleton.log.txt) and [paused PHYSIS wind/fire](evidence/studio-debug-physis-field-frames.log.txt). [Detached Scene cluster fill](handoff/studio-html5/captures/mac-scene-cluster-fill.png) was rechecked with an off/on/off comparison.
 
 Port editor_select to HTML Studio starting with map entity ordinals, canonical document IDs, camera focus, Inspector and clearing selection. Record selection follows in the same migration.
