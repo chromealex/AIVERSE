@@ -1,0 +1,10 @@
+{
+  "sha": "c31df2164c50f8daf798dc52433222203d64bc7d",
+  "argv": [
+    "bash",
+    "../build-inventory.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-build-package-inventory.log.txt",
+  "sha256": "537b00571c3751c23dbaac3ef39e72ef057496243176b59fd785e96299ea3781"
+}
