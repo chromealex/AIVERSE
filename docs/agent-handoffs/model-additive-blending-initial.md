@@ -20,3 +20,7 @@ Native compile and GPU acceptance remain pending. Next start final verification 
 ## Authoring completion stage
 
 Current runtime Metal evidence passes, but material_set and native Studio validation still reject additive values. Complete both through render::parseMaterialBlend and expose the two modes in the existing Studio material select. Add native and frontend regressions. Full Mac gate passed at d88e86901 with Studio disabled; Studio itself remains to build and verify.
+
+## Material effects example plan — 2026-11-27
+
+Prepare one ordinary data-only demo for shadows, both additive model modes and linear/display emitters, reusing the verified shadow fixture. Existing owner APIs only. Native/Web acceptance and publication pending.

@@ -32,7 +32,24 @@
     "tests/tests.cpp",
     "tools/modeling/Export.cpp",
     "tools/modeling/SurfaceProxy.cpp",
-    "tools/studio/test_reference_pin_zoom.py"
+    "tools/studio/test_reference_pin_zoom.py",
+    "demos/material-effects/README.md",
+    "demos/material-effects/game.json",
+    "demos/material-effects/rules.json",
+    "demos/material-effects/models/target.obj",
+    "demos/material-effects/models/tall-target.obj",
+    "demos/material-effects/models/range.mtl",
+    "demos/material-effects/maps/shadows.json",
+    "demos/material-effects/maps/materials.json",
+    "demos/material-effects/maps/particles.json",
+    "demos/material-effects/fx/fx.json",
+    "demos/material-effects/fx/shadow.json",
+    "demos/material-effects/fx/no_shadow.json",
+    "demos/material-effects/fx/alpha.json",
+    "demos/material-effects/fx/weighted.json",
+    "demos/material-effects/fx/unweighted.json",
+    "demos/material-effects/fx/linear.json",
+    "demos/material-effects/fx/display.json"
   ],
   "traits": {
     "editable": true,
@@ -130,7 +147,7 @@
     },
     "examples": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "note": "Shared material-effects demo planned from accepted native shadow fixture: shadow flags, weighted/unweighted model additive and linear/display particles. Native/Web acceptance pending.",
       "evidence": []
     },
     "tests": {

@@ -36,3 +36,7 @@ Renderer pointer now propagates through BatchWorld, GpuPoolWorld CPU fallback, G
 Changed paths are listed in the feature manifest. Documented authoring, native lifecycle, postprocess ordering and current GPU requirements in docs/particles.md; PRISMA/SpectraFX design status updated. git diff --check passed; tests/builds/GPU captures NOT RUN. No issues closed, no push/merge.
 
 Next: full source audit of #219/#221 before final build, especially material serialization/MDX multilayer semantics, shader template injection and frame source-depth lifetime. Add synthetic GPU probes for additive model pixel equations and particle display brightness/occlusion/graph parity; then final cached KINGSTON build and merged-tree quick gate, followed by feature-ready checks and real evidence. All other issue fixes remain unverified; Windows #206 still needs actual runner evidence.
+
+## Material effects example plan — 2026-11-27
+
+Prepare one ordinary data-only demo for shadows, both additive model modes and linear/display emitters, reusing the verified shadow fixture. Existing owner APIs only. Native/Web acceptance and publication pending.
