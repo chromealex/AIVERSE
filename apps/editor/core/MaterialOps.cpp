@@ -283,6 +283,16 @@ static void saveMaterialLibraryLocked(Workspace& ws,const graph_asset::Transacti
             const bool indexed=old[name].isString();
             std::string path=indexed?old[name].str():materialFileName(name);
             if(auto move=relocated.find(path);move!=relocated.end())path=move->second;
+            if(old[name].isObject()){
+                const std::string suffix=".material.json";
+                const auto stem=path.substr(0,path.size()-suffix.size());
+                unsigned ordinal=1;
+                // A tilde is escaped in canonical material names, keeping aliases distinct.
+                while(fs::exists(fs::symlink_status(root/path)) ||
+                      fs::exists(fs::symlink_status(root/(path+".meta")))){
+                    path=stem+"~"+std::to_string(ordinal++)+suffix;
+                }
+            }
             const auto file=materialFile(root,path);
             if(!indexed&&fs::exists(file))throw std::runtime_error("Material asset already exists: "+path);
             std::string previous;
