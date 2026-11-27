@@ -4,6 +4,9 @@ on:
   pull_request:
     paths:
       - 'apps/editor/**'
+      - 'apps/studio-native/**'
+      - 'apps/studio-web/**'
+      - 'CMakeLists.txt'
       - 'engine/render/**'
       - 'engine/gfx/**'
       - '.github/workflows/studio-validation.yml'
@@ -17,37 +20,34 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest, windows-2022]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Install Linux editor graphics headers
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build HTML5 Studio frontend
+        working-directory: apps/studio-web
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Install Linux Studio dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q libx11-dev libegl-dev libgles-dev libvulkan-dev
-      - name: Configure editor and tests
-        run: cmake -S . -B build/studio-ci -DCMAKE_BUILD_TYPE=Debug -DAIVERSE_BUILD_EDITOR=ON -DAIVERSE_BUILD_TESTS=ON
-      - name: Build editor
-        run: cmake --build build/studio-ci --target aiverse_editor --parallel 2
-      - name: Build tests
-        run: cmake --build build/studio-ci --target aiverse_tests --parallel 2
-      - name: Build PHYSIS editor authoring and Scene geometry tests
-        run: |
-          cmake --build build/studio-ci --target \
-            aiverse_physis_authoring_test \
-            aiverse_physis_field_authoring_test \
-            aiverse_physis_field_assets_test \
-            aiverse_physis_field_runtime_test \
-            aiverse_physis_live_edit_test \
-            aiverse_physis_remote_edit_test \
-            aiverse_physis_admin_journal_test \
-            aiverse_physis_project_config_test \
-            aiverse_physis_scene_geometry_test --parallel 2
-      - name: Run PHYSIS editor tests
-        run: ctest --test-dir build/studio-ci --output-on-failure -R '^physis_(authoring|scene_geometry|project_config)
-
-      - name: Run tests
-        run: ctest --test-dir build/studio-ci --output-on-failure
+          sudo apt-get install -y libx11-dev libegl-dev libgles-dev libvulkan-dev libwebkit2gtk-4.1-dev libsqlite3-dev mesa-vulkan-drivers xvfb xauth
+      - name: Configure HTML5 Studio and tests
+        run: cmake -S . -B build/studio-ci -DCMAKE_BUILD_TYPE=Debug -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_BUILD_STUDIO_HTML5=ON
+      - name: Build Studio
+        run: cmake --build build/studio-ci --config Debug --target aiverse_studio --parallel 2
+      - name: Build test suite and its dependencies
+        run: cmake --build build/studio-ci --config Debug --parallel 2
+      - name: Run tests on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run -a ctest --test-dir build/studio-ci -C Debug --output-on-failure --no-tests=error
+      - name: Run tests on macOS and Windows
+        if: runner.os != 'Linux'
+        run: ctest --test-dir build/studio-ci -C Debug --output-on-failure --no-tests=error
