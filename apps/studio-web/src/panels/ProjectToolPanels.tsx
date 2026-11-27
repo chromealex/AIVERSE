@@ -1,3 +1,4 @@
+import { changeInputAction } from './inputActionReferences';
 import InputTriggers from './InputTriggers';
 import InputModifiers from './InputModifiers';
 import type { StudioScriptMessage } from '../types';
@@ -275,6 +276,14 @@ export function ScriptsPanel(ctx: Ctx & {location:{path:string;line:number}|null
 type InputAction = StudioInputAsset['actions'][number];
 type InputContext = StudioInputAsset['contexts'][number];
 type InputMapping = InputContext['mappings'][number];
+function InputActionName({ name, rename, reject }: { name: string; rename: (value: string) => void; reject: () => void }) {
+  const [draft, setDraft] = useState(name);
+  useEffect(() => setDraft(name), [name]);
+  return <input className="au-input" aria-label="Action name" value={draft}
+    onChange={e => { setDraft(e.target.value); rename(e.target.value); }}
+    onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+    onBlur={() => { if (draft !== name) { setDraft(name); reject(); } }}/>;
+}
 export function InputPanel(ctx: Ctx) {
   const path = ctx.snapshot?.project.path ?? '';
   const [info, setInfo] = useState<StudioInputInfo | null>(null);
@@ -293,11 +302,6 @@ export function InputPanel(ctx: Ctx) {
   };
   if (!path) return <div className="tool__empty">Open a project to edit its input actions.</div>;
   const setAction = (i: number, a: Partial<InputAction>) => edit({ ...asset, actions: asset.actions.map((x, n) => n === i ? { ...x, ...a } : x) });
-  const renameAction = (i: number, name: string) => {
-    const old = asset.actions[i].name;
-    edit({ actions: asset.actions.map((x, n) => n === i ? { ...x, name } : x), version: 1,
-      contexts: asset.contexts.map(c => ({ ...c, mappings: c.mappings.map(m => m.action === old ? { ...m, action: name } : m) })) });
-  };
   const setContext = (i: number, c: Partial<InputContext>) => edit({ ...asset, contexts: asset.contexts.map((x, n) => n === i ? { ...x, ...c } : x) });
   const setMapping = (ci: number, mi: number, m: Partial<InputMapping>) =>
     setContext(ci, { mappings: asset.contexts[ci].mappings.map((x, n) => n === mi ? { ...x, ...m } : x) });
@@ -318,13 +322,16 @@ export function InputPanel(ctx: Ctx) {
         <button type="button" className="au-button au-button--ghost au-button--sm" onClick={() => edit({ ...asset, actions: [...asset.actions, { name: unique('Action', asset.actions.map(a => a.name)), type: 'bool' }] })}><Plus size={12}/>Action</button></h4>
       <table className="ptp__table ptp__table--rows"><tbody>
         {asset.actions.map((a, i) => <tr key={i}>
-          <td><input className="au-input" value={a.name} onChange={e => renameAction(i, e.target.value)}/></td>
+          <td><InputActionName name={a.name} rename={value => {
+            const next = changeInputAction(asset, i, value);
+            if (next !== asset) edit(next);
+          }} reject={() => setStatus({ ok: false, text: 'Enter a unique, nonempty action name.' })}/></td>
           <td><select className="au-input" value={a.type} onChange={e => setAction(i, { type: e.target.value as InputAction['type'] })}>
             {['bool', 'axis1D', 'axis2D', 'axis3D'].map(t => <option key={t}>{t}</option>)}</select></td>
           <td><InputModifiers items={a.modifiers} onChange={modifiers => setAction(i, { modifiers })}/></td>
           <td><InputTriggers items={a.triggers} actions={asset.actions} onChange={triggers => setAction(i, { triggers })}/></td>
           <td><button type="button" className="au-button au-button--icon au-button--ghost au-button--sm" title="Delete action"
-            onClick={() => edit({ ...asset, actions: asset.actions.filter((_, n) => n !== i), contexts: asset.contexts.map(c => ({ ...c, mappings: c.mappings.filter(m => m.action !== a.name) })) })}><Trash2 size={12}/></button></td>
+            onClick={() => edit(changeInputAction(asset, i, null))}><Trash2 size={12}/></button></td>
         </tr>)}
       </tbody></table>
       {!asset.actions.length && <p className="ptp__hint">No actions. Add one, then bind keys to it in a context.</p>}
