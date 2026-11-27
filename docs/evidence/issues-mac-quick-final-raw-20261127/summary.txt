@@ -1,0 +1,9 @@
+AIVERSE tests | commit=0a8ed3c9e | build=/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick | report=/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-134227-98949
+PASS configure
+PASS build
+PASS ctest
+
+========== SUMMARY ==========
+Passed stages: 3 | Failed stages: 0
+Logs: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-134227-98949
+PASS: all selected test stages
