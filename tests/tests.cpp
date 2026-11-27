@@ -18878,3 +18878,25 @@ TEST(projectile_shared_branch_provenance) {
     if(child)CHECK(child->state.origin==projectile::FlightOrigin::Ricochet);
     CHECK(parent.origin==projectile::FlightOrigin::Emission);
 }
+
+TEST(fx_finish_consumes_last_motion_once) {
+    fx::ParticleSystem ps;
+    ps.setQuality(fx::FxQuality::High);
+    ps.init(nullptr);
+    int id=ps.define("finish-path",fxParse(R"({"emitters":[{"perMeter":10,"loop":true,"life":1,"speed":0}]})"));
+    auto h=ps.play(id,{0,0,0});
+    ps.finish(h,{1,0,0});
+    ps.finish(h,{9,0,0}); // repeated finish and late moves cannot change the endpoint
+    ps.move(h,{8,0,0});
+    ps.update(.01f);
+    std::vector<fx::FxParticleInfo> particles;
+    ps.snapshot(particles);
+    CHECK(particles.size()==10);
+    CHECK(std::any_of(particles.begin(),particles.end(),[](const auto& p){return aiverse::render::length(p.pos-aiverse::render::float3{1,0,0})<1e-5f;}));
+    CHECK(!ps.playing(h));
+    const auto count=particles.size();
+    ps.update(.01f);ps.snapshot(particles);
+    CHECK(particles.size()==count);
+    ps.kill(h);
+    ps.finish(h,{99,0,0}); // stale handle is safe
+}

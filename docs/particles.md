@@ -283,3 +283,7 @@ Set `"castShadow":false` in the model block for spell and impact models that sho
 ```
 
 Material names select the affected surfaces. Omit the name to affect all materials. RGBA keys multiply the source colour and opacity at normalized times. Texture frames refer to images already in the model and divide each cycle evenly. glTF frames accept texture names, image names and external image URIs. When several samplers share an image, use distinct texture names to choose among them. UV speed is in texture repeats per second. Instance positions and directions follow the same move, attachment and stop calls used by other FX.
+
+### Finishing attached effects
+
+Native consumers can call `ParticleSystem::finish(handle, endpoint)` to process the last movement on the next particle update before stopping emission. Distance emitters include an endpoint sample within their normal particle budget. Repeated finish calls and subsequent moves preserve the first endpoint; live particles then fade normally. `stop` remains immediate emission cancellation, and `kill` removes particles. This API is general to attached effects; projectile adapters supply their terminal point separately.

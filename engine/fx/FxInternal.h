@@ -194,7 +194,7 @@ struct ParticleSystem::Impl {
     struct Instance {
         uint16_t gen = 1;
         uint64_t telemetrySerial=0; // owner-local non-reused instance identity
-        bool used = false, stopped = false;
+        bool used = false, stopped = false, finishing = false;
         bool emitting = true;          // false: done emitting; the slot lives on while it has particles
         int effect = -1;
         float3 pos, prev, dir{0, 1, 0};

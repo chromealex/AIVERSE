@@ -186,6 +186,8 @@ public:
     void modelInstances(std::vector<ModelInstance>& out) const;
     void move(FxHandle h, float3 pos);                 // attached effects (trails, burning buildings)
     void move(FxHandle h, float3 pos, float3 dir);
+    // Consume the final movement on the next update, then stop emission. Idempotent.
+    void finish(FxHandle h, float3 position);
     void stop(FxHandle h);                             // stops emitting; live particles fade out
     void kill(FxHandle h);                             // stops and removes its particles at once
     bool playing(FxHandle h) const;                    // still emitting (its particles may outlive it)

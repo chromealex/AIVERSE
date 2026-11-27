@@ -423,8 +423,11 @@ void ParticleSystem::Impl::emitInstance(size_t slot, float dt, float spawn, int&
             in.accum[k] += count;
             int n = int(in.accum[k]);
             in.accum[k] -= float(n);
+            const bool endpoint = in.finishing && spawn > 0 &&
+                (d.perMeter.max > 0 || d.perMeter.curved()) && render::length(in.pos - in.prev) > 1e-6f;
+            if (endpoint) n = std::max(1, n);
             for (int i = 0; i < n; ++i) {   // spread along the path moved this frame (smooth trails)
-                float f = (float(i) + rng.unit()) / float(n);
+                float f = endpoint && i == n - 1 ? 1.f : (float(i) + rng.unit()) / float(n);
                 emit(in, owner, in.effect, int(k), render::lerp(in.prev, in.pos, f), dropped, f * edt, float(i) / float(n));
             }
             if (d.arcMode == FxArcMode::Loop || d.arcMode == FxArcMode::PingPong) in.arcPhase[k] += d.arcSpeed * edt;
@@ -434,6 +437,7 @@ void ParticleSystem::Impl::emitInstance(size_t slot, float dt, float spawn, int&
     in.delta = in.pos - in.prev;
     if (dt > 0) in.vel = in.delta * (1.0f / dt);
     in.prev = in.pos;
+    if (in.finishing) in.stopped = true;
     if (in.emitting && (in.stopped || (!e.looping && in.time >= e.emitEnd))) in.emitting = false;
     if (!in.emitting && in.live == 0) freeInstance(slot);
 }
@@ -1109,9 +1113,15 @@ void ParticleSystem::modelInstances(std::vector<ModelInstance>& out) const {
     }
 }
 
-void ParticleSystem::move(FxHandle h, float3 pos) { if (auto* in = findInstance(*impl_, h)) in->pos = pos; }
+void ParticleSystem::move(FxHandle h, float3 pos) { if (auto* in = findInstance(*impl_, h); in && !in->finishing) in->pos = pos; }
 void ParticleSystem::move(FxHandle h, float3 pos, float3 dir) {
-    if (auto* in = findInstance(*impl_, h)) { in->pos = pos; if (render::length(dir) > 1e-5f) in->setDir(render::normalize(dir)); }
+    if (auto* in = findInstance(*impl_, h); in && !in->finishing) { in->pos = pos; if (render::length(dir) > 1e-5f) in->setDir(render::normalize(dir)); }
+}
+void ParticleSystem::finish(FxHandle h, float3 position) {
+    if (auto* in = findInstance(*impl_, h); in && in->emitting && !in->stopped && !in->finishing) {
+        in->pos = position;
+        in->finishing = true;
+    }
 }
 void ParticleSystem::stop(FxHandle h) { if (auto* in = findInstance(*impl_, h)) in->stopped = true; }
 void ParticleSystem::kill(FxHandle h) {
