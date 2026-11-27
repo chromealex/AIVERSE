@@ -1648,3 +1648,7 @@ d36ac0faed88182b8f29271a8271dbef4cdbec52 updates docs/studio-html5-parity.md and
 ### Individual frame inspection and CSV
 
 918dce60d12def2db3811793becb8a8e2c974fc5 updates InsightPanels.tsx, ProjectToolPanels.css and StudioPanelRenderer.tsx. Mac web/native builds passed. Detached Scene and Frame Capture produced 63 real frames. Verified freeze stability, scrub to first frame, displayed time and draws against the exported CSV, Clear disabling CSV, and Resume live collecting frames again. CSV payload tested with isolated clipboard sink. Capture: docs/handoff/studio-html5/captures/mac-frame-capture-scrub.png. Next cover recording across the 240-frame ring and simulation time from its owner.
+
+### Full Scene frame ring
+
+7ed1320de47683340f15ff39aedebbe153f8e62c updates StudioHost.cpp, types.ts and InsightPanels.tsx. Web and Mac builds and 303 web tests passed. Real Scene rendered beyond 6000 frames in packaged macOS Studio. Live responses remained bounded at 240, explicit capture retained exactly 6000, scrub and CSV first row agreed, and a new capture after Clear and Resume started after the old last frame. Screenshot docs/handoff/studio-html5/captures/mac-frame-capture-6000.png; stats-mac-clydvvi_/live.log on KINGSTON. Timing of the simulation owner remains to port.
