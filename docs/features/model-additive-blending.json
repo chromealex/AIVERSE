@@ -49,7 +49,8 @@
     "demos/material-effects/fx/weighted.json",
     "demos/material-effects/fx/unweighted.json",
     "demos/material-effects/fx/linear.json",
-    "demos/material-effects/fx/display.json"
+    "demos/material-effects/fx/display.json",
+    "skills/visuals/aiverse-look/SKILL.md"
   ],
   "traits": {
     "editable": true,
@@ -76,9 +77,11 @@
       "evidence": []
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Existing owner recipe documents exact authoring route, shared semantics, example and verified backend limits.",
+      "evidence": [
+        "skills/visuals/aiverse-look/SKILL.md"
+      ]
     },
     "mcp": {
       "status": "not_run",
@@ -146,9 +149,13 @@
       "evidence": []
     },
     "examples": {
-      "status": "not_run",
-      "note": "Shared material-effects demo planned from accepted native shadow fixture: shadow flags, weighted/unweighted model additive and linear/display particles. Native/Web acceptance pending.",
-      "evidence": []
+      "status": "pass",
+      "note": "Three ordinary material-effects scenes verified in actual Metal and WebGL captures: shadow switch, weighted/unweighted model addition, linear/display particles. No special demo runtime path. Publication pending.",
+      "evidence": [
+        "demos/material-effects/README.md",
+        "docs/evidence/issues-material-effects-metal-20261127/result.json",
+        "docs/evidence/issues-material-effects-web-20261127/result.json"
+      ]
     },
     "tests": {
       "status": "not_run",
@@ -172,7 +179,9 @@
     }
   },
   "integrations": {
-    "skills": [],
+    "skills": [
+      "aiverse-look"
+    ],
     "mcp_tools": [
       "material_set",
       "material_get",

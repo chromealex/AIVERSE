@@ -305,5 +305,9 @@ callback; keep the particle system and its view unchanged until resolve finishes
 Without a postprocessing/depth source, the existing open-pass LDR path is used.
 Graph-runtime GPU admission routes this setting to CPU presentation; a strict
 GPU requirement reports incompatibility. Volume features that require GPU-only
-execution must not silently discard this setting. Backend captures and native
-runtime acceptance are still pending for this implementation.
+execution must not silently discard this setting. Actual Metal pixel cases and Metal/WebGL example captures are retained in
+`docs/evidence/issues-additive-metal-20261127` and
+`docs/evidence/issues-material-effects-{metal,web}-20261127`. These checks do
+not establish Windows/Vulkan or mobile-device parity. Graph v1/v2 MCP
+validate/save/bake/reopen and invalid-edit preservation are retained in
+`docs/evidence/issues-display-graph-mcp-20261127`.

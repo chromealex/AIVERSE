@@ -8,4 +8,4 @@ Three ordinary game scenes share the same model and native FX owners:
 
 Choose the scene in the map menu (or use ?map=0, ?map=1, ?map=2 in the Web build). Shadows depend on the selected renderer quality. These examples use ordinary view.fx bindings and fx/*.json; there is no demonstration-only runtime path.
 
-The source shadow fixture has retained native Metal A/B evidence. This combined demo still needs native and browser acceptance before publication; a data file alone does not establish backend parity.
+All three scenes have actual native Metal and browser WebGL captures in docs/evidence/issues-material-effects-metal-20261127 and docs/evidence/issues-material-effects-web-20261127. Native runs completed 120 frames per scene with zero pipeline failures. The Web output is hash-pinned in site/manifest.json for publication after main integration. Windows/Vulkan and mobile hardware have not been verified.
