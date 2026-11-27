@@ -66,13 +66,19 @@ std::string findEditor(const Options& o, const std::string& self) {
     for (const char* build : {"Release", "RelWithDebInfo", "Debug", "MinSizeRel"})
         roots.push_back(directory / "apps/studio-native" / build);
 #else
-    const fs::path studio = "aiverse_editor";
+    const fs::path studio = "AiverseStudio";
 #endif
     for (const auto& root : roots) {
         std::error_code error;
         const auto candidate = root / studio;
         if (fs::is_regular_file(candidate, error)) return candidate.string();
     }
+#if defined(__linux__)
+    // Existing Linux build trees can still explicitly build only the legacy editor.
+    std::error_code error;
+    if (fs::is_regular_file(directory / "aiverse_editor", error))
+        return (directory / "aiverse_editor").string();
+#endif
     return {};
 }
 
@@ -165,7 +171,7 @@ public:
         if (ed.empty()) return false;
         std::vector<std::string> args{ed, "--listen", std::to_string(opt_.port)};
         const auto executable = fs::path(ed).filename();
-        if (executable == "AiverseStudioHTML5" || executable == "AiverseStudio.exe") {
+        if (executable == "AiverseStudioHTML5" || executable == "AiverseStudio" || executable == "AiverseStudio.exe") {
             if (!opt_.game.empty()) {
                 if (projectDir_.empty()) return false;
                 args.insert(args.end(), {"--project", projectDir_});
