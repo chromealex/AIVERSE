@@ -1,0 +1,10 @@
+{
+  "sha": "45af92f555ae26c0674f3f859d532b9232f3ca77",
+  "argv": [
+    "bash",
+    "../mac-export-rosetta.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-export-rosetta-launch.log.txt",
+  "sha256": "6b2499a9db028d741e7ac34c57e0eb2f7beecb3d8ce4d898cf6c2c934c5eb6bc"
+}
