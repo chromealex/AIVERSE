@@ -85,18 +85,23 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
    if(wireDrag.current){wireDrag.current=null;suppressClick.current=true;e.stopPropagation();}
    setMenu(false);onCancel?.();return;
   }if(disabled||e.defaultPrevented)return;const target=e.target as HTMLElement;if(target.closest('input,textarea,select,[contenteditable=true]'))return;if(enhancedNavigation&&e.code==='Space'&&e.target===svg.current){e.preventDefault();space.current=true;return;}const chord=(e.metaKey||e.ctrlKey?'mod+':'')+(e.shiftKey?'shift+':'')+e.key.toLowerCase();const command=commands?.find(c=>c.shortcut===chord&&!c.disabled);if(command){e.preventDefault();e.stopPropagation();setMenu(false);command.run();}}}>
- <div className="au-row" aria-label="Graph zoom">
-  <StudioButton size="sm" disabled={zoom<=(enhancedNavigation ? .25 : .5)} onClick={()=>setZoom(z=>Math.max(enhancedNavigation ? .25 : .5,z-.25))}>−</StudioButton>
-  <StudioButton size="sm" onClick={()=>setZoom(1)}>{Math.round(zoom*100)}%</StudioButton>
-  <StudioButton size="sm" disabled={zoom>=2} onClick={()=>setZoom(z=>Math.min(2,z+.25))}>+</StudioButton>
-  {enhancedNavigation&&<StudioButton size="sm" onClick={fit}>Fit</StudioButton>}
+ <div className="au-row" role="group" aria-label="Graph zoom">
+  <StudioButton size="sm" aria-label="Zoom out" title="Zoom out" disabled={zoom<=(enhancedNavigation ? .25 : .5)} onClick={()=>setZoom(z=>Math.max(enhancedNavigation ? .25 : .5,z-.25))}>−</StudioButton>
+  <StudioButton size="sm" aria-label={Math.round(zoom*100)+'% · Reset zoom to 100%'} title="Reset zoom to 100%" onClick={()=>setZoom(1)}>{Math.round(zoom*100)}%</StudioButton>
+  <StudioButton size="sm" aria-label="Zoom in" title="Zoom in" disabled={zoom>=2} onClick={()=>setZoom(z=>Math.min(2,z+.25))}>+</StudioButton>
+  {enhancedNavigation&&<StudioButton size="sm" aria-label="Fit graph to window" title="Fit graph to window (Home on canvas)" onClick={fit}>Fit</StudioButton>}
   {onAddMenu&&<StudioButton size="sm" disabled={disabled} onClick={onAddMenu}>Search nodes</StudioButton>}
   {commands?.length&&<StudioButton size="sm" aria-expanded={menu} disabled={disabled} onClick={()=>setMenu(v=>!v)}>Actions</StudioButton>}
  </div>
  {menu&&<div className="au-row au-graph-actions" aria-label="Graph actions">{commands?.map(c=><StudioButton key={c.id} size="sm" disabled={disabled||c.disabled} onClick={()=>{setMenu(false);c.run()}}>{c.label}</StudioButton>)}</div>}
  <div className={"au-graph-canvas graph-surface"+(enhancedNavigation?" au-graph-canvas--grid":"")} ref={scroll}>
   <svg ref={svg} width={maxWidth*zoom} height={maxHeight*zoom} viewBox={`0 0 ${maxWidth} ${maxHeight}`}
-   role="group" tabIndex={0} aria-label={label}
+   role="group" tabIndex={0} aria-label={label} aria-keyshortcuts={enhancedNavigation?'Home':undefined}
+   onKeyDown={event=>{
+    if(!enhancedNavigation||event.target!==event.currentTarget||event.key!=='Home'||
+       event.altKey||event.ctrlKey||event.metaKey||event.shiftKey)return;
+    event.preventDefault();event.stopPropagation();fit();
+   }}
    onPointerDown={event=>{
     if(disabled||drag.current||box.current||pan.current)return;
     if(event.button===1||(event.button===0&&(event.altKey||(enhancedNavigation&&space.current)))){
