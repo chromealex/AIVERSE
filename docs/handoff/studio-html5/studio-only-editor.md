@@ -1604,3 +1604,7 @@ Project Studio build and launch 50fb367f90292cd08582d983d52b7f31985efaa9. Real d
 ### Planet demo Build estimate
 
 Stage f4bfc187840af26ed4fb91b37fea8cf114621a5e updates examples/native/world_processes/planet-demo/game.json to use an ID accepted by aiversebuild. Tested on Linux with a copy of the example using aiversebuild --target linux --config Release --estimate. Exit 0, linux/size-report.json produced, 46 files, 6.0 MB packed from 18.7 MB. Next verify the Statistics player lifecycle in the running Studio.
+
+### Statistics ECS counts
+
+684292b4ba09c278c391f9de25d9977b5b02718f changes apps/studio-native/StudioGameSurface.cpp to call the const countExisting API for units and projectiles. The current source compiled successfully with the studio-project-module-mac CMake object target. Linux live match lifecycle evidence remains pending: Docker failed to mount the reattached KINGSTON build tree before starting the test. Next run the live Statistics pause, restart and stop scenario and capture its graph.
