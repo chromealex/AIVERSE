@@ -17,6 +17,7 @@
     "engine/assets/ui/menu.rml",
     "engine/assets/ui/theme.rcss",
     "engine/platform/EnhancedInputPresets.h",
+    "engine/world/TriangleCollision.cpp",
     "tests/libraries/enhanced_input_config_tests.cpp",
     "tests/render/client_controls_frame.cpp"
   ],
@@ -79,7 +80,7 @@
     },
     "platforms": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "note": "Mac client acceptance passed. Web demo build with Emscripten 7.0.1 exposed missing cstdlib in shared triangle collision; correcting the explicit dependency before continuing web acceptance.",
       "evidence": []
     },
     "dependencies": {
