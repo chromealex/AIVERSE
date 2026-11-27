@@ -1,0 +1,14 @@
+{
+  "sha": "7fc001628f6b9c89a8a3b4da4ed96601f66fc405",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "../windows-cross",
+    "-N",
+    "-R",
+    "^studio_(win_device_overlay|session)$"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-windows-device-test-registration.log.txt",
+  "sha256": "815defba24be16c2390e46727bc7cd24c2b15fed93b1bceb59128100b3eb4668"
+}
