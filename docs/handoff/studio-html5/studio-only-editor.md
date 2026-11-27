@@ -1720,3 +1720,7 @@ cd5056a300a6a0bfd7be469afe235ec71f438696 updates InsightPanels.tsx, docs/studio-
 ### Detached RGBA32F preview acceptance
 
 e0cac53cf8300ab90e112b6e8a7bf727b6d773c6 adds docs/handoff/studio-html5/captures/mac-texture-rgba32f.png. A disposable test build allocated an authored two-pixel HDR texture on the Scene Metal device. Selecting its real inventory entry in the production detached WKWebView automatically rendered the two expected canvas colors (0,188,225,255 and 0,124,0,255). Evidence: stats-mac-8kcg_ba0/live.log. Next review remaining single/dual-channel and cross-backend parity.
+
+### Scene Debug search by individual setting
+
+6cddca6676ce37d4ac43c7187808035e6dafc645 updates SceneToolbar.tsx and SceneToolbar.css with label-level filtering including subsystem names and select option text. Production web build passed. Initial run looked for Scene in the restored main layout and timed out; reran explicitly in a detached Scene. stats-mac-47tadykb/live.log verifies one result each for strata wire and physis wind, empty results for an unknown term and all five STRATA controls for STRATA. Screenshot captures/mac-scene-strata-search.png. This verifies menu discovery, not render output for every mode. Next audit the rendered diagnostic modes against the owners.
