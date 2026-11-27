@@ -18800,3 +18800,28 @@ TEST(native_build_drops_cache_of_another_engine_folder) {
     fs::remove_all(bd);
 }
 #endif   // AIVERSE_TESTS_EDITOR_CORE
+
+#include "engine/view/ProjectilePresentation.h"
+TEST(projectile_presentation_segment_origin_and_shared_sample) {
+    using namespace aiverse;
+    view::ProjectilePresentation a, b;
+    const view::FlightSegment emission{1, view::FlightOrigin::Emission, {0,0,0}};
+    a.begin(emission, {0,2,0}); b.begin(emission, {0,2,0});
+    a.evaluate({1,0,0}, {1,0,0}, .1f);
+    a.evaluate({2,0,0}, {1,0,0}, .2f);
+    b.evaluate({2,0,0}, {1,0,0}, .2f);
+    CHECK(render::length(a.sample().position-b.sample().position)<1e-6f);
+    for(auto origin : {view::FlightOrigin::Split, view::FlightOrigin::Ricochet}) {
+        a.begin({2,origin,{4,1,0}}, {0,2,0});
+        a.evaluate({5,1,0}, {1,0,0}, .01f);
+        CHECK(render::length(a.sample().position-render::float3{5,1,0})<1e-6f);
+    }
+    a.finish({6,1,0});
+    a.evaluate({99,0,0}, {1,0,0}, 5.f);
+    CHECK(a.sample().terminal);
+    CHECK(render::length(a.sample().position-render::float3{6,1,0})<1e-6f);
+    a.begin(emission,{0,2,0});
+    a.evaluateStraight({10,0,0},{10,1,0});
+    CHECK(render::length(a.sample().position-render::float3{10,1,0})<1e-6f);
+    CHECK(!a.sample().terminal);
+}

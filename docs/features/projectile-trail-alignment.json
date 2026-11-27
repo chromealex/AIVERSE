@@ -7,9 +7,11 @@
     "apps/editor/Editor.cpp",
     "engine/fx/GameFx.cpp",
     "engine/game/Components.h",
+    "engine/view/ProjectilePresentation.h",
     "engine/view/game/GameView.cpp",
     "engine/view/game/GameView.h",
-    "engine/view/game/GameViewDraw.cpp"
+    "engine/view/game/GameViewDraw.cpp",
+    "tests/tests.cpp"
   ],
   "traits": {
     "editable": true,
