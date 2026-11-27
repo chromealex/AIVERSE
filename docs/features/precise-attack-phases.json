@@ -6,7 +6,9 @@
     "docs/game-format.md",
     "engine/game/Combat.cpp",
     "engine/game/GameCore.cpp",
+    "engine/game/TopDown.cpp",
     "engine/mechanics/AttackTiming.h",
+    "tests/libraries/systems_engine_tests.cpp",
     "tests/tests.cpp"
   ],
   "traits": {

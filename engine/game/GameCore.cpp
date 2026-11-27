@@ -115,9 +115,23 @@ void GameCore::setup(Simulation& sim, const Json& rulesIn, const Json& map) {
         s.world().each<Combat, Unit>([&](Entity e, Combat& combat, Unit& unit) {
             const auto& weapons = rules_.types[unit.type].weapons;
             const Fixed elapsed = s.dt() * fxMax(stat(s, e, Stat::AttackSpeed), Fixed::fromRatio(1, 10));
-            for (size_t i = 0; i < weapons.size() && i < 4; ++i)
-                if (weapons[i].preciseCooldown && !(combat.target.valid() && weapons[i].hasAttackTiming() && weapons[i].chargeTime.raw <= 0))
-                    combat.cooldown[i] = lib::mechanics::advanceWeaponCadence(combat.cooldown[i], elapsed, true);
+            for (size_t i = 0; i < weapons.size() && i < 4; ++i) {
+                if (!weapons[i].preciseCooldown) continue;
+                if (weapons[i].hasAttackTiming() && weapons[i].chargeTime.raw <= 0) {
+                    auto& phase = combat.attackTiming[i];
+                    const Entity previous = phase.target;
+                    const auto rest = lib::mechanics::consumeAttackRest(phase, combat.cooldown[i], elapsed);
+                    // Negative cooldown carries this tick's unspent time through
+                    // movement/free-fire into targeted combat. No target-dependent clock.
+                    if (rest.available.raw > 0) combat.cooldown[i] = -rest.available;
+                    if (rest.recoveryCompleted) {
+                        const auto* owner = s.world().tryGet<Owner>(e);
+                        const auto* transform = s.world().tryGet<Transform>(e);
+                        s.emit({kEvAttackRecoveryEnd, uint8_t(owner ? owner->player : 0), e, previous,
+                            int64_t(i), transform ? transform->pos : Vec3{}});
+                    }
+                } else combat.cooldown[i] = lib::mechanics::advanceWeaponCadence(combat.cooldown[i], elapsed, true);
+            }
         });
     });
     sim.addSystem("movement", [this](Simulation& s) { sysMovement(s); });

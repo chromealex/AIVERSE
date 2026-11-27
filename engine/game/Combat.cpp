@@ -191,14 +191,11 @@ void GameCore::sysWeapons(Simulation& sim) {
         Fixed phaseTime[4]{};
         for (size_t i = 0; i < 4; ++i) {
             auto& phase = c.attackTiming[i];
-            if (c.target.valid() && i < t.weapons.size() && t.weapons[i].preciseCooldown &&
+            if (i < t.weapons.size() && t.weapons[i].preciseCooldown &&
                 t.weapons[i].hasAttackTiming() && t.weapons[i].chargeTime.raw <= 0) {
-                const Entity previous = phase.target;
-                const auto rest = consumeAttackRest(phase, c.cooldown[i], dt * atkSpeed);
-                phaseTime[i] = rest.available;
-                if (rest.recoveryCompleted)
-                    sim.emit({kEvAttackRecoveryEnd, o.player, e, previous, int64_t(i), tr.pos});
-                continue;
+                phaseTime[i] = fxMax(Fixed{}, -c.cooldown[i]);
+                c.cooldown[i] = fxMax(Fixed{}, c.cooldown[i]);
+                continue; // rest already advanced by the shared pre-movement stage
             }
             if (phase.phase == WeaponAttackPhase::Recovery && advanceAttackPhase(phase, dt * atkSpeed)) {
                 sim.emit({kEvAttackRecoveryEnd, o.player, e, phase.target, int64_t(i), tr.pos});

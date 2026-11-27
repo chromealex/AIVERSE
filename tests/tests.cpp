@@ -18958,4 +18958,12 @@ TEST(precise_windup_cooldown_preserves_authored_period) {
     const auto elapsed=sim->dt()*200;
     const auto period=Fixed::fromRatio(3,10)+Fixed::fromRatio(2,100);
     CHECK(releases==int(((elapsed-Fixed::fromRatio(3,10))/period).floorInt())+1);
+    const auto saved=sim->serialize(); CHECK(!saved.empty());
+    for(int i=0;i<30;++i)sim->step();
+    const auto expected=sim->checksum();
+    std::string error;
+    CHECK(sim->deserialize(saved,&error));
+    for(int i=0;i<30;++i)sim->step();
+    CHECK(sim->checksum()==expected);
+
 }
