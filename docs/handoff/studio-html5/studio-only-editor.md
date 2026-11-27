@@ -1856,3 +1856,7 @@ b6e6f3b57a5f7151137574117e17a61a938c8eb9 adds docs/handoff/studio-html5/captures
 ### Inspector Escape during rename
 
 b59daa3766d05b83b55cb0b66f212bc07b64c60b updates InspectorPanel.tsx and adds captures/mac-inspector-name-cancel.png. Baseline stats-mac-l4pdzz01/live.log reproduced the canceled name on the native object. Production web build and detached macOS regression passed in stats-mac-tjbewn6q: Esc restored the original in the DOM and native inspector, Enter committed Courtyard Lamp and Save wrote it into the disposable map. Continue Hierarchy document record authoring.
+
+### Map player record rename in HTML Inspector
+
+b293126c0468e1c079046203ae72d7e833a078e5 adds captures/mac-map-player-rename.png. Detached Mac Inspector opened Players, discarded a draft name, applied Northern Patrol, undid and redid the edit, then saved. Parsing maps/courtyard.json confirmed both player names, Northern Patrol and unchanged Watch. Evidence: stats-mac-0615r0g_/live.log. The verified owner is studio.mapPlayer with document revision and one-based player slot. Direct Hierarchy entry for player records is still outstanding.
