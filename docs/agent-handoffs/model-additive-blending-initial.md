@@ -1,0 +1,12 @@
+# Model additive blending — #219
+
+Source commit: abeca2a1001c20fe52a617bbc2fdb03e8bf34138
+Branch: codex/issue223-minimap-atlas-20261126
+
+Shared owner: engine/render/MaterialBlend.h. AlphaMode appends Additive (SRC_ALPHA, ONE) and AdditiveUnweighted (ONE, ONE), with common classification, parsing and RHI mapping. Existing enum values preserved. RHI appends unweighted additive; GL, Metal and Vulkan source implementations updated. No shaders changed. ModelShaderKey now distinguishes pipeline blend state without duplicating shader variants. Renderer phase sorting, shadow eligibility, opaque batching and virtual fallback use common transparency classification.
+
+Import: MDX Additive/AddAlpha retain actual additive semantics, including material alpha; glTF extras.aiverseBlend. AppearanceAuthoringService accepts blend overrides. FX model material tracks persist blend and do not overwrite additive state with alpha tracks. Modeling export preserves glTF extras; proxy bake and Studio reject additive where they reject other transparent input. Full changed paths are recorded in docs/features/model-additive-blending.json.
+
+Evidence: git diff --check passed. Added common policy regression and FX JSON roundtrip assertion; tests and builds NOT RUN per final-build instruction. GPU blending equations, import/export fixture roundtrips, transparent sorting, cache separation, material overrides and captures still need actual verification. No #219 closure/merge/push.
+
+Next: inspect serialization/cooked material enum validation, shader output alpha semantics for both modes, all MDX multilayer paths (existing layer approximations may remain); extend import/export and GPU regression coverage. Implement #221 with PRISMA-owned display-space composition (no duplicate full-screen owner), then execute final build and all applicable gates. Other stages remain unverified; #206 requires native Windows evidence.
