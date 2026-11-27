@@ -19029,3 +19029,24 @@ TEST(particle_blend_space_roundtrip_and_trail_override) {
     effect=fxParse(R"({"emitters":[{"burst":1,"blendSpace":"display","trail":{}}]})");
     CHECK(effect.emitters[0].trail.blendSpace==fx::FxBlendSpace::Display);
 }
+
+TEST(models_mdl_preserves_additive_layers) {
+    using namespace mdxtest;
+    using namespace aiverse::render;
+    std::string text=kMdl;
+    const std::string layer="Layer { FilterMode Transparent, TwoSided, static TextureID 0, }";
+    const auto at=text.find(layer);CHECK(at!=std::string::npos);if(at==std::string::npos)return;
+    text.replace(at,layer.size(),layer+"\n Layer { FilterMode AddAlpha, static TextureID 0, static Alpha 0.5, }");
+    auto model=loadModel("units/guy/guy.mdl",modeltest::mapReader({{"units/guy/guy.mdl",text},{"units/Textures/Guy.blp",paletted2x2()}}),nullptr);
+    bool found=false;
+    for(const auto& mesh:model->meshes)for(size_t i=1;i<mesh.primitives.size();++i) {
+        const auto& overlay=mesh.primitives[i];const auto& base=mesh.primitives[i-1];
+        const auto& material=model->materials[size_t(overlay.material)];
+        if(material.alpha!=AlphaMode::Additive)continue;
+        found=true;
+        CHECK(overlay.firstIndex==base.firstIndex && overlay.indexCount==base.indexCount);
+        CHECK(overlay.firstVertex==base.firstVertex && overlay.vertexCount==base.vertexCount);
+        CHECK(std::abs(material.baseColor.w-.5f)<1e-6f && !material.castShadow);
+    }
+    CHECK(found);
+}
