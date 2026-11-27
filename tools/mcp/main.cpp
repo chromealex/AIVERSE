@@ -73,12 +73,6 @@ std::string findEditor(const Options& o, const std::string& self) {
         const auto candidate = root / studio;
         if (fs::is_regular_file(candidate, error)) return candidate.string();
     }
-#if defined(__linux__)
-    // Existing Linux build trees can still explicitly build only the legacy editor.
-    std::error_code error;
-    if (fs::is_regular_file(directory / "aiverse_editor", error))
-        return (directory / "aiverse_editor").string();
-#endif
     return {};
 }
 

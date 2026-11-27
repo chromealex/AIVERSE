@@ -18,7 +18,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 BINARIES = {
     "windows": ["AiverseStudio.exe", "aiversemcp.exe", "aiversebuild.exe", "aiverse_headless.exe", "AiverseGame.exe", "assetpipe.exe", "aiverse_modeling.exe", "aiverse_lod_simplify.exe", "aiverse_fps_server.exe"],
     "macos": ["AiverseStudioHTML5.app", "AiverseGame.app", "aiversemcp", "aiversebuild", "aiverse_headless", "assetpipe", "aiverse_modeling", "aiverse_lod_simplify", "aiverse_fps_server"],
-    "linux": ["aiverse_editor", "aiversemcp", "aiversebuild", "aiverse_headless", "AiverseGame", "assetpipe", "aiverse_modeling", "aiverse_lod_simplify", "aiverse_fps_server"],
+    "linux": ["aiversemcp", "aiversebuild", "aiverse_headless", "AiverseGame", "assetpipe", "aiverse_modeling", "aiverse_lod_simplify", "aiverse_fps_server"],
 }
 # source paths left out of packages: benchmark screenshots are not needed to run the engine and
 # would push a zip past GitHub's 100 MB file limit on the builds branch
@@ -115,15 +115,14 @@ def main():
             if os.path.isfile(os.path.join(directory, "aiverse_client")):
                 require_files(directory, ("content/engine/ui/theme.rcss",))
                 resources.extend(["aiverse_client", "content/engine"])
-            binaries.remove("aiverse_editor")
             binaries.extend(resources)
             studio_files.update(dict.fromkeys(resources + ["aiversemcp"], directory))
             if os.path.isfile(os.path.join(directory, "aiversebuild")):
                 studio_files["aiversebuild"] = directory
             break
         else:
-            if not any(os.path.isfile(os.path.join(a.bin, name)) for name in ("aiverse_editor", "aiversemcp")):
-                sys.exit(f"no Linux Studio, editor or MCP server in {a.bin}")
+            if not os.path.isfile(os.path.join(a.bin, "aiversemcp")):
+                sys.exit(f"no Linux HTML Studio or MCP server in {a.bin}")
     ver, commit, date = version()
     name = f"AIVERSE-{ver}-{commit}-{a.platform}.zip"
     os.makedirs(os.path.join(a.out, ".temp"), exist_ok=True)
