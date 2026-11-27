@@ -148,14 +148,20 @@ export function SnapshotDiffPanel({ snapshot }: Ctx) {
   </div>;
 }
 
-function FrameTimeChart({ ms, peak }: { ms: number[]; peak: number }) {
-  const W = 480, H = 90, top = Math.max(33.4, peak * 1.1);
-  const line = ms.map((v, i) => `${(i / Math.max(1, ms.length - 1)) * W},${H - (v / top) * H}`).join(' ');
-  const y16 = H - (16.7 / top) * H, y33 = H - (33.3 / top) * H;
-  return <svg className="frames__chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Frame times">
-        <line x1={0} x2={W} y1={y16} y2={y16} className="frames__budget"/><line x1={0} x2={W} y1={y33} y2={y33} className="frames__budget"/>
-        <polyline points={line} className="frames__line"/>
-      </svg>;
+function FrameChart({ values, label, budget = false, selected }: {
+  values: number[]; label: string; budget?: boolean; selected?: number;
+}) {
+  const width = 480, height = 90;
+  const top = Math.max(budget ? 33.4 : 0.0001, Math.max(0, ...values) * 1.1);
+  const x = (i: number) => width * i / Math.max(1, values.length - 1);
+  const y = (v: number) => height * (1 - v / top);
+  const points = values.map((v, i) => x(i) + ',' + y(v)).join(' ');
+  return <svg className="frames__chart" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-label={label}>
+    {budget && [16.7, 33.3].map(ms => <line key={ms} x1={0} x2={width} y1={y(ms)} y2={y(ms)} className="frames__budget"/>)}
+    <polyline points={points} className="frames__line"/>
+    {selected !== undefined && selected < values.length &&
+      <line x1={x(selected)} x2={x(selected)} y1={0} y2={height} className="frames__cursor"/>}
+  </svg>;
 }
 
 function StatsFrameHistory({ project }: { project: string }) {
@@ -187,7 +193,7 @@ function StatsFrameHistory({ project }: { project: string }) {
         <div><b>{sum.max.toFixed(1)} ms</b><span>peak</span></div>
         <div><b>{frames?.history[ms.length - 1]?.[1]}</b><span>latest draw calls</span></div>
       </div>
-      <FrameTimeChart ms={ms} peak={sum.max}/>
+      <FrameChart values={ms} label="Frame times" budget/>
     </>}
     <p className="ptp__hint">{error || (sum.count ? sum.count + ' Scene frames · reference lines at 60 and 30 fps' : 'Waiting for Scene frames')}</p>
   </section>;
@@ -262,7 +268,14 @@ export function FrameCapturePanel({ snapshot }: Ctx) {
         <input type="range" aria-label="Captured frame" min={0} max={sum.count - 1} value={selected}
           onChange={event => setSelected(Number(event.target.value))}/>
       </label>}
-      <FrameTimeChart ms={ms} peak={sum.max}/>
+      {sum.count > 0 && <div className="frame-capture__plots">
+        <figure><figcaption>Scene frame time · ms</figcaption><FrameChart values={ms} label="Frame times" budget selected={frozen ? selected : undefined}/></figure>
+        {frozen && frozen.history.every(sample => sample[2] !== undefined) && <figure>
+          <figcaption>Simulation step time · ms</figcaption>
+          <FrameChart values={frozen.history.map(sample => sample[2]!)} label="Simulation step times" selected={selected}/>
+        </figure>}
+        <figure><figcaption>Scene draw calls</figcaption><FrameChart values={draws} label="Draw calls" selected={frozen ? selected : undefined}/></figure>
+      </div>}
       <p className="ptp__hint">Time between Scene frames (CPU side, includes waiting for the display); lines at 60 and 30 fps. Draw calls of the Scene renderer. Not a GPU command capture.</p>
     </div>
   </div>;
