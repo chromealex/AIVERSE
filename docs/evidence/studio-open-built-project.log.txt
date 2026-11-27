@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "../studio-open-built-project.py", line 49, in <module>
+    else: raise RuntimeError('Timed out waiting for module card')
+RuntimeError: Timed out waiting for module card
