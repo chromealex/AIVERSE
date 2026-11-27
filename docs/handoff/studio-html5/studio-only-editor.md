@@ -1800,3 +1800,7 @@ ba54858b8ae8fce4297bea809535f4a06d4c5c33 updates SpectraNativePreview.tsx and ad
 ### Narrow SpectraFX comparison controls
 
 5ff9cc3a70d786508206db54cea322fcbe9d79d7 puts drawable reveal inside the common capture handler in SpectraNativePreview.tsx. Production web build passed. In the detached WKWebView constrained to 250 CSS pixels, the test scrolled separately to Capture A and Capture B, verified both decoded native frame images, then verified a 512x447 decoded difference heatmap. See stats-mac-j6cp13y8/live.log and captures/mac-spectra-narrow-ab.png. Continue the remaining window parity matrix.
+
+### Detached Asset Audit reference resolution
+
+6426e1405aadd540f9e79ce33ca96d2c39ebf51f updates docs/studio-html5-parity.md with captures/mac-asset-audit-references.png. In the native WKWebView the Scan references action reported ui/audit-fixture/refs.lua and missing-proof.png. Its sibling present.png was correctly absent from missing rows. Evidence: stats-mac-0lgnjnvc/live.log. Next check project lifecycle session tests and remaining legacy workflows.
