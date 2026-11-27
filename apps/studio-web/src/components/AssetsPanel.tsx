@@ -401,6 +401,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     const text=absolute?absoluteChildPath(projectPath,relative):relative;
     void copyText(text).then(ok=>ok?setMessage('Copied '+text):setError('Clipboard unavailable'));
   };
+  const startMaterial=()=>{setCreatingMaterial(true);setAddingFolder(false);setMaterialName('');};
   const createMaterial=async()=>{
     const name=materialName.trim();
     if(!native||!projectPath||!name||busy)return;
@@ -418,7 +419,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
   const backgroundItems=():StudioMenuItem[]=>[
     {id:'folder',label:'Create Folder',icon:<FolderPlus size={13}/>,disabled:!native||!projectPath||busy,onSelect:()=>setAddingFolder(true)},
     {id:'material',label:'Create Material…',icon:<Library size={13}/>,disabled:!native||!projectPath||busy,
-      onSelect:()=>{setCreatingMaterial(true);setMaterialName('')}},
+      onSelect:startMaterial},
     {id:'import',label:'Import Assets…',icon:<Upload size={13}/>,separator:true,disabled:!native||!projectPath||busy,onSelect:()=>void externalImport()},
     {id:'copy',label:'Copy Folder Path',icon:<Search size={13}/>,separator:true,onSelect:()=>copyPath(folder)},
     {id:'copy-absolute',label:'Copy Absolute Folder Path',disabled:!native,onSelect:()=>copyPath(folder,true)},
@@ -571,8 +572,11 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
               {!projectPath ? <p>Assets appear here when an AIVERSE project is open.</p>
                 : filtering ? <button type="button" className="studio-assets-empty-action"
                     onClick={clearAssetFilters}>Clear filters</button>
-                : native ? <button type="button" className="studio-assets-empty-action" disabled={busy||!!plan}
-                    onClick={()=>void externalImport()}>Import assets…</button>
+                : native ? <div className="studio-assets-empty-actions">
+                    {!folder&&<button type="button" className="studio-assets-empty-action" disabled={busy||!!plan||creatingMaterial}
+                      onClick={startMaterial}>Create material…</button>}
+                    <button type="button" className="studio-assets-empty-action" disabled={busy||!!plan}
+                    onClick={()=>void externalImport()}>Import assets…</button></div>
                 : <p>Open a project in Studio to import assets.</p>}
             </div>:
             <div className={'studio-assets-items studio-assets-items--'+mode} role="list">
