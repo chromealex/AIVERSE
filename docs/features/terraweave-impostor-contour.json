@@ -75,7 +75,7 @@
     },
     "performance": {
       "status": "fail",
-      "note": "Both contours reduce coverage. On the 288-tree M3 Ultra grove, median GPU time rises by 2.7% for three bands and 32.6% for eight bands. Keep opt-in.",
+      "note": "Both contours reduce coverage. On the 288-tree M3 Ultra grove, median GPU time rises by 2.7% for three bands and 32.6% for eight bands. Keep opt-in. Follow-up trial: one alpha bounding box per layer on a long-trunk palm at multiple distances and azimuths.",
       "evidence": [
         "docs/evidence/terraweave-contour-m3-ultra.log.txt"
       ]
