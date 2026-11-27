@@ -7,7 +7,8 @@ import base64
 import json
 import os
 from pathlib import Path
-import select
+from queue import Queue, Empty
+from threading import Thread
 import shutil
 import socket
 import subprocess
@@ -27,20 +28,31 @@ def main():
     build = args.build.resolve()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    editor = build / 'AiverseEditor.app/Contents/MacOS/AiverseEditor'
-    if not editor.exists():
-        editor = build / ('AiverseEditor.exe' if os.name == 'nt' else 'AiverseEditor')
-    with tempfile.TemporaryDirectory(prefix='aiverse-modeling-mcp-') as tmp:
+    studio = sys.platform == 'darwin' or os.name == 'nt'
+    if studio:
+        name = Path('AiverseStudioHTML5.app/Contents/MacOS/AiverseStudioHTML5') if sys.platform == 'darwin' else Path('AiverseStudio.exe')
+        directory = build / 'apps/studio-native'
+        candidates = [directory / name] + [directory / config / name for config in ('Release', 'Debug', 'RelWithDebInfo')]
+        editor = next((p for p in candidates if p.is_file()), None)
+        if editor is None:
+            parser.error(f'Build aiverse_studio first in {build}')
+        mcp_binary = editor.with_name('aiversemcp.exe' if os.name == 'nt' else 'aiversemcp')
+    else:
+        editor = build / 'aiverse_editor'
+        mcp_binary = build / 'aiversemcp'
+    with tempfile.TemporaryDirectory(prefix='aiverse-modeling-mcp-', dir=output) as tmp:
         project = Path(tmp) / 'game'
         shutil.copytree(templates_dir() / 'showcase', project)
         with socket.socket() as probe:
             probe.bind(('127.0.0.1', 0))
             port = probe.getsockname()[1]
-        env = dict(os.environ, AIVERSE_AUDIO='off', AIVERSE_LANG='ru')
+        env = dict(os.environ, AIVERSE_AUDIO='off', AIVERSE_LANG='ru', AIVERSE_ENGINE_DIR=str(root),
+                   AIVERSE_AGENT_LINK_DIR=str(Path(tmp) / 'agent-link'))
         with (output / 'editor.log').open('w') as log:
-            gui = subprocess.Popen([str(editor), '--project', str(project), '--engine', str(root),
-                                    '--listen', str(port), '--window', 'modeling'], env=env,
-                                   stdout=log, stderr=log)
+            arguments = ['--project', str(project), '--listen', str(port)]
+            if not studio:
+                arguments.extend(['--engine', str(root), '--window', 'modeling'])
+            gui = subprocess.Popen([str(editor), *arguments], env=env, stdout=log, stderr=log)
             mcp = None
             try:
                 deadline = time.monotonic() + 40
@@ -54,9 +66,15 @@ def main():
                         if time.monotonic() > deadline:
                             raise TimeoutError('editor connection')
                         time.sleep(.2)
-                mcp = subprocess.Popen([str(build / 'aiversemcp'), '--engine', str(root),
+                mcp = subprocess.Popen([str(mcp_binary), '--engine', str(root),
                                         '--port', str(port), '--no-editor'], stdin=subprocess.PIPE,
-                                       stdout=subprocess.PIPE, stderr=log, text=True, bufsize=1)
+                                       stdout=subprocess.PIPE, stderr=log, env=env, text=True, bufsize=1)
+                replies = Queue()
+                def read_replies():
+                    for line in mcp.stdout:
+                        replies.put(line)
+                    replies.put('')
+                Thread(target=read_replies, daemon=True).start()
                 serial = 0
 
                 def rpc(method, params):
@@ -65,14 +83,19 @@ def main():
                     mcp.stdin.write(json.dumps({'jsonrpc': '2.0', 'id': serial,
                                                'method': method, 'params': params}) + '\n')
                     mcp.stdin.flush()
-                    if not select.select([mcp.stdout], [], [], 40)[0]:
-                        raise TimeoutError(method)
-                    reply = json.loads(mcp.stdout.readline())
+                    try:
+                        line = replies.get(timeout=40)
+                    except Empty:
+                        raise TimeoutError(method) from None
+                    if not line:
+                        raise RuntimeError(f'MCP exited during {method}')
+                    reply = json.loads(line)
                     assert reply['id'] == serial, reply
                     assert 'error' not in reply, reply
                     return reply['result']
 
                 def tool(name, params, expect_error=False, image=None):
+                    captured = False
                     result = rpc('tools/call', {'name': name, 'arguments': params})
                     assert bool(result.get('isError')) == expect_error, result
                     text = {}
@@ -83,8 +106,9 @@ def main():
                             data = base64.b64decode(item['data'])
                             assert data.startswith(b'\x89PNG'), 'invalid preview'
                             (output / image).write_bytes(data)
+                            captured = True
                     if image:
-                        assert (output / image).exists(), 'missing rendered image'
+                        assert captured, f'{name} returned no rendered image'
                     return text
 
                 rpc('initialize', {'protocolVersion': '2025-06-18', 'capabilities': {},
