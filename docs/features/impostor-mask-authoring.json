@@ -188,7 +188,7 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/impostor-mask-authoring-final.json",
+    "docs/evidence/impostor-pr227-mac-mapped.json",
     "docs/evidence/impostor-pr227-windows.json",
     "docs/evidence/impostor-pr227-ubuntu.json"
   ]
