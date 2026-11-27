@@ -1,0 +1,10 @@
+{
+  "sha": "738cf4940e15d84c3accb619903096d89b535d40",
+  "argv": [
+    "bash",
+    "../ramp-debug.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-scene-ramp-debug.log.txt",
+  "sha256": "98441fb443882bdd24991f631bc2f0ca9063def5c9d98e70ef632980c998d135"
+}
