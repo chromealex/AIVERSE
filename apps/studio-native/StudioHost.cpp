@@ -327,6 +327,8 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
                 {"animation_assets","anim_assets"}, {"animation_graph","anim_graph"},
                 {"animation_rig","anim_rig"}, {"animation_attachments","attachments"},
                 {"animation_authoring","animation"}, {"studio_asset_audit","asset_audit"},
+                {"lens_cameras","actor"}, {"studio_camera_bookmarks","scene"}, {"tools","scene"},
+                {"FpsWindow","actor"}, {"ModelingWindow","modeling"}, {"AnimationWindow","model_anim"},
                 {"spectrafx_gpu_assets","fx_functions"}, {"spectrafx_graph","fx_graph"},
                 {"spectrafx_vfx_graph","fx_graph"}, {"static-geometry","static_geometry"}, {"studio_extensions","extensions"},
                 {"studio_frame_capture","frame_capture"}, {"studio_snapshot_diff","snapshot_diff"}
