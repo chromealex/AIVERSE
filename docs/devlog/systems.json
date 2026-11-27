@@ -3779,6 +3779,13 @@
           "title": "selection-voice-order",
           "titleEn": "selection-voice-order",
           "target": null
+        },
+        {
+          "id": "precise-attack-phases",
+          "status": "in-progress",
+          "title": "Точное время фаз атаки",
+          "titleEn": "Precise attack phase timing",
+          "target": null
         }
       ]
     }

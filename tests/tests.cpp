@@ -18920,3 +18920,25 @@ TEST(fx_motion_finished_without_rendered_entity) {
     bridge.update(*sim,nullptr);ps.update(.01f);ps.snapshot(particles);
     CHECK(particles.size()==10);
 }
+
+#include "engine/mechanics/AttackTiming.h"
+TEST(attack_phase_fractional_time_is_conserved) {
+    using namespace aiverse;
+    using namespace lib::mechanics;
+    AttackTimingState state;
+    beginAttackWindup(state,Entity{1,1},Fixed::fromRatio(3,100));
+    const Fixed tick=Fixed::fromRatio(5,100);
+    auto step=consumeAttackPhase(state,tick);
+    CHECK(step.complete);
+    CHECK(step.unused==tick-Fixed::fromRatio(3,100));
+    Fixed cooldown=Fixed::fromRatio(1,100);
+    commitAttackRelease(state,Fixed::fromRatio(15,1000));
+    auto rest=consumeAttackRest(state,cooldown,step.unused);
+    CHECK(rest.recoveryCompleted && state.phase==WeaponAttackPhase::Idle);
+    CHECK(rest.available==step.unused-Fixed::fromRatio(15,1000));
+    CHECK(cooldown==Fixed{});
+    beginAttackWindup(state,Entity{1,1},Fixed::fromRatio(3,100));
+    step=consumeAttackPhase(state,rest.available);
+    CHECK(!step.complete && step.unused==Fixed{});
+    CHECK(state.remaining==Fixed::fromRatio(3,100)-rest.available);
+}

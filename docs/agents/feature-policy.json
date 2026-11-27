@@ -417,6 +417,16 @@
         "id": "fx-model-shadow-option"
       },
       "api_paths": []
+    },
+    "precise-attack-phases": {
+      "requires": [],
+      "roadmap": {
+        "system": "gameplay",
+        "id": "precise-attack-phases"
+      },
+      "api_paths": [
+        "engine/mechanics/AttackTiming.h"
+      ]
     }
   },
   "claims": []
