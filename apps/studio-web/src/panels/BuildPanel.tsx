@@ -152,6 +152,17 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
           {pageSizes.map(size => <option key={size} value={size}>{size} px</option>)}
         </StudioSelect>
       </StudioField>
+      <StudioField label="Content delivery" htmlFor="build-split-mode">
+        <StudioSelect id="build-split-mode" disabled={atlasDisabled || !selected}
+          value={selected?.split == null ? '' : String(selected.split)} onChange={e => {
+            const mode = e.currentTarget.value;
+            void saveAtlas(() => invoke('studio.buildSplitMode',{project:projectPath,target,original:selected?.split ?? null,mode:mode === '' ? null : mode === 'true'}));
+          }}>
+          <option value="">Project default ({info?.splitDefault ? 'download packages' : 'single package'})</option>
+          <option value="false">Single package</option>
+          <option value="true">Base install and download packages</option>
+        </StudioSelect>
+      </StudioField>
       <StudioField label="Audio profile" htmlFor="build-audio">
         <StudioSelect id="build-audio" value={audio} disabled={state.running} onChange={e => setAudio(e.target.value)}>
           <option value="auto">Platform default</option><option value="desktop">Desktop</option>

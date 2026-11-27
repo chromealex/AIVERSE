@@ -2460,6 +2460,28 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
     const Json& pages = manifest["atlas"]["maxPage"];
     const bool atlasEnabled = manifest["atlas"].getBool("enable",true);
     const auto compression = manifest["packaging"].getInt("level",0);
+    if (method == "studio.buildSplitMode") {
+        const auto target = params.getStr("target");
+        if (!knownBuildTarget(target) || ws_.building() || params.getStr("project") != ws_.project.dir)
+            throw std::runtime_error("Build settings unavailable");
+        const auto& current = manifest["packaging"]["targets"][target];
+        if (!params.has("original") || current["split"].dump() != params["original"].dump())
+            throw std::runtime_error("Download settings changed. Review the current mode.");
+        const auto& mode = params["mode"];
+        if (!params.has("mode") || (!mode.isNull() && mode.type() != Json::Type::Bool))
+            throw std::runtime_error("Invalid download mode");
+        if (current["split"].dump() != mode.dump()) {
+            Json next = current.isObject() ? current : Json::object();
+            if (mode.isNull()) next.erase("split");
+            else next.set("split", mode);
+            Json patch = Json::object();
+            patch.set("path", str("packaging.targets." + target));
+            patch.set("value", next);
+            const auto saved = ws_.call("set_manifest", patch);
+            if (saved.has("error")) throw std::runtime_error(saved.getStr("error"));
+        }
+        return snapshot();
+    }
     if (method == "studio.buildCompression") {
         if (ws_.building() || params.getStr("project")!=ws_.project.dir ||
             !params["original"].isNumber() || params["original"].toDouble()!=compression)
@@ -2513,10 +2535,12 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
             Json v = Json::object();
             v.set("id", str(t[0])); v.set("name", str(t[1]));
             std::error_code ec;
+            v.set("split",manifest["packaging"]["targets"][t[0]]["split"]);
             v.set("built", Json::fromBool(fs::is_directory(builds / t[0], ec)));
             targets.push(std::move(v));
         }
         out.set("project", str(ws_.project.dir));
+        out.set("splitDefault",Json::fromBool(manifest["packaging"].getBool("split",false)));
         out.set("compression",num(int64_t(compression)));
         out.set("atlasEnabled", Json::fromBool(atlasEnabled));
         out.set("atlasPages", pages);
@@ -5120,7 +5144,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             reply.set("result",sceneBrushJson());
         } else if (method == "studio.agentInfo" || method == "studio.agentStart" || method == "studio.agentStop" || method == "studio.agentReset") {
             reply.set("result", agentRequest(method, params));
-        } else if (method == "studio.buildInfo" || method == "studio.buildCompression" || method == "studio.buildAtlasFixSizes" || method == "studio.buildAtlasPage" || method == "studio.buildAtlasEnabled" || method == "studio.buildToolchain" || method == "studio.buildStart" ||
+        } else if (method == "studio.buildInfo" || method == "studio.buildSplitMode" || method == "studio.buildCompression" || method == "studio.buildAtlasFixSizes" || method == "studio.buildAtlasPage" || method == "studio.buildAtlasEnabled" || method == "studio.buildToolchain" || method == "studio.buildStart" ||
                    method == "studio.buildLog" || method == "studio.buildEstimate") {
             reply.set("result", buildRequest(method, params));
         } else if(method=="studio.worldProcessAreaBatchResize"){
