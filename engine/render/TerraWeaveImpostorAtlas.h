@@ -13,6 +13,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include "engine/render/ImpostorMaskBounds.h"
 #include <array>
 #include <utility>
 #include <vector>
@@ -30,7 +31,7 @@ struct ArborImpostorAtlas {
     std::unique_ptr<render::Model> model;
     std::vector<std::vector<render::Material>> viewMaterials;
     uint32_t views = 0;
-    bool narrowTrunkHighCrown = false;
+    bool trimBakedLayers = false;
 };
 
 inline ArborImpostorAtlas makeArborImpostorAtlas(
@@ -219,8 +220,7 @@ inline void bakeArborImpostorFromModel(ArborImpostorAtlas& out,
         throw std::invalid_argument("TerraWeave impostor atlas size");
 
     // Union of opaque texel centres across baked views, in tile coordinates.
-    struct Bounds { int left, right, top, bottom; };
-    Bounds silhouette[2] = {{W,-1,H,-1},{W,-1,H,-1}};
+    render::ImpostorMaskBounds silhouette[2];
 
     // Real extent of the near geometry (metres).
     float radius = 0.5f, top = 1.0f;
@@ -354,13 +354,7 @@ inline void bakeArborImpostorFromModel(ArborImpostorAtlas& out,
                         atlas.rgba[o + size_t(k)] = uint8_t(std::clamp(
                             std::pow(sum[k] / float(n), 1.f / 2.2f) * 255.f + 0.5f, 0.f, 255.f));
                     atlas.rgba[o + 3] = n * 2 >= SS * SS ? 255 : 0;
-                    if (atlas.rgba[o + 3]) {
-                        auto& box = silhouette[layer];
-                        box.left = std::min(box.left,x);
-                        box.right = std::max(box.right,x);
-                        box.top = std::min(box.top,y);
-                        box.bottom = std::max(box.bottom,y);
-                    }
+                    if (atlas.rgba[o + 3]) silhouette[layer].include(x,y);
                 }
             // Bleed colour into transparent texels (alpha stays 0) so mips and
             // bilinear filtering do not pull black halos into the silhouette.
@@ -393,13 +387,9 @@ inline void bakeArborImpostorFromModel(ArborImpostorAtlas& out,
             }
         }
     }
-    const auto& bark = silhouette[0];
-    const auto& crown = silhouette[1];
-    // Restrict automatic trimming to the tall, exposed-trunk shape profiled
-    // on Metal. Width/height fractions are compared in the atlas tile.
-    out.narrowTrunkHighCrown = bark.right >= bark.left && crown.right >= crown.left &&
-        4 * (bark.right-bark.left+1) <= W && 3 * (bark.bottom-bark.top+1) >= 2 * H &&
-        2 * (crown.right-crown.left+1) >= W && 2 * crown.bottom <= H;
+    out.trimBakedLayers = std::any_of(std::begin(silhouette), std::end(silhouette), [&](const auto& mask) {
+        return mask.select(W,H,render::ImpostorFit::Auto).area() < W*H;
+    });
     // Textured bake: the atlas already carries the albedo; keep the impostor
     // materials untinted, and copy the near foliage cutout threshold.
     for (auto& variant : out.viewMaterials)
@@ -445,10 +435,19 @@ inline void trimArborImpostorCards(ArborImpostorAtlas& atlas, int bands) {
                     }
                 }
             if (span.right < 0) continue;
+            if (bands == 1) {
+                render::ImpostorMaskBounds bounds;
+                bounds.include(span.left,span.top);
+                bounds.include(span.right,span.bottom);
+                const auto rect=bounds.select(width,height,render::ImpostorFit::Auto);
+                span={rect.left,rect.right-1,rect.top,rect.bottom-1};
+                covered=float(rect.area());
+                continue;
+            }
             span.left = std::max(0, span.left - padding);
             span.right = std::min(width - 1, span.right + padding);
-            span.top = bands == 1 ? std::max(0, span.top - padding) : top;
-            span.bottom = bands == 1 ? std::min(height-1, span.bottom + padding) : bottom;
+            span.top = top;
+            span.bottom = bottom;
             covered += float(span.right - span.left) * (span.bottom - span.top);
         }
 
@@ -470,7 +469,7 @@ inline void trimArborImpostorCards(ArborImpostorAtlas& atlas, int bands) {
             for (uint32_t offset : {0u,1u,2u,0u,2u,3u}) model.indices.push_back(first + offset);
         };
         // Dense cards have little to gain; keep empty layers valid as well.
-        if (covered == 0 || covered >= 0.8f * (width - 1) * (height - 1)) {
+        if (covered == 0 || (bands > 1 && covered >= 0.8f * (width - 1) * (height - 1))) {
             rectangle(0, 1, 0, 1);
         } else {
             for (int band = 0; band < bands; ++band) {

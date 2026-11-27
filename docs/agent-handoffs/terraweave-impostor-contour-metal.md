@@ -1,6 +1,6 @@
 # Arbor far tree contour experiment
 
-Tested commit `d050984baf6d47c6d143a00585cff659c72aeb55` on branch `codex/forest-impostor-contour` (Apple M3 Ultra, arm64 Release, Metal). Planning commit 42fddb5012b6ededad1f78f1d0e02c2e504ce329.
+Tested commit `d050984baf6d47c6d143a00585cff659c72aeb55` on branch `codex/forest-impostor-contour` (Apple M3 Ultra, x86_64 Release, Metal). Planning commit 42fddb5012b6ededad1f78f1d0e02c2e504ce329.
 
 `ArborForestAdapter::setImpostorContourBands(3 or 8)` applies to subsequently added prototypes. Zero selects the original two cards. At bake time, each horizontal band encloses nonzero alpha for all azimuths, with a two-texel border. Bark and foliage keep independent primitives. Layers retaining 80% or more of full-card area use the original rectangle. No scene data migration or per-instance allocation.
 

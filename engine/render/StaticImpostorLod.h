@@ -5,6 +5,7 @@
 // Opt-in per asset: "<model>.batching.json" {"impostor": {"maxPixels": 20}}.
 #pragma once
 #include "engine/render/Model.h"
+#include "engine/render/ImpostorMaskBounds.h"
 #include <algorithm>
 #include <cmath>
 #include <string>
@@ -15,6 +16,7 @@ namespace aiverse::render {
 struct StaticImpostorSettings {
     float maxPixels = 20.f; // switch to cards below this projected size
     int tile = 256;         // texels per card (height); width follows aspect
+    ImpostorFit fit = ImpostorFit::Auto;
 };
 
 namespace static_impostor_detail {
@@ -68,6 +70,7 @@ inline bool appendStaticImpostorLod(Model& m, StaticImpostorSettings s = {},
     const int WA = std::clamp((int(float(H) * spanX / spanY) + 3) & ~3, 16, H * 2);
     const int WB = std::clamp((int(float(H) * spanZ / spanY) + 3) & ~3, 16, H * 2);
     const int SS = 2;
+    ImpostorMaskBounds masks[2];
     Image atlas;
     atlas.name = m.path + "#impostor";
     atlas.width = WA + WB;
@@ -192,6 +195,7 @@ inline bool appendStaticImpostorLod(Model& m, StaticImpostorSettings s = {},
                 for (int k = 0; k < 3; ++k)
                     t[k] = uint8_t(std::clamp(std::pow(rgb[o * 3 + size_t(k)], 1.f / 2.2f), 0.f, 1.f) * 255.f + .5f);
                 t[3] = uint8_t(std::clamp(alpha[o], 0.f, 1.f) * 255.f + .5f);
+                if (t[3]) masks[view].include(x,y);
             }
     }
 
@@ -209,7 +213,7 @@ inline bool appendStaticImpostorLod(Model& m, StaticImpostorSettings s = {},
     const int materialIndex = int(m.materials.size());
     m.materials.push_back(card);
 
-    const float uA = float(WA) / float(WA + WB);
+
     const uint32_t firstVertex = uint32_t(m.vertices.size());
     const auto vert = [&](float3 p, float2 uv) {
         ModelVertex v{};
@@ -219,12 +223,18 @@ inline bool appendStaticImpostorLod(Model& m, StaticImpostorSettings s = {},
         v.tangent = {1.f, 0.f, 0.f, 1.f};
         m.vertices.push_back(v);
     };
-    // Card A (plane z = cz), u from lo.x to hi.x.
-    vert({lo.x, hi.y, cz}, {0.f, 0.f});  vert({hi.x, hi.y, cz}, {uA, 0.f});
-    vert({hi.x, lo.y, cz}, {uA, 1.f});   vert({lo.x, lo.y, cz}, {0.f, 1.f});
-    // Card B (plane x = cx), u from hi.z to lo.z.
-    vert({cx, hi.y, hi.z}, {uA, 0.f});   vert({cx, hi.y, lo.z}, {1.f, 0.f});
-    vert({cx, lo.y, lo.z}, {1.f, 1.f});  vert({cx, lo.y, hi.z}, {uA, 1.f});
+    for (int view=0; view<2; ++view) {
+        const int w = view==0 ? WA : WB;
+        const auto rect = masks[view].select(w,H,s.fit);
+        for (int corner : {0,1,3,2}) {
+            const int x = corner&1 ? rect.right : rect.left;
+            const int y = corner&2 ? rect.bottom : rect.top;
+            const float u = float(x)/w, v = float(y)/H;
+            const float3 pos = view==0 ? float3{lo.x+spanX*u,hi.y-spanY*v,cz}
+                                      : float3{cx,hi.y-spanY*v,hi.z-spanZ*u};
+            vert(pos,{float((view==0 ? 0 : WA)+x)/(WA+WB),v});
+        }
+    }
     const uint32_t firstIndex = uint32_t(m.indices.size());
     for (uint32_t c = 0; c < 2; ++c) {
         const uint32_t b = firstVertex + c * 4;

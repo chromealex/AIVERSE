@@ -157,7 +157,7 @@ public:
         auto impostor = makeArborImpostorAtlas(profile, meshSeed, impostorSettings);
         if(impostorFromNearModel_)
             bakeArborImpostorFromModel(impostor,*model,impostorSettings);
-        const int bands = impostorContourBands_.value_or(impostor.narrowTrunkHighCrown ? 1 : 0);
+        const int bands = impostorContourBands_.value_or(impostor.trimBakedLayers ? 1 : 0);
         if (bands) trimArborImpostorCards(impostor, bands);
         models_.emplace(profile.speciesId, std::move(model));
         billboardMaterials_.emplace(profile.speciesId, std::move(impostor.viewMaterials));

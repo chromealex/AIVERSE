@@ -69,6 +69,27 @@ int main() {
         CHECK(!why.empty());
         CHECK(m.meshes[0].lods.size() == 1);
     }
+    {
+        auto makeSparse = [] {
+            Model m=makeBox(false);
+            auto invisible=m.materials[0];invisible.alpha=AlphaMode::Mask;invisible.baseColor.w=0;
+            m.materials.push_back(invisible);
+            auto ghost=m.meshes[0].primitives.front();
+            ghost.material=1;ghost.firstIndex=uint32_t(m.indices.size());
+            ghost.firstVertex=uint32_t(m.vertices.size());ghost.vertexCount=8;
+            for (uint32_t v=0;v<8;++v) {
+                auto p=m.vertices[v];p.pos=p.pos+float3{8,12,6};m.vertices.push_back(p);
+            }
+            for (uint32_t i=0;i<36;++i)m.indices.push_back(m.indices[i]+8);
+            m.meshes[0].primitives.push_back(ghost);m.finalize();return m;
+        };
+        Model a=makeSparse(),b=makeSparse();
+        CHECK(appendStaticImpostorLod(a,{20,128,ImpostorFit::Auto}));
+        CHECK(appendStaticImpostorLod(b,{20,128,ImpostorFit::Full}));
+        CHECK(a.images.back().rgba==b.images.back().rgba);
+        CHECK(a.meshes.back().boundsMax.y < b.meshes.back().boundsMax.y*0.5f);
+        CHECK(a.indices==b.indices);
+    }
     std::printf("static impostor lod: ok\n");
     return 0;
 }

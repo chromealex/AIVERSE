@@ -1,6 +1,6 @@
 # Two-card palm impostors
 
-Tested commit `8a64baa22f4226b9c1fa83c21f67ce9e12be0ebf` on `codex/forest-impostor-contour`. Planning commit 36ca815b7. Build tree on KINGSTON, arm64 Release, Apple M3 Ultra. The test constructs a reproducible palm with a tapered 9 m trunk and fourteen arching fronds with individual leaflets. Both variants bake the same near mesh via the normal forest adapter.
+Tested commit `8a64baa22f4226b9c1fa83c21f67ce9e12be0ebf` on `codex/forest-impostor-contour`. Planning commit 36ca815b7. Build tree on KINGSTON, x86_64 Release, Apple M3 Ultra. The test constructs a reproducible palm with a tapered 9 m trunk and fourteen arching fronds with individual leaflets. Both variants bake the same near mesh via the normal forest adapter.
 
 The baker accumulates the union of opaque texels across all azimuths while resolving each layer. In eligible baked prototypes the bark spans at most one quarter of tile width and at least two thirds of height. The crown spans at least half the width and ends in the upper half of the tile. An eligible prototype gets one padded rectangle per layer. The legacy and ordinary broad-canopy paths keep full cards by default. Explicit native settings still override the selection. Geometry stays at four triangles; the CPU test covers every opaque texel in all eight azimuths. The oak fixture also verifies its original UVs.
 

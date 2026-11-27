@@ -271,6 +271,10 @@ void applyModelBatchingSidecar(Model& model, const std::string& path, const File
         const Json& imp = config["impostor"];
         if (!imp.isObject()) throw std::runtime_error(path + ".batching.json: impostor must be an object");
         StaticImpostorSettings settings;
+        if (imp.has("fit")) {
+            if (!imp["fit"].isString()) throw std::invalid_argument("impostor.fit must be a string");
+            settings.fit = parseImpostorFit(imp["fit"].str());
+        }
         settings.maxPixels = float(imp["maxPixels"].toDouble(20.0));
         settings.tile = int(imp["tile"].toDouble(256.0));
         std::string why;

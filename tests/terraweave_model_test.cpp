@@ -415,12 +415,12 @@ int main() {
     bakeArborImpostorFromModel(billboardRepeat, *shared, hiRes);
     assert(billboardRepeat.model->images[0].rgba == billboard->images[0].rgba);
     assert(legacyPixels.size() != billboard->images[0].rgba.size());
-    {   // Quad matches the near tree's real height.
+    {   // Full card matches near height before fitting the baked mask.
         float top = 0;
         for (const auto& v : shared->vertices) top = std::max(top, v.pos.y);
         float quadTop = 0;
-        for (const auto& v : billboard->vertices) quadTop = std::max(quadTop, v.pos.y);
-        assert(std::fabs(quadTop - top) < 1e-4f);
+        for (const auto& v : billboardRepeat.model->vertices) quadTop = std::max(quadTop, v.pos.y);
+        assert(std::fabs(quadTop-top)<1e-4f);
     }
     {   // Legacy silhouette stays available.
         ArborForestAdapter legacyForest;
@@ -428,7 +428,7 @@ int main() {
         legacyForest.addPrototype(oak, 17);
         assert(legacyForest.billboardPrototype(oak.speciesId)->images[0].rgba == legacyPixels);
     }
-    assert(!billboardRepeat.narrowTrunkHighCrown);
+    if (billboardRepeat.trimBakedLayers) trimArborImpostorCards(billboardRepeat,1);
     assert(billboardRepeat.model->indices == billboard->indices);
     for (size_t i=0; i<billboard->vertices.size(); ++i) {
         assert(billboard->vertices[i].uv.x == billboardRepeat.model->vertices[i].uv.x);

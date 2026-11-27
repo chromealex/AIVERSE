@@ -1,4 +1,5 @@
 #include "SurfaceProxy.h"
+#include "engine/render/ImpostorMaskBounds.h"
 #include <algorithm>
 #include <array>
 #include <limits>
@@ -39,11 +40,12 @@ float edge(float2 a,float2 b,float2 c){return (b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x
 }
 Build bakeSurfaceProxy(const Model& src, const Json& options) {
     require(options.isObject(), "surface proxy: options must be an object");
-    for(auto& [k,v]:options.members())require(k=="mode"||k=="axis"||k=="resolution", "surface proxy: unknown option '"+k+"'");
-    for(const char* key:{"mode","axis"})require(!options.has(key)||options[key].isString(),std::string("surface proxy: string required for ")+key);
+    for(auto& [k,v]:options.members())require(k=="mode"||k=="axis"||k=="resolution"||k=="fit", "surface proxy: unknown option '"+k+"'");
+    for(const char* key:{"mode","axis","fit"})require(!options.has(key)||options[key].isString(),std::string("surface proxy: string required for ")+key);
     const auto mode=options.getStr("mode","box"),axis=options.getStr("axis","auto");
     require(mode=="plane"||mode=="box", "surface proxy: mode must be plane or box");
     require(axis=="auto"||axis=="x"||axis=="y"||axis=="z", "surface proxy: axis must be auto, x, y or z");
+    const auto fit = parseImpostorFit(options.getStr("fit","auto"));
     int resolution=options.getInt("resolution",128);
     require(!options.has("resolution")||(options["resolution"].isNumber()&&options["resolution"].toDouble()==resolution),"surface proxy: integer resolution required");
     require(resolution>=16&&resolution<=512, "surface proxy: resolution must be 16..512 per face");
@@ -111,6 +113,8 @@ Build bakeSurfaceProxy(const Model& src, const Json& options) {
     // RTS LOD maps nodes by name. Baked vertices already include all source transforms.
     std::string rootName="__aiverse_surface_proxy";while(src.findNode(rootName)>=0)rootName+="_";
     out.nodes[0].name=rootName;out.meshes.emplace_back();
+    Json charts = Json::array();
+    double originalArea = 0, chosenArea = 0;
     uint64_t work=0,covered=0;float maxDepth=0;
     for(size_t fi=0;fi<faces.size();++fi){
         const auto f=faces[fi];const int tx=int(fi%cols)*tile,ty=int(fi/cols)*tile;
@@ -151,7 +155,15 @@ Build bakeSurfaceProxy(const Model& src, const Json& options) {
                 packed[at]=byte(1-mt.occlusionStrength+mt.occlusionStrength*ao.x);packed[at+1]=byte(mr.y*mt.roughness);packed[at+2]=byte(mr.z*mt.metallic);packed[at+3]=255;
             }
         }
-        size_t faceCovered=0;for(float d:depth)if(std::isfinite(d)){++faceCovered;maxDepth=std::max(maxDepth,f.depth-d);}
+        ImpostorMaskBounds mask;
+        size_t faceCovered=0;
+        for (int y=0; y<resolution; ++y) for (int x=0; x<resolution; ++x) {
+            const float d=depth[size_t(y)*resolution+x];
+            if (!std::isfinite(d)) continue;
+            mask.include(x,y);
+            ++faceCovered;
+            maxDepth=std::max(maxDepth,f.depth-d);
+        }
         if(!faceCovered)continue;
         covered+=faceCovered;
         // Dilation propagates attributes only; coverage alpha stays untouched, including holes.
@@ -165,17 +177,40 @@ Build bakeSurfaceProxy(const Model& src, const Json& options) {
                         for(int channel=0;channel<3;++channel)im.rgba[a+channel]=im.rgba[b+channel];}
                     next[k]=1;break;}}
             valid=std::move(next);}
+        const auto rect=mask.select(resolution,resolution,fit);
+        const double area=double(f.hiU-f.loU)*(f.hiV-f.loV);
+        originalArea+=area;
+        chosenArea+=area*rect.area()/(resolution*resolution);
+        Json chart=Json::object();
+        chart.set("direction",Json::string(f.n.x>0?"+X":f.n.x<0?"-X":f.n.y>0?"+Y":f.n.y<0?"-Y":f.n.z>0?"+Z":"-Z"));
+        auto bounds=Json::array();
+        for(int value:{rect.left,rect.top,rect.right,rect.bottom}) bounds.push(Json::number(int64_t(value)));
+        chart.set("bounds",bounds);
+        chart.set("x",Json::number(int64_t(tx+gutter)));
+        chart.set("y",Json::number(int64_t(ty+gutter)));
+        charts.push(chart);
         uint32_t first=uint32_t(out.vertices.size());
-        for(int corner:{0,1,3,2}){float u=corner&1?f.hiU:f.loU,v=corner&2?f.hiV:f.loV;
+        for(int corner:{0,1,3,2}) {
+            const int x=corner&1?rect.right:rect.left;
+            const int y=corner&2?rect.bottom:rect.top;
+            const float u=f.loU+(f.hiU-f.loU)*float(x)/resolution;
+            const float v=f.loV+(f.hiV-f.loV)*float(y)/resolution;
             ModelVertex vert;vert.pos=f.u*u+f.v*v+f.n*f.depth;vert.nrm=f.n;vert.tangent={f.u.x,f.u.y,f.u.z,1};
-            vert.uv={float(tx+gutter+((corner&1)?resolution:0))/out.images[0].width,
-                     float(ty+gutter+((corner&2)?resolution:0))/out.images[0].height};out.vertices.push_back(vert);}
+            vert.uv={float(tx+gutter+x)/out.images[0].width,float(ty+gutter+y)/out.images[0].height};
+            out.vertices.push_back(vert);
+        }
         out.indices.insert(out.indices.end(),{first,first+1,first+2,first,first+2,first+3});
     }
     require(!out.indices.empty(),"surface proxy: no visible covered texels");
     Primitive primitive;primitive.indexCount=uint32_t(out.indices.size());primitive.vertexCount=uint32_t(out.vertices.size());out.meshes[0].primitives.push_back(primitive);out.finalize();
     auto& r=result.report;r=Json::object();r.set("sourceTriangles",Json::number(int64_t(triangles.size())));r.set("proxyTriangles",Json::number(int64_t(out.indices.size()/3)));
     r.set("mode",Json::string(mode));r.set("axis",Json::string(selected==0?"x":selected==1?"y":"z"));
+    r.set("charts",charts);
+    r.set("resolution",Json::number(int64_t(resolution)));
+    r.set("fit",Json::string(options.getStr("fit","auto")));
+    r.set("originalArea",Json::number(originalArea,9));
+    r.set("chosenArea",Json::number(chosenArea,9));
+    r.set("areaSaved",Json::number(1-chosenArea/originalArea,6));
     r.set("coverage",Json::number(double(covered)/(faces.size()*resolution*resolution),6));r.set("sampledDepthError",Json::number(double(maxDepth),6));
     r.set("textureBytes",Json::number(int64_t(out.images[0].rgba.size()*3)));
     r.set("warning",Json::string("Directional surface approximation for distant rigid scenery. No parallax or relighting of hidden surfaces. Coverage is sampled; inspect holes, silhouette and oblique views. sampledDepthError is not a certified geometric error bound."));

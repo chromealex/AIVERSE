@@ -34,6 +34,7 @@ void bevelConvex(Mesh &mesh, float amount);
 void smoothSubdivision(Mesh &mesh, int levels);
 void modifier(Mesh &mesh, const Json &operation);
 std::string exportGlb(const Model &model);
+std::string exportGlb(const Model &model, const Json& assetExtras);
 Json sample(const Model &model, const Json &request);
 Json autoWeights(const Json &document, const Json &request);
 Json generateClip(const Json &document, const Json &request);
