@@ -170,6 +170,7 @@ export function ScriptsPanel(ctx: Ctx & {location:{path:string;line:number}|null
   const dirty = text !== saved;
   const editor = useRef<HTMLTextAreaElement>(null);
   const loadVersion = useRef(0);
+  const pendingRead = useRef<number|null>(null);
   const [selection,setSelection] = useState<{line:number}|null>(null);
   const [restart,setRestart] = useState<boolean|null>(null);
   const [updatingRestart,setUpdatingRestart] = useState(false);
@@ -198,11 +199,17 @@ export function ScriptsPanel(ctx: Ctx & {location:{path:string;line:number}|null
   }, [selection]);
   const open = async (p: string, line?:number) => {
     setView('source');
-    if (p === current) { if (line) setSelection({line}); return; }
+    if (p === current) {
+      pendingRead.current=null;
+      if (line) setSelection({line});
+      return;
+    }
     if (dirty && !window.confirm('Discard unsaved changes to ' + current + '?')) return;
     const version = ++loadVersion.current;
-    try { const r = await op('script_read', { path: p }); if(version !== loadVersion.current)return; if(line)setSelection({line}); setCurrent(p); setText(r.text ?? ''); setSaved(r.text ?? ''); setStatus(null); }
-    catch (e) { setStatus({ ok: false, text: message(e) }); }
+    pendingRead.current=version;
+    try { const r = await op('script_read', { path: p }); if(version !== pendingRead.current)return; if(line)setSelection({line}); setCurrent(p); setText(r.text ?? ''); setSaved(r.text ?? ''); setStatus(null); }
+    catch (e) { if(version === pendingRead.current)setStatus({ ok: false, text: message(e) }); }
+    finally { if(version === pendingRead.current)pendingRead.current=null; }
   };
   useEffect(() => {
     if (!ctx.location) return;
