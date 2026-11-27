@@ -392,9 +392,40 @@ export function TextureResourcesPanel({ snapshot }: Ctx) {
   const [gpu, setGpu] = useState<StudioGpuStats['gpu'] | null>(null);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('');
-  const read = useCallback(() => void invoke('studio.gpuStats', { textures: true }).then(s => { setGpu(s.gpu ?? null); setSelectedId(id => s.gpu?.textures.some(texture => texture.id === id) ? id : null); setError(s.error ?? ''); })
-    .catch(e => setError(message(e))), []);
-  useEffect(() => { if (path) read(); }, [path, read]);
+  const refresh = useRef<() => void>(() => {});
+  useEffect(() => {
+    let active = true;
+    let pending = false;
+    setGpu(null);
+    setSelectedId(null);
+    setError('');
+    if (!path) return;
+    const read = async () => {
+      if (!active || pending || document.hidden) return;
+      pending = true;
+      try {
+        const result = await invoke('studio.gpuStats', { textures: true });
+        if (!active) return;
+        const inventory = result.gpu ?? null;
+        setGpu(inventory);
+        setSelectedId(id => inventory?.textures.some(texture => texture.id === id) ? id : null);
+        setError(result.error ?? '');
+      } catch (e) {
+        if (active) setError(message(e));
+      } finally {
+        pending = false;
+      }
+    };
+    refresh.current = read;
+    void read();
+    const timer = window.setInterval(read, 2000);
+    document.addEventListener('visibilitychange', read);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', read);
+    };
+  }, [path]);
   if (!path) return <div className="tool__empty">Open a project to list GPU textures.</div>;
   const selected = gpu?.textures.find(texture => texture.id === selectedId);
   const query = filter.trim().toLowerCase().replaceAll('×', 'x');
@@ -403,7 +434,7 @@ export function TextureResourcesPanel({ snapshot }: Ctx) {
     .sort((a, b) => (largestFirst ? b.bytes - a.bytes : 0) || a.id - b.id);
   return <div className="ptp">
     <div className="ptp__edhead">
-      <button type="button" className="au-button au-button--sm" onClick={read}><RefreshCw size={13}/>Refresh</button>
+      <button type="button" className="au-button au-button--sm" onClick={() => refresh.current()}><RefreshCw size={13}/>Refresh</button>
       <span className="ptp__meta">{gpu ? `${gpu.textures.length} textures · ${gpu.textures.filter(t => t.renderTarget).length} targets · ${gpu.textures.filter(t => t.samples > 1).length} multisampled · ${formatBytes(gpu.totalBytes)} estimated` : ''}</span>
     </div>
     <div className="ptp__edhead texture-resources__filters">
