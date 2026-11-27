@@ -7,6 +7,13 @@
 include_directories("${PROJECT_SOURCE_DIR}/third_party/box3d/include")
 set(AIVERSE_STUDIO_SOURCES StudioHost.cpp StudioScene.cpp StudioGameSurface.cpp StudioFacialGpuPreview.cpp
     StudioSession.cpp StudioAssetCatalog.cpp StudioAssetTransfers.cpp)
+# GCC's Release optimizer can exceed the memory available for a single
+# translation unit in the project Studio build. Keep these large dispatch
+# and preview files buildable on an 8 GiB Linux host.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    set_property(SOURCE StudioHost.cpp StudioScene.cpp StudioSession.cpp APPEND PROPERTY
+        COMPILE_OPTIONS "$<$<CONFIG:Release>:-O1;--param=ggc-min-expand=20;--param=ggc-min-heapsize=32768>")
+endif()
 if(NOT EXISTS "${AIVERSE_STUDIO_WEB_DIST}/index.html")
     message(FATAL_ERROR "HTML5 bundle missing: build apps/studio-web (npm run build) or set AIVERSE_STUDIO_WEB_DIST")
 endif()
