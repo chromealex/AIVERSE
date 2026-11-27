@@ -306,6 +306,32 @@ void volume(Device& dev) {
         return r.handle==h;
     }),"Metal resource inventory removes destroyed 3D texture");
 }
+void dataTexturePreviews(Device& dev) {
+    const auto verify = [&](PixelFormat format, const auto& source,
+                            std::array<uint8_t, 3> expected, const char* name) {
+        TextureDesc desc;
+        desc.width = desc.height = 1;
+        desc.format = format;
+        desc.data = source.data();
+        const auto texture = dev.createTexture(desc);
+        check(texture.valid(), name);
+        if (!texture.valid()) return;
+        std::vector<uint8_t> bytes(sizeof(source));
+        std::memcpy(bytes.data(), source.data(), bytes.size());
+        auto read = probe(texture, 0, 0, 1, 1, bytes, name);
+        read->expectedFormat = format;
+        verifyReads(dev, {read}, name);
+        const auto grid = aiverse::render::texturePreviewGrid(read->output, true);
+        check(grid.colors.size() == 1 && grid.colors.front() == expected, name);
+        dev.destroyTexture(texture);
+    };
+    verify(PixelFormat::RG8, std::array<uint8_t,2>{37,217}, {37,217,0}, "RG8 preview");
+    verify(PixelFormat::R16F, std::array<uint16_t,1>{0x3c00}, {188,188,188}, "R16F preview");
+    verify(PixelFormat::RG16F, std::array<uint16_t,2>{0x3c00,0x3400}, {188,124,0}, "RG16F preview");
+    verify(PixelFormat::R32F, std::array<float,1>{0.25f}, {124,124,124}, "R32F preview");
+    verify(PixelFormat::RG32F, std::array<float,2>{3.f,1.f}, {225,188,0}, "RG32F preview");
+}
+
 void redTexturePreview(Device& dev) {
     const std::vector<uint8_t> pixels{0, 127, 255, 9, 33, 180};
     TextureDesc desc;
@@ -1359,6 +1385,7 @@ int main() {
                     elapsedMs(testStart,deviceReady));
         orderedArrayReuse(*device);
         volume(*device);
+        dataTexturePreviews(*device);
         redTexturePreview(*device);
         floatTexturePreview(*device);
         layered(*device,TextureDimension::Texture2DArray,2,"Texture2DArray");

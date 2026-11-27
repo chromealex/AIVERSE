@@ -17,14 +17,7 @@ struct TexturePreviewGrid {
 };
 
 constexpr size_t texturePreviewPixelBytes(gfx::PixelFormat format) {
-    switch (format) {
-        case gfx::PixelFormat::R8: return 1;
-        case gfx::PixelFormat::RGBA8:
-        case gfx::PixelFormat::RGBA8_sRGB: return 4;
-        case gfx::PixelFormat::RGBA16F: return 8;
-        case gfx::PixelFormat::RGBA32F: return 16;
-        default: return 0;
-    }
+    return gfx::uncompressedTexturePixelBytes(format);
 }
 
 inline TexturePreviewGrid texturePreviewGrid(const gfx::TextureReadbackResult& image, bool preview2D = false, bool fullResolution = false) {
@@ -55,6 +48,12 @@ inline TexturePreviewGrid texturePreviewGrid(const gfx::TextureReadbackResult& i
         grid.columns = std::max(1, int(std::round(image.width * scale)));
         grid.rows = std::max(1, int(std::round(image.height * scale)));
     }
+    using Format = gfx::PixelFormat;
+    const auto format = image.format;
+    const bool half = format == Format::R16F || format == Format::RG16F || format == Format::RGBA16F;
+    const bool single = format == Format::R32F || format == Format::RG32F || format == Format::RGBA32F;
+    const size_t channelBytes = half ? 2 : single ? 4 : 1;
+    const size_t channels = stride / channelBytes;
     grid.colors.reserve(grid.columns * grid.rows);
     for (int y = 0; y < grid.rows; ++y) {
         const size_t sy = uint64_t(y) * grid.height / grid.rows;
@@ -62,11 +61,10 @@ inline TexturePreviewGrid texturePreviewGrid(const gfx::TextureReadbackResult& i
             const size_t sx = uint64_t(x) * grid.width / grid.columns;
             const auto* sample = image.pixels.data() + (sy * grid.width + sx) * stride;
             std::array<uint8_t, 3> rgb{};
-            for (int c = 0; c < 3; ++c) {
-                if (stride == 1) { rgb.fill(sample[0]); break; }
-                if (stride == 4) { rgb[c] = sample[c]; continue; }
+            for (size_t c = 0; c < std::min(channels, rgb.size()); ++c) {
+                if (channelBytes == 1) { rgb[c] = sample[c]; continue; }
                 float linear;
-                if (stride == 16) {
+                if (single) {
                     std::memcpy(&linear, sample + c * sizeof(float), sizeof(float));
                 } else {
                     const auto bits = uint16_t(sample[c * 2]) | (uint16_t(sample[c * 2 + 1]) << 8);
@@ -77,6 +75,7 @@ inline TexturePreviewGrid texturePreviewGrid(const gfx::TextureReadbackResult& i
                 const float display = mapped <= .0031308f ? mapped * 12.92f : 1.055f * std::pow(mapped, 1.f / 2.4f) - .055f;
                 rgb[c] = uint8_t(std::clamp(int(display * 255.f + .5f), 0, 255));
             }
+            if (channels == 1) rgb.fill(rgb[0]);
             grid.colors.push_back(rgb);
         }
     }

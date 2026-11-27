@@ -918,10 +918,7 @@ bool VulkanDevice::readTextureAsync(TextureHandle h, TextureReadbackDesc request
         texture->dimension != TextureDimension::CubeArray &&
         texture->dimension != TextureDimension::Texture3D)
         return false;
-    if (texture->format != PixelFormat::R8 && texture->format != PixelFormat::RGBA8 &&
-        texture->format != PixelFormat::RGBA8_sRGB &&
-        texture->format != PixelFormat::RGBA16F && texture->format != PixelFormat::RGBA32F)
-        return false;
+    if (!uncompressedTexturePixelBytes(texture->format)) return false;
     const int width = std::max(1, texture->width >> request.mipLevel);
     const int height = std::max(1, texture->height >> request.mipLevel);
     const size_t bpp = uncompressedTexturePixelBytes(texture->format);
