@@ -80,3 +80,8 @@ SimEvent now has a typed presentation MotionFinished tag independent of module n
 
 Commit: 51ea262e035d3372530bb05d59d573a6ebf49075
 Generic MotionPathPresentation carries start and source-anchor policy. Game projectile adapter copies source type/weapon and path before removal; initProjectileProgram records start even for ordinary flights. GameFx can create and finish a trail from terminal data without a live entity; enemy start and end visibility are required. Reuses trailFor lookup. Added bridge regression with no rendered/live subject. Tests/build NOT RUN; diff check passed. Remaining actor path metadata/visual consumer and light integration, full save compatibility and runtime/capture tests. Be alert to start/endpoint coordinates and legacy zero-start save compatibility during final verification.
+
+## Light consumer checkpoint
+
+Commit: 2081af3dbcf9d8c05f5cbc703ac2bb2fa82f2a90
+GameLights now queries the same current-frame projectileDrawPoint consumed by FX; model draw precedes lights_.draw in GameView. Missing samples fall back to authoritative scene position. Tests/build NOT RUN; diff check passed. Actor frontend currently renders snapshot projectiles directly with no muzzle convergence; its separate trail authoring integration is not established. Remaining runtime checks must include spheres/planets, full save migrations, short-flight endpoint visibility and publication captures.
