@@ -1,11 +1,19 @@
 #!/bin/bash
 # AIVERSE Studio on macOS: builds the web UI and the native Studio, then opens it.
-# Usage: ./studio_mac.command [project folder]   (omit to reopen the last project)
+# Usage: ./studio_mac.command [project folder or .aiverse file]   (omit to reopen the last project)
 # Log: studio_mac.log. Needs Xcode, CMake and Node.js (brew install cmake node).
 set -o pipefail
 PROJECT=""
 if [ -n "${1:-}" ]; then
-  PROJECT="$(cd "$1" && pwd -P)" || exit 1
+  if [ -d "$1" ]; then
+    PROJECT="$(cd -- "$1" && pwd -P)" || exit 1
+  elif [[ "$1" == *.aiverse && -f "$1" ]]; then
+    PROJECT_DIR="$(cd -- "$(dirname -- "$1")" && pwd -P)" || exit 1
+    PROJECT="$PROJECT_DIR/${1##*/}"
+  else
+    echo "Expected a project folder or .aiverse file: $1" >&2
+    exit 1
+  fi
 fi
 cd "$(dirname "$0")" || exit 1
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
@@ -23,7 +31,7 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
   echo "== open"
   APP=build/mac/apps/studio-native/AiverseStudioHTML5.app
   if [ -n "$PROJECT" ]; then
-    open "$APP" --args --project "$PROJECT" || exit 1
+    open -n "$APP" --args --project "$PROJECT" || exit 1
   else
     open "$APP" || exit 1
   fi
