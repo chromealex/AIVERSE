@@ -64,8 +64,9 @@ int aiverseMain(int argc,char** argv) {
             case 4:{bool moving=false;client.simulation()->world().each<game::Mobile>([&](Entity,const auto& m){moving|=m.moving;});require(moving,"mouse target creates movement");key(platform::Key::F7);break;}
             case 5:{require(button("Attack")&&button("Stop")&&!button("Move"),"view.select armed structure card");
                 auto* aura=button("Guard aura");require(aura&&aura->IsClassSet("disabled"),"passive aura is disabled card button");
-                require(aura->QuerySelector(".tip"),"passive aura tooltip");snapshot("tower");break;}
-            case 6:{auto* context=Rml::GetContext("main");typing=context->LoadDocumentFromMemory("<rml><body style='position:absolute;left:10px;top:80px;width:200px;height:40px'><input id='typing' type='text'/></body></rml>");
+                require(aura->QuerySelector(".tip"),"passive aura tooltip");
+                const auto p=aura->GetAbsoluteOffset(Rml::BoxArea::Border);platform::Event hover;hover.type=platform::EventType::MouseMove;hover.x=p.x+8;hover.y=p.y+8;client.event(hover);break;}
+            case 6:{require(button("Guard aura")->QuerySelector(".tip")->IsVisible(true),"hover reveals passive description");snapshot("tower");auto* context=Rml::GetContext("main");typing=context->LoadDocumentFromMemory("<rml><body style='position:absolute;left:10px;top:80px;width:200px;height:40px'><input id='typing' type='text'/></body></rml>");
                 require(typing,"typing document");typing->Show();context->Update();auto* input=typing->GetElementById("typing");require(input&&input->Focus(),"text input focus");
                 key(platform::Key::F6);break;}
             case 7:require(button("Attack")&&!button("Move"),"shortcut suppressed while typing");typing->Close();typing=nullptr;break;

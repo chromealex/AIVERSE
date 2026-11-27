@@ -11,7 +11,8 @@
     "engine/assets/ui/hud.rml",
     "engine/assets/ui/menu.rml",
     "engine/platform/EnhancedInputPresets.h",
-    "tests/libraries/enhanced_input_config_tests.cpp"
+    "tests/libraries/enhanced_input_config_tests.cpp",
+    "engine/assets/ui/theme.rcss"
   ],
   "traits": {
     "editable": true,
@@ -22,7 +23,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "note": "Controls implemented; real client acceptance passed. Capture review found inline descriptions clipped in fixed command-card cells; fixing shared card-slot tooltip presentation for every action.",
       "evidence": []
     },
     "architecture": {
