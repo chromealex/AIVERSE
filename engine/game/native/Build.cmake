@@ -92,14 +92,16 @@ target_sources(aiverse_game PRIVATE "${AIVERSE_NATIVE_ENGINE_ROOT}/engine/game/N
 # An empty project needs no translation unit or static initializer. In particular,
 # a render-only program must never acquire an empty registrar dependency.
 if(_defs)
-    file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/gen/NativeRegistry.cpp" CONTENT
+    # Multiple dependent executables compile this source. Create it at configure time
+    # so Ninja does not attach its generation to any one of those executables.
+    file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/gen/NativeRegistry.cpp" CONTENT
     "#include \"engine/game/Native.h\"\n${_decls}
     namespace {
     // Explicit references prevent dead stripping of the module objects.
     const aiverse::game::NativeRegistrar aiverseNativeRegistrar({
     ${_defs}});
     }
-    ")
+    " @ONLY)
     target_sources(aiverse_native_modules INTERFACE "${CMAKE_CURRENT_BINARY_DIR}/gen/NativeRegistry.cpp")
     target_include_directories(aiverse_native_modules INTERFACE "${AIVERSE_NATIVE_ENGINE_ROOT}")
 else()
