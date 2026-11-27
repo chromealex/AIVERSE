@@ -3780,9 +3780,11 @@
         {
           "id": "client-command-controls",
           "status": "in-progress",
-          "title": "client-command-controls",
-          "titleEn": "client-command-controls",
-          "target": null
+          "title": "Управление клиентом и общие настройки проекта",
+          "titleEn": "Client controls and shared project settings",
+          "target": null,
+          "text": "Проверка клиентских команд; общий редактор game.json в Project через существующий Workspace с защитой от устаревшего сохранения.",
+          "textEn": "Client command acceptance; shared game.json editing in Project through the existing Workspace owner with stale-save protection."
         },
         {
           "id": "view-selection-requests",

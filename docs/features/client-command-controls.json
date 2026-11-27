@@ -20,7 +20,11 @@
     "engine/world/TriangleCollision.cpp",
     "skills/ui/aiverse-controls/SKILL.md",
     "tests/libraries/enhanced_input_config_tests.cpp",
-    "tests/render/client_controls_frame.cpp"
+    "tests/render/client_controls_frame.cpp",
+    "apps/editor/core/Workspace.cpp",
+    "apps/studio-native/StudioTools.h",
+    "apps/studio-native/StudioSession.cpp",
+    "apps/studio-web/src/panels/generated/ProjectPanel.tsx"
   ],
   "traits": {
     "editable": true,
@@ -70,7 +74,7 @@
     },
     "studio": {
       "status": "not_run",
-      "note": "Confirmed general project-settings gap: selectionShortcut/commandCard authored through set_manifest are not exposed by current native Studio tool allowlist. Reuse native manifest owner in general project settings UI; no command-specific file write bypass.",
+      "note": "Planned shared Project settings section using game_info and set_manifest, with expected-project and original-manifest fences. Existing Project history owner remains authoritative. Implementation and native UI acceptance pending; no feature-specific fields or file-write bypass.",
       "evidence": [
         "apps/studio-native/StudioTools.h"
       ]
