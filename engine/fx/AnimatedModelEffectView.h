@@ -38,17 +38,19 @@ public:
             render::worldMatrices(*model,frame.pose,frame.nodes);
             render::ModelDraw draw;
             draw.model = model; draw.world = instance.world; draw.tint = instance.tint;
+            if (!effect.castShadow) draw.flags |= render::kDrawNoCastShadow;
             draw.nodeWorld = &frame.nodes; draw.pose = &frame.pose;
             if (!effect.materials.empty()) {
                 frame.materials = model->materials;
                 for (const auto& track : effect.materials) {
                     for (auto& material : frame.materials) {
                         if (!track.material.empty() && material.name != track.material) continue;
+                        if(!track.blend.empty())render::parseMaterialBlend(track.blend,material.alpha);
                         if (!track.color.empty()) {
                             const auto c = sampleColor(track.color,phase);
                             material.baseColor.x *= c.x; material.baseColor.y *= c.y;
                             material.baseColor.z *= c.z; material.baseColor.w *= c.w;
-                            if (material.baseColor.w < 1) material.alpha = render::AlphaMode::Blend;
+                            if (material.baseColor.w < 1 && !render::alphaBlended(material.alpha)) material.alpha = render::AlphaMode::Blend;
                         }
                         material.uvOffset.x += age*track.uvSpeed.x;
                         material.uvOffset.y += age*track.uvSpeed.y;

@@ -51,10 +51,12 @@
     },
     "native_api": {
       "status": "pass",
-      "note": "The production panel in a native Studio window rendered the completed eight-tick native capture with tick timings and individual system measurements.",
+      "note": "The production panel in a native Studio window rendered the completed eight-tick native capture with tick timings and individual system measurements. Compatibility review for issues #210–224: Simulation.h adds default-empty presentation event metadata; profiling ownership and timing API remain unchanged. Current simulation_profile_test and native studio_session passed, including existing simulation/checksum and session contracts.",
       "evidence": [
         "docs/evidence/studio-play-ad676e70c/simulation_profiler.png",
-        "apps/studio-native/StudioGameSurface.cpp"
+        "apps/studio-native/StudioGameSurface.cpp",
+        "docs/evidence/issues-mac-quick-final-retained-20261127.json",
+        "docs/agent-handoffs/issues-20261127-verification.md"
       ]
     },
     "skill": {
@@ -115,10 +117,12 @@
       ]
     },
     "platforms": {
-      "status": "not_run",
-      "note": "Merged-tree acceptance pending. See the owner handoff for implementation scope and prior verification.",
+      "status": "pass",
+      "note": "Scoped Mac acceptance: current merged-tree native simulation_profile_test and studio_session passed; previously recorded production WKWebView profiler capture establishes native panel behavior. Current Windows/Linux/mobile profiler runtime NOT RUN; no parity claim. Simulation.h change only adds default-empty presentation-event metadata.",
       "evidence": [
-        "docs/handoff/studio-html5/s2-simulation-profiler-2026-11-24.md"
+        "docs/evidence/issues-mac-quick-final-retained-20261127.json",
+        "docs/evidence/studio-play-ad676e70c/simulation_profiler.png",
+        "docs/evidence/studio-actor-g1/verified-native-results.json"
       ]
     },
     "dependencies": {
@@ -149,11 +153,10 @@
     },
     "tests": {
       "status": "pass",
-      "note": "The native profiler measures Simulation steps and individual scheduled systems. Authenticated MCP started, queried and stopped a bounded capture against the paused actor authority, and the native panel displayed a completed eight-tick capture. The native profile fixture covered scheduling changes and checksum parity.",
+      "note": "Current combined Mac quick gate: 587 passed, 5 explicit skips, 0 failures on 0a8ed3c9ef3858d539c1b38ade9036dd8391e64f. Simulation.h adds default-empty presentation event metadata; profiling ownership and timing API remain unchanged. Current simulation_profile_test and native studio_session passed, including existing simulation/checksum and session contracts.",
       "evidence": [
-        "docs/evidence/studio-actor-g1/verified-native-results.json",
-        "tests/simulation_profile_test.cpp",
-        "docs/evidence/studio-play-ad676e70c/simulation_profiler.png"
+        "docs/evidence/issues-mac-quick-final-retained-20261127.json",
+        "docs/evidence/issues-mac-quick-final-raw-20261127/ctest.xml"
       ]
     },
     "handoff": {
@@ -194,9 +197,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/feature-gate-e0b95cf24-studio-contracts.json",
-    "docs/evidence/feature-gate-e0b95cf24-web.json",
-    "docs/evidence/feature-gate-e0b95cf24-typecheck.json",
-    "docs/evidence/feature-gate-e0b95cf24-skill-audit.json"
+    "docs/evidence/issues-mac-quick-final-retained-20261127.json"
   ]
 }

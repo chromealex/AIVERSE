@@ -1,0 +1,17 @@
+{
+  "sha": "4a5e163b160a9772ef74140fc3c5559148c4ca8d",
+  "build_exit": 0,
+  "targets": [
+    "aiversemcp",
+    "aiverse_studio",
+    "aiverse_studio_session_tests"
+  ],
+  "command": "./run-tests.sh --quick --no-build --filter ^studio_session$ --build-dir /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick",
+  "exit_code": 0,
+  "tests": 1,
+  "failed": 0,
+  "seconds": 23.27,
+  "limits": [
+    "Focused session regression only; real Project Data panel UI capture and final full gate pending."
+  ]
+}

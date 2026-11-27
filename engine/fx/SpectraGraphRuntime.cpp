@@ -65,6 +65,8 @@ GraphGpuEligibility inspectGraphGpuEligibility(
         return reject("GPU v1 supports only one-shot bursts of 1..64 particles");
     if(!e.life.constant()||!e.speed.constant()||!e.size.constant()||!e.drag.constant())
         return reject("GPU v1 cannot execute random ranges or curves");
+    if(e.blendSpace==fx::FxBlendSpace::Display)
+        return reject("display-space blending uses the CPU presentation path");
     if(e.texture!="builtin:soft"||e.blend!=fx::FxBlend::Additive||
        e.align!=fx::FxAlign::Camera||e.shape!=fx::FxShape::Point)
         return reject("GPU v1 supports only additive soft camera-facing point sprites");
@@ -487,9 +489,10 @@ bool GraphRuntime::step(float dt) {
     if(!success) reason_=gpu_.reason();
     return success;
 }
-void GraphRuntime::draw(const fx::FxFog& fog) {
+void GraphRuntime::draw(const fx::FxFog& fog,render::Renderer3D* renderer) {
     if(!initialized_||sharedWorld_)return; // host makes ONE batched draw submission
     if(useComputeWrapper_)gpu_.draw(fog);
+    else if(renderer)cpu_.renderScene(*renderer,fog);
     else cpu_.render(fog);
 }
 bool GraphRuntime::resetGpuAllocationSeed(uint32_t seed) {

@@ -1,0 +1,7 @@
+audio: captured 76.7 s to /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/selection-voices-final.wav
+[metal-assets] libraries=0 sourceMisses=36 pipelines=75 pipelineFailures=0 archive=0 strict=0
+[ui info] Loading Lua plugin using the provided Lua state.
+[streaming] initial=1 background=0 radius=34.3 focus=12.0,8.0
+[loading] map=maps/voices.json types=1/1
+[loading] map assets ready in 333.5 ms (1 types)
+[loading] first map frame in 3452.4 ms

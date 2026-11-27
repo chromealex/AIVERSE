@@ -1,5 +1,5 @@
 /** Persistable nested docking geometry; no React, renderer or genre dependencies. */
-export const STUDIO_PANELS = ['hierarchy','assets','scene','game','materials','texture_graph','animation','facial_rig','inspector','console','lighting','shader_graph','project','runtime','nereid_flow','rules','human_appearance','build','human_creator','wind','history','terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','scripts','input','overlays','branding','asset_audit','agent','fields','physis','actor','raid','balance','fx_graph','fx_library','fx_functions','modeling','anim_assets','anim_graph','anim_rig','model_anim','project_import','stats','snapshot_diff','frame_capture','texture_resources','extensions','attachments','terraweave_generator','building_generator','catalog','feature_readiness','caverns','world_persistence','static_geometry','world_explorer','simulation_profiler'] as const;
+export const STUDIO_PANELS = ['hierarchy','assets','scene','game','materials','texture_graph','animation','facial_rig','inspector','console','lighting','shader_graph','project','runtime','nereid_flow','rules','human_appearance','build','human_creator','wind','history','terrain','water','roads','tiles','fog','generate','postfx','effects','lightbake','models','scripts','input','overlays','branding','asset_audit','agent','fields','physis','actor','raid','balance','fx_graph','fx_library','fx_functions','modeling','anim_assets','anim_graph','anim_rig','model_anim','project_import','stats','snapshot_diff','frame_capture','texture_resources','extensions','attachments','terraweave_generator','building_generator','catalog','feature_readiness','caverns','world_persistence','static_geometry','world_explorer','simulation_profiler','project_data'] as const;
 export type StudioPanel = typeof STUDIO_PANELS[number];
 /** Single metadata source for the UI shell and AI-authored panel integrations. */
 export const STUDIO_PANEL_TITLES: Record<StudioPanel,string> = {
@@ -58,6 +58,7 @@ export const STUDIO_PANEL_TITLES: Record<StudioPanel,string> = {
   catalog: "Catalog",
   feature_readiness: "Feature Readiness",
   caverns: "Caverns",
+  project_data: "Project Data"
 };
 export const STUDIO_PANEL_HOME: Record<StudioPanel,string> = {
   hierarchy: 'dock-left', assets: 'dock-bottom', scene: 'dock-center', game: 'dock-center',
@@ -115,6 +116,7 @@ export const STUDIO_PANEL_HOME: Record<StudioPanel,string> = {
   catalog: "dock-right",
   feature_readiness: "dock-center",
   caverns: "dock-right",
+  project_data: "dock-center"
 };
 
 export type DockAxis = 'horizontal' | 'vertical';

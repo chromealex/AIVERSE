@@ -174,7 +174,7 @@ Each selected secondary receives an independent full-strength shot (or instant h
 
 ### Weapon attack windup and backswing
 
-Weapon entries can specify `windup` and `backswing` (seconds, each 0–60). The targeted GameCore combat adapter starts a per-slot attack phase after cooldown and targeting checks; windup progresses on subsequent eligible ticks, scaled by attack speed. At release the existing damage/projectile path, ammo/weapon acceptance, cooldown, sound and muzzle effects run once. A stun, disarm, invalid target/range, blocked release or replacing an order cancels a pending windup without spending cooldown. Recovery runs concurrently with the post-release cooldown and prevents another start for that weapon until both are ready; it does not lock movement. Phased weapons release at most once per tick even with preciseCooldown; a separate chargeTime remains a pre-windup lock-on gate.
+Weapon entries can specify `windup` and `backswing` (seconds, each 0–60). The targeted GameCore combat adapter starts a per-slot attack phase after cooldown and targeting checks; windup progresses within eligible tick time, scaled by attack speed (whole-tick mode starts progress on subsequent ticks). At release the existing damage/projectile path, ammo/weapon acceptance, cooldown, sound and muzzle effects run once. A stun, disarm, invalid target/range, blocked release or replacing an order cancels a pending windup without spending cooldown. Recovery runs concurrently with the post-release cooldown and prevents another start for that weapon until both are ready; it does not lock movement. With `preciseCooldown`, uncharged phased weapons carry unused Fixed time through windup and concurrent cooldown/recovery, allowing another windup in the same tick. The shared limit is 32 releases per tick. Whole-tick timing remains available with `preciseCooldown:false`; a separate `chargeTime` keeps its pre-windup lock-on gate and one-release limit.
 
 Events: `attack` starts the attack. With a positive windup, `attack_start` marks the same tick and `attack_release` marks the damage point. Instantaneous attacks deliver their shot on `attack`. Other timing events are `attack_cancelled` and `attack_recovery_end`. All carry attacker, target and weapon slot. The GameView attack event adapter avoids restarting a clip on the corresponding release and only emits tracers on release. Clip speed/marker matching and explicit cancellation blending are not automated in this stage. Native code can use `AttackTimingState` in `engine/mechanics/AttackTiming.h`. Save extension ATP1 persists phase, target and remaining time for projects with phased weapons. TopDown free-fire, Arsenal, generic weapon launch and ActorModule are separate adapters and do not yet consume these fields.
 
@@ -522,7 +522,8 @@ stays silent.
 }
 ```
 
-In `audio.json`, `types.scout.repeatSelect` can be `{"sound":"annoyed","count":3,"window":2}`. The third click on the same scout within two seconds and subsequent qualifying clicks use the repeat sound in place of its selection voice. Switching units or clearing selection resets the sequence. Bind a sound with variants to use the audio bank's normal variant selection.
+In `audio.json`, `types.scout.repeatSelect` can be `{"sound":"annoyed","count":3,"window":2}`. The third click on the same scout within two seconds and subsequent qualifying clicks use the repeat sound in place of its selection voice. Switching units, clearing selection or issuing an order resets the sequence. Bind a sound with variants to use the audio bank's normal variant selection.
+For ordered annoyed lines, use `{"sound":"annoyed","count":3,"order":"sequential","cycle":true}`. The variants play in file order from the third click, then the next click returns to the normal selection voice and starts the sequence again. A sequential sequence has no timeout unless `window` is positive; `window:0` also disables the timeout. Without `order:"sequential"`, the existing random-variant behavior remains.
 
 `volume`: mix level per bus, 0..4 (default 1); the player's own volume settings multiply on top
 (client data model: `volume` master, `music`, `sfx` = every bus but music, percent; `musicOn` / `sfxOn` 1 / 0 switch
@@ -3050,6 +3051,7 @@ are unchanged when this block is absent.
 Unit type `view.hitFlash` controls the additive highlight on a hit. Set it to `false` to disable it, or set `"hitFlash":{"strength":0.2,"duration":0.15,"color":[0.3,0.6,1]}`. Duration is in seconds. Linear RGB components are in [0,1]. With no override, the warm highlight starts at 0.3 strength and decays for 0.3 seconds. The scene light uses the separate hitLight setting.
 
 For a painted flat minimap, set `"minimapBackground":"maps/valley-overview.png"` in the map or in game.json. A map value overrides the game default, and an empty string selects terrain colours. The image spans the map rectangle with its top left at grid (0,0). Transparent pixels reveal terrain colours. Fog, units, overlay marks and the camera frame are drawn above it. Missing or unreadable images fall back to terrain colours.
+CPU image consumers resolve logical content paths through the shared image loader, which reconstructs packed atlas regions (including trimming and rotation) or decodes standalone files. Minimap backgrounds use this same path.
 
 Set `hotkey` in a unit type or technology to show and activate its build, train, upgrade or research card action. Example: `"hotkey":"F5"`. If multiple enabled production buttons use the same key, the first in card order wins. Script commands take precedence.
 
@@ -3057,7 +3059,7 @@ In audio.json, `events.menuClick`, `events.topClick` and `events.cardClick` over
 
 Set `types.<type>.constructionLoop` in audio.json to a sound name. A visible construction site plays that sound at its world position until construction finishes, the site disappears, or the match ends. The voice fades out over 0.15 seconds.
 
-To put a unit shortcut beside the minimap, set `"selectionShortcut":{"type":"builder","label":"@hud.builder","image":"icons/builder.png"}` in game.json. Only the type is required. Alternatively use `{"idleWorker":true}` to select an own worker with an empty order queue; combine both keys to restrict the worker type. A second press with that unit selected centers the camera. Custom HUDs can bind `selectionShortcuts[]` and call `act(a.id)`.
+To put a unit shortcut beside the minimap, set `"selectionShortcut":{"type":"builder","label":"@hud.builder","image":"icons/builder.png","hotkey":"F5"}` in game.json. Only the type is required. Alternatively use `{"idleWorker":true}` to select an own worker with an empty order queue; combine both keys to restrict the worker type. Clicking or pressing the optional hotkey a second time with that unit selected centers the camera. Custom HUDs can bind `selectionShortcuts[]` and call `act(a.id)`.
 
 The game.json camera block accepts a shakes array. For example, `"shakes":[{"event":"unit_died","type":"fortress","amplitude":0.6,"frequency":10,"duration":0.5,"radius":30}]`. Events use view-script names. An ability event may filter by ability ID. The radius uses horizontal distance from the camera focus to the event.
 
@@ -3078,3 +3080,54 @@ In `game.json`, map pointer states to project images. A hotspot is a pixel posit
 ```
 
 The client selects `normal`, `attack`, `ability`, `place`, `invalid`, `enemy` or `ally` over the world. Active edge scrolling uses `edgeNorth`, `edgeSouth`, `edgeEast`, `edgeWest` or a diagonal such as `edgeNorthWest`. Over the HUD, an RmlUi cursor name selects the matching entry. Unconfigured states fall back to `normal`. Linux builds with libXcursor support full colour. Base X11 builds use a monochrome pointer.
+
+
+### Minimap visibility and planar bounds
+
+Set a unit type's `view.minimap` to `false` to hide its marker, or `true` to
+explicitly show it (including small neutral resource nodes hidden by the legacy
+default). The flag applies to flat and planetary maps and does not reveal objects
+hidden by visibility/fog.
+
+Flat maps accept `minimap` settings in the map or game.json; each map setting
+overrides its corresponding game default:
+
+```json
+"minimap": {
+  "bounds": [10, 20, 90, 70],
+  "cameraFrame": "rectangle"
+}
+```
+
+`bounds` is `[left, top, right, bottom]` in world X/Z coordinates. It is clipped
+to the grid and must have a nonempty intersection. Omit it for the whole grid,
+or use `"camera"` for the map's authored `screen` coverage: screen center plus
+half-size and allowed center displacement. This requires an enabled map screen.
+The background image still spans the whole grid: cropping samples the matching
+part of that image rather than stretching the entire image into the crop.
+Terrain, fog, markers, overlays and pointer actions use the same cropped area.
+`cameraFrame` is `"frustum"` by default; `"rectangle"` draws the axis-aligned
+bounding rectangle of the camera footprint. These planar settings do not change
+the planetary globe projection.
+
+
+### Portrait background
+
+`ui.portrait.background` in game.json supplies the default portrait clear colour;
+`types.<id>.view.portrait.background` overrides it for one type. Use RGB or RGBA
+components in `[0,1]`, or `"player"` to use the selected subject owner's colour.
+Malformed values retain the inherited background. With neither setting, the
+existing grey-blue background remains. The same background applies to static
+and animated world-model portrait paths. `yaw`, `zoom` and `focusHeight` follow
+the same per-type-over-project precedence.
+
+
+Set `view.portrait.model` to an alternate model asset path, for example
+`"portrait": {"model":"models/portrait.glb", "background":"player"}`.
+`ui.portrait.model` supplies a project default; an explicit empty string on a
+type restores its world model. The separate model uses its own bounds, the
+portrait camera settings and owner tint. It loops `Idle`, then `Stand`, or the
+first available clip; assets without clips use their bind pose. Animation runs
+through the shared View/MotionWeave presentation world. A missing or rejected
+asset falls back to the subject's existing world-model portrait. Switching back
+to a different source starts that preview's animation anew.

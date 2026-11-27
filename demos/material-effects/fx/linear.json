@@ -1,0 +1,25 @@
+{
+  "emitters": [
+    {
+      "texture": "builtin:soft",
+      "blend": "additive",
+      "blendSpace": "linear",
+      "rate": 2,
+      "duration": 10,
+      "loop": true,
+      "life": 1,
+      "size": 3,
+      "speed": 0,
+      "color": [
+        [
+          0,
+          "#80402080"
+        ],
+        [
+          1,
+          "#80402080"
+        ]
+      ]
+    }
+  ]
+}

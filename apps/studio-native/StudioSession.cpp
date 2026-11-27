@@ -4039,6 +4039,12 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             if((op=="terraweave_caverns_paint"||op=="terraweave_caverns_pick") && (params.getStr("expectedProject")!=ws_.project.dir ||
                !params["expectedMap"].isString() || params.getStr("expectedMap")!=(ws_.map.path.empty()?"":ws_.relative(ws_.map.path))))
                 throw std::runtime_error("Caverns project/map changed; refresh the panel");
+            if(op=="set_manifest" && (params.getStr("expectedProject")!=ws_.project.dir ||
+               !params["params"]["expectedManifest"].isString()))
+                throw std::runtime_error("Project settings save requires the loaded project and original manifest");
+            if(op=="game_file_write" && (params.getStr("expectedProject")!=ws_.project.dir ||
+               !params["params"]["expectedText"].isString()))
+                throw std::runtime_error("Project data save requires the loaded project and original file text");
             Json input=params["params"].isObject()?params["params"]:Json::object();
             if(op=="shader_graph_apply" && input.getStr("scope")=="map" && params.has("expectedMap") &&
                (!params["expectedMap"].isString() || params.getStr("expectedMap")!=ws_.map.path))

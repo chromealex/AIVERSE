@@ -48,7 +48,7 @@ const fields:Array<Omit<MaterialField,'value'|'editable'>>=[
  {key:'castShadow',label:'Cast shadow',type:'boolean'},
  {key:'receiveShadow',label:'Receive shadow',type:'boolean'},
  {key:'vertexColors',label:'Vertex colors',type:'boolean'},
- {key:'alpha',label:'Alpha mode',type:'text',options:[{label:'Opaque',value:'opaque'},{label:'Mask',value:'mask'},{label:'Blend',value:'blend'}]},
+ {key:'alpha',label:'Alpha mode',type:'text',options:[{label:'Opaque',value:'opaque'},{label:'Mask',value:'mask'},{label:'Blend',value:'blend'},{label:'Additive (alpha weighted)',value:'additive'},{label:'Additive (unweighted)',value:'additive-unweighted'}]},
  {key:'team',label:'Team tint',type:'text',options:[{label:'None',value:'none'},{label:'Tint',value:'tint'},{label:'Mask',value:'mask'},{label:'Alpha',value:'alpha'},{label:'Vertex',value:'vertex'}]},
  {key:'description',label:'Description',type:'text'},
  {key:'texture',label:'Albedo texture',type:'asset',assetKinds:['image']},

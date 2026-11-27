@@ -1661,10 +1661,10 @@ public:
         } else if (d.blend != BlendMode::Opaque) {
             ca.blendingEnabled = YES;
             ca.rgbBlendOperation = ca.alphaBlendOperation = MTLBlendOperationAdd;
-            ca.sourceRGBBlendFactor = d.blend == BlendMode::Premultiplied ? MTLBlendFactorOne : MTLBlendFactorSourceAlpha;
-            ca.destinationRGBBlendFactor = d.blend == BlendMode::Additive ? MTLBlendFactorOne : MTLBlendFactorOneMinusSourceAlpha;
+            ca.sourceRGBBlendFactor = (d.blend == BlendMode::Premultiplied || d.blend == BlendMode::AdditiveUnweighted) ? MTLBlendFactorOne : MTLBlendFactorSourceAlpha;
+            ca.destinationRGBBlendFactor = (d.blend == BlendMode::Additive || d.blend == BlendMode::AdditiveUnweighted) ? MTLBlendFactorOne : MTLBlendFactorOneMinusSourceAlpha;
             ca.sourceAlphaBlendFactor = MTLBlendFactorOne;
-            ca.destinationAlphaBlendFactor = d.blend == BlendMode::Additive ? MTLBlendFactorOne : MTLBlendFactorOneMinusSourceAlpha;
+            ca.destinationAlphaBlendFactor = (d.blend == BlendMode::Additive || d.blend == BlendMode::AdditiveUnweighted) ? MTLBlendFactorOne : MTLBlendFactorOneMinusSourceAlpha;
         }
         }
         shaderAssets_->prepare(pd);

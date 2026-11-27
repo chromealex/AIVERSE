@@ -48,3 +48,26 @@ ballistic flight reuse, NOT a completed full FPS/RTS shooting-system migration.
 Build selection: `AIVERSE::lib_weapon_policies`; native OBJECT modules call
 `aiverse_native_use_libraries(target weapon-policies)`. Only this header library and its
 declared dependencies are selected. See `skills/catalog.json` for dependency and responsibility routing.
+
+## Fractional attack phases
+
+Reuse `engine/mechanics/AttackTiming.h` in the existing authoritative weapon
+owner. `consumeAttackPhase(state, elapsed)` returns the unused Fixed time;
+pass that remainder through release into `consumeAttackRest(state, cooldown,
+elapsed)`. Cooldown and recovery overlap, so the rest duration is their maximum,
+not their sum. Carry the remainder into the next windup in the same tick and
+bound releases with `kMaxCadenceShotsPerTick` from `WeaponCadence.h` (32).
+Never advance the same slot twice or retain unused idle/out-of-range time.
+
+The targeted GameCore adapter opts in with existing `preciseCooldown:true`
+and `windup`/`backswing`; a separate positive `chargeTime` retains its current
+one-release gate. This does not establish equivalent wiring in every host.
+Keep phase, target, remaining time and cooldown in the owner's ECS state;
+include them in save/rollback/checksum rather than a parallel scheduler.
+
+Verify fractional period over many ticks, concurrent recovery/cooldown,
+multiple releases, cancellation/reacquisition and save/restore checksum.
+Existing regressions are `attack_phase_fractional_time_is_conserved` and
+`precise_windup*` in `aiverse_tests`; the public native consumer is covered by
+`tests/libraries/systems_engine_tests.cpp`. Run the relevant unified test gate
+before integration; a helper test alone is not full combat acceptance.

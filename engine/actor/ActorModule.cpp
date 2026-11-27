@@ -600,7 +600,7 @@ void ActorHost::hashState(Simulation& sim,Hasher& hash) {
         hash.str(bytes);
     }
     if(config_.melee.enabled){std::string extra;Archive m(&extra);for(auto& c:characters)ioMelee(m,c);hash.str(extra);}
-    for(auto& p:shots)if(p.program.enabled){std::string extra;Archive e(&extra);e(p.id,p.program,p.programSpeed,p.programTarget);hash.str(extra);}
+    for(auto& p:shots)if(p.program.enabled){std::string extra;Archive e(&extra);if(p.program.origin==projectile::FlightOrigin::Unknown)e.formatVersion=12;e(p.id,p.program,p.programSpeed,p.programTarget);hash.str(extra);}
     if(s.royale.enabled){std::string extra;Archive r(&extra);royaleIo(r,s.royale);hash.str(extra);}
     for(size_t slot=1;slot<=characters.size();++slot)if(const auto* g=gear(view,uint8_t(slot)))hash.u64(lib::systems::gearHash(*g));
     if(w.countExisting<vehicles::VehicleDrive>())vehicles::hashVehicles(w,hash,false);   // typed vehicles (the shared vehicle system)
@@ -682,6 +682,14 @@ bool ActorHost::validatePortableWorld(const World& w,uint32_t tick)const{
     });
     const auto* race=w.resourceConst<vehicles::RaceState>();
     return ok&&bool(race)==bool(race_)&&(!race||validRace(*race,typed));
+}
+
+uint32_t ActorHost::minimumSaveVersion(const Simulation& sim) const {
+    bool provenance=false;
+    sim.world().eachExistingConst<Projectile>([&](Entity,const Projectile& p) {
+        provenance |= p.program.origin != projectile::FlightOrigin::Unknown;
+    });
+    return provenance ? 13u : 0u;
 }
 
 bool ActorHost::serializeState(Simulation& sim,Archive& archive) {

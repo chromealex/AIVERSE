@@ -576,7 +576,7 @@ private:
         pass.clearColor[2]=0.16f;
         renderer.render(pass);
         if(canDraw)
-            previewHost_.render(renderer.lighting,view);
+            previewHost_.render(renderer.lighting,view,&renderer);
         previewDevice_->endPass();
         previewViewport_.image(*previewDevice_,width,height);
         if(ImGui::IsItemHovered()) {

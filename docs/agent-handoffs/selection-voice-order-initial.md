@@ -1,0 +1,27 @@
+# selection-voice-order — initial handoff
+
+Owner: gameplay
+Branch/SHA: pending
+Architecture/API: pending
+Changed paths: pending
+Tests: NOT RUN
+Risks: pending
+Next: confirm owner, update roadmap and implement.
+
+## 2026-11-27 — implementation checkpoint
+
+Commit: `8be0f0c0d17500ced8dfaf76b5e91fa7471340c6`
+Branch: `codex/issue223-minimap-atlas-20261126`
+Paths: `engine/audio/GameAudio.cpp`, `engine/audio/GameAudio.h`, `tests/tests.cpp`
+
+Source changes committed; readiness is pending. Tests/build: NOT RUN for this revision, per request to build the complete batch once at the end. `git diff --check` passed before commit. No save-format migration introduced. Existing atlas-only ImageSource::load semantics preserved; new loadImage handles both storage forms. Remaining work: review and verify controls, Lua selection, voice sequencing, FX and projectile paths; add missing runtime/Studio/publication evidence. Issues #211–213, #219, #221 remain unimplemented; #206 requires Windows crash verification. Do not merge or close issues from this checkpoint. Next: finish remaining issue implementations, refresh main, run the final merged-tree Mac gate and feature readiness checks.
+
+## Mixer acceptance follow-up
+
+Review found GameAudio::onCommand did not reset repeated clicks, despite issue220 requiring it. The client routes commands through that owner. Correct the shared API and add frequency-distinct PCM variants to verify actual mixer sequence, not only played() count. Test execution remains pending the final combined build.
+
+Audible example planned at demos/selection-voices: two selectable entities, normal440Hz and sequential660/880Hz PCM files, count3/cycle/window0. Repeated explicit clicks, Stop/Move, switching and clearing selection exercise the existing client/GameAudio path. Synthetic tones distinguish sequence entries without copyrighted voice assets.
+
+## Shared Studio project-data authoring gap
+
+Source inspection confirms StudioTools exposes game_file_read only in Snapshot Diff; game_file_write is unavailable. Add a general Project Data panel using existing Workspace text-file operations (no audio-specific path or backend). Restrict Studio saves to an explicitly loaded existing file with expectedProject and exact expectedText. Keep dedicated manifest/rules/map owners and validate JSON natively. No map/project-history undo claim. Native boundary and actual WKWebView save/reload tests required.

@@ -144,6 +144,9 @@ verify ordinary and narrow-screen counters. Android, Windows and Web builds were
 not executed for this change; no shaders were changed.
 
 The game HUD model exposes `selectedUnits[]` with type, name, icon, subgroup, unitClass, hp, maxHp, hpFraction, energy, attackMin, attackMax, damageType, armor, armorType, invulnerable, hasInventory and selectAction. Call `act(row.selectAction)` to narrow the selection. Attack values describe the primary weapon before target mitigation. For a single selection, `selectedStatuses[]` contains active status ids. View scripts can query `view.selection()` for the current local entity handles. Set optional `view.icon`, `view.class` and `view.subgroup` on the type for project presentation.
+View scripts can request `view.select({handle1, handle2})` or `view.select_add(handle)` to change the local selection. The client accepts at most 256 alive, visible, selectable entities and ignores invalid or hidden entities; these calls never write simulation state. Use the replacement entity's handle after a scripted upgrade to keep it selected.
+Mobile selections receive a Move command-card button with default key `M`; armed structures receive Attack and Stop even when immobile. Passive auras appear as disabled buttons with a tooltip. `commandCard.buttons` can place `card.move`, `card.sell`, `card.deploy`, `card.reinforce` and `card.cancel_build` in explicit cells.
+The stock game HUD data model also accepts `quit()` from a menu button. It requests application exit through the platform API; the pause menu includes a localized Quit game button.
 
 ### Fixed command cells and pages
 

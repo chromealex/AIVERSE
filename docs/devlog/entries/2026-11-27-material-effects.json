@@ -1,0 +1,45 @@
+{
+  "id": "2026-11-27-material-effects",
+  "date": "2026-11-27",
+  "system": "spectrafx",
+  "title": "Тени моделей и аддитивные эффекты",
+  "summary": "Модель эффекта может отключить тень. Материалы поддерживают два варианта сложения цвета, а частицы — сложение после тонального отображения.",
+  "body": [
+    "Три сцены сравнивают включённые и выключенные тени, alpha и два аддитивных материала, линейное и display-space сложение частиц."
+  ],
+  "status": "in-progress",
+  "verified": "Все три сцены проверены в macOS Metal и браузере WebGL. Отдельные Metal-тесты сверяют пиксели; графы v1/v2 прошли MCP-проверку сохранения, bake и отказа без повреждения данных.",
+  "limits": "Windows/Vulkan и мобильные устройства не проверены. Display-space использует CPU-путь представления и не участвует в HDR bloom и экспозиции. Публикация ожидает интеграции в main.",
+  "branch": "codex/issue223-minimap-atlas-20261126",
+  "commit": "8aaece7af",
+  "media": [
+    {
+      "src": "docs/evidence/issues-material-effects-web-20261127/models.png",
+      "caption": "Слева направо: alpha, аддитивный с альфой, аддитивный без альфы.",
+      "captionEn": "Left to right: alpha, alpha-weighted additive, unweighted additive."
+    },
+    {
+      "src": "docs/evidence/issues-material-effects-web-20261127/particles.png",
+      "caption": "Слева линейное сложение, справа display-space.",
+      "captionEn": "Linear addition on the left; display-space addition on the right."
+    }
+  ],
+  "links": [
+    {
+      "title": "Play · Web",
+      "href": "https://chromealex.github.io/AIVERSE/demos/material-effects/?map=0"
+    },
+    {
+      "title": "Demo · source",
+      "href": "demos/material-effects/README.md"
+    }
+  ],
+  "author": null,
+  "titleEn": "Model shadows and additive effects",
+  "summaryEn": "Effect models can disable shadows. Materials support two additive modes, and particles can add their contribution after tone mapping.",
+  "bodyEn": [
+    "Three scenes compare enabled and disabled shadows, alpha and two additive materials, and linear versus display-space particle addition."
+  ],
+  "verifiedEn": "All three scenes ran in macOS Metal and WebGL. Separate Metal tests compare pixels; graph v1/v2 MCP checks cover persistence, baking and rejection without damaging saved data.",
+  "limitsEn": "Windows/Vulkan and mobile devices remain unverified. Display-space uses CPU presentation and does not feed HDR bloom or exposure. Publication awaits main integration."
+}

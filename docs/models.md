@@ -1787,3 +1787,19 @@ export AIVERSE_BSP_FRAME_PNG="$OUTPUT/egyptian-trouble.png"
 cmake --build "$BUILD" --target aiverse_quake3_bsp_tests aiverse_bsp_metal_frame
 ctest --test-dir "$BUILD" -R '^quake3_bsp(_frame)?$' -V
 ```
+
+
+### Additive model materials
+
+Material overrides accept `"blend":"additive"` (source RGB times source alpha
+plus destination RGB) and `"blend":"additive-unweighted"` (source RGB plus
+destination RGB). `blend` takes precedence over `alpha`; ordinary `alpha`/`blend`,
+`opaque` and `mask` modes also use the shared material parser. Both additive
+modes use the transparent pass with depth testing, no depth writes and no ordinary
+shadow casting. They remain scene-linear in HDR rendering.
+
+MDX/MDL Additive layers import as additive-unweighted and AddAlpha layers as
+additive. glTF materials can declare `extras.aiverseBlend` with either spelling;
+AIVERSE model export preserves it alongside the portable BLEND alphaMode fallback.
+FX `model.materials[]` accepts the same `blend` setting; omitting it inherits the
+imported material, and colour tracks retain an authored additive mode.

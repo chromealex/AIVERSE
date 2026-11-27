@@ -1,0 +1,66 @@
+{
+  "source": "6ca126bb07f3e7169f073a9352efaddc94807d2a",
+  "mcp_exit": 0,
+  "studio": "Native WKWebView Effects Set/Get via shared fx_set/fx_get",
+  "observed": [
+    "UI creates model effect with castShadow false, additive material and display-space additive emitter; zero warnings",
+    "UI rereads all authored options",
+    "UI rejects alpha+display without changing saved file",
+    "Fresh standalone MCP opens project and reads same saved JSON",
+    "MCP rejects invalid blend combination and rereads exact original after reopen"
+  ],
+  "limits": [
+    "Authoring/save/reopen evidence only; no preview/graph-canvas or undo claim",
+    "Metal rendering is separately recorded; Web and other backends remain pending"
+  ],
+  "responses": {
+    "3": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\n  \"name\": \"delivery_probe\",\n  \"text\": \"{\\n  \\\"model\\\": {\\n    \\\"castShadow\\\": false,\\n    \\\"loop\\\": true,\\n    \\\"source\\\": \\\"models/target.obj\\\",\\n    \\\"materials\\\": [\\n      {\\\"blend\\\": \\\"additive\\\"}\\n    ],\\n    \\\"duration\\\": 2\\n  },\\n  \\\"emitters\\\": [\\n    {\\n      \\\"burst\\\": 1,\\n      \\\"blend\\\": \\\"additive\\\",\\n      \\\"life\\\": 2,\\n      \\\"size\\\": 1,\\n      \\\"blendSpace\\\": \\\"display\\\",\\n      \\\"texture\\\": \\\"builtin:soft\\\"\\n    }\\n  ]\\n}\\n\",\n  \"json\": {\n    \"model\": {\n      \"castShadow\": false,\n      \"loop\": true,\n      \"source\": \"models/target.obj\",\n      \"materials\": [\n        {\"blend\": \"additive\"}\n      ],\n      \"duration\": 2\n    },\n    \"emitters\": [\n      {\n        \"burst\": 1,\n        \"blend\": \"additive\",\n        \"life\": 2,\n        \"size\": 1,\n        \"blendSpace\": \"display\",\n        \"texture\": \"builtin:soft\"\n      }\n    ]\n  }\n}"
+          }
+        ]
+      }
+    },
+    "4": {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"ok\": false, \"errors\": [\"fx/delivery_probe.json.emitters[0].blendSpace: display requires additive blending\"], \"warnings\": [], \"summary\": \"\u041d\u0435 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u043e: 1 \u043e\u0448\u0438\u0431\u043e\u043a\"}"
+          }
+        ]
+      }
+    },
+    "5": {
+      "jsonrpc": "2.0",
+      "id": 5,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\n  \"name\": \"delivery_probe\",\n  \"text\": \"{\\n  \\\"model\\\": {\\n    \\\"castShadow\\\": false,\\n    \\\"loop\\\": true,\\n    \\\"source\\\": \\\"models/target.obj\\\",\\n    \\\"materials\\\": [\\n      {\\\"blend\\\": \\\"additive\\\"}\\n    ],\\n    \\\"duration\\\": 2\\n  },\\n  \\\"emitters\\\": [\\n    {\\n      \\\"burst\\\": 1,\\n      \\\"blend\\\": \\\"additive\\\",\\n      \\\"life\\\": 2,\\n      \\\"size\\\": 1,\\n      \\\"blendSpace\\\": \\\"display\\\",\\n      \\\"texture\\\": \\\"builtin:soft\\\"\\n    }\\n  ]\\n}\\n\",\n  \"json\": {\n    \"model\": {\n      \"castShadow\": false,\n      \"loop\": true,\n      \"source\": \"models/target.obj\",\n      \"materials\": [\n        {\"blend\": \"additive\"}\n      ],\n      \"duration\": 2\n    },\n    \"emitters\": [\n      {\n        \"burst\": 1,\n        \"blend\": \"additive\",\n        \"life\": 2,\n        \"size\": 1,\n        \"blendSpace\": \"display\",\n        \"texture\": \"builtin:soft\"\n      }\n    ]\n  }\n}"
+          }
+        ]
+      }
+    },
+    "7": {
+      "jsonrpc": "2.0",
+      "id": 7,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\n  \"name\": \"delivery_probe\",\n  \"text\": \"{\\n  \\\"model\\\": {\\n    \\\"castShadow\\\": false,\\n    \\\"loop\\\": true,\\n    \\\"source\\\": \\\"models/target.obj\\\",\\n    \\\"materials\\\": [\\n      {\\\"blend\\\": \\\"additive\\\"}\\n    ],\\n    \\\"duration\\\": 2\\n  },\\n  \\\"emitters\\\": [\\n    {\\n      \\\"burst\\\": 1,\\n      \\\"blend\\\": \\\"additive\\\",\\n      \\\"life\\\": 2,\\n      \\\"size\\\": 1,\\n      \\\"blendSpace\\\": \\\"display\\\",\\n      \\\"texture\\\": \\\"builtin:soft\\\"\\n    }\\n  ]\\n}\\n\",\n  \"json\": {\n    \"model\": {\n      \"castShadow\": false,\n      \"loop\": true,\n      \"source\": \"models/target.obj\",\n      \"materials\": [\n        {\"blend\": \"additive\"}\n      ],\n      \"duration\": 2\n    },\n    \"emitters\": [\n      {\n        \"burst\": 1,\n        \"blend\": \"additive\",\n        \"life\": 2,\n        \"size\": 1,\n        \"blendSpace\": \"display\",\n        \"texture\": \"builtin:soft\"\n      }\n    ]\n  }\n}"
+          }
+        ]
+      }
+    }
+  }
+}

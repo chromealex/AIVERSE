@@ -63,8 +63,8 @@ class StudioReferencePinZoomTests(unittest.TestCase):
                 self.assertIn("key:'"+key+"'", schema)
         self.assertIn("studioMaterialTextureKey(key)", native)
         self.assertIn("catalog.byGuid(value.str())", native)
-        self.assertIn('asset->importer != "texture"', native)
-        self.assertIn('str("content/" + asset->path)', native)
+        self.assertRegex(native, r'asset->importer\s*!=\s*"texture"')
+        self.assertRegex(native, r'str\("content/"\s*\+\s*asset->path\)')
         self.assertIn('std::move(validatedPatch)', native)
 
     def test_asset_moves_repair_material_paths_using_guid(self):
@@ -192,7 +192,7 @@ class StudioReferencePinZoomTests(unittest.TestCase):
         self.assertIn('if(cached.water || cached.hasModel)continue;',scene)
         self.assertIn('clearDocumentModels();',scene)
         self.assertIn('model->skinned()',scene)
-        self.assertIn('material.alpha==render::AlphaMode::Blend',scene)  # masked rigid models are allowed
+        self.assertIn('render::alphaBlended(material.alpha)',scene)  # masked rigid models are allowed
         self.assertIn('model->batching.autoLod=false',scene)
         self.assertIn('rejectedDocumentModels_',api)
         self.assertIn('documentModelTimes_',api)

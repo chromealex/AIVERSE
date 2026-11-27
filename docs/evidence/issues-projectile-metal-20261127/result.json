@@ -1,0 +1,30 @@
+{
+  "tested_checkout": "d79d09eec",
+  "client_binary_source": "2cd2d9ee6",
+  "projectile_source": "51ea262e035d3372530bb05d59d573a6ebf49075",
+  "backend": "Metal",
+  "capture_frame": 210,
+  "fixtures_base": "demos/projectile-impact-height",
+  "result": "visual smoke passed",
+  "observations": [
+    "Ricochet trail begins at first target and travels toward second target, not shooter muzzle.",
+    "Timed split trails fan from split point, not shooter muzzle.",
+    "Straight flight trail reaches rendered projectile head."
+  ],
+  "native_tests": {
+    "projectile_program": {
+      "checks": 596,
+      "failed": 0
+    },
+    "presentation_origin_branch_and_terminal": {
+      "checks": 33,
+      "failed": 0
+    }
+  },
+  "limits": [
+    "Standalone client is from earlier full build, not final integrated gate.",
+    "Current captures use built-in projectile geometry, not custom imported projectile model.",
+    "No Windows, GL or Vulkan visual acceptance claimed."
+  ],
+  "reproduction": "Copy demo to isolated fixture, replace rules.json with retained variant; AIVERSE_CONTENT=fixture AIVERSE_BACKGROUND=1 AIVERSE_AUDIO=off AIVERSE_SHADOWS=off AIVERSE_SCREENSHOT=capture.ppm AIVERSE_EXIT_AFTER_FRAMES=210 AiverseGame --map 0 --spectate. Convert native PPM to PNG for viewing."
+}

@@ -117,6 +117,7 @@ public:
     void applyCommand(Simulation&,const Command&) override;
     void hashState(Simulation&,Hasher&) override;
     bool serializeState(Simulation&,Archive&) override;
+    uint32_t minimumSaveVersion(const Simulation&) const override;
     int result(Simulation& sim) override { return state(sim).winner; }
     const Config& config() const { return config_; }
     // Runtime-only storage audit and content-specific portable validation.

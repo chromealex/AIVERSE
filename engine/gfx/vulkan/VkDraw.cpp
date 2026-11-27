@@ -603,6 +603,9 @@ void blendState(BlendMode m, VkPipelineColorBlendAttachmentState& a) {
         case BlendMode::Additive:
             a.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA; a.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
             a.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; a.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE; break;
+        case BlendMode::AdditiveUnweighted:
+            a.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; a.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+            a.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; a.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE; break;
         case BlendMode::Premultiplied:
             a.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; a.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
             a.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; a.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA; break;

@@ -1,0 +1,3 @@
+[ OK ] atlas_preserves_raw_minimap_backgrounds
+
+11 checks, 0 failed

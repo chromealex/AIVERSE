@@ -6,7 +6,7 @@ import {
   resizeDockSplit, splitDockRoot, splitDockStack, migrateDockV2
 } from '../src/nestedDock.ts';
 
-const onDemandPanels=['catalog','terraweave_generator','texture_graph'];
+const onDemandPanels=['catalog','terraweave_generator','texture_graph','project_data'];
 const defaultPanels=STUDIO_PANELS.filter(p=>!onDemandPanels.includes(p)).sort();
 
 test('default tree has 4 nested stacks and exactly one copy of each default panel',()=>{

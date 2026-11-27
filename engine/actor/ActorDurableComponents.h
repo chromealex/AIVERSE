@@ -56,8 +56,10 @@ public:
         })&&c.addTyped<lib::systems::GearLoadout>("aiverse.actor.gear")
           &&c.addTyped<Loot>("aiverse.actor.loot")
           &&c.addTyped<Vehicle>("aiverse.actor.vehicle")
-          &&c.addContextual<Projectile>("aiverse.actor.projectile",1,
+          &&c.addContextual<Projectile>("aiverse.actor.projectile",2,
             [](Archive& a,Projectile& p,const World&,const Context&){return ioDurableProjectile(a,p);})
+          &&c.addTypedMigration<Projectile>("aiverse.actor.projectile",1,
+            [](Archive& a,Projectile& p,const Context&){return ioDurableProjectile(a,p,false);})
           &&c.addTyped<world::RegionDormant>("aiverse.world.region_dormant")
           &&vehicles::registerDurableVehicleComponents(c)
           &&c.addRebuilder(rebuildDerived)

@@ -3,6 +3,36 @@ name: aiverse-spectrafx
 description: Author and integrate AIVERSE SpectraFX visual effects: versioned graphs, asset variants, ECS source components, event bindings, CPU fallback, editor previews and eventual GPU backends.
 ---
 
+## Model shadows and additive display-space particles
+
+Use `fx_get` / `fx_set` and Studio Effects for ordinary effect definitions.
+Set `model.castShadow:false` to suppress that FX model's shadow while retaining
+its visible model. Model material overrides accept `blend:"additive"` and
+`blend:"additive-unweighted"`; the shared material owner and `aiverse-look`
+recipe define their alpha/depth semantics.
+
+For an additive particle emitter use `blend:"additive", blendSpace:"display"`
+to add encoded RGB after PRISMA tone mapping and before HUD. The default
+`blendSpace:"linear"` remains scene-HDR. Display contributions retain alpha,
+fog and opaque depth occlusion, but do not feed HDR bloom, exposure or temporal
+effects. Trails inherit the emitter setting unless explicitly overridden.
+Other blend modes with display space are rejected.
+
+Graph v1/v2 `SpriteOutput.properties` accepts these emitter settings through the
+existing graph compiler: validate with `fx_graph_validate`, save with
+`fx_graph_set` (existing asset requires `expected` from `fx_graph_get`), then
+optionally `fx_graph_bake`. Invalid edits must leave the published graph intact.
+Display-space effects use CPU presentation; GPU admission reports the reason,
+and RequireGpu must reject rather than silently change the authored blend.
+Do not infer GPU simulation parity from a successful graph compile.
+
+Example: `demos/material-effects`. Actual Metal/WebGL captures and the v1/v2
+MCP validate/save/bake/reopen/rejection evidence are under
+`docs/evidence/issues-material-effects-metal-20261127`,
+`docs/evidence/issues-material-effects-web-20261127`, and
+`docs/evidence/issues-display-graph-mcp-20261127`. These establish the stated
+paths, not Windows/Vulkan parity or graph-canvas interaction.
+
 ## Current runtime update — stages 116–121 (2026-11-24)
 
 The graph ComputeParticles runtime now has source implementations for Metal and capability-gated Vulkan, GPU-owned alive/free lists with demand growth and live shrink/compaction, a canonical per-Device allocation ledger, separate checked staging transfer budget and exact owned allocator checkpoint v2. Native compilation and hardware QA are deferred; do not claim parity or performance. CPU fallback remains the full authored effect. In Studio choose GPU-owned allocator and Load graph, or use `fx_graph_preview` with `{"action":"load","graphName":"...","gpuOwnedAllocation":true}`. Status reports actual backend, requested/active allocator, estimated alive, physical slots, logical bytes and budget denials. Legacy Metal eligibility fields remain schema-only aliases; prefer gpuEligible/gpuVmEligible. GPU-owned slot order is nondeterministic: use gpuShaderSeed, not gpuAllocationSeed. Checkpoint capture remains capped at 4096 physical slots and bounded by configured readback quotas. Device ledger covers ComputeParticles allocations, not entire driver VRAM. Unsupported Vulkan hardware and graph operations fall back to CPU; RequireGpu rejects. Historical sections below retain their original stage context.

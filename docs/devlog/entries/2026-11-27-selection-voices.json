@@ -1,0 +1,42 @@
+{
+  "id": "2026-11-27-selection-voices",
+  "date": "2026-11-27",
+  "system": "audio",
+  "title": "Реплики выбора в заданном порядке",
+  "titleEn": "Selection voices in authored order",
+  "summary": "Повторные клики перебирают реплики по порядку; приказ и смена объекта начинают последовательность заново.",
+  "summaryEn": "Repeated clicks cycle voices in order; commands and switching objects restart the sequence.",
+  "body": [
+    "В демо два объекта с короткими тонами: два обычных ответа 440 Гц, затем 660 и 880 Гц. Нажимайте на один объект с интервалом более 0,3 секунды.",
+    "Настройки находятся в обычном audio.json; нулевое окно сохраняет последовательность при долгой паузе."
+  ],
+  "bodyEn": [
+    "The demo has two objects with short tones: two normal 440 Hz responses followed by 660 and 880 Hz. Click one object with gaps longer than 0.3 seconds.",
+    "Settings use ordinary audio.json data; a zero window retains the sequence across long pauses."
+  ],
+  "status": "in-progress",
+  "verified": "Запись выхода нативного аудиомикшера подтвердила порядок и сброс после Stop и смены объекта. Три регрессионных теста: 119 проверок. WebGL-сцена загружена, повторный выбор работает.",
+  "verifiedEn": "Native mixer output capture confirmed ordering and resets after Stop and switching objects. Three regressions: 119 checks. WebGL scene loading and repeated selection checked.",
+  "limits": "Звук браузера и физических динамиков не записан. Итоговая проверка и интеграция продолжаются.",
+  "limitsEn": "Browser audio and physical speaker output were not recorded. Final verification and integration continue.",
+  "branch": "codex/issue223-minimap-atlas-20261126",
+  "commit": "0ed8dddaa",
+  "media": [
+    {
+      "src": "docs/evidence/issues-selection-voices-web-20261127/selected.png",
+      "caption": "WebGL: выбран объект со звуковыми репликами.",
+      "captionEn": "WebGL: selected object with authored voices."
+    }
+  ],
+  "links": [
+    {
+      "title": "Play · Web",
+      "href": "https://chromealex.github.io/AIVERSE/demos/selection-voices/?map=0"
+    },
+    {
+      "title": "Source",
+      "href": "demos/selection-voices/README.md"
+    }
+  ],
+  "author": null
+}

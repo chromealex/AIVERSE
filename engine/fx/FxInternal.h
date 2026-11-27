@@ -146,7 +146,7 @@ bool builtinMesh(const std::string& name, FxMesh& out);
 using namespace detail;
 
 struct ParticleSystem::Impl {
-    struct Batch { uint32_t texId; FxBlend blend; gfx::TextureHandle tex; std::string graphKey; std::string error; gfx::ShaderHandle shader; gfx::PipelineHandle graphPipe[2]; std::vector<FxTexture> graphTextures; };
+    struct Batch { uint32_t texId; FxBlend blend; gfx::TextureHandle tex; std::string graphKey; std::string error; gfx::ShaderHandle shader; gfx::PipelineHandle graphPipe[2]; std::vector<FxTexture> graphTextures; FxBlendSpace blendSpace=FxBlendSpace::Linear; gfx::ShaderHandle displayShader; gfx::PipelineHandle displayPipe[2]; };
     struct MeshRT {
         std::vector<float3> pos, nrm;
         std::vector<float2> uv;
@@ -194,7 +194,7 @@ struct ParticleSystem::Impl {
     struct Instance {
         uint16_t gen = 1;
         uint64_t telemetrySerial=0; // owner-local non-reused instance identity
-        bool used = false, stopped = false;
+        bool used = false, stopped = false, finishing = false;
         bool emitting = true;          // false: done emitting; the slot lives on while it has particles
         int effect = -1;
         float3 pos, prev, dir{0, 1, 0};
@@ -292,6 +292,11 @@ struct ParticleSystem::Impl {
         bool mesh = false;  // true: nonindexed triangles; false: indexed quads
     };
     std::vector<ReactiveRun> reactiveRuns;
+    struct DisplayRun { uint16_t batch; uint32_t first,count; bool mesh; };
+    std::vector<DisplayRun> displayRuns;
+    FxFog displayFog;
+    gfx::ShaderHandle displayShader;
+    gfx::PipelineHandle displayQuadPipe,displayMeshPipe;
     gfx::ShaderHandle reactiveShader;
     gfx::PipelineHandle reactiveQuadPipe, reactiveMeshPipe;
     Rng rng;
@@ -352,7 +357,7 @@ struct ParticleSystem::Impl {
     FxTexture builtin(size_t i) const;
     FxTexture texture(const std::string& name, std::vector<std::string>& errors, const std::string& where);
     int mesh(const std::string& name, std::vector<std::string>& errors, const std::string& where);
-    uint16_t batchFor(const FxTexture& t, FxBlend blend, const Json& graph = {});
+    uint16_t batchFor(const FxTexture& t, FxBlend blend, const Json& graph = {}, FxBlendSpace space=FxBlendSpace::Linear);
     void build(EffectRT& e, std::vector<std::string>& errors);
 
     // ---- particles (ParticleSystem.cpp)

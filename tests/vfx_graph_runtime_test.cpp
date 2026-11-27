@@ -77,6 +77,12 @@ int main() {
             "opt-in GPU-authored indirect preference was not forwarded");
     options.gpuIndirect=false;
 
+    auto display=basic;
+    display.emitters[0].blendSpace=fx::FxBlendSpace::Display;
+    const auto displayEligibility=sp::inspectGraphGpuEligibility(display,options);
+    require(!displayEligibility.eligible && displayEligibility.reason.find("display-space")!=std::string::npos,
+            "display-space request must not silently use linear GPU blending");
+
     auto alternate=basic;
     alternate.emitters[0].spread=30;
     require(!sp::inspectGraphGpuEligibility(alternate,options).eligible,

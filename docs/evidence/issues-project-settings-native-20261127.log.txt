@@ -1,0 +1,27 @@
+AIVERSE tests | commit=fbb07d996 | build=/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick | report=/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-130357-70966
+
+========== ctest ==========
+Command: ctest --test-dir /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick --config Debug --no-tests=error --output-on-failure --parallel 2 --output-junit /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-130357-70966/ctest.xml -R \^studio_session\$
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick
+Test project /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick
+    Start 590: studio_session
+1/1 Test #590: studio_session ...................Subprocess aborted***Exception:   3.18 sec
+AIVERSE test check failed: Json::parseFile((project/"game.json").string())["seed"].integer()==9007199254740993LL (/tmp/aiverse-issue223/apps/studio-native/tests/StudioSessionTests.cpp:1362)
+
+
+0% tests passed, 1 tests failed out of 1
+
+Label Time Summary:
+EDITOR    =   3.18 sec*proc (1 test)
+
+Total Test time (real) =   3.21 sec
+
+The following tests FAILED:
+	590 - studio_session (Subprocess aborted)
+Errors while running CTest
+FAIL ctest (exit 8)
+
+========== SUMMARY ==========
+Passed stages: 0 | Failed stages: 1
+Logs: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-130357-70966
+Failed: ctest

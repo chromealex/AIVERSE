@@ -1965,7 +1965,7 @@ void Editor::tickSpectraGpuPreview(const Camera& cam,int w,int h,bool game) {
 }
 void Editor::drawSpectraGpuPreview() {
     if(!spectraPreviewFrameOpen_ || !spectraPreviewGpu_)return;
-    spectraPreviewGpu_->draw({r3d_.lighting.fogColor,r3d_.lighting.fogDensity});
+    spectraPreviewGpu_->draw({r3d_.lighting.fogColor,r3d_.lighting.fogDensity},&r3d_);
 }
 
 void Editor::renderScene(Viewport& vp, const Camera& cam, bool editOverlays) {
@@ -2181,7 +2181,7 @@ void Editor::renderScene(Viewport& vp, const Camera& cam, bool editOverlays) {
     const auto afterRender = std::chrono::steady_clock::now();
     r3d_.setSceneSelectionOutline(false);
     if (!ws_.map.data.worldSpace && !r3d_.studioDebugMode()) {
-        gameFx_.render({r3d_.lighting.fogColor, r3d_.lighting.fogDensity});
+        gameFx_.renderScene(r3d_,{r3d_.lighting.fogColor,r3d_.lighting.fogDensity});
         // Scene-view particle reactive coverage; per-scene callback is
         // consumed synchronously by resolvePrisma and never persists.
         if (gameFx_.hasReactiveGeometry())
@@ -2306,7 +2306,7 @@ void Editor::renderGame(Viewport& vp, const Camera& cam, uint64_t prismaViewId) 
     r3d_.render(pass, &prisma_);
     if (postActiveForGame && prismaViewId == 1ULL) prismaSceneRendered_ = true;
     if (postActiveForGame && prismaViewId == 2ULL) prismaGameRendered_ = true;
-    gameFx_.render({r3d_.lighting.fogColor, r3d_.lighting.fogDensity});
+    gameFx_.renderScene(r3d_,{r3d_.lighting.fogColor,r3d_.lighting.fogDensity});
     if (gameFx_.hasReactiveGeometry())
         r3d_.addMotionReactiveDraw([this](gfx::Device& gpu,
                 gfx::TextureHandle sceneDepth, int width, int height) {
@@ -2432,7 +2432,7 @@ void Editor::startPlay(int humanSlot) {
     fxFrozen_ = false;
     gameFxBridge_.setHeightFn([this](float x, float z) { return sim_ ? view_.heightAt(simModule()->state(*sim_).grid, x, z) : 0.0f; });
     gameFxBridge_.setPlayerColorFn([](int p) { return game::GameView::playerColor(p); });
-    gameFxBridge_.setProjectilePointFn([this](Entity e, fx::float3& point) { return view_.projectileImpactPathPoint(e, point); });
+    gameFxBridge_.setProjectilePointFn([this](Entity e, fx::float3& point) { return view_.projectileDrawPoint(e, point); });
     gameFxBridge_.setAttackOriginFn([this](Entity e, fx::float3& pos, fx::float3& dir) { return view_.muzzleOf(e, pos, dir); });   // shots leave the model's muzzle
     gameFxBridge_.setNodeFn([this](Entity e,const std::string& node,render::mat4& frame){return view_.effectNodeOf(e,node,frame);});
     gameFxBridge_.attach(*sim_, uint8_t(human_));

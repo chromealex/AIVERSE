@@ -16,5 +16,9 @@ static_assert(std::is_same_v<
 static_assert(std::is_same_v<
     decltype(&client::ClientFx::renderPrepared),
     void(client::ClientFx::*)(const render::Camera3D&,const render::mat4&,
-                             int,int,const render::Lighting&)>);
+                             int,int,const render::Lighting&,render::Renderer3D*)>);
+// The existing LDR call remains valid through the default renderer argument.
+static_assert(std::is_same_v<decltype(std::declval<client::ClientFx&>().renderPrepared(
+    std::declval<const render::Camera3D&>(), std::declval<const render::mat4&>(),
+    1, 1, std::declval<const render::Lighting&>())), void>);
 int main(){return 0;}

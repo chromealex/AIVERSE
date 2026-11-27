@@ -1508,6 +1508,74 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(!refs.has("error") && refs["result"]["mentions"].size()>=1);
        AIVERSE_TEST_CHECK(call("studio.assetUsage",R"({"path":"../x"})").has("error"));
    }
+   // General manifest editing: native project fence, original value and Project history.
+   {
+       const auto before=call("studio.op",R"({"op":"game_info","params":{}})");
+       AIVERSE_TEST_CHECK(!before.has("error") && !before["result"].getBool("changed"));
+       const auto original=before["result"]["result"].getStr("originalManifest");
+       const auto bytes=editor::readProjectFileBytes(project/"game.json");
+       auto value=Json::parse(original);value.set("name",Json::string("Settings acceptance"));
+       Json input=Json::object();input.set("path",Json::string(""));input.set("value",value);
+       input.set("expectedManifest",Json::string(original));
+       Json request=Json::object();request.set("op",Json::string("set_manifest"));request.set("params",input);
+       AIVERSE_TEST_CHECK(call("studio.op",request.dump().c_str()).has("error"));
+       request.set("expectedProject",Json::string("wrong project"));
+       AIVERSE_TEST_CHECK(call("studio.op",request.dump().c_str()).has("error"));
+       request.set("expectedProject",Json::string(project.string()));
+       AIVERSE_TEST_CHECK(!call("studio.op",request.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(Json::parseFile((project/"game.json").string()).getStr("name")=="Settings acceptance");
+       AIVERSE_TEST_CHECK(call("studio.op",request.dump().c_str()).has("error")); // stale original
+       auto& owner=const_cast<editor::Workspace&>(session.workspace());
+       auto history=owner.call("project_history_status",Json::object());
+       Json step=Json::object();step.set("direction",Json::string("undo"));step.set("expectedVersion",history["version"]);
+       AIVERSE_TEST_CHECK(!owner.call("project_history_step",step).has("error"));
+       AIVERSE_TEST_CHECK(editor::readProjectFileBytes(project/"game.json")==bytes);
+       step.set("direction",Json::string("redo"));step.set("expectedVersion",owner.call("project_history_status",Json::object())["version"]);
+       AIVERSE_TEST_CHECK(!owner.call("project_history_step",step).has("error"));
+       step.set("direction",Json::string("undo"));step.set("expectedVersion",owner.call("project_history_status",Json::object())["version"]);
+       AIVERSE_TEST_CHECK(!owner.call("project_history_step",step).has("error"));
+       input.set("value",Json::array());request.set("params",input);
+       AIVERSE_TEST_CHECK(call("studio.op",request.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(owner.project.manifest.dump()==original);
+       input.set("value",value);request.set("params",input);
+       std::ofstream(project/"game.json")<<bytes<<"\n";
+       AIVERSE_TEST_CHECK(call("studio.op",request.dump().c_str()).has("error")); // external file edit
+       AIVERSE_TEST_CHECK(owner.project.manifest.dump()==original);
+       AIVERSE_TEST_CHECK(editor::readProjectFileBytes(project/"game.json")==bytes+"\n");
+       std::ofstream(project/"game.json")<<bytes;
+       input.erase("value");input.set("valueJson",Json::string("{"));request.set("params",input);
+       AIVERSE_TEST_CHECK(call("studio.op",request.dump().c_str()).has("error"));
+       value.set("seed",Json::number(int64_t(9007199254740993LL)));
+       input.set("valueJson",Json::string(value.dump()));request.set("params",input);
+       AIVERSE_TEST_CHECK(!call("studio.op",request.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(Json::parseFile((project/"game.json").string())["seed"].numberLiteral()=="9007199254740993");
+       step.set("expectedVersion",owner.call("project_history_status",Json::object())["version"]);
+       AIVERSE_TEST_CHECK(!owner.call("project_history_step",step).has("error"));
+       AIVERSE_TEST_CHECK(editor::readProjectFileBytes(project/"game.json")==bytes);
+   }
+   // Shared project data editing uses the Workspace owner and rejects stale drafts.
+   {
+       std::ofstream(project/"audio.json") << "{}\n";
+       AIVERSE_TEST_CHECK(call("studio.ops",R"({"panel":"project_data"})")["result"]["ops"].size()==2);
+       Json input=Json::object();input.set("path",Json::string("audio.json"));
+       input.set("text",Json::string("{\"types\":{}}\n"));input.set("expectedText",Json::string("{}\n"));
+       Json request=Json::object();request.set("op",Json::string("game_file_write"));request.set("params",input);
+       AIVERSE_TEST_CHECK(call("studio.op",request.dump().c_str()).has("error"));
+       request.set("expectedProject",Json::string(project.string()));
+       AIVERSE_TEST_CHECK(!call("studio.op",request.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(call("studio.op",R"({"op":"game_file_read","params":{"path":"audio.json"}})")["result"]["result"].getStr("text")=="{\"types\":{}}\n");
+       AIVERSE_TEST_CHECK(call("studio.op",request.dump().c_str()).has("error")); // old before-image
+       input.set("expectedText",Json::string("{\"types\":{}}\n"));input.set("text",Json::string("{"));
+       request.set("params",input);
+       AIVERSE_TEST_CHECK(call("studio.op",request.dump().c_str()).has("error")); // invalid JSON preserves bytes
+       AIVERSE_TEST_CHECK(Json::parseFile((project/"audio.json").string()).has("types"));
+       input.set("path",Json::string("../outside.json"));request.set("params",input);
+       AIVERSE_TEST_CHECK(call("studio.op",request.dump().c_str()).has("error"));
+       input.set("path",Json::string("rules.json"));request.set("params",input);
+       AIVERSE_TEST_CHECK(call("studio.op",request.dump().c_str()).has("error"));
+       std::error_code linkError;fs::create_symlink(project/"audio.json",project/"audio-link.json",linkError);
+       if(!linkError) AIVERSE_TEST_CHECK(call("studio.op",R"({"op":"game_file_read","params":{"path":"audio-link.json"}})").has("error"));
+   }
    // Tool panels: op lists carry schemas, only allowlisted ops run, edits count as History steps.
    {
        const auto ops=call("studio.ops",R"({"panel":"terrain"})");

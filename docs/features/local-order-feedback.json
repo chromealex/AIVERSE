@@ -85,11 +85,13 @@
     },
     "native_api": {
       "status": "pass",
-      "note": "ViewScripts::queueLocalOrder and OverlayContext::orders pass a presentation-only event.",
+      "note": "ViewScripts::queueLocalOrder and OverlayContext::orders pass a presentation-only event. Compatibility review for issues #210–224: GameViewScript.h adds a separate takeSelectionRequest API without changing queueLocalOrder. Current order_upgrade_mcp, studio_session and complete aiverse_tests passed; existing local-order feedback ownership is retained.",
       "evidence": [
         "engine/view/game/GameViewScript.h",
         "apps/client/GameClient.cpp",
-        "docs/evidence/local-order-upgrade-native-20261125.log.txt"
+        "docs/evidence/local-order-upgrade-native-20261125.log.txt",
+        "docs/evidence/issues-mac-quick-final-retained-20261127.json",
+        "docs/agent-handoffs/issues-20261127-verification.md"
       ]
     },
     "skill": {
@@ -183,12 +185,10 @@
     },
     "tests": {
       "status": "pass",
-      "note": "Native focused regressions, Studio session, the Rules schema, headless restore and native MCP registry ran against the recorded tree. Retested on the integrated Mac tree; see issues-197-202-integrated-mac.json.",
+      "note": "Current combined Mac quick gate: 587 passed, 5 explicit skips, 0 failures on 0a8ed3c9ef3858d539c1b38ade9036dd8391e64f. GameViewScript.h adds a separate takeSelectionRequest API without changing queueLocalOrder. Current order_upgrade_mcp, studio_session and complete aiverse_tests passed; existing local-order feedback ownership is retained.",
       "evidence": [
-        "docs/evidence/local-order-upgrade-native-20261125.json",
-        "docs/evidence/local-order-upgrade-native-20261125.log.txt",
-        "docs/evidence/issues-197-202-final-mac.json",
-        "docs/evidence/issues-197-202-merged-main-mac.json"
+        "docs/evidence/issues-mac-quick-final-retained-20261127.json",
+        "docs/evidence/issues-mac-quick-final-raw-20261127/ctest.xml"
       ]
     },
     "handoff": {
@@ -238,6 +238,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/issues-197-202-merged-main-mac.json"
+    "docs/evidence/issues-mac-quick-final-retained-20261127.json"
   ]
 }

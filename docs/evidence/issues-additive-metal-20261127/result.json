@@ -1,0 +1,125 @@
+{
+  "source_sha": "d3efe5289",
+  "tested_tree": "66844e3db",
+  "backend": "Metal",
+  "host": "macOS 15.6; x86-64 translated (Rosetta)",
+  "command": "AIVERSE_ADDITIVE_CAPTURE=<KINGSTON>/captures/additive-geometry2 ./run-tests.sh --quick --no-build --build-dir <KINGSTON> --filter ^additive_blend_frame$",
+  "report": "/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-095645-22511",
+  "pipeline_failures": 0,
+  "cases": [
+    {
+      "case": "model-weighted",
+      "actual": 0.584559,
+      "expected": 0.584608,
+      "tolerance": 0.01568627450980392,
+      "capture": "docs/evidence/issues-additive-metal-20261127/model-weighted.png"
+    },
+    {
+      "case": "model-unweighted",
+      "actual": 0.767647,
+      "expected": 0.767921,
+      "tolerance": 0.01568627450980392,
+      "capture": "docs/evidence/issues-additive-metal-20261127/model-unweighted.png"
+    },
+    {
+      "case": "model-alpha",
+      "actual": 0.561029,
+      "expected": 0.561494,
+      "tolerance": 0.01568627450980392,
+      "capture": "docs/evidence/issues-additive-metal-20261127/model-alpha.png"
+    },
+    {
+      "case": "model-weighted-again",
+      "actual": 0.585049,
+      "expected": 0.584608,
+      "tolerance": 0.01568627450980392,
+      "capture": "docs/evidence/issues-additive-metal-20261127/model-weighted-again.png"
+    },
+    {
+      "case": "particle-linear",
+      "actual": 0.352451,
+      "expected": 0.352781,
+      "tolerance": 0.01568627450980392,
+      "capture": "docs/evidence/issues-additive-metal-20261127/particle-linear.png"
+    },
+    {
+      "case": "particle-display",
+      "actual": 0.501471,
+      "expected": 0.50098,
+      "tolerance": 0.01568627450980392,
+      "capture": "docs/evidence/issues-additive-metal-20261127/particle-display.png"
+    },
+    {
+      "case": "particle-display-occluded",
+      "actual": 0.24951,
+      "expected": 0.25,
+      "tolerance": 0.01568627450980392,
+      "capture": "docs/evidence/issues-additive-metal-20261127/particle-display-occluded.png"
+    },
+    {
+      "case": "particle-display-graph",
+      "actual": 0.50098,
+      "expected": 0.50098,
+      "tolerance": 0.01568627450980392,
+      "capture": "docs/evidence/issues-additive-metal-20261127/particle-display-graph.png"
+    },
+    {
+      "case": "particle-display-fog",
+      "actual": 0.410784,
+      "expected": 0.410032,
+      "tolerance": 0.01568627450980392,
+      "capture": "docs/evidence/issues-additive-metal-20261127/particle-display-fog.png"
+    },
+    {
+      "case": "particle-display-resize",
+      "actual": 0.500735,
+      "expected": 0.50098,
+      "tolerance": 0.01568627450980392,
+      "capture": "docs/evidence/issues-additive-metal-20261127/particle-display-resize.png"
+    },
+    {
+      "case": "particle-display-mesh",
+      "actual": 0.501716,
+      "expected": 0.50098,
+      "tolerance": 0.01568627450980392,
+      "capture": "docs/evidence/issues-additive-metal-20261127/particle-display-mesh.png"
+    },
+    {
+      "case": "particle-display-mesh-occluded",
+      "actual": 0.249755,
+      "expected": 0.25,
+      "tolerance": 0.01568627450980392,
+      "capture": "docs/evidence/issues-additive-metal-20261127/particle-display-mesh-occluded.png"
+    },
+    {
+      "case": "particle-display-ribbon",
+      "actual": 0.501225,
+      "expected": 0.50098,
+      "tolerance": 0.01568627450980392,
+      "capture": "docs/evidence/issues-additive-metal-20261127/particle-display-ribbon.png"
+    },
+    {
+      "case": "particle-display-trail",
+      "actual": 0.500735,
+      "expected": 0.50098,
+      "tolerance": 0.01568627450980392,
+      "capture": "docs/evidence/issues-additive-metal-20261127/particle-display-trail.png"
+    },
+    {
+      "case": "particle-display-graph-texture",
+      "actual": 0.50098,
+      "expected": 0.50098,
+      "tolerance": 0.01568627450980392,
+      "capture": "docs/evidence/issues-additive-metal-20261127/particle-display-graph-texture.png"
+    },
+    {
+      "case": "particle-display-graph-texture-occluded",
+      "actual": 0.250245,
+      "expected": 0.25,
+      "tolerance": 0.01568627450980392,
+      "capture": "docs/evidence/issues-additive-metal-20261127/particle-display-graph-texture-occluded.png"
+    }
+  ],
+  "result": "pass",
+  "limits": "Metal runtime fixture only. Does not establish other graphics backends, every client/Studio integration, or all issue delivery requirements."
+}

@@ -1,3 +1,4 @@
+#include "FxDisplayShaders.h"
 #include "ParticleSystem.h"
 #include "SpectraStaticSphereCollision.h"
 #include "../gfx/GpuTier.h"
@@ -161,11 +162,13 @@ int ParticleSystem::Impl::mesh(const std::string& name, std::vector<std::string>
     return int(meshes.size() - 1);
 }
 
-uint16_t ParticleSystem::Impl::batchFor(const FxTexture& t, FxBlend blend, const Json& graphData) {
+uint16_t ParticleSystem::Impl::batchFor(const FxTexture& t, FxBlend blend, const Json& graphData, FxBlendSpace space) {
     const std::string key = graphData.isNull() ? "" : graphData.dump(-1);
     for (size_t i = 0; i < batches.size(); ++i)
-        if (batches[i].texId == t.tex.id && batches[i].blend == blend && batches[i].graphKey == key) return uint16_t(i);
-    Batch batch{t.tex.id, blend, t.tex, key, {}, {}, {}, {}};
+        if (batches[i].texId == t.tex.id && batches[i].blend == blend && batches[i].blendSpace == space && batches[i].graphKey == key) return uint16_t(i);
+    Batch batch{};
+    batch.texId=t.tex.id;batch.blend=blend;batch.tex=t.tex;batch.graphKey=key;
+    batch.blendSpace=space;
     if (dev && !key.empty()) {
         try {
             const auto program = render::graph::compile(graphData, "particle");
@@ -188,7 +191,7 @@ uint16_t ParticleSystem::Impl::batchFor(const FxTexture& t, FxBlend blend, const
                 std::string muv=uv;size_t at=0;while((at=muv.find("vec2",at))!=std::string::npos){muv.replace(at,4,"float2");at+=6;}
                 mm+="#define SG_TEXTURE"+idx+"(uv) tex"+slot+".sample(s"+slot+","+muv+")\n";
             }
-            const std::string fs="precision highp float; layout(std140) uniform U0 {mat4 u_viewProj; vec4 u_fog; vec4 u_camPos; vec4 u_params;}; uniform sampler2D tex0; in mediump vec2 v_uv; in lowp vec4 v_col; in vec4 v_graph; in vec3 v_world; in vec4 v_clip; out vec4 o_color;\n"+declarations+gm+
+            std::string fs="precision highp float; layout(std140) uniform U0 {mat4 u_viewProj; vec4 u_fog; vec4 u_camPos; vec4 u_params;}; uniform sampler2D tex0; in mediump vec2 v_uv; in lowp vec4 v_col; in vec4 v_graph; in vec3 v_world; in vec4 v_clip; out vec4 o_color;\n"+declarations+gm+
                 "#define SG_SAMPLE(uv) texture(tex0,uv)\nvoid main(){vec2 sg_uv=v_uv,sg_screen=v_clip.xy/max(abs(v_clip.w),0.00001)*0.5+0.5;vec3 sg_world=v_world,sg_view=u_camPos.xyz-v_world;vec4 sg_color=v_col,sg_particle=v_graph;float sg_time=u_params.w;vec4 sg_input=texture(tex0,v_uv)*v_col;\n"+program.glsl+"vec4 c="+program.outputs.at("color")+";o_color="+(blend==FxBlend::Multiply?"vec4(mix(vec3(1.0),c.rgb,c.a),c.a)":"c")+";}";
             // Graphs supply the entire fragment stage. Keep the shared particle
             // vertex stage without depending on the default blend shader body.
@@ -197,16 +200,49 @@ uint16_t ParticleSystem::Impl::batchFor(const FxTexture& t, FxBlend blend, const
                  "texture2d<half> tex0 [[texture(0)]], sampler s0 [[sampler(0)]]"+args+") {\n";
             const std::string code="\n#define SG_SAMPLE(uv) float4(tex0.sample(s0,uv))\n"+mm+"float2 sg_uv=in.uv,sg_screen=in.clip.xy/max(abs(in.clip.w),0.00001)*0.5+0.5;float3 sg_world=in.world,sg_view=u.camPos.xyz-in.world;float4 sg_color=float4(in.col),sg_particle=in.graph;float sg_time=u.params.w;float4 sg_input=float4(tex0.sample(s0,in.uv)*in.col);\n"+program.msl+"float4 c="+program.outputs.at("color")+";return half4("+(blend==FxBlend::Multiply?"float4(mix(float3(1.0),c.rgb,c.a),c.a)":"c")+");";
             msl+=code+"\n}\n";
-            gfx::ShaderDesc sd;sd.glslVertex=vs.c_str();sd.glslFragment=fs.c_str();sd.msl=msl.c_str();sd.textureSlots=1+int(program.textures.size());sd.uniformSlots=1;
-            batch.shader=dev->createShader(sd);
-            if (!batch.shader.valid()) throw std::runtime_error(dev->lastError());
-            for(int mesh=0;mesh<2;++mesh) {
-                gfx::PipelineDesc pd; pd.shader=batch.shader;
-                pd.attrs[0]={0,gfx::VertexFormat::Float3,0}; pd.attrs[1]={1,gfx::VertexFormat::Float2,12}; pd.attrs[2]={2,gfx::VertexFormat::UByte4N,20};
-                pd.attrs[3]={3,gfx::VertexFormat::Float4,24}; pd.attrCount=4; pd.stride=sizeof(Vertex); pd.indexType=mesh?gfx::IndexType::None:gfx::IndexType::UInt16;
-                pd.cull=gfx::CullMode::None; pd.blend=gfxBlend(int(blend)); pd.depthWrite=blend==FxBlend::Opaque;
-                batch.graphPipe[mesh]=dev->createPipeline(pd);
-                if(!batch.graphPipe[mesh].valid()) throw std::runtime_error(dev->lastError());
+            const auto normalVs=vs,normalFs=fs,normalMsl=msl;
+            if(space==FxBlendSpace::Display) {
+                vs=display_shaders::kVS;fs=display_shaders::kFS;msl=display_shaders::kMSL;
+                const auto depthSlot=std::to_string(program.textures.size()+1);
+                replace(vs,"out vec2 v_uv;","layout(location=3) in vec4 a_graph; out vec4 v_graph; out vec3 v_world; out vec4 v_clip;\nout vec2 v_uv;");
+                replace(vs,"v_uv=a_uv;","v_graph=a_graph;v_world=a_pos;v_clip=gl_Position;v_uv=a_uv;");
+                replace(fs,"uniform sampler2D tex1;","uniform sampler2D tex"+depthSlot+";\n"+declarations+gm);
+                replace(fs,"texture(tex1,uv)","texture(tex"+depthSlot+",uv)");
+                replace(fs,"in vec2 v_uv;","in vec4 v_graph; in vec3 v_world; in vec4 v_clip;\nin vec2 v_uv;");
+                replace(fs,"    o_color=texture(tex0,v_uv)*v_color;",
+                    "vec2 sg_uv=v_uv,sg_screen=v_clip.xy/max(abs(v_clip.w),0.00001)*0.5+0.5;vec3 sg_world=v_world,sg_view=cameraFog.xyz-v_world;vec4 sg_color=v_color,sg_particle=v_graph;float sg_time=outputSize.z;vec4 sg_input=texture(tex0,v_uv)*v_color;\n"+program.glsl+"o_color="+program.outputs.at("color")+";");
+                fs="#define SG_SAMPLE(uv) texture(tex0,uv)\n"+fs;
+                replace(msl,"float4 color [[attribute(2)]];","float4 color [[attribute(2)]];float4 graph [[attribute(3)]];");
+                replace(msl,"float4 color;};","float4 color;float4 graph;float3 world;float4 clip;};");
+                replace(msl,"VOut o;o.pos=","VOut o;o.graph=in.graph;o.world=in.pos;o.clip=u.viewProj*float4(in.pos,1);o.pos=");
+                replace(msl,"depth2d<float> tex1 [[texture(1)]],sampler s1 [[sampler(1)]]",
+                    "depth2d<float> depthTex [[texture("+depthSlot+")]],sampler depthSampler [[sampler("+depthSlot+")]]"+args);
+                replace(msl,"tex1.sample(s1,","depthTex.sample(depthSampler,");
+                replace(msl,"    return tex0.sample(s0,in.uv)*in.color;",
+                    "float2 sg_uv=in.uv,sg_screen=in.clip.xy/max(abs(in.clip.w),0.00001)*0.5+0.5;float3 sg_world=in.world,sg_view=u.cameraFog.xyz-in.world;float4 sg_color=in.color,sg_particle=in.graph;float sg_time=u.outputSize.z;float4 sg_input=tex0.sample(s0,in.uv)*in.color;\n"+program.msl+"return "+program.outputs.at("color")+";");
+                msl="#define SG_SAMPLE(uv) tex0.sample(s0,uv)\n"+mm+msl;
+            }
+            for(int pass=0;pass<(space==FxBlendSpace::Display?2:1);++pass) {
+                const bool display=pass==1;
+                gfx::ShaderDesc sd;
+                sd.glslVertex=display?vs.c_str():normalVs.c_str();
+                sd.glslFragment=display?fs.c_str():normalFs.c_str();
+                sd.msl=display?msl.c_str():normalMsl.c_str();
+                sd.textureSlots=1+int(program.textures.size())+(display?1:0);sd.uniformSlots=1;
+                auto& shader=display?batch.displayShader:batch.shader;
+                shader=dev->createShader(sd);
+                if(!shader.valid())throw std::runtime_error(dev->lastError());
+                for(int mesh=0;mesh<2;++mesh) {
+                    gfx::PipelineDesc pd;pd.shader=shader;
+                    pd.attrs[0]={0,gfx::VertexFormat::Float3,0};pd.attrs[1]={1,gfx::VertexFormat::Float2,12};
+                    pd.attrs[2]={2,gfx::VertexFormat::UByte4N,20};pd.attrs[3]={3,gfx::VertexFormat::Float4,24};
+                    pd.attrCount=4;pd.stride=sizeof(Vertex);pd.indexType=mesh?gfx::IndexType::None:gfx::IndexType::UInt16;
+                    pd.cull=gfx::CullMode::None;pd.blend=gfxBlend(int(blend));pd.depthWrite=blend==FxBlend::Opaque;
+                    if(display){pd.depthTest=false;pd.depthWrite=false;}
+                    auto& pipe=display?batch.displayPipe[mesh]:batch.graphPipe[mesh];
+                    pipe=dev->createPipeline(pd);
+                    if(!pipe.valid())throw std::runtime_error(dev->lastError());
+                }
             }
         } catch(const std::exception& ex) { batch.error=ex.what(); std::fprintf(stderr,"particle shader graph: %s\n",ex.what()); }
     }
@@ -242,7 +278,7 @@ void ParticleSystem::Impl::build(EffectRT& e, std::vector<std::string>& errors) 
             }
         }
         r.tex = texture(d.texture, errors, where);
-        r.batch = batchFor(r.tex, d.blend, d.shaderGraph);
+        r.batch = batchFor(r.tex, d.blend, d.shaderGraph,d.blendSpace);
         if(!batches[r.batch].error.empty()) errors.push_back(where + ": " + batches[r.batch].error);
         lutColor(r.color, d.color);
         float maxK = 0;
@@ -276,7 +312,7 @@ void ParticleSystem::Impl::build(EffectRT& e, std::vector<std::string>& errors) 
             lutColor(r.trailLife, d.trail.lifeColor);
             lutScalar(r.trailWidth, d.trail.width);
             r.trailTex = texture(d.trail.texture, errors, where + ".trail");
-            r.trailBatch = batchFor(r.trailTex, d.trail.blend);
+            r.trailBatch = batchFor(r.trailTex, d.trail.blend,{},d.trail.blendSpace);
         }
         r.shapeRot = Mat3::euler(d.shapeRotation);
         if (d.shape == FxShape::Mesh && !d.mesh.empty()) r.shapeMesh = mesh(d.mesh, errors, where + ".mesh");
@@ -289,7 +325,7 @@ void ParticleSystem::Impl::build(EffectRT& e, std::vector<std::string>& errors) 
         for (auto& sp : d.sprites) {
             FxTexture t = texture(sp, errors, where + ".sprites");
             r.spriteTex.push_back(t);
-            r.spriteBatch.push_back(batchFor(t, d.blend, d.shaderGraph));
+            r.spriteBatch.push_back(batchFor(t, d.blend, d.shaderGraph,d.blendSpace));
         }
         e.em.push_back(r);
         if (!d.loop) e.emitEnd = std::max(e.emitEnd, d.endTime());
@@ -427,8 +463,11 @@ void ParticleSystem::Impl::emitInstance(size_t slot, float dt, float spawn, int&
             in.accum[k] += count;
             int n = int(in.accum[k]);
             in.accum[k] -= float(n);
+            const bool endpoint = in.finishing && spawn > 0 &&
+                (d.perMeter.max > 0 || d.perMeter.curved()) && render::length(in.pos - in.prev) > 1e-6f;
+            if (endpoint) n = std::max(1, n);
             for (int i = 0; i < n; ++i) {   // spread along the path moved this frame (smooth trails)
-                float f = (float(i) + rng.unit()) / float(n);
+                float f = endpoint && i == n - 1 ? 1.f : (float(i) + rng.unit()) / float(n);
                 emit(in, owner, in.effect, int(k), render::lerp(in.prev, in.pos, f), dropped, f * edt, float(i) / float(n));
             }
             if (d.arcMode == FxArcMode::Loop || d.arcMode == FxArcMode::PingPong) in.arcPhase[k] += d.arcSpeed * edt;
@@ -438,6 +477,7 @@ void ParticleSystem::Impl::emitInstance(size_t slot, float dt, float spawn, int&
     in.delta = in.pos - in.prev;
     if (dt > 0) in.vel = in.delta * (1.0f / dt);
     in.prev = in.pos;
+    if (in.finishing) in.stopped = true;
     if (in.emitting && (in.stopped || (!e.looping && in.time >= e.emitEnd))) in.emitting = false;
     if (!in.emitting && in.live == 0) freeInstance(slot);
 }
@@ -805,14 +845,19 @@ void ParticleSystem::shutdown() {
         for (auto& batch : I.batches) {
             for (auto& p : batch.graphPipe) releasePipeline(p);
             releaseShader(batch.shader);
+            for(auto& p:batch.displayPipe)releasePipeline(p);
+            releaseShader(batch.displayShader);
         }
         for (auto& p : I.pipe) releasePipeline(p);
         for (auto& p : I.meshPipe) releasePipeline(p);
         releasePipeline(I.reactiveQuadPipe);
         releasePipeline(I.reactiveMeshPipe);
+        releasePipeline(I.displayQuadPipe);
+        releasePipeline(I.displayMeshPipe);
         releaseShader(I.shader);
         releaseShader(I.mulShader);
         releaseShader(I.reactiveShader);
+        releaseShader(I.displayShader);
         releaseBuffer(I.vb);
         releaseBuffer(I.ib);
         releaseTexture(I.atlas);
@@ -1113,9 +1158,15 @@ void ParticleSystem::modelInstances(std::vector<ModelInstance>& out) const {
     }
 }
 
-void ParticleSystem::move(FxHandle h, float3 pos) { if (auto* in = findInstance(*impl_, h)) in->pos = pos; }
+void ParticleSystem::move(FxHandle h, float3 pos) { if (auto* in = findInstance(*impl_, h); in && !in->finishing) in->pos = pos; }
 void ParticleSystem::move(FxHandle h, float3 pos, float3 dir) {
-    if (auto* in = findInstance(*impl_, h)) { in->pos = pos; if (render::length(dir) > 1e-5f) in->setDir(render::normalize(dir)); }
+    if (auto* in = findInstance(*impl_, h); in && !in->finishing) { in->pos = pos; if (render::length(dir) > 1e-5f) in->setDir(render::normalize(dir)); }
+}
+void ParticleSystem::finish(FxHandle h, float3 position) {
+    if (auto* in = findInstance(*impl_, h); in && in->emitting && !in->stopped && !in->finishing) {
+        in->pos = position;
+        in->finishing = true;
+    }
 }
 void ParticleSystem::stop(FxHandle h) { if (auto* in = findInstance(*impl_, h)) in->stopped = true; }
 void ParticleSystem::kill(FxHandle h) {

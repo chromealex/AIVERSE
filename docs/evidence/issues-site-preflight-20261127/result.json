@@ -1,0 +1,26 @@
+{
+  "checkout": "aa0d0cfc77d6af9bffdcd2ea9c51424c093c3a3b",
+  "source_note": "Documentation translation updates pending in this stage; this is site artifact preparation, not native test freshness or remote publication.",
+  "command": "Python3.12 tools/site/build.py build --out <KINGSTON>/site-issues-preflight --demo-root <KINGSTON>/site-demos-verified",
+  "exit_code": 0,
+  "languages": 2,
+  "pages": 156,
+  "entries": 77,
+  "media": 173,
+  "web_demos": [
+    "projectile-impact-height",
+    "selection-targeting",
+    "order-upgrade",
+    "client-command-controls",
+    "projectile-segments",
+    "selection-voices",
+    "material-effects"
+  ],
+  "web_files_rehashed": 112,
+  "verified_demo_root": "/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/site-demos-verified",
+  "limits": [
+    "Remote publish requires clean origin/main after push.",
+    "First attempts rejected old local demo bytes; all older demos recovered from exact-hash matching historical archive. No pins changed.",
+    "Rendered browser layout verification remains before/after actual publication."
+  ]
+}

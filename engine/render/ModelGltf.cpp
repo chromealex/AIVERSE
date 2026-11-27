@@ -356,6 +356,8 @@ private:
             if (m.emissiveTex >= 0 && !j.has("emissiveFactor")) m.emissive = {0, 0, 0};
             std::string am = j.getStr("alphaMode", "OPAQUE");
             m.alpha = am == "MASK" ? AlphaMode::Mask : am == "BLEND" ? AlphaMode::Blend : AlphaMode::Opaque;
+            if(j["extras"].has("aiverseBlend") && !parseMaterialBlend(j["extras"].getStr("aiverseBlend"),m.alpha))
+                fail("aiverseBlend must be opaque, mask, alpha, additive or additive-unweighted");
             m.alphaCutoff = float(num(j["alphaCutoff"], 0.5));
             m.doubleSided = j.getBool("doubleSided");
             m.thinTransmission = float(num(j["extras"]["aiverseThinTransmission"],0));

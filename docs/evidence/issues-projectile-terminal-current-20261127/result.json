@@ -1,0 +1,15 @@
+{
+  "sha": "e66bc357d7c5e02ddb784db336b654033429707c",
+  "argv": [
+    "/usr/bin/time",
+    "-l",
+    "/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/aiverse_tests",
+    "fx_motion_finished_without_rendered_entity"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/issues-projectile-terminal-current-20261127/run.log.txt",
+  "scope": "Native headless GameFx terminal event for entity never rendered; endpoint included exactly once across repeated update",
+  "limits": [
+    "Existing binary with unchanged tested production source; final integrated gate remains required"
+  ]
+}

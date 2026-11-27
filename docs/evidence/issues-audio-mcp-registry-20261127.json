@@ -1,0 +1,15 @@
+{
+  "sha": "6b2b8bb4980a9a8d76cb2f8f0f9140552d9520b9",
+  "argv": [
+    "python3",
+    "tools/mcp/audit_registry.py",
+    "/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/aiversemcp",
+    "--engine",
+    ".",
+    "--feature-manifest",
+    "docs/features/selection-voice-order.json"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/issues-audio-mcp-registry-20261127.log.txt",
+  "sha256": "15c22104366c18de3952e96df9882b0e0a5d72fe8e6f87ce4e3d0dc46eeee2ce"
+}

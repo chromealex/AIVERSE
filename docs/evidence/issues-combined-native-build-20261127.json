@@ -1,0 +1,20 @@
+{
+  "source_at_start": "58a237621",
+  "source_at_finish": "85414a9ca",
+  "command": [
+    "cmake",
+    "--build",
+    "/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick",
+    "--parallel",
+    "6"
+  ],
+  "exit_code": 0,
+  "cache": "Debug x86_64, CLIENT/EDITOR/STUDIO_HTML5/TESTS ON",
+  "log": "docs/evidence/issues-combined-native-build-20261127.log.txt",
+  "sha256": "2fdf7af2791f75472e671a461cc8d7753fb7b0553a15ff37b7c5ae0d3e3a230c",
+  "warning_lines": 0,
+  "limits": [
+    "Only skill/manifest/handoff edits during build",
+    "Runtime acceptance tracked separately; build alone is not test pass"
+  ]
+}

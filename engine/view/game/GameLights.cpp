@@ -142,7 +142,9 @@ void GameLights::draw(Renderer3D& r, const GameScene& s, double time, const std:
             if (o.shooterType >= types_.size()) continue;
             const Flash& f = types_[o.shooterType].projectile;
             if (!f.on) continue;
-            PointLight l{o.pos, f.radius, f.color, f.intensity, 0.5f};
+            float3 point = o.pos;
+            view.projectileDrawPoint(o.entity, point);
+            PointLight l{point, f.radius, f.color, f.intensity, 0.5f};
             l.halo = std::max(f.halo, 0.0f);
             l.haloAlpha = 0.8f;
             ls.add(l);

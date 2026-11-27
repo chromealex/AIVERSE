@@ -1425,7 +1425,13 @@
           "titleEn": "Author pass chains and intermediate render textures",
           "id": "prisma-authored-compositor"
         },
-        {"id": "native-sky-skill", "status": "done", "date": "2026-11-25", "title": "Выбор штатного неба при оформлении карты", "titleEn": "Discover native sky when authoring a map"}
+        {
+          "id": "native-sky-skill",
+          "status": "done",
+          "date": "2026-11-25",
+          "title": "Выбор штатного неба при оформлении карты",
+          "titleEn": "Discover native sky when authoring a map"
+        }
       ],
       "taglineEn": "Post-processing and atmosphere",
       "essenceEn": "HDR, exposure and tone mapping, bloom, DoF, motion blur, TAA, AO and reflections, lens effects, anti-aliasing and upscaling, colour grading and screen-space atmosphere with quality profiles.",
@@ -1577,6 +1583,15 @@
           "target": null,
           "title": "Автоматическое подключение к RTS и FPS",
           "titleEn": "Automatic hookup to RTS and FPS"
+        },
+        {
+          "id": "fx-model-shadow-option",
+          "status": "in-progress",
+          "title": "fx-model-shadow-option",
+          "titleEn": "fx-model-shadow-option",
+          "target": null,
+          "text": "Готовится общий пример модельных эффектов: тени, аддитивные материалы и цветовое пространство частиц.",
+          "textEn": "Preparing a shared model-effects example: shadows, additive materials and particle blend space."
         }
       ],
       "taglineEn": "Particle effects",
@@ -3228,7 +3243,15 @@
         "Connect Claude Code or another MCP client."
       ],
       "roadmap": [
-        {"id": "native-simulation-checks", "status": "done", "title": "Диагностика C++-модулей перед проверкой симуляции", "titleEn": "Report missing native modules before simulation checks", "text": "MCP перечисляет отсутствующие модули проекта перед запуском проверки.", "textEn": "MCP lists missing project modules before running a simulation check.", "date": "2026-11-25"},
+        {
+          "id": "native-simulation-checks",
+          "status": "done",
+          "title": "Диагностика C++-модулей перед проверкой симуляции",
+          "titleEn": "Report missing native modules before simulation checks",
+          "text": "MCP перечисляет отсутствующие модули проекта перед запуском проверки.",
+          "textEn": "MCP lists missing project modules before running a simulation check.",
+          "date": "2026-11-25"
+        },
         {
           "id": "feature-gate",
           "title": "Единый контракт готовности фич",
@@ -3389,6 +3412,13 @@
         "Keep the web build size under control."
       ],
       "roadmap": [
+        {
+          "id": "minimap-background-packaging",
+          "status": "in-progress",
+          "target": null,
+          "title": "Сохранять фон миникарты в пакетах",
+          "titleEn": "Preserve minimap backgrounds in packaged builds"
+        },
         {
           "id": "site-devlog-roadmap",
           "status": "done",
@@ -3561,6 +3591,33 @@
           "titleEn": "Direct3D 11 and Direct3D 9 backends for Windows",
           "id": "direct3d-renderer",
           "date": "2026-11-25"
+        },
+        {
+          "id": "projectile-trail-alignment",
+          "status": "in-progress",
+          "title": "Единое представление снарядов и следов",
+          "titleEn": "Shared projectile and trail presentation",
+          "target": null,
+          "text": "Общий образец позиции для модели, следа и света. Четыре сцены проверены на Metal; браузерная проверка и интеграция продолжаются.",
+          "textEn": "One position sample for model, trail and light. Four scenes checked on Metal; browser acceptance and integration remain in progress."
+        },
+        {
+          "id": "model-additive-blending",
+          "status": "in-progress",
+          "title": "Аддитивные материалы моделей",
+          "titleEn": "Additive model materials",
+          "text": "Готовится общий пример модельных эффектов: тени, аддитивные материалы и цветовое пространство частиц.",
+          "textEn": "Preparing a shared model-effects example: shadows, additive materials and particle blend space.",
+          "target": null
+        },
+        {
+          "id": "particle-display-blending",
+          "status": "in-progress",
+          "title": "Смешивание частиц в пространстве отображения",
+          "titleEn": "Display-space particle blending",
+          "target": null,
+          "text": "Готовится общий пример модельных эффектов: тени, аддитивные материалы и цветовое пространство частиц.",
+          "textEn": "Preparing a shared model-effects example: shadows, additive materials and particle blend space."
         }
       ]
     },
@@ -3739,6 +3796,52 @@
           "titleEn": "Structure upgrade appearance",
           "text": "Модель нового типа с прогрессом улучшения.",
           "textEn": "Display the target model with upgrade progress."
+        },
+        {
+          "id": "client-command-controls",
+          "status": "in-progress",
+          "title": "Управление клиентом и общие настройки проекта",
+          "titleEn": "Client controls and shared project settings",
+          "target": null,
+          "text": "Проверка клиентских команд; общий редактор game.json в Project через существующий Workspace с защитой от устаревшего сохранения.",
+          "textEn": "Client command acceptance; shared game.json editing in Project through the existing Workspace owner with stale-save protection."
+        },
+        {
+          "id": "view-selection-requests",
+          "status": "in-progress",
+          "title": "view-selection-requests",
+          "titleEn": "view-selection-requests",
+          "target": null
+        },
+        {
+          "id": "selection-voice-order",
+          "status": "in-progress",
+          "title": "Последовательные реплики при повторном выборе",
+          "titleEn": "Sequential repeated-selection voices",
+          "target": null,
+          "text": "Порядок и сброс подтверждены записью нативного клиента. Завершается общий редактор данных проекта в Studio и web-демо.",
+          "textEn": "Order and reset verified in captured native audio. Completing shared Studio project-data editing and the web demo."
+        },
+        {
+          "id": "precise-attack-phases",
+          "status": "in-progress",
+          "title": "Точное время фаз атаки",
+          "titleEn": "Precise attack phase timing",
+          "target": null
+        },
+        {
+          "id": "minimap-view-options",
+          "status": "in-progress",
+          "title": "Область и отображение миникарты",
+          "titleEn": "Minimap bounds and display",
+          "target": null
+        },
+        {
+          "id": "portrait-appearance-options",
+          "status": "in-progress",
+          "title": "Модель и фон портрета",
+          "titleEn": "Portrait model and background",
+          "target": null
         }
       ]
     }

@@ -1,0 +1,207 @@
+{
+  "schema": 1,
+  "id": "client-command-controls",
+  "owner": "gameplay",
+  "changed_paths": [
+    "apps/client/ClientUi.cpp",
+    "apps/client/GameClient.cpp",
+    "apps/client/GameClient.h",
+    "demos/client-command-controls/README.md",
+    "demos/client-command-controls/game.json",
+    "demos/client-command-controls/maps/controls.json",
+    "demos/client-command-controls/rules.json",
+    "demos/client-command-controls/scripts/view/controls.lua",
+    "engine/assets/lang/en.json",
+    "engine/assets/lang/ru.json",
+    "engine/assets/ui/hud.rml",
+    "engine/assets/ui/menu.rml",
+    "engine/assets/ui/theme.rcss",
+    "engine/platform/EnhancedInputPresets.h",
+    "engine/world/TriangleCollision.cpp",
+    "skills/ui/aiverse-controls/SKILL.md",
+    "tests/libraries/enhanced_input_config_tests.cpp",
+    "tests/render/client_controls_frame.cpp",
+    "apps/editor/core/Workspace.cpp",
+    "apps/studio-native/StudioTools.h",
+    "apps/studio-native/StudioSession.cpp",
+    "apps/studio-web/src/panels/generated/ProjectPanel.tsx",
+    "apps/studio-web/src/panels/ProjectSettingsEditor.tsx",
+    "apps/studio-native/tests/StudioSessionTests.cpp"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": false,
+    "visible": true,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Real native client fixture verified shortcut label/select, M and mouse/touch Move, text-focus suppression, armed immobile Attack/Stop, passive tooltip and hosted Quit dispatch. Browser controls scene exercised F6/M/F7. Tooltip clipping correction is included in retained native touch/aura captures; mobile OS exit is not established.",
+      "evidence": [
+        "docs/evidence/issues-client-controls-metal-20261127/result.json",
+        "docs/evidence/issues-client-controls-web-20261127/result.json"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Existing GameClient action/card-key path handles shortcut and standard Move mode; standard commands go through existing command dispatch. Passive buttons carry description and stay disabled. Quit delegates to platform requestQuit. No simulation authority or alternative input system added.",
+      "evidence": [
+        "apps/client/ClientUi.cpp",
+        "apps/client/GameClient.cpp",
+        "engine/assets/ui/hud.rml"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "Existing GameClient and InputFlow action routing expose shared host controls; platform requestQuit remains application termination owner. Native fixture exercises the actual client/RmlUi path.",
+      "evidence": [
+        "apps/client/GameClient.h",
+        "engine/platform/Platform.h",
+        "tests/render/client_controls_frame.cpp",
+        "docs/evidence/issues-client-controls-metal-20261127/result.json"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "Existing controls recipe documents selectionShortcut.hotkey, command-card overrides, text focus, immobile subjects/passives and platform Quit boundary.",
+      "evidence": [
+        "skills/ui/aiverse-controls/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "pass",
+      "note": "Built standalone MCP tools/list and mcp_registry audited. Isolated fixture actually saved selectionShortcut.hotkey, ui.portrait.background and minimap.bounds through game_info/set_manifest; read/reopen, exact-byte Project Undo/Redo, stale original, malformed/root and external-file conflicts verified. Raw 64-bit integer preserved. Native Studio path is separately evidenced.",
+      "evidence": [
+        "docs/evidence/issues-authoring-mcp-registry-20261127.json",
+        "docs/evidence/issues-project-settings-mcp-20261127/result.json"
+      ]
+    },
+    "studio": {
+      "status": "pass",
+      "note": "Actual native Project settings UI saved hotkey, portrait defaults and minimap crop through shared manifest owner; malformed JSON and stale draft rejected, Project Undo/Redo and reopen/readback verified. Per-type Rules editing retained separately where applicable. Generic JSON editor, not custom per-key widgets.",
+      "evidence": [
+        "docs/evidence/issues-project-settings-ui-20261127/result.json",
+        "docs/evidence/issues-project-settings-ui-20261127/game-after.json",
+        "docs/evidence/issues-project-settings-native-corrected-20261127.json"
+      ]
+    },
+    "inspector": {
+      "status": "pass",
+      "note": "Actual native Project settings UI saved hotkey, portrait defaults and minimap crop through shared manifest owner; malformed JSON and stale draft rejected, Project Undo/Redo and reopen/readback verified. Per-type Rules editing retained separately where applicable. Generic JSON editor, not custom per-key widgets.",
+      "evidence": [
+        "docs/evidence/issues-project-settings-ui-20261127/result.json",
+        "docs/evidence/issues-project-settings-ui-20261127/game-after.json",
+        "docs/evidence/issues-project-settings-native-corrected-20261127.json"
+      ]
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "Actual native Project settings UI saved hotkey, portrait defaults and minimap crop through shared manifest owner; malformed JSON and stale draft rejected, Project Undo/Redo and reopen/readback verified. Per-type Rules editing retained separately where applicable. Generic JSON editor, not custom per-key widgets.",
+      "evidence": [
+        "docs/evidence/issues-project-settings-ui-20261127/result.json",
+        "docs/evidence/issues-project-settings-ui-20261127/game-after.json",
+        "docs/evidence/issues-project-settings-native-corrected-20261127.json"
+      ]
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "This adds ordinary command-card/input configuration and callbacks, not a user-authored graph or graph evaluator.",
+      "evidence": [
+        "apps/client/ClientUi.cpp"
+      ]
+    },
+    "performance": {
+      "status": "pass",
+      "note": "Scoped native Debug/Rosetta workload:256-handle selection every update, separate selected animated portrait, and four projectile scenes. Post-warmup CPU120-frame means<=16.04ms, sampled GPU frames<16.67ms,RSS<512MiB. First selection warmup block17.96ms is retained. Allocation review records bounded vectors/pools and fixed-size presentation; no p95/zero-allocation/mobile claim.",
+      "evidence": [
+        "docs/evidence/issues-client-performance-20261127/result.json"
+      ]
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "Verified scope: native macOS Metal and Emscripten browser WebGL runtime, using retained real captures. Windows, Linux desktop and physical mobile devices are NOT RUN; these results do not establish their backend/runtime parity.",
+      "evidence": [
+        "docs/evidence/issues-client-controls-metal-20261127/result.json",
+        "docs/evidence/issues-client-controls-web-20261127/result.json"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Reuses RmlUi, existing InputFlow key bindings and platform termination API; no new package or solver.",
+      "evidence": [
+        "apps/client/ClientUi.cpp",
+        "engine/platform/EnhancedInputPresets.h"
+      ]
+    },
+    "headless": {
+      "status": "not_applicable",
+      "note": "Local HUD actions emit existing commands; server command semantics are unchanged. There is no server HUD or menu to render.",
+      "evidence": [
+        "apps/client/ClientUi.cpp"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "Tracked controls demo exercised in native Metal and real WebGL browser: selection shortcut, Move, tower card, passive ability, explicit Sell cell and Quit menu.",
+      "evidence": [
+        "demos/client-command-controls/README.md",
+        "docs/evidence/issues-client-controls-metal-20261127/result.json",
+        "docs/evidence/issues-client-controls-web-20261127/result.json"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Complete Mac quick gate on clean 0a8ed3c9ef3858d539c1b38ade9036dd8391e64f: configure/build PASS; 592 CTests, 587 passed, 5 explicit GPU skips, 0 failures, 1126.43s. Includes real client_controls_frame and additive_blend_frame. Original recorder report-name collision did not fail native tests; retained logs were separately verified on the unchanged clean checkout. Windows/Linux/mobile runtime not established.",
+      "evidence": [
+        "docs/evidence/issues-mac-quick-final-retained-20261127.json",
+        "docs/evidence/issues-mac-quick-final-retained-20261127.log.txt",
+        "docs/agent-handoffs/issues-20261127-verification.md"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Cumulative staged handoff records exact implementation/evidence SHAs, actual checks and failures, ownership, known backend limits and remaining final integration steps. Final gate result will be appended after terminal completion.",
+      "evidence": [
+        "docs/agent-handoffs/issues-20261127-verification.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "Controls recipe, demo instructions and game-format reference describe authored hotkeys and standard card behavior.",
+      "evidence": [
+        "skills/ui/aiverse-controls/SKILL.md",
+        "docs/game-format.md",
+        "demos/client-command-controls/README.md"
+      ]
+    },
+    "publishing": {
+      "status": "pass",
+      "note": "Pre-main publishing deliverables prepared: actual captures, bilingual devlog and browser-verified Web demo pinned by SHA-256. Full site built successfully and all112 demo files rehashed. Per release-site contract actual publish runs only AFTER main push; remote deployment remains an explicit integration task, not claimed complete here.",
+      "evidence": [
+        "docs/evidence/issues-client-controls-web-20261127/result.json",
+        "docs/devlog/entries/2026-11-27-gameplay-client-controls.json",
+        "site/manifest.json",
+        "docs/evidence/issues-site-preflight-20261127/result.json"
+      ]
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-controls"
+    ],
+    "mcp_tools": [
+      "game_info",
+      "set_manifest"
+    ],
+    "studio_panels": [
+      "project"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ]
+  },
+  "test_reports": [
+    "docs/evidence/issues-mac-quick-final-retained-20261127.json"
+  ]
+}

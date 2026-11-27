@@ -260,7 +260,7 @@ public:
         return beginPresentationFrame(fx::SpectraFxView::fromCamera(camera,projection,width,height));
     }
     bool step(float dt);
-    void draw(const fx::FxFog& fog = {});
+    void draw(const fx::FxFog& fog = {},render::Renderer3D* renderer=nullptr);
     void endPresentationFrame();
 
     // Scene-level visual rollback reset; clears ALL effects registered to

@@ -6,6 +6,7 @@ import type { StudioPanelContext } from '../StudioPanelRenderer';
 import { StudioPanel, StudioSection, StudioAlert, StudioEmptyState, StudioButton, StudioField, StudioInput, StudioSelect } from '../../ui';
 import typeBlocks from '../../../../editor/core/type-blocks.json';
 import './ProjectPanel.css';
+import ProjectSettingsEditor from '../ProjectSettingsEditor';
 
 const blockGroups = [...new Set(Object.values(typeBlocks).map(block=>block.group))];
 const singular = {types:'type',resources:'resource',techs:'technology',factions:'faction'};
@@ -90,6 +91,7 @@ export default function ProjectPanel({projectRecord,snapshot,busy,connected,open
     {!path ? <StudioEmptyState title="Open a project" description="Choose a project to browse its maps and rules."/> :
     <div className="project-page">
       {error && <StudioAlert tone="danger">{error}</StudioAlert>}
+      <ProjectSettingsEditor key={path} project={path} disabled={busy || !connected} updateSnapshot={updateSnapshot}/>
       {project?.rulesError && <StudioAlert tone="danger" title="Rules">{project.rulesError}</StudioAlert>}
       <div className="project-current"><MapIcon size={19}/><div><small>Current map</small><strong>{project?.currentMap || 'Unsaved map'}</strong></div>
         <StudioButton disabled={busy || !snapshot?.project.dirty} onClick={()=>void run(()=>invoke('studio.save',{}))}><Save size={13}/>Save</StudioButton>

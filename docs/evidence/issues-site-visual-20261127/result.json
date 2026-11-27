@@ -1,0 +1,18 @@
+{
+  "source": "local site bundle built from current branch; not public deployment",
+  "pages": [
+    "http://127.0.0.1:8770/devlog.html",
+    "http://127.0.0.1:8770/ru/devlog.html"
+  ],
+  "observed": [
+    "77 entries and latest date 27.11 in both languages",
+    "new controls, projectile, material and audio entries present",
+    "search finds projectile card in both languages",
+    "projectile captures loaded and visible",
+    "Russian card title/body and source/demo links render"
+  ],
+  "limits": [
+    "In-progress statuses remain appropriate before main integration",
+    "Public deployment still pending"
+  ]
+}

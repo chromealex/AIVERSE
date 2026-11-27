@@ -1,3 +1,4 @@
+#include "ProjectileEvents.h"
 // Effect engine: applies payloads (lists of effects) with target filters and shapes, runs statuses
 // (DoT/HoT, shields, flags, stacking, expiry with reverts and follow-up payloads), ground areas
 // (delayed strikes, fields, moving hazards, mines, portals, reveals, soul traps), ability projectiles
@@ -797,7 +798,9 @@ void GameCore::tickAreas(Simulation& sim) {
 void GameCore::impactProjectile(Simulation& sim, Entity p) {
     World& w = sim.world();
     Projectile pr = w.get<Projectile>(p);
-    const Vec3 at = flat(w.get<Transform>(p).pos);
+    const Vec3 endpoint = w.get<Transform>(p).pos;
+    const Vec3 at = flat(endpoint);
+    sim.emit(projectileFinishedEvent(p, pr, endpoint));
     w.destroyLater(p);
     if (pr.effList < 0) return;
     const EffectDef& e = rules_.payloads[size_t(pr.effList)][size_t(pr.effIndex)];

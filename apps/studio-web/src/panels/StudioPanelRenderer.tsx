@@ -72,6 +72,7 @@ import CavernsPanel from './generated/CavernsPanel';
 import CatalogPanel from './generated/CatalogPanel';
 import FeatureReadinessPanel from './FeatureReadinessPanel';
 
+import ProjectDataPanel from './generated/ProjectDataPanel';
 export type InspectorRecord = {kind:"player";slot:number} | {kind:"area"|"region";key:string};
 
 export interface StudioPanelContext {
@@ -227,6 +228,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'world_explorer': return <WorldExplorerPanel snapshot={snapshot}/>;
       case 'simulation_profiler': return <SimulationProfilerPanel snapshot={snapshot}/>;
       case 'world_persistence': return <WorldPersistencePanel projectPath={snapshot?.project.path ?? ''}/>;
+      case 'project_data': return <ProjectDataPanel snapshot={snapshot}/>;
       // AI_PANEL_CASES: add new panel renderers above this line.
       case 'game': return <GamePanel {...ctx}/>;
       case 'animation': return <AnimationTimeline key={snapshot?.project.path} route={ctx.animationRoute} snapshot={snapshot} showPanel={ctx.showPanel}/>;

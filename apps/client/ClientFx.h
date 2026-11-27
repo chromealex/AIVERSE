@@ -26,8 +26,8 @@ public:
     void prepareGraphGpuFrame(Simulation&,const game::GameScene&,const render::Camera&,const render::mat4&,int,int,float) {}
     void contributeVolumes(render::Prisma&) {}
     void renderGpu(const render::mat4&, const render::Camera&) {}
-    void render(const render::Lighting&) {}
-    void renderPrepared(const render::Camera3D&, const render::mat4&, int, int, const render::Lighting&) {}
+    void render(const render::Lighting&,render::Renderer3D* = nullptr) {}
+    void renderPrepared(const render::Camera3D&, const render::mat4&, int, int, const render::Lighting&,render::Renderer3D* = nullptr) {}
     int quality() const { return 0; }
     void setQuality(int) {}
     void scriptEffect(const game::ViewRequest&) {}
@@ -100,14 +100,14 @@ public:
     void renderGpu(const render::mat4& viewProj, const render::Camera& camera);
     void contributeVolumes(render::Prisma& prisma);
     // After Renderer3D::render(): draws into the still open main pass.
-    void render(const render::Lighting& lighting);
+    void render(const render::Lighting& lighting,render::Renderer3D* renderer=nullptr);
     // Reorient and draw already updated particles for another LENS camera.
     // No bridge.update(), ParticleSystem::update(), sub-emitter processing
     // or time advancement; call inside an active post-geometry render pass.
     void renderPrepared(const render::Camera3D& camera,
                         const render::mat4& viewProj,
                         int width,int height,
-                        const render::Lighting& lighting);
+                        const render::Lighting& lighting,render::Renderer3D* renderer=nullptr);
 
     int quality() const { return int(ps_.quality()); }
     void setQuality(int q) { ps_.setQuality(fx::FxQuality(q < 0 ? 0 : q > 3 ? 3 : q)); }

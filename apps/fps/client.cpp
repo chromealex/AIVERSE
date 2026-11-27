@@ -1194,7 +1194,7 @@ struct App {
         for(const auto& c:client->snapshot().royale.crates)box(c,{1.2f,1.2f,1.2f},{0.95f,0.6f,0.1f,1});
         genericSceneView.submitPackets(renderer,worldPackets);
         gfx::PassDesc pass;pass.clearColor[0]=0.2f;pass.clearColor[1]=0.28f;pass.clearColor[2]=0.36f;renderer.render(pass);
-        if(fxOriginReady) fxScene.render(renderer.lighting,renderer.viewProj(),cam);
+        if(fxOriginReady) fxScene.render(renderer.lighting,renderer.viewProj(),cam,&renderer);
         ImGui::SetNextWindowPos({16,16});ImGui::SetNextWindowBgAlpha(0.65f);
         ImGui::Begin("##fps",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_AlwaysAutoResize|ImGuiWindowFlags_NoInputs);
         auto text=lang.tr("actor.status",i18n::Args().num("health",actor.health).num("ammo",actor.ammo).num("reserve",actor.reserve).num("tick",client->snapshot().tick));

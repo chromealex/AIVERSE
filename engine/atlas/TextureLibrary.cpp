@@ -90,9 +90,7 @@ const TextureRef* TextureLibrary::get(const std::string& path) {
 }
 
 bool TextureLibrary::loadImage(const std::string& path, Image& out) {
-    if (images_.load(path, out)) return true;
-    std::string bytes;
-    return read_(path, bytes) && decodeImageFile(bytes, out);
+    return images_.loadImage(path, out);
 }
 
 } // namespace aiverse::atlas

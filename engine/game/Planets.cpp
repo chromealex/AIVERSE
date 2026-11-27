@@ -30,8 +30,14 @@ const Surface* GameCore::surface(Simulation& sim) const {
 }
 
 uint32_t GameCore::minimumSaveVersion(const Simulation& sim) const {
+    if(systems_)return systems_->minimumSaveVersion(sim);
+    bool provenance=false;
+    sim.world().eachExistingConst<Projectile>([&](Entity,const Projectile& p) {
+        provenance |= p.program.origin != projectile::FlightOrigin::Unknown;
+    });
+    if(provenance)return 13;
     const auto* gs=sim.world().resourceConst<GameState>();
-    return !systems_&&gs&&gs->planetTerrainRevision?12u:0u;
+    return gs&&gs->planetTerrainRevision?12u:0u;
 }
 bool GameCore::stagePlanetTerrain(World& staged,const Surface& expected,
         uint64_t expectedRevision,const Surface& candidate) const {
