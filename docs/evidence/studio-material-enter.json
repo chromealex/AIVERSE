@@ -1,0 +1,10 @@
+{
+  "sha": "0c901050821edb5181ec4c9e853b36cd6aa54f0d",
+  "argv": [
+    "bash",
+    "../material-enter.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-material-enter.log.txt",
+  "sha256": "887ebb7a6f132b5820f5448eed0b8cd6bcad6c235abf912bf23541fb49e46200"
+}
