@@ -36,7 +36,7 @@ public:
             webkit_user_content_manager_remove_script(manager,script_);
             webkit_user_content_manager_unregister_script_message_handler(manager,"studioRequest");
         }
-        g_signal_handler_disconnect(view_,policy_);
+        if (g_signal_handler_is_connected(view_,policy_)) g_signal_handler_disconnect(view_,policy_);
         g_signal_handler_disconnect(manager,signal_);
         webkit_user_script_unref(script_);
         g_object_unref(view_);
