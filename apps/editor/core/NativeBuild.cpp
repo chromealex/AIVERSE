@@ -231,7 +231,8 @@ std::vector<std::string> nativeBuildModules(const std::string& buildDir) {
     std::vector<std::string> ids;
     std::ifstream f(fs::path(buildDir) / "gen" / "NativeRegistry.cpp");
     std::string line;
-    const std::string key = "result.push_back({\"";
+    // Both NativeRegistrar initializer rows and older push_back rows begin their entry here.
+    const std::string key = "{\"";
     while (std::getline(f, line)) {
         size_t a = line.find(key);
         if (a == std::string::npos) continue;
