@@ -1740,3 +1740,7 @@ beb3676a563566b15140b219abbef4ea6616a77e adds captures/mac-scene-world-axes.png.
 ### River flow edits on unnamed map entities
 
 c90f93c71756fdcc68818e7c38f0a13829bdcbb9 fixes apps/editor/AuthoringWater.h and adds the regression to tests/editor/scene_entity_adapter_tests.cpp. The initial live edit copied the water component onto an unrelated unnamed entity and broke Scene with a duplicate surface ID. Write-back now uses the same water-only document order as the read projection. Focused native adapter test, exact undo restoration and Mac Studio build passed. Detached Scene accepted +3/-3/+3 manual currents. The first tightly spaced spline did not produce distinguishable reversible pixels. With longer segments, stats-mac-v0k_19mx/{forward,reverse,restored}.png showed 348 changed viewport pixels over 30 channel levels, of which 102 exactly returned. captures/mac-river-flow-reversed.png shows the longer-segment run. Only translation is supported by the current entity manifest. Next check isolation between multiple selected rivers.
+
+### Two unnamed river entities, undo and redo
+
+b9296de84a641e61fbd420084a561f45d0b4b22d extends tests/editor/scene_entity_adapter_tests.cpp with two unnamed entity-local surfaces (IDs 7 and 8). Editing surface 8 preserved surface 7 and the unrelated unnamed object. Parsed both resulting surfaces and compared full map JSON after undo and redo. Native two-river-editor-test linked against the current Mac Studio libraries exited zero. This covers document edits; viewport selection isolation remains a separate check.
