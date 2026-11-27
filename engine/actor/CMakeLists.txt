@@ -36,7 +36,7 @@ if(AIVERSE_BUILD_SERVER AND NOT EMSCRIPTEN)
     target_link_libraries(aiverse_fps_server PRIVATE aiverse_authority)
 endif()
 # Actor projects run in the one game client (apps/client/main.cpp: game.json "module" "fps").
-if(TARGET aiverse_client AND AIVERSE_DESKTOP)
+if(TARGET aiverse_client AND AIVERSE_DESKTOP AND NOT AIVERSE_SCENE_CLIENT)
     target_sources(aiverse_client PRIVATE ../../apps/fps/client.cpp)
     target_link_libraries(aiverse_client PRIVATE AIVERSE::libraries)   # apps/fps/client.cpp uses library headers
     target_compile_definitions(aiverse_client PRIVATE AIVERSE_CLIENT_ACTOR=1)
