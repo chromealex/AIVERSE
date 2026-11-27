@@ -1,0 +1,21 @@
+{
+  "sha": "8a64baa22f4226b9c1fa83c21f67ce9e12be0ebf",
+  "argv": [
+    "env",
+    "TMPDIR=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/tmp",
+    "AIVERSE_COMPARE_PALM_BOUNDS=1",
+    "AIVERSE_COMPARE_FOREST_CONTOURS=1",
+    "AIVERSE_TERRAWEAVE_FOREST_CAPTURE=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/palm-final",
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac",
+    "-R",
+    "^terraweave_(metal_forest|model)$",
+    "--repeat",
+    "until-fail:3",
+    "-V"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/terraweave-palm-bounds-metal.log.txt",
+  "sha256": "9ea71865487cfd4235488ea9b42609ac450dea88010e6146a51bc5422179d006"
+}

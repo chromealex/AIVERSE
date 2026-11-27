@@ -4,16 +4,21 @@
   "owner": "terraweave",
   "changed_paths": [
     "docs/agent-handoffs/media/terraweave-contour-grove.png",
+    "docs/agent-handoffs/media/terraweave-palm-bounds.png",
     "docs/agent-handoffs/terraweave-impostor-contour-initial.md",
     "docs/agent-handoffs/terraweave-impostor-contour-metal.md",
+    "docs/agent-handoffs/terraweave-palm-bounds-metal.md",
     "docs/devlog/systems.json",
     "docs/evidence/terraweave-contour-m3-ultra.json",
     "docs/evidence/terraweave-contour-m3-ultra.log.txt",
+    "docs/evidence/terraweave-palm-bounds-metal.json",
+    "docs/evidence/terraweave-palm-bounds-metal.log.txt",
     "docs/features/terraweave-impostor-contour.json",
     "engine/render/TerraWeaveForestAdapter.h",
     "engine/render/TerraWeaveImpostorAtlas.h",
     "tests/terraweave_metal_forest.mm",
-    "tests/terraweave_model_test.cpp"
+    "tests/terraweave_model_test.cpp",
+    "tests/terraweave_palm_comparison.inc"
   ],
   "traits": {
     "editable": false,
@@ -74,17 +79,17 @@
       "evidence": []
     },
     "performance": {
-      "status": "fail",
-      "note": "Both contours reduce coverage. On the 288-tree M3 Ultra grove, median GPU time rises by 2.7% for three bands and 32.6% for eight bands. Keep opt-in. Follow-up trial: one alpha bounding box per layer on a long-trunk palm at multiple distances and azimuths.",
+      "status": "pass",
+      "note": "Two-card bounding boxes on the palm reduce median Metal GPU time at all three radii. Prior three/eight-band trials remain opt-in.",
       "evidence": [
-        "docs/evidence/terraweave-contour-m3-ultra.log.txt"
+        "docs/evidence/terraweave-palm-bounds-metal.log.txt"
       ]
     },
     "platforms": {
       "status": "not_run",
       "note": "Measured arm64 Metal only. Other targets untested.",
       "evidence": [
-        "docs/evidence/terraweave-contour-m3-ultra.json"
+        "docs/evidence/terraweave-palm-bounds-metal.json"
       ]
     },
     "dependencies": {
@@ -101,30 +106,30 @@
     },
     "examples": {
       "status": "pass",
-      "note": "The offscreen grove exercises all three geometry modes.",
+      "note": "Reproducible long-trunk palm with a controlled paired orbit.",
       "evidence": [
-        "tests/terraweave_metal_forest.mm"
+        "tests/terraweave_palm_comparison.inc"
       ]
     },
     "tests": {
       "status": "pass",
-      "note": "CPU and Metal checks repeated three times on the tested SHA.",
+      "note": "Three repeats of model and Metal tests on the current code, including the earlier strip comparison.",
       "evidence": [
-        "docs/evidence/terraweave-contour-m3-ultra.json"
+        "docs/evidence/terraweave-palm-bounds-metal.json"
       ]
     },
     "handoff": {
       "status": "pass",
-      "note": "Includes workload, limitations, tested SHA and next step.",
+      "note": "Palm measurements and remaining integration limits recorded.",
       "evidence": [
-        "docs/agent-handoffs/terraweave-impostor-contour-metal.md"
+        "docs/agent-handoffs/terraweave-palm-bounds-metal.md"
       ]
     },
     "documentation": {
       "status": "pass",
-      "note": "Describes the experiment and invocation.",
+      "note": "Describes selection, timing and silhouette tests.",
       "evidence": [
-        "docs/agent-handoffs/terraweave-impostor-contour-metal.md"
+        "docs/agent-handoffs/terraweave-palm-bounds-metal.md"
       ]
     },
     "publishing": {
@@ -140,6 +145,6 @@
     "studio_methods": []
   },
   "test_reports": [
-    "docs/evidence/terraweave-contour-m3-ultra.json"
+    "docs/evidence/terraweave-palm-bounds-metal.json"
   ]
 }
