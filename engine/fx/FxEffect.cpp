@@ -1,4 +1,5 @@
 #include "FxEffect.h"
+#include "engine/render/MaterialBlend.h"
 #include "SpectraParticleProgram.h"
 #include "engine/render/graph/ShaderGraph.h"
 #include <algorithm>
@@ -129,6 +130,7 @@ struct Reader {
     Reader sub(const char* key) const { return Reader{obj[key], where + "." + key, errors}; }
 };
 
+constexpr const char* kBlendSpaceNames[] = {"linear", "display"};
 constexpr const char* kBlendNames[] = {"alpha", "additive", "premultiplied", "multiply", "subtract", "opaque"};
 constexpr const char* kAlignNames[] = {"camera", "velocity", "ground", "upright", "world", "local"};
 constexpr const char* kShapeNames[] = {"point", "sphere", "disc", "ring", "hemisphere", "cone", "box", "line", "donut", "mesh"};
@@ -144,7 +146,7 @@ constexpr const char* kTrailModeNames[] = {"particle", "ribbon"};
 constexpr const char* kInheritModeNames[] = {"initial", "current"};
 
 constexpr const char* kKnownKeys[] = {
-    "texture", "frames", "fps", "blend", "align", "burst", "rate", "perMeter", "delay", "duration", "loop",
+    "texture", "frames", "fps", "blend", "blendSpace", "align", "burst", "rate", "perMeter", "delay", "duration", "loop",
     "life", "speed", "size", "rotation", "spin", "direction", "spread", "shape", "radius", "gravity", "drag",
     "stretch", "sizeOverLife", "color", "minQuality", "comment",
     // optional modules
@@ -533,7 +535,7 @@ void parseModules(const Json& e, Reader& r, EmitterDef& d, const SdfResourceRead
             else { r.fail("subEmitters", "at most " + std::to_string(kMaxSubEmitters) + " sub-emitters per emitter"); break; }
         }
     }
-    module(e, r, "trail", {"time", "width", "color", "texture", "blend", "inheritColor", "sizeAffectsWidth", "minQuality", "mode", "ribbons",
+    module(e, r, "trail", {"time", "width", "color", "texture", "blend", "blendSpace", "inheritColor", "sizeAffectsWidth", "minQuality", "mode", "ribbons",
                            "ratio", "lifeColor", "lifeFraction", "minDistance", "textureMode", "dieWithParticles", "sizeAffectsLifetime"},
            [&](const Json& o, Reader& tr) {
         FxTrail& t = d.trail;
@@ -545,6 +547,10 @@ void parseModules(const Json& e, Reader& r, EmitterDef& d, const SdfResourceRead
         if (o.has("lifeColor") && !colorKeys(o["lifeColor"], t.lifeColor)) tr.fail("lifeColor", "expected \"#rrggbbaa\" or [[t, \"#rrggbbaa\"], ...]");
         if (o.has("texture")) { t.texture = o["texture"].str(); if (t.texture.empty()) tr.fail("texture", "expected a name"); }
         tr.choice("blend", t.blend, kBlendNames);
+        t.blendSpace=d.blendSpace;
+        tr.choice("blendSpace", t.blendSpace, kBlendSpaceNames);
+        if(t.blendSpace==FxBlendSpace::Display && t.blend!=FxBlend::Additive)
+            tr.fail("blendSpace","display requires additive blending");
         tr.boolean("inheritColor", t.inheritColor);
         tr.boolean("sizeAffectsWidth", t.sizeAffectsWidth);
         tr.boolean("sizeAffectsLifetime", t.sizeAffectsLifetime);
@@ -830,13 +836,14 @@ void modulesToJson(const EmitterDef& d, Json& e,bool includeSdf) {
         const FxTrail& t = d.trail;
         Json o = Json::object();
         if (t.ribbon) { o.set("mode", Json::string("ribbon")); if (t.ribbons != 1) o.set("ribbons", Json::number(int64_t(t.ribbons))); }
-        o.set("time", numJ(t.time));
+        if(t.time!=tb.time)o.set("time", numJ(t.time));
         if (t.lifeFraction > 0) o.set("lifeFraction", numJ(t.lifeFraction));
         o.set("width", keysJ(t.width));
         o.set("color", colorKeysJ(t.color));
         if (!t.lifeColor.empty()) o.set("lifeColor", colorKeysJ(t.lifeColor));
         if (t.texture != tb.texture) o.set("texture", Json::string(t.texture));
         o.set("blend", Json::string(kBlendNames[size_t(t.blend)]));
+        o.set("blendSpace",Json::string(kBlendSpaceNames[size_t(t.blendSpace)]));
         if (!t.inheritColor) o.set("inheritColor", Json::fromBool(false));
         if (!t.sizeAffectsWidth) o.set("sizeAffectsWidth", Json::fromBool(false));
         if (t.sizeAffectsLifetime) o.set("sizeAffectsLifetime", Json::fromBool(true));
@@ -999,7 +1006,7 @@ bool FxTrail::operator==(const FxTrail& o) const {
         return true;
     };
     return enabled == o.enabled && time == o.time && lifeFraction == o.lifeFraction && width == o.width && ck(color, o.color) &&
-           ck(lifeColor, o.lifeColor) && texture == o.texture && blend == o.blend && inheritColor == o.inheritColor &&
+           ck(lifeColor, o.lifeColor) && texture == o.texture && blend == o.blend && blendSpace == o.blendSpace && inheritColor == o.inheritColor &&
            sizeAffectsWidth == o.sizeAffectsWidth && sizeAffectsLifetime == o.sizeAffectsLifetime && ribbon == o.ribbon && ribbons == o.ribbons &&
            ratio == o.ratio && minDistance == o.minDistance && textureMode == o.textureMode && dieWithParticles == o.dieWithParticles &&
            minQuality == o.minQuality;
@@ -1024,12 +1031,19 @@ bool parseEffect(const Json& j, const std::string& where, EffectDef& out, std::v
         model.source = m.getStr("source"); model.clip = m.getStr("clip");
         model.duration = float(m["duration"].toDouble(1));
         model.loop = m.getBool("loop");
+        model.castShadow = m.getBool("castShadow", true);
         if (model.source.empty() || !std::isfinite(model.duration) || model.duration <= 0)
             errors.push_back(where + ".model: expected source and positive duration");
         if (m.has("materials") && !m["materials"].isArray()) errors.push_back(where+".model.materials: expected array");
         for (const auto& item : m["materials"].items()) {
             ModelMaterialTrack track;
             track.material = item.getStr("material");
+            if(item.has("blend")) {
+                render::AlphaMode mode;
+                track.blend=item.getStr("blend");
+                if(!render::parseMaterialBlend(track.blend,mode))
+                    errors.push_back(where+".model.materials.blend: invalid material blend mode");
+            }
             if (item.has("color") && !colorKeys(item["color"],track.color))
                 errors.push_back(where+".model.materials.color: invalid RGBA gradient");
             Reader reader{item,where+".model.materials",errors};
@@ -1096,6 +1110,9 @@ bool parseEffect(const Json& j, const std::string& where, EffectDef& out, std::v
         }
         r.number("fps", d.fps, 0, 120);
         r.choice("blend", d.blend, kBlendNames);
+        r.choice("blendSpace", d.blendSpace, kBlendSpaceNames);
+        if(d.blendSpace==FxBlendSpace::Display && d.blend!=FxBlend::Additive)
+            r.fail("blendSpace","display requires additive blending");
         r.choice("align", d.align, kAlignNames);
         r.integer("burst", d.burst, 0, 2000);
         r.range("rate", d.rate, 0, 2000);
@@ -1145,6 +1162,7 @@ Json effectToJson(const EffectDef& def,bool includeSdf) {
         if (d.frameCols != 1 || d.frameRows != 1) { Json f = Json::array(); f.push(Json::number(int64_t(d.frameCols))); f.push(Json::number(int64_t(d.frameRows))); e.set("frames", f); }
         if (d.fps != base.fps) e.set("fps", numJ(d.fps));
         e.set("blend", Json::string(kBlendNames[size_t(d.blend)]));
+        if(d.blendSpace!=FxBlendSpace::Linear)e.set("blendSpace",Json::string(kBlendSpaceNames[size_t(d.blendSpace)]));
         if (d.align != base.align) e.set("align", Json::string(kAlignNames[size_t(d.align)]));
         if (d.burst) e.set("burst", Json::number(int64_t(d.burst)));
         if (!isZero(d.rate)) e.set("rate", rangeJ(d.rate));
@@ -1175,12 +1193,14 @@ Json effectToJson(const EffectDef& def,bool includeSdf) {
         const auto& model = def.model;
         Json m = Json::object(), tracks = Json::array();
         m.set("source",Json::string(model.source)); m.set("duration",numJ(model.duration));
+        if (!model.castShadow) m.set("castShadow", Json::fromBool(false));
         if (model.loop) m.set("loop",Json::fromBool(true));
         if (!model.clip.empty()) m.set("clip",Json::string(model.clip));
         for (const auto& track : model.materials) {
             Json item = Json::object();
             if (!track.material.empty()) item.set("material",Json::string(track.material));
             if (!track.color.empty()) item.set("color",colorKeysJ(track.color));
+            if (!track.blend.empty()) item.set("blend",Json::string(track.blend));
             Json speed=Json::array(); speed.push(numJ(track.uvSpeed.x)); speed.push(numJ(track.uvSpeed.y));
             item.set("uvSpeed",speed);
             Json frames=Json::array();

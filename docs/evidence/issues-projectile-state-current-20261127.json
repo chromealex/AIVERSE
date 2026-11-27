@@ -1,0 +1,11 @@
+{
+  "sha": "e66bc357d7c5e02ddb784db336b654033429707c",
+  "argv": [
+    "python3",
+    "-c",
+    "import subprocess; binary=\"/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/aiverse_tests\"; [subprocess.run([binary, name],check=True) for name in [\"projectile\", \"fx_finish_consumes_last_motion_once\"]]"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/issues-projectile-state-current-20261127.log.txt",
+  "sha256": "afebf290fdaecfaaab0d6566abdc7e4fb58abe3a5c63a04e1d60e1af4823c9a2"
+}

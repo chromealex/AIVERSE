@@ -222,8 +222,8 @@ public:
     void setView(const fx::SpectraFxView& view){
         for(auto& [id,e]:entries_)if(e.particles)e.particles->setView(view);
     }
-    void drawParticles(const fx::FxFog& fog={}){
-        for(auto& [id,e]:entries_)if(e.particles&&!e.failed&&!e.particleDepthAware)e.particles->draw(fog);
+    void drawParticles(const fx::FxFog& fog={},render::Renderer3D* renderer=nullptr){
+        for(auto& [id,e]:entries_)if(e.particles&&!e.failed&&!e.particleDepthAware)e.particles->draw(fog,renderer);
     }
     void step(float dt){
         if(!std::isfinite(dt)||dt<0)return;

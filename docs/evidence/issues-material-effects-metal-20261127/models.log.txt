@@ -1,0 +1,6 @@
+[metal-assets] libraries=0 sourceMisses=33 pipelines=76 pipelineFailures=0 archive=0 strict=0
+[ui info] Loading Lua plugin using the provided Lua state.
+[streaming] initial=3 background=0 radius=29.0 focus=10.0,8.0
+[loading] map=maps/materials.json types=3/7
+[loading] map assets ready in 340.9 ms (3 types)
+[loading] first map frame in 3308.5 ms

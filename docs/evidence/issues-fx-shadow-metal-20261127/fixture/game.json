@@ -1,0 +1,19 @@
+{
+  "id": "org.aiverse.qa.fxshadow",
+  "name": "FX model shadows",
+  "module": "game",
+  "rules": "rules.json",
+  "maps": [
+    {
+      "file": "maps/check.json",
+      "title": "Model effect shadow comparison"
+    }
+  ],
+  "camera": {
+    "projection": "ortho",
+    "pitch": 45,
+    "yaw": 0,
+    "pixelsPerCell": 48,
+    "rotate": true
+  }
+}

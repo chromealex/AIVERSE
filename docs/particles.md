@@ -274,6 +274,7 @@ imported folder (dry runs kept outside the repo).
 ### Animated model effects
 
 An `fx/NAME.json` effect can contain a `model` alone or alongside its particle emitters. Use its name in event bindings, model anchors and view-script handles. Its duration is in seconds. A named skeletal clip is sampled across that duration and repeats when `loop` is true. Without a clip name the first clip plays, or the bind pose for a model with no clips.
+Set `"castShadow":false` in the model block for spell and impact models that should not cast a shadow. The default is true; the option does not alter material alpha or depth sorting.
 
 ```json
 {"model":{"source":"models/aura.glb","clip":"Pulse","duration":1.5,"loop":true,
@@ -282,3 +283,31 @@ An `fx/NAME.json` effect can contain a `model` alone or alongside its particle e
 ```
 
 Material names select the affected surfaces. Omit the name to affect all materials. RGBA keys multiply the source colour and opacity at normalized times. Texture frames refer to images already in the model and divide each cycle evenly. glTF frames accept texture names, image names and external image URIs. When several samplers share an image, use distinct texture names to choose among them. UV speed is in texture repeats per second. Instance positions and directions follow the same move, attachment and stop calls used by other FX.
+
+### Finishing attached effects
+
+Native consumers can call `ParticleSystem::finish(handle, endpoint)` to process the last movement on the next particle update before stopping emission. Distance emitters include an endpoint sample within their normal particle budget. Repeated finish calls and subsequent moves preserve the first endpoint; live particles then fade normally. `stop` remains immediate emission cancellation, and `kill` removes particles. This API is general to attached effects; projectile adapters supply their terminal point separately.
+
+
+### Additive blend colour space
+
+An additive emitter may set `"blendSpace":"display"` to add its encoded RGB
+contribution after PRISMA tone mapping, retaining the familiar `src * alpha + dst`
+look over bright surfaces. `"linear"` is the default scene-HDR path. Trails inherit
+the emitter choice; a trail's own `blendSpace` explicitly overrides it. Other
+blend modes reject the display setting. Source alpha, fog attenuation and opaque
+scene-depth occlusion remain active. Display contributions occur before HUD and
+after postprocessing, so they do not feed HDR bloom/exposure or temporal effects.
+
+Native consumers call `ParticleSystem::renderScene(renderer,fog)` between
+Renderer3D::render and resolvePrisma. It reuses uploaded geometry in the resolve
+callback; keep the particle system and its view unchanged until resolve finishes.
+Without a postprocessing/depth source, the existing open-pass LDR path is used.
+Graph-runtime GPU admission routes this setting to CPU presentation; a strict
+GPU requirement reports incompatibility. Volume features that require GPU-only
+execution must not silently discard this setting. Actual Metal pixel cases and Metal/WebGL example captures are retained in
+`docs/evidence/issues-additive-metal-20261127` and
+`docs/evidence/issues-material-effects-{metal,web}-20261127`. These checks do
+not establish Windows/Vulkan or mobile-device parity. Graph v1/v2 MCP
+validate/save/bake/reopen and invalid-edit preservation are retained in
+`docs/evidence/issues-display-graph-mcp-20261127`.

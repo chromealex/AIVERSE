@@ -5,6 +5,7 @@
 //   Lobby.cpp     online play: NetClient, lobby / room screens, network matches
 #pragma once
 #include "engine/view/game/MainCameraShake.h"
+#include "engine/view/MapProjection.h"
 #include "ProjectCursors.h"
 #include "engine/view/game/GamePortrait.h"
 #include "MatchFiles.h"
@@ -82,7 +83,7 @@ struct Notice { std::string text, style; double until; };
 
 class Minimap {
 public:
-    void build(gfx::Device& dev, const GameState& gs, const std::string& background);
+    void build(gfx::Device& dev, const GameState& gs, const std::string& background, const ::aiverse::view::MapProjection& bounds, bool rectangle);
     void update(gfx::Device& dev, const GameState& gs, const Rules& rules, const GameScene& scene, const std::vector<uint8_t>* vision,
                 const float3 (&viewQuad)[4], bool haveQuad, const std::vector<OverlayMinimapMark>* marks = nullptr);
     void release(gfx::Device& dev);
@@ -90,6 +91,7 @@ public:
     int width() const { return w_; }
     int height() const { return h_; }
     float cellsPerPixel() const { return cellsPerPx_; }
+    float3 pointer(float u,float v) const { return bounds_.point(u,v); }
     // planet maps (MinimapPlanet.cpp): a globe around the camera focus, or the system seen from above
     void buildPlanet(gfx::Device& dev, const GameView& view);
     void updatePlanet(gfx::Device& dev, const GameView& view, const GameScene& scene, const Rules& rules, bool fog);
@@ -107,6 +109,8 @@ private:
     gfx::TextureHandle tex_;
     int w_ = 0, h_ = 0, gridW_ = 0, gridH_ = 0;
     float cellsPerPx_ = 1;
+    ::aiverse::view::MapProjection bounds_;
+    bool rectangle_ = false;
     std::vector<uint32_t> base_, pixels_;
 };
 
@@ -217,7 +221,7 @@ private:
         std::vector<std::span<const render::Material>>& roots)const;
     bool hostPaused_ = false, hostStep_ = false;
     enum class Screen { Menu, Lobby, Playing, Paused, Over };
-    enum class Mode { Normal, AttackMove, Patrol, Place, Rally, Ability, Claim, Skill, Dig, Undig, Room, Road, Unroad, Drop, ScriptCmd, Repair, Reclaim };
+    enum class Mode { Normal, Move, AttackMove, Patrol, Place, Rally, Ability, Claim, Skill, Dig, Undig, Room, Road, Unroad, Drop, ScriptCmd, Repair, Reclaim };
 
     bool startMatch(size_t idx, const Json& initialVars = Json(), const MatchFile* file = nullptr, bool playback = false);
     bool writeMatchFile(const std::string& slot, bool replay);
@@ -494,6 +498,7 @@ private:
     GameView view_;
     ClientSpine spine_;
     game::Portrait selectionPortrait_;
+    ::aiverse::view::ModelPreview portraitModel_;
     Entity portraitSubject_;
     int portraitSize_ = 192;
     bool showPortrait_ = false, portraitFailed_ = false, portraitBlank_ = false;

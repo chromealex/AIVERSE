@@ -113,6 +113,9 @@ private:
     std::string error_;
 };
 
+// Loads CPU pixels by logical content path, reconstructing atlas regions when needed.
+bool loadContentImage(const std::string& path, atlas::Image& image);
+
 // Decodes an image file in memory to RGBA8 (top row first). Returns false on bad data.
 bool decodeImage(const std::string& bytes, int& w, int& h, std::vector<uint8_t>& rgba);
 

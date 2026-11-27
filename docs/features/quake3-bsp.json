@@ -79,9 +79,11 @@
     },
     "native_api": {
       "status": "pass",
-      "note": "loadModel and Renderer3D consume IBSP v46, diffuse images and per-face lightmap pages.",
+      "note": "loadModel and Renderer3D consume IBSP v46, diffuse images and per-face lightmap pages. Compatibility review for issues #210–224: AlphaMode remains available transitively from Model.h through MaterialBlend.h with prior Opaque/Mask/Blend values preserved. Current quake3_bsp CPU parser/geometry regression passed; quake3_bsp_frame was explicitly skipped, so prior Metal/WebGL captures are not represented as rerun.",
       "evidence": [
-        "engine/render/ModelBsp.cpp"
+        "engine/render/ModelBsp.cpp",
+        "docs/evidence/issues-mac-quick-final-retained-20261127.json",
+        "docs/agent-handoffs/issues-20261127-verification.md"
       ]
     },
     "skill": {
@@ -168,13 +170,10 @@
     },
     "tests": {
       "status": "pass",
-      "note": "Combined native CTest, real MCP and browser optical regression passed on the final code SHA.",
+      "note": "Current combined Mac quick gate: 587 passed, 5 explicit skips, 0 failures on 0a8ed3c9ef3858d539c1b38ade9036dd8391e64f. AlphaMode remains available transitively from Model.h through MaterialBlend.h with prior Opaque/Mask/Blend values preserved. Current quake3_bsp CPU parser/geometry regression passed; quake3_bsp_frame was explicitly skipped, so prior Metal/WebGL captures are not represented as rerun.",
       "evidence": [
-        "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.json",
-        "docs/evidence/quake3-bsp-native-mcp-webgl-20261125.log.txt",
-        "docs/evidence/render-seven-combined-preview.json",
-        "docs/evidence/render-seven-final-mac.json",
-        "docs/evidence/render-seven-verified-main-mac.json"
+        "docs/evidence/issues-mac-quick-final-retained-20261127.json",
+        "docs/evidence/issues-mac-quick-final-raw-20261127/ctest.xml"
       ]
     },
     "handoff": {
@@ -218,6 +217,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/render-seven-verified-main-mac.json"
+    "docs/evidence/issues-mac-quick-final-retained-20261127.json"
   ]
 }

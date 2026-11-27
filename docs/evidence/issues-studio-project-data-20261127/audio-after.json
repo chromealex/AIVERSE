@@ -1,0 +1,7 @@
+{
+  "sounds": {
+    "normal": {"files": ["audio/normal.wav"], "spatial": false, "bus": "voice"},
+    "repeat": {"files": ["audio/first.wav", "audio/second.wav"], "spatial": false, "bus": "voice"}
+  },
+  "types": {"scout": {"select": "normal", "repeatSelect": {"sound": "repeat", "count": 4, "order": "sequential", "cycle": true, "window": 0}}}
+}

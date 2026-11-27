@@ -40,6 +40,7 @@
             </div>
         </div>
 
+        <button class="map" data-event-click="quit()">{{ 'pause.quit' | tr(lang) }}</button>
         <p class="dim footer">{{platformInfo}}</p>
     </div>
 </div>

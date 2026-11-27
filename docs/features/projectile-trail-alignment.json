@@ -1,0 +1,239 @@
+{
+  "schema": 1,
+  "id": "projectile-trail-alignment",
+  "owner": "render",
+  "changed_paths": [
+    "apps/client/ClientFx.cpp",
+    "apps/editor/Editor.cpp",
+    "demos/projectile-segments/README.md",
+    "demos/projectile-segments/fx/fx.json",
+    "demos/projectile-segments/fx/trace.json",
+    "demos/projectile-segments/game.json",
+    "demos/projectile-segments/maps/arc.json",
+    "demos/projectile-segments/maps/ricochet.json",
+    "demos/projectile-segments/maps/split.json",
+    "demos/projectile-segments/maps/straight.json",
+    "demos/projectile-segments/models/launcher.obj",
+    "demos/projectile-segments/models/projectile.gltf",
+    "demos/projectile-segments/models/range.mtl",
+    "demos/projectile-segments/models/tall-target.obj",
+    "demos/projectile-segments/models/target.obj",
+    "demos/projectile-segments/rules.json",
+    "docs/ecs-mechanic-composition.md",
+    "docs/particles.md",
+    "docs/view.md",
+    "engine/actor/ActorDurableComponents.h",
+    "engine/actor/ActorDurableProjectile.h",
+    "engine/actor/ActorModule.cpp",
+    "engine/actor/ActorModule.h",
+    "engine/actor/ActorProjectiles.cpp",
+    "engine/fx/FxInternal.h",
+    "engine/fx/GameFx.cpp",
+    "engine/fx/ParticleSystem.cpp",
+    "engine/fx/ParticleSystem.h",
+    "engine/game/Combat.cpp",
+    "engine/game/Components.h",
+    "engine/game/Effects.cpp",
+    "engine/game/GameCore.cpp",
+    "engine/game/HostSystems.h",
+    "engine/game/Planets.cpp",
+    "engine/game/ProjectileEvents.h",
+    "engine/game/ProjectilePrograms.cpp",
+    "engine/game/Save.cpp",
+    "engine/sim/ProjectileData.h",
+    "engine/sim/ProjectileProgram.h",
+    "engine/sim/Simulation.cpp",
+    "engine/sim/Simulation.h",
+    "engine/view/ProjectilePresentation.h",
+    "engine/view/game/GameLights.cpp",
+    "engine/view/game/GameView.cpp",
+    "engine/view/game/GameView.h",
+    "engine/view/game/GameViewDraw.cpp",
+    "skills/gameplay/aiverse-view/SKILL.md",
+    "tests/tests.cpp"
+  ],
+  "traits": {
+    "editable": false,
+    "simulation": true,
+    "visible": true,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Shared single-sample model/trail/light presentation, explicit simulation branch origin and terminal path verified by native regressions and four real Metal scenes. Browser smoke retained with documented static-capture limits; final integrated gate is tracked separately.",
+      "evidence": [
+        "engine/view/ProjectilePresentation.h",
+        "docs/evidence/issues-projectile-state-current-20261127.json",
+        "docs/evidence/issues-projectile-terminal-current-20261127/result.json",
+        "docs/evidence/issues-projectile-metal-20261127/custom-result.json",
+        "docs/evidence/issues-projectile-segments-web-20261127/result.json"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Simulation supplies explicit Emission/Split/Ricochet provenance. Shared view::ProjectilePresentation owns convergence; GameView adapts scene data and exposes one sampled position consumed by model, FX bridge and lights. No consumer-local continuation workaround remains.",
+      "evidence": [
+        "engine/view/ProjectilePresentation.h",
+        "engine/view/game/GameViewDraw.cpp",
+        "apps/client/ClientFx.cpp",
+        "engine/view/game/GameLights.cpp",
+        "engine/sim/ProjectileData.h"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "FlightSegment and FlightSample expose begin/evaluate/evaluateStraight/finish/sample. Native regression covers frame partitioning, non-emission origins, exact contact and terminal immutability; real imported-model Metal captures cover four flight kinds.",
+      "evidence": [
+        "engine/view/ProjectilePresentation.h",
+        "tests/tests.cpp",
+        "docs/evidence/issues-projectile-metal-20261127/custom-result.json"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "Existing View recipe documents the shared native presentation/projection owner, host responsibilities, ordinary authoring route and actual acceptance scenarios without consumer-specific algorithms.",
+      "evidence": [
+        "skills/gameplay/aiverse-view/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "not_applicable",
+      "note": "Reviewed scope is an internal runtime correction: segment provenance is produced by simulation, and one shared visual sample replaces consumer-specific offsets. No new author-editable parameter or operation is introduced. Existing projectile rules and FX configuration remain unchanged; adding a UI/MCP switch for branch origin would expose derived authority state.",
+      "evidence": [
+        "engine/view/ProjectilePresentation.h",
+        "engine/sim/ProjectileData.h",
+        "engine/game/ProjectilePrograms.cpp",
+        "engine/game/ProjectileEvents.h"
+      ]
+    },
+    "studio": {
+      "status": "not_applicable",
+      "note": "Reviewed scope is an internal runtime correction: segment provenance is produced by simulation, and one shared visual sample replaces consumer-specific offsets. No new author-editable parameter or operation is introduced. Existing projectile rules and FX configuration remain unchanged; adding a UI/MCP switch for branch origin would expose derived authority state.",
+      "evidence": [
+        "engine/view/ProjectilePresentation.h",
+        "engine/sim/ProjectileData.h",
+        "engine/game/ProjectilePrograms.cpp",
+        "engine/game/ProjectileEvents.h"
+      ]
+    },
+    "inspector": {
+      "status": "not_applicable",
+      "note": "Reviewed scope is an internal runtime correction: segment provenance is produced by simulation, and one shared visual sample replaces consumer-specific offsets. No new author-editable parameter or operation is introduced. Existing projectile rules and FX configuration remain unchanged; adding a UI/MCP switch for branch origin would expose derived authority state.",
+      "evidence": [
+        "engine/view/ProjectilePresentation.h",
+        "engine/sim/ProjectileData.h",
+        "engine/game/ProjectilePrograms.cpp",
+        "engine/game/ProjectileEvents.h"
+      ]
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "Native regressions verify midflight save/restore checksum, ballistic and planetary paths, real legacy v4 save, v12 Unknown fallback, v13 Ricochet provenance and corrupt-origin rejection. Actor durable codec uses versioned provenance with Unknown fallback; final all-host gate remains tracked by tests.",
+      "evidence": [
+        "docs/evidence/issues-projectile-state-current-20261127.json",
+        "tests/tests_projectiles.inc",
+        "tests/tests.cpp",
+        "engine/actor/ActorDurableProjectile.h",
+        "engine/actor/ActorDurableComponents.h"
+      ]
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "Shared segment sampling and terminal delivery consume authoritative flight events independently of authored effect graphs. This correction adds no graph property/node; existing FX graphs continue receiving the same owner-sampled position through GameFx.",
+      "evidence": [
+        "engine/view/ProjectilePresentation.h",
+        "engine/fx/GameFx.cpp",
+        "apps/client/ClientFx.cpp"
+      ]
+    },
+    "performance": {
+      "status": "pass",
+      "note": "Scoped native Debug/Rosetta workload:256-handle selection every update, separate selected animated portrait, and four projectile scenes. Post-warmup CPU120-frame means<=16.04ms, sampled GPU frames<16.67ms,RSS<512MiB. First selection warmup block17.96ms is retained. Allocation review records bounded vectors/pools and fixed-size presentation; no p95/zero-allocation/mobile claim.",
+      "evidence": [
+        "docs/evidence/issues-client-performance-20261127/result.json"
+      ]
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "Verified scope: native macOS Metal and Emscripten browser WebGL runtime, using retained real captures. Windows, Linux desktop and physical mobile devices are NOT RUN; these results do not establish their backend/runtime parity.",
+      "evidence": [
+        "docs/evidence/issues-projectile-metal-20261127/result.json",
+        "docs/evidence/issues-projectile-segments-web-20261127/result.json"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Reviewed dependency direction: simulation owns deterministic projectile state and branch construction; view depends on shared projectile data and render math, FX receives sampled presentation points. Presentation floats do not feed flight integration.",
+      "evidence": [
+        "engine/sim/ProjectileData.h",
+        "engine/view/ProjectilePresentation.h",
+        "engine/game/ProjectilePrograms.cpp",
+        "apps/client/ClientFx.cpp"
+      ]
+    },
+    "headless": {
+      "status": "pass",
+      "note": "Actual native CPU tests run projectile simulation, branch provenance, archive restore/hash and GameFx terminal retirement with a null graphics device. 634 projectile/finish checks plus6 never-rendered-entity terminal checks passed. Presentation floats do not feed simulation.",
+      "evidence": [
+        "docs/evidence/issues-projectile-state-current-20261127.json",
+        "docs/evidence/issues-projectile-terminal-current-20261127/result.json"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "Four ordinary-data scenes cover straight,arc,ricochet,split with real Metal and browser captures. Retained straight/arc browser frames have explicit timing/occlusion limits; native flight captures supplement them.",
+      "evidence": [
+        "demos/projectile-segments/README.md",
+        "docs/evidence/issues-projectile-segments-20261127/result.json",
+        "docs/evidence/issues-projectile-segments-web-20261127/result.json"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Complete Mac quick gate on clean 0a8ed3c9ef3858d539c1b38ade9036dd8391e64f: configure/build PASS; 592 CTests, 587 passed, 5 explicit GPU skips, 0 failures, 1126.43s. Includes real client_controls_frame and additive_blend_frame. Original recorder report-name collision did not fail native tests; retained logs were separately verified on the unchanged clean checkout. Windows/Linux/mobile runtime not established.",
+      "evidence": [
+        "docs/evidence/issues-mac-quick-final-retained-20261127.json",
+        "docs/evidence/issues-mac-quick-final-retained-20261127.log.txt",
+        "docs/agent-handoffs/issues-20261127-verification.md"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Cumulative staged handoff records exact implementation/evidence SHAs, actual checks and failures, ownership, known backend limits and remaining final integration steps. Final gate result will be appended after terminal completion.",
+      "evidence": [
+        "docs/agent-handoffs/issues-20261127-verification.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "Shared presentation API, authoritative provenance/save compatibility and trail retirement are documented with scope limits; four-scene example explains reproduction.",
+      "evidence": [
+        "docs/view.md",
+        "docs/ecs-mechanic-composition.md",
+        "docs/particles.md",
+        "demos/projectile-segments/README.md"
+      ]
+    },
+    "publishing": {
+      "status": "pass",
+      "note": "Pre-main publishing deliverables prepared: actual captures, bilingual devlog and browser-verified Web demo pinned by SHA-256. Full site built successfully and all112 demo files rehashed. Per release-site contract actual publish runs only AFTER main push; remote deployment remains an explicit integration task, not claimed complete here.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-27-projectile-segments.json",
+        "site/manifest.json",
+        "docs/evidence/issues-site-preflight-20261127/result.json"
+      ]
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-view"
+    ],
+    "mcp_tools": [],
+    "studio_panels": [],
+    "studio_methods": []
+  },
+  "test_reports": [
+    "docs/evidence/issues-mac-quick-final-retained-20261127.json"
+  ]
+}

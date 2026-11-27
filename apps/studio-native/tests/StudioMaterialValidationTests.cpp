@@ -35,6 +35,9 @@ int main(){
   AIVERSE_TEST_CHECK(!validStudioMaterialNumber("emissiveStrength",101));
   AIVERSE_TEST_CHECK(validStudioMaterialBoolean("doubleSided")); AIVERSE_TEST_CHECK(!validStudioMaterialBoolean("delete"));
   AIVERSE_TEST_CHECK(validStudioMaterialText("alpha","blend"));
+  AIVERSE_TEST_CHECK(validStudioMaterialText("alpha","additive"));
+  AIVERSE_TEST_CHECK(validStudioMaterialText("alpha","additive-unweighted"));
+  AIVERSE_TEST_CHECK(validStudioMaterialText("alpha","alpha"));
   AIVERSE_TEST_CHECK(!validStudioMaterialText("alpha","transparent"));
   AIVERSE_TEST_CHECK(validStudioMaterialText("team","tint"));
   AIVERSE_TEST_CHECK(!validStudioMaterialText("base","../x"));

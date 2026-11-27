@@ -80,7 +80,7 @@ inline bool configureModelVirtualFallback(
             usedAsBase = true;
             if (material.alpha == AlphaMode::Mask)
                 needsAlphaMask = true;
-            if (material.alpha == AlphaMode::Blend || material.transparent ||
+            if (alphaBlended(material.alpha) || material.transparent ||
                 material.shaderGraph || material.team == TeamMode::BaseAlpha ||
                 material.team == TeamMode::VertexAlpha ||
                 material.baseColor.w < 0.999f)

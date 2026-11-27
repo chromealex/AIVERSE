@@ -14,3 +14,26 @@ Format: `docs/game-format.md` "audio.json" (presentation only - never reaches th
 5. Mix: voices and alerts above effects (`priority`, buses); big battles limited by `groups` so they stay readable.
 
 Runtime library: none. Workflow over the game's audio data.
+
+## Ordered repeated selection voices
+
+Set `types.<id>.repeatSelect` in audio.json, for example
+`{"sound":"annoyed","count":3,"order":"sequential","cycle":true,"window":0}`.
+The named sound's files play in order starting at the threshold; with cycle
+enabled, the next click after the last variant returns to the normal selection
+voice. Zero or omitted window disables timeout for sequential mode; a positive
+window limits the sequence. Existing random mode remains the default.
+
+Use the existing game_file_read/write operations, then read the saved JSON
+back. Verify repeated selection of the same entity, switching/clearing
+selection, and an issued order. Record audio through the null-device capture
+workflow above; inspecting JSON alone does not prove the audible sequence.
+
+## Studio authoring
+
+Open **Project Data** from the command palette, enter `audio.json`, and Load.
+Edit the existing file, Save, and check the reloaded value. Invalid JSON or an
+externally changed original is rejected and leaves the draft available. Discard
+draft before loading another file. Saves use the shared game_file_read/write
+owner and are immediate, outside Map and Project Undo; restart the game to
+apply audio settings. This generic panel does not validate audio semantics.

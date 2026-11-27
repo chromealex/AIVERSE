@@ -12,6 +12,7 @@ public:
     virtual void applyCommand(Simulation&, const Command&) = 0;
     virtual void hashState(Simulation&, Hasher&) = 0;
     virtual bool serializeState(Simulation&, Archive&) = 0;
+    virtual uint32_t minimumSaveVersion(const Simulation&) const { return 0; }
     virtual int result(Simulation&) = 0;
     virtual bool readyToStep(Simulation&) { return true; }
 };

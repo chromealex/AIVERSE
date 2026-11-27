@@ -1,0 +1,23 @@
+[ OK ] audio_repeated_selection_uses_entity_and_time_window
+[ OK ] audio_repeated_selection_sequential_cycles_without_window
+[ OK ] audio_repeated_selection_mixer_order_and_resets
+
+119 checks, 0 failed
+        0.57 real         0.51 user         0.03 sys
+            40185856  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               10993  page reclaims
+                  54  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   0  voluntary context switches
+                 703  involuntary context switches
+          8935934707  instructions retired
+          1969933752  cycles elapsed
+            24017920  peak memory footprint

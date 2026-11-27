@@ -97,6 +97,7 @@ public:
     // Queue an input event for the next frame's view.on('order', fn) handlers.
     void queueLocalOrder(const SimEvent& event);
     void setSelection(const std::vector<Entity>& selected);
+    bool takeSelectionRequest(std::vector<Entity>& selected);
     void setTargeting(const ViewTargeting& target);
     // view.set_map_drag_offset(dx, dy): window points added to a map-drag pointer before its ground pick and its release
     // tap (e.g. aim above a finger); the client resets it when a map-drag starts.

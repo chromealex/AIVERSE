@@ -122,3 +122,61 @@ handler `view.on("order", fn)`. The payload includes kind, target, queued flag a
 For an in-place structure upgrade set `view.showUpgradeTarget` on the source type. The active
 production item's progress drives the target type's existing construction appearance.
 See `demos/order-upgrade`, `docs/models.md` and `docs/scripting.md`.
+
+
+For an independent HUD or asset preview, reuse `view::ModelPreview` with
+`view::PortraitOptions`; do not add an Animator or another model loader.
+Provide the host's content reader and subject tint, prepare before submission,
+and shut down through the resource provider before destroying the device.
+For data-driven HUD portraits use `rules_set` at `types.<id>.view.portrait` or
+`set_manifest` ui.portrait defaults, and inspect the saved data before capturing
+the selected subject. See docs/game-format.md and docs/view.md.
+
+## Local selection from view scripts
+
+Use `view.select({entityHandle, ...})` to replace the local selection or
+`view.select_add(entityHandle)` to append. These are presentation requests,
+not simulation commands. The client filters dead, hidden or unselectable
+entities and clears command-card paging. Keep requests at most 256 handles;
+pass generation-safe handles returned by `game.units`, not guessed IDs.
+
+Author the file under `scripts/view/` with `script_write` and register it in
+`viewScripts` through `rules_set`. Read it back with `script_read`; in Studio
+use the existing Scripts panel. Trigger selection from the relevant view
+event after the replacement entity exists. `demos/client-command-controls`
+shows F7 selecting an armed tower; verify the selected portrait/command card
+in the actual client. `view.selection()` queries the current local handles.
+See `docs/ui-scripting.md`; this does not persist selection in game saves.
+
+## Shared flight presentation
+
+Use `view::ProjectilePresentation` from `engine/view/ProjectilePresentation.h`
+when a host presents a flying entity with a model, trail or light. The simulation
+supplies a segment ID, start and explicit `FlightOrigin`; only Emission receives
+muzzle convergence. Split, Ricochet and Unknown origins start at the supplied
+segment point. Do not infer provenance from entity age or a consumer's cache.
+
+One presentation owner calls begin/evaluate (absolute segment age), or
+`evaluateStraight` for a known straight impact path. Every visual consumer reads
+the same `sample()`; never decay offsets separately in the model and FX paths.
+Publish terminal contact before retiring the consumers. The particle owner's
+`finish(handle, endpoint)` preserves the endpoint and lets existing particles
+fade; simulation retirement must also cover entities born and removed between
+rendered frames. This does not introduce a second authoritative flight solver.
+
+Verify straight, arc, split and ricochet with `demos/projectile-segments`, plus
+save/restore provenance and native shared-sample regression. Static captures
+alone do not establish every-frame agreement or cross-platform parity.
+
+## Planar map projection
+
+For a rectangular map or overlay reuse `view::MapProjection`: validate the
+rectangle with `set`, intersect with `clipTo`, and use `uv`/`point` for both
+rendering and input. Use `rectangularFrame` for an axis-aligned camera footprint.
+Keep texture aspect tied to the actual cropped dimensions. This is presentation
+geometry; the host owns world/camera bounds and visibility data.
+
+The existing minimap adapter reads type `view.minimap` visibility and map/project
+`minimap` settings described in docs/game-format.md. Author these through existing
+rules/manifest tools and verify marker hiding, crop, camera frame and pointer
+mapping. Planar crop behavior does not imply spherical-world projection support.

@@ -1,0 +1,75 @@
+{
+  "source": "5b72690ba",
+  "tested_tree": "9737d664f",
+  "binary_source": "530764e8e",
+  "backend": "Metal",
+  "result": "pass",
+  "pipeline_failures": 0,
+  "cases": [
+    "separate animated Idle model with fixed yaw",
+    "distinct static model",
+    "owner background",
+    "per-type RGBA background",
+    "ui.portrait model inheritance",
+    "ui.portrait background inheritance",
+    "missing-file fallback to world model",
+    "empty model resets inherited source",
+    "source switch and shutdown"
+  ],
+  "metrics": {
+    "animated_portrait_changed_pixels": 2096,
+    "owner_background_rgba8": [
+      51,
+      115,
+      242,
+      255
+    ],
+    "authored_background_rgba8": [
+      77,
+      18,
+      31,
+      255
+    ],
+    "inherited_background_rgba8": [
+      26,
+      38,
+      51,
+      255
+    ]
+  },
+  "captures": [
+    {
+      "file": "controls-scout.png",
+      "scanline_sha256": "63c946ed4ce913b92a026d5c59d8019ae63369fc7cd7f39b42880c96edfdfca9"
+    },
+    {
+      "file": "controls-move.png",
+      "scanline_sha256": "ece2ff9b1b6ffae97f107265e154f00e6de10d4e7db1af40d34c1333accb5ee7"
+    },
+    {
+      "file": "controls-tower.png",
+      "scanline_sha256": "b21978bce2488dc72b139b1add77525d9712667dbba5a6eb8913838888c5166a"
+    },
+    {
+      "file": "fallback-scout.png",
+      "scanline_sha256": "692044d79a59b88ffdf80b65898ec58d7b74aa46f93d4ebef4eebf7dafc0a41e"
+    },
+    {
+      "file": "fallback-tower.png",
+      "scanline_sha256": "5184bac2e40677db9e3c45cdbb944a5983aa288b3e0ef56c861f8f7f9f81de7c"
+    },
+    {
+      "file": "defaults-scout.png",
+      "scanline_sha256": "63c946ed4ce913b92a026d5c59d8019ae63369fc7cd7f39b42880c96edfdfca9"
+    },
+    {
+      "file": "defaults-tower.png",
+      "scanline_sha256": "b66d36a2d2f913bcb1182f8c61ca76556b50fee6417363e4b9784a23273719ce"
+    }
+  ],
+  "reproduction": "Run aiverse_client_controls_frame DEMO ENGINE_ASSETS CAPTURE_DIR; variants replace game.json/rules.json with the retained variant copies. Binary compiled at 530764e8e, source changes since then are CSS/data/docs only.",
+  "limits": [
+    "Windows/Linux/Web not run",
+    "fallback retains existing world-model portrait framing; tower roof reaches image edge"
+  ]
+}

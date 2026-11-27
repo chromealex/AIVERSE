@@ -1,0 +1,192 @@
+{
+  "schema": 1,
+  "id": "minimap-view-options",
+  "owner": "gameplay",
+  "changed_paths": [
+    "apps/client/ClientUi.cpp",
+    "apps/client/GameClient.h",
+    "apps/client/Minimap.cpp",
+    "apps/client/MinimapPlanet.cpp",
+    "demos/client-command-controls/game.json",
+    "demos/client-command-controls/rules.json",
+    "docs/game-format.md",
+    "engine/view/MapProjection.h",
+    "skills/gameplay/aiverse-view/SKILL.md",
+    "tests/tests.cpp"
+  ],
+  "traits": {
+    "runtime": true,
+    "simulation": false,
+    "visible": true,
+    "editable": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Actual planar Metal loose/atlas capture proves crop, texture aspect, marker filtering and complete camera rectangle. Actual planetary renderer A/B/C captures prove hiding either type changes only its marker pixels, preserving globe and camera rectangle.",
+      "evidence": [
+        "docs/evidence/issues-minimap-metal-20261127/result.json",
+        "docs/evidence/issues-planet-minimap-20261127/result.json"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Shared MapProjection handles normalized rectangle, clipping and frame geometry. Existing flat/planet minimap consumers apply authored visibility. Atlas access remains the shared image owner, not a packer special case.",
+      "evidence": [
+        "engine/view/MapProjection.h",
+        "apps/client/Minimap.cpp",
+        "apps/client/MinimapPlanet.cpp"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "MapProjection exposes checked set/clipTo/uv/point and rectangularFrame without gameplay types; native regression and flat capture use this shared transform.",
+      "evidence": [
+        "engine/view/MapProjection.h",
+        "tests/tests.cpp",
+        "docs/evidence/issues-minimap-metal-20261127/result.json"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "Existing View recipe documents the shared native presentation/projection owner, host responsibilities, ordinary authoring route and actual acceptance scenarios without consumer-specific algorithms.",
+      "evidence": [
+        "skills/gameplay/aiverse-view/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "pass",
+      "note": "Built standalone MCP tools/list and mcp_registry audited. Isolated fixture actually saved selectionShortcut.hotkey, ui.portrait.background and minimap.bounds through game_info/set_manifest; read/reopen, exact-byte Project Undo/Redo, stale original, malformed/root and external-file conflicts verified. Raw 64-bit integer preserved. Native Studio path is separately evidenced.",
+      "evidence": [
+        "docs/evidence/issues-authoring-mcp-registry-20261127.json",
+        "docs/evidence/issues-project-settings-mcp-20261127/result.json"
+      ]
+    },
+    "studio": {
+      "status": "pass",
+      "note": "Actual native Project settings UI saved hotkey, portrait defaults and minimap crop through shared manifest owner; malformed JSON and stale draft rejected, Project Undo/Redo and reopen/readback verified. Per-type Rules editing retained separately where applicable. Generic JSON editor, not custom per-key widgets.",
+      "evidence": [
+        "docs/evidence/issues-project-settings-ui-20261127/result.json",
+        "docs/evidence/issues-project-settings-ui-20261127/game-after.json",
+        "docs/evidence/issues-project-settings-native-corrected-20261127.json"
+      ]
+    },
+    "inspector": {
+      "status": "pass",
+      "note": "Actual native Project settings UI saved hotkey, portrait defaults and minimap crop through shared manifest owner; malformed JSON and stale draft rejected, Project Undo/Redo and reopen/readback verified. Per-type Rules editing retained separately where applicable. Generic JSON editor, not custom per-key widgets.",
+      "evidence": [
+        "docs/evidence/issues-project-settings-ui-20261127/result.json",
+        "docs/evidence/issues-project-settings-ui-20261127/game-after.json",
+        "docs/evidence/issues-project-settings-native-corrected-20261127.json"
+      ]
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "Actual native Project settings UI saved hotkey, portrait defaults and minimap crop through shared manifest owner; malformed JSON and stale draft rejected, Project Undo/Redo and reopen/readback verified. Per-type Rules editing retained separately where applicable. Generic JSON editor, not custom per-key widgets.",
+      "evidence": [
+        "docs/evidence/issues-project-settings-ui-20261127/result.json",
+        "docs/evidence/issues-project-settings-ui-20261127/game-after.json",
+        "docs/evidence/issues-project-settings-native-corrected-20261127.json"
+      ]
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "These are view configuration and projection utilities, with no authored graph/evaluator.",
+      "evidence": [
+        "engine/view/MapProjection.h"
+      ]
+    },
+    "performance": {
+      "status": "pass",
+      "note": "Scoped native Debug/Rosetta workload:256-handle selection every update, separate selected animated portrait, and four projectile scenes. Post-warmup CPU120-frame means<=16.04ms, sampled GPU frames<16.67ms,RSS<512MiB. First selection warmup block17.96ms is retained. Allocation review records bounded vectors/pools and fixed-size presentation; no p95/zero-allocation/mobile claim.",
+      "evidence": [
+        "docs/evidence/issues-client-performance-20261127/result.json"
+      ]
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "Verified scope: native macOS Metal and Emscripten browser WebGL runtime, using retained real captures. Windows, Linux desktop and physical mobile devices are NOT RUN; these results do not establish their backend/runtime parity.",
+      "evidence": [
+        "docs/evidence/issues-minimap-metal-20261127/result.json",
+        "docs/evidence/issues-client-controls-web-20261127/result.json",
+        "docs/evidence/issues-planet-minimap-20261127/result.json"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Reuses existing minimap consumers and shared view geometry; no competing minimap renderer or atlas packer exception.",
+      "evidence": [
+        "apps/client/Minimap.cpp",
+        "engine/view/MapProjection.h"
+      ]
+    },
+    "headless": {
+      "status": "not_applicable",
+      "note": "HUD visibility/crop have no authoritative simulation mutation or server minimap output.",
+      "evidence": [
+        "apps/client/Minimap.cpp"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "Ordinary controls demo contains minimap background/crop and type visibility with actual Metal/WebGL captures. Planetary visibility separately exercised using isolated copy of existing examples/projectiles, no demo-specific runtime.",
+      "evidence": [
+        "demos/client-command-controls/game.json",
+        "demos/client-command-controls/rules.json",
+        "docs/evidence/issues-client-controls-web-20261127/result.json",
+        "docs/evidence/issues-planet-minimap-20261127/result.json"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Complete Mac quick gate on clean 0a8ed3c9ef3858d539c1b38ade9036dd8391e64f: configure/build PASS; 592 CTests, 587 passed, 5 explicit GPU skips, 0 failures, 1126.43s. Includes real client_controls_frame and additive_blend_frame. Original recorder report-name collision did not fail native tests; retained logs were separately verified on the unchanged clean checkout. Windows/Linux/mobile runtime not established.",
+      "evidence": [
+        "docs/evidence/issues-mac-quick-final-retained-20261127.json",
+        "docs/evidence/issues-mac-quick-final-retained-20261127.log.txt",
+        "docs/agent-handoffs/issues-20261127-verification.md"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Cumulative staged handoff records exact implementation/evidence SHAs, actual checks and failures, ownership, known backend limits and remaining final integration steps. Final gate result will be appended after terminal completion.",
+      "evidence": [
+        "docs/agent-handoffs/issues-20261127-verification.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "Game-format documents view.minimap visibility, flat crop and camera-frame options.",
+      "evidence": [
+        "docs/game-format.md"
+      ]
+    },
+    "publishing": {
+      "status": "pass",
+      "note": "Pre-main publishing deliverables prepared: actual captures, bilingual devlog and browser-verified Web demo pinned by SHA-256. Full site built successfully and all112 demo files rehashed. Per release-site contract actual publish runs only AFTER main push; remote deployment remains an explicit integration task, not claimed complete here.",
+      "evidence": [
+        "docs/evidence/issues-client-controls-web-20261127/result.json",
+        "docs/devlog/entries/2026-11-27-gameplay-client-controls.json",
+        "site/manifest.json",
+        "docs/evidence/issues-site-preflight-20261127/result.json"
+      ]
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-view"
+    ],
+    "mcp_tools": [
+      "game_info",
+      "set_manifest"
+    ],
+    "studio_panels": [
+      "project"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ]
+  },
+  "test_reports": [
+    "docs/evidence/issues-mac-quick-final-retained-20261127.json"
+  ]
+}

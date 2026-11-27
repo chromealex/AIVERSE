@@ -106,6 +106,7 @@ using render::float4;
 
 enum class FxQuality : uint8_t { Off, Low, Medium, High };
 enum class FxBlend : uint8_t { Alpha, Additive, Premultiplied, Multiply, Subtract, Opaque };
+enum class FxBlendSpace : uint8_t { Linear, Display };
 enum class FxAlign : uint8_t { Camera, Velocity, Ground, Upright, World, Local };
 enum class FxShape : uint8_t { Point, Sphere, Disc, Ring, Hemisphere, Cone, Box, Line, Donut, Mesh };
 enum class FxSubEvent : uint8_t { Birth, Death, Collision, Trigger, Manual };
@@ -173,6 +174,7 @@ struct FxTrail {
     FxTextureMode textureMode = FxTextureMode::Stretch;
     bool dieWithParticles = true;               // false: the trail fades out on its own after the particle died
     FxQuality minQuality = FxQuality::Medium;   // ribbons are the first thing to go on weak GPUs
+    FxBlendSpace blendSpace = FxBlendSpace::Linear;
     bool operator==(const FxTrail&) const;
 };
 struct FxLight {
@@ -334,6 +336,7 @@ struct EmitterDef {
     std::vector<std::string> meshes;           // draw particles as these meshes (random per particle)
     bool ringBuffer = false;                   // with maxParticles: old particles stay until replaced
     FxTriggerDef trigger;
+    FxBlendSpace blendSpace = FxBlendSpace::Linear;
 
     bool continuous() const { return rate.max > 0 || rate.curved() || perMeter.max > 0 || perMeter.curved(); }
     float endTime() const;  // when this emitter stops creating particles (loop: infinity)
@@ -344,11 +347,13 @@ struct ModelMaterialTrack {
     std::vector<FxColorKey> color;
     float2 uvSpeed{};
     std::vector<std::string> textures;
+    std::string blend; // empty inherits the source material
 };
 struct AnimatedModelEffect {
     std::string source, clip;
     float duration = 1;
     bool loop = false;
+    bool castShadow = true;
     std::vector<ModelMaterialTrack> materials;
 };
 

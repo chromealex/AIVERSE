@@ -1,0 +1,25 @@
+{
+  "sha": "6b47cf2b905b1f92b2860fe764d77c0b78817670",
+  "argv": [
+    "python3",
+    "tools/mcp/audit_registry.py",
+    "/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/aiversemcp",
+    "--engine",
+    "/private/tmp/aiverse-issue223",
+    "--feature-manifest",
+    "docs/features/client-command-controls.json",
+    "--feature-manifest",
+    "docs/features/portrait-appearance-options.json",
+    "--feature-manifest",
+    "docs/features/minimap-view-options.json",
+    "--feature-manifest",
+    "docs/features/model-additive-blending.json",
+    "--feature-manifest",
+    "docs/features/particle-display-blending.json",
+    "--feature-manifest",
+    "docs/features/fx-model-shadow-option.json"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/issues-authoring-mcp-registry-20261127.log.txt",
+  "sha256": "0fc294fa61a936829eb6a0c49e1b96d0d742ae2832874a8181f98f6be754409b"
+}

@@ -1,0 +1,11 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick
+Test project /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick
+    Start 590: studio_session
+1/1 Test #590: studio_session ...................   Passed   23.27 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+EDITOR    =  23.27 sec*proc (1 test)
+
+Total Test time (real) =  23.31 sec

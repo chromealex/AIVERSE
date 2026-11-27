@@ -345,3 +345,28 @@ velocity input and acceleration output. Deterministic
 NEREID's sampled contact. Integrate output through the host's canonical
 physical velocity (do not create a new physics owner in NEREID).
 `ecs_nereid_buoyancy_test` is authored but native execution is pending.
+
+## Projectile segment provenance and visual lifetime
+
+`projectile::FlightOrigin` in `engine/sim/ProjectileData.h` distinguishes
+`Unknown`, `Emission`, `Split` and `Ricochet`. Shared branch construction
+sets this provenance in authoritative projectile state; visual adapters must
+consume it rather than infer a fresh shot from a missing animation record.
+The game save stream uses version 13 for the additional provenance. The actor
+durable projectile codec reads its older representation as `Unknown`, avoiding
+a fabricated muzzle launch when provenance was not saved.
+
+`view::ProjectilePresentation` supplies the shared visual sample for a segment;
+its floating-point offset is presentation-only and must never feed back into
+collision, damage or the deterministic hash. Model, trail and light consume
+one sample. A terminal motion event can supply the final contact even when
+the authoritative entity was created and retired between rendered frames.
+Particle retirement finishes the distance-emission path once before the
+effect is released, preserving its final endpoint.
+
+Regression coverage includes origin archive roundtrips, shared split/ricochet
+provenance, terminal motion and between-frame retirement in `tests/tests.cpp`.
+Native Metal captures of imported projectile models cover straight, arc,
+ricochet and timed split paths in
+`docs/evidence/issues-projectile-metal-20261127`. These captures do not
+establish Windows, Vulkan or OpenGL acceptance.

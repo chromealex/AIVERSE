@@ -1,0 +1,89 @@
+{
+  "source": "6b2b8bb4980a9a8d76cb2f8f0f9140552d9520b9",
+  "exit_code": 0,
+  "checks": [
+    "read original",
+    "expectedText save",
+    "stale original rejected",
+    "invalid JSON rejected",
+    "readback exact",
+    "reopen exact",
+    "disk exact"
+  ],
+  "responses": {
+    "3": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\n  \"path\": \"audio.json\",\n  \"text\": \"{\\n  \\\"sounds\\\": {\\n    \\\"normal\\\": {\\n      \\\"files\\\": [\\n        \\\"audio/normal.wav\\\"\\n      ],\\n      \\\"spatial\\\": false,\\n      \\\"bus\\\": \\\"voice\\\"\\n    },\\n    \\\"repeat\\\": {\\n      \\\"files\\\": [\\n        \\\"audio/first.wav\\\",\\n        \\\"audio/second.wav\\\"\\n      ],\\n      \\\"spatial\\\": false,\\n      \\\"bus\\\": \\\"voice\\\"\\n    }\\n  },\\n  \\\"types\\\": {\\n    \\\"scout\\\": {\\n      \\\"select\\\": \\\"normal\\\",\\n      \\\"repeatSelect\\\": {\\n        \\\"sound\\\": \\\"repeat\\\",\\n        \\\"count\\\": 3,\\n        \\\"order\\\": \\\"sequential\\\",\\n        \\\"cycle\\\": true,\\n        \\\"window\\\": 0\\n      }\\n    }\\n  }\\n}\\n\"\n}"
+          }
+        ]
+      }
+    },
+    "4": {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"ok\": true, \"summary\": \"\u0418\u0437\u043c\u0435\u043d\u0451\u043d audio.json\", \"bytes\": 508}"
+          }
+        ]
+      }
+    },
+    "5": {
+      "jsonrpc": "2.0",
+      "id": 5,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"error\": \"file changed since loading; reload before saving\"}"
+          }
+        ],
+        "isError": true
+      }
+    },
+    "6": {
+      "jsonrpc": "2.0",
+      "id": 6,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"error\": \"invalid JSON, not saved: JSON error at 1:2: expected key\"}"
+          }
+        ],
+        "isError": true
+      }
+    },
+    "7": {
+      "jsonrpc": "2.0",
+      "id": 7,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\n  \"path\": \"audio.json\",\n  \"text\": \"{\\n  \\\"sounds\\\": {\\n    \\\"normal\\\": {\\n      \\\"files\\\": [\\n        \\\"audio/normal.wav\\\"\\n      ],\\n      \\\"spatial\\\": false,\\n      \\\"bus\\\": \\\"voice\\\"\\n    },\\n    \\\"repeat\\\": {\\n      \\\"files\\\": [\\n        \\\"audio/first.wav\\\",\\n        \\\"audio/second.wav\\\"\\n      ],\\n      \\\"spatial\\\": false,\\n      \\\"bus\\\": \\\"voice\\\"\\n    }\\n  },\\n  \\\"types\\\": {\\n    \\\"scout\\\": {\\n      \\\"select\\\": \\\"normal\\\",\\n      \\\"repeatSelect\\\": {\\n        \\\"sound\\\": \\\"repeat\\\",\\n        \\\"count\\\": 5,\\n        \\\"order\\\": \\\"sequential\\\",\\n        \\\"cycle\\\": true,\\n        \\\"window\\\": 0\\n      }\\n    }\\n  }\\n}\\n\"\n}"
+          }
+        ]
+      }
+    },
+    "9": {
+      "jsonrpc": "2.0",
+      "id": 9,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\n  \"path\": \"audio.json\",\n  \"text\": \"{\\n  \\\"sounds\\\": {\\n    \\\"normal\\\": {\\n      \\\"files\\\": [\\n        \\\"audio/normal.wav\\\"\\n      ],\\n      \\\"spatial\\\": false,\\n      \\\"bus\\\": \\\"voice\\\"\\n    },\\n    \\\"repeat\\\": {\\n      \\\"files\\\": [\\n        \\\"audio/first.wav\\\",\\n        \\\"audio/second.wav\\\"\\n      ],\\n      \\\"spatial\\\": false,\\n      \\\"bus\\\": \\\"voice\\\"\\n    }\\n  },\\n  \\\"types\\\": {\\n    \\\"scout\\\": {\\n      \\\"select\\\": \\\"normal\\\",\\n      \\\"repeatSelect\\\": {\\n        \\\"sound\\\": \\\"repeat\\\",\\n        \\\"count\\\": 5,\\n        \\\"order\\\": \\\"sequential\\\",\\n        \\\"cycle\\\": true,\\n        \\\"window\\\": 0\\n      }\\n    }\\n  }\\n}\\n\"\n}"
+          }
+        ]
+      }
+    }
+  }
+}

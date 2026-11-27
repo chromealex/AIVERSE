@@ -40,6 +40,8 @@ struct ViewScripts::Impl {
     uint8_t player = 0;
     ViewTargeting targeting;
     std::vector<Entity> selection;
+    std::vector<Entity> selectionRequest;
+    bool selectionRequested = false;
     float dragDx = 0, dragDy = 0;     // view.set_map_drag_offset (window points)
     ViewCamera camera;
     std::function<bool(uint64_t,render::float3&)> visualPosition;
@@ -363,6 +365,40 @@ int vSelection(lua_State* L, Vm& vm) {
         lua_rawseti(L, -2, ++i);
     }
     return 1;
+}
+
+int vSelect(lua_State* L, Vm& vm) {
+    if (!lua_istable(L, 1)) return fail(vm, "view.select: array of entity handles expected");
+    const size_t count = lua_rawlen(L, 1);
+    if (count > 256) return fail(vm, "view.select: at most 256 handles");
+    std::vector<Entity> selected;
+    selected.reserve(count);
+    for (size_t i = 1; i <= count; ++i) {
+        lua_rawgeti(L, 1, lua_Integer(i));
+        Entity e;
+        const bool valid = argEntity(L, -1, e) && e.valid();
+        lua_pop(L, 1);
+        if (!valid) return fail(vm, "view.select: invalid entity handle");
+        if (std::find(selected.begin(), selected.end(), e) == selected.end()) selected.push_back(e);
+    }
+    auto& im = viewOf(vm);
+    im.selection = selected;
+    im.selectionRequest = std::move(selected);
+    im.selectionRequested = true;
+    return 0;
+}
+
+int vSelectAdd(lua_State* L, Vm& vm) {
+    Entity e;
+    if (!argEntity(L, 1, e) || !e.valid()) return fail(vm, "view.select_add: entity handle expected");
+    auto& im = viewOf(vm);
+    if (!im.selectionRequested) im.selectionRequest = im.selection;
+    if (im.selectionRequest.size() >= 256) return fail(vm, "view.select_add: at most 256 handles");
+    if (std::find(im.selectionRequest.begin(), im.selectionRequest.end(), e) == im.selectionRequest.end())
+        im.selectionRequest.push_back(e);
+    im.selection = im.selectionRequest;
+    im.selectionRequested = true;
+    return 0;
 }
 
 int vTargeting(lua_State* L, Vm& vm) {
@@ -872,6 +908,13 @@ std::shared_ptr<render::PaintLayers> ViewScripts::paintLayers() const { return i
 std::shared_ptr<EntityFxStore> ViewScripts::entityFx() const { return impl_->fx; }
 
 void ViewScripts::setSelection(const std::vector<Entity>& selected) { impl_->selection = selected; }
+bool ViewScripts::takeSelectionRequest(std::vector<Entity>& selected) {
+    if (!impl_->selectionRequested) return false;
+    selected = std::move(impl_->selectionRequest);
+    impl_->selectionRequest.clear();
+    impl_->selectionRequested = false;
+    return true;
+}
 void ViewScripts::setTargeting(const ViewTargeting& target) { impl_->targeting=target; }
 void ViewScripts::mapDragOffset(float& dx, float& dy) const { dx=impl_->dragDx; dy=impl_->dragDy; }
 void ViewScripts::setMapDragOffset(float dx, float dy) { impl_->dragDx=dx; impl_->dragDy=dy; }
@@ -933,7 +976,7 @@ bool ViewScripts::load(Simulation& sim, const Json& rules, const Json& map, uint
     im.player = localPlayer;
     for (auto& [p, t] : rules["$scriptSources"].members()) vm.sources[p] = t.str();
     openGameApi(vm);
-    static const luaL_Reg funcs[] = {{"on", bind<vOn>}, {"on_frame", bind<vOnFrame>}, {"notice", bind<vNotice>}, {"shake_camera", bind<vShakeCamera>}, {"selection", bind<vSelection>},
+    static const luaL_Reg funcs[] = {{"on", bind<vOn>}, {"on_frame", bind<vOnFrame>}, {"notice", bind<vNotice>}, {"shake_camera", bind<vShakeCamera>}, {"selection", bind<vSelection>}, {"select", bind<vSelect>}, {"select_add", bind<vSelectAdd>},
                                      {"start_fx", bind<vPersistentFx<ViewRequest::StartFx>>}, {"move_fx", bind<vPersistentFx<ViewRequest::MoveFx>>},
                                      {"attach_fx", bind<vPersistentFx<ViewRequest::AttachFx>>}, {"stop_fx", bind<vPersistentFx<ViewRequest::StopFx>>},
                                      {"kill_fx", bind<vPersistentFx<ViewRequest::KillFx>>}, {"effect", bind<vEffect>}, {"sound", bind<vSound>}, {"player", bind<vPlayer>}, {"screen", bind<vScreen>},
@@ -982,6 +1025,8 @@ void ViewScripts::queueLocalOrder(const SimEvent& event) {
 void ViewScripts::detach() {
     if (impl_->collector) impl_->collector->enabled = false;
     impl_->collector.reset();
+    impl_->selectionRequest.clear();
+    impl_->selectionRequested = false;
 }
 
 void ViewScripts::update(Simulation& sim, float dt) {

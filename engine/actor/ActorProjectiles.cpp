@@ -151,6 +151,7 @@ void ActorHost::tickProjectilePrograms(Simulation& sim) {
         auto* p=world.tryGet<Projectile>(e);
         if(!p||!p->program.enabled)continue;
         if(!stepProgrammedProjectile(sim,*p,children,liveCount)) {
+            sim.emit(SimEvent::motionFinished(e,p->pos,p->owner));
             expired.push_back(e);
             --liveCount;   // the removed shot no longer counts against the limit for later branches
         }

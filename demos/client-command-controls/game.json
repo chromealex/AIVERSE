@@ -1,0 +1,59 @@
+{
+  "id": "org.aiverse.demos.client_controls",
+  "name": "Shared client controls",
+  "version": "1.0",
+  "module": "game",
+  "rules": "rules.json",
+  "sourceLanguage": "en",
+  "languages": [
+    "en"
+  ],
+  "maps": [
+    {
+      "file": "maps/controls.json",
+      "title": "Controls"
+    }
+  ],
+  "selectionShortcut": {
+    "type": "scout",
+    "label": "Select scout",
+    "hotkey": "F6",
+    "image": "../../ui/shortcut-probe.png"
+  },
+  "commandCard": {
+    "columns": 4,
+    "rows": 3,
+    "buttons": {
+      "card.move": {
+        "column": 0,
+        "row": 0
+      },
+      "card.sell": {
+        "column": 3,
+        "row": 2
+      }
+    }
+  },
+  "ui": {
+    "portrait": {
+      "enabled": true,
+      "background": [
+        0.1,
+        0.15,
+        0.2,
+        1
+      ],
+      "yaw": 0
+    }
+  },
+  "minimapBackground": "ui/minimap-probe.png",
+  "minimap": {
+    "bounds": [
+      4,
+      2,
+      20,
+      14
+    ],
+    "cameraFrame": "rectangle"
+  }
+}

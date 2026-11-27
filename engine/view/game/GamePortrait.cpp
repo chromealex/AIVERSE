@@ -155,6 +155,20 @@ bool Portrait::renderStaticModel(render::ModelAssetProvider& provider,
     return renderAppearance(draw,cam,{0.12f,0.14f,0.18f,1.f});
 }
 
+bool Portrait::renderModelPreview(::aiverse::view::ModelPreview& preview,
+                                  const ::aiverse::view::PortraitOptions& options,
+                                  float3 team,double time) {
+    if(!dev_ || !color_.valid() || !preview.prepare(*dev_,options,team,time))return false;
+    sceneView_.beginScene(r3d_,preview.camera(),size_,size_);
+    preview.submit(r3d_);
+    gfx::PassDesc pass;
+    pass.colorTarget=color_;pass.depthTarget=depth_;
+    pass.clearColor[0]=options.background.x;pass.clearColor[1]=options.background.y;
+    pass.clearColor[2]=options.background.z;pass.clearColor[3]=options.background.w;
+    r3d_.render(pass);dev_->endPass();
+    return true;
+}
+
 void Portrait::renderPose(const Model& model,const Pose& pose,float yaw) {
     if(!dev_||!color_.valid()||pose.size()!=model.nodes.size())return;
     std::vector<mat4> world;worldMatrices(model,pose,world);
@@ -188,7 +202,7 @@ void Portrait::clear() {
     dev_->beginPass(pass); dev_->endPass();
 }
 
-void Portrait::render(GameView& view, uint16_t type, uint8_t owner, double time, float yaw, float zoom, float focusHeight) {
+void Portrait::render(GameView& view, uint16_t type, uint8_t owner, double time, float yaw, float zoom, float focusHeight, float4 background) {
     if (!dev_ || !color_.valid()) return;
     // frame the bind-pose bounds (look scale and fit are applied by the view; approximate with the model)
     float radius = 0.8f, height = 1.0f;
@@ -214,7 +228,7 @@ void Portrait::render(GameView& view, uint16_t type, uint8_t owner, double time,
     ::aiverse::view::Object packet;
     if(view.resolveStatic(type,owner,resolved) &&
        view_adapter::buildStaticPreviewPacket(resolved,previewYaw,packet)) {
-        (void)renderAppearance(packet.draw,cam);
+        (void)renderAppearance(packet.draw,cam,background);
         return;
     }
     // Complex or animated models continue using the established host
@@ -224,10 +238,10 @@ void Portrait::render(GameView& view, uint16_t type, uint8_t owner, double time,
     gfx::PassDesc pass;
     pass.colorTarget=color_;
     pass.depthTarget=depth_;
-    pass.clearColor[0]=.16f;
-    pass.clearColor[1]=.18f;
-    pass.clearColor[2]=.22f;
-    pass.clearColor[3]=1.f;
+    pass.clearColor[0]=background.x;
+    pass.clearColor[1]=background.y;
+    pass.clearColor[2]=background.z;
+    pass.clearColor[3]=background.w;
     r3d_.render(pass);
     dev_->endPass();
 }

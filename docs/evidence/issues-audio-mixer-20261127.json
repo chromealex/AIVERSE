@@ -1,0 +1,10 @@
+{
+  "sha": "99f71adcf8873f2743903ff40c53184d630c3a7d",
+  "argv": [
+    "/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/aiverse_tests",
+    "audio_repeated_selection"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/issues-audio-mixer-20261127.log.txt",
+  "sha256": "7b089e8e96356a2de3497bcfe00bb5a087c8163e9a9d8497d618e13bed6020f2"
+}

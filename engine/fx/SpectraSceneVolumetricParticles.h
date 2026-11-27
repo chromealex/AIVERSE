@@ -139,8 +139,8 @@ public:
                 error_=e.runtime->reason();
         }
     }
-    void drawInline(const fx::FxFog& fog={}){
-        for(auto& [id,e]:entries_)if(!e.depthAware)e.runtime->draw(fog);
+    void drawInline(const fx::FxFog& fog={},render::Renderer3D* renderer=nullptr){
+        for(auto& [id,e]:entries_)if(!e.depthAware)e.runtime->draw(fog,renderer);
     }
     gfx::TextureHandle composeDepth(gfx::Device& device,const render::PostFrame& frame,
                                     gfx::TextureHandle color,gfx::TextureHandle depth){

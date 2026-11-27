@@ -7,6 +7,11 @@
 
 int main() {
     using namespace aiverse;
+    static_assert(std::is_same_v<decltype(std::declval<view::ModelPreview&>().prepare(
+        std::declval<gfx::Device&>(),std::declval<const view::PortraitOptions&>(),
+        render::float3{},0.0)),bool>);
+    static_assert(std::is_same_v<decltype(std::declval<view::ModelPreview&>().camera()),
+        const render::Camera&>);
     using Fn=bool (game::Portrait::*)(
         const render::ModelDraw&,const render::Camera&,
         render::float4);

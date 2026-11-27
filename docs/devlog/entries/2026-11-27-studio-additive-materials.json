@@ -1,0 +1,43 @@
+{
+  "id": "2026-11-27-studio-additive-materials",
+  "date": "2026-11-27",
+  "system": "studio",
+  "title": "Аддитивные материалы в Studio",
+  "summary": "В библиотеке материалов появились два аддитивных режима: с учётом прозрачности и без неё. Выбранный режим сохраняется вместе с материалом.",
+  "body": [
+    "Откройте Materials, выберите материал и задайте Alpha mode: Additive (alpha weighted) или Additive (unweighted). Apply & save записывает режим в materials.json; Reload сохраняет сделанный выбор.",
+    "Те же значения доступны через material_set в MCP. Ошибочное имя режима отклоняется до записи файла."
+  ],
+  "status": "in-progress",
+  "verified": "В нативной Studio на macOS оба режима сохранены и повторно загружены. Через MCP материалы также прочитаны после перезапуска сервера.",
+  "limits": "Редактирование библиотеки не входит в MapDoc Undo. Проверка Windows пока не выполнена. Это инструмент нативного редактора, отдельного браузерного демо нет.",
+  "branch": "codex/issue223-minimap-atlas-20261126",
+  "commit": "313dd7101",
+  "media": [
+    {
+      "src": "docs/evidence/issues-studio-materials-20261127/weighted.png",
+      "caption": "Материал после сохранения режима с учётом alpha.",
+      "captionEn": "Material after saving the alpha-weighted mode."
+    },
+    {
+      "src": "docs/evidence/issues-studio-materials-20261127/unweighted.png",
+      "caption": "Тот же материал после сохранения режима без учёта alpha.",
+      "captionEn": "The same material after saving the unweighted mode."
+    }
+  ],
+  "links": [
+    {
+      "title": "Materials",
+      "href": "docs/models.md"
+    }
+  ],
+  "author": null,
+  "titleEn": "Additive materials in Studio",
+  "summaryEn": "The material library offers two additive modes: alpha weighted and unweighted. The selected mode is saved with the material.",
+  "bodyEn": [
+    "Open Materials, select a material, and set Alpha mode to Additive (alpha weighted) or Additive (unweighted). Apply & save writes the mode to materials.json; Reload retains the choice.",
+    "The same values are available through material_set in MCP. An invalid mode name is rejected before the file is written."
+  ],
+  "verifiedEn": "Both modes were saved and reloaded in native macOS Studio. MCP also read the materials after a server restart.",
+  "limitsEn": "Material library edits are not part of MapDoc Undo. Windows has not been verified. This native editor workflow has no standalone browser demo."
+}

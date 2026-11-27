@@ -1,0 +1,21 @@
+{
+  "model": {
+    "castShadow": false,
+    "loop": true,
+    "source": "models/target.obj",
+    "materials": [
+      {"blend": "additive"}
+    ],
+    "duration": 2
+  },
+  "emitters": [
+    {
+      "burst": 1,
+      "blend": "additive",
+      "life": 2,
+      "size": 1,
+      "blendSpace": "display",
+      "texture": "builtin:soft"
+    }
+  ]
+}

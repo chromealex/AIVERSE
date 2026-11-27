@@ -1397,6 +1397,25 @@ TEST(audio_repeated_selection_uses_entity_and_time_window) {
     CHECK(!sound.onSelectionClick(*sim, first));
 }
 
+TEST(audio_repeated_selection_sequential_cycles_without_window) {
+    auto sim = makeSimJson(R"({"types":{"scout":{"health":{"max":10}}}})",
+        flatMap(16,16,R"(,"entities":[{"type":"scout","owner":1,"pos":[3,3]}])"));
+    Entity scout;
+    sim->world().each<game::Unit>([&](Entity e, game::Unit&) { scout = e; });
+    CHECK(scout.valid());
+    auto audioEngine = offlineAudio();
+    const Json bank = Json::parse(R"({"sounds":{"repeat":{"synth":{}}},
+        "types":{"scout":{"repeatSelect":{"sound":"repeat","count":3,"order":"sequential","cycle":true}}}})");
+    CHECK(audioEngine->loadBank(bank, {}));
+    game::GameAudio sound;
+    CHECK(sound.init(*audioEngine, mod(*sim).rules(), bank) && sound.warnings().empty());
+    for (int i = 0; i < 3; ++i) CHECK(sound.onSelectionClick(*sim, scout));
+    CHECK(sound.played() == 1);
+    sound.update(*sim, 10.0); // no timeout when window is omitted
+    for (int i = 0; i < 3; ++i) CHECK(sound.onSelectionClick(*sim, scout));
+    CHECK(sound.played() == 2);
+}
+
 TEST(build_button_missing_resource_audio) {
     audio::AudioEngine audioEngine;
     audio::AudioConfig config;
@@ -2635,6 +2654,16 @@ TEST(atlas_pack_integration_and_runtime_lookup) {
     CHECK(src.atlased("units/a/walk.png") && src.load("units/a/walk.png", back) && sameImage(back, sprite));
     CHECK(src.load("tiles/t.png", back) && sameImage(back, tile));
     CHECK(!src.load("models/m.png", back));
+    CHECK(src.loadImage("units/a/walk.png", back) && sameImage(back, sprite));
+    CHECK(src.loadImage("models/m.png", back) && sameImage(back, tile));
+    CHECK(!src.loadImage("missing.png", back) && sameImage(back, tile));
+    atlas::ImageSource broken([&](const std::string& path, std::string& out) {
+        if (path == atlas::kManifestPath) return p->read(path, out);
+        if (path == "units/a/walk.png") { out = atlas::encodePng(tile); return true; }
+        return false;
+    }, atlas::decodeImageFile);
+    CHECK(!broken.loadImage("units/a/walk.png", back)); // corrupt atlas must not silently use stale raw pixels
+
 }
 
 // ---------------- models (models agent): loaders, animation, procedural ----------------
@@ -3401,6 +3430,51 @@ double level(const std::vector<float>& st, double hz, double from, double to) {
 }
 } // namespace
 
+TEST(audio_repeated_selection_mixer_order_and_resets) {
+    auto sim = makeSimJson(R"({"types":{"scout":{"health":{"max":10}}}})",
+        flatMap(16,16,R"(,"entities":[{"type":"scout","owner":1,"pos":[3,3]},{"type":"scout","owner":1,"pos":[8,8]}])"));
+    std::vector<Entity> scouts;
+    sim->world().each<game::Unit>([&](Entity e, game::Unit&) { scouts.push_back(e); });
+    CHECK(scouts.size() == 2);
+    if (scouts.size() != 2) return;
+    auto a = offlineAudio();
+    const std::map<std::string,std::string> clips = {
+        {"normal.wav", wavOf(48000,.12f,[](float t){return tone(440,t);})},
+        {"first.wav", wavOf(48000,.12f,[](float t){return tone(660,t);})},
+        {"second.wav", wavOf(48000,.12f,[](float t){return tone(880,t);})}};
+    Json bank = Json::parse(R"({"sounds":{
+        "normal":{"files":["normal.wav"],"spatial":false},
+        "repeat":{"files":["first.wav","second.wav"],"spatial":false}},
+        "types":{"scout":{"select":"normal","repeatSelect":{
+            "sound":"repeat","count":3,"order":"sequential","cycle":true,"window":0}}}})");
+    CHECK(loadBank(*a,bank.dump(),nullptr,clips));
+    game::GameAudio sound;
+    CHECK(sound.init(*a,mod(*sim).rules(),bank));
+    auto click = [&](Entity who, int expectedHz) {
+        CHECK(sound.onSelectionClick(*sim,who));
+        const auto pcm = renderBuf(*a,.2f);
+        CHECK(level(pcm,expectedHz,.02,.10) > .1);
+        for (int other : {440,660,880})
+            if (other != expectedHz) CHECK(level(pcm,other,.02,.10) < .03);
+    };
+    click(scouts[0],440); click(scouts[0],440); click(scouts[0],660);
+    sound.update(*sim,10); // window=0 must retain next variant after a long gap
+    click(scouts[0],880); click(scouts[0],440); // cycle returns to the normal voice
+    click(scouts[0],440); click(scouts[0],660);
+    sound.onCommand(*sim,scouts[0],game::kCmdMove);
+    click(scouts[0],440); // the order resets even without a move acknowledgement sound
+    click(scouts[0],440); click(scouts[0],660);
+    click(scouts[1],440); click(scouts[0],440); // changed entity resets
+    click(scouts[0],440); click(scouts[0],660);
+    sound.resetSelectionClicks(); // client clearing/group selection uses this API
+    click(scouts[0],440);
+    bank.member("types").member("scout").member("repeatSelect").set("window", Json::number(int64_t(1)));
+    CHECK(sound.init(*a,mod(*sim).rules(),bank));
+    click(scouts[0],440); click(scouts[0],440); click(scouts[0],660);
+    sound.update(*sim,1.1);
+    click(scouts[0],440); // an explicitly positive window expires
+}
+
 TEST(audio_music_loop_points) {
     auto a = offlineAudio();
     // 0..0.5 s: 200 Hz intro, 0.5..1 s: 800 Hz loop body
@@ -3719,11 +3793,13 @@ TEST(main_camera_shake_distance_pause_and_expiry) {
 }
 
 TEST(animated_model_effect_uses_existing_handle_lifecycle) {
-    const auto source = R"({"model":{"source":"models/aura.glb","clip":"idle","duration":0.5,"loop":true,
-        "materials":[{"material":"Glow","color":[[0,"#ffffff00"],[1,"#ff0000ff"]],"uvSpeed":[1,-2],"textures":["a","b"]}]}})";
+    const auto source = R"({"model":{"source":"models/aura.glb","clip":"idle","duration":0.5,"loop":true,"castShadow":false,
+        "materials":[{"material":"Glow","blend":"additive","color":[[0,"#ffffff00"],[1,"#ff0000ff"]],"uvSpeed":[1,-2],"textures":["a","b"]}]}})";
     auto definition = fxParse(source);
     auto roundTrip = fxParse(fx::effectToJson(definition).dump().c_str());
     CHECK(roundTrip.model.source == definition.model.source);
+    CHECK(!definition.model.castShadow && !roundTrip.model.castShadow);
+    CHECK(roundTrip.model.materials[0].blend=="additive");
     CHECK(roundTrip.model.materials.size() == 1 && roundTrip.model.materials[0].textures.size() == 2);
     fx::ParticleSystem ps;
     CHECK(ps.init(nullptr));
@@ -12600,6 +12676,30 @@ TEST(script_command_map_click) {
 }
 
 // OpenWar presentation hooks (agent-openwar): game.json "playerColors", flat lighting, view camera API
+TEST(view_selection_request_is_local_and_bounded) {
+    Json rules = Json::parse(R"({"types":{"scout":{"health":{"max":10}}},"viewScripts":["scripts/view/select.lua"]})");
+    Json sources = Json::object();
+    sources.set("scripts/view/select.lua", Json::string(R"LUA(
+view.on_frame(function()
+ local e = game.units{owner=1,type='scout'}[1]
+ view.select({e})
+ view.select_add(e)
+ assert(#view.selection() == 1)
+end)
+)LUA"));
+    rules.set("$scriptSources", sources);
+    Json map = Json::parse(flatMap(8,8,R"(,"entities":[{"type":"scout","owner":1,"pos":[3,3]}])"));
+    Simulation sim(SimConfig{}, std::make_unique<game::GameCore>()); sim.setup(rules, map);
+    Entity scout;
+    sim.world().each<game::Unit>([&](Entity e, game::Unit&) { scout = e; });
+    game::ViewScripts view; CHECK(view.load(sim, rules, map, 1));
+    view.setSelection({}); view.update(sim, .016f);
+    std::vector<Entity> requested;
+    CHECK(view.takeSelectionRequest(requested));
+    CHECK(requested.size() == 1 && requested[0] == scout);
+    CHECK(!view.takeSelectionRequest(requested));
+}
+
 TEST(openwar_player_colors_flat_lighting_view_camera) {
     // playerColors: hex / 0..1 / 0..255 entries, null keeps the default, errors are reported, reset on reload
     const render::float4 def1 = game::overlayPlayerColor(1);
@@ -18746,3 +18846,324 @@ TEST(native_build_drops_cache_of_another_engine_folder) {
     fs::remove_all(bd);
 }
 #endif   // AIVERSE_TESTS_EDITOR_CORE
+
+#include "engine/view/ProjectilePresentation.h"
+TEST(projectile_presentation_segment_origin_and_shared_sample) {
+    using namespace aiverse;
+    view::ProjectilePresentation a, b;
+    const view::FlightSegment emission{1, view::FlightOrigin::Emission, {0,0,0}};
+    a.begin(emission, {0,2,0}); b.begin(emission, {0,2,0});
+    a.evaluate({1,0,0}, {1,0,0}, .1f);
+    a.evaluate({2,0,0}, {1,0,0}, .2f);
+    b.evaluate({2,0,0}, {1,0,0}, .2f);
+    CHECK(render::length(a.sample().position-b.sample().position)<1e-6f);
+    for(auto origin : {view::FlightOrigin::Split, view::FlightOrigin::Ricochet}) {
+        a.begin({2,origin,{4,1,0}}, {0,2,0});
+        a.evaluate({5,1,0}, {1,0,0}, .01f);
+        CHECK(render::length(a.sample().position-render::float3{5,1,0})<1e-6f);
+    }
+    a.finish({6,1,0});
+    a.evaluate({99,0,0}, {1,0,0}, 5.f);
+    CHECK(a.sample().terminal);
+    CHECK(render::length(a.sample().position-render::float3{6,1,0})<1e-6f);
+    a.begin(emission,{0,2,0});
+    a.evaluateStraight({10,0,0},{10,1,0});
+    CHECK(render::length(a.sample().position-render::float3{10,1,0})<1e-6f);
+    CHECK(!a.sample().terminal);
+}
+
+TEST(projectile_origin_versioned_archive) {
+    using namespace aiverse;
+    projectile::State state;
+    state.origin = projectile::FlightOrigin::Ricochet;
+    state.enabled = true;
+    state.age = Fixed::fromRatio(1,2);
+    for(uint32_t version : {12u,13u}) {
+        std::string bytes;
+        Archive out(&bytes); out.formatVersion=version; out(state);
+        CHECK(out.ok());
+        projectile::State restored;
+        Archive in(bytes); in.formatVersion=version; in(restored);
+        CHECK(in.ok() && in.remaining()==0);
+        CHECK(restored.age==state.age);
+        CHECK(restored.origin==(version==13 ? projectile::FlightOrigin::Ricochet : projectile::FlightOrigin::Unknown));
+    }
+    std::string corrupt;
+    Archive out(&corrupt); out.formatVersion=13; out(state);
+    corrupt.back()=char(255);
+    projectile::State restored;
+    Archive in(corrupt); in.formatVersion=13; in(restored);
+    CHECK(!in.ok());
+}
+
+TEST(projectile_shared_branch_provenance) {
+    using namespace aiverse;
+    projectile::ProjectileFlight flight;
+    flight.enabled=true;
+    projectile::ProjectileModifier modifier;
+    modifier.kind=projectile::ProjectileModKind::Split;
+    modifier.count=2;
+    modifier.timed=true;
+    flight.modifiers.push_back(modifier);
+    projectile::State parent;
+    Fixed speed=1_fx;
+    projectile::initialize(parent,speed,flight,{1_fx,Fixed{},Fixed{}});
+    int children=0;
+    projectile::split(parent,speed,flight,0,{Fixed{},1_fx,Fixed{}},[&](projectile::Branch child) {
+        ++children;
+        CHECK(child.state.origin==projectile::FlightOrigin::Split);
+    });
+    CHECK(children==2);
+    CHECK(parent.origin==projectile::FlightOrigin::Emission);
+    flight.modifiers[0].kind=projectile::ProjectileModKind::Ricochet;
+    projectile::initialize(parent,speed,flight,{1_fx,Fixed{},Fixed{}});
+    auto child=projectile::contact(parent,speed,flight,[](size_t){},[](Fixed)->std::optional<projectile::Target> {
+        return projectile::Target{Entity{1,1},{Fixed{},Fixed{},1_fx}};
+    });
+    CHECK(child.has_value());
+    if(child)CHECK(child->state.origin==projectile::FlightOrigin::Ricochet);
+    CHECK(parent.origin==projectile::FlightOrigin::Emission);
+}
+
+TEST(fx_finish_consumes_last_motion_once) {
+    fx::ParticleSystem ps;
+    ps.setQuality(fx::FxQuality::High);
+    ps.init(nullptr);
+    int id=ps.define("finish-path",fxParse(R"({"emitters":[{"perMeter":10,"loop":true,"life":1,"speed":0}]})"));
+    auto h=ps.play(id,{0,0,0});
+    ps.finish(h,{1,0,0});
+    ps.finish(h,{9,0,0}); // repeated finish and late moves cannot change the endpoint
+    ps.move(h,{8,0,0});
+    ps.update(.01f);
+    std::vector<fx::FxParticleInfo> particles;
+    ps.snapshot(particles);
+    CHECK(particles.size()==10);
+    CHECK(std::any_of(particles.begin(),particles.end(),[](const auto& p){return aiverse::render::length(p.pos-aiverse::render::float3{1,0,0})<1e-5f;}));
+    CHECK(!ps.playing(h));
+    const auto count=particles.size();
+    ps.update(.01f);ps.snapshot(particles);
+    CHECK(particles.size()==count);
+    ps.kill(h);
+    ps.finish(h,{99,0,0}); // stale handle is safe
+}
+
+TEST(fx_motion_finished_without_rendered_entity) {
+    auto sim=makeSimJson(R"({"types":{"unit":{}}})",flatMap(12,12,""));
+    fx::ParticleSystem ps; ps.setQuality(fx::FxQuality::High); CHECK(ps.init(nullptr));
+    CHECK(ps.define("terminal-trail",fxParse(R"({"emitters":[{"perMeter":10,"loop":true,"life":1,"speed":0}]})"))>=0);
+    game::GameFx bridge;
+    CHECK(bridge.init(ps,mod(*sim).rules(),Json::parse(R"({"events":{"trail":"terminal-trail"}})")));
+    sim->addSystem("test.motion.finished",[](Simulation& s){
+        auto event=SimEvent::motionFinished(Entity{9000,1},{1_fx,Fixed{},Fixed{}});
+        event.motion=std::make_shared<const MotionPathPresentation>(MotionPathPresentation{{},false});
+        s.emit(event);
+    });
+    bridge.attach(*sim,0); sim->step();
+    bridge.update(*sim,nullptr); ps.update(.01f);
+    std::vector<fx::FxParticleInfo> particles; ps.snapshot(particles);
+    CHECK(particles.size()==10);
+    CHECK(std::any_of(particles.begin(),particles.end(),[](const auto& p){return aiverse::render::length(p.pos-aiverse::render::float3{1,0,0})<1e-5f;}));
+    bridge.update(*sim,nullptr);ps.update(.01f);ps.snapshot(particles);
+    CHECK(particles.size()==10);
+}
+
+#include "engine/mechanics/AttackTiming.h"
+TEST(attack_phase_fractional_time_is_conserved) {
+    using namespace aiverse;
+    using namespace lib::mechanics;
+    AttackTimingState state;
+    beginAttackWindup(state,Entity{1,1},Fixed::fromRatio(3,100));
+    const Fixed tick=Fixed::fromRatio(5,100);
+    auto step=consumeAttackPhase(state,tick);
+    CHECK(step.complete);
+    CHECK(step.unused==tick-Fixed::fromRatio(3,100));
+    Fixed cooldown=Fixed::fromRatio(1,100);
+    commitAttackRelease(state,Fixed::fromRatio(15,1000));
+    auto rest=consumeAttackRest(state,cooldown,step.unused);
+    CHECK(rest.recoveryCompleted && state.phase==WeaponAttackPhase::Idle);
+    CHECK(rest.available==step.unused-Fixed::fromRatio(15,1000));
+    CHECK(cooldown==Fixed{});
+    beginAttackWindup(state,Entity{1,1},Fixed::fromRatio(3,100));
+    step=consumeAttackPhase(state,rest.available);
+    CHECK(!step.complete && step.unused==Fixed{});
+    CHECK(state.remaining==Fixed::fromRatio(3,100)-rest.available);
+}
+
+TEST(precise_windup_cooldown_preserves_authored_period) {
+    using namespace aiverse;
+    auto map=Json::parse(flatMap(12,12,""));
+    map.set("entities",Json::parse(R"([{"type":"shooter","owner":1,"pos":[2,2]},{"type":"target","owner":2,"pos":[4,2]}])"));
+    auto sim=makeSimJson(R"({"types":{"shooter":{"weapons":[{"range":8,"damage":1,"cooldown":0.02,"windup":0.3,"preciseCooldown":true}]},"target":{"health":{"max":100000}}}})",map.dump());
+    Entity shooter,target;
+    sim->world().each<game::Unit>([&](Entity e,const auto&){if(sim->world().has<game::Combat>(e))shooter=e;else target=e;});
+    CHECK(shooter.valid()&&target.valid());
+    if(!shooter.valid()||!target.valid())return;
+    auto& combat=sim->world().get<game::Combat>(shooter);combat.target=target;combat.autoTarget=false;
+    int releases=0;
+    for(int tick=0;tick<200;++tick){sim->step();for(const auto& event:sim->events())if(event.a==shooter&&event.type==game::kEvAttackReleased)++releases;}
+    const auto elapsed=sim->dt()*200;
+    const auto period=Fixed::fromRatio(3,10)+Fixed::fromRatio(2,100);
+    CHECK(releases==int(((elapsed-Fixed::fromRatio(3,10))/period).floorInt())+1);
+    const auto saved=sim->serialize(); CHECK(!saved.empty());
+    for(int i=0;i<30;++i)sim->step();
+    const auto expected=sim->checksum();
+    std::string error;
+    CHECK(sim->deserialize(saved,&error));
+    for(int i=0;i<30;++i)sim->step();
+    CHECK(sim->checksum()==expected);
+
+}
+
+TEST(precise_windup_subtick_recovery_and_cancellation) {
+    using namespace aiverse;
+    using namespace lib::mechanics;
+    auto map=Json::parse(flatMap(12,12,""));
+    map.set("entities",Json::parse(R"([{"type":"shooter","owner":1,"pos":[2,2]},{"type":"target","owner":2,"pos":[4,2]}])"));
+    auto make=[&](const char* weapon) {
+        return makeSimJson(std::string(R"({"types":{"shooter":{"weapons":[)")+weapon+R"(]},"target":{"health":{"max":100000}}}})",map.dump());
+    };
+    auto entities=[](Simulation& sim) {
+        std::pair<Entity,Entity> pair;
+        sim.world().each<game::Unit>([&](Entity e,const auto&){if(sim.world().has<game::Combat>(e))pair.first=e;else pair.second=e;});
+        return pair;
+    };
+    auto count=[](Simulation& sim,Entity shooter,uint16_t kind) {
+        return std::count_if(sim.events().begin(),sim.events().end(),[&](const auto& e){return e.a==shooter&&e.type==kind;});
+    };
+    // Recovery and cooldown overlap; their maximum, not sum, sets the period.
+    auto sim=make(R"({"range":8,"damage":1,"cooldown":0.005,"windup":0.005,"backswing":0.01,"preciseCooldown":true})");
+    auto [shooter,target]=entities(*sim);
+    auto& combat=sim->world().get<game::Combat>(shooter);combat.target=target;combat.autoTarget=false;
+    const Fixed windup=Fixed::fromRatio(5,1000), rest=Fixed::fromRatio(1,100);
+    int releases=0;
+    for(int tick=1;tick<=20;++tick) {
+        sim->step();
+        const int thisTick=int(count(*sim,shooter,game::kEvAttackReleased));
+        if(tick==1)CHECK(thisTick>1);
+        releases+=thisTick;
+        const auto elapsed=sim->dt()*tick;
+        CHECK(releases==int(((elapsed-windup)/(windup+rest)).floorInt())+1);
+    }
+    // An out-of-range tick cancels the current windup, with no release or
+    // stored time credit; reacquiring the target requires a full fresh windup.
+    sim=make(R"({"range":3,"damage":1,"cooldown":0.02,"windup":0.3,"preciseCooldown":true})");
+    std::tie(shooter,target)=entities(*sim);
+    auto& c=sim->world().get<game::Combat>(shooter);c.target=target;c.autoTarget=false;
+    sim->step();
+    CHECK(c.attackTiming[0].phase==WeaponAttackPhase::Windup);
+    CHECK(count(*sim,shooter,game::kEvAttackReleased)==0);
+    auto& position=sim->world().get<Transform>(target).pos;
+    const auto original=position;position.x=Fixed::fromInt(10);
+    sim->step();
+    CHECK(c.attackTiming[0].phase==WeaponAttackPhase::Idle);
+    CHECK(count(*sim,shooter,game::kEvAttackCancelled)==1);
+    CHECK(count(*sim,shooter,game::kEvAttackReleased)==0);
+    for(int i=0;i<10;++i)sim->step();
+    position=original;c.target=target;
+    Fixed elapsed{};bool released=false;
+    for(int i=0;i<20&&!released;++i) {
+        sim->step();elapsed+=sim->dt();
+        released=count(*sim,shooter,game::kEvAttackReleased)>0;
+        CHECK(released==(elapsed>=Fixed::fromRatio(3,10)));
+    }
+    CHECK(released);
+}
+
+#include "engine/view/MapProjection.h"
+#include <limits>
+TEST(map_projection_crop_roundtrip_and_frame) {
+    using namespace aiverse;
+    view::MapProjection projection;
+    CHECK(projection.set(10,20,30,60));
+    const auto point=projection.point(.25f,.75f);
+    const auto uv=projection.uv(point.x,point.z);
+    CHECK(std::abs(uv.x-.25f)<1e-6f&&std::abs(uv.y-.75f)<1e-6f);
+    CHECK(!projection.intersects(2,30,1));
+    CHECK(!projection.set(20,20,10,30));
+    CHECK(!projection.set(-3.0e38f,0,3.0e38f,1));
+    CHECK(!projection.set(0,0,std::numeric_limits<float>::infinity(),1));
+    CHECK(projection.left==10&&projection.bottom==60);
+    view::MapProjection grid; CHECK(grid.set(0,0,24,40));
+    CHECK(projection.clipTo(grid));
+    CHECK(projection.left==10&&projection.right==24&&projection.bottom==40);
+    const render::float3 quad[4]={{10,0,20},{20,0,20},{24,0,40},{8,0,40}};
+    const auto rectangle=view::MapProjection::rectangularFrame(quad);
+    CHECK(rectangle[0].x==8&&rectangle[1].x==24&&rectangle[2].z==40);
+}
+
+#include "engine/view/PortraitOptions.h"
+TEST(portrait_options_inheritance_and_background) {
+    using namespace aiverse;
+    const auto defaults=Json::parse(R"({"model":"models/portrait.glb","zoom":2,"background":[0.1,0.2,0.3]})");
+    const render::float4 player{.8f,.1f,.2f,1};
+    auto look=view::PortraitOptions::resolve(Json::parse(R"({"background":"player","focusHeight":0.7})"),defaults,player);
+    CHECK(look.model=="models/portrait.glb" && look.zoom==2);
+    CHECK(look.background.x==player.x && look.background.y==player.y);
+    CHECK(std::abs(look.focusHeight-.7f)<1e-6f);
+    look=view::PortraitOptions::resolve(Json::parse(R"({"model":"","zoom":99,"background":[1,"bad",0]})"),defaults,player);
+    CHECK(look.model.empty() && look.zoom==8);
+    CHECK(std::abs(look.background.x-.1f)<1e-6f && look.background.w==1);
+    look=view::PortraitOptions::resolve(Json::parse(R"({"background":[0,0,0,0.5]})"),Json{},player);
+    CHECK(look.background.w==.5f);
+}
+
+TEST(model_material_additive_policy) {
+    using namespace aiverse::render;
+    auto mode=AlphaMode::Opaque;
+    CHECK(parseMaterialBlend("additive",mode));
+    CHECK(alphaBlended(mode) && materialBlendMode(mode)==aiverse::gfx::BlendMode::Additive);
+    CHECK(parseMaterialBlend("additive-unweighted",mode));
+    CHECK(alphaBlended(mode) && materialBlendMode(mode)==aiverse::gfx::BlendMode::AdditiveUnweighted);
+    CHECK(!parseMaterialBlend("invalid",mode));
+    CHECK(mode==AlphaMode::AdditiveUnweighted);
+    CHECK(!alphaBlended(AlphaMode::Mask) && !alphaBlended(AlphaMode::Opaque));
+}
+
+TEST(particle_blend_space_roundtrip_and_trail_override) {
+    auto effect=fxParse(R"({"emitters":[{"burst":1,"blendSpace":"display","trail":{"blendSpace":"linear"}}]})");
+    CHECK(effect.emitters[0].blendSpace==fx::FxBlendSpace::Display);
+    CHECK(effect.emitters[0].trail.blendSpace==fx::FxBlendSpace::Linear);
+    auto roundtrip=fxParse(fx::effectToJson(effect).dump().c_str());
+    CHECK(roundtrip.emitters[0].blendSpace==effect.emitters[0].blendSpace);
+    CHECK(roundtrip.emitters[0].trail==effect.emitters[0].trail);
+    CHECK(!fx::effectToJson(effect)["emitters"][size_t(0)]["trail"].has("time"));
+    effect=fxParse(R"({"emitters":[{"burst":1,"blendSpace":"display","trail":{"time":0.5,"blendSpace":"linear"}}]})");
+    roundtrip=fxParse(fx::effectToJson(effect).dump().c_str());
+    CHECK(roundtrip.emitters[0].trail==effect.emitters[0].trail);
+    effect=fxParse(R"({"emitters":[{"burst":1,"blendSpace":"display","trail":{}}]})");
+    CHECK(effect.emitters[0].trail.blendSpace==fx::FxBlendSpace::Display);
+}
+
+TEST(models_mdl_preserves_additive_layers) {
+    using namespace mdxtest;
+    using namespace aiverse::render;
+    std::string text=kMdl;
+    const std::string layer="Layer { FilterMode Transparent, TwoSided, static TextureID 0, }";
+    const auto at=text.find(layer);CHECK(at!=std::string::npos);if(at==std::string::npos)return;
+    text.replace(at,layer.size(),layer+"\n Layer { FilterMode AddAlpha, static TextureID 0, static Alpha 0.5, }");
+    auto model=loadModel("units/guy/guy.mdl",modeltest::mapReader({{"units/guy/guy.mdl",text},{"units/Textures/Guy.blp",paletted2x2()}}),nullptr);
+    bool found=false;
+    for(const auto& mesh:model->meshes)for(size_t i=1;i<mesh.primitives.size();++i) {
+        const auto& overlay=mesh.primitives[i];const auto& base=mesh.primitives[i-1];
+        const auto& material=model->materials[size_t(overlay.material)];
+        if(material.alpha!=AlphaMode::Additive)continue;
+        found=true;
+        CHECK(overlay.firstIndex==base.firstIndex && overlay.indexCount==base.indexCount);
+        CHECK(overlay.firstVertex==base.firstVertex && overlay.vertexCount==base.vertexCount);
+        CHECK(std::abs(material.baseColor.w-.5f)<1e-6f && !material.castShadow);
+    }
+    CHECK(found);
+}
+
+#ifdef AIVERSE_TESTS_EDITOR_CORE
+#include "apps/editor/core/MaterialOps.h"
+TEST(materials_additive_authoring_validation) {
+    for (const char* mode : {"opaque", "mask", "blend", "alpha", "additive", "additive-unweighted"}) {
+        Json material = Json::object();
+        material.set("alpha", Json::string(mode));
+        CHECK(editor::checkMaterial(material).empty());
+    }
+    CHECK(!editor::checkMaterial(Json::parse(R"({"alpha":"unsupported"})")).empty());
+    CHECK(!editor::checkMaterial(Json::parse(R"({"alpha":1})")).empty());
+}
+#endif

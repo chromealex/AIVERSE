@@ -1,0 +1,18 @@
+{
+  "sha": "d88e869011662ae5621a0338d5da3b77461e18cc",
+  "passed": [
+    "rules_set/get portrait background",
+    "rules_set minimap visibility",
+    "game_file_write/read sequential audio fields",
+    "fx_set/get persisted castShadow false, additive material, display emitter"
+  ],
+  "confirmed_gap": "material_set rejects alpha additive; prepared patch not yet applied",
+  "fixture_errors": [
+    "First effect name contained forbidden hyphen.",
+    "Second emitter omitted burst/rate/perMeter. Corrected valid emitter passed."
+  ],
+  "limits": [
+    "MCP mutations only, not native Studio UI proof.",
+    "rules_set emits existing unknown-key warnings for cardSlot column/row; client consumes those fields through applyCardSlot."
+  ]
+}

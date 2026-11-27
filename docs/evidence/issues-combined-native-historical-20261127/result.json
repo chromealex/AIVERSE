@@ -1,0 +1,11 @@
+{
+  "binary_source": "85414a9ca",
+  "ctest": "PASS",
+  "total": 592,
+  "passed": 587,
+  "skipped": 5,
+  "failed": 0,
+  "seconds": 1118.41,
+  "provenance": "evidence.py exited2 because checkout changed while tests ran. This is historical binary evidence, not current-source readiness. New Studio settings code was not in these binaries.",
+  "report": "/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-123918-45316"
+}

@@ -174,7 +174,13 @@ public:
             if(!gpuPool_.step(dt)){error_=gpuPool_.reason();finish();}
         }
     }
-    void draw(){if(ready_){particles_.render({});volumeWorld_.drawParticles();volumetricWorld_.drawInline();}if(gpuFrameOpen_)gpuPool_.draw();}
+    void draw(render::Renderer3D* renderer=nullptr) {
+        if(ready_) {
+            if(renderer)particles_.renderScene(*renderer,{});else particles_.render({});
+            volumeWorld_.drawParticles({},renderer);volumetricWorld_.drawInline({},renderer);
+        }
+        if(gpuFrameOpen_)gpuPool_.draw({},renderer);
+    }
     void finish(){if(gpuFrameOpen_){gpuPool_.endPresentationFrame();gpuFrameOpen_=false;}}
 private:
     static constexpr uint32_t kStudioMaxGroupSlots=65536;

@@ -1,0 +1,47 @@
+[mac-frame] timer=120.0 Hz, uncapped=0, displaySync=1 (not an FPS guarantee)
+[mac-frame] avg/120 events=0.014 ms prep=0.001 ms begin=0.115 ms editor=6.215 ms end=0.038 ms gpu=0.236 ms
+[rts-view-cull] avg/120 culled=0.0 objects/frame (AIVERSE_RTS_VIEW_CULL=0 disables)
+[view-stages] avg/120 setup=0.377 ground=0.156 objects=0.236 anim-cleanup=0.017 overlays=0.126 ms
+[view-objects] avg/120 state=0.003 animate=0.050 drawObject=0.109 shadow=0.000 ms objects/frame=3.0
+[rts-ground-cache] avg/120 hits=2.0 misses=0.0 hit-rate=99.2%
+[rts-visible-types] avg/120 unique=3.0 catalog=6 contact-frame=0.0%
+[client-stages] avg/120 sim=1.11 scene=0.08 ui=2.18 view=0.94 fx=0.11 render=0.88 hud=0.28 other=0.31 total=5.90 ms
+[mac-frame] avg/120 events=0.008 ms prep=0.000 ms begin=0.091 ms editor=4.301 ms end=0.037 ms gpu=0.191 ms
+[rts-view-cull] avg/120 culled=0.0 objects/frame (AIVERSE_RTS_VIEW_CULL=0 disables)
+[view-stages] avg/120 setup=0.215 ground=0.088 objects=0.132 anim-cleanup=0.016 overlays=0.064 ms
+[view-objects] avg/120 state=0.003 animate=0.028 drawObject=0.079 shadow=0.000 ms objects/frame=3.0
+[rts-ground-cache] avg/120 hits=2.0 misses=0.0 hit-rate=100.0%
+[rts-visible-types] avg/120 unique=3.0 catalog=6 contact-frame=0.0%
+[client-stages] avg/120 sim=0.83 scene=0.07 ui=1.92 view=0.53 fx=0.04 render=0.49 hud=0.16 other=0.24 total=4.29 ms
+[mac-frame] avg/120 events=0.008 ms prep=0.000 ms begin=0.062 ms editor=4.285 ms end=0.036 ms gpu=0.167 ms
+[rts-view-cull] avg/120 culled=0.0 objects/frame (AIVERSE_RTS_VIEW_CULL=0 disables)
+[view-stages] avg/120 setup=0.205 ground=0.084 objects=0.138 anim-cleanup=0.010 overlays=0.065 ms
+[view-objects] avg/120 state=0.003 animate=0.028 drawObject=0.077 shadow=0.000 ms objects/frame=3.0
+[rts-ground-cache] avg/120 hits=2.0 misses=0.0 hit-rate=100.0%
+[rts-visible-types] avg/120 unique=3.0 catalog=6 contact-frame=0.0%
+[client-stages] avg/120 sim=0.79 scene=0.07 ui=1.90 view=0.52 fx=0.05 render=0.55 hud=0.16 other=0.23 total=4.26 ms
+[mac-frame] avg/120 events=0.008 ms prep=0.004 ms begin=0.062 ms editor=4.195 ms end=0.035 ms gpu=0.156 ms
+[metal-assets] libraries=0 sourceMisses=33 pipelines=73 pipelineFailures=0 archive=0 strict=0
+[ui info] Loading Lua plugin using the provided Lua state.
+[streaming] initial=3 background=0 radius=42.3 focus=12.0,9.0
+[loading] map=maps/straight.json types=3/6
+[loading] map assets ready in 477.4 ms (3 types)
+[loading] first map frame in 3835.7 ms
+        8.21 real         5.95 user         0.39 sys
+           275521536  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               78603  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  10  voluntary context switches
+                8476  involuntary context switches
+         80069284457  instructions retired
+         22364903862  cycles elapsed
+          1287990336  peak memory footprint

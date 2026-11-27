@@ -147,12 +147,13 @@ void Minimap::updatePlanet(gfx::Device& dev, const GameView& view, const GameSce
         return true;
     };
     for (auto& o : scene.objects) {
-        if (!o.visible || o.isProjectile) continue;
+        if (!o.visible || o.isProjectile || o.type>=rules.types.size()) continue;
         int b; float3 local;
         if (!view.objectOnBody(o, b, local) || b != body) continue;
         const UnitType& ut = rules.types[o.type];
+        if(!ut.view.getBool("minimap",true))continue;
         const bool node = o.owner == 0 && ut.resourceNode >= 0;
-        if (node && ut.footprintW <= 1) continue;
+        if (!ut.view.has("minimap") && node && ut.footprintW <= 1) continue;
         float2 p;
         if (!project(local, p)) continue;
         const float4 c = GameView::playerColor(o.owner);

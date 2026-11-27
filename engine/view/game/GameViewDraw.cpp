@@ -425,11 +425,16 @@ void GameView::drawTracers(Renderer3D& r, float dt, const MapGrid* grid) {
     tracers_.erase(std::remove_if(tracers_.begin(), tracers_.end(), [](const Tracer& s) { return s.age >= 1; }), tracers_.end());
 }
 
-bool GameView::projectileImpactPathPoint(Entity projectile, float3& point) const {
+bool GameView::projectileDrawPoint(Entity projectile, float3& point) const {
     const auto it = anims_.find(projectile.packed());
-    if (it == anims_.end() || !it->second.straightImpact || it->second.seen != frame_) return false;
+    if (it == anims_.end() || it->second.seen != frame_) return false;
     point = it->second.last.pos;
     return true;
+}
+
+bool GameView::projectileImpactPathPoint(Entity projectile, float3& point) const {
+    const auto it = anims_.find(projectile.packed());
+    return it != anims_.end() && it->second.straightImpact && projectileDrawPoint(projectile, point);
 }
 
 void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o, float dt,
@@ -442,24 +447,19 @@ void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o,
     if (!ps.launched) {
         ps.launched = true;
         ps.lastPos = o.pos;
-        ps.launch = {0, 0, 0};
+        float3 launch = o.pos;
         auto src = o.source.valid() ? anims_.find(o.source.packed()) : anims_.end();
-        if (useMuzzle && src != anims_.end() && src->second.initialized && src->second.type < looks_.size() &&
+        if (useMuzzle && o.projectileOrigin == projectile::FlightOrigin::Emission && src != anims_.end() && src->second.initialized && src->second.type < looks_.size() &&
             src->second.choice>=0 && size_t(src->second.choice)<looks_[src->second.type].models.size()) {
             const EntityAnim& s = src->second;
             const ModelChoice& ch = looks_[s.type].models[size_t(s.choice)];
             if (ch.muzzle >= 0) {
                 const float3 muzzle = nodeWorldPos(s, ch, ch.muzzle, ch.muzzleOffset);
-                ps.launch = muzzle - o.pos;
-                if (length(ps.launch) > 8) ps.launch = {0, 0, 0}; // stale pose (teleport): do not fly from afar
+                if (length(muzzle - o.pos) <= 8) launch = muzzle; // reject stale source poses
             }
-            events_.push_back({"launch", o.source, s.type, s.last.owner, o.pos + ps.launch});
+            events_.push_back({"launch", o.source, s.type, s.last.owner, launch});
         }
-    } else if (!ps.straightImpact) {
-        // converge onto the simulated path across the ground; the height stays: a shot flies at the height of the
-        // muzzle it left (the simulation moves projectiles just above the ground)
-        const float k = std::exp(-dt * 7.0f);
-        ps.launch = {ps.launch.x * k, ps.launch.y, ps.launch.z * k};
+        ps.projectilePresentation.begin({key, o.projectileOrigin, o.pos}, launch);
     }
     if (grid && o.shotTargetType < looks_.size()) {
         const auto& target = looks_[o.shotTargetType];
@@ -471,14 +471,13 @@ void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o,
             ps.last.target = {o.target.x, base + (target.air ? target.flyHeight : 0.f) + target.impactHeight, o.target.z};
         }
     }
-    float3 point = o.pos + ps.launch;
-    float3 direction = o.facing;
-    if (ps.straightImpact) {
-        const float3 muzzle = ps.lastPos + ps.launch;
-        point = view_adapter::straightShotPoint(ps.lastPos, muzzle, o.pos, ps.last.target);
-        direction = ps.last.target - muzzle;
-        ps.last.pos = point;
-    }
+    if (ps.straightImpact)
+        ps.projectilePresentation.evaluateStraight(o.pos, ps.last.target);
+    else
+        ps.projectilePresentation.evaluate(o.pos, o.facing, ps.phase);
+    const auto& sample = ps.projectilePresentation.sample();
+    const float3 point = sample.position;
+    const float3 direction = sample.direction;
     float size = 1;
     const TypeLook::ProjectileLook* appearance=nullptr;
     if (o.shooterType < looks_.size()) {
@@ -488,16 +487,13 @@ void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o,
            SL.projectiles[size_t(o.shotWeapon)].model)
             appearance=&SL.projectiles[size_t(o.shotWeapon)];
     }
+    ps.last.pos = point;
     if(appearance) {
         const auto& cfg=appearance->config;
         if(cfg.scale>=0)size=cfg.scale;
         if(size<=0 || cfg.tint.w<=0)return;
         ModelDraw draw;
         draw.model=appearance->model;
-        // Custom models follow the authoritative 3D trajectory, not the
-        // legacy ball's permanent muzzle-height offset.
-        const float3 offset=useMuzzle?ps.launch*std::exp(-ps.phase*7.f):float3{};
-        if (!ps.straightImpact) point = o.pos + offset;
         if(length(direction)>1e-6f)ps.attackDirection=direction;
         draw.world=view_adapter::projectileFlightFrame(point,ps.attackDirection,up)*
             mat4::scale({size,size,size})*cfg.axisFix;

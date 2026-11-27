@@ -8,6 +8,7 @@ import {
   StudioField, StudioInput, StudioListRow
 } from '../../ui';
 import './ProjectPanel.css';
+import ProjectSettingsEditor from '../ProjectSettingsEditor';
 
 export default function ProjectPanel({ snapshot, busy, connected, openProject, updateSnapshot, setBusy }: StudioPanelContext) {
   const [project, setProject] = useState<StudioProjectState | null>(null);
@@ -34,6 +35,7 @@ export default function ProjectPanel({ snapshot, busy, connected, openProject, u
     <div className="au-stack">
       {error && <StudioAlert tone="danger">{error}</StudioAlert>}
       {!loaded ? <StudioEmptyState title="No native project" description="Open a project to manage its maps."/> : <>
+        <ProjectSettingsEditor key={snapshot?.project.path} project={snapshot?.project.path ?? ''} disabled={busy || !connected} updateSnapshot={updateSnapshot}/>
         <StudioSection title="Current map">
           <p>{project?.currentMap || 'Unsaved map'}</p>
           <div className="au-row">

@@ -4,6 +4,8 @@
 #include "../../engine/data/Json.h"
 #include <vector>
 namespace aiverse::projectile {
+// Provenance is assigned by the shared chain policy and preserved by hosts.
+enum class FlightOrigin : uint8_t { Unknown, Emission, Split, Ricochet };
 enum class ProjectileModKind : uint8_t { Damage, Speed, Radius, Split, Ricochet, FlyThrough };
 struct ProjectileModifier {
     ProjectileModKind kind = ProjectileModKind::Damage;

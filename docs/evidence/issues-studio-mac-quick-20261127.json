@@ -1,0 +1,16 @@
+{
+  "sha": "d1871901bcefaf7bfb314a255dd883bc217303ce",
+  "argv": [
+    "bash",
+    "run-tests.sh",
+    "--quick",
+    "--no-build",
+    "--ctest-jobs",
+    "6",
+    "--build-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/issues-studio-mac-quick-20261127.log.txt",
+  "sha256": "2a8b62400b1eca865c53f889c52aff559e605f3613df5a6bd855796df82c46fb"
+}

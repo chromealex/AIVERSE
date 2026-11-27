@@ -1,0 +1,19 @@
+{
+  "source": "94d69c72635fc6800be9c7732f72c76b40363a0e",
+  "native_test_source": "9ae0cb046754fb980cf4f5b1993861f4498f001c",
+  "studio_session": 73841,
+  "observed": [
+    "Actual Project settings UI saved F8 hotkey, portrait background and minimap bounds",
+    "Malformed JSON rejected; draft retained and Discard restored baseline",
+    "History Project Undo restored F6; Redo restored F8",
+    "Undo after loading made draft stale; Save rejected with project settings changed",
+    "Discard and Redo restored valid saved settings",
+    "Project reopened through native picker and Load settings reread saved data",
+    "Disk values independently match three edits; narrow270px dock fits actions"
+  ],
+  "limits": [
+    "Generic JSON editor uses existing domain validation; not a custom inspector for every key",
+    "Project reopened within same process; fresh-process persistence separately covered by native owner tests",
+    "Global Map Undo remains separate; no Windows acceptance"
+  ]
+}

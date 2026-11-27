@@ -212,7 +212,7 @@ void ClientFx::startMatch(Simulation& sim, uint8_t viewer, const game::GameView&
     bridge_.setHeightFn([&view, &grid](float x, float z) { return view.heightAt(grid, x, z); });
     ps_.setGroundHeight([&view, &grid](float x, float z) { return view.heightAt(grid, x, z); });   // "collision" module
     bridge_.setPlayerColorFn([](int p) { return game::GameView::playerColor(p); });
-    bridge_.setProjectilePointFn([&view](Entity e, fx::float3& point) { return view.projectileImpactPathPoint(e, point); });
+    bridge_.setProjectilePointFn([&view](Entity e, fx::float3& point) { return view.projectileDrawPoint(e, point); });
     bridge_.setAttackOriginFn([&view](Entity e, fx::float3& pos, fx::float3& dir) { return view.muzzleOf(e, pos, dir); });   // shots leave the model's muzzle
     bridge_.setNodeFn([&view](Entity e,const std::string& node,render::mat4& frame){return view.effectNodeOf(e,node,frame);});
     bridge_.attach(sim, viewer);
@@ -815,13 +815,14 @@ void ClientFx::addPreparedLights(render::LightSystem& lights) const {
         lights.add(planet_ ? space_.transformPoint(l.pos) : l.pos, l.radius, l.color, l.intensity);
 }
 
-void ClientFx::render(const render::Lighting& lighting) {
+void ClientFx::render(const render::Lighting& lighting,render::Renderer3D* renderer) {
     ps_.setLightDir(lighting.sunDir);   // shading of mesh particles
-    ps_.render({lighting.fogColor, lighting.fogDensity});
-    graphVolumes_.drawParticles({lighting.fogColor,lighting.fogDensity});
-    graphVolumetricParticles_.drawInline({lighting.fogColor,lighting.fogDensity});
+    if(renderer)ps_.renderScene(*renderer,{lighting.fogColor,lighting.fogDensity});
+    else ps_.render({lighting.fogColor,lighting.fogDensity});
+    graphVolumes_.drawParticles({lighting.fogColor,lighting.fogDensity},renderer);
+    graphVolumetricParticles_.drawInline({lighting.fogColor,lighting.fogDensity},renderer);
     if(graphPoolOpen_) {
-        graphPool_.draw({lighting.fogColor,lighting.fogDensity});
+        graphPool_.draw({lighting.fogColor,lighting.fogDensity},renderer);
         finishGraphGpuFrame();
     }
 }
@@ -829,12 +830,13 @@ void ClientFx::render(const render::Lighting& lighting) {
 void ClientFx::renderPrepared(const render::Camera3D& camera,
                               const render::mat4& viewProj,
                               int width,int height,
-                              const render::Lighting& lighting) {
+                              const render::Lighting& lighting,render::Renderer3D* renderer) {
     // Particles have already advanced exactly once in update(). This path
     // redoes camera-dependent culling/billboards and GPU draw submission only.
     ps_.setView(camera,viewProj,width,height);
     ps_.setLightDir(lighting.sunDir);
-    ps_.render({lighting.fogColor,lighting.fogDensity});
+    if(renderer)ps_.renderScene(*renderer,{lighting.fogColor,lighting.fogDensity});
+    else ps_.render({lighting.fogColor,lighting.fogDensity});
 }
 
 } // namespace aiverse::client

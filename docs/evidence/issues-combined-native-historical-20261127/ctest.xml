@@ -1,0 +1,2714 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="(empty)"
+	tests="592"
+	failures="0"
+	disabled="0"
+	skipped="5"
+	hostname=""
+	time="1118"
+	timestamp="2026-11-27T15:39:18"
+	>
+	<testcase name="ecs_experiments_test" classname="ecs_experiments_test" time="0.303888" status="run">
+		<system-out>PASS prepared, adaptive jobs, exceptions, dependency waves, deterministic commands, dirty pages
+</system-out>
+	</testcase>
+	<testcase name="ecs_wave_executor_test" classname="ecs_wave_executor_test" time="0.194281" status="run">
+		<system-out>PASS dependency wave execution, sequential/parallel checksum, worker recovery
+</system-out>
+	</testcase>
+	<testcase name="ecs_guarded_world_test" classname="ecs_guarded_world_test" time="0.186082" status="run">
+		<system-out>PASS guarded access, dependency barriers, parallel parity, exception recovery
+</system-out>
+	</testcase>
+	<testcase name="ecs_snapshot_delta_test" classname="ecs_snapshot_delta_test" time="0.321408" status="run">
+		<system-out>PASS serialized snapshot delta, changed pages, grow/shrink, full fallback, base checksum
+</system-out>
+	</testcase>
+	<testcase name="ecs_scene_hierarchy_test" classname="ecs_scene_hierarchy_test" time="2.50264" status="run">
+		<system-out>PASS hierarchy parent links, deep updates, dirty branches, cycles, rollback and generations
+</system-out>
+	</testcase>
+	<testcase name="ecs_scene_hierarchy_simulation_test" classname="ecs_scene_hierarchy_simulation_test" time="0.377333" status="run">
+		<system-out>PASS Simulation parent transforms, presentation matrix and snapshot restoration
+</system-out>
+	</testcase>
+	<testcase name="ecs_scene_runtime_test" classname="ecs_scene_runtime_test" time="0.537575" status="run">
+		<system-out>PASS scene additive/replace/cancel, hierarchy, COW, binary persistence
+</system-out>
+	</testcase>
+	<testcase name="ecs_multiworld_test" classname="ecs_multiworld_test" time="0.398532" status="run">
+		<system-out>PASS multiple independent Simulations, pause, WorldEntityRef and stale handles
+</system-out>
+	</testcase>
+	<testcase name="ecs_scene_load_coordinator_test" classname="ecs_scene_load_coordinator_test" time="0.252253" status="run">
+		<system-out>PASS scene manifest, async jobs, leases, replace, cancel, COW and residency restore
+</system-out>
+	</testcase>
+	<testcase name="ecs_scene_resource_pipeline_test" classname="ecs_scene_resource_pipeline_test" time="0.225046" status="run">
+		<system-out>PASS scene resource pipeline budgets, cross-system leases, replace and rollback
+</system-out>
+	</testcase>
+	<testcase name="ecs_shared_static_components_test" classname="ecs_shared_static_components_test" time="0.568775" status="run">
+		<system-out>PASS shared/static immutable refs, COW, compaction, native v10 save and rollback
+</system-out>
+	</testcase>
+	<testcase name="ecs_prefab_static_catalog_test" classname="ecs_prefab_static_catalog_test" time="0.430272" status="run">
+		<system-out>PASS prefab static configs across scenes/worlds, deterministic mapping, native save, rollback and changed-alias rejection
+</system-out>
+	</testcase>
+	<testcase name="ecs_static_scene_integration_test" classname="ecs_static_scene_integration_test" time="0.538152" status="run">
+		<system-out>PASS StaticPrefabSceneBinding, additive/replace/unload, shared config table, dual Worlds, rollback and save
+</system-out>
+	</testcase>
+	<testcase name="ecs_static_scene_multidomain_test" classname="ecs_static_scene_multidomain_test" time="0.447512" status="run">
+		<system-out>PASS multi static domains, optional prefab config, real scene replace, cross-World tables, v10 native persistence and COW rollback
+</system-out>
+	</testcase>
+	<testcase name="ecs_static_scene_editor_contract_test" classname="ecs_static_scene_editor_contract_test" time="0.195247" status="run">
+		<system-out>PASS prefab editor JSON authoring, deterministic catalog and read-only inspector
+</system-out>
+	</testcase>
+	<testcase name="ecs_cow_snapshot_test" classname="ecs_cow_snapshot_test" time="0.182971" status="run">
+		<system-out>PASS COW world snapshots, resource detachment, generations, rollback, legacy fallback
+</system-out>
+	</testcase>
+	<testcase name="ecs_cow_exception_test" classname="ecs_cow_exception_test" time="0.184961" status="run">
+		<system-out>PASS COW page conversion, failed append recovery and shared snapshot isolation
+</system-out>
+	</testcase>
+	<testcase name="ecs_cow_parallel_test" classname="ecs_cow_parallel_test" time="0.443494" status="run">
+		<system-out>PASS COW shared-pool snapshots with guarded parallel read/write and rollback
+</system-out>
+	</testcase>
+	<testcase name="ecs_guarded_parallel_test" classname="ecs_guarded_parallel_test" time="3.58569" status="run">
+		<system-out>PASS checked adaptive per-entity jobs: worker scopes, checksum, foreign-write rejection
+</system-out>
+	</testcase>
+	<testcase name="ecs_guarded_failure_test" classname="ecs_guarded_failure_test" time="0.558464" status="run">
+		<system-out>PASS opt-in World transactional restoration on guarded worker failure
+</system-out>
+	</testcase>
+	<testcase name="ecs_wave_replay_test" classname="ecs_wave_replay_test" time="0.208322" status="run">
+		<system-out>PASS deterministic world snapshot replay across 0/3/7 workers
+</system-out>
+	</testcase>
+	<testcase name="ecs_simulation_bridge_test" classname="ecs_simulation_bridge_test" time="0.454638" status="run">
+		<system-out>PASS Simulation step, canonical commands, snapshot rollback, 0/1/3/7-worker checksums
+</system-out>
+	</testcase>
+	<testcase name="ecs_cross_genre_mechanics_test" classname="ecs_cross_genre_mechanics_test" time="0.517096" status="run">
+		<system-out>PASS cross-genre ECS locomotion/recoil/capture policies, COW rollback and checksum parity
+</system-out>
+	</testcase>
+	<testcase name="ecs_cow_rollback_session_test" classname="ecs_cow_rollback_session_test" time="0.445674" status="run">
+		<system-out>PASS RollbackSession deep-vs-incremental COW parity including late confirmations
+</system-out>
+	</testcase>
+	<testcase name="aiverse_replica_tests" classname="aiverse_replica_tests" time="6.60669" status="run">
+		<system-out>ok   batched_fields_preserve_legacy_replica_wire_and_values (6 ms)
+    4g delivered: 66.07% (redundancy 1) 97.70% (redundancy 3) 99.76% (redundancy 5) 100.00% (redundancy 8)
+    bad delivered: 53.26% (redundancy 1) 93.76% (redundancy 3) 98.33% (redundancy 5) 99.91% (redundancy 8)
+ok   inputs_in_order_with_redundancy_over_4g_and_bad (1955 ms)
+ok   clients_converge_over_lossy_links (1014 ms)
+    442 snapshots checked, 0 with a stale owned state
+ok   owned_state_matches_last_applied_input_under_loss (72 ms)
+    4g fixed 100 ms: delay 100 ms, jitter 13.7 ms, rate 0.984..1.008, 34 underruns in 90 s (2.23 % of the time, 1669 snapshots)
+    4g adaptive: delay 177 ms, jitter 13.7 ms, rate 0.968..1.013, 8 underruns in 90 s (0.39 % of the time, 1669 snapshots)
+    bad fixed 100 ms: delay 100 ms, jitter 13.7 ms, rate 0.978..1.016, 171 underruns in 90 s (10.38 % of the time, 1340 snapshots)
+    bad adaptive: delay 182 ms, jitter 13.7 ms, rate 0.975..1.022, 34 underruns in 90 s (1.88 % of the time, 1340 snapshots)
+ok   re...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+	<testcase name="aiverse_deferred_loading_tests" classname="aiverse_deferred_loading_tests" time="33.3223" status="run">
+		<system-out>view: type 'missing': missing.obj: file not found
+view: type 'missing': missing.obj: using the built-in shape
+view: type 'missing': missing.obj: file not found
+view: type 'missing': missing.obj: using the built-in shape
+view: type 'missing': missing.obj: file not found
+view: type 'missing': missing.obj: using the built-in shape
+deferred loading: subset, cache, later spawn, missing asset, reinit, eager mode, editor trim/reload + memory metrics passed
+</system-out>
+	</testcase>
+	<testcase name="unity_anim_controller" classname="unity_anim_controller" time="0.676876" status="run">
+		<system-out>Unity animation checks: 38 passed
+</system-out>
+	</testcase>
+	<testcase name="adaptive_shadow_resolution" classname="adaptive_shadow_resolution" time="0.161805" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="quake3_bsp" classname="quake3_bsp" time="0.581581" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="model_batching_policy" classname="model_batching_policy" time="0.809745" status="run">
+		<system-out>engine model batching policy: PASS
+</system-out>
+	</testcase>
+	<testcase name="static_impostor_lod" classname="static_impostor_lod" time="0.869526" status="run">
+		<system-out>static impostor lod: ok
+</system-out>
+	</testcase>
+	<testcase name="strata_auto_select" classname="strata_auto_select" time="0.15813" status="run">
+		<system-out>strata auto select: ok
+</system-out>
+	</testcase>
+	<testcase name="animation_graphs" classname="animation_graphs" time="1.64269" status="run">
+		<system-out>Climb room: body 0.000 2.000 -7.400 normal 0.000 -1.000 0.000 error 0.000
+Eight leg ceiling: 0.000 2.000 -6.408 normal -1.000 error 0.000 supports 6
+Animation graph checks: 1304 passed
+</system-out>
+	</testcase>
+	<testcase name="animation_ecs_presentation" classname="animation_ecs_presentation" time="0.704896" status="run">
+		<system-out>animation ECS presentation OK
+</system-out>
+	</testcase>
+	<testcase name="animation_playback" classname="animation_playback" time="0.169336" status="run">
+		<system-out>animation playback events/root motion OK
+</system-out>
+	</testcase>
+	<testcase name="animation_generic_retarget" classname="animation_generic_retarget" time="0.629697" status="run">
+		<system-out>generic retarget OK
+</system-out>
+	</testcase>
+	<testcase name="animation_montage" classname="animation_montage" time="0.116385" status="run">
+		<system-out>montage OK
+</system-out>
+	</testcase>
+	<testcase name="animation_motion_warp" classname="animation_motion_warp" time="0.188315" status="run">
+		<system-out>motion warp OK
+</system-out>
+	</testcase>
+	<testcase name="animation_inertialization" classname="animation_inertialization" time="0.149671" status="run">
+		<system-out>pose inertialization OK
+</system-out>
+	</testcase>
+	<testcase name="animation_physical_pose" classname="animation_physical_pose" time="0.604648" status="run">
+		<system-out>physical pose blending OK
+</system-out>
+	</testcase>
+	<testcase name="animation_budget_policy" classname="animation_budget_policy" time="0.321329" status="run">
+		<system-out>animation budget allocator OK
+</system-out>
+	</testcase>
+	<testcase name="animation_root_motor" classname="animation_root_motor" time="0.203103" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="animation_facial_control_rig" classname="animation_facial_control_rig" time="0.79818" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="animation_humanoid_retarget" classname="animation_humanoid_retarget" time="0.170172" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="animation_ragdoll_asset" classname="animation_ragdoll_asset" time="0.447254" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="animation_root_motion_bake" classname="animation_root_motion_bake" time="0.178808" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="animation_recovery" classname="animation_recovery" time="0.779381" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="animation_humanoid_profile" classname="animation_humanoid_profile" time="0.249061" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="animation_jobs" classname="animation_jobs" time="0.769756" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="animation_graph_notifies" classname="animation_graph_notifies" time="0.795526" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="animation_hot_reload" classname="animation_hot_reload" time="0.771009" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="animation_model_dependencies" classname="animation_model_dependencies" time="0.16768" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="animation_editor_visual_asset_watcher" classname="animation_editor_visual_asset_watcher" time="0.748718" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="resource_retirement_queue" classname="resource_retirement_queue" time="0.158013" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="async_resource_retirement_queue" classname="async_resource_retirement_queue" time="0.156886" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="model_resource_owner_contract" classname="model_resource_owner_contract" time="0.165393" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="model_asset_provider_api" classname="model_asset_provider_api" time="0.712163" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="animation_scene_game_host_api" classname="animation_scene_game_host_api" time="0.979751" status="run">
+		<system-out>MotionWeave typed scene host contract OK
+</system-out>
+	</testcase>
+	<testcase name="animation_scene_preview_assets" classname="animation_scene_preview_assets" time="0.369449" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="render_retirement_pressure" classname="render_retirement_pressure" time="0.156877" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="render_async_model_cpu_queue" classname="render_async_model_cpu_queue" time="0.606387" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="render_model_estimate" classname="render_model_estimate" time="0.160648" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="render_model_priority" classname="render_model_priority" time="0.614435" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="render_model_owner_estimates" classname="render_model_owner_estimates" time="0.418777" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="render_model_parallel_jobs" classname="render_model_parallel_jobs" time="0.61062" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="render_geometry_page_owners" classname="render_geometry_page_owners" time="0.1686" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="render_resource_owner_lifetime" classname="render_resource_owner_lifetime" time="0.166373" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="render_retirement_failed_token" classname="render_retirement_failed_token" time="0.153649" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="render_resource_owner_group" classname="render_resource_owner_group" time="0.187859" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="view_portrait_appearance_api" classname="view_portrait_appearance_api" time="0.195752" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="render_persistent_model_pool" classname="render_persistent_model_pool" time="0.559278" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="render_retirement_status_replay" classname="render_retirement_status_replay" time="0.183806" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="view_appearance_packet" classname="view_appearance_packet" time="0.63125" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="render_scoped_resource_owner" classname="render_scoped_resource_owner" time="0.306255" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="render_retirement_diagnostic_ring" classname="render_retirement_diagnostic_ring" time="0.155493" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="view_appearance_authoring" classname="view_appearance_authoring" time="0.77686" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="view_appearance_registry" classname="view_appearance_registry" time="0.996558" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="view_appearance_choice" classname="view_appearance_choice" time="0.899795" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="view_appearance_prepared" classname="view_appearance_prepared" time="0.719039" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="render_model_image_transaction" classname="render_model_image_transaction" time="0.667493" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="render_gpu_program_retirement" classname="render_gpu_program_retirement" time="0.191533" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="render_device_epoch" classname="render_device_epoch" time="1.31564" status="run">
+		<system-out>ModelReadLease released on foreign thread
+libc++abi: terminating
+ModelCacheReadScope released on foreign thread
+libc++abi: terminating
+ModelResourceCache destroyed with active Model read leases
+libc++abi: terminating
+</system-out>
+	</testcase>
+	<testcase name="animation_crowd_policy" classname="animation_crowd_policy" time="0.176191" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="animation_cues" classname="animation_cues" time="0.176108" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="animation_montage_asset_loader" classname="animation_montage_asset_loader" time="0.589355" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="motionweave_api" classname="motionweave_api" time="1.14926" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="motionweave_core" classname="motionweave_core" time="1.03351" status="run">
+		<system-out>walk/run blend w=0.5 planted-foot slide: unsynced 0.944 m/s, synced 0.313 m/s
+MotionWeave core checks: 292 passed
+</system-out>
+	</testcase>
+	<testcase name="motionweave_workers" classname="motionweave_workers" time="0.161566" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="motionweave_hybrid" classname="motionweave_hybrid" time="0.716091" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="motionweave_cost_balancing" classname="motionweave_cost_balancing" time="0.677582" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="motionweave_backend_selection" classname="motionweave_backend_selection" time="0.202563" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="motionweave_graph_cost_cache" classname="motionweave_graph_cost_cache" time="0.704851" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="motionweave_worker_reuse" classname="motionweave_worker_reuse" time="0.238702" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="motionweave_parallel_rig" classname="motionweave_parallel_rig" time="0.779769" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="motionweave_phase_seed" classname="motionweave_phase_seed" time="0.096976" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="motionweave_backend_phase_transfer" classname="motionweave_backend_phase_transfer" time="0.670996" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="motionweave_source_bridge" classname="motionweave_source_bridge" time="0.890301" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="motionweave_action_edges" classname="motionweave_action_edges" time="0.159979" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="motionweave_genre_boundary" classname="motionweave_genre_boundary" time="0.506204" status="run">
+		<system-out>MotionWeave: no genre dependencies in animation core
+</system-out>
+	</testcase>
+	<testcase name="view_genre_independent" classname="view_genre_independent" time="0.735891" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="view_camera_lod" classname="view_camera_lod" time="0.679755" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="view_genre_boundary" classname="view_genre_boundary" time="0.342268" status="run">
+		<system-out>AIVERSE View has no genre dependencies
+</system-out>
+	</testcase>
+	<testcase name="view_layer_order" classname="view_layer_order" time="0.197503" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="view_scene_packets" classname="view_scene_packets" time="0.897037" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="view_surface_composition" classname="view_surface_composition" time="0.167921" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="view_layer_providers" classname="view_layer_providers" time="0.158607" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="view_visibility_alias" classname="view_visibility_alias" time="0.167742" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="view_frustum_culling" classname="view_frustum_culling" time="0.15314" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="view_spherical_horizon" classname="view_spherical_horizon" time="0.157954" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="view_grid_geometry" classname="view_grid_geometry" time="0.28849" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="view_triangle_facing" classname="view_triangle_facing" time="0.145216" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="view_geometry_bounds" classname="view_geometry_bounds" time="0.148721" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="view_rts_selection_presentation" classname="view_rts_selection_presentation" time="0.177576" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="view_rts_preview_presentation" classname="view_rts_preview_presentation" time="0.146628" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="bake_tests" classname="bake_tests" time="0.937014" status="run">
+		<system-out>open sky: 0.4011 0.5020 0.6028 (expect 0.4 0.5 0.6)
+subtractive: lit 1.000, shadow 0.000
+emissive: under 2.187 1.094 0.551, corner 0.031
+probes: up 0.400 0.499 0.596 down 0.100 0.082 0.063
+unwrap: 20108 texels covered, 0 overlaps
+bake tests: 135 checks, 0 failed
+</system-out>
+	</testcase>
+	<testcase name="render_cpu_device" classname="render_cpu_device" time="0.168697" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="render_cpu_textured_model" classname="render_cpu_textured_model" time="0.778373" status="run">
+		<system-out>Textured OBJ headless capture: 26667 red and 38770 green pixels
+</system-out>
+	</testcase>
+	<testcase name="aiverse_net_tests" classname="aiverse_net_tests" time="70.9077" status="run">
+		<system-out>  snapshot maps/valley.json: 0.186 ms, 543 entities
+  snapshot maps/duel.json: 0.110 ms, 94 entities
+[ OK ] snapshot_restore_resimulates_identically
+[ OK ] command_sink_intercepts_submit
+[ OK ] transport_loopback_latency_preserves_order
+  udp 127.0.0.1:50242: 300/300 echoed in 1339 ms, rtt 3 ms
+  udp [::1]:50242: 50/50 echoed in 8 ms, rtt 2 ms
+[ OK ] transport_udp_survives_packet_loss
+  ws 127.0.0.1:61001: 200/200 echoed in 31 ms, rtt 10 ms
+[ OK ] transport_websocket_echo
+    [Bob] error: net.error.data_mismatch
+    [Alice] error: net.error.not_ready
+    Alice  slot 1: result 2 at tick 1741, rollbacks 51 (max 2, resim 58), predicted 1504, stalls 0
+    Bob    slot 2: result 2 at tick 1741, rollbacks 28 (max 2, resim 34), predicted 1675, stalls 0
+    Watcher slot 0: result 2 at tick 1741, rollbacks 0 (max 0, resim 0), predicted 0, stalls 0
+    replay 20261127-123933-room1.rpl: 1741 ticks, 113 commands, 87/87 checkpoints ok
+[ OK ] net_room_match_with_rollback_and_spectator
+    Ann    slot 2: result 2 at tick 293...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+	<testcase name="aiverse_battle_tests" classname="aiverse_battle_tests" time="3.41672" status="run">
+		<system-out>crypto_aead_detects_tampering
+ticket_opens_only_with_the_server_key_and_in_time
+secure_handshake_and_both_directions
+secure_rejects_unadmitted_tickets_and_garbage
+secure_drops_replays_and_survives_nat_rebinding
+secure_stream_tolerates_mobile_loss
+  10% loss, 150 ms RTT, 40 ms jitter: p95 one-way 160 ms with redundancy, 570 ms without (400/400 delivered)
+  20% loss, 150 ms RTT, 40 ms jitter: p95 one-way 260 ms with redundancy, 2940 ms without (400/400 delivered)
+secure_ping_for_server_selection
+  pong: 1, rtt 60 ms, load 37
+secure_real_udp_on_loopback
+hero_input_is_one_command_scheme
+correction_smoother_blends_and_snaps
+hosted_allocation_validation_and_admission
+hosted_battles_on_a_bad_mobile_link
+  matches 3, finished 3, results agreed 3, aborted 0, desyncs 0, broken 0 | rollbacks 1044 (max 12 ticks), resimulated 4907, stalls 250, ahead avg 4.8 max 12 ticks | server update p50 0.134 ms p99 0.355 ms max 0.591 ms, cpu 1.39% | per player up 5318 B/s down 10446 B/s | handshakes 6, migrations 0, reconnects 0 | her...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+	<testcase name="aiverse_remote_tests" classname="aiverse_remote_tests" time="65.5448" status="run">
+		<system-out>[ OK ] msgpack_spec_vectors
+[ OK ] msgpack_round_trip_and_limits
+[ OK ] msgpack_json_bridge
+[ OK ] hashes_and_base64
+[ OK ] plain_http_server_and_client
+[ OK ] platform_http_request_reaches_a_server
+[ OK ] server_extension_registry
+  re-simulated 171 commands to tick 3301: hash matches
+[ OK ] external_match_reservation_tickets_spectators_report
+
+89 checks, 0 failed
+</system-out>
+	</testcase>
+	<testcase name="aiverse_tests" classname="aiverse_tests" time="1098.09" status="run">
+		<system-out>[ OK ] fixed_basic_arithmetic
+[ OK ] fixed_trig_turns
+[ OK ] fixed_parse_is_float_free
+[ OK ] fixed_sqrt
+[ OK ] fixed_large_multiply_portable_path
+[ OK ] random_is_reproducible
+[ OK ] ecs_create_destroy_and_generations
+[ OK ] ecs_deferred_destroy_during_iteration
+[ OK ] json_parse
+[ OK ] command_serialization_roundtrip
+[ OK ] aiverse_rules_load
+[ OK ] aiverse_pathfinding_avoids_water
+[ OK ] aiverse_train_and_gather
+[ OK ] aiverse_build_structure
+[ OK ] aiverse_invalid_commands_ignored
+[ OK ] aiverse_garrison_send_and_capture
+[ OK ] determinism_same_seed_same_result
+[ OK ] determinism_replay_reproduces_match
+[ OK ] replay_file_roundtrip
+[ OK ] client_match_save_and_replay_slots
+[ OK ] mech_field_harvest_and_regrow
+[ OK ] mech_power_deficit_slows_and_disables
+[ OK ] mech_progressive_cost_stalls_without_income
+[ OK ] mech_cliffs_need_ramps
+[ OK ] mech_sidebar_and_morph
+[ OK ] mech_hero_levels_and_stun
+[ OK ] mech_lane_autobuild_waves_score
+[ OK ] mech_lane_bots_deterministic
+[ OK ] mech_triggers
+[ OK ] mech_regi...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+	<testcase name="ecs_camera" classname="ecs_camera" time="0.192489" status="run">
+		<system-out>AIVERSE LENS ECS camera contract passed
+</system-out>
+	</testcase>
+	<testcase name="camera_scheduler" classname="camera_scheduler" time="0.315564" status="run">
+		<system-out>AIVERSE LENS scheduler CPU contract passed\n
+</system-out>
+	</testcase>
+	<testcase name="camera_rt_pool" classname="camera_rt_pool" time="0.170015" status="run">
+		<system-out>AIVERSE LENS RT pool CPU contract passed\n
+</system-out>
+	</testcase>
+	<testcase name="camera_rig" classname="camera_rig" time="0.223885" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="camera_behavior" classname="camera_behavior" time="0.213269" status="run">
+		<system-out>camera_behavior: OK
+</system-out>
+	</testcase>
+	<testcase name="camera_rail_path" classname="camera_rail_path" time="0.180595" status="run">
+		<system-out>PASS camera_rail_path
+</system-out>
+	</testcase>
+	<testcase name="camera_exr" classname="camera_exr" time="0.19888" status="run">
+		<system-out>PASS camera_exr
+</system-out>
+	</testcase>
+	<testcase name="camera_temporal" classname="camera_temporal" time="0.149973" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="camera_layout" classname="camera_layout" time="0.181776" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="camera_capture_views" classname="camera_capture_views" time="0.146366" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="camera_scene_asset" classname="camera_scene_asset" time="0.367095" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="camera_lens_physics" classname="camera_lens_physics" time="0.330974" status="run">
+		<system-out>PASS camera_lens_physics
+</system-out>
+	</testcase>
+	<testcase name="camera_capture_graph" classname="camera_capture_graph" time="0.157332" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="camera_oblique" classname="camera_oblique" time="0.150077" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="camera_png" classname="camera_png" time="0.22649" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="camera_frustum" classname="camera_frustum" time="0.151786" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="camera_hdr_resolve" classname="camera_hdr_resolve" time="0.231227" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="camera_client_adapter" classname="camera_client_adapter" time="1.34365" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="camera_model_snapshot" classname="camera_model_snapshot" time="0.232678" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="camera_terrain_prepared_api" classname="camera_terrain_prepared_api" time="0.1506" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="camera_sprite_vfx_prepared_api" classname="camera_sprite_vfx_prepared_api" time="0.151621" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="editor_scene_adapter" classname="editor_scene_adapter" time="4.45065" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="editor_scene_picking" classname="editor_scene_picking" time="0.306805" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="editor_scene_gizmo" classname="editor_scene_gizmo" time="0.389479" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="editor_oriented_collider" classname="editor_oriented_collider" time="3.84426" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="editor_scene_rotation" classname="editor_scene_rotation" time="4.86652" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="editor_agent_link" classname="editor_agent_link" time="6.28441" status="run">
+		<system-out>agent link transport passed
+</system-out>
+	</testcase>
+	<testcase name="editor_lua_inspector_sandbox" classname="editor_lua_inspector_sandbox" time="0.59644" status="run">
+		<system-out>Lua Custom Inspector sandbox passed
+</system-out>
+	</testcase>
+	<testcase name="editor_build_tool" classname="editor_build_tool" time="0.22929" status="run">
+		<system-out>Build tool discovery passed
+</system-out>
+	</testcase>
+	<testcase name="unity_vfx_importer" classname="unity_vfx_importer" time="0.935575" status="run">
+		<system-out>....................................
+----------------------------------------------------------------------
+Ran 36 tests in 0.654s
+
+OK
+</system-out>
+	</testcase>
+	<testcase name="unity_anim_importer" classname="unity_anim_importer" time="1.12329" status="run">
+		<system-out>......
+----------------------------------------------------------------------
+Ran 6 tests in 0.777s
+
+OK
+</system-out>
+	</testcase>
+	<testcase name="splash_choice" classname="splash_choice" time="0.171866" status="run">
+		<system-out>splash choices: engine, changed, own, none, map loading: OK
+</system-out>
+	</testcase>
+	<testcase name="aiverse_ui_viewport_tests" classname="aiverse_ui_viewport_tests" time="0.692233" status="run">
+		<system-out>embedded UI: 0 failures
+</system-out>
+	</testcase>
+	<testcase name="native_project_build" classname="native_project_build" time="8.55064" status="run">
+		<system-out>Native modules: project isolation and cache reset passed; engine targets + gRPC helper passed
+</system-out>
+	</testcase>
+	<testcase name="selection_targeting_mcp" classname="selection_targeting_mcp" time="6.962" status="run">
+		<system-out>rowMajor damaged target at x = 14
+nearest damaged target at x = 11
+MCP rules lint, edit, validation rollback, reopen and both targeting policies passed
+</system-out>
+	</testcase>
+	<testcase name="terraweave_meadow_mcp" classname="terraweave_meadow_mcp" time="4.27118" status="run">
+		<system-out>Meadow MCP authoring PASS
+</system-out>
+	</testcase>
+	<testcase name="release_tools" classname="release_tools" time="1.96123" status="run">
+		<system-out>index.json: ok
+</system-out>
+	</testcase>
+	<testcase name="project_importer" classname="project_importer" time="5.65136" status="run">
+		<system-out>...............
+----------------------------------------------------------------------
+Ran 15 tests in 5.089s
+
+OK
+</system-out>
+	</testcase>
+	<testcase name="unity_ui_importer" classname="unity_ui_importer" time="4.16883" status="run">
+		<system-out>s................
+----------------------------------------------------------------------
+Ran 17 tests in 0.340s
+
+OK (skipped=1)
+</system-out>
+	</testcase>
+	<testcase name="world_importer" classname="world_importer" time="1.26562" status="run">
+		<system-out>.........
+----------------------------------------------------------------------
+Ran 9 tests in 0.467s
+
+OK
+</system-out>
+	</testcase>
+	<testcase name="aiverse_pkg" classname="aiverse_pkg" time="2.01992" status="run">
+		<system-out>aiverse_pkg: ok
+</system-out>
+	</testcase>
+	<testcase name="branding_loader" classname="branding_loader" time="0.202234" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="ta_importer" classname="ta_importer" time="27.6267" status="run">
+		<system-out>ta importer: 0 failed
+</system-out>
+	</testcase>
+	<testcase name="unity_materials" classname="unity_materials" time="1.15179" status="run">
+		<system-out>..............
+----------------------------------------------------------------------
+Ran 14 tests in 0.864s
+
+OK
+</system-out>
+	</testcase>
+	<testcase name="client_controls_frame" classname="client_controls_frame" time="15.7582" status="run">
+		<system-out>[metal-assets] libraries=0 sourceMisses=36 pipelines=88 pipelineFailures=0 archive=0 strict=0
+[ui info] Loading Lua plugin using the provided Lua state.
+[streaming] initial=2 background=0 radius=35.8 focus=12.0,8.0
+[loading] map=maps/controls.json types=2/2
+[loading] map assets ready in 435.4 ms (2 types)
+[loading] first map frame in 6892.4 ms
+PASS: shortcut, text suppression, mouse/touch Move, structure/passive card, pause quit
+</system-out>
+	</testcase>
+	<testcase name="aiverse_hosted_view_tests" classname="aiverse_hosted_view_tests" time="5.95104" status="run">
+		<system-out>hosted view: all passed
+</system-out>
+	</testcase>
+	<testcase name="aiverse_library_tests" classname="aiverse_library_tests" time="0.158923" status="run">
+		<system-out>10 C++ library modules passed
+</system-out>
+	</testcase>
+	<testcase name="library_noise" classname="library_noise" time="0.347726" status="run">
+		<system-out>Noise stage 49 checks passed; SSE2=1 AVX2=0 NEON=0
+</system-out>
+	</testcase>
+	<testcase name="aiverse_meta_tests" classname="aiverse_meta_tests" time="0.226465" status="run">
+		<system-out>meta tests passed
+</system-out>
+	</testcase>
+	<testcase name="meta_native_link" classname="meta_native_link" time="31.9745" status="run">
+		<system-out>-- The CXX compiler identification is AppleClang 17.0.0.17000604
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Configuring done (3.1s)
+-- Generating done (0.1s)
+-- Build files have been written to: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/tmp/rts-meta-native-82ck0jz5/build
+[  6%] Building CXX object meta/CMakeFiles/aiverse_meta_data.dir/tmp/aiverse-issue223/engine/core/Fixed.cpp.o
+[  9%] Building CXX object CMakeFiles/aiverse_native_registry.dir/engine/game/NativeRegistry.cpp.o
+[  9%] Building CXX object meta/CMakeFiles/aiverse_meta_data.dir/tmp/aiverse-issue223/engine/data/Json.cpp.o
+[ 12%] Linking CXX static library libaiverse_native_registry.a
+[ 12%] Built target aiverse_native_registry
+[ 15%] Linking CXX static library libaiverse_meta_dat...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+	<testcase name="aiverse_gameplay_tests" classname="aiverse_gameplay_tests" time="0.193557" status="run">
+		<system-out>Gameplay configuration, commands and subsystem scenarios passed
+</system-out>
+	</testcase>
+	<testcase name="aiverse_gameplay_generated" classname="aiverse_gameplay_generated" time="0.353448" status="run">
+		<system-out>Gameplay configuration generation: OK
+</system-out>
+	</testcase>
+	<testcase name="aiverse_gameplay_tools" classname="aiverse_gameplay_tools" time="5.65111" status="run">
+		<system-out>....
+----------------------------------------------------------------------
+Ran 4 tests in 2.073s
+
+OK
+</system-out>
+	</testcase>
+	<testcase name="aiverse_app_tests" classname="aiverse_app_tests" time="0.180692" status="run">
+		<system-out>Application package tests passed
+</system-out>
+	</testcase>
+	<testcase name="aiverse_app_meta_tests" classname="aiverse_app_meta_tests" time="0.190488" status="run">
+		<system-out>Match rewards reuse meta economy: OK
+</system-out>
+	</testcase>
+	<testcase name="meta_service" classname="meta_service" time="0.304334" status="run">
+		<system-out>Extended meta service tests passed
+</system-out>
+	</testcase>
+	<testcase name="region_ecs_bridge_test" classname="region_ecs_bridge_test" time="0.415899" status="run">
+		<system-out>PASS region_ecs_bridge (live bindings, 100 crossings, restore, COW, reify)
+</system-out>
+	</testcase>
+	<testcase name="ecs_scene_collision_namespaces_test" classname="ecs_scene_collision_namespaces_test" time="0.34613" status="run">
+		<system-out>PASS two concurrent additive hashed CollisionStreams, collision namespace leases, independent unload/reload, legacy guard
+</system-out>
+	</testcase>
+	<testcase name="ecs_scene_collision_bridge_test" classname="ecs_scene_collision_bridge_test" time="0.481642" status="run">
+		<system-out>PASS additive collision ownership, real scene loads, physics gate and independent unload/replace
+</system-out>
+	</testcase>
+	<testcase name="ecs_real_genre_replay_test" classname="ecs_real_genre_replay_test" time="0.944423" status="run">
+		<system-out>PASS real RTS/FPS commands, v9 disk save, peer reorder, rollback and COW
+</system-out>
+	</testcase>
+	<testcase name="ecs_projectile_composition_test" classname="ecs_projectile_composition_test" time="0.52003" status="run">
+		<system-out>PASS shared projectile ECS system in shooter and strategy modules, impact order and COW replay
+</system-out>
+	</testcase>
+	<testcase name="ecs_cross_genre_projectile_test" classname="ecs_cross_genre_projectile_test" time="0.447638" status="run">
+		<system-out>PASS shared ECS bullet/artillery flight, collision, ordered damage and COW rollback
+</system-out>
+	</testcase>
+	<testcase name="ecs_cross_genre_weapon_pipeline_test" classname="ecs_cross_genre_weapon_pipeline_test" time="0.413993" status="run">
+		<system-out>PASS reusable ECS launch/spawn/ballistics/impact/damage across RTS and FPS style hosts
+</system-out>
+	</testcase>
+	<testcase name="ecs_kinematic_projectile_test" classname="ecs_kinematic_projectile_test" time="0.502675" status="run">
+		<system-out>PASS kinematic ECS projectiles and rollback across hosts
+</system-out>
+	</testcase>
+	<testcase name="ecs_cross_genre_impact_queue_test" classname="ecs_cross_genre_impact_queue_test" time="0.607609" status="run">
+		<system-out>PASS ECS ordered impact queue, delayed callbacks and rollback
+</system-out>
+	</testcase>
+	<testcase name="ecs_integer_health_commit_test" classname="ecs_integer_health_commit_test" time="0.158976" status="run">
+		<system-out>PASS generic ECS and FPS integer health commit parity
+</system-out>
+	</testcase>
+	<testcase name="ecs_hitscan_selection_test" classname="ecs_hitscan_selection_test" time="0.211253" status="run">
+		<system-out>PASS shared hitscan selection, equal-distance ties, rewind eligibility and occlusion
+</system-out>
+	</testcase>
+	<testcase name="ecs_hitscan_resolution_test" classname="ecs_hitscan_resolution_test" time="0.503046" status="run">
+		<system-out>PASS generic ECS hitscan resolution ordering and rollback
+</system-out>
+	</testcase>
+	<testcase name="ecs_nereid_water_test" classname="ecs_nereid_water_test" time="0.552499" status="run">
+		<system-out>PASS: NEREID sampling, native save/load, two hosts, COW and replay
+</system-out>
+	</testcase>
+	<testcase name="ecs_nereid_buoyancy_test" classname="ecs_nereid_buoyancy_test" time="0.414464" status="run">
+		<system-out>PASS NEREID buoyancy, drag, native state, two hosts and rollback
+</system-out>
+	</testcase>
+	<testcase name="ecs_nereid_sphere_water_test" classname="ecs_nereid_sphere_water_test" time="1.0304" status="run">
+		<system-out>nereid sphere water: ok
+</system-out>
+	</testcase>
+	<testcase name="ecs_nereid_geometry_test" classname="ecs_nereid_geometry_test" time="0.399903" status="run">
+		<system-out>PASS NEREID polygon/spline, native save/load, two hosts and rollback
+</system-out>
+	</testcase>
+	<testcase name="ecs_nereid_river_grade_test" classname="ecs_nereid_river_grade_test" time="0.466609" status="run">
+		<system-out>PASS grade sampling, indexed parity, native persistence/replay, manual/flat flow, mesh and typed authoring
+</system-out>
+	</testcase>
+	<testcase name="ecs_nereid_query_index_test" classname="ecs_nereid_query_index_test" time="0.458454" status="run">
+		<system-out>PASS NEREID broadphase/reference parity, native save and rollback
+</system-out>
+	</testcase>
+	<testcase name="ecs_nereid_legacy_raster_test" classname="ecs_nereid_legacy_raster_test" time="0.561586" status="run">
+		<system-out>PASS NEREID exact legacy wet cells, indexed parity, native state and rollback
+</system-out>
+	</testcase>
+	<testcase name="ecs_nereid_native_pipeline_test" classname="ecs_nereid_native_pipeline_test" time="0.52865" status="run">
+		<system-out>PASS NEREID adaptive/native setup, save, cross-genre, COW, rollback
+</system-out>
+	</testcase>
+	<testcase name="ecs_nereid_surface_mesh_test" classname="ecs_nereid_surface_mesh_test" time="0.165819" status="run">
+		<system-out>PASS NEREID presentation geometry, LOD, polygon, river, ocean and winding
+</system-out>
+	</testcase>
+	<testcase name="ecs_nereid_renderer_contract_test" classname="ecs_nereid_renderer_contract_test" time="0.264832" status="run">
+		<system-out>PASS NEREID renderer bridge + multi-height planar fallback contract
+</system-out>
+	</testcase>
+	<testcase name="game_water_nereid_test" classname="game_water_nereid_test" time="0.408482" status="run">
+		<system-out>PASS legacy water -&gt; NEREID conversion
+</system-out>
+	</testcase>
+	<testcase name="ecs_nereid_ocean_lod_test" classname="ecs_nereid_ocean_lod_test" time="1.0913" status="run">
+		<system-out>rings: 13248 triangles, 6689 vertices, half extent 8192 m
+PASS NEREID large-world ocean LOD: legacy coverage, stitched rings, keys, precision, fixture
+</system-out>
+	</testcase>
+	<testcase name="ecs_nereid_confluence_contract_test" classname="ecs_nereid_confluence_contract_test" time="0.21798" status="run">
+		<system-out>PASS NEREID confluence JSON, ECS/indexed/scene and upload keys
+</system-out>
+	</testcase>
+	<testcase name="ecs_nereid_review_fixes_test" classname="ecs_nereid_review_fixes_test" time="0.739246" status="run">
+		<system-out>PASS: NEREID review fixes (rock, flood carry/flow/ports/index, wake cull, cascade mesh, surface revision, sediment links)
+</system-out>
+	</testcase>
+	<testcase name="terraweave_review_fixes" classname="terraweave_review_fixes" time="0.759161" status="run">
+		<system-out>TerraWeave review fixes: PASS
+</system-out>
+	</testcase>
+	<testcase name="ecs_native_rts_integration_test" classname="ecs_native_rts_integration_test" time="0.504729" status="run">
+		<system-out>PASS real RTS NativeModule, ECS v9/v10, COW, replay, rogue pool, corruption
+</system-out>
+	</testcase>
+	<testcase name="rts_authored_pose_test" classname="rts_authored_pose_test" time="5.06411" status="run">
+		<system-out>PASS RTS authored Transform: facing, Y, X/Z tilt, scale, save/reload, view frame
+</system-out>
+	</testcase>
+	<testcase name="ecs_native_persistence_test" classname="ecs_native_persistence_test" time="0.546037" status="run">
+		<system-out>PASS native ECS v9/v10, migration with original hash, COW, simulated peer parity, failed-load rollback
+</system-out>
+	</testcase>
+	<testcase name="ecs_echo_acoustics_test" classname="ecs_echo_acoustics_test" time="0.618899" status="run">
+		<system-out>PASS ECHO native ECS, 2 hosts, thresholds, generation, stable ties, budgets, save and COW rollback
+</system-out>
+	</testcase>
+	<testcase name="ecs_fracture_structure_test" classname="ecs_fracture_structure_test" time="0.414017" status="run">
+		<system-out>PASS FRACTURE ECS, native hosts, graph cascade, ack, overflow, COW, save and rollback
+</system-out>
+	</testcase>
+	<testcase name="ecs_aether_gas_test" classname="ecs_aether_gas_test" time="0.410021" status="run">
+		<system-out>PASS AETHER ECS diffusion, mass, flux, PHYSIS, budgets, generation and COW persistence
+</system-out>
+	</testcase>
+	<testcase name="world_processes_inspector_test" classname="world_processes_inspector_test" time="0.215105" status="run">
+		<system-out>PASS real World Processes ECS Inspector metadata, read-only, exact refs, no ghost components
+</system-out>
+	</testcase>
+	<testcase name="world_processes_authoring_test" classname="world_processes_authoring_test" time="0.283716" status="run">
+		<system-out>PASS authored world-process component validation, ECS apply and no runtime state injection
+</system-out>
+	</testcase>
+	<testcase name="world_processes_map_hydration_test" classname="world_processes_map_hydration_test" time="0.680199" status="run">
+		<system-out>PASS World Processes map hydration, cross-host checksum, v9 opt-out and v10 rollback
+</system-out>
+	</testcase>
+	<testcase name="world_processes_linked_test" classname="world_processes_linked_test" time="0.814829" status="run">
+		<system-out>PASS World Processes stable-id links, ECHO+FRACTURE+AETHER, save, replay and invalid refs
+</system-out>
+	</testcase>
+	<testcase name="world_processes_gamecore_native_test" classname="world_processes_gamecore_native_test" time="3.00268" status="run">
+		<system-out>PASS native GameCore map World Processes hydration, opt-in, persistence, replay and rollback
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_planet_authority" classname="terraweave_caverns_planet_authority" time="5.19133" status="run">
+		<system-out>PASS planetary cave region set, edit isolation, save and rollback
+</system-out>
+	</testcase>
+	<testcase name="ecs_cross_genre_timed_mechanics_test" classname="ecs_cross_genre_timed_mechanics_test" time="0.443761" status="run">
+		<system-out>PASS: cross-genre reload, fire gate, regen, expiry and rollback
+</system-out>
+	</testcase>
+	<testcase name="ecs_cross_genre_locomotion_test" classname="ecs_cross_genre_locomotion_test" time="0.370826" status="run">
+		<system-out>PASS: universal ECS locomotion, input edges, COW and replay
+</system-out>
+	</testcase>
+	<testcase name="ecs_cross_genre_inventory_test" classname="ecs_cross_genre_inventory_test" time="0.411976" status="run">
+		<system-out>PASS ECS transactional cross-genre inventory and COW rollback
+</system-out>
+	</testcase>
+	<testcase name="ecs_fixed_regeneration_policy_test" classname="ecs_fixed_regeneration_policy_test" time="0.153847" status="run">
+		<system-out>PASS: shared Fixed ECS regen policy matches legacy RTS arithmetic
+</system-out>
+	</testcase>
+	<testcase name="aiverse_runtime_library_tests" classname="aiverse_runtime_library_tests" time="0.184461" status="run">
+		<system-out>Runtime package checks passed
+</system-out>
+	</testcase>
+	<testcase name="aiverse_systems_tests" classname="aiverse_systems_tests" time="0.16629" status="run">
+		<system-out>Gameplay systems checks passed
+</system-out>
+	</testcase>
+	<testcase name="aiverse_systems_engine_tests" classname="aiverse_systems_engine_tests" time="0.551385" status="run">
+		<system-out>Engine stats/statuses, commands, sim RNG and restoration: OK
+</system-out>
+	</testcase>
+	<testcase name="meta_liveops" classname="meta_liveops" time="0.548531" status="run">
+		<system-out>All 15 LiveOps groups, atomicity, restore and rating reference passed
+</system-out>
+	</testcase>
+	<testcase name="meta_liveops_schema" classname="meta_liveops_schema" time="0.220327" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="library_aiverse_bots" classname="library_aiverse_bots" time="3.76634" status="run">
+		<system-out>RTS bot presets, command production and 300-tick fresh restore: OK
+</system-out>
+	</testcase>
+	<testcase name="library_fps_bots" classname="library_fps_bots" time="3.25839" status="run">
+		<system-out>FPS bot visibility, reaction, team safety, navigation, combat and 300-tick restore: OK
+</system-out>
+	</testcase>
+	<testcase name="library_navmesh" classname="library_navmesh" time="0.531535" status="run">
+		<system-out>Automatic navmesh: deterministic bake, motor wall detour, gaps, clearance, steps, layers, stale geometry and budgets: OK
+</system-out>
+	</testcase>
+	<testcase name="library_genre" classname="library_genre" time="5.5071" status="run">
+		<system-out>Genre policies: locomotion, locomotion modes, melee, combat actions, weapon ballistics, stealth senses, genre bots, projectiles, rounds/capture, match objectives, story, narrative scenes and save/restore, physical interactions, cinematic gameplay: OK
+</system-out>
+	</testcase>
+	<testcase name="library_policy_mechanics" classname="library_policy_mechanics" time="0.975905" status="run">
+		<system-out>policy mechanics tests passed
+</system-out>
+	</testcase>
+	<testcase name="library_encounters" classname="library_encounters" time="0.472199" status="run">
+		<system-out>  reference fight: boss defeated at tick 1897, hero hp 693, 19 attacks, 15 dodged, adds 17/17
+Boss encounters: telegraph areas and lifecycle, statuses, boss phases/patterns/enrage/adds, schedule and rotation, mob states, data, reference fight: OK
+</system-out>
+	</testcase>
+	<testcase name="library_building_gen" classname="library_building_gen" time="0.182056" status="run">
+		<system-out>building-gen: default house 83 boxes
+building-gen tests passed
+</system-out>
+	</testcase>
+	<testcase name="library_building_features" classname="library_building_features" time="0.539651" status="run">
+		<system-out>building functional-feature tests passed
+</system-out>
+	</testcase>
+	<testcase name="library_building_surface_patterns" classname="library_building_surface_patterns" time="3.94536" status="run">
+		<system-out>building surface pattern contracts: PASS (16 patterns, 4 PBR maps)
+</system-out>
+	</testcase>
+	<testcase name="library_building_structure_graph" classname="library_building_structure_graph" time="0.192868" status="run">
+		<system-out>building structure graph standalone PASS
+</system-out>
+	</testcase>
+	<testcase name="building_native_world_replica" classname="building_native_world_replica" time="4.86462" status="run">
+		<system-out>building native world + Replica loopback + ECS lift checkpoint: PASS
+</system-out>
+	</testcase>
+	<testcase name="building_native_world_lockstep" classname="building_native_world_lockstep" time="5.03911" status="run">
+		<system-out>building deterministic checkpoint and late-input rollback: PASS
+</system-out>
+	</testcase>
+	<testcase name="library_building_style" classname="library_building_style" time="11.1763" status="run">
+		<system-out>building-style: sci-fi house 5110 triangles, 15 materials
+building-style tests passed
+</system-out>
+	</testcase>
+	<testcase name="library_building_runtime" classname="library_building_runtime" time="0.517958" status="run">
+		<system-out>building runtime API PASS
+</system-out>
+	</testcase>
+	<testcase name="library_gear" classname="library_gear" time="0.206656" status="run">
+		<system-out>gear-tiers tests passed
+</system-out>
+	</testcase>
+	<testcase name="library_snapshot_delta" classname="library_snapshot_delta" time="0.299963" status="run">
+		<system-out>delta: 219657 bytes as deltas vs 3152052 full (7.0%), 485/600 decoded at 20% loss
+snapshot-delta tests passed
+</system-out>
+	</testcase>
+	<testcase name="library_royale" classname="library_royale" time="0.331868" status="run">
+		<system-out>golden zone 13358533664497283348 flight 5352959581620080163
+royale tests passed
+</system-out>
+	</testcase>
+	<testcase name="strategy_libraries" classname="strategy_libraries" time="0.47857" status="run">
+		<system-out>Strategy libraries: arithmetic, offline equivalence, reactions, hidden-card views, puzzles, flow, zone proofs, rhythm, seeded runs, VM and restore OK
+</system-out>
+	</testcase>
+	<testcase name="library_genre_puzzles" classname="library_genre_puzzles" time="0.797012" status="run">
+		<system-out>genre puzzle tests passed
+</system-out>
+	</testcase>
+	<testcase name="library_genre_puzzles_example" classname="library_genre_puzzles_example" time="0.513077" status="run">
+		<system-out>-- match3: won after 20 moves, score 2520, collected c1=27 c3=34, specials 4, cascades 14, shuffles 0, max chain 3
+sokoban: solved, 14 moves (9 pushes), 165 nodes expanded
+sudoku: unique solution, 30 givens, solved in 51 moves, 108 search nodes
+final hash: 0b6d45dc43315a37 (second run 0b6d45dc43315a37)
+puzzles example completed
+
+</system-out>
+	</testcase>
+	<testcase name="library_cards_turns" classname="library_cards_turns" time="2.09444" status="run">
+		<system-out>Cards + turns: card data/rules variants, stack/priority/fizzle, hidden information, card bot games, tactics grid/cover/line of fire, AP/initiative/overwatch, WeGo, tactics bot games: OK
+</system-out>
+	</testcase>
+	<testcase name="library_cards_turns_example" classname="library_cards_turns_example" time="0.389677" status="run">
+		<system-out>card duel: winner seat 1 after 73 commands (turn 9, health 0/15), hash c0ca031a642b0f1f
+hex skirmish: winner team 2 after 25 commands (round 3, 2 survivors), hash 2deae0b245c7f067
+final hash 4f6976405a5c23b1
+deterministic replay: identical, winners: yes
+</system-out>
+	</testcase>
+	<testcase name="library_vehicles_sports" classname="library_vehicles_sports" time="2.47492" status="run">
+		<system-out>Vehicles + sports: controllers, damage zones, seats, race positions, race bot, race session, ball rules, formations, sports bot, persistence, data: OK
+</system-out>
+	</testcase>
+	<testcase name="library_vehicles_sports_example" classname="library_vehicles_sports_example" time="3.41798" status="run">
+		<system-out>-- vehicles-sports example: hash=c8f6de9d05f0a765
+</system-out>
+	</testcase>
+	<testcase name="library_genre_production_survival" classname="library_genre_production_survival" time="0.477722" status="run">
+		<system-out>production/survival genre tests passed
+</system-out>
+	</testcase>
+	<testcase name="library_production_survival_example" classname="library_production_survival_example" time="17.3738" status="run">
+		<system-out>final hash f94e6eee34f3619f (second run f94e6eee34f3619f, restored at day 10 f94e6eee34f3619f)
+determinism: identical hashes across two runs and a save/restore run
+</system-out>
+	</testcase>
+	<testcase name="genre_registry" classname="genre_registry" time="0.213969" status="run">
+		<system-out>genre registry: 47 areas, {'core': 9, 'partial': 37, 'planned': 1}
+</system-out>
+	</testcase>
+	<testcase name="library_voxel" classname="library_voxel" time="9.76888" status="run">
+		<system-out>voxel tests passed
+</system-out>
+	</testcase>
+	<testcase name="voxel_headless" classname="voxel_headless" time="5.96925" status="run">
+		<system-out>{"chunks":348,"generateMs":535.3,"lightMs":3574.3,"meshMs":459.5,"meshMsPerChunk":1.320,"nonEmptyChunks":201,"quads":48887,"vertexBytes":6257536,"edits":466,"editRelightMs":35.6,"dirtyChunks":47,"remeshMs":86.4,"fluidUpdates":70,"fluidMs":44.2,"regions":4,"regionBytes":7512,"saveRestoreMs":543.0,"restoreHashEqual":true,"replicatedChunks":348,"replicatedBytes":84680,"replicateMs":72.8,"mirrorEqual":true,"path":52,"pathMs":391.80,"hash":"8603509496060293946"}
+</system-out>
+	</testcase>
+	<testcase name="library_progression" classname="library_progression" time="0.254593" status="run">
+		<system-out>Match progression: perks, modifier pipeline, xp/levels, offers, xp pickups, summons, battle deck, save/restore: OK
+</system-out>
+	</testcase>
+	<testcase name="progression_headless" classname="progression_headless" time="0.974664" status="run">
+		<system-out>progression: ticks=5400 seed=3 level=10 xp=693 kills=360 orbs=173 choices=10 recruits=9 deaths=18 summons=9 allies=0
+perks: fire_on_move,armor
+checksum d973c34500c9dff5 (replay + save/restore identical)
+</system-out>
+	</testcase>
+	<testcase name="prisma_graph" classname="prisma_graph" time="0.169966" status="run">
+		<system-out>PRISMA RenderGraph: 0 failures
+</system-out>
+	</testcase>
+	<testcase name="prisma_lens_water" classname="prisma_lens_water" time="0.191147" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="prisma_volume" classname="prisma_volume" time="0.419812" status="run">
+		<system-out>PRISMA volume profiles: 0 failures
+</system-out>
+	</testcase>
+	<testcase name="prisma_compositor" classname="prisma_compositor" time="0.228992" status="run">
+		<system-out>PASS compositor ordering, sizing, alias safety, estimate, map overrides and invalid graphs
+</system-out>
+	</testcase>
+	<testcase name="prisma_new_effects" classname="prisma_new_effects" time="0.20577" status="run">
+		<system-out>prisma_new_effects: PASS
+</system-out>
+	</testcase>
+	<testcase name="prisma_style_presets_fresh" classname="prisma_style_presets_fresh" time="0.207576" status="run">
+		<system-out>PrismaStylePresets.h is up to date
+</system-out>
+	</testcase>
+	<testcase name="alpha_coverage_mips" classname="alpha_coverage_mips" time="0.313831" status="run">
+		<system-out>PASS alpha coverage, premultiplied linear color, odd edges, bounds and unchanged source
+</system-out>
+	</testcase>
+	<testcase name="shader_graph" classname="shader_graph" time="0.254096" status="run">
+		<system-out>shader graph compiler/domain/round-trip tests passed
+</system-out>
+	</testcase>
+	<testcase name="cables_geometry" classname="cables_geometry" time="0.163297" status="run">
+		<system-out>Cable attachment, sag, bundles, UV, winding, vertical span, input/budget/cancellation checks passed
+</system-out>
+	</testcase>
+	<testcase name="modeling_authoring" classname="modeling_authoring" time="5.73453" status="run">
+		<system-out>630 modeling checks passed
+</system-out>
+	</testcase>
+	<testcase name="modeling_volume_csg" classname="modeling_volume_csg" time="12.0186" status="run">
+		<system-out>PASS: reopened source, 7662 -&gt; 7736 triangles after bore edit, GLB changed, rejected invalid revision/cycle, undo restored identical GLB
+</system-out>
+	</testcase>
+	<testcase name="surface_proxy" classname="surface_proxy" time="5.24828" status="run">
+		<system-out>35 surface proxy checks passed
+</system-out>
+	</testcase>
+	<testcase name="strata_builder" classname="strata_builder" time="0.413229" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="strata_seams" classname="strata_seams" time="0.231737" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="strata_model_adapter" classname="strata_model_adapter" time="0.347421" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="strata_source_seams" classname="strata_source_seams" time="0.75056" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="strata_view" classname="strata_view" time="0.204242" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="strata_lod_benchmark" classname="strata_lod_benchmark" time="0.159341" status="run">
+		<system-out>mode,frames,transitions,triangles,checksum,cpu_wall_ns
+legacy_root,240,0,480,17457209650631874243,58085
+strata_h0,240,122,880,13209303408318016135,426633
+strata_h02,240,2,1120,7508608460890805507,483632
+</system-out>
+	</testcase>
+	<testcase name="strata_gpu_scene" classname="strata_gpu_scene" time="0.233295" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="strata_gpu_culling" classname="strata_gpu_culling" time="0.648034" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="strata_render_routing" classname="strata_render_routing" time="0.250947" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="strata_portable" classname="strata_portable" time="0.781229" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="strata_debug_view" classname="strata_debug_view" time="0.797856" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="strata_index_residency" classname="strata_index_residency" time="0.202078" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="strata_index_pages" classname="strata_index_pages" time="0.203021" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="strata_disk_pages" classname="strata_disk_pages" time="0.222781" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="strata_streaming_coordinator" classname="strata_streaming_coordinator" time="0.385495" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="auto_lod_runtime" classname="auto_lod_runtime" time="0.971791" status="run">
+		<system-out>auto LOD regression: rigid/morph channels, aliases, envelopes, indices and opt-outs passed
+</system-out>
+	</testcase>
+	<testcase name="skill_catalog" classname="skill_catalog" time="0.661501" status="run">
+		<system-out>Validated 303 skills and isolated library mappings
+</system-out>
+	</testcase>
+	<testcase name="skill_routing" classname="skill_routing" time="0.652543" status="run">
+		<system-out>Skill routing, ownership and dependency validation passed
+</system-out>
+	</testcase>
+	<testcase name="skill_audit" classname="skill_audit" time="0.965007" status="run">
+		<system-out>0 error(s), 0 warning(s)
+</system-out>
+	</testcase>
+	<testcase name="genre_free_engine" classname="genre_free_engine" time="1.06006" status="run">
+		<system-out>genre-free engine: 0 files with debt, 0 names
+</system-out>
+	</testcase>
+	<testcase name="tool_bot_sweep" classname="tool_bot_sweep" time="0.272139" status="run">
+		<system-out>....
+----------------------------------------------------------------------
+Ran 4 tests in 0.007s
+
+OK
+</system-out>
+	</testcase>
+	<testcase name="tool_determinism_diff" classname="tool_determinism_diff" time="2.12593" status="run">
+		<system-out>..
+----------------------------------------------------------------------
+Ran 2 tests in 0.011s
+
+OK
+identical: 2 checksums
+diverged (checksum): last equal tick 20, first different tick 40 (t=1.33s)
+</system-out>
+	</testcase>
+	<testcase name="tool_screenshot_compare" classname="tool_screenshot_compare" time="1.78641" status="run">
+		<system-out>..
+----------------------------------------------------------------------
+Ran 2 tests in 0.009s
+
+OK
+4x3: changed 0 px (0.000%), mean error 0.00
+4x3: changed 1 px (8.333%), mean error 19.92 box x=1..1 y=1..1
+4x3: changed 1 px (8.333%), mean error 19.92 box x=1..1 y=1..1
+</system-out>
+	</testcase>
+	<testcase name="tool_aiverse_progress" classname="tool_aiverse_progress" time="3.5312" status="run">
+		<system-out>...
+----------------------------------------------------------------------
+Ran 3 tests in 0.008s
+
+OK
+</system-out>
+	</testcase>
+	<testcase name="skill_library_isolation" classname="skill_library_isolation" time="96.684" status="run">
+		<system-out>Isolated: economy
+Isolated: progression
+Isolated: social
+Isolated: clans
+Isolated: items
+Isolated: backend
+Isolated: tournaments
+Isolated: loot
+Isolated: albums
+Isolated: research
+Isolated: offline
+Isolated: jobs
+Isolated: quests
+Isolated: events
+Isolated: notifications
+Isolated: referrals
+Isolated: ads
+Isolated: offer-chains
+Isolated: wars
+Isolated: async-pvp
+Isolated: ratings
+Isolated: matchmaking
+22 policy selections verified; unused/default and header-only builds are empty
+</system-out>
+	</testcase>
+	<testcase name="uiwindows_audio_importer" classname="uiwindows_audio_importer" time="0.695309" status="run">
+		<system-out>import_audio: ok
+</system-out>
+	</testcase>
+	<testcase name="native_registry_link" classname="native_registry_link" time="0.146875" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="material_batches_unit" classname="material_batches_unit" time="1.26675" status="run">
+		<system-out>material palette CPU checks=45 result=passed
+mesh subdivision CPU checks=passed
+triangle coverage CPU checks=passed
+</system-out>
+	</testcase>
+	<testcase name="rules_files" classname="rules_files" time="2.29592" status="run">
+		<system-out>.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.169s
+
+OK
+</system-out>
+	</testcase>
+	<testcase name="virtual_texture_pack" classname="virtual_texture_pack" time="0.278687" status="run">
+		<system-out>...
+----------------------------------------------------------------------
+Ran 3 tests in 0.020s
+
+OK
+</system-out>
+	</testcase>
+	<testcase name="texture_contract" classname="texture_contract" time="0.296" status="run">
+		<system-out>Texture descriptor contract: 0 failures
+</system-out>
+	</testcase>
+	<testcase name="render_target_set" classname="render_target_set" time="0.15841" status="run">
+		<system-out>RenderTargetSet ownership/rollback: OK
+</system-out>
+	</testcase>
+	<testcase name="ktx2_layers" classname="ktx2_layers" time="0.42228" status="run">
+		<system-out>KTX2 array, cubemap and 3D payload: OK
+</system-out>
+	</testcase>
+	<testcase name="ktx2_transcode" classname="ktx2_transcode" time="0.358891" status="run">
+		<system-out>KTX2 transcoder contract: OK
+</system-out>
+	</testcase>
+	<testcase name="texture_asset" classname="texture_asset" time="0.296087" status="run">
+		<system-out>TextureAsset KTX2 array/volume resource upload: OK
+</system-out>
+	</testcase>
+	<testcase name="hdr_texture" classname="hdr_texture" time="13.1168" status="run">
+		<system-out>Radiance HDR decode/upload contract: OK
+</system-out>
+	</testcase>
+	<testcase name="exr_texture" classname="exr_texture" time="0.152542" status="run">
+		<system-out>OpenEXR scanline import fixture: OK
+</system-out>
+	</testcase>
+	<testcase name="dds_layers" classname="dds_layers" time="0.295175" status="run">
+		<system-out>DDS cube arrays, RGBA arrays, volumes and bounds: OK
+</system-out>
+	</testcase>
+	<testcase name="texture_streaming" classname="texture_streaming" time="0.18477" status="run">
+		<system-out>Texture streaming ownership/staging/budgets/cancel: OK
+</system-out>
+	</testcase>
+	<testcase name="texture_mip_residency" classname="texture_mip_residency" time="0.151676" status="run">
+		<system-out>Texture mip residency ordering, safety and sampler LOD: OK
+</system-out>
+	</testcase>
+	<testcase name="texture_resident_streamer" classname="texture_resident_streamer" time="0.173075" status="run">
+		<system-out>TextureResidentStreamer contracts: OK
+</system-out>
+	</testcase>
+	<testcase name="virtual_texture_pages" classname="virtual_texture_pages" time="0.31223" status="run">
+		<system-out>Virtual page cache pinning, LRU, stale tokens and fallback: OK
+</system-out>
+	</testcase>
+	<testcase name="virtual_texture_page_table" classname="virtual_texture_page_table" time="0.161678" status="run">
+		<system-out>Virtual page-table encoding and bounded GPU-row uploads: OK
+</system-out>
+	</testcase>
+	<testcase name="virtual_texture_streamer" classname="virtual_texture_streamer" time="0.196242" status="run">
+		<system-out>VirtualTextureStreamer cache, page table and budgets: OK
+</system-out>
+	</testcase>
+	<testcase name="virtual_texture_mip_pipeline" classname="virtual_texture_mip_pipeline" time="0.29634" status="run">
+		<system-out>VirtualTextureMipPipeline: mip chains, indexed LRU and atomic publication PASS
+</system-out>
+	</testcase>
+	<testcase name="virtual_texture_disk_queue" classname="virtual_texture_disk_queue" time="0.322832" status="run">
+		<system-out>Virtual texture disk queue real file I/O, backpressure and cancellation: OK
+</system-out>
+	</testcase>
+	<testcase name="virtual_texture_file_streamer" classname="virtual_texture_file_streamer" time="0.257355" status="run">
+		<system-out>Virtual texture disk-&gt;GPU table publication, LRU, cancellation and failure: OK
+</system-out>
+	</testcase>
+	<testcase name="virtual_texture_prefetch" classname="virtual_texture_prefetch" time="0.157317" status="run">
+		<system-out>Virtual texture visibility planning contracts: OK
+</system-out>
+	</testcase>
+	<testcase name="virtual_texture_feedback" classname="virtual_texture_feedback" time="0.17974" status="run">
+		<system-out>Virtual texture RGBA8 feedback codec and visibility: OK
+</system-out>
+	</testcase>
+	<testcase name="virtual_texture_feedback_pass" classname="virtual_texture_feedback_pass" time="0.16231" status="run">
+		<system-out>Virtual feedback pass ownership and async capture: OK
+</system-out>
+	</testcase>
+	<testcase name="gpu_icb_material_contract" classname="gpu_icb_material_contract" time="0.187191" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="virtual_texture_feedback_shaders" classname="virtual_texture_feedback_shaders" time="0.321512" status="run">
+		<system-out>PASS GLSL 330 core
+PASS GLSL 300 es
+</system-out>
+	</testcase>
+	<testcase name="virtual_texture_sampling_glsl" classname="virtual_texture_sampling_glsl" time="0.303092" status="run">
+		<system-out>PASS: canonical VT sampler compiles for OpenGL 3.3
+PASS: canonical VT sampler compiles for OpenGL ES 3.0
+</system-out>
+	</testcase>
+	<testcase name="virtual_texture_sampling_vulkan_spirv" classname="virtual_texture_sampling_vulkan_spirv" time="0.882629" status="run">
+		<system-out>PASS: canonical VT sampler compiles for Vulkan 1.1 SPIR-V
+</system-out>
+	</testcase>
+	<testcase name="virtual_texture_feedback_msl" classname="virtual_texture_feedback_msl" time="1.82828" status="run">
+		<system-out>PASS: embedded virtual texture MSL feedback shaders compile
+</system-out>
+	</testcase>
+	<testcase name="virtual_texture_sampling_msl" classname="virtual_texture_sampling_msl" time="1.31632" status="run">
+		<system-out>PASS: canonical VT sampler compiles for Metal macOS
+</system-out>
+	</testcase>
+	<testcase name="spectrafx_architecture" classname="spectrafx_architecture" time="0.364529" status="run">
+		<system-out>PASS SpectraFX independent of genre/editor headers (49 runtime files)
+</system-out>
+	</testcase>
+	<testcase name="vfx_graph_compiler" classname="vfx_graph_compiler" time="0.312169" status="run">
+		<system-out>PASS vfx_graph_compiler_test (graph branching, CPU backend, parameters, validation)
+</system-out>
+	</testcase>
+	<testcase name="vfx_ecs_presentation" classname="vfx_ecs_presentation" time="0.445015" status="run">
+		<system-out>PASS vfx_ecs_presentation_test (two genres, attaches, events, generation and reset)
+</system-out>
+	</testcase>
+	<testcase name="spectrafx_contract" classname="spectrafx_contract" time="0.546982" status="run">
+		<system-out>SpectraFX native contracts passed
+</system-out>
+	</testcase>
+	<testcase name="spectrafx_metal_gpu" classname="spectrafx_metal_gpu" time="0.558275" status="run">
+		<system-out>[spectrafx-metal-gpu] device=Apple M3 Ultra
+PASS [spectrafx-metal-gpu] compile evolution
+PASS [spectrafx-metal-gpu] compile alpha-sort
+PASS [spectrafx-metal-gpu] compile compaction
+PASS [spectrafx-metal-gpu] evolution, alpha sorting, compaction
+</system-out>
+	</testcase>
+	<testcase name="spectrafx_metal_billboard" classname="spectrafx_metal_billboard" time="0.42323" status="run">
+		<system-out>[spectrafx-metal-billboard] device=Apple M3 Ultra
+PASS [spectrafx-metal-billboard] MSL + alpha/additive pipelines
+[spectrafx-metal-billboard] alpha direct/remap=163/163 additive red 1x/2x=76/152
+PASS [spectrafx-metal-billboard] alpha/additive draw, GPU index remap and offscreen readback
+</system-out>
+	</testcase>
+	<testcase name="spectrafx_metal_evidence_parser" classname="spectrafx_metal_evidence_parser" time="0.244989" status="run">
+		<system-out>....
+----------------------------------------------------------------------
+Ran 4 tests in 0.003s
+
+OK
+[spectrafx] MetalGPU real PASS=5/5 SKIP=0 MISSING=0 FAIL/UNKNOWN=0
+[spectrafx] spectrafx_metal_gpu=PASS spectrafx_metal_billboard=PASS spectrafx_metal_rhi=PASS spectrafx_metal_scene=PASS spectrafx_metal_allocator=PASS
+[spectrafx] MetalGPU real PASS=4/5 SKIP=0 MISSING=0 FAIL/UNKNOWN=1
+[spectrafx] spectrafx_metal_gpu=PASS spectrafx_metal_billboard=FAIL spectrafx_metal_rhi=PASS spectrafx_metal_scene=PASS spectrafx_metal_allocator=PASS
+[spectrafx] MetalGPU real PASS=4/5 SKIP=0 MISSING=0 FAIL/UNKNOWN=1
+[spectrafx] spectrafx_metal_gpu=PASS spectrafx_metal_billboard=FAIL spectrafx_metal_rhi=PASS spectrafx_metal_scene=PASS spectrafx_metal_allocator=PASS
+[spectrafx] MetalGPU real PASS=3/5 SKIP=0 MISSING=2 FAIL/UNKNOWN=0
+[spectrafx] spectrafx_metal_gpu=PASS spectrafx_metal_billboard=PASS spectrafx_metal_rhi=PASS spectrafx_metal_scene=MISSING spectrafx_metal_allocator=MISSING
+[spectrafx] MetalGPU real PASS=4/5 SKIP=1 MI...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+	<testcase name="spectrafx_visual_review_parser" classname="spectrafx_visual_review_parser" time="2.28384" status="run">
+		<system-out>....
+----------------------------------------------------------------------
+Ran 4 tests in 0.024s
+
+OK
+[spectrafx-visual] contact_sheet=/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/tmp/tmp21rbxzqz/report.ppm report=/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/tmp/tmp21rbxzqz/report.json
+[spectrafx-visual] changed A/B/PRISMA=132/108/132
+[spectrafx-visual] PASS effect_visible_in_both_views
+[spectrafx-visual] PASS camera_changes_screen_position
+[spectrafx-visual] PASS opaque_center_depth_test
+[spectrafx-visual] PASS reset_restores_baseline_red
+[spectrafx-visual] PASS prisma_effect_visible
+</system-out>
+	</testcase>
+	<testcase name="spectrafx_metal_rhi" classname="spectrafx_metal_rhi" time="1.01595" status="run">
+		<system-out>[metal-assets] libraries=0 sourceMisses=2 pipelines=3 pipelineFailures=0 archive=0 strict=0
+[spectrafx-metal-rhi] device=Metal Apple M3 Ultra
+[spectrafx-metal-rhi] A left/right=229/0 B left/right=0/228
+[spectrafx-metal-rhi] gpu_frame_timing requested=24 scheduled=24 valid=24 invalid=0 p50_ms=0.0403 p95_ms=0.4512 metal_alloc_baseline_kib=1536 peak_kib=1632 after_kib=1664
+[spectrafx-metal-rhi] churn_frames=24 capacity=1 peak_nominal_kib=12 retire_remaining=0 gpu_healthy=1
+[spectrafx-metal-rhi] alpha_views_first=51/229 expected~51/230
+[spectrafx-metal-rhi] impact_queued=1 impact_discarded=1 delivered=0
+[spectrafx-metal-rhi] batched_slot_ranges=17
+PASS [spectrafx-metal-rhi] production RHI offscreen cameras, pixel parity, compute-&gt;draw and 3-frame resource retirement
+</system-out>
+	</testcase>
+	<testcase name="spectrafx_preview_policy" classname="spectrafx_preview_policy" time="0.14947" status="run">
+		<system-out>PASS [spectrafx-preview-policy] pause, step, invalid draft, revision retry, restart and reset
+</system-out>
+	</testcase>
+	<testcase name="spectrafx_retirement" classname="spectrafx_retirement" time="0.299401" status="run">
+		<system-out>[spectrafx-retirement] frames=1024 retired=2049 peak_slots=48 peak_rhi_handles=30 created_rhi_handles=8202 wall_ms=17.97
+[spectrafx-retirement] serial=1036 live=0 errors=0
+</system-out>
+	</testcase>
+	<testcase name="spectrafx_metal_scene" classname="spectrafx_metal_scene" time="2.94218" status="run">
+		<system-out>[metal-assets] libraries=0 sourceMisses=21 pipelines=36 pipelineFailures=0 archive=0 strict=0
+[spectrafx-metal-scene] device=Metal Apple M3 Ultra
+[spectrafx-metal-scene] A pixels=168 center=63.50 B pixels=304 center=43.07 depth_center_delta=0
+[spectrafx-metal-scene] prisma_hdr=1 passes=10 fx_pixels=232 max_red_delta=185 depth_delta=-1
+[spectrafx-metal-scene] failures=0
+PASS [spectrafx-metal-scene] production Renderer3D depth, two camera RTs, SceneHost and reset retirement
+</system-out>
+	</testcase>
+	<testcase name="spectrafx_metal_allocator" classname="spectrafx_metal_allocator" time="4.88777" status="run">
+		<system-out>[metal-assets] libraries=0 sourceMisses=2 pipelines=26 pipelineFailures=0 archive=0 strict=0
+PASS allocator cap=256 procedural=0 growth=0 shrink=0 bytes=124004 elapsed_ms=51.88 (includes QA readbacks)
+PASS allocator cap=65536 procedural=0 growth=8 shrink=1 bytes=127076 elapsed_ms=238.54 (includes QA readbacks)
+PASS allocator cap=262144 procedural=0 growth=10 shrink=1 bytes=127076 elapsed_ms=442.10 (includes QA readbacks)
+PASS LOD procedural=0 far=72 rejected=184
+PASS real indirect billboard pixels procedural=0
+PASS live compaction procedural=0
+PASS owned checkpoint procedural=0
+PASS allocator cap=256 procedural=1 growth=0 shrink=0 bytes=90224 elapsed_ms=27.38 (includes QA readbacks)
+PASS allocator cap=65536 procedural=1 growth=8 shrink=1 bytes=90224 elapsed_ms=228.94 (includes QA readbacks)
+PASS allocator cap=262144 procedural=1 growth=10 shrink=1 bytes=90224 elapsed_ms=378.09 (includes QA readbacks)
+PASS LOD procedural=1 far=72 rejected=184
+PASS real indirect billboard pixels procedural=1
+PASS live compactio...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+	<testcase name="spectrafx_metal_volumetric_scene" classname="spectrafx_metal_volumetric_scene" time="1.88123" status="run">
+		<system-out>[metal-assets] libraries=0 sourceMisses=2 pipelines=4 pipelineFailures=0 archive=0 strict=0
+PASS volumetric particle and hybrid scene depth HDR passes
+</system-out>
+	</testcase>
+	<testcase name="spectrafx_entity_effects" classname="spectrafx_entity_effects" time="0.328618" status="run">
+		<system-out>[spectrafx-entities] cues=18 routes=4 gpuPlays=4 errors=0
+</system-out>
+	</testcase>
+	<testcase name="spectrafx_cpu_gpu_parity" classname="spectrafx_cpu_gpu_parity" time="22.8002" status="run">
+		<system-out>[metal-assets] libraries=0 sourceMisses=3 pipelines=16 pipelineFailures=0 archive=0 strict=0
+[spectrafx-cpu-gpu] device=Metal Apple M3 Ultra
+PASS [spectrafx-cpu-gpu] GPU evolution initialized on Metal
+PASS [spectrafx-cpu-gpu] CPU twin initialized from the same seeds
+PASS [spectrafx-cpu-gpu] 180 frames stepped on both simulators
+PASS [spectrafx-cpu-gpu] test-only GPU state readback delivered
+[spectrafx-cpu-gpu] kernel_parity particles=4096 frames=180 alive_gpu=1447 alive_cpu=1447 pos_err_m p50=2.98e-08 p99=5.96e-07 max=1.55e-06 age_err_max=0.00e+00
+PASS [spectrafx-cpu-gpu] alive particle sets are identical
+PASS [spectrafx-cpu-gpu] particle ages agree (|d|&lt;1e-4 s)
+PASS [spectrafx-cpu-gpu] 99% of positions agree within 1 mm after 3 s
+PASS [spectrafx-cpu-gpu] every position agrees within 5 cm (bounce rounding)
+PASS [spectrafx-cpu-gpu] asset without cpuEffect is valid (CPU twin fallback)
+PASS [spectrafx-cpu-gpu] auto preference selects the Metal GPU
+PASS [spectrafx-cpu-gpu] cpu preference runs the same asset on th...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+	<testcase name="terraweave_metal_forest" classname="terraweave_metal_forest" time="5.61384" status="run">
+		<system-out>[metal-assets] libraries=0 sourceMisses=12 pipelines=18 pipelineFailures=0 archive=0 strict=0
+[terraweave-metal-forest] near=6490 far=5831 holes=6433 resized=1504 azimuthA=0.00012 azimuthB=0.12512
+[terraweave-metal-forest] failures=0
+PASS [terraweave-metal-forest] real Metal BranchLOD, masked 8-view impostor, RT resize and GPU-idle retirement
+</system-out>
+	</testcase>
+	<testcase name="vfx_graph_assets" classname="vfx_graph_assets" time="0.251277" status="run">
+		<system-out>PASS vfx_graph_assets_test (load, cache, override, hot reload, fallback, name validation)
+</system-out>
+	</testcase>
+	<testcase name="lens_sprite_gpu_faults" classname="lens_sprite_gpu_faults" time="3.99216" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="additive_blend_frame" classname="additive_blend_frame" time="3.29203" status="run">
+		<system-out>[metal-assets] libraries=0 sourceMisses=21 pipelines=46 pipelineFailures=0 archive=0 strict=0
+model-weighted got=0.584559 expected=0.584608
+model-unweighted got=0.767647 expected=0.767921
+model-alpha got=0.561029 expected=0.561494
+model-weighted-again got=0.585049 expected=0.584608
+particle-linear got=0.352451 expected=0.352781
+particle-display got=0.501471 expected=0.50098
+particle-display-occluded got=0.24951 expected=0.25
+particle-display-graph got=0.50098 expected=0.50098
+particle-display-fog got=0.410784 expected=0.410032
+particle-display-resize got=0.500735 expected=0.50098
+particle-display-mesh got=0.501716 expected=0.50098
+particle-display-mesh-occluded got=0.249755 expected=0.25
+particle-display-ribbon got=0.501225 expected=0.50098
+particle-display-trail got=0.500735 expected=0.50098
+particle-display-graph-texture got=0.50098 expected=0.50098
+particle-display-graph-texture-occluded got=0.250245 expected=0.25
+</system-out>
+	</testcase>
+	<testcase name="material_technique_frame" classname="material_technique_frame" time="0.772646" status="notrun">
+		<skipped message="SKIP_RETURN_CODE=77"/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="model_triplanar_frame" classname="model_triplanar_frame" time="0.951964" status="notrun">
+		<skipped message="SKIP_RETURN_CODE=77"/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="prisma_compositor_metal" classname="prisma_compositor_metal" time="1.39066" status="notrun">
+		<skipped message="SKIP_RETURN_CODE=77"/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="quake3_bsp_frame" classname="quake3_bsp_frame" time="1.43169" status="notrun">
+		<skipped message="SKIP_RETURN_CODE=77"/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lens_metal_frame" classname="lens_metal_frame" time="4.59275" status="notrun">
+		<skipped message="SKIP_RETURN_CODE=77"/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="vfx_graph_ops" classname="vfx_graph_ops" time="4.99492" status="run">
+		<system-out>PASS SpectraFX MCP graph CRUD, native preview bridge, validation, variants, bake and path safety
+</system-out>
+	</testcase>
+	<testcase name="vfx_spfx_diagnostics" classname="vfx_spfx_diagnostics" time="0.158223" status="run">
+		<system-out>SPFX V2 diagnostics, privacy, corruption, ZIP central directory &amp; CRC assertions passed
+</system-out>
+	</testcase>
+	<testcase name="vfx_gpu_backend" classname="vfx_gpu_backend" time="0.315874" status="run">
+		<system-out>PASS SpectraFX compute policy, config validation, CPU fallback and lifecycle
+</system-out>
+	</testcase>
+	<testcase name="physis_core" classname="physis_core" time="0.19385" status="run">
+		<system-out>PHYSIS core: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_climate" classname="physis_climate" time="0.43339" status="run">
+		<system-out>PHYSIS climate: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_environment" classname="physis_environment" time="0.193432" status="run">
+		<system-out>PHYSIS environment: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_disasters" classname="physis_disasters" time="0.197404" status="run">
+		<system-out>PHYSIS disasters: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_integration" classname="physis_integration" time="0.390439" status="run">
+		<system-out>PHYSIS integration: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_nereid_contacts" classname="physis_nereid_contacts" time="0.410963" status="run">
+		<system-out>PHYSIS/NEREID: same World, opt-in nature contacts, external flood authority, save/load, rollback and COW PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_nature_stress" classname="physis_nature_stress" time="0.403731" status="run">
+		<system-out>PHYSIS nature stress: loads, fire, fracture, persistence and rollback PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_fracture_outbox" classname="physis_fracture_outbox" time="0.39671" status="run">
+		<system-out>PHYSIS fracture outbox: stable identity, pending, ack, native persistence and rollback PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_nature_fall_host" classname="physis_nature_fall_host" time="0.355114" status="run">
+		<system-out>PHYSIS/Terra host fall ledger: binding, pending, ack, replay, save and rollback PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_wind" classname="physis_wind" time="0.243615" status="run">
+		<system-out>PHYSIS Wind: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_gravity" classname="physis_gravity" time="0.170621" status="run">
+		<system-out>PHYSIS Gravity: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_storm" classname="physis_storm" time="0.19303" status="run">
+		<system-out>PHYSIS Storm: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_forces" classname="physis_forces" time="0.195919" status="run">
+		<system-out>PHYSIS Forces: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_presentation" classname="physis_presentation" time="0.197834" status="run">
+		<system-out>PHYSIS Presentation: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_nature_presentation" classname="physis_nature_presentation" time="0.627162" status="run">
+		<system-out>PHYSIS nature presentation: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_parallel" classname="physis_parallel" time="17.357" status="run">
+		<system-out>PHYSIS parallel: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_streaming" classname="physis_streaming" time="4.24642" status="run">
+		<system-out>PHYSIS streaming: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_nature_runtime" classname="physis_nature_runtime" time="0.476403" status="run">
+		<system-out>PHYSIS nature runtime: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_tornado" classname="physis_tornado" time="3.96596" status="run">
+		<system-out>PHYSIS TORNADO: OK
+</system-out>
+	</testcase>
+	<testcase name="physis_firestorm" classname="physis_firestorm" time="8.37798" status="run">
+		<system-out>fireness peak: big 0.828 small 0.028
+ignited on path: 12, embers in air max 23, ember ignitions 43
+land tornado over water: dissipated after 251 ticks
+waterspout on land: dissipated after 34 ticks
+scour: 704 cells, track -0.172 m, over water 0.000 m
+map run: peak fireness 0.937, waterspout 0, over water 1, dissipated 1, scour cells 748
+PHYSIS FIRESTORM: OK
+</system-out>
+	</testcase>
+	<testcase name="physis_nature_cues" classname="physis_nature_cues" time="0.767347" status="run">
+		<system-out>PHYSIS nature cues: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_tornado_cues" classname="physis_tornado_cues" time="0.507064" status="run">
+		<system-out>TORNADO CUES: OK
+</system-out>
+	</testcase>
+	<testcase name="physis_diagnostics" classname="physis_diagnostics" time="0.206792" status="run">
+		<system-out>PHYSIS Diagnostics: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_spatial_index" classname="physis_spatial_index" time="0.364177" status="run">
+		<system-out>PHYSIS SpatialIndex: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_editor_view" classname="physis_editor_view" time="0.193948" status="run">
+		<system-out>PHYSIS Editor View: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_scene_geometry" classname="physis_scene_geometry" time="0.652124" status="run">
+		<system-out>PHYSIS SceneGeometry: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_project_config" classname="physis_project_config" time="0.424541" status="run">
+		<system-out>PHYSIS ProjectConfig: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_authoring" classname="physis_authoring" time="5.20099" status="run">
+		<system-out>PHYSIS authoring: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_nature_preview" classname="physis_nature_preview" time="5.34409" status="run">
+		<system-out>PHYSIS nature preview: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_mcp" classname="physis_mcp" time="1.13838" status="run">
+		<system-out>PHYSIS MCP stdio: PASS (discovery, validate, set/read, conflict, rejection atomicity, removal)
+</system-out>
+	</testcase>
+	<testcase name="physis_journal_posix_io" classname="physis_journal_posix_io" time="0.333919" status="run">
+		<system-out>PHYSIS POSIX journal I/O: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_journal_locked_io" classname="physis_journal_locked_io" time="0.153181" status="run">
+		<system-out>PHYSIS locked journal I/O: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_journal_crash_recovery" classname="physis_journal_crash_recovery" time="0.160181" status="run">
+		<system-out>PHYSIS journal cross-process crash: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_admin_journal" classname="physis_admin_journal" time="0.446632" status="run">
+		<system-out>PHYSIS admin/journal: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_remote_edit" classname="physis_remote_edit" time="0.409492" status="run">
+		<system-out>PHYSIS remote edit: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_live_edit" classname="physis_live_edit" time="0.440158" status="run">
+		<system-out>PHYSIS Live Editing: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_field_runtime" classname="physis_field_runtime" time="0.410205" status="run">
+		<system-out>PHYSIS field runtime: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_field_assets" classname="physis_field_assets" time="0.445454" status="run">
+		<system-out>PHYSIS Fields: PASS
+</system-out>
+	</testcase>
+	<testcase name="physis_field_authoring" classname="physis_field_authoring" time="9.01925" status="run">
+		<system-out>PHYSIS Field Authoring: PASS
+</system-out>
+	</testcase>
+	<testcase name="gpu_timing_router" classname="gpu_timing_router" time="0.167606" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="terraweave_sparse_editor" classname="terraweave_sparse_editor" time="4.99683" status="run">
+		<system-out>PASS sparse editor/MCP click anywhere, auto-neighbors, undo/redo, no fixed map resize, atomic validation
+</system-out>
+	</testcase>
+	<testcase name="terraweave_sparse_authoring_lod" classname="terraweave_sparse_authoring_lod" time="0.598571" status="run">
+		<system-out>PASS TerraWeave sparse click/auto-neighbors, dynamic distance LOD, flat=1 indexed quad (4 verts/2 tris), stitched edges, rollback-safe authoring
+</system-out>
+	</testcase>
+	<testcase name="terraweave" classname="terraweave" time="0.219744" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="terraweave_micro_nutrient" classname="terraweave_micro_nutrient" time="0.963072" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="terraweave_stage70_sustained" classname="terraweave_stage70_sustained" time="1.02509" status="run">
+		<system-out>PASS: Stage70 128 due ticks / 32768 virtual ticks; initialUnits=71680 absorbed=9216 leached=16384 advected=49086 junction=34 remainingMicroCells=2047 replay=identical
+</system-out>
+	</testcase>
+	<testcase name="terraweave_native_micro_compile" classname="terraweave_native_micro_compile" time="1.76447" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="terraweave_arbor" classname="terraweave_arbor" time="0.377564" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="terraweave_flora" classname="terraweave_flora" time="0.156853" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="wind_rig" classname="wind_rig" time="7.2622" status="run">
+		<system-out>wind rig: PASS
+</system-out>
+	</testcase>
+	<testcase name="terraweave_model" classname="terraweave_model" time="14.4082" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="terraweave_grass_meadow" classname="terraweave_grass_meadow" time="1.39611" status="run">
+		<system-out>legacy plain fe3470faa0183f44 natural-lod aee9ae705474b21e
+clump cells 14400 empty 32 permille, species 3
+placed 18970 clumped 11376 dispersion 1.64 empty 20cm cells 0
+meadow verts 82878 tris 39258 height 1.23..2.15 colours 3273
+lod tris 39258 10199 2760
+budget mobile 344064 high 6488064
+terraweave_grass_meadow: ok
+</system-out>
+	</testcase>
+	<testcase name="terraweave_heightmap" classname="terraweave_heightmap" time="0.161961" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="terraweave_ops" classname="terraweave_ops" time="0.189928" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="terraweave_preview" classname="terraweave_preview" time="0.394877" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="terraweave_erosion_zones" classname="terraweave_erosion_zones" time="0.18586" status="run">
+		<system-out>erosion cm after 40 s: default -84, zone x3 -252, rock 0 (no zones: -84 -84 -84)
+terraweave erosion zones: PASS
+</system-out>
+	</testcase>
+	<testcase name="terraweave_forest_scene" classname="terraweave_forest_scene" time="7.06663" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="terraweave_streaming" classname="terraweave_streaming" time="1.73241" status="run">
+		<system-out>terraweave_streaming: 27 trunks, first r=26cm h=1322cm
+terraweave_streaming: ok
+</system-out>
+	</testcase>
+	<testcase name="terraweave_horizon" classname="terraweave_horizon" time="0.782558" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="terraweave_editor" classname="terraweave_editor" time="7.78446" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="vfx_graph_runtime" classname="vfx_graph_runtime" time="2.0933" status="run">
+		<system-out>PASS SpectraFX graph GPU eligibility, strict CPU preservation and host fallback
+</system-out>
+	</testcase>
+	<testcase name="physical_sky" classname="physical_sky" time="0.208411" status="run">
+		<system-out>Physical sky configuration, quality, GPU lifetime and failure checks passed
+</system-out>
+	</testcase>
+	<testcase name="physis_sky" classname="physis_sky" time="0.385293" status="run">
+		<system-out>PHYSIS sky read-only mapping, pause, wind changes, rollback and source isolation passed
+</system-out>
+	</testcase>
+	<testcase name="local_fog" classname="local_fog" time="0.163457" status="run">
+		<system-out>Local fog regions, runtime reveal, bounds and GPU lifetime checks passed
+</system-out>
+	</testcase>
+	<testcase name="nereid_flow_map" classname="nereid_flow_map" time="0.239573" status="run">
+		<system-out>NEREID camera-independent flow map PASS
+</system-out>
+	</testcase>
+	<testcase name="terraweave_rocks" classname="terraweave_rocks" time="1.25547" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="terraweave_landscape" classname="terraweave_landscape" time="0.474611" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lens_ops" classname="lens_ops" time="6.89607" status="run">
+		<system-out>PASS LENS operations: CRUD, stale edits, validation, bounds, symlinks, registry
+</system-out>
+	</testcase>
+	<testcase name="lens_mcp_stdio" classname="lens_mcp_stdio" time="4.80013" status="run">
+		<system-out>PASS LENS stdio MCP: discovery, open, write, stale-error, restart, delete
+</system-out>
+	</testcase>
+	<testcase name="native_simulation_checks_mcp" classname="native_simulation_checks_mcp" time="1.89973" status="run">
+		<system-out>Six simulation tools report both missing IDs. Default refusal, static stats, project integrity and real match parity passed.
+</system-out>
+	</testcase>
+	<testcase name="order_upgrade_mcp" classname="order_upgrade_mcp" time="1.62301" status="run">
+		<system-out>PASS local order template and upgrade appearance authoring, rollback and project reopen
+</system-out>
+	</testcase>
+	<testcase name="simulation_budget_mcp" classname="simulation_budget_mcp" time="0.550279" status="run">
+		<system-out>simulation budget planner: stdio discovery, exact plans and invalid input refusal
+</system-out>
+	</testcase>
+	<testcase name="planet_forest_mcp_stdio" classname="planet_forest_mcp_stdio" time="4.52281" status="run">
+		<system-out>planet forest MCP authoring/validation/history/save-reopen PASS
+</system-out>
+	</testcase>
+	<testcase name="world_persistence_mcp_stdio" classname="world_persistence_mcp_stdio" time="1.38867" status="run">
+		<system-out>World persistence MCP stdio: PASS
+</system-out>
+	</testcase>
+	<testcase name="strata_editor" classname="strata_editor" time="9.68081" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="vfx_metal_compaction_smoke" classname="vfx_metal_compaction_smoke" time="0.57722" status="run">
+		<system-out>PASS SpectraFX real Metal MSL compile, compute compact and GPU indirect args
+</system-out>
+	</testcase>
+	<testcase name="vfx_shared_batch_world" classname="vfx_shared_batch_world" time="0.330551" status="run">
+		<system-out>PASS SpectraFX: cross-instance same-atlas batching, blend isolation, shared tick/draw and source-scoped cleanup
+</system-out>
+	</testcase>
+	<testcase name="vfx_cue_scheduler" classname="vfx_cue_scheduler" time="0.318256" status="run">
+		<system-out>PASS SpectraFX cue scheduler: two genres, bounded queues, ECS generation, tick dedup and rollback handles
+</system-out>
+	</testcase>
+	<testcase name="lighting_lumaweave_clusters" classname="lighting_lumaweave_clusters" time="0.158598" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_lumaweave_gpu_packet" classname="lighting_lumaweave_gpu_packet" time="0.169598" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_gi_lighting_composition" classname="lighting_gi_lighting_composition" time="0.148852" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_lighting_gles_admission" classname="lighting_lighting_gles_admission" time="0.186392" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_gi_chunked_geometry" classname="lighting_gi_chunked_geometry" time="0.164918" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_gi_gpu_bvh_validator" classname="lighting_gi_gpu_bvh_validator" time="0.173145" status="run">
+		<system-out>gi_gpu_bvh_validator: OK
+</system-out>
+	</testcase>
+	<testcase name="lighting_gi_gpu_bvh_validation" classname="lighting_gi_gpu_bvh_validation" time="0.195244" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_gi_gpu_bvh_sparse_upload" classname="lighting_gi_gpu_bvh_sparse_upload" time="0.187802" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_gi_gpu_chunk_bvh_cache" classname="lighting_gi_gpu_chunk_bvh_cache" time="0.187815" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_gi_gpu_chunk_bvh_lifetime" classname="lighting_gi_gpu_chunk_bvh_lifetime" time="0.294949" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_gi_gpu_paged_bvh" classname="lighting_gi_gpu_paged_bvh" time="0.232526" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_gi_gpu_residency_planner" classname="lighting_gi_gpu_residency_planner" time="0.340766" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_gi_world_dirty_accumulator" classname="lighting_gi_world_dirty_accumulator" time="0.157781" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_model_vt_shader_injection" classname="lighting_model_vt_shader_injection" time="0.153553" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_gi_geometry_scene" classname="lighting_gi_geometry_scene" time="0.180872" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_gi_world_geometry_bridge" classname="lighting_gi_world_geometry_bridge" time="0.17839" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_gi_terraweave_resident_bridge" classname="lighting_gi_terraweave_resident_bridge" time="0.218575" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_lumaweave_direct_reference" classname="lighting_lumaweave_direct_reference" time="0.3542" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_gi_dynamic_probe_reference" classname="lighting_gi_dynamic_probe_reference" time="0.163844" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_gi_cpu_trace_budget" classname="lighting_gi_cpu_trace_budget" time="0.150394" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_lighting_gi_cpu_sampling" classname="lighting_lighting_gi_cpu_sampling" time="0.160839" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_gi_dynamic_probe_texture" classname="lighting_gi_dynamic_probe_texture" time="0.172412" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_lighting_cpu_gi_bridge" classname="lighting_lighting_cpu_gi_bridge" time="0.190614" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_lighting_gpu_bridge" classname="lighting_lighting_gpu_bridge" time="0.328338" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_lighting_gi_cascades" classname="lighting_lighting_gi_cascades" time="0.325753" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_lighting_gi_scrolling" classname="lighting_lighting_gi_scrolling" time="0.257882" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_lighting_luma_mobile_fallback" classname="lighting_lighting_luma_mobile_fallback" time="0.154441" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_lighting_model_gi_shader_contract" classname="lighting_lighting_model_gi_shader_contract" time="0.153821" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_lighting_terrain_gi_shader_contract" classname="lighting_lighting_terrain_gi_shader_contract" time="0.153505" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="lighting_model_geometry" classname="lighting_model_geometry" time="0.62339" status="run">
+		<system-out>Lighting animated model geometry PASS
+</system-out>
+	</testcase>
+	<testcase name="vivid_human_wardrobe" classname="vivid_human_wardrobe" time="0.902073" status="run">
+		<system-out>Wardrobe, socket, masks, appearance and facial roundtrip PASS
+</system-out>
+	</testcase>
+	<testcase name="vivid_face_shape" classname="vivid_face_shape" time="0.989503" status="run">
+		<system-out>face shape, topology, scan fit and photo depth checks PASS
+</system-out>
+	</testcase>
+	<testcase name="region_entity_ledger_test" classname="region_entity_ledger_test" time="0.685306" status="run">
+		<system-out>PASS region_entity_ledger (transfer, tombstone, archive, ECS v10, rollback, 100 crossings)
+</system-out>
+	</testcase>
+	<testcase name="simulation_profile_test" classname="simulation_profile_test" time="0.387026" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="region_cold_store_test" classname="region_cold_store_test" time="0.43581" status="run">
+		<system-out>PASS region_cold_store (real component parking, restore, rollback, retirement)
+</system-out>
+	</testcase>
+	<testcase name="runtime_vitals_test" classname="runtime_vitals_test" time="0.342196" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="region_gamecore_integration_test" classname="region_gamecore_integration_test" time="0.630756" status="run">
+		<system-out>PASS real GameCore region lifecycle integration, commands, save and rollback
+</system-out>
+	</testcase>
+	<testcase name="actor_navigation_stream_gate_test" classname="actor_navigation_stream_gate_test" time="5.27406" status="run">
+		<system-out>PASS world-space collision/nav readiness admission and fresh restore
+</system-out>
+	</testcase>
+	<testcase name="vehicle_region_group_test" classname="vehicle_region_group_test" time="0.199607" status="run">
+		<system-out>PASS vehicle region atomic occupancy groups, bad links and dormant refusal
+</system-out>
+	</testcase>
+	<testcase name="actor_vehicle_region_group_test" classname="actor_vehicle_region_group_test" time="0.280402" status="run">
+		<system-out>PASS ActorHost real seat slot resolution and fail-closed W1 transfer
+</system-out>
+	</testcase>
+	<testcase name="actor_region_position_test" classname="actor_region_position_test" time="0.409167" status="run">
+		<system-out>PASS world-space canonical actor/vehicle position and ECS region state
+</system-out>
+	</testcase>
+	<testcase name="actor_region_lifecycle_test" classname="actor_region_lifecycle_test" time="0.387612" status="run">
+		<system-out>PASS world-space authoritative region reconciliation and tombstones
+</system-out>
+	</testcase>
+	<testcase name="actor_region_admission_test" classname="actor_region_admission_test" time="0.503544" status="run">
+		<system-out>PASS staged region move admission, retry, save, and occupied group
+</system-out>
+	</testcase>
+	<testcase name="race_region_respawn_gate_test" classname="race_region_respawn_gate_test" time="0.317762" status="run">
+		<system-out>PASS race respawn pre-tick grid/last/next checkpoint candidates
+</system-out>
+	</testcase>
+	<testcase name="region_dirty_queue_test" classname="region_dirty_queue_test" time="0.311525" status="run">
+		<system-out>PASS region dirty queue coalescing/archive/COW rollback
+</system-out>
+	</testcase>
+	<testcase name="warcraft3_importer_python" classname="warcraft3_importer_python" time="5.60673" status="run">
+		<system-out>test_folder_to_assets_and_no_overwrite (test_warcraft3_import.Warcraft3Import.test_folder_to_assets_and_no_overwrite) ... ok
+test_mpq_magic_and_paths (test_warcraft3_import.Warcraft3Import.test_mpq_magic_and_paths) ... ok
+test_pathing (test_warcraft3_import.Warcraft3Import.test_pathing) ... ok
+test_strings_imports (test_warcraft3_import.Warcraft3Import.test_strings_imports) ... ok
+test_terrain_validation (test_warcraft3_import.Warcraft3Import.test_terrain_validation) ... ok
+test_w3e_classic_fields (test_warcraft3_import.Warcraft3Import.test_w3e_classic_fields) ... ok
+test_w3e_reforged_v12 (test_warcraft3_import.Warcraft3Import.test_w3e_reforged_v12) ... ok
+test_doodad_nonfinite_rejected (test_warcraft3_stage2.Stage2Tests.test_doodad_nonfinite_rejected) ... ok
+test_doodad_specials_and_skin (test_warcraft3_stage2.Stage2Tests.test_doodad_specials_and_skin) ... ok
+test_forward_compat_and_strict (test_warcraft3_stage2.Stage2Tests.test_forward_compat_and_strict) ... ok
+test_full_import_and_preview (test_warcraft3_s...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+	<testcase name="texture_graph_pipeline_cache" classname="texture_graph_pipeline_cache" time="0.148706" status="run">
+		<system-out>PASS: exact keys, LRU, duplicate, bounds, clear, abandon
+</system-out>
+	</testcase>
+	<testcase name="texture_graph_shared_scratch" classname="texture_graph_shared_scratch" time="0.150382" status="run">
+		<system-out>PASS: scratch identity, acceptance and invalidation
+</system-out>
+	</testcase>
+	<testcase name="texture_graph_liveness" classname="texture_graph_liveness" time="0.155754" status="run">
+		<system-out>PASS: shared dependencies, duplicate edges, pinned outputs, pruning, chain lifetime, invalid plans
+</system-out>
+	</testcase>
+	<testcase name="texture_graph_pass_schedule" classname="texture_graph_pass_schedule" time="0.200431" status="run">
+		<system-out>PASS: ordered passes, slot reuse, external readiness, bounds, dependency rejection, partial encode
+</system-out>
+	</testcase>
+	<testcase name="texture_graph_dag_lowering" classname="texture_graph_dag_lowering" time="0.184061" status="run">
+		<system-out>PASS: typed capacity, multi-input order, duplicate ports/targets, output pinning, pruning, budget, binding limit, slot reuse
+</system-out>
+	</testcase>
+	<testcase name="texture_graph_output_reuse" classname="texture_graph_output_reuse" time="0.155764" status="run">
+		<system-out>PASS output closure, independent branch, configuration, cold cache, no-op, key limit
+</system-out>
+	</testcase>
+	<testcase name="texture_graph_image_pins" classname="texture_graph_image_pins" time="0.15445" status="run">
+		<system-out>PASS immutable material-copy pins, partial replacement, external pin, last-reader release
+</system-out>
+	</testcase>
+	<testcase name="texture_graph_group_profile" classname="texture_graph_group_profile" time="0.149168" status="run">
+		<system-out>PASS region metadata, duplicate/invalid bounds, per-frame timing admission
+</system-out>
+	</testcase>
+	<testcase name="vulkan_scope_timing" classname="vulkan_scope_timing" time="0.149262" status="run">
+		<system-out>PASS scope pairing, bounds, abandonment, timestamp wrap and units
+</system-out>
+	</testcase>
+	<testcase name="texture_graph_request_queue" classname="texture_graph_request_queue" time="0.151218" status="run">
+		<system-out>PASS: priority, FIFO, cancellation, count/byte caps, nonrecycled tickets
+</system-out>
+	</testcase>
+	<testcase name="texture_graph_kernel_source" classname="texture_graph_kernel_source" time="0.285467" status="run">
+		<system-out>PASS: typed Metal/Vulkan ABI, custom compute interpreter, safe source emission and bounds\n
+</system-out>
+	</testcase>
+	<testcase name="texture_graph_materialized_dispatch" classname="texture_graph_materialized_dispatch" time="0.15667" status="run">
+		<system-out>PASS: ordered multi-input bindings, duplicates, alias/invalid refusal, encode failure, Metal status, exception cleanup
+</system-out>
+	</testcase>
+	<testcase name="texture_graph_gpu_resource_cache" classname="texture_graph_gpu_resource_cache" time="0.151382" status="run">
+		<system-out>PASS: exact layout, exclusive take, replacement, budget, clear, abandon
+</system-out>
+	</testcase>
+	<testcase name="texture_graph_fusion" classname="texture_graph_fusion" time="0.282684" status="run">
+		<system-out>PASS: bounded fusion, pinned outputs, neighborhood barriers, shared nodes, duplicate ports, input cap, pruning, typed slots
+</system-out>
+	</testcase>
+	<testcase name="texture_graph_gpu_texture_transfer" classname="texture_graph_gpu_texture_transfer" time="0.251903" status="run">
+		<system-out>PASS: aligned RGBA8 copy bounds, padded GPU packing, scalar/vector ABI, unchanged tight pack
+</system-out>
+	</testcase>
+	<testcase name="texture_graph_gpu_texture_budget" classname="texture_graph_gpu_texture_budget" time="0.192457" status="run">
+		<system-out>PASS: texture request cap, all candidates, validation reserve, overflow and exact boundary
+</system-out>
+	</testcase>
+	<testcase name="view_live_appearance_material_target" classname="view_live_appearance_material_target" time="0.150921" status="run">
+		<system-out>PASS: exact publication identity, stale revision, material range, overflow and decimal transport
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_edit_runtime_test" classname="terraweave_caverns_edit_runtime_test" time="0.396051" status="run">
+		<system-out>caverns stage22 revisioned edit bridge contract OK
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_editor_visual_preview_test" classname="terraweave_caverns_editor_visual_preview_test" time="0.243069" status="run">
+		<system-out>caverns stage31 visual-only preview does not ACK gameplay dirty state
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_multinav_test" classname="terraweave_caverns_multinav_test" time="0.289116" status="run">
+		<system-out>cave nav source contract OK spans=0
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_surface_cut_test" classname="terraweave_caverns_surface_cut_test" time="0.165047" status="run">
+		<system-out>surface cut contract OK triangles=20
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_batch_geometry_test" classname="terraweave_caverns_batch_geometry_test" time="0.692232" status="run">
+		<system-out>caverns batch manifest OK
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_edit_presentation_test" classname="terraweave_caverns_edit_presentation_test" time="0.697245" status="run">
+		<system-out>caverns stage23 edit presentation preparation OK
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_geometry_scene_test" classname="terraweave_caverns_geometry_scene_test" time="0.609854" status="run">
+		<system-out>caverns GeometryScene model/manifest contract OK
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_mixed_shard_test" classname="terraweave_caverns_mixed_shard_test" time="0.607147" status="run">
+		<system-out>caverns stage29 mixed shard snapshot OK
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_presentation_test" classname="terraweave_caverns_presentation_test" time="0.157755" status="run">
+		<system-out>Caverns presentation lease contract OK
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_resident_test" classname="terraweave_caverns_resident_test" time="0.580465" status="run">
+		<system-out>caverns native payload contract OK triangles=20
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_shard_gpu_host_test" classname="terraweave_caverns_shard_gpu_host_test" time="0.593524" status="run">
+		<system-out>caverns stage30 shard GPU host CPU contract OK
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_stage6_test" classname="terraweave_caverns_stage6_test" time="0.158888" status="run">
+		<system-out>caverns stage6 contracts OK
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_editor_test" classname="terraweave_caverns_editor_test" time="5.00247" status="run">
+		<system-out>caverns editor authoring undo redo persistence contract OK
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_mesh_test" classname="terraweave_caverns_mesh_test" time="1.55775" status="run">
+		<system-out>caverns mesh OK triangles=3108
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_swap_policy_test" classname="terraweave_caverns_swap_policy_test" time="0.150642" status="run">
+		<system-out>caverns stage24 swap policy PASS
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_owner_barrier_test" classname="terraweave_caverns_owner_barrier_test" time="0.147581" status="run">
+		<system-out>caverns stage25 owner barrier PASS
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_preview_pacer_test" classname="terraweave_caverns_preview_pacer_test" time="0.147353" status="run">
+		<system-out>caverns stage32 preview pacer PASS
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_streaming_test" classname="terraweave_caverns_streaming_test" time="0.376161" status="run">
+		<system-out>streaming and shaft contracts OK
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_test" classname="terraweave_caverns_test" time="0.246759" status="run">
+		<system-out>caverns core contract OK
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_async_rebuild_test" classname="terraweave_caverns_async_rebuild_test" time="0.195043" status="run">
+		<system-out>caverns stage17 async dispatch contract OK
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_dirty_queue_test" classname="terraweave_caverns_dirty_queue_test" time="0.172073" status="run">
+		<system-out>caverns stage21 dirty queue OK
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_entrances_test" classname="terraweave_caverns_entrances_test" time="0.435725" status="run">
+		<system-out>caverns entrance contract OK count=13
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_lod_policy_test" classname="terraweave_caverns_lod_policy_test" time="0.158131" status="run">
+		<system-out>caverns stage15 six-direction face policy OK
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_lod_transition_test" classname="terraweave_caverns_lod_transition_test" time="0.237962" status="run">
+		<system-out>mixed-LOD collinear cave seam contract OK
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_lod_weld_test" classname="terraweave_caverns_lod_weld_test" time="0.159557" status="run">
+		<system-out>caverns stage13 weld and LOD planner OK
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_publication_test" classname="terraweave_caverns_publication_test" time="0.30076" status="run">
+		<system-out>caverns publication/lease contract OK
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_raycast_test" classname="terraweave_caverns_raycast_test" time="0.157042" status="run">
+		<system-out>caverns stage20 SDF ray and dirty bounds OK
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_seam_gate_test" classname="terraweave_caverns_seam_gate_test" time="0.169195" status="run">
+		<system-out>caverns stage16 seam publication gate contract OK
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_shard_seam_test" classname="terraweave_caverns_shard_seam_test" time="0.171179" status="run">
+		<system-out>caverns shard and seam contracts OK
+</system-out>
+	</testcase>
+	<testcase name="terraweave_caverns_snapshot_workers_test" classname="terraweave_caverns_snapshot_workers_test" time="0.240137" status="run">
+		<system-out>caverns authored snapshot and async worker contracts OK
+</system-out>
+	</testcase>
+	<testcase name="aiverse_grpc_tests" classname="aiverse_grpc_tests" time="1.2523" status="run">
+		<system-out>aiverse_grpc_tests (TLS backend: securetransport, available)
+  transport http2 h2c
+  transport http2 tls
+  SKIP http2 tls: TLS test server unavailable (securetransport): test TLS server is only implemented with OpenSSL
+  transport grpc-web + ws bridge
+  transport grpc-web + ws bridge, tls
+  SKIP grpc-web + ws bridge, tls: TLS test server unavailable (securetransport): test TLS server is only implemented with OpenSSL
+  transport ws bridge for unary
+  transport ws bridge for unary, tls
+  SKIP ws bridge for unary, tls: TLS test server unavailable (securetransport): test TLS server is only implemented with OpenSSL
+  SKIP TLS failures: no TLS test server with securetransport
+aiverse_grpc_tests: 175 checks, 0 failed
+</system-out>
+	</testcase>
+	<testcase name="aiverse_protoc" classname="aiverse_protoc" time="2.84592" status="run">
+		<system-out>protoc_test: OK
+</system-out>
+	</testcase>
+	<testcase name="vivid_human_rig" classname="vivid_human_rig" time="0.595432" status="run">
+		<system-out>VIVID human rig PASS
+</system-out>
+	</testcase>
+	<testcase name="vivid_metahuman_adapter" classname="vivid_metahuman_adapter" time="0.771118" status="run">
+		<system-out>metahuman_adapter ok
+</system-out>
+	</testcase>
+	<testcase name="vivid_human_lod" classname="vivid_human_lod" time="0.179793" status="run">
+		<system-out>human_lod ok
+</system-out>
+	</testcase>
+	<testcase name="vivid_human_appearance" classname="vivid_human_appearance" time="1.57383" status="run">
+		<system-out>VIVID groom 8192 sparse x2 CPU ms=235.26 particleEntries=8192 segmentCells=220707 segmentPairs=0
+VIVID human appearance/groom PASS
+</system-out>
+	</testcase>
+	<testcase name="vivid_human_import" classname="vivid_human_import" time="0.631681" status="run">
+		<system-out>VIVID open human importer PASS
+</system-out>
+	</testcase>
+	<testcase name="vivid_human_creator" classname="vivid_human_creator" time="0.711618" status="run">
+		<system-out>VIVID creator transactions PASS
+</system-out>
+	</testcase>
+	<testcase name="vivid_human_dna" classname="vivid_human_dna" time="0.187268" status="run">
+		<system-out>VIVID Human DNA schema PASS
+</system-out>
+	</testcase>
+	<testcase name="vivid_face" classname="vivid_face" time="0.253839" status="run">
+		<system-out>VIVID facial core PASS (52 channels, validation, layering, smoothing, presets)
+</system-out>
+	</testcase>
+	<testcase name="vivid_sparse_morph" classname="vivid_sparse_morph" time="0.160753" status="run">
+		<system-out>VIVID sparse morph PASS (160 targets, stable GPU ABI/CSR gather, CPU parity)
+</system-out>
+	</testcase>
+	<testcase name="vivid_shape_binding" classname="vivid_shape_binding" time="0.360159" status="run">
+		<system-out>VIVID shape mapping PASS (97 routes, semantic-to-sparse morph CPU chain)
+</system-out>
+	</testcase>
+	<testcase name="vivid_gpu_contract" classname="vivid_gpu_contract" time="0.301171" status="run">
+		<system-out>VIVID GPU contract PASS (recording backend, ABI, buffers, dispatch validation)
+</system-out>
+	</testcase>
+	<testcase name="vivid_motionweave_bridge" classname="vivid_motionweave_bridge" time="0.795786" status="run">
+		<system-out>VIVID MotionWeave bridge PASS (pose reuse, isolation, no additive drift)
+</system-out>
+	</testcase>
+	<testcase name="vivid_metal_gpu" classname="vivid_metal_gpu" time="0.323966" status="run">
+		<system-out>VIVID real Metal GPU pass=0 vertices=137 shapes=160 max_abs_error=5.96046e-08
+VIVID real Metal GPU pass=1 vertices=137 shapes=160 max_abs_error=5.96046e-08
+VIVID real Metal GPU pass=2 vertices=137 shapes=160 max_abs_error=0
+VIVID real Metal GPU parity PASS
+</system-out>
+	</testcase>
+	<testcase name="vivid_metal_rhi" classname="vivid_metal_rhi" time="0.430329" status="run">
+		<system-out>[metal-assets] libraries=0 sourceMisses=0 pipelines=0 pipelineFailures=0 archive=0 strict=0
+VIVID Metal RHI frame=0 vertices=79 max_abs_error=5.96046e-08
+VIVID Metal RHI ModelVertex(60B) frame=0 max_abs_error=5.96046e-08
+VIVID Metal RHI frame=1 vertices=79 max_abs_error=0
+VIVID Metal RHI ModelVertex(60B) frame=1 max_abs_error=0
+VIVID Metal RHI frame=2 vertices=79 max_abs_error=5.96046e-08
+VIVID Metal RHI ModelVertex(60B) frame=2 max_abs_error=5.96046e-08
+VIVID Metal RHI frame=3 vertices=79 max_abs_error=0
+VIVID Metal RHI ModelVertex(60B) frame=3 max_abs_error=0
+VIVID real Metal async actor retirement PASS
+VIVID multi-actor GPU 2 independent actors / 3 frames PASS
+VIVID real Metal gfx::Device parity PASS
+</system-out>
+	</testcase>
+	<testcase name="vivid_metal_sculpt_id" classname="vivid_metal_sculpt_id" time="1.10496" status="run">
+		<system-out>[metal-assets] libraries=0 sourceMisses=2 pipelines=2 pipelineFailures=0 archive=0 strict=0
+VIVID Metal sculpt ID depth/readback pass=1
+</system-out>
+	</testcase>
+	<testcase name="vivid_human_retirement" classname="vivid_human_retirement" time="0.562682" status="run">
+		<system-out>VIVID whole-human retirement PASS
+</system-out>
+	</testcase>
+	<testcase name="vivid_cpu_actor" classname="vivid_cpu_actor" time="0.194674" status="run">
+		<system-out>VIVID CPU actor GLES fallback PASS
+</system-out>
+	</testcase>
+	<testcase name="vivid_actor_retirement" classname="vivid_actor_retirement" time="0.215705" status="run">
+		<system-out>VIVID async GPU actor retirement PASS (batch token, pending, failed, idle recovery, device ownership)
+</system-out>
+	</testcase>
+	<testcase name="vivid_vertex_override" classname="vivid_vertex_override" time="0.573941" status="run">
+		<system-out>VIVID render vertex override safety policy PASS
+</system-out>
+	</testcase>
+	<testcase name="vivid_morph_binding" classname="vivid_morph_binding" time="0.216881" status="run">
+		<system-out>VIVID morph binding PASS (compile validation, pose blending, atomic failure)
+</system-out>
+	</testcase>
+	<testcase name="fps_animation_actions" classname="fps_animation_actions" time="0.176927" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="fps" classname="fps" time="26.1551" status="run">
+		<system-out>FPS_MOTOR_TICKS_MS=635.197
+FPS_MOTOR_PARITY_HASH=a82683dc6ab37eb0
+FPS_COMBAT_PARITY_HASH=deadafc7c9c52593
+royale: winner 1 after 131 ticks
+snapshot deltas: 10000 packets, 488910 bytes vs 3570000 full (100 sent full)
+100 clients / 300 ticks / sparse 16 km world: 3806 ms (debug/local loopback, not WAN capacity)
+FPS spatial, motor, combat, save/rollback and authority tests passed
+</system-out>
+	</testcase>
+	<testcase name="authority_world_persistence" classname="authority_world_persistence" time="2.92616" status="run">
+		<system-out>Authority world persistence fixtures passed
+</system-out>
+	</testcase>
+	<testcase name="fps_transport" classname="fps_transport" time="0.873342" status="run">
+		<system-out>UDP: authority tick=750 input ack=721 (UDP test loss 10%)
+WebSocket: authority tick=750 input ack=745 (UDP test loss 10%)
+</system-out>
+	</testcase>
+	<testcase name="world_operator_jobs" classname="world_operator_jobs" time="0.333057" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="world_streaming" classname="world_streaming" time="0.86741" status="run">
+		<system-out>World streaming: budgets, priorities, failures, local coordinates and 20001-cell traversal passed
+</system-out>
+	</testcase>
+	<testcase name="world_async" classname="world_async" time="4.62526" status="run">
+		<system-out>async
+triangles
+terrain
+corruption
+simulation
+example network and motor
+Async world: background preparation, cancellation, budgets, triangles, terrain motor, hashes, seams and restore passed
+</system-out>
+	</testcase>
+	<testcase name="voxel_game" classname="voxel_game" time="64.9257" status="run">
+		<system-out>mobs at night: 8, player health 20
+session: chunks 1104, sent 317 KiB
+voxel game tests passed
+</system-out>
+	</testcase>
+	<testcase name="voxel_server" classname="voxel_server" time="13.1501" status="run">
+		<system-out>Voxel authority: UDP 27290, WebSocket 27291; 20 Hz; 8 slots
+ticks=100 checksum=2377265875353663793 sent=0
+</system-out>
+	</testcase>
+	<testcase name="studio_image_codecs" classname="studio_image_codecs" time="0.564089" status="run">
+		<system-out>Studio image codecs PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_building_topology" classname="studio_building_topology" time="5.53048" status="run">
+		<system-out>Studio building topology PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_building_preview" classname="studio_building_preview" time="4.48673" status="run">
+		<system-out>[metal-assets] libraries=0 sourceMisses=10 pipelines=14 pipelineFailures=0 archive=0 strict=0
+Building panel native GPU orbit PASS, changed pixels=83374
+</system-out>
+	</testcase>
+	<testcase name="studio_metal_lighting" classname="studio_metal_lighting" time="12.0924" status="run">
+		<system-out>[metal-assets] libraries=0 sourceMisses=26 pipelines=36 pipelineFailures=0 archive=0 strict=0
+Preview geometry · GI: CPU · Direct: Luma PASS
+Preview geometry · GI: GPU · Direct: Luma PASS
+Preview geometry · GI: off · Direct: Luma PASS
+Preview geometry · GI: off · Direct: Luma PASS
+Luma light removal delta 47645 in 3917 pixels
+Negative-coordinate FPS and material transition PASS
+Idle frame skipping PASS
+Studio Metal lighting PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_spectrafx_preview" classname="studio_spectrafx_preview" time="7.2339" status="run">
+		<system-out>[metal-assets] libraries=0 sourceMisses=11 pipelines=15 pipelineFailures=0 archive=0 strict=0
+[metal-assets] libraries=0 sourceMisses=23 pipelines=32 pipelineFailures=0 archive=0 strict=0
+Studio SpectraFX Metal preview PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_spectrafx_fire_smoke" classname="studio_spectrafx_fire_smoke" time="7.24577" status="run">
+		<system-out>[metal-assets] libraries=0 sourceMisses=11 pipelines=15 pipelineFailures=0 archive=0 strict=0
+[metal-assets] libraries=0 sourceMisses=25 pipelines=46 pipelineFailures=0 archive=0 strict=0
+Studio SpectraFX Metal preview PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_render_lighting" classname="studio_render_lighting" time="9.7709" status="run">
+		<system-out>Studio render lighting persistence PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_human_appearance_session" classname="studio_human_appearance_session" time="9.66254" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="studio_human_creator" classname="studio_human_creator" time="0.860789" status="run">
+		<system-out>studio human creator PASS (25 nodes, 5 targets, 11932 verts)
+</system-out>
+	</testcase>
+	<testcase name="studio_content_directory" classname="studio_content_directory" time="0.235041" status="run">
+		<system-out>studio content directory and sandboxed listing PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_asset_transfers" classname="studio_asset_transfers" time="60.2444" status="run">
+		<system-out>PASS studio conflict resolution and GUID-preserving asset transfers
+</system-out>
+	</testcase>
+	<testcase name="studio_move_journal" classname="studio_move_journal" time="18.7122" status="run">
+		<system-out>PASS studio persistent move recovery and collision safety
+</system-out>
+	</testcase>
+	<testcase name="studio_asset_catalog" classname="studio_asset_catalog" time="3.8406" status="run">
+		<system-out>PASS studio asset .meta GUID + SQLite catalog
+</system-out>
+	</testcase>
+	<testcase name="studio_fps_lighting_contract" classname="studio_fps_lighting_contract" time="0.150668" status="run">
+		<system-out>Studio FPS Lighting authorization PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_fps_lighting_document" classname="studio_fps_lighting_document" time="4.8828" status="run">
+		<system-out>Studio FPS Lighting serialization PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_light_preview_math" classname="studio_light_preview_math" time="0.214536" status="run">
+		<system-out>Studio light preview math PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_authored_lights" classname="studio_authored_lights" time="5.85105" status="run">
+		<system-out>Studio authored lights PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_pbr_adapter" classname="studio_pbr_adapter" time="6.05465" status="run">
+		<system-out>Studio PBR material adapter PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_facial_preview_binding" classname="studio_facial_preview_binding" time="2.1414" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="studio_facial_runtime" classname="studio_facial_runtime" time="1.5627" status="run">
+		<system-out></system-out>
+	</testcase>
+	<testcase name="studio_facial_gpu" classname="studio_facial_gpu" time="3.32834" status="run">
+		<system-out>[metal-assets] libraries=0 sourceMisses=11 pipelines=15 pipelineFailures=0 archive=0 strict=0
+Studio facial async import / last-good / Metal frame lease PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_facial_rig_document" classname="studio_facial_rig_document" time="0.584081" status="run">
+		<system-out>Studio facial rig authoring contract OK
+</system-out>
+	</testcase>
+	<testcase name="studio_shader_graph_draft" classname="studio_shader_graph_draft" time="0.452172" status="run">
+		<system-out>Studio Shader Graph draft contract PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_shader_graph_name" classname="studio_shader_graph_name" time="0.378282" status="run">
+		<system-out>Studio Shader Graph name validation PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_material_validation" classname="studio_material_validation" time="0.150277" status="run">
+		<system-out>Studio material validation PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_bridge" classname="studio_bridge" time="0.238449" status="run">
+		<system-out>TAP version 13
+# (node:50850) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: studio.openProject waits for native interaction without an RPC timeout
+ok 1 - studio.openProject waits for native interaction without an RPC timeout
+  ---
+  duration_ms: 34.4405
+  type: 'test'
+  ...
+# Subtest: studio.openMap waits for native interaction without an RPC timeout
+ok 2 - studio.openMap waits for native interaction without an RPC timeout
+  ---
+  duration_ms: 0.884542
+  type: 'test'
+  ...
+# Subtest: studio.newMap waits for native interaction without an RPC timeout
+ok 3 - studio.newMap waits for native interaction without an RPC timeout
+  ---
+  duration_ms: 0.719542
+  type: 'test'
+  ...
+# Subtest: studio.saveAs waits for native interaction without an RPC timeout
+ok 4 - studio.saveAs waits for native interaction without an RPC timeout
+  ---
+  duration_ms: 0.6645
+  type: 'test'
+  ...
+# Subtest...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+	<testcase name="studio_material_schema" classname="studio_material_schema" time="0.192987" status="run">
+		<system-out>TAP version 13
+# Subtest: PBR field metadata exactly matches native allowlist
+ok 1 - PBR field metadata exactly matches native allowlist
+  ---
+  duration_ms: 1.451167
+  type: 'test'
+  ...
+# Subtest: draft values override material without mutating source
+ok 2 - draft values override material without mutating source
+  ---
+  duration_ms: 0.096083
+  type: 'test'
+  ...
+# Subtest: invalid library entries are excluded
+ok 3 - invalid library entries are excluded
+  ---
+  duration_ms: 6.851666
+  type: 'test'
+  ...
+# Subtest: color swatch clamps invalid channels
+ok 4 - color swatch clamps invalid channels
+  ---
+  duration_ms: 0.129167
+  type: 'test'
+  ...
+# Subtest: patch output strips unsupported fields
+ok 5 - patch output strips unsupported fields
+  ---
+  duration_ms: 0.153209
+  type: 'test'
+  ...
+# Subtest: creation preset registry stays within native whitelist
+ok 6 - creation preset registry stays within native whitelist
+  ---
+  duration_ms: 0.044917
+  type: 'test'
+  ...
+# Subtest: receiver shadow diffusion defaults...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+	<testcase name="studio_lighting_validation" classname="studio_lighting_validation" time="0.337335" status="run">
+		<system-out>Studio lighting validation PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_model_picking" classname="studio_model_picking" time="0.333608" status="run">
+		<system-out>PASS studio CPU model and rendered planetary terrain picking
+</system-out>
+	</testcase>
+	<testcase name="studio_visual_picking" classname="studio_visual_picking" time="0.315836" status="run">
+		<system-out>PASS studio visual shape picking
+</system-out>
+	</testcase>
+	<testcase name="studio_document_visuals" classname="studio_document_visuals" time="5.40855" status="run">
+		<system-out>StudioDocumentVisuals PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_scene_nodes" classname="studio_scene_nodes" time="5.96189" status="run">
+		<system-out>Studio scene node contract PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_terrain_geometry" classname="studio_terrain_geometry" time="5.45258" status="run">
+		<system-out>StudioTerrainGeometry PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_spectra_transfer" classname="studio_spectra_transfer" time="0.19335" status="run">
+		<system-out>SpectraFX transfer lease contract PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_viewport_layout" classname="studio_viewport_layout" time="0.144788" status="run">
+		<system-out>Studio viewport layout contract PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_render_thread" classname="studio_render_thread" time="0.232821" status="run">
+		<system-out>studio render thread PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_session" classname="studio_session" time="21.3575" status="run">
+		<system-out>studio session contract PASS
+</system-out>
+	</testcase>
+	<testcase name="studio_owner_history" classname="studio_owner_history" time="0.190874" status="run">
+		<system-out>PASS distinct owner epochs
+PASS stable step IDs across undo/redo
+PASS no-op and redo branch fencing
+PASS bounded eviction
+PASS typed move recording
+PASS oversized history barrier
+PASS explicit agent policy
+PASS cross-owner batch boundaries and intervening edit refusal
+PASS merged file chain and external conflict refusal
+</system-out>
+	</testcase>
+	<testcase name="studio_mcp_registry" classname="studio_mcp_registry" time="5.41666" status="run">
+		<system-out>registered=448, required_families=18
+PASS core: open_game, map_validate
+PASS scene: scene_entity_list, scene_component_set
+PASS camera: lens_scene_get, lens_camera_set
+PASS animation: animation_graph_list, animation_graph_set
+PASS terrain: terrain_sculpt, terrain_material, terraweave_meadow_get, terraweave_meadow_set
+PASS planet_forest: planet_forest_get, planet_forest_set, planet_forest_plant, planet_forest_move, planet_forest_remove
+PASS lighting: light_list, scene_light_create
+PASS physis: physis_get, physis_set
+PASS spectrafx: fx_graph_list, fx_graph_set
+PASS postfx: postfx_get
+PASS geometry: geometry_catalog, strata_capabilities
+PASS human: human_schema, human_create
+PASS building: building_graph_diagnostics
+PASS graphs: graph_catalog, graph_list, graph_get, graph_node_catalog, graph_validate, graph_edit, graph_save, graph_diagnostics, graph_dependencies, graph_property_schema, graph_asset_dependencies, graph_runtime_capabilities, graph_runtime_probe, graph_live_snapshot, graph_live_watch, graph_live_pro...
+[This part of the test output was removed since it exceeds the threshold of 1024 bytes.]
+</system-out>
+	</testcase>
+</testsuite>

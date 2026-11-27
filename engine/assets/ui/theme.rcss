@@ -117,6 +117,12 @@ scrollbarcorner { width: 6dp; height: 6dp; }
 #card .card-grid { position: relative; width: 100%; }
 #card .card-slot { position: absolute; }
 #card .card-slot button { display: block; width: 100%; height: 50dp; box-sizing: border-box; overflow: hidden; }
+/* Expand descriptions inside the scrollable card, so neither its edges nor
+   the fixed cell height truncate an authored action description. Grid slots
+   keep their position; the hovered/focused action draws above neighbours. */
+#card .card-slot button .tip { display: none; white-space: normal; }
+#card .card-slot button:hover, #card .card-slot button:focus { height: auto; min-height: 50dp; overflow: visible; z-index: 10; }
+#card .card-slot button:hover .tip, #card .card-slot button:focus .tip { display: block; }
 #card .hidden-slot { display: none; }
 #card .cell { display: block; }
 #card .cell button { display: block; margin: 3dp 0; }

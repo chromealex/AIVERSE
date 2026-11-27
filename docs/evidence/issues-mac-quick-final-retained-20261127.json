@@ -1,0 +1,11 @@
+{
+  "sha": "0a8ed3c9ef3858d539c1b38ade9036dd8391e64f",
+  "argv": [
+    "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12",
+    "-c",
+    "\nfrom pathlib import Path\nimport subprocess,xml.etree.ElementTree as ET,hashlib\nsha='0a8ed3c9ef3858d539c1b38ade9036dd8391e64f'\nassert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==sha\nassert not subprocess.check_output(['git','status','--porcelain'],text=True).strip()\np=Path('/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-134227-98949')\ns=(p/'summary.txt').read_text()\nassert 'commit='+sha[:9] in s\nassert all(x in s for x in ['PASS configure','PASS build','PASS ctest','Passed stages: 3 | Failed stages: 0','PASS: all selected test stages'])\nx=ET.parse(p/'ctest.xml').getroot()\nassert int(x.attrib['tests'])==592 and int(x.attrib['failures'])==0\ncases=x.findall('testcase')\nassert len(cases)==592\nassert not any(c.find('failure') is not None or c.find('error') is not None for c in cases)\nskips=[c.attrib['name'] for c in cases if c.find('skipped') is not None]\nassert len(skips)==5\nprint('Verification of actual completed Mac quick run; no tests re-executed by this capture command.')\nprint('Native run source SHA:',sha)\nprint('Original argv: env TMPDIR=/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/tmp bash ./run-tests.sh --quick --build-dir /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick')\nprint('Original evidence recorder exited 2 because its report ID already existed; native runner completed all three stages successfully. Checkout remained clean and at the same SHA.')\nprint('Counts: 587 passed, 5 skipped, 0 failed. Skips:',skips)\nfor name in ['configure.log','build.log','ctest.log','summary.txt']:\n raw=(p/name).read_bytes()\n print('\\nRETAINED',name,'sha256',hashlib.sha256(raw).hexdigest())\n print(raw.decode('utf-8',errors='replace'))\nprint('JUnit sha256:',hashlib.sha256((p/'ctest.xml').read_bytes()).hexdigest())\n"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/issues-mac-quick-final-retained-20261127.log.txt",
+  "sha256": "45e83f196c6fd849f32eafb1624c8f3160d73158d2c2a2892ddf32e3aa75bead"
+}

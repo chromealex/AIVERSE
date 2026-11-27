@@ -1,0 +1,18 @@
+{
+  "source": "32c2c3e04",
+  "backend": "native WKWebView",
+  "project": "/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/fixtures/project-data-ui-20261127",
+  "observed": [
+    "Command palette opens Project Data",
+    "Loaded audio.json; changed repeatSelect.count from 3 to 4",
+    "Save returned Saved and reloaded; Load and path disabled while draft dirty",
+    "Invalid JSON rejected with error and draft retained",
+    "Discard restored saved bytes; disk JSON retained count 4",
+    "New process loaded saved file with count 4"
+  ],
+  "limits": [
+    "Stale-original and path/symlink rejection covered by studio_session regression, not this UI capture",
+    "First process required SIGTERM after UI quit attempt left process live; exit143 is not successful shutdown evidence",
+    "Second Studio process13604 remains running; no final gate claimed"
+  ]
+}

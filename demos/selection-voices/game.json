@@ -1,0 +1,19 @@
+{
+  "id": "org.aiverse.demos.selection_voices",
+  "name": "Selection voices",
+  "version": "1.0",
+  "module": "game",
+  "rules": "rules.json",
+  "audio": "audio.json",
+  "maps": [
+    {
+      "file": "maps/voices.json",
+      "title": "Ordered selection voices"
+    }
+  ],
+  "selectionShortcut": {
+    "type": "scout",
+    "hotkey": "F6",
+    "label": "Select scout"
+  }
+}

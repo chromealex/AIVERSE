@@ -1,0 +1,121 @@
+{
+  "runtime_source": "0ed8dddaa",
+  "fixture_source": "14e105a09",
+  "exit_code": 0,
+  "device": "miniaudio null backend, real device callback capture",
+  "original_sha256": "6ecef25a30ec378d8f54e84d3919989e420e8d5b2b2e18033fcf2c132589ae56",
+  "original_frames": 3682560,
+  "sample_rate": 48000,
+  "channels": 2,
+  "expected_hz": [
+    440,
+    440,
+    660,
+    880,
+    440,
+    440,
+    660,
+    440,
+    440
+  ],
+  "measured": [
+    {
+      "start_seconds": 23.01,
+      "end_seconds": 23.26,
+      "frequency_hz": 440,
+      "amplitudes_pcm16": {
+        "440": 11760.164053575307,
+        "660": 1.2030022818982338,
+        "880": 1.3148286511510217
+      }
+    },
+    {
+      "start_seconds": 26.94,
+      "end_seconds": 27.19,
+      "frequency_hz": 440,
+      "amplitudes_pcm16": {
+        "440": 11760.164053575307,
+        "660": 1.2030022818982338,
+        "880": 1.3148286511510217
+      }
+    },
+    {
+      "start_seconds": 30.53,
+      "end_seconds": 30.78,
+      "frequency_hz": 660,
+      "amplitudes_pcm16": {
+        "440": 1.202931706921515,
+        "660": 11759.492987775611,
+        "880": 1.7574901579310584
+      }
+    },
+    {
+      "start_seconds": 35.25,
+      "end_seconds": 35.5,
+      "frequency_hz": 880,
+      "amplitudes_pcm16": {
+        "440": 1.3194729388643975,
+        "660": 1.7572202830455261,
+        "880": 11759.096113580259
+      }
+    },
+    {
+      "start_seconds": 38.94,
+      "end_seconds": 39.19,
+      "frequency_hz": 440,
+      "amplitudes_pcm16": {
+        "440": 11760.164053575307,
+        "660": 1.2030022818982338,
+        "880": 1.3148286511510217
+      }
+    },
+    {
+      "start_seconds": 43.22,
+      "end_seconds": 43.47,
+      "frequency_hz": 440,
+      "amplitudes_pcm16": {
+        "440": 11760.164053575307,
+        "660": 1.2030022818982338,
+        "880": 1.3148286511510217
+      }
+    },
+    {
+      "start_seconds": 48.34,
+      "end_seconds": 48.59,
+      "frequency_hz": 660,
+      "amplitudes_pcm16": {
+        "440": 1.202931706921515,
+        "660": 11759.492987775611,
+        "880": 1.7574901579310584
+      }
+    },
+    {
+      "start_seconds": 58.92,
+      "end_seconds": 59.17,
+      "frequency_hz": 440,
+      "amplitudes_pcm16": {
+        "440": 11760.164053575307,
+        "660": 1.2030022818982338,
+        "880": 1.3148286511510217
+      }
+    },
+    {
+      "start_seconds": 63.92,
+      "end_seconds": 64.17,
+      "frequency_hz": 440,
+      "amplitudes_pcm16": {
+        "440": 11760.164053575307,
+        "660": 1.2030022818982338,
+        "880": 1.3148286511510217
+      }
+    }
+  ],
+  "actions": "Seven clicks on first scout, Stop command, click first scout, click second scout.",
+  "excerpt_policy": "Each detected non-silent interval plus100ms padding concatenated without resampling or amplitude changes; original timestamps retained above.",
+  "observed": "Cycle, sequential file order, no timeout across >2s gaps, command reset and entity switch confirmed by measured real client PCM.",
+  "limits": [
+    "Null-device output, not physical speakers.",
+    "Positive timeout and explicit reset covered by native mixer regression, not this UI recording.",
+    "Web audio and final full gate pending."
+  ]
+}

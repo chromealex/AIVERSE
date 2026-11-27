@@ -533,6 +533,7 @@ void GameClient::shutdown() {
     }
     ui_.setDynamicTexture("portrait",{},portraitSize_,portraitSize_);
     selectionPortrait_.shutdown();
+    portraitModel_.shutdown(*dev_);
     view_.shutdown(*dev_);
     prisma_.shutdown();
     r3d_.setBakedLighting(nullptr);
@@ -1173,8 +1174,8 @@ void GameClient::event(const Event& incoming) {
                 mode_ = Mode::Normal;
                 return;
             }
-            if (mode_ == Mode::AttackMove || mode_ == Mode::Patrol || mode_ == Mode::Rally) {
-                command(mode_ == Mode::AttackMove ? kCmdAttack : mode_ == Mode::Patrol ? kCmdPatrol : kCmdRally, e.x, e.y, e.mods & platform::kModShift);
+            if (mode_ == Mode::Move || mode_ == Mode::AttackMove || mode_ == Mode::Patrol || mode_ == Mode::Rally) {
+                command(mode_ == Mode::Move ? kCmdMove : mode_ == Mode::AttackMove ? kCmdAttack : mode_ == Mode::Patrol ? kCmdPatrol : kCmdRally, e.x, e.y, e.mods & platform::kModShift);
                 mode_ = Mode::Normal;
                 return;
             }
@@ -1339,7 +1340,7 @@ void GameClient::event(const Event& incoming) {
             } else if (!touchMoved_ && !uiWants) {
                 Entity t = pick(e.x, e.y);
                 if (mapClickTap(e.x, e.y)) {   // rules "mapClick": a tap is the game's tap command, as a mouse click
-                } else if (mode_ == Mode::Place || mode_ == Mode::Ability || mode_ == Mode::Claim || mode_ == Mode::Skill || mode_ == Mode::Drop || mode_ == Mode::ScriptCmd) {
+                } else if (mode_ == Mode::Move || mode_ == Mode::Place || mode_ == Mode::Ability || mode_ == Mode::Claim || mode_ == Mode::Skill || mode_ == Mode::Drop || mode_ == Mode::ScriptCmd) {
                     Event fake = e; fake.type = EventType::MouseDown; fake.button = 0; fake.mods = 0;
                     event(fake);
                 } else if (t.valid() && w.get<Owner>(t).player == human_ && !selectionHasGarrison()) {
@@ -1406,6 +1407,7 @@ void GameClient::applyRtsActions(const std::vector<std::string>& actions,bool al
         return std::find(actions.begin(),actions.end(),name)!=actions.end();
     };
     if(allowOrders && !selection_.empty()) {
+        if(fired("Move"))mode_=Mode::Move;
         if(fired("AttackMove"))mode_=Mode::AttackMove;
         if(fired("Patrol"))mode_=Mode::Patrol;
         if(mod().fieldOps() && selectionBuilds()) {
@@ -1535,6 +1537,13 @@ void GameClient::runViewScripts(float dt) {
     }
     viewScripts_.setScreen(screen_ == Screen::Paused ? "paused" : screen_ == Screen::Over ? "over" : "playing");   // view.screen()
     viewScripts_.update(*sim_, dt);
+    if (std::vector<Entity> requested; viewScripts_.takeSelectionRequest(requested)) {
+        selection_.clear();
+        for (Entity e : requested)
+            if (visibleSelectionUnit(e) && std::find(selection_.begin(), selection_.end(), e) == selection_.end())
+                selection_.push_back(e);
+        cardPage_.clear();
+    }
     if (static const char* pf = std::getenv("AIVERSE_VIEW_PROFILE"); pf && *pf) {   // testing: view script cost per frame
         static FILE* out = std::fopen(pf, "w");
         static size_t named = 0;
@@ -1673,7 +1682,7 @@ std::string GameClient::cursorState() {
         const Vec3 centre = placeCentre(mouseX_, mouseY_, onMap);
         return onMap && mod().canPlace(*sim_, human_, uint16_t(placeType_), centre) ? "place" : "invalid";
     }
-    if (mode_ == Mode::AttackMove || mode_ == Mode::Ability || mode_ == Mode::Skill || entityPointer_) {
+    if (mode_ == Mode::Move || mode_ == Mode::AttackMove || mode_ == Mode::Ability || mode_ == Mode::Skill || entityPointer_) {
         float3 ground;
         if (!groundAt(mouseX_, mouseY_, ground)) return "invalid";
         TargetKind kind = TargetKind::Point;
@@ -1689,7 +1698,7 @@ std::string GameClient::cursorState() {
         }
         if ((kind == TargetKind::Unit || kind == TargetKind::Structure) && !target) return "invalid";
         if (kind == TargetKind::Structure && (target->type >= rules_.types.size() || !rules_.types[target->type].structure)) return "invalid";
-        return mode_ == Mode::AttackMove ? "attack" : "ability";
+        return mode_ == Mode::AttackMove ? "attack" : mode_ == Mode::Move ? "normal" : "ability";
     }
     if (target) if (const auto* owner = w.tryGet<Owner>(hovered)) {
         if (mod().hostile(*sim_, human_, owner->player)) return "enemy";
@@ -2134,7 +2143,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
         fx_.contributeVolumes(prisma_);
         r3d_.render(pass, &prisma_);
         view_.noteRenderedFrame(r3d_.profile().cameraModelTriangles, r3d_.profile().triangles[0], r3d_.drawCalls());
-        fx_.render(r3d_.lighting);
+        fx_.render(r3d_.lighting,&r3d_);
         // GPU billboards share this scene depth/pass; no separate pass and no
         // duplicate CPU draw of GPU-owned hybrid emitter instances.
         fx_.renderGpu(r3d_.viewProj(),shakenCam);
@@ -2209,7 +2218,7 @@ void GameClient::frame(gfx::Device& dev, double dt) {
                 // The already updated particle population is reprojected
                 // into each camera's still-open draw pass. No FX tick/event.
                 fx_.renderPrepared(camera.camera,renderer.viewProj(),
-                                   width,height,renderer.lighting);
+                                   width,height,renderer.lighting,&renderer);
             });
         if(std::getenv("AIVERSE_LENS_LOG") && !result.diagnostics.empty())
             std::fprintf(stderr,"[lens] submitted=%zu skipped=%zu diagnostics=%zu\n",

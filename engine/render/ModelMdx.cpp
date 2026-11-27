@@ -27,8 +27,10 @@
 // Materials: the first textured layer is the base colour; a team-colour layer (replaceable id 1)
 // under it -> TeamMode::BaseAlpha (texture alpha 0 = team colour); only a team-colour texture ->
 // TeamMode::Tint on white; team glow (id 2) -> tinted procedural glow sprite. Filter modes:
-// None -> opaque, Transparent -> alpha test 0.75, Blend / Additive / AddAlpha / Modulate -> alpha
-// blend (additive and modulate are approximated). Reforged HD materials: diffuse, normal, ORM
+// None -> opaque, Transparent -> alpha test 0.75, Blend -> alpha blend,
+// Additive -> ONE/ONE, AddAlpha -> SRC_ALPHA/ONE. Extra additive layers share
+// the base geometry in separate transparent draws; Modulate remains approximated.
+// Reforged HD materials: diffuse, normal, ORM
 // (+ team mask from ORM alpha), emissive.
 //
 // Not supported (skipped quietly, or one warning): particle emitters, ribbons, lights, cameras,
@@ -564,6 +566,28 @@ private:
 
     void materials() {
         for (size_t i = 0; i < x_.materials.size(); ++i) m_->materials.push_back(material(x_.materials[i], i));
+        additiveLayers_.resize(x_.materials.size());
+        for(size_t i=0;i<x_.materials.size();++i) {
+            const auto& source=x_.materials[i];
+            if(source.layers.empty() || source.layers[0].textures.size()>1 || lower(source.shader).find("_hd")!=std::string::npos)continue;
+            int main=-1,team=-1,glow=-1;
+            for(size_t k=0;k<source.layers.size();++k) {
+                const auto* t=tex(source.layers[k].texture);if(!t)continue;
+                if(t->replaceable==1){if(team<0)team=int(k);}
+                else if(t->replaceable==2){if(glow<0)glow=int(k);}
+                else if(main<0)main=int(k);
+            }
+            const int base=main>=0?main:team>=0?team:glow>=0?glow:0;
+            for(size_t k=0;k<source.layers.size();++k) {
+                const auto& layer=source.layers[k];
+                if(int(k)==base || (layer.filter!=3 && layer.filter!=4))continue;
+                Mat isolated;isolated.layers.push_back(layer);
+                auto overlay=material(isolated,i);
+                overlay.name+="_layer"+std::to_string(k);
+                additiveLayers_[i].push_back(int(m_->materials.size()));
+                m_->materials.push_back(std::move(overlay));
+            }
+        }
         defaultMat_ = int(m_->materials.size());
         Material d;
         d.name = "default";
@@ -607,7 +631,7 @@ private:
         if (main >= 0) {
             const Layer& l = wm.layers[size_t(main)];
             m.baseTex = texImage(l.texture);
-            if (team >= 0 && team < main) { m.team = TeamMode::BaseAlpha; applyFilter(m, wm.layers[size_t(team)]); }
+            if (team >= 0 && team < main) { m.team = TeamMode::BaseAlpha; applyFilter(m, (l.filter==3 || l.filter==4)?l:wm.layers[size_t(team)]); }
             else applyFilter(m, l);
             if (team > main) m.team = TeamMode::Tint;   // team colour drawn on top: tint (approximation)
         } else if (team >= 0) {
@@ -616,7 +640,7 @@ private:
         } else if (glow >= 0) {
             m.team = TeamMode::Tint;
             m.baseTex = glowImage();
-            m.alpha = AlphaMode::Blend;
+            applyFilter(m,wm.layers[size_t(glow)]);
             m.shading = ShadingModel::Unlit;
             m.castShadow = false;
         } else if (!wm.layers.empty()) applyFilter(m, wm.layers[0]);
@@ -630,11 +654,12 @@ private:
             case 0: m.alpha = AlphaMode::Opaque; break;
             case 1: m.alpha = AlphaMode::Mask; m.alphaCutoff = 0.75f; break;
             case 2: m.alpha = AlphaMode::Blend; break;
-            case 3: case 4: m.alpha = AlphaMode::Blend; m.castShadow = false; warn("additive layers are approximated by alpha blending"); break;
+            case 3: m.alpha = AlphaMode::AdditiveUnweighted; break;
+            case 4: m.alpha = AlphaMode::Additive; break;
             default: m.alpha = AlphaMode::Blend; m.castShadow = false; warn("modulate layers are approximated by alpha blending"); break;
         }
-        if (l.alpha < 0.999f) { m.baseColor.w = std::clamp(l.alpha, 0.0f, 1.0f); m.alpha = AlphaMode::Blend; }
-        if (m.alpha == AlphaMode::Blend) m.castShadow = false;
+        if (l.alpha < 0.999f) { m.baseColor.w = std::clamp(l.alpha, 0.0f, 1.0f); if(!alphaBlended(m.alpha))m.alpha = AlphaMode::Blend; }
+        if (alphaBlended(m.alpha)) m.castShadow = false;
     }
 
     // ---- geometry
@@ -801,7 +826,11 @@ private:
         for (auto& [j, slot] : palette) prim.jointPalette[size_t(slot)] = uint16_t(j);
         if (prim.jointPalette.empty()) prim.jointPalette.push_back(0);
         if (needTangents) generateTangents(m.vertices, m.indices, prim.firstIndex, prim.indexCount);
-        md.primitives.push_back(std::move(prim));
+        md.primitives.push_back(prim);
+        if(prim.material>=0 && size_t(prim.material)<additiveLayers_.size())
+            for(int materialId:additiveLayers_[size_t(prim.material)]) {
+                auto layer=prim;layer.material=materialId;md.primitives.push_back(std::move(layer));
+            }
     }
 
     // ---- animation
@@ -1001,6 +1030,7 @@ private:
     std::vector<float3> pivots_;     // per node, engine space
     std::map<std::string, int> images_;
     int glowImage_ = -1, defaultMat_ = 0;
+    std::vector<std::vector<int>> additiveLayers_;
 };
 
 } // namespace

@@ -1,0 +1,11 @@
+{
+  "sha": "16c4cf6d2c281109f031c129a8351692c3f81e97",
+  "argv": [
+    "python3",
+    "-c",
+    "import subprocess; from pathlib import Path; binary=Path(\"/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/aiverse_tests\"); [subprocess.run([str(binary), name],check=True) for name in [\"attack_phase_fractional_time_is_conserved\",\"precise_windup\"]]"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/issues-attack-phases-current-20261127.log.txt",
+  "sha256": "5df957cdd50070e5042a513f4abc0e8a2c3dc994ba0c5fdc148a0993db786604"
+}
