@@ -180,15 +180,16 @@ export default function SceneToolbar({ enabled, projectPath = '', documentScope 
            {MODEL_VIEWS.map((name,value)=><option key={name} value={value}>{name}</option>)}
          </StudioSelect></label></fieldset>
        {([
-         ['Scene',[['mapRoutes','Map routes'],['playerStarts','Player starts'],['resourceFields','Resource fields'],['rampTiles','Ramp tiles'],['regionBorders','Region borders'],['triggerAreas','Trigger areas'],['worldAxes','World axes'],['objectBounds','Object bounds'],['selectionBox','Selection box']]],
+         ['Scene',[['worldAxes','World axes'],['objectBounds','Object bounds'],['selectionBox','Selection box']]],
+         ['Map',[['mapRoutes','Map routes'],['playerStarts','Player starts'],['resourceFields','Resource fields'],['rampTiles','Ramp tiles'],['regionBorders','Region borders'],['triggerAreas','Trigger areas']]],
          ['STRATA',[['strataBounds','Cluster bounds'],['strataWire','Cluster wireframe'],['strataFill','Cluster fill'],['strataRoutes','Instance routes']]],
          ['PHYSIS · play-test',[['natureWind','Wind field'],['natureFire','Fire spread']]],
-         ['TerraWeave',[['terraTreeWind','Wind at selected tree'],['erosionZones','Erosion zones']]],
+         ['TerraWeave',[['terraTreeWind','Wind at selected tree'],['erosionZones','Erosion zones'],['terraSlope','Slope at selected tile'],['terraSlopeAtTarget','Slope at camera target']]],
        ] as const).map(([name,items])=><fieldset key={name}><legend>{name}</legend>{items.map(([key,label])=>
          <label key={key}><input type="checkbox" checked={state[key]} onChange={e=>set({[key]:e.target.checked})}/>{label}</label>)}{name==='STRATA'&&<label>Color by
            <StudioSelect value={state.strataColor} onChange={e=>set({strataColor:Number(e.currentTarget.value)})}>
              {['Cluster','LOD depth','Geometric error','Material'].map((label,value)=><option key={label} value={value}>{label}</option>)}
-           </StudioSelect></label>}</fieldset>)}
+           </StudioSelect></label>}{name==='TerraWeave' && state.erosionZones && documentScope && <ErosionZoneHighlight key={JSON.stringify([documentScope.projectPath,documentScope.mapPath,documentScope.epoch,documentScope.revision])} scope={documentScope}/>}</fieldset>)}
        <fieldset><legend>Wind rig</legend><label>Display
         <StudioSelect value={windDebug} onChange={e=>{
           const debug=e.currentTarget.value as WindDebugView;
@@ -197,11 +198,9 @@ export default function SceneToolbar({ enabled, projectPath = '', documentScope 
         }}>
          {(['off','parts','depth','weight','skeleton'] as const).map((value,i)=><option key={value} value={value}>{['Off','Parts','Hierarchy depth','Sway weight','Skeleton'][i]}</option>)}
         </StudioSelect></label>{windError&&<small role="alert">{windError}</small>}</fieldset>
-       {state.erosionZones && documentScope && <ErosionZoneHighlight key={JSON.stringify([documentScope.projectPath,documentScope.mapPath,documentScope.epoch,documentScope.revision])} scope={documentScope}/>}
+
        <fieldset><legend>NEREID</legend><label><input type="checkbox" checked={state.nereidFlow} onChange={e=>set({nereidFlow:e.target.checked})}/>River flow</label>
        {state.nereidFlow&&<label><input type="checkbox" checked={state.nereidAllWater} onChange={e=>set({nereidAllWater:e.target.checked})}/>Show all rivers</label>}</fieldset>
-       <label><input type="checkbox" checked={state.terraSlope} onChange={e=>set({terraSlope:e.target.checked})}/>Slope at selected tile</label>
-       <label><input type="checkbox" checked={state.terraSlopeAtTarget} onChange={e=>set({terraSlopeAtTarget:e.target.checked})}/>Slope at camera target</label>
        {(state.natureWind||state.natureFire||state.terraSlope||state.terraSlopeAtTarget)&&<fieldset className="scene-toolbar__sampling"><legend>Field sampling</legend>
         {([['natureRadius','Radius',8,200],['natureSpacing','Spacing',2,32]] as const).map(([key,label,min,max])=>
          <label key={key}>{label}<output>{state[key]} m</output>
