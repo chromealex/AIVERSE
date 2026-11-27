@@ -113,8 +113,25 @@ private:
         if (!bridge->registered()) { g_object_ref_sink(web);g_object_unref(web);throw std::runtime_error("Floating bridge unavailable"); }
         auto* win=GTK_WINDOW(gtk_window_new(GTK_WINDOW_TOPLEVEL));
         gtk_window_set_title(win,title.empty()?"AIVERSE Studio":title.c_str());
-        gtk_window_set_default_size(win,std::clamp<int64_t>(params.getInt("width",640),220,6000),std::clamp<int64_t>(params.getInt("height",560),160,4000));
-        if (params.has("x") && params.has("y")) gtk_window_move(win,params.getInt("x"),params.getInt("y"));
+        int width=std::clamp<int64_t>(params.getInt("width",640),220,6000);
+        int height=std::clamp<int64_t>(params.getInt("height",560),160,4000);
+        if (params["x"].isNumber() && params["y"].isNumber()) {
+            int x=std::clamp<int64_t>(params.getInt("x"),G_MININT,G_MAXINT);
+            int y=std::clamp<int64_t>(params.getInt("y"),G_MININT,G_MAXINT);
+            auto* display=gtk_widget_get_display(GTK_WIDGET(win));
+            if (auto* monitor=gdk_display_get_monitor_at_point(display,x,y)) {
+                GdkRectangle work;
+                gdk_monitor_get_workarea(monitor,&work);
+                if (work.width>0 && work.height>0) {
+                    width=std::min(width,work.width);
+                    height=std::min(height,work.height);
+                    x=std::clamp(x,work.x,work.x+work.width-width);
+                    y=std::clamp(y,work.y,work.y+work.height-height);
+                    gtk_window_move(win,x,y);
+                }
+            }
+        }
+        gtk_window_set_default_size(win,width,height);
         gtk_container_add(GTK_CONTAINER(win),GTK_WIDGET(web));
         floats_.emplace(key,Floating{win,std::move(bridge)});
         g_signal_connect(win,"configure-event",G_CALLBACK(+[](GtkWidget* widget,GdkEventConfigure* event,gpointer data)->gboolean {
