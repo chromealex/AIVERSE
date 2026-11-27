@@ -41,7 +41,7 @@ elseif(AIVERSE_PLATFORM STREQUAL "linux")
     target_sources(aiverse_studio PRIVATE $<TARGET_OBJECTS:aiverse_runtime>)
     set_target_properties(aiverse_studio PROPERTIES OUTPUT_NAME AiverseStudio)
     add_custom_target(aiverse_studio_web_assets
-        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${AIVERSE_STUDIO_WEB_DIST}" "$<TARGET_FILE_DIR:aiverse_studio>/studio-web"
+        COMMAND "${CMAKE_COMMAND}" "-Dsource=${AIVERSE_STUDIO_WEB_DIST}" "-Ddestination=$<TARGET_FILE_DIR:aiverse_studio>/studio-web" -P "${CMAKE_CURRENT_SOURCE_DIR}/StageWebAssets.cmake"
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:aiversemcp>" "$<TARGET_FILE_DIR:aiverse_studio>/$<TARGET_FILE_NAME:aiversemcp>"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:aiverse_studio>/engine/fx/physis" "$<TARGET_FILE_DIR:aiverse_studio>/engine/fonts"
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${STUDIO_NATURE_TEXTURES} "$<TARGET_FILE_DIR:aiverse_studio>/engine/fx/physis"
@@ -69,9 +69,7 @@ else()
             DEPENDS "${AIVERSE_STUDIO_WEB_DIST}/index.html"
             COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/MacOS"
             COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:aiversemcp>" "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/MacOS/$<TARGET_FILE_NAME:aiversemcp>"
-            COMMAND "${CMAKE_COMMAND}" -E copy_directory
-                "${AIVERSE_STUDIO_WEB_DIST}"
-                "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/Resources/studio-web"
+            COMMAND "${CMAKE_COMMAND}" "-Dsource=${AIVERSE_STUDIO_WEB_DIST}" "-Ddestination=$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/Resources/studio-web" -P "${CMAKE_CURRENT_SOURCE_DIR}/StageWebAssets.cmake"
             COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/Resources/engine/fx/physis"
             COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${STUDIO_NATURE_TEXTURES} "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/Resources/engine/fx/physis"
             COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:aiverse_studio>/Resources/engine/fonts"
