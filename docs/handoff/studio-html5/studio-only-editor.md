@@ -1712,3 +1712,7 @@ cd5056a300a6a0bfd7be469afe235ec71f438696 updates InsightPanels.tsx, docs/studio-
 ### Display-resolution sampling for 2D textures
 
 779b0c3d94810d2dcd7ba2f4c386971a5028aeee updates engine/render/TexturePreviewGrid.h, StudioScene.cpp and InsightPanels.tsx. 2D reads now sample up to 160 pixels on the long side; layered diagnostics retain their 32x32 default. CPU checks passed for 898x452, transposed and 1x8192 inputs plus previous grid cases. Native Mac Studio and production web builds passed. Detached Metal panel validated canvas dimensions of 160x81 for an actual 898x452 target, with CSS dimensions 160x80.53. See stats-mac-v08xkq0v/live.log and captures/mac-texture-detailed-preview.png. Next extend uncompressed format support.
+
+### Full-float texture preview
+
+8e61d5b546bb7a177835961e32c7ed64ac0f5631 changes engine/render/TexturePreviewGrid.h, StudioScene.cpp, InsightPanels.tsx and tests/render/metal_texture_gpu.mm. RGBA32F uses the same HDR display transform as half floats; the memory limit accounts for 16 bytes per pixel. Built production web and Mac Studio. Hardware suite passed with an authored 2x1 RGBA32F Metal texture, byte-exact readback and comparison against expected display channels. Logs on KINGSTON: texture-float32-{metal,native,web}.log. Next verify an RGBA32F selection end-to-end in the detached inspector and assess remaining single/dual-channel backend formats.
