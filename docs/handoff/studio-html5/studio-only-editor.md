@@ -1768,3 +1768,7 @@ b004f89bcd665079b550b896fb7cc8d2b57bab21 updates apps/studio-web/src/graphs/Grap
 ### Fit graph to a small dock
 
 fc5d0076319dfaae6737c9e50c2d08b0cb9692d7 corrects GraphCanvas.tsx: Fit and Home can scale below the ordinary 25% manual bound and zooming out there no longer enlarges the graph. Production web build and graph tests passed. In a detached Mac Materials panel a test constrained the actual graph viewport to 110 CSS pixels, verified both SVG dimensions fit and zoom fell below 25%, then dispatched a zoom-out wheel event and rechecked containment. Returned the panel to its original width. Evidence: stats-mac-nrt7a93a/live.log. Continue outstanding window migration.
+
+### Dragging the graph minimap
+
+b0fec432c5d7d229e7c5fe466178d7e1b7120211 changes GraphCanvas.tsx and GraphCanvas.css to pan continuously with primary pointer capture. Web build and graph tests passed. Initial native event injection missed the minimap; scrolled it into view and used targeted foreground HID events after checking the window under the pointer. Detached Materials verified scrollLeft 8 after pointerdown and 334 after drag, with node coordinates unchanged. stats-mac-0ibdhso_/live.log and statistics.png. Mouse verified; touch input was not exercised.
