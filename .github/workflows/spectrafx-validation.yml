@@ -42,6 +42,10 @@ jobs:
         with:
           submodules: recursive
           lfs: false
+      - uses: actions/setup-node@v4
+        if: runner.os == 'macOS'
+        with:
+          node-version: '22'
       - name: Linux graphics and build dependencies
         if: runner.os == 'Linux'
         run: |
