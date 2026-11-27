@@ -158,7 +158,7 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
  };
  const switchGraph=(name:string)=>{
   if(name===selected)return;
-  if(dirty){setPendingName(name);setMessage('Save or discard your current graph draft before switching.');return;}
+  if(dirty){setPendingName(name);setMessage('');return;}
   setSelected(name);
  };
  const discardAndSwitch=()=>{
@@ -208,8 +208,8 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
   }catch(e){setError(e instanceof Error?e.message:String(e));}
   finally{setBusy(false);}
  };
- const save=async(applyAfterSave=false)=>{
-  if(!draft||!document||!selected||busy||(!dirty&&!applyAfterSave))return;
+ const save=async(applyAfterSave=false,openAfterSave='')=>{
+  if(!draft||!document||!selected||busy||(!dirty&&!applyAfterSave&&!openAfterSave))return;
   setBusy(true);setError('');setMessage('');
   let saved=document;
   try{
@@ -220,6 +220,7 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
     if(saveScope.current.projectPath!==projectPath||saveScope.current.selected!==selected)return;
     setDocument(saved);resetDraft(structuredClone(saved.graph));
    }
+   if(openAfterSave){setPendingName('');setSelected(openAfterSave);return;}
    if(applyAfterSave){
     const applyToMap=draft.domain==='postfx'&&scope==='map';
     await invoke('studio.op',{expectedProject:projectPath,expectedDocumentEpoch:documentEpoch,expectedMap:applyToMap?mapPath:undefined,op:'shader_graph_apply',
@@ -251,9 +252,10 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
   {(error||gpuError)&&<p className="graph-error" role="alert">{error||gpuError}</p>}
 
   {pendingName&&<div className="graph-pending">
-    <span>Discard unsaved changes and open {pendingName}?</span>
-    <button onClick={discardAndSwitch}>Discard &amp; open</button>
-    <button onClick={()=>setPendingName('')}>Cancel</button>
+    <span>Save changes to {selected} before opening {pendingName}?</span>
+    <button disabled={busy} onClick={()=>void save(false,pendingName)}>Save &amp; open</button>
+    <button disabled={busy} onClick={discardAndSwitch}>Discard &amp; open</button>
+    <button disabled={busy} onClick={()=>setPendingName('')}>Keep editing</button>
   </div>}
   {message&&<p className="graph-message" role="status">{message}</p>}
   <div className="graph-columns">
@@ -263,7 +265,7 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
       onChange={e=>setSearch(e.target.value)} placeholder="Graph name…"/>
     </label>
     {names.filter(x=>x.toLowerCase().includes(search.toLowerCase())).map(name=>
-     <button key={name} className={selected===name?'active':''} onClick={()=>switchGraph(name)}>{name}</button>)}
+     <button key={name} disabled={busy} className={selected===name?'active':''} onClick={()=>switchGraph(name)}>{name}</button>)}
     {!busy&&names.length===0&&<p>No project graphs found.</p>}
    </aside>
    <main className="graph-inspector" aria-busy={busy} inert={busy}>
