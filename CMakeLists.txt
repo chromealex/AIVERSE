@@ -5553,6 +5553,7 @@ if(AIVERSE_BUILD_TESTS AND AIVERSE_PLATFORM STREQUAL "linux" AND EXISTS "${AIVER
     endif()
     if(TARGET PkgConfig::STUDIO_WEBKITGTK)
         add_executable(aiverse_studio_linux_web_assets_tests apps/studio-native/tests/StudioLinuxWebAssets.cpp)
+        target_include_directories(aiverse_studio_linux_web_assets_tests PRIVATE "${PROJECT_SOURCE_DIR}")
         target_link_libraries(aiverse_studio_linux_web_assets_tests PRIVATE PkgConfig::STUDIO_WEBKITGTK)
         add_test(NAME studio_linux_web_assets COMMAND aiverse_studio_linux_web_assets_tests "${AIVERSE_STUDIO_WEB_DIST}")
         set_tests_properties(studio_linux_web_assets PROPERTIES LABELS "EDITOR;HTML" SKIP_RETURN_CODE 77 TIMEOUT 45)

@@ -59,7 +59,7 @@ jobs:
         run: |
           sudo apt-get update -q
           sudo apt-get install -y libwebkit2gtk-4.1-dev xvfb xauth
-          c++ -std=c++20 apps/studio-native/tests/StudioLinuxWebAssets.cpp -o "$RUNNER_TEMP/studio-webkit-test" $(pkg-config --cflags --libs webkit2gtk-4.1)
+          c++ -std=c++20 -I. apps/studio-native/tests/StudioLinuxWebAssets.cpp -o "$RUNNER_TEMP/studio-webkit-test" $(pkg-config --cflags --libs webkit2gtk-4.1)
           xvfb-run -a "$RUNNER_TEMP/studio-webkit-test" "$PWD/apps/studio-web/dist"
 
   boundary:

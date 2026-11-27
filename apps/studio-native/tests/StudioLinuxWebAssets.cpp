@@ -1,10 +1,30 @@
 #include "../linux/StudioWebAssets.h"
 #include "../linux/StudioWebBridge.h"
 #include <iostream>
+#include "../linux/StudioVulkanWindow.h"
 
 int main(int argc, char** argv) {
     if (argc != 2) return 2;
     if (!gtk_init_check(&argc, &argv)) return 77;
+    auto* surfaceWindow = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    auto* box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    auto* scene = gtk_drawing_area_new();
+    auto* preview = gtk_drawing_area_new();
+    gtk_container_add(GTK_CONTAINER(surfaceWindow), box);
+    gtk_container_add(GTK_CONTAINER(box), scene);
+    gtk_container_add(GTK_CONTAINER(box), preview);
+    if (aiverse::studio::studioVulkanWindow(preview)) return 1;
+    gtk_widget_show_all(surfaceWindow);
+    const auto sceneTarget = aiverse::studio::studioVulkanWindow(scene);
+    const auto previewTarget = aiverse::studio::studioVulkanWindow(preview);
+    if (!sceneTarget || !previewTarget || !sceneTarget->display ||
+        sceneTarget->display != previewTarget->display || !sceneTarget->window ||
+        !previewTarget->window || sceneTarget->window == previewTarget->window ||
+        aiverse::studio::studioVulkanWindow(box)) {
+        std::cerr << "Expected independent X11 drawables for Scene and preview\n";
+        return 1;
+    }
+    gtk_widget_destroy(surfaceWindow);
     auto* window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_default_size(GTK_WINDOW(window),1280,800);
     auto* view = WEBKIT_WEB_VIEW(webkit_web_view_new());
