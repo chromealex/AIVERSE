@@ -66,7 +66,13 @@ function DebugLayersMenu({children}:{children:ReactNode}) {
   },[query]);
   return <div className="scene-toolbar__marks-menu scene-toolbar__layers" data-native-overlay role="group" aria-label="Scene overlays">
     <StudioInput type="search" autoFocus aria-label="Search debug views" placeholder="Search debug views…" value={query}
-      onChange={event=>setQuery(event.currentTarget.value)}/>
+      onChange={event=>setQuery(event.currentTarget.value)}
+      onKeyDown={event=>{
+        if(event.key!=='ArrowDown')return;
+        const controls=list.current?.querySelectorAll<HTMLElement>('input:not(:disabled), select:not(:disabled), button:not(:disabled)');
+        const first=controls && Array.from(controls).find(control=>control.getClientRects().length>0);
+        if(first){event.preventDefault();first.focus();}
+      }}/>
     <div ref={list} className="scene-toolbar__layer-groups">{children}</div>
     {empty&&<p role="status">No matching debug views.</p>}
   </div>;
@@ -212,7 +218,7 @@ export default function SceneToolbar({ enabled, projectPath = '', documentScope 
     <button type="button" className={'scene-toolbar__toggle' + (state.gizmos ? ' is-on' : '')} disabled={!enabled} aria-pressed={state.gizmos}
       title="Show handles, selection box and the orientation gizmo" onClick={() => set({ gizmos: !state.gizmos })}><Shapes size={13}/></button>
     <div className="scene-toolbar__marks" onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))setLayersOpen(false);}}
-      onKeyDown={e=>{if(e.key==='Escape'){e.currentTarget.querySelector('button')?.focus();setLayersOpen(false);}}}>
+      onKeyDown={e=>{if(layersOpen&&e.key==='Escape'){e.preventDefault();e.stopPropagation();e.currentTarget.querySelector('button')?.focus();setLayersOpen(false);}}}>
       <button type="button" className="scene-toolbar__toggle" aria-label="Scene overlays" title="Scene overlays"
         disabled={!enabled} aria-expanded={layersOpen} onClick={()=>{setMarksOpen(false);setLayersOpen(v=>!v);}}><Layers size={13}/> Debug</button>
       {layersOpen&&<DebugLayersMenu>
