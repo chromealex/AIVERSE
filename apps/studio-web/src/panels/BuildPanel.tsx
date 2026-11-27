@@ -109,6 +109,7 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
   const {state,reload:reloadTranscript,error:transcriptError}=useBuildTranscript(projectPath,MAX_LOG);
   const log=state.text;
   const [error, setError] = useState('');
+  const [startingNative,setStartingNative] = useState(false);
   const [startedAt, setStartedAt] = useState(0);
   const [now, setNow] = useState(Date.now());
   const logBox = useRef<HTMLPreElement>(null);
@@ -299,6 +300,25 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
       {missing && phase === 'missing-toolchain' && <StudioAlert tone="warning" title={'Missing for ' + missing.target + ': ' + missing.ids.join(', ')}>
         <StudioButton size="sm" onClick={() => void start('build', true)}>Install and build</StudioButton></StudioAlert>}
       <div className="build__cards">
+        {info?.project === projectPath && !!info.nativeModules?.required?.length && <section className="build__card" aria-label="Project C++ modules">
+          <h3>Project C++ modules</h3>
+          {info.nativeModules.required.map(id => {
+            const missing = info.nativeModules!.missing.includes(id);
+            return <div key={id} className={'build__req ' + (missing ? 'is-missing' : 'is-found')}>
+              {missing ? <CircleAlert size={13}/> : <CheckCircle2 size={13}/>}
+              <span>{id}</span><small>{missing ? 'Missing in this Studio' : 'Loaded in this Studio'}</small>
+            </div>;
+          })}
+          {info.nativeModules.ready && <p className="build__note">Project Studio · {info.nativeModules.launch}</p>}
+          <StudioButton disabled={startingNative || state.running} onClick={async () => {
+            setStartingNative(true); setError('');
+            try {
+              await invoke('studio.buildNativeProject', {project:projectPath});
+              reloadTranscript('native-editor');
+            } catch (err) { setError(message(err)); }
+            finally { setStartingNative(false); }
+          }}>Build Studio with project modules</StudioButton>
+        </section>}
         <section className="build__card" aria-label="Toolchain">
           <h3>Toolchain · {selected?.name ?? target}{checking && <StudioLoader size={15}/>}</h3>
           {toolchain && !toolchain.hostSupported && <p className="build__note">{toolchain.hostNote || 'Not buildable on this computer'}</p>}

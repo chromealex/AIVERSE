@@ -2612,6 +2612,13 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
         if (saved.has("error")) throw std::runtime_error(saved.getStr("error"));
         return snapshot();
     }
+    if (method == "studio.buildNativeProject") {
+        if (params.getStr("project") != ws_.project.dir || ws_.building())
+            throw std::runtime_error("Project or build state changed");
+        auto result = ws_.call("native_build", Json::object());
+        if (result.has("error")) throw std::runtime_error(result.getStr("error"));
+        return result;
+    }
     if (method == "studio.buildInfo") {
         Json out = Json::object(), targets = Json::array();
         auto fileRules = [](const Json& rules) {
@@ -2624,6 +2631,9 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
             }
             return rows;
         };
+        if (ws_.project.rulesJson["nativeModules"].size()) {
+            out.set("nativeModules", ws_.call("native_status", Json::object()));
+        }
         out.set("rules",fileRules(manifest["packaging"]["files"]));
         for (const auto& t : kBuildTargets) {
             Json v = Json::object();
@@ -5244,7 +5254,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             reply.set("result",sceneBrushJson());
         } else if (method == "studio.agentInfo" || method == "studio.agentStart" || method == "studio.agentStop" || method == "studio.agentReset") {
             reply.set("result", agentRequest(method, params));
-        } else if (method == "studio.buildInfo" || method == "studio.buildFileTextureSize" || method == "studio.buildFileExclusion" || method == "studio.buildFileCompression" || method == "studio.buildRemoveFileRule" || method == "studio.buildSplitLimit" || method == "studio.buildSplitMode" || method == "studio.buildCompression" || method == "studio.buildAtlasFixSizes" || method == "studio.buildAtlasPage" || method == "studio.buildAtlasEnabled" || method == "studio.buildToolchain" || method == "studio.buildStart" ||
+        } else if (method == "studio.buildNativeProject" || method == "studio.buildInfo" || method == "studio.buildFileTextureSize" || method == "studio.buildFileExclusion" || method == "studio.buildFileCompression" || method == "studio.buildRemoveFileRule" || method == "studio.buildSplitLimit" || method == "studio.buildSplitMode" || method == "studio.buildCompression" || method == "studio.buildAtlasFixSizes" || method == "studio.buildAtlasPage" || method == "studio.buildAtlasEnabled" || method == "studio.buildToolchain" || method == "studio.buildStart" ||
                    method == "studio.buildLog" || method == "studio.buildEstimate") {
             reply.set("result", buildRequest(method, params));
         } else if(method=="studio.worldProcessAreaBatchResize"){
