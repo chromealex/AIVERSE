@@ -262,3 +262,6 @@
 .project-directory-list li.is-selected{background:var(--au-active)}
 button.project-directory-entry:hover{background:var(--au-hover);cursor:pointer}
 .project-directory footer{display:flex;align-items:center;gap:8px;padding:5px 8px;border-top:1px solid var(--au-line);color:var(--au-text-muted);flex-wrap:wrap;overflow-wrap:anywhere}
+
+.studio-assets-material-form{flex-wrap:wrap}
+.studio-assets-material-form label{display:inline-flex;align-items:center;gap:5px}

@@ -1,3 +1,4 @@
+import { MaterialRecipeFields, useMaterialRecipe } from './MaterialRecipeFields';
 import { revealProjectAsset } from '../assetNavigation';
 import { StudioDialog } from '../ui';
 import { copyText } from '../clipboard';
@@ -188,7 +189,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
   const [menu,setMenu]=useState<{x:number;y:number;path:string;directory:boolean;background?:boolean}|null>(null);
   const [creatingMaterial,setCreatingMaterial]=useState(false);
   const [materialName,setMaterialName]=useState('');
-  const [materialPreset,setMaterialPreset]=useState<'matte'|'metal'|'glass'>('matte');
+  const materialRecipe=useMaterialRecipe();
   const [error,setError]=useState('');
   const [message,setMessage]=useState('');
   const [loading,setLoading]=useState(true);
@@ -405,10 +406,10 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
   const startMaterial=()=>{setCreatingMaterial(true);setAddingFolder(false);setMaterialName('');};
   const createMaterial=async()=>{
     const name=materialName.trim();
-    if(!native||!projectPath||!name||busy)return;
+    if(!native||!projectPath||!name||busy||!materialRecipe.valid)return;
     setBusy(true);setError('');setMessage('');
     try{
-      const library=await invoke('studio.materialCreate',{name,preset:materialPreset});
+      const library=await invoke('studio.materialCreate',{name,...materialRecipe.params});
       setCreatingMaterial(false);setMaterialName('');
       const file=library.files?.[name];
       if(file?.startsWith('content/'))revealProjectAsset(projectPath,file.slice('content/'.length));
@@ -525,17 +526,14 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       <button type="submit" disabled={!renameName.trim()||busy||renameName.trim()===assetFileName(renameTarget)}>Review</button>
       <button type="button" disabled={busy} onClick={()=>setRenameTarget(null)}>Cancel</button>
     </form>}
-    {creatingMaterial&&<form className="studio-assets-create-folder" onSubmit={event=>{
+    {creatingMaterial&&<form className="studio-assets-create-folder studio-assets-material-form" onSubmit={event=>{
       event.preventDefault();void createMaterial();
     }}>
       <Library size={13}/><span>New material in content/materials</span>
       <input autoFocus aria-label="New material name" value={materialName}
         onChange={event=>setMaterialName(event.target.value)} placeholder="Material name"/>
-      <select aria-label="Material preset" value={materialPreset}
-        onChange={event=>setMaterialPreset(event.target.value as 'matte'|'metal'|'glass')}>
-        <option value="matte">Matte</option><option value="metal">Metal</option><option value="glass">Glass</option>
-      </select>
-      <button type="submit" disabled={!materialName.trim()||busy}>Create</button>
+      <MaterialRecipeFields recipe={materialRecipe} busy={busy}/>
+      <button type="submit" disabled={!materialName.trim()||busy||!materialRecipe.valid}>Create</button>
       <button type="button" onClick={()=>setCreatingMaterial(false)}>Cancel</button>
     </form>}
     {message&&<div className="studio-assets-status" role="status">{message}</div>}

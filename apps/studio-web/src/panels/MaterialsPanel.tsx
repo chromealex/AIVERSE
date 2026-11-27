@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Eye, Layers, RefreshCw, Save, Search, ShieldAlert } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
-import AssetReferencePicker from '../components/AssetReferencePicker';
+import { MaterialRecipeFields, useMaterialRecipe } from '../components/MaterialRecipeFields';
 import PropertyField from '../components/PropertyField';
 import MaterialGraphPanel from '../graphs/MaterialGraphPanel';
 import {StudioButton} from '../ui';
 import { StudioLoader } from '../ui';
-import { editablePatch, materialFields, materialNames, materialSwatchColor, MATERIAL_PRESETS } from './materialSchema';
-import type { MaterialData, MaterialKey, MaterialLibrary, MaterialPatch, MaterialPreset } from './materialSchema';
+import { editablePatch, materialFields, materialNames, materialSwatchColor } from './materialSchema';
+import type { MaterialData, MaterialKey, MaterialLibrary, MaterialPatch } from './materialSchema';
 import { revealProjectAsset } from '../assetNavigation';
 import './MaterialsPanel.css';
 
@@ -19,10 +19,7 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
  const [name,setName]=useState('');
  const [query,setQuery]=useState('');
  const [newName,setNewName]=useState('');
- const [newPreset,setNewPreset]=useState<MaterialPreset>('matte');
- const [colorMap,setColorMap]=useState('');
- const [normalMap,setNormalMap]=useState('');
- const [repeatMetres,setRepeatMetres]=useState('1');
+ const recipe=useMaterialRecipe();
  const [creating,setCreating]=useState(false);
  const [draft,setDraft]=useState<MaterialPatch>({});
  const [pending,setPending]=useState<string|null>(null);
@@ -83,14 +80,14 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
   setDraft(current=>({...current,[key as MaterialKey]:value}));
   setMessage('');
  };
- const recipeValid=newPreset!=='triplanar' || (colorMap.trim() && Number(repeatMetres)>=0.001 && Number(repeatMetres)<=100000);
+
  const create=async()=>{
   if(busy||loading||!connected||!projectPath)return;
   if(changes>0){setError('Apply or discard the current material draft first.');return;}
   if(!/^[A-Za-z0-9_-]{1,64}$/.test(newName)){setError('Use 1–64 letters, digits, underscore or hyphen.');return;}
   setBusy(true);setError('');setMessage('');
   try{
-   const response=await invoke('studio.materialCreate',{name:newName,preset:newPreset,...(newPreset==='triplanar'?{colorGuid:colorMap,normalGuid:normalMap,repeatMetres:Number(repeatMetres)}:{})});
+   const response=await invoke('studio.materialCreate',{name:newName,...recipe.params});
    setQuery(current=>newName.toLowerCase().includes(current.toLowerCase())?current:'');
    setLibrary(response);setName(newName);setDraft({});setPending(null);setNewName('');setCreating(false);
    const file=response.files?.[newName];
@@ -239,17 +236,9 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
     {creating&&<div className="materials-new-form">
       <label>Name<input aria-label="New material name" value={newName}
         placeholder="matte_stone" maxLength={64} onChange={e=>setNewName(e.target.value)}/></label>
-      <label>Preset<select aria-label="Material preset" value={newPreset}
-        onChange={e=>setNewPreset(e.target.value as MaterialPreset)}>
-        {MATERIAL_PRESETS.map(p=><option key={p} value={p}>{p}</option>)}
-      </select></label>
-      {newPreset==='triplanar'&&<>
-        <div className="property-row"><span>Colour texture</span><AssetReferencePicker label="Colour texture" value={colorMap} kinds={['image']} disabled={busy} onChange={setColorMap}/></div>
-        <div className="property-row"><span>Normal texture (optional)</span><AssetReferencePicker label="Normal texture (optional)" value={normalMap} kinds={['image']} disabled={busy} onChange={setNormalMap}/></div>
-        <label>Repeat length (metres)<input type="number" min="0.001" max="100000" step="any" value={repeatMetres} onChange={e=>setRepeatMetres(e.target.value)}/></label>
-      </>}
+      <MaterialRecipeFields recipe={recipe} busy={busy}/>
       {changes>0&&<small>Save or discard your edits to {name} before creating this material.</small>}
-      <button disabled={busy||!newName||!recipeValid||changes>0} onClick={()=>void create()}>Create and save</button>
+      <button disabled={busy||!newName||!recipe.valid||changes>0} onClick={()=>void create()}>Create and save</button>
     </div>}
     <label className="materials-search"><Search size={14}/>
      <input placeholder="Filter materials…" aria-label="Filter materials"
