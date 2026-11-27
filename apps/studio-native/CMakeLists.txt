@@ -112,7 +112,7 @@ if(AIVERSE_BUILD_TESTS AND APPLE)
         StudioFacialGpuPreview.cpp StudioAssetCatalog.cpp)
     target_include_directories(aiverse_studio_spectrafx_preview_tests
         PRIVATE "${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/third_party/box3d/include")
-    target_link_libraries(aiverse_studio_spectrafx_preview_tests PRIVATE aiverse_ui
+    target_link_libraries(aiverse_studio_spectrafx_preview_tests PRIVATE aiverse_ui aiverse_audio
         SQLite::SQLite3 aiverse_editor_core aiverse_runtime aiverse_fx
         aiverse_game_view AIVERSE::vivid_human AIVERSE::libraries "-framework Cocoa")
     target_sources(aiverse_studio_spectrafx_preview_tests
@@ -297,7 +297,7 @@ if(AIVERSE_BUILD_TESTS AND APPLE)
     add_test(NAME studio_render_thread COMMAND aiverse_studio_render_thread_tests)
     set_tests_properties(studio_render_thread PROPERTIES LABELS "EDITOR")
     add_test(NAME studio_session COMMAND aiverse_studio_session_tests)
-    set_tests_properties(studio_session PROPERTIES LABELS "EDITOR")
+    set_tests_properties(studio_session PROPERTIES LABELS "EDITOR" ENVIRONMENT "AIVERSE_AGENT_LINK_DIR=${CMAKE_CURRENT_BINARY_DIR}/session-test-agent-link")
 endif()
 
 # Keep the dependency-light history contract in the ordinary CTest inventory.
