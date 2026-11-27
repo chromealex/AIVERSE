@@ -312,6 +312,20 @@ static void saveMaterialLibraryLocked(Workspace& ws,const graph_asset::Transacti
     }
     ws.note({Change::Rules,0,0,-1,-1,-1,what});
 }
+void migrateInlineMaterials(Workspace& ws) {
+    const fs::path root=ws.project.dir;
+    const auto hasInline=[](const Json& index){
+        for(const auto& [name,entry]:index["materials"].members())
+            if(entry.isObject())return true;
+        return false;
+    };
+    if(!hasInline(readMaterialIndex(root)))return;
+    graph_asset::Transaction tx(root/"materials.json",root);
+    const auto index=readMaterialIndex(root);
+    if(hasInline(index))
+        saveMaterialLibraryLocked(ws,tx,resolveMaterialLibraryIndex(root,index),"Migrated inline materials to content");
+}
+
 void saveMaterialLibrary(Workspace& ws,const Json& lib,const std::string& what,const std::map<std::string,std::string>& relocated) {
     graph_asset::Transaction tx(fs::path(ws.project.dir)/"materials.json",ws.project.dir);
     saveMaterialLibraryLocked(ws,tx,lib,what,relocated);

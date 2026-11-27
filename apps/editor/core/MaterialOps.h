@@ -26,6 +26,7 @@ Json publishTextureGraphEnvironment(Workspace& ws,const std::string& name,int si
 Json publishTextureGraphSet(Workspace& ws,const std::string& name,const Json& graph,const Json& overrides,const std::vector<render::Image>& images,const std::vector<std::string>& backends);
 
 // materials.json of the open game ({"materials": {...}}); empty object when missing.
+void migrateInlineMaterials(Workspace& ws);
 Json materialFilePaths(const Workspace& ws);
 Json resolveMaterialLibraryIndex(const std::filesystem::path& root,const Json& index,
                                  size_t maxFileBytes=std::numeric_limits<size_t>::max());
