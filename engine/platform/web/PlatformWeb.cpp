@@ -255,6 +255,13 @@ Key mapCode(const char* code) {
 EM_BOOL onMouse(int type, const EmscriptenMouseEvent* m, void*) {
     Event e;
     e.x = float(m->targetX); e.y = float(m->targetY);
+    if (type == EMSCRIPTEN_EVENT_MOUSEUP) {
+        // Mouse-up is listened to on the document (a drag released outside the canvas still ends), so its target
+        // coordinates are page coordinates. Make them canvas-relative like mouse-down / move: a page that does
+        // not put the canvas at the top-left corner (a centred column) otherwise releases a press elsewhere.
+        e.x = float(m->clientX - EM_ASM_DOUBLE({ return Module.canvas.getBoundingClientRect().left; }));
+        e.y = float(m->clientY - EM_ASM_DOUBLE({ return Module.canvas.getBoundingClientRect().top; }));
+    }
     e.deltaX = float(m->movementX); e.deltaY = float(m->movementY);
     e.button = m->button == 0 ? 0 : m->button == 2 ? 1 : 2;
     e.mods = modsOf(m->shiftKey, m->ctrlKey, m->altKey, m->metaKey);
