@@ -115,7 +115,8 @@ export default function NativeGraphPanel({documentEpoch,domain,projectPath}:{doc
  });
  const save=()=>void run(async current=>{
   if(!draft||!original||!name||!dirty)return;
-  requireOk(await op(prefix+'_validate',{graph:draft}));if(!current())return;
+  if(fx)requireOk(await op(prefix+'_validate',{graph:draft}));
+  if(!current())return;
   const result=await op(prefix+'_set',{name,graph:draft,expected:originalJson.current??original});
   requireOk(result);if(!current())return;
   await loadSaved(name,current);if(current())setStatus('Saved and read back from native asset.');
