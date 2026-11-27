@@ -60,6 +60,13 @@ export default function ProjectSplash({ state, onClose, onHub }: { state: Projec
     const r = window.setInterval(() => setTip(i => (i + 1) % TIPS.length), 4500);
     return () => { window.clearInterval(t); window.clearInterval(r); };
   }, [active, info?.path]);
+  const canContinue = active && state?.phase !== 'error' && state?.phase !== 'project';
+  useEffect(() => {
+    if (!canContinue) return;
+    const dismiss = () => setDismissed(true);
+    window.addEventListener('studio:show-panel', dismiss);
+    return () => window.removeEventListener('studio:show-panel', dismiss);
+  }, [canContinue]);
   if (!active || !state || !info) return null;
   const stages = splashStages(state);
   const failed = state.phase === 'error';
@@ -93,7 +100,7 @@ export default function ProjectSplash({ state, onClose, onHub }: { state: Projec
           <span>{stages.detail}</span>
           <span className="psplash__tip">Tip: {TIPS[tip]}</span>
         </div>
-        {state.phase !== 'project' && <button type="button" className="psplash__continue" onClick={() => setDismissed(true)}>Continue while loading</button>}
+        {canContinue && <button type="button" className="psplash__continue" onClick={() => setDismissed(true)}>Continue while loading</button>}
       </>}
     </div>
   </div>;

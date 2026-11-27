@@ -521,7 +521,7 @@ export default function App() {
     setDock(t => reopenTab(t, panel, STUDIO_PANEL_HOME[panel]));
   };
   useEffect(() => {
-    const run = (event: Event) => { const panel = (event as CustomEvent<unknown>).detail; if (knownPanel(panel)) showPanel(panel); };
+    const run = (event: Event) => { const panel = (event as CustomEvent<unknown>).detail; if (knownPanel(panel)) { setTourOpen(false); showPanel(panel); } };
     window.addEventListener('studio:show-panel', run);
     return () => window.removeEventListener('studio:show-panel', run);
   });

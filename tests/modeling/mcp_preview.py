@@ -144,6 +144,15 @@ def main():
                                            'time': .3}, image='graph-pose.png')
                 tool('modeling_graph_publish', {'name': 'robot', 'expectedRevision': 3})
                 tool('animation_editor_open', {'name': 'robot'})
+                if studio:
+                    deadline = time.monotonic() + 20
+                    while True:
+                        displayed = tool('animation_editor_status', {}).get('graph') or {}
+                        if displayed.get('output') == 'blend' and {node['id'] for node in displayed.get('nodes', [])} == {'idle', 'walk', 'blend'}:
+                            break
+                        if time.monotonic() >= deadline:
+                            raise AssertionError(f'Animation Graph did not display the published robot graph: {displayed}')
+                        time.sleep(.1)
                 tool('view_screenshot', {'window': 'all'}, image='graph-editor.png')
                 print('MCP discovery, create/apply/edit, stale revisions, graph sampling and five real screenshots passed')
             finally:
