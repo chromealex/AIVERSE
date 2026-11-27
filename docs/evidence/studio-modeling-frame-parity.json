@@ -1,0 +1,14 @@
+{
+  "sha": "ff3abec70eec70489bf629d7af47922eede1f5d7",
+  "argv": [
+    "python3",
+    "tests/modeling/mcp_preview.py",
+    "--build",
+    "../studio-project-module-mac",
+    "--output",
+    "../studio-modeling-frame-proof"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-modeling-frame-parity.log.txt",
+  "sha256": "725cc9526f33dbc80c32b591810b82849f0f4edeb1ac7b1d9429927a2531e07c"
+}

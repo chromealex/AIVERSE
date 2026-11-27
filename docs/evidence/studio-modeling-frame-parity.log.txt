@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "tests/modeling/mcp_preview.py", line 162, in <module>
+    main()
+  File "tests/modeling/mcp_preview.py", line 134, in main
+    tool('editor_window', {'id': 'animation_authoring', 'open': True})
+  File "tests/modeling/mcp_preview.py", line 100, in tool
+    assert bool(result.get('isError')) == expect_error, result
+AssertionError: {'content': [{'type': 'text', 'text': '{"error": "unknown window (see editor_windows)"}'}], 'isError': True}
