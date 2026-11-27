@@ -1,0 +1,2 @@
+2026-11-27 05:03:06.682 AiverseStudioHTML5[30992:87113669] [studio-web] JS: CROSS main VERIFIED native FX wire draft
+Only the disconnected execution link changed in the draft; live graph byte-identical
