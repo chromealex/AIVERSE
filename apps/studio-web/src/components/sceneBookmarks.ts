@@ -19,13 +19,11 @@ export function readBookmarks(project: string, store: Storage | null = storage()
   } catch { return []; }
 }
 function write(project: string, list: CameraBookmark[], store: Storage | null) {
-  try {
-    if (project && store) {
-      let saved;
-      try { saved = JSON.parse(store.getItem(key(project)) ?? 'null'); } catch { /* replace invalid settings */ }
-      store.setItem(key(project), JSON.stringify(saved?.importedV1 ? { importedV1: true, views: list } : list));
-    }
-  } catch { /* quota */ }
+  if (!project || !store) throw Error('Camera bookmark storage is unavailable.');
+  const raw = store.getItem(key(project));
+  let saved;
+  try { saved = JSON.parse(raw ?? 'null'); } catch { /* replace invalid settings */ }
+  store.setItem(key(project), JSON.stringify(saved?.importedV1 ? { importedV1: true, views: list } : list));
   return list;
 }
 export function importBookmarks(project: string, legacy: CameraBookmark[], store: Storage | null = storage()): CameraBookmark[] {

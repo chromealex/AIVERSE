@@ -18,6 +18,7 @@
 .scene-toolbar__mark button:hover:not(:disabled){background:var(--au-hover)}
 .scene-toolbar__mark button:disabled{color:var(--au-text-faint);cursor:default}
 .scene-toolbar__mark kbd{font-size:10px;color:var(--au-text-faint)}
+.scene-toolbar__target{display:block;color:var(--au-text-muted);font-variant-numeric:tabular-nums}
 .scene-toolbar__mark i{color:var(--au-text-faint)}
 .viewport-toolbar{gap:8px;overflow:visible}
 .viewport-toolbar .viewport-tools{min-width:0;flex:1 1 auto}

@@ -76,6 +76,16 @@ test('camera events are validated before use', () => {
   assert.ok(!isSceneCameraState(null));
 });
 
+test('failed bookmark writes preserve the saved slot and report failure', async () => {
+  const { saveBookmark, removeBookmark, readBookmarks } = await import('../src/components/sceneBookmarks.ts');
+  const mark={slot:1,name:'View 1',x:2,y:3,z:4,distance:12,yaw:0,pitch:1,ortho:false};
+  const store={getItem:()=>JSON.stringify([mark]),setItem:()=>{throw Error('quota');}};
+  assert.throws(()=>saveBookmark('A',{...mark,x:100},store),/quota/);
+  assert.throws(()=>removeBookmark('A',1,store),/quota/);
+  assert.deepEqual(readBookmarks('A',store),[mark]);
+  assert.throws(()=>saveBookmark('A',mark,null),/unavailable/);
+});
+
 test('previous editor shortcuts fill original slots first, then free slots, once per project', async () => {
   const { importBookmarks, saveBookmark, removeBookmark } = await import('../src/components/sceneBookmarks.ts');
   const data = new Map();

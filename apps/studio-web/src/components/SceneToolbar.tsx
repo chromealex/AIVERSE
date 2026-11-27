@@ -82,12 +82,13 @@ export default function SceneToolbar({ enabled, projectPath = '', documentScope 
     const off=onNativeEvent(event=>{if(event==='wind.changed')void refresh();});
     return ()=>{active=false;off();};
   },[layersOpen,enabled,projectPath]);
+  const [bookmarkError,setBookmarkError]=useState('');
   const [marksOpen, setMarksOpen] = useState(false);
   const [legacyViews, setLegacyViews] = useState<CameraBookmark[]>([]);
   useEffect(() => {
     let current = true;
     setMarks(readBookmarks(projectPath));
-    setLegacyViews([]);
+    setLegacyViews([]);setBookmarkError('');
     if (projectPath) void invoke('studio.legacyCameraBookmarks', { project: projectPath }).then(views => {
       if (current) {
         setLegacyViews(views);
@@ -101,7 +102,8 @@ export default function SceneToolbar({ enabled, projectPath = '', documentScope 
     try {
       const cam = await invoke('studio.viewportInput', { kind: 'camera' }) as unknown as CameraBookmark;
       setMarks(saveBookmark(projectPath, { ...cam, slot, name: 'View ' + slot }));
-    } catch { /* Scene not ready */ }
+      setBookmarkError('');
+    } catch { setBookmarkError('Could not store the current camera view.');setMarksOpen(true); }
   }, [projectPath]);
   const goSlot = useCallback((mark: CameraBookmark) => {
     void invoke('studio.viewportInput', { kind: 'camera', set: mark }).catch(() => {});
@@ -249,12 +251,16 @@ export default function SceneToolbar({ enabled, projectPath = '', documentScope 
       <button type="button" className={'scene-toolbar__toggle' + (marksOpen ? ' is-on' : '')} disabled={!enabled} aria-expanded={marksOpen}
         title="Camera bookmarks (⌥1…9 go, ⌥⇧1…9 store)" onClick={() => setMarksOpen(o => !o)}><Bookmark size={13}/>{marks.length || ''}</button>
       {marksOpen && <div className="scene-toolbar__marks-menu" role="menu" data-native-overlay>
+        {bookmarkError&&<small role="alert">{bookmarkError}</small>}
         {CAMERA_SLOTS.map(slot => { const m = marks.find(x => x.slot === slot);
           return <div key={slot} className="scene-toolbar__mark" role="none">
             <button type="button" role="menuitem" disabled={!m} onClick={() => { if (m) { goSlot(m); setMarksOpen(false); } }}>
-              <kbd>⌥{slot}</kbd>{m ? m.name : <i>empty</i>}</button>
+              <kbd>⌥{slot}</kbd>{m ? <span>{m.name}<small className="scene-toolbar__target">{[m.x,m.y,m.z].map(value=>value.toFixed(1)).join(', ')}</small></span> : <i>empty</i>}</button>
             <button type="button" role="menuitem" title={'Store the current view in ' + slot} onClick={() => void storeSlot(slot)}>Store</button>
-            {m && <button type="button" role="menuitem" title="Remove" onClick={() => setMarks(removeBookmark(projectPath, slot))}>×</button>}
+            {m && <button type="button" role="menuitem" title="Remove" onClick={() => {
+              try { setMarks(removeBookmark(projectPath,slot));setBookmarkError(''); }
+              catch { setBookmarkError('Could not remove this camera view.'); }
+            }}>×</button>}
           </div>; })}
         {legacyViews.length > 0 && <details>
           <summary>Views from the previous editor</summary>
