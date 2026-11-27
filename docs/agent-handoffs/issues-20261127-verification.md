@@ -700,3 +700,10 @@ Stage e0455b60dadfa4aa149c54b098fe6b704970e78c on codex/issues-site-publication-
 Issues210-224 closed completed after verified implementation reached main25d057a51. Fresh GitHub open-issue search returned only206; Windows runtime remains NOT RUN. Draft manual-only focused Windows workflow exists outside repository at /private/tmp/aiverse-issue206-windows.yml, not installed/enabled/dispatched. Existing prohibition on non-Pages runs remains until explicit permission.
 
 PR228 holds publication metadata. Next recheck main base, strict docs-only compliance, push and squash PR228, publish exact clean origin/main with verified demo root, then check Pages deployment and public English/Russian entries/roadmap/media. Do not edit native sources or rebuild for these publication steps.
+
+
+## Authorized isolated Windows verification
+
+User explicitly approved one manual Windows run on 2026-11-27. Harness stage d4128efde477425f2b3c55eb3f1645ddcf4682c2 on codex/issue206-windows-verification-20261127 adds a workflow only to this disposable verification branch, using the already registered impostor-227-platforms.yml dispatch path. It does not modify that workflow on its owning branch or main, enable disabled workflows, or add push/PR/scheduled triggers. This harness branch is not intended for integration. The workflow checks out exact main ed1e451f25812214051f6d8df98a231b5eef9dfb, builds real Studio frontend prerequisites and only aiverse_studio_session_tests using VS2022 x64 Release on windows-2022, then runs anchored CTest studio_session. Native execution NOT RUN yet. git diff --check passed; target registration inspected in apps/studio-native/win/StudioWindows.cmake. Next push and dispatch once, retain runner logs and result; fix owner code if reproduced.
+
+Publication confirmed: PR228 squash ed1e451f25812214051f6d8df98a231b5eef9dfb; gh-pages 2515dc7a167b1327abd54266ebe5ee0b85d5625a; Pages run46016977302 completed success. Public English and Russian devlog show77 entries, latest27.11, new Done cards with25d057a5195f6b6ade1a6b2c38e25a48cf9d184b. Visible Russian material images loaded. Issues210-224 closed; latest search leaves206 only.
