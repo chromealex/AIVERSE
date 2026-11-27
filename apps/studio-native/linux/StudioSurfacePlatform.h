@@ -2,6 +2,7 @@
 #include "../StudioHost.h"
 #include "StudioViewportOverlay.h"
 #include "StudioFileDialog.h"
+#include "StudioUserPaths.h"
 #include "StudioVulkanWindow.h"
 #include <array>
 #include <stdexcept>
@@ -63,6 +64,9 @@ public:
         chooseStudioPaths(parentWindow(), GTK_FILE_CHOOSER_ACTION_OPEN, "Import into content",
                           startDir, {}, true, std::move(done));
     }
+
+    std::filesystem::path cacheDir() override { return g_get_user_cache_dir(); }
+    void rememberLastProject(const std::string& dir) override { storeStudioLastProject(dir); }
 
     void chooseProject(std::function<void(std::string)> done) override {
         chooseFolder("Open Project", {}, std::move(done));
