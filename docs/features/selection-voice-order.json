@@ -17,7 +17,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "note": "Review found missing command-triggered reset. Add shared GameAudio reset and mixer-output regression for ordered variants, cycle, switching, explicit reset and timeout; execution pending final build.",
       "evidence": []
     },
     "architecture": {

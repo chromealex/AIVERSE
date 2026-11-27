@@ -433,6 +433,7 @@ void GameAudio::onSelect(Simulation& sim, Entity unit) {
 }
 
 void GameAudio::onCommand(Simulation& sim, Entity firstUnit, uint16_t commandType) {
+    resetSelectionClicks(); // any issued order ends the local repeated-selection sequence
     auto* u = sim.world().alive(firstUnit) ? sim.world().tryGet<Unit>(firstUnit) : nullptr;
     if (!u) return;
     // only orders a unit would answer to; production, research, selling etc. have their own cues

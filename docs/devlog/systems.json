@@ -3794,9 +3794,11 @@
         {
           "id": "selection-voice-order",
           "status": "in-progress",
-          "title": "selection-voice-order",
-          "titleEn": "selection-voice-order",
-          "target": null
+          "title": "Последовательные реплики при повторном выборе",
+          "titleEn": "Sequential repeated-selection voices",
+          "target": null,
+          "text": "Проверяется реальный аудиовыход и сброс очереди при выдаче приказа.",
+          "textEn": "Verifying actual mixer output and sequence reset on issued commands."
         },
         {
           "id": "precise-attack-phases",

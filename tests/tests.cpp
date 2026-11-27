@@ -3430,6 +3430,51 @@ double level(const std::vector<float>& st, double hz, double from, double to) {
 }
 } // namespace
 
+TEST(audio_repeated_selection_mixer_order_and_resets) {
+    auto sim = makeSimJson(R"({"types":{"scout":{"health":{"max":10}}}})",
+        flatMap(16,16,R"(,"entities":[{"type":"scout","owner":1,"pos":[3,3]},{"type":"scout","owner":1,"pos":[8,8]}])"));
+    std::vector<Entity> scouts;
+    sim->world().each<game::Unit>([&](Entity e, game::Unit&) { scouts.push_back(e); });
+    CHECK(scouts.size() == 2);
+    if (scouts.size() != 2) return;
+    auto a = offlineAudio();
+    const std::map<std::string,std::string> clips = {
+        {"normal.wav", wavOf(48000,.12f,[](float t){return tone(440,t);})},
+        {"first.wav", wavOf(48000,.12f,[](float t){return tone(660,t);})},
+        {"second.wav", wavOf(48000,.12f,[](float t){return tone(880,t);})}};
+    Json bank = Json::parse(R"({"sounds":{
+        "normal":{"files":["normal.wav"],"spatial":false},
+        "repeat":{"files":["first.wav","second.wav"],"spatial":false}},
+        "types":{"scout":{"select":"normal","repeatSelect":{
+            "sound":"repeat","count":3,"order":"sequential","cycle":true,"window":0}}}})");
+    CHECK(loadBank(*a,bank.dump(),nullptr,clips));
+    game::GameAudio sound;
+    CHECK(sound.init(*a,mod(*sim).rules(),bank));
+    auto click = [&](Entity who, int expectedHz) {
+        CHECK(sound.onSelectionClick(*sim,who));
+        const auto pcm = renderBuf(*a,.2f);
+        CHECK(level(pcm,expectedHz,.02,.10) > .1);
+        for (int other : {440,660,880})
+            if (other != expectedHz) CHECK(level(pcm,other,.02,.10) < .03);
+    };
+    click(scouts[0],440); click(scouts[0],440); click(scouts[0],660);
+    sound.update(*sim,10); // window=0 must retain next variant after a long gap
+    click(scouts[0],880); click(scouts[0],440); // cycle returns to the normal voice
+    click(scouts[0],440); click(scouts[0],660);
+    sound.onCommand(*sim,scouts[0],game::kCmdMove);
+    click(scouts[0],440); // the order resets even without a move acknowledgement sound
+    click(scouts[0],440); click(scouts[0],660);
+    click(scouts[1],440); click(scouts[0],440); // changed entity resets
+    click(scouts[0],440); click(scouts[0],660);
+    sound.resetSelectionClicks(); // client clearing/group selection uses this API
+    click(scouts[0],440);
+    bank["types"]["scout"]["repeatSelect"]["window"] = 1;
+    CHECK(sound.init(*a,mod(*sim).rules(),bank));
+    click(scouts[0],440); click(scouts[0],440); click(scouts[0],660);
+    sound.update(*sim,1.1);
+    click(scouts[0],440); // an explicitly positive window expires
+}
+
 TEST(audio_music_loop_points) {
     auto a = offlineAudio();
     // 0..0.5 s: 200 Hz intro, 0.5..1 s: 800 Hz loop body

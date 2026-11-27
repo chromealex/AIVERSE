@@ -15,3 +15,7 @@ Branch: `codex/issue223-minimap-atlas-20261126`
 Paths: `engine/audio/GameAudio.cpp`, `engine/audio/GameAudio.h`, `tests/tests.cpp`
 
 Source changes committed; readiness is pending. Tests/build: NOT RUN for this revision, per request to build the complete batch once at the end. `git diff --check` passed before commit. No save-format migration introduced. Existing atlas-only ImageSource::load semantics preserved; new loadImage handles both storage forms. Remaining work: review and verify controls, Lua selection, voice sequencing, FX and projectile paths; add missing runtime/Studio/publication evidence. Issues #211–213, #219, #221 remain unimplemented; #206 requires Windows crash verification. Do not merge or close issues from this checkpoint. Next: finish remaining issue implementations, refresh main, run the final merged-tree Mac gate and feature readiness checks.
+
+## Mixer acceptance follow-up
+
+Review found GameAudio::onCommand did not reset repeated clicks, despite issue220 requiring it. The client routes commands through that owner. Correct the shared API and add frequency-distinct PCM variants to verify actual mixer sequence, not only played() count. Test execution remains pending the final combined build.
