@@ -51,15 +51,17 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
   const [playersOpen, setPlayersOpen] = useState(false);
   const [areasOpen, setAreasOpen] = useState(false);
   const [records, setRecords] = useState<{revision: string; epoch: string; names: string[]; areas: string[]}>();
+  const searching = search.trim().length > 0;
+  const needRecords = playersOpen || areasOpen || searching;
   const scope = snapshot?.graphDocument;
   useEffect(() => {
-    if ((!playersOpen && !areasOpen) || !scope || snapshot?.scene.worldSpace) return;
+    if (!needRecords || !scope || snapshot?.scene.worldSpace) return;
     let current = true;
     void invoke('studio.mapProperties', {scope}).then(data => {
       if (current) setRecords({ revision: data.scope.revision, epoch: data.scope.epoch, names: data.roster.map(p => p.name), areas: Object.keys(data.areas).sort() });
     }).catch(e => { if (current) setError(String(e)); });
     return () => { current = false; };
-  }, [playersOpen, areasOpen, scope?.projectPath, scope?.mapPath, scope?.epoch, scope?.revision, snapshot?.scene.worldSpace]);
+  }, [needRecords, scope?.projectPath, scope?.mapPath, scope?.epoch, scope?.revision, snapshot?.scene.worldSpace]);
   const currentRecords = scope && records?.revision === scope.revision && records.epoch === scope.epoch ? records : undefined;
   const selectRecord = (params: {kind:'player';index:number} | {kind:'area';key:string}) => {
     if (scope && currentRecords) void invoke('studio.op', { op:'editor_select', expectedProject:scope.projectPath,
@@ -71,11 +73,12 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
   const selectedSet = useMemo(() => new Set(snapshot?.selectedIds ?? (selectedId ? [selectedId] : [])), [snapshot?.selectedIds, selectedId]);
   const editable = (id: string | null | undefined) => mapEntities && !!id?.startsWith('entity:');
   const allRows=useMemo(()=>[...rows,...preview.map(node=>({node,depth:0}))],[rows,preview]);
-  const matches = useMemo(() => {
-    if (!search.trim()) return allRows;
-    const filter = parseHierarchyFilter(search);
-    return allRows.filter(({node}) => matchesHierarchy(node, filter, selectedSet));
-  }, [allRows, search, selectedSet]);
+  const filter = useMemo(() => parseHierarchyFilter(search), [search]);
+  const matches = useMemo(() => allRows.filter(({node}) => matchesHierarchy(node, filter, selectedSet)), [allRows, filter, selectedSet]);
+  const players = (currentRecords?.names ?? []).map((name, i) => ({name, index:i+1}))
+    .filter(({name, index}) => matchesHierarchy({id:`player:${index}`, name, kind:'player', owner:index}, filter, selectedSet));
+  const areas = (currentRecords?.areas ?? []).filter(name =>
+    matchesHierarchy({id:`area:${name}`, name, kind:'area'}, filter, selectedSet));
 
   const selectPreview=async(id:string)=>{
     if(!scope || !snapshot || busy)return;
@@ -223,7 +226,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     <div className="hier__toolbar">
       <label className="hier__search">
         <Search size={12} aria-hidden="true"/>
-        <input ref={searchRef} type="search" placeholder="Find scene objects…" title="Search by name, t:type, owner:1 or is:hidden" aria-label="Search scene objects"
+        <input ref={searchRef} type="search" placeholder="Find objects, players, areas…" title="Search by name, t:type, owner:1 or is:hidden" aria-label="Search scene objects"
           value={search} onChange={event => setSearch(event.target.value)}
           onKeyDown={event => { if (event.key === 'Escape' && search) { event.stopPropagation(); setSearch(''); } }}/>
         {search && <button type="button" aria-label="Clear search" onClick={() => setSearch('')}><X size={11}/></button>}
@@ -256,7 +259,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
       onMouseLeave={() => hover('')}
       onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDrop(null); }}>
       {!project && <p className="hier__empty">Open a project to see its scene objects.</p>}
-      {project && matches.length === 0 && <p className="hier__empty">{search ? 'No matching objects.' : 'The scene is empty.'}</p>}
+      {project && matches.length === 0 && (!searching || (!players.length && !areas.length)) && <p className="hier__empty">{search ? 'No matching objects.' : 'The scene is empty.'}</p>}
       {display.map(row => {
         if ('members' in row) {
           const documentMembers=row.members.filter(id=>!id.startsWith('preview:'));
@@ -323,18 +326,18 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
         </div>;
       })}
     </div>
-    {scope && !snapshot?.scene.worldSpace && <details className="hier__players" open={playersOpen}
-      onToggle={event => setPlayersOpen(event.currentTarget.open)}>
+    {scope && !snapshot?.scene.worldSpace && (!searching || players.length > 0) && <details className="hier__players" open={searching || playersOpen}
+      onToggle={event => { if (!searching) setPlayersOpen(event.currentTarget.open); }}>
       <summary>Map players</summary>
-      {playersOpen && currentRecords?.names.map((name, i) => <StudioButton key={i} size="sm" disabled={busy}
-          onClick={() => selectRecord({kind:'player',index:i+1})}>
-          {i+1} · {name}
+      {(playersOpen || searching) && players.map(({name,index}) => <StudioButton key={index} size="sm" disabled={busy}
+          onClick={() => selectRecord({kind:'player',index})}>
+          {index} · {name}
         </StudioButton>)}
     </details>}
-    {scope && !snapshot?.scene.worldSpace && <details className="hier__players" open={areasOpen}
-      onToggle={event => setAreasOpen(event.currentTarget.open)}>
+    {scope && !snapshot?.scene.worldSpace && (!searching || areas.length > 0) && <details className="hier__players" open={searching || areasOpen}
+      onToggle={event => { if (!searching) setAreasOpen(event.currentTarget.open); }}>
       <summary>Map areas</summary>
-      {areasOpen && currentRecords && (currentRecords.areas.length ? currentRecords.areas.map(key =>
+      {(areasOpen || searching) && currentRecords && (areas.length ? areas.map(key =>
         <StudioButton key={key} size="sm" disabled={busy} onClick={() => selectRecord({kind:'area',key})}>{key}</StudioButton>)
         : <span>No named areas</span>)}
     </details>}
