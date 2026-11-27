@@ -63,7 +63,7 @@ cmake -S "$ROOT" -B "$BUILD_DIR" \
 
 echo "==== Step 3: native target and tests ===="
 cmake --build "$BUILD_DIR" \
-  --target aiverse_studio aiversemcp aiverse_studio_owner_history_tests aiverse_studio_human_appearance_session_tests aiverse_studio_human_creator_tests aiverse_studio_facial_preview_binding_tests aiverse_studio_facial_runtime_tests aiverse_studio_facial_gpu_tests aiverse_studio_facial_rig_tests aiverse_studio_model_picking_tests aiverse_studio_visual_picking_tests aiverse_studio_move_journal_tests aiverse_studio_content_tests aiverse_studio_asset_catalog_tests aiverse_studio_asset_transfer_tests aiverse_studio_session_tests aiverse_studio_lighting_validation_tests aiverse_studio_material_validation_tests aiverse_studio_pbr_adapter_tests aiverse_studio_shader_graph_name_tests aiverse_studio_shader_graph_draft_tests aiverse_studio_light_preview_math_tests aiverse_studio_authored_lights_tests aiverse_studio_fps_lighting_contract_tests aiverse_studio_fps_lighting_document_tests aiverse_studio_scene_nodes_tests aiverse_studio_document_visuals_tests aiverse_studio_viewport_layout_tests aiverse_studio_render_thread_tests aiverse_studio_terrain_tests aiverse_studio_render_lighting_tests aiverse_studio_metal_lighting_tests \
+  --target aiverse_studio_verification \
   --parallel 4
 
 echo "==== Step 4: studio contracts ===="
