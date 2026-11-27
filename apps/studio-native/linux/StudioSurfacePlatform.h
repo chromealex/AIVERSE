@@ -59,6 +59,11 @@ public:
         return confirmStudioDiscard(parentWindow(), title, message, discardLabel);
     }
 
+    void chooseImportSources(const std::string& startDir, StudioPathSelection done) override {
+        chooseStudioPaths(parentWindow(), GTK_FILE_CHOOSER_ACTION_OPEN, "Import into content",
+                          startDir, {}, true, std::move(done));
+    }
+
     void chooseProject(std::function<void(std::string)> done) override {
         chooseFolder("Open Project", {}, std::move(done));
     }
