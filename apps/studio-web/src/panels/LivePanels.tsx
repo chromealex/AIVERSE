@@ -14,7 +14,7 @@ export function LiveSwitch({ children }: { children: ReactNode }) {
       <button type="button" role="tab" aria-selected={!showLive} className={!showLive ? 'is-on' : ''} onClick={() => setShowLive(false)}>Scene</button>
       <button type="button" role="tab" aria-selected={showLive} className={showLive ? 'is-on' : ''} onClick={() => setShowLive(true)}>
         <Radio size={11}/>Live</button>
-      <span className="live__hint">{showLive ? 'Running game · read only' : 'Map edits apply after Stop'}</span>
+      <span className="live__hint">{showLive ? 'Live entities · read only' : 'Map edits apply after Stop'}</span>
     </div>
     <div className="live__body">{children}</div>
   </div>;
