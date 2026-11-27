@@ -31,7 +31,8 @@
     "tests/render/additive_blend_frame.cpp",
     "tests/tests.cpp",
     "tools/modeling/Export.cpp",
-    "tools/modeling/SurfaceProxy.cpp"
+    "tools/modeling/SurfaceProxy.cpp",
+    "tools/studio/test_reference_pin_zoom.py"
   ],
   "traits": {
     "editable": true,
