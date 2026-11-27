@@ -3,6 +3,7 @@
 // macOS-only native preview: AIVERSE gfx::Device + Renderer3D over a CAMetalLayer.
 // No ImGui, no CPU texture readback, no dependency on UI component hierarchy.
 #pragma once
+#include "apps/editor/core/RouteOps.h"
 #include "apps/studio-native/StudioMapAreaBounds.h"
 #include "apps/studio-native/StudioNatureLayers.h"
 #include "apps/studio-native/StudioSceneDocument.h"
@@ -798,6 +799,7 @@ private:
     char regionBorderLetter_=0;
     bool regionBordersDirty_=true;
     std::vector<StudioMapCell> rampTiles_,resourceTiles_;
+    std::vector<editor::RoutePreviewLine> mapRoutes_;
     std::shared_ptr<const world::NaturePresentationFrame> natureFrame_;
     StudioNatureLayers natureLayers_;
     const editor::TerrainTileSurface* groundTiles(const editor::MapDoc& map,std::optional<editor::TerrainTileSurface>& dragSurface);

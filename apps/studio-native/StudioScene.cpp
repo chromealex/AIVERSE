@@ -4109,6 +4109,12 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             // The periodic pass also catches document changes that did not bump the
             // revision (direct loads) and rules edits, within a second.
             {
+                mapRoutes_.clear();
+                if(!fpsProject && !map.worldSpace && !map.planet() && map.extra["routes"].size()){
+                    game::Rules previewRules;
+                    if(rules["lanes"].isObject())game::loadRouteRules(rules["lanes"],previewRules.routes);
+                    mapRoutes_=editor::routePreviewLines(previewRules,doc);
+                }
                 proxies_=studioDocumentProxies(doc,fpsProject,levelHeight);
                 showTerrain_=rules["terrain"].getBool("render",true)&&map.extra.getStr("terrainPresentation","legacy")!="entities";
                 lightingSettings_=renderLightingSettings(doc.data.extra["renderLighting"]);
@@ -4574,6 +4580,17 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             renderer_.line({at.x-extent,at.y,at.z},{at.x+extent,at.y,at.z},color);
             renderer_.line({at.x,at.y-extent,at.z},{at.x,at.y+extent,at.z},color);
             renderer_.line({at.x,at.y,at.z-extent},{at.x,at.y,at.z+extent},color);
+        }
+        if(natureLayers_.mapRoutes){
+            const auto point=[&](const std::array<float,2>& p){
+                const float y=showTerrain?terrainPreviewHeight(map,p[0],p[1],levelHeight,baseTerrainView_):0.f;
+                return float3{p[0],y+.12f,p[1]};
+            };
+            for(const auto& line:mapRoutes_){
+                const auto color=line.line==0?rgba(255,240,160,230):rgba(220,190,110,120);
+                for(size_t i=1;i<line.pts.size();++i)
+                    renderer_.line(point(line.pts[i-1]),point(line.pts[i]),color);
+            }
         }
         if(natureLayers_.playerStarts && !fpsProject && !planetaryChart && !map.worldSpace){
             for(size_t i=0;i<map.players.size();++i){
@@ -5951,7 +5968,7 @@ uint64_t StudioScene::frameSignature(int width,int height,const editor::MapDoc& 
     value(wind_.revision);value(wind_.enabled);value(wind_.speed);value(wind_.directionDeg);
     value(wind_.gust);value(wind_.scale);value(wind_.debug);
     value(areaBounds_.has_value());if(areaBounds_)for(int coord:*areaBounds_)value(coord);
-    value(natureLayers_.playerStarts);value(natureLayers_.resourceFields);value(natureLayers_.rampTiles);value(natureLayers_.regionBorders);value(regionBorderLetter_);value(brushVisible_);vec(brushCenter_);value(brushRadius_);
+    value(natureLayers_.mapRoutes);value(natureLayers_.playerStarts);value(natureLayers_.resourceFields);value(natureLayers_.rampTiles);value(natureLayers_.regionBorders);value(regionBorderLetter_);value(brushVisible_);vec(brushCenter_);value(brushRadius_);
     value(overlayShapes_.size());
     for(const auto& shape:overlayShapes_){value(shape.kind);vec(shape.a);vec(shape.b);value(shape.radius);
         value(shape.thickness);value(shape.r);value(shape.g);value(shape.bl);}
