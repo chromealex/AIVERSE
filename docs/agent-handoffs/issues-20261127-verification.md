@@ -188,3 +188,10 @@ mesh/non-indexed drawing and mesh occlusion; ribbon and trail generation;
 shader graph texture binding and occlusion with the additional sampler slot.
 All use deterministic authored geometry, white textures and independent expected
 blend values. Build/run NOT RUN yet. Next: focused cached rebuild and capture run.
+
+Extended fixture first run (`test-reports/20261127-095524-21764`):
+mesh, mesh occlusion and ribbon passed; trail did not intersect sampled pixels.
+Fixture velocity is effect-local, not world-space. Correction d3efe528943a6402d6a9b85eed815d8dfc6d118d
+uses local +Y along explicit world +X play direction, and asserts the live
+particle actually crossed the sampled center without changing depth.
+Graph texture cases were not reached. Corrected run pending.
