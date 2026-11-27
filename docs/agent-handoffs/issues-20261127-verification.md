@@ -312,3 +312,7 @@ compressed captures and exact source/binary provenance. Text suppression,
 mouse/touch orders and passive aura behavior now verified. No processes live.
 Next: portrait and minimap visual acceptance, projectile visual acceptance,
 Windows #206, manifests/publishing and final integrated gate before squash/push.
+
+## Portrait real-client acceptance data
+
+Source 5b72690ba enables HUD portraits in shared controls demo: orange animated Idle diamond / owner background for scout, green static diamond / authored RGBA background for tower, distinct from both world models. Uses existing binary at 530764e8e; data-only stage needs no C++ rebuild. Capture NOT RUN. Next run full client scenario, inspect portraits across source switch, then missing/empty-source fallback using isolated project copies on KINGSTON.
