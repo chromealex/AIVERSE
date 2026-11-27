@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Bookmark, Expand, Globe2, Hand, Magnet, Maximize, Mountain, Move3d, Rotate3d, Shapes, Layers, Box } from 'lucide-react';
 import { CAMERA_SLOTS, importBookmarks, readBookmarks, removeBookmark, saveBookmark, type CameraBookmark } from './sceneBookmarks';
 import { invoke, onNativeEvent } from '../bridge';
 import ErosionZoneHighlight from './ErosionZoneHighlight';
-import { StudioSelect } from '../ui';
+import { StudioInput, StudioSelect } from '../ui';
 import { EcologyLayerPicker } from '../panels/SceneBrushBar';
 import type { WindDebugView, StudioGraphDocumentScope } from '../types';
 import './SceneToolbar.css';
@@ -32,6 +32,38 @@ export function readSceneTools(): SceneToolState {
     return { tool, local: v.local === true, snap: v.snap === true, gizmos: v.gizmos !== false, modelDebugMode:isModelView(v.modelDebugMode)?v.modelDebugMode:0, strataColor:[0,1,2,3].includes(v.strataColor??-1)?v.strataColor!:0, strataBounds:v.strataBounds===true, strataWire:v.strataWire===true, strataFill:v.strataFill===true, strataRoutes:v.strataRoutes===true, natureRadius:Math.min(200,Math.max(8,num(v.natureRadius,48))), natureSpacing:Math.min(32,Math.max(2,num(v.natureSpacing,6))), mapRoutes:v.mapRoutes!==false, playerStarts:v.playerStarts!==false, resourceFields:v.resourceFields!==false, rampTiles:v.rampTiles===true, regionBorders:v.regionBorders===true, triggerAreas:v.triggerAreas!==false, erosionZones:v.erosionZones!==false, terraTreeWind:v.terraTreeWind!==false, terraSlope:v.terraSlope!==false, terraSlopeAtTarget:v.terraSlopeAtTarget===true, nereidFlow:v.nereidFlow!==false, nereidAllWater:v.nereidAllWater===true, natureWind:v.natureWind===true, natureFire:v.natureFire===true, worldAxes:v.worldAxes===true, objectBounds:v.objectBounds===true, selectionBox:v.selectionBox!==false, surface: v.surface === true,
       snapMove: num(v.snapMove, 1), snapRotate: num(v.snapRotate, 15), snapScale: num(v.snapScale, 0.1) };
   } catch { return DEFAULTS; }
+}
+
+function DebugLayersMenu({children}:{children:ReactNode}) {
+  const [query,setQuery]=useState('');
+  const [empty,setEmpty]=useState(false);
+  const list=useRef<HTMLDivElement>(null);
+  useLayoutEffect(()=>{
+    const groups=list.current;
+    if(!groups)return;
+    const terms=query.trim().toLowerCase().split(/\s+/);
+    const filter=()=>{
+      let matches=0;
+      for(const group of groups.querySelectorAll(':scope > fieldset')){
+        const text=(group.textContent??'').toLowerCase();
+        const visible=terms.every(term=>text.includes(term));
+        group.toggleAttribute('hidden',!visible);
+        if(visible)matches++;
+      }
+      setEmpty(matches===0);
+    };
+    filter();
+    // Some project-specific options arrive after the menu opens.
+    const observer=new MutationObserver(filter);
+    observer.observe(groups,{childList:true,subtree:true,characterData:true});
+    return ()=>observer.disconnect();
+  },[query]);
+  return <div className="scene-toolbar__marks-menu scene-toolbar__layers" data-native-overlay role="group" aria-label="Scene overlays">
+    <StudioInput type="search" autoFocus aria-label="Search debug views" placeholder="Search debug views…" value={query}
+      onChange={event=>setQuery(event.currentTarget.value)}/>
+    <div ref={list} className="scene-toolbar__layer-groups">{children}</div>
+    {empty&&<p role="status">No matching debug views.</p>}
+  </div>;
 }
 
 /** Scene header: Q/W/E/R tools, Global/Local, snapping (Ctrl/Cmd inverts while dragging), gizmos. */
@@ -175,7 +207,7 @@ export default function SceneToolbar({ enabled, projectPath = '', documentScope 
       onKeyDown={e=>{if(e.key==='Escape'){e.currentTarget.querySelector('button')?.focus();setLayersOpen(false);}}}>
       <button type="button" className="scene-toolbar__toggle" aria-label="Scene overlays" title="Scene overlays"
         disabled={!enabled} aria-expanded={layersOpen} onClick={()=>{setMarksOpen(false);setLayersOpen(v=>!v);}}><Layers size={13}/> Debug</button>
-      {layersOpen&&<div className="scene-toolbar__marks-menu scene-toolbar__layers" data-native-overlay role="group" aria-label="Scene overlays">
+      {layersOpen&&<DebugLayersMenu>
        <fieldset><legend>Models</legend><label>Render view
          <StudioSelect value={state.modelDebugMode} onChange={e=>set({modelDebugMode:Number(e.target.value)})}>
            {MODEL_VIEWS.map((name,value)=><option key={name} value={value}>{name}</option>)}
@@ -209,7 +241,7 @@ export default function SceneToolbar({ enabled, projectPath = '', documentScope 
           <input aria-label={label+' in metres'} type="range" min={min} max={max} value={state[key]} onChange={e=>set({[key]:e.currentTarget.valueAsNumber})}/>
          </label>)}
        </fieldset>}
-      </div>}
+      </DebugLayersMenu>}
     </div>
     <button type="button" className="scene-toolbar__toggle" disabled={!enabled} title="Frame all objects (⇧F)"
       onClick={() => void invoke('studio.viewportInput', { kind: 'frameAll' }).catch(() => {})}><Maximize size={13}/></button>

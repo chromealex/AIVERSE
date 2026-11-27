@@ -47,3 +47,7 @@
 .scene-toolbar__layers fieldset{min-inline-size:0;border:0;border-block-start:1px solid var(--au-line);margin:5px 0;padding:4px}
 .scene-toolbar__layers legend{color:var(--au-text-muted);font-weight:600;padding-inline:5px}
 .scene-toolbar__layers select{flex:1;min-width:0}
+
+.scene-toolbar__layers > input,.scene-toolbar__layers > p{grid-column:1/-1}
+.scene-toolbar__layer-groups{display:contents}
+.scene-toolbar__layer-groups > fieldset[hidden]{display:none}
