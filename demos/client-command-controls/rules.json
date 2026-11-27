@@ -39,7 +39,20 @@
       ],
       "view": {
         "shape": "tower"
-      }
+      },
+      "abilities": [
+        {
+          "id": "guard_aura",
+          "name": "Guard aura",
+          "aura": true,
+          "radius": 4,
+          "effects": [],
+          "cardSlot": {
+            "column": 1,
+            "row": 1
+          }
+        }
+      ]
     }
   },
   "viewScripts": [

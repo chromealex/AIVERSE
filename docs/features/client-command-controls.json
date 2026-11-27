@@ -94,7 +94,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Actual hosted GameClient Metal fixture passed shortcut key/mobile selection, Move targeting and mouse movement, public view.select armed structure card and pause Quit. Evidence records scope; touch/passive aura/text focus and final integrated quick gate remain pending.",
+      "note": "Actual hosted GameClient Metal fixture passed shortcut key/mobile selection, Move targeting and mouse movement, public view.select armed structure card and pause Quit. Evidence records scope; touch/passive aura/text focus and final integrated quick gate remain pending. Extending the same fixture with focused text input, touch targeting and passive aura; new scenarios not run yet.",
       "evidence": [
         "docs/evidence/issues-client-controls-metal-20261127/result.json"
       ]

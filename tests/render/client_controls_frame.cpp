@@ -30,9 +30,10 @@ int aiverseMain(int argc,char** argv) {
     platform::HostedView hosted;hosted.width=hosted.fbWidth=1280;hosted.height=hosted.fbHeight=760;
     hosted.contentRoot=argv[1];hosted.engineAssets=argv[2];
     const std::string capture=argc>3?argv[3]:"";
-    gfx::Device* device=nullptr;int frames=0,ready=0,stage=0;bool failed=false,pending=false,done=false;
+    gfx::Device* device=nullptr;int frames=0,ready=0,stage=0;bool failed=false,pending=false,done=false;Rml::ElementDocument* typing=nullptr;
     auto key=[&](platform::Key k){platform::Event e;e.type=platform::EventType::KeyDown;e.key=k;client.event(e);e.type=platform::EventType::KeyUp;client.event(e);};
     auto click=[&](float x,float y){platform::Event e;e.x=x;e.y=y;e.type=platform::EventType::MouseMove;client.event(e);e.type=platform::EventType::MouseDown;e.button=0;client.event(e);e.type=platform::EventType::MouseUp;client.event(e);};
+    auto tap=[&](float x,float y){platform::Event e;e.x=x;e.y=y;e.touchId=17;e.type=platform::EventType::TouchBegin;client.event(e);e.type=platform::EventType::TouchEnd;client.event(e);};
     platform::AppConfig app;app.title="Client controls acceptance";app.width=1280;app.height=760;app.highDpi=false;
     platform::AppCallbacks cb;
     cb.init=[&](gfx::Device& d){device=&d;platform::setHostedView(&hosted);try {
@@ -61,10 +62,22 @@ int aiverseMain(int argc,char** argv) {
             case 2:key(platform::Key::M);break;
             case 3:require(element("#modehint")&&element("#modehint")->GetInnerRML().find("Move")!=std::string::npos,"M activates Move targeting");snapshot("move");click(740,330);break;
             case 4:{bool moving=false;client.simulation()->world().each<game::Mobile>([&](Entity,const auto& m){moving|=m.moving;});require(moving,"mouse target creates movement");key(platform::Key::F7);break;}
-            case 5:require(button("Attack")&&button("Stop")&&!button("Move"),"view.select armed structure card");snapshot("tower");key(platform::Key::Escape);break;
-            case 6:require(button("Quit game"),"pause quit button");snapshot("pause");break;
-            case 7:{auto* quit=button("Quit game");require(quit,"quit still visible");const auto p=quit->GetAbsoluteOffset(Rml::BoxArea::Border);const auto size=quit->GetBox().GetSize(Rml::BoxArea::Border);click(p.x+size.x/2,p.y+size.y/2);break;}
-            case 8:require(hosted.quitRequested,"quit requests native host termination");done=true;std::cout<<"PASS: shortcut, Move mouse order, structure selection/card, pause quit\n";break;
+            case 5:{require(button("Attack")&&button("Stop")&&!button("Move"),"view.select armed structure card");
+                auto* aura=button("Guard aura");require(aura&&aura->IsClassSet("disabled"),"passive aura is disabled card button");
+                require(aura->QuerySelector(".tip"),"passive aura tooltip");snapshot("tower");break;}
+            case 6:{auto* context=Rml::GetContext("main");typing=context->LoadDocumentFromMemory("<rml><body style='position:absolute;left:10px;top:80px;width:200px;height:40px'><input id='typing' type='text'/></body></rml>");
+                require(typing,"typing document");typing->Show();context->Update();auto* input=typing->GetElementById("typing");require(input&&input->Focus(),"text input focus");
+                key(platform::Key::F6);break;}
+            case 7:require(button("Attack")&&!button("Move"),"shortcut suppressed while typing");typing->Close();typing=nullptr;break;
+            case 8:key(platform::Key::F6);break;
+            case 9:require(button("Move"),"shortcut works after text blur");key(platform::Key::S);hosted.touch=true;break;
+            case 10:{bool moving=false;client.simulation()->world().each<game::Mobile>([&](Entity,const auto& m){moving|=m.moving;});require(!moving,"Stop before touch order");
+                auto* move=button("Move");require(move,"touch Move card");const auto p=move->GetAbsoluteOffset(Rml::BoxArea::Border);const auto size=move->GetBox().GetSize(Rml::BoxArea::Border);tap(p.x+size.x/2,p.y+size.y/2);break;}
+            case 11:require(element("#modehint")&&element("#modehint")->GetInnerRML().find("Move")!=std::string::npos,"touch button activates Move");tap(540,300);break;
+            case 12:{bool moving=false;client.simulation()->world().each<game::Mobile>([&](Entity,const auto& m){moving|=m.moving;});require(moving,"touch target creates movement");snapshot("touch");hosted.touch=false;key(platform::Key::Escape);break;}
+            case 13:require(button("Quit game"),"pause quit button");snapshot("pause");break;
+            case 14:{auto* quit=button("Quit game");require(quit,"quit still visible");const auto p=quit->GetAbsoluteOffset(Rml::BoxArea::Border);const auto size=quit->GetBox().GetSize(Rml::BoxArea::Border);click(p.x+size.x/2,p.y+size.y/2);break;}
+            case 15:require(hosted.quitRequested,"quit requests native host termination");done=true;std::cout<<"PASS: shortcut, text suppression, mouse/touch Move, structure/passive card, pause quit\n";break;
             }
         }catch(const std::exception& e){std::cerr<<"stage "<<stage<<": "<<e.what()<<'\n';failed=true;}
         platform::setHostedView(nullptr);
