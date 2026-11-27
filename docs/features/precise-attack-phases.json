@@ -90,7 +90,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "note": "Existing fractional helper and 200-tick period/save checks passed. Adding simulation acceptance for multiple releases within a tick, concurrent recovery and cancellation/reacquisition; new scenarios not run yet.",
       "evidence": []
     },
     "handoff": {

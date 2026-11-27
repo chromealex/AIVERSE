@@ -18969,6 +18969,61 @@ TEST(precise_windup_cooldown_preserves_authored_period) {
 
 }
 
+TEST(precise_windup_subtick_recovery_and_cancellation) {
+    using namespace aiverse;
+    using namespace lib::mechanics;
+    auto map=Json::parse(flatMap(12,12,""));
+    map.set("entities",Json::parse(R"([{"type":"shooter","owner":1,"pos":[2,2]},{"type":"target","owner":2,"pos":[4,2]}])"));
+    auto make=[&](const char* weapon) {
+        return makeSimJson(std::string(R"({"types":{"shooter":{"weapons":[)")+weapon+R"(]},"target":{"health":{"max":100000}}}})",map.dump());
+    };
+    auto entities=[](Simulation& sim) {
+        std::pair<Entity,Entity> pair;
+        sim.world().each<game::Unit>([&](Entity e,const auto&){if(sim.world().has<game::Combat>(e))pair.first=e;else pair.second=e;});
+        return pair;
+    };
+    auto count=[](Simulation& sim,Entity shooter,uint16_t kind) {
+        return std::count_if(sim.events().begin(),sim.events().end(),[&](const auto& e){return e.a==shooter&&e.type==kind;});
+    };
+    // Recovery and cooldown overlap; their maximum, not sum, sets the period.
+    auto sim=make(R"({"range":8,"damage":1,"cooldown":0.005,"windup":0.005,"backswing":0.01,"preciseCooldown":true})");
+    auto [shooter,target]=entities(*sim);
+    auto& combat=sim->world().get<game::Combat>(shooter);combat.target=target;combat.autoTarget=false;
+    const Fixed windup=Fixed::fromRatio(5,1000), rest=Fixed::fromRatio(1,100);
+    int releases=0;
+    for(int tick=1;tick<=20;++tick) {
+        sim->step();
+        const int thisTick=int(count(*sim,shooter,game::kEvAttackReleased));
+        if(tick==1)CHECK(thisTick>1);
+        releases+=thisTick;
+        const auto elapsed=sim->dt()*tick;
+        CHECK(releases==int(((elapsed-windup)/(windup+rest)).floorInt())+1);
+    }
+    // An out-of-range tick cancels the current windup, with no release or
+    // stored time credit; reacquiring the target requires a full fresh windup.
+    sim=make(R"({"range":3,"damage":1,"cooldown":0.02,"windup":0.3,"preciseCooldown":true})");
+    std::tie(shooter,target)=entities(*sim);
+    auto& c=sim->world().get<game::Combat>(shooter);c.target=target;c.autoTarget=false;
+    sim->step();
+    CHECK(c.attackTiming[0].phase==WeaponAttackPhase::Windup);
+    CHECK(count(*sim,shooter,game::kEvAttackReleased)==0);
+    auto& position=sim->world().get<game::Transform>(target).pos;
+    const auto original=position;position.x=Fixed::fromInt(10);
+    sim->step();
+    CHECK(c.attackTiming[0].phase==WeaponAttackPhase::Idle);
+    CHECK(count(*sim,shooter,game::kEvAttackCancelled)==1);
+    CHECK(count(*sim,shooter,game::kEvAttackReleased)==0);
+    for(int i=0;i<10;++i)sim->step();
+    position=original;c.target=target;
+    Fixed elapsed{};bool released=false;
+    for(int i=0;i<20&&!released;++i) {
+        sim->step();elapsed+=sim->dt();
+        released=count(*sim,shooter,game::kEvAttackReleased)>0;
+        CHECK(released==(elapsed>=Fixed::fromRatio(3,10)));
+    }
+    CHECK(released);
+}
+
 #include "engine/view/MapProjection.h"
 #include <limits>
 TEST(map_projection_crop_roundtrip_and_frame) {
