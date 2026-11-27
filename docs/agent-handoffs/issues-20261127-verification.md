@@ -262,3 +262,7 @@ inspect/click actual GameClient documents, without exposing private state or
 adding test controls to engine runtime. Link existing aiverse_hosted_client,
 use platform::HostedView for the demo root and engine assets, inject native
 GameClient::event, inspect simulation commands and capture real Metal output.
+
+## Real hosted client input acceptance
+
+Source 83c2a4e58f48322d47ee6714a720826c6a6d9f1f adds tests/render/client_controls_frame.cpp, a macOS CTest target and demos/client-command-controls. Uses actual GameClient, native key/pointer input, stock HUD and RmlUi inspection. Exercises F6 shortcut/key label, Move mouse order, public view.select into armed structure card and pause Quit; optional Metal captures. No production test switches or private access. Build/runtime NOT RUN yet. Next: build aiverse_client_controls_frame in existing KINGSTON cache, run with capture directory and inspect results.
