@@ -73,6 +73,7 @@ int main(int argc,char** argv) {
         const auto dist=std::filesystem::read_symlink("/proc/self/exe").parent_path()/"studio-web";
         if (!std::filesystem::is_regular_file(dist/"index.html")) throw std::runtime_error("Studio HTML bundle missing");
         registerStudioWebAssets(webkit_web_view_get_context(web),dist);
+        aiverse::platform::setEngineAssetsDir((dist.parent_path()/"engine").string());
         GtkStudio studio(overlay,window,web,root);
         studio.host().session().setMcpTool((dist.parent_path()/"aiversemcp").string());
         if (listenPort && !studio.host().session().listenForAgent(listenPort))
