@@ -54,7 +54,7 @@ AIVERSE_STUDIO_WEB_DIST="$WEB_DIST" python3 -m unittest discover -s tools/studio
 
 echo "==== Step 2: CMake configure ===="
 cmake -S "$ROOT" -B "$BUILD_DIR" \
-  -DAIVERSE_BUILD_EDITOR=ON \
+  -DAIVERSE_BUILD_EDITOR=OFF \
   -DAIVERSE_BUILD_TOOLS=ON \
   -DAIVERSE_BUILD_STUDIO_HTML5=ON \
   -DAIVERSE_BUILD_TESTS=ON \
