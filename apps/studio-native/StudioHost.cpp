@@ -296,7 +296,16 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
         Json::parse(R"({"properties":{"id":{"type":"string"},"open":{"type":"boolean"},"resetLayout":{"type":"boolean"},"workspace":{"type":"string","enum":["scene","world","look","animate","character","logic","publish"]}}})"),[this](const Json& params){
             if (!panelInventory_.isObject()) throw std::runtime_error("Studio layout is loading");
             Json command = params;
-            if (command.getStr("id") == "animation_authoring") command.set("id", Json::string("animation"));
+            static const std::map<std::string,std::string> migratedPanels{
+                {"animation_assets","anim_assets"}, {"animation_graph","anim_graph"},
+                {"animation_rig","anim_rig"}, {"animation_attachments","attachments"},
+                {"animation_authoring","animation"}, {"studio_asset_audit","asset_audit"},
+                {"spectrafx_gpu_assets","fx_functions"}, {"spectrafx_graph","fx_graph"},
+                {"spectrafx_vfx_graph","fx_graph"}, {"static-geometry","static_geometry"}, {"studio_extensions","extensions"},
+                {"studio_frame_capture","frame_capture"}, {"studio_snapshot_diff","snapshot_diff"}
+            };
+            const auto migrated=migratedPanels.find(command.getStr("id"));
+            if(migrated!=migratedPanels.end())command.set("id",Json::string(migrated->second));
             if (!params.getBool("resetLayout",false)) {
                 if (params.has("workspace")) {
                     const auto name=params.getStr("workspace");
