@@ -1,0 +1,23 @@
+name: Impostor PR 227 desktop validation
+on:
+  push:
+    branches: [codex/qa-227-platforms]
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 59fb6f69e5262f977ea4d95384369b8c24ba7776
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q libx11-dev libegl-dev libgles-dev ninja-build
+      - run: cmake -S . -B qa -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_BUILD_TOOLS=ON -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_CLIENT=OFF -DAIVERSE_ASSIMP=OFF -DAIVERSE_FETCH_TEMPLATES=OFF -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build qa --config Release --parallel 4 --target aiverse_static_impostor_lod_tests aiverse_surface_proxy_tests aiverse_terraweave_model_test
+      - run: ctest --test-dir qa -C Release --no-tests=error --output-on-failure -R "^(static_impostor_lod|surface_proxy|terraweave_model)$"
