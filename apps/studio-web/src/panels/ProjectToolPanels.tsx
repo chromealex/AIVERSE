@@ -1,3 +1,4 @@
+import InputModifiers from './InputModifiers';
 import type { StudioScriptMessage } from '../types';
 import { useCallback, useEffect, useMemo, useRef, useLayoutEffect, useState, type KeyboardEvent } from 'react';
 import { AlertTriangle, CheckCircle2, FilePlus2, Play, Plus, RefreshCw, RotateCcw, Save, ScanSearch, Trash2 } from 'lucide-react';
@@ -319,6 +320,7 @@ export function InputPanel(ctx: Ctx) {
           <td><input className="au-input" value={a.name} onChange={e => renameAction(i, e.target.value)}/></td>
           <td><select className="au-input" value={a.type} onChange={e => setAction(i, { type: e.target.value as InputAction['type'] })}>
             {['bool', 'axis1D', 'axis2D', 'axis3D'].map(t => <option key={t}>{t}</option>)}</select></td>
+          <td><InputModifiers items={a.modifiers} onChange={modifiers => setAction(i, { modifiers })}/></td>
           <td className="ptp__meta">{(a.modifiers?.length ?? 0) + (a.triggers?.length ?? 0) ? `${a.modifiers?.length ?? 0} mod · ${a.triggers?.length ?? 0} trig` : ''}</td>
           <td><button type="button" className="au-button au-button--icon au-button--ghost au-button--sm" title="Delete action"
             onClick={() => edit({ ...asset, actions: asset.actions.filter((_, n) => n !== i), contexts: asset.contexts.map(c => ({ ...c, mappings: c.mappings.filter(m => m.action !== a.name) })) })}><Trash2 size={12}/></button></td>
@@ -350,6 +352,7 @@ export function InputPanel(ctx: Ctx) {
                 {Array.from({ length: m.control.device === 'touch' ? 32 : 4 }, (_, index) =>
                   <option key={index} value={index}>{index}</option>)}
               </select></label>}</td>
+            <td><InputModifiers items={m.modifiers} onChange={modifiers => setMapping(ci, mi, { modifiers })}/></td>
             <td className="ptp__consume"><label className="ptp__check" title="Stop lower-priority contexts from seeing this input"><input type="checkbox" checked={m.consume ?? false} onChange={e => setMapping(ci, mi, { consume: e.target.checked })}/>Consume</label></td>
             <td><button type="button" className="au-button au-button--icon au-button--ghost au-button--sm" title="Delete binding" onClick={() => setContext(ci, { mappings: c.mappings.filter((_, n) => n !== mi) })}><Trash2 size={12}/></button></td>
           </tr>)}
