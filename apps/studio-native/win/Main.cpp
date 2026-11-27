@@ -193,7 +193,7 @@ public:
         wc.style = CS_HREDRAW | CS_VREDRAW;
         wc.lpfnWndProc = mainProc;
         wc.hInstance = instance;
-        wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+        wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
         wc.hbrBackground = CreateSolidBrush(RGB(14, 17, 23));
         // The resource holds 16–256 with alpha. LoadIcon keeps one 32px frame and drops that alpha.
         wc.hIcon = reinterpret_cast<HICON>(LoadImageW(instance, MAKEINTRESOURCEW(1), IMAGE_ICON, 256, 256, LR_DEFAULTCOLOR));
@@ -205,7 +205,7 @@ public:
         fc.style = CS_HREDRAW | CS_VREDRAW;
         fc.lpfnWndProc = floatProc;
         fc.hInstance = instance;
-        fc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+        fc.hCursor = LoadCursor(nullptr, IDC_ARROW);
         fc.hbrBackground = wc.hbrBackground;
         fc.hIcon = wc.hIcon;
         fc.hIconSm = wc.hIconSm;
@@ -215,7 +215,7 @@ public:
         sc.style = CS_OWNDC | CS_DBLCLKS;
         sc.lpfnWndProc = surfaceProc;
         sc.hInstance = instance;
-        sc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+        sc.hCursor = LoadCursor(nullptr, IDC_ARROW);
         sc.lpszClassName = kSurfaceClass;
         RegisterClassExW(&sc);
 
