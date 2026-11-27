@@ -1,28 +1,9 @@
 #pragma once
-#include "StudioPanelRenderTarget.h"
+#include "StudioPanelModelTarget.h"
 
 namespace aiverse::studio {
-class StudioBuildingPanelPreview final : private StudioPanelRenderTarget {
+class StudioBuildingPanelPreview final : public StudioPanelModelTarget {
 public:
-    using StudioPanelRenderTarget::Side;
-    ~StudioBuildingPanelPreview() {
-        if(model_) {
-            (void)device_->waitForResourceIdle();
-            renderer_.invalidateModelCachesFor(model_.get());
-            render::releaseModel(*device_,*model_);
-        }
-    }
-    void setModel(std::unique_ptr<render::Model> model){
-        if(!model)throw std::runtime_error("No generated building model");
-        if(!device_->waitForResourceIdle())throw std::runtime_error("Building preview GPU barrier failed");
-        if(model_){renderer_.invalidateModelCachesFor(model_.get());render::releaseModel(*device_,*model_);model_.reset();}
-        model_=std::move(model);
-        model_->batching.mergeRigid=false;model_->batching.autoLod=false;
-        model_->batching.geometryPoolPolicy=render::Model::Batching::GeometryPoolPolicy::Dedicated;
-        render::prepareModelUpload(*model_);
-        ready_=render::uploadModel(*device_,*model_,true,false);
-        if(!ready_)throw std::runtime_error("Building preview GPU upload failed");
-    }
     std::vector<uint8_t> frame(float yaw,float pitch,float zoom,float panX=0.f,float panY=0.f){
         if(!ready_||!model_)throw std::runtime_error("No active Building preview");
         if(!std::isfinite(yaw)||!std::isfinite(pitch)||!std::isfinite(zoom)||!std::isfinite(panX)||!std::isfinite(panY)||zoom<.55f||zoom>2.5f||std::abs(panX)>2.f||std::abs(panY)>2.f)
@@ -45,8 +26,5 @@ public:
             renderer.drawModel(draw);
         });
     }
-private:
-    std::unique_ptr<render::Model> model_;
-    bool ready_=false;
 };
 }

@@ -2,6 +2,7 @@
 #include "StudioOverlayPlan.h"
 #include "engine/game/Tiles.h"
 #include "StudioPlacementGhost.h"
+#include "StudioModelingPreview.h"
 #include "apps/editor/core/LightBakeOps.h"
 #include "apps/editor/core/GeometryOps.h"
 #include "StudioDocumentIds.h"
@@ -300,20 +301,22 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
     session_->workspace().registerOp({"editor_window","Open or close a panel, switch workspace or restore the layout.",
         Json::parse(R"({"properties":{"id":{"type":"string"},"open":{"type":"boolean"},"resetLayout":{"type":"boolean"},"workspace":{"type":"string","enum":["scene","world","look","animate","character","logic","publish"]}}})"),[this](const Json& params){
             if (!panelInventory_.isObject()) throw std::runtime_error("Studio layout is loading");
+            Json command = params;
+            if (command.getStr("id") == "animation_authoring") command.set("id", Json::string("animation"));
             if (!params.getBool("resetLayout",false)) {
                 if (params.has("workspace")) {
                     const auto name=params.getStr("workspace");
                     if (name!="scene" && name!="world" && name!="look" && name!="animate" &&
                         name!="character" && name!="logic" && name!="publish") throw std::runtime_error("unknown workspace");
                 } else {
-                    const auto id=params.getStr("id");
+                    const auto id=command.getStr("id");
                     bool found=false;
                     for (const auto& panel:panelInventory_["windows"].items())
                         if (panel.getStr("id")==id) {found=true;break;}
                     if (!found) throw std::runtime_error("unknown window (see editor_windows)");
                 }
             }
-            sendEventPayload("layout.command",params);
+            sendEventPayload("layout.command",command);
             return Json::parse(R"({"ok":true,"summary":"Layout change requested"})");
         },true});
     session_->workspace().registerOp({"editor_windows","List HTML Studio panels and their open state.",
@@ -346,6 +349,30 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
         };
         workspace.registerOp(std::move(op));
         break;
+    }
+    for (const auto* name : {"modeling_preview", "animation_preview"}) {
+        auto& ws = session_->workspace();
+        for (auto op : ws.ops()) {
+            if (op.name != name) continue;
+            op.fn = [this](const Json& params) {
+                auto state = session_->workspace().call("modeling_get", params);
+                if (state.has("error")) return state;
+                if (params.has("expectedRevision") && params.getInt("expectedRevision") != state.getInt("revision"))
+                    throw std::runtime_error("preview revision conflict");
+                StudioModelingPreview preview;
+                auto pixels = preview.frame(state["document"], params);
+                auto png = encodePng(pixels, preview.Side, preview.Side);
+                if (png.empty()) throw std::runtime_error("Modeling preview PNG encoding failed");
+                Json result = Json::object();
+                result.set("revision", state["revision"]);
+                result.set("png_base64", Json::string(editor::base64Encode(png)));
+                result.set("width", Json::number(int64_t(preview.Side)));
+                result.set("height", Json::number(int64_t(preview.Side)));
+                return result;
+            };
+            ws.registerOp(std::move(op));
+            break;
+        }
     }
     for(const bool rig:{false,true}){
         session_->workspace().registerOp({rig?"rig_runtime_status":"animation_runtime_status",

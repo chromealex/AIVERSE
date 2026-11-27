@@ -21,6 +21,7 @@ export default function ModelGraphPanel({documentEpoch,projectPath,openAttachmen
  const [selection,setSelection]=useState<string[]>([]),[pending,setPending]=useState<PortRef|null>(null);
  const [positions,setPositions]=useState<Record<string,Positioned>>({}),[json,setJson]=useState('');
  const [modifierKind,setModifierKind]=useState('transform');
+ const [preview,setPreview]=useState('');
  const [showBuilding,setShowBuilding]=useState(false);
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[status,setStatus]=useState('');
  const history=useRef<DraftHistory<GraphObject>|null>(null),epoch=useRef(0),lock=useRef(false);
@@ -31,7 +32,7 @@ export default function ModelGraphPanel({documentEpoch,projectPath,openAttachmen
  const active=selection.at(-1)??'';
  const rows=mode==='model'||mode==='geometry'?draft?.nodes:mode==='pose'?graph?.nodes:graph?.states;
  const entry=Array.isArray(rows)?rows.find(n=>object(n)&&n.id===active):undefined;
- const reset=(doc:GraphObject|null,rev:number)=>{setOriginal(doc);setDraft(doc);setRevision(rev);history.current=doc?new DraftHistory(doc):null;setSelection([]);setPending(null);setPositions({});};
+ const reset=(doc:GraphObject|null,rev:number)=>{setPreview('');setOriginal(doc);setDraft(doc);setRevision(rev);history.current=doc?new DraftHistory(doc):null;setSelection([]);setPending(null);setPositions({});};
  const edit=(doc:GraphObject)=>{if(history.current&&doc!==history.current.current())setDraft(history.current.push(doc));};
  const run=async(task:(live:()=>boolean)=>Promise<void>)=>{
   if(lock.current)return;lock.current=true;setBusy(true);setError('');setStatus('');
@@ -115,6 +116,15 @@ export default function ModelGraphPanel({documentEpoch,projectPath,openAttachmen
     while(nodes.some(n=>object(n)&&n.id==='volume'+i))i++;
     const id='volume'+i;edit({...draft,nodes:[...nodes,{id,geometry:initialVolume()}]});setMode('geometry');setSelection([id]);setPending(null);
    }}>Add volume CSG part</StudioButton>}
+   <StudioButton size="sm" disabled={!draft||dirty||busy} onClick={()=>{
+    if(preview){setPreview('');return;}
+    void run(async live=>{
+     const image=await op('modeling_preview',{name,expectedRevision:revision});
+     if(!live())return;
+     if(!object(image)||image.revision!==revision||typeof image.png_base64!=='string')throw new Error('Model preview unavailable');
+     setPreview('data:image/png;base64,'+image.png_base64);
+    });
+   }}>{preview&&!dirty?'Hide preview':'Preview saved model'}</StudioButton>
    <StudioButton size="sm" disabled={!draft||busy} onClick={validate}>Validate</StudioButton>
    <StudioButton size="sm" disabled={!dirty||busy} onClick={save}>Save</StudioButton>
    <StudioButton size="sm" disabled={!dirty||busy} onClick={()=>reset(original,revision)}>Discard</StudioButton>
@@ -123,6 +133,7 @@ export default function ModelGraphPanel({documentEpoch,projectPath,openAttachmen
    {draft&&openAttachments&&<StudioButton size="sm" disabled={busy} onClick={openAttachments}>Attachments</StudioButton>}
    {name&&<span>Revision {revision}{dirty?' · Draft':''}</span>}
   </div>
+  {preview&&!dirty&&<img src={preview} alt={name+' · revision '+revision} width={512} height={512} style={{maxWidth:'100%',height:'auto',alignSelf:'center'}}/>}
   {error&&<StudioAlert tone="danger">{error}</StudioAlert>}{status&&<StudioAlert tone="success">{status}</StudioAlert>}
   <StudioAlert>Part hierarchy edits parent transforms. Geometry view edits native CSG operands and modifier order; operands use local geometry, not node transforms. Layout is local. Native validation governs saves.</StudioAlert>
   {draft&&(mode==='model'||mode==='geometry'||graph)?<>
