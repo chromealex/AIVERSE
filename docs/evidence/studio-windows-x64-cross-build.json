@@ -1,0 +1,10 @@
+{
+  "sha": "ef82bcb2a8111ab3ac721262c989f297c137dbaf",
+  "argv": [
+    "bash",
+    "../windows-cross-verify.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-windows-x64-cross-build.log.txt",
+  "sha256": "858f14a9a5ebb80a751c2d7e0c24249026b544abed305c48b119dfc5df01018e"
+}
