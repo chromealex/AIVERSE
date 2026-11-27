@@ -489,9 +489,10 @@ bool GraphRuntime::step(float dt) {
     if(!success) reason_=gpu_.reason();
     return success;
 }
-void GraphRuntime::draw(const fx::FxFog& fog) {
+void GraphRuntime::draw(const fx::FxFog& fog,render::Renderer3D* renderer) {
     if(!initialized_||sharedWorld_)return; // host makes ONE batched draw submission
     if(useComputeWrapper_)gpu_.draw(fog);
+    else if(renderer)cpu_.renderScene(*renderer,fog);
     else cpu_.render(fog);
 }
 bool GraphRuntime::resetGpuAllocationSeed(uint32_t seed) {

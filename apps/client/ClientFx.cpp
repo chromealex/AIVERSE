@@ -819,10 +819,10 @@ void ClientFx::render(const render::Lighting& lighting,render::Renderer3D* rende
     ps_.setLightDir(lighting.sunDir);   // shading of mesh particles
     if(renderer)ps_.renderScene(*renderer,{lighting.fogColor,lighting.fogDensity});
     else ps_.render({lighting.fogColor,lighting.fogDensity});
-    graphVolumes_.drawParticles({lighting.fogColor,lighting.fogDensity});
-    graphVolumetricParticles_.drawInline({lighting.fogColor,lighting.fogDensity});
+    graphVolumes_.drawParticles({lighting.fogColor,lighting.fogDensity},renderer);
+    graphVolumetricParticles_.drawInline({lighting.fogColor,lighting.fogDensity},renderer);
     if(graphPoolOpen_) {
-        graphPool_.draw({lighting.fogColor,lighting.fogDensity});
+        graphPool_.draw({lighting.fogColor,lighting.fogDensity},renderer);
         finishGraphGpuFrame();
     }
 }

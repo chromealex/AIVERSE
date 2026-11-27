@@ -8,6 +8,13 @@
     "apps/client/GameClient.cpp",
     "apps/editor/Editor.cpp",
     "apps/editor/windows/SpectraFxGpuAssetsWindow.cpp",
+    "apps/fps/client.cpp",
+    "apps/studio-native/StudioScene.cpp",
+    "apps/studio-native/StudioSpectraPreview.h",
+    "apps/studio-native/StudioSpectraSources.h",
+    "docs/particles.md",
+    "docs/prisma.md",
+    "docs/spectrafx.md",
     "engine/fx/FxDisplayShaders.h",
     "engine/fx/FxEffect.cpp",
     "engine/fx/FxEffect.h",
@@ -15,11 +22,19 @@
     "engine/fx/FxRender.cpp",
     "engine/fx/ParticleSystem.cpp",
     "engine/fx/ParticleSystem.h",
+    "engine/fx/SpectraBatchWorld.cpp",
+    "engine/fx/SpectraBatchWorld.h",
     "engine/fx/SpectraFxSceneHost.h",
+    "engine/fx/SpectraGpuPoolWorld.cpp",
+    "engine/fx/SpectraGpuPoolWorld.h",
     "engine/fx/SpectraGraphRuntime.cpp",
+    "engine/fx/SpectraGraphRuntime.h",
+    "engine/fx/SpectraSceneVolumeWorld.h",
+    "engine/fx/SpectraSceneVolumetricParticles.h",
     "engine/render/Renderer3D.cpp",
     "engine/render/Renderer3D.h",
-    "tests/tests.cpp"
+    "tests/tests.cpp",
+    "tests/vfx_graph_runtime_test.cpp"
   ],
   "traits": {
     "editable": true,
@@ -30,7 +45,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Client/LENS/editor native paths connected, shader graph display variants added, GPU graph admission explicitly selects CPU. Graph pool/volume adapters and runtime verification remain pending.",
+      "note": "Common batch/graph/pool/volume adapters and native Studio connected. Added explicit GPU admission regression. Native compile, GPU capture and feature delivery acceptance remain pending.",
       "evidence": []
     },
     "architecture": {

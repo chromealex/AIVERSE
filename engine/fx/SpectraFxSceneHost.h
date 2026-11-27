@@ -314,9 +314,9 @@ public:
     }
     template<class Camera>
     void render(const render::Lighting& lighting,
-                const render::mat4& viewProj,const Camera& camera) {
+                const render::mat4& viewProj,const Camera& camera,render::Renderer3D* renderer=nullptr) {
         render(lighting,SpectraFxView::fromCamera(
-            camera,viewProj,1,1));
+            camera,viewProj,1,1),renderer);
     }
     // Call outside render/compute encoders (host teardown or re-init).
     void shutdown() {

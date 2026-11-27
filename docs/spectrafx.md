@@ -3668,5 +3668,5 @@ PRISMA remains the only tone-map/composition owner. SpectraFX will reuse its
 existing geometry and source textures for opted-in additive contributions; it
 will not introduce a second postprocessing pipeline. Emitter/trail `blendSpace`
 data currently distinguishes `linear` (default) and `display`; trail overrides
-inherit from their emitter. The particle draw path is not connected yet. This
-is an unfinished source stage, not a supported or visually verified feature.
+inherit from their emitter. The draw path is now connected through shared native/client/editor adapters.
+Native compilation and GPU acceptance remain pending; this is not a verified release claim.

@@ -287,3 +287,23 @@ Material names select the affected surfaces. Omit the name to affect all materia
 ### Finishing attached effects
 
 Native consumers can call `ParticleSystem::finish(handle, endpoint)` to process the last movement on the next particle update before stopping emission. Distance emitters include an endpoint sample within their normal particle budget. Repeated finish calls and subsequent moves preserve the first endpoint; live particles then fade normally. `stop` remains immediate emission cancellation, and `kill` removes particles. This API is general to attached effects; projectile adapters supply their terminal point separately.
+
+
+### Additive blend colour space
+
+An additive emitter may set `"blendSpace":"display"` to add its encoded RGB
+contribution after PRISMA tone mapping, retaining the familiar `src * alpha + dst`
+look over bright surfaces. `"linear"` is the default scene-HDR path. Trails inherit
+the emitter choice; a trail's own `blendSpace` explicitly overrides it. Other
+blend modes reject the display setting. Source alpha, fog attenuation and opaque
+scene-depth occlusion remain active. Display contributions occur before HUD and
+after postprocessing, so they do not feed HDR bloom/exposure or temporal effects.
+
+Native consumers call `ParticleSystem::renderScene(renderer,fog)` between
+Renderer3D::render and resolvePrisma. It reuses uploaded geometry in the resolve
+callback; keep the particle system and its view unchanged until resolve finishes.
+Without a postprocessing/depth source, the existing open-pass LDR path is used.
+Graph-runtime GPU admission routes this setting to CPU presentation; a strict
+GPU requirement reports incompatibility. Volume features that require GPU-only
+execution must not silently discard this setting. Backend captures and native
+runtime acceptance are still pending for this implementation.

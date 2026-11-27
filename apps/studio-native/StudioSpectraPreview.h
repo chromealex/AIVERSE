@@ -564,8 +564,8 @@ public:
 
     // Draw only inside the SAME still-open native Scene pass (before PRISMA
     // resolves that frame). No RHI work is ever submitted by the HTML UI.
-    void draw() {
-        if(ready_&&hasParticles_&&!volumetricParticleDepth_)runtime_->draw();
+    void draw(render::Renderer3D* renderer=nullptr) {
+        if(ready_&&hasParticles_&&!volumetricParticleDepth_)runtime_->draw({},renderer);
     }
     bool active() const {return ready_;}
     bool volumeStageFloor(float& height)const{

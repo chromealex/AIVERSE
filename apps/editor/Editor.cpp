@@ -2035,7 +2035,7 @@ void Editor::tickSpectraGpuPreview(const Camera& cam,int w,int h,bool game) {
 }
 void Editor::drawSpectraGpuPreview() {
     if(!spectraPreviewFrameOpen_ || !spectraPreviewGpu_)return;
-    spectraPreviewGpu_->draw({r3d_.lighting.fogColor,r3d_.lighting.fogDensity});
+    spectraPreviewGpu_->draw({r3d_.lighting.fogColor,r3d_.lighting.fogDensity},&r3d_);
 }
 
 void Editor::renderScene(Viewport& vp, const Camera& cam, bool editOverlays) {

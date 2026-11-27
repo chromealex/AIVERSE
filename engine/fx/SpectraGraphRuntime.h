@@ -131,7 +131,7 @@ public:
         if(!gpuActive()||!gpu_.drawWithVolumeDepth(depth,fog)){reason_=gpu_.reason();return false;}
         return true;
     }
-    void draw(const fx::FxFog& fog = {}); // during still-open render pass
+    void draw(const fx::FxFog& fog = {},render::Renderer3D* renderer=nullptr); // during still-open render pass
     void clear();
     // CPU-only deterministic reset. GPU/shared-world paths reject explicitly.
     bool resetDeterministicSeed(uint32_t seed);

@@ -28,7 +28,10 @@ struct Frame { float u0, v0, u1, v1; int sprite = -1; };
 } // namespace
 
 void ParticleSystem::renderScene(render::Renderer3D& renderer,const FxFog& fog) {
-    const bool defer=renderer.addDisplayDraw([this](gfx::Device& device,gfx::TextureHandle depth,int w,int h) {
+    const bool hasDisplay=std::any_of(impl_->batches.begin(),impl_->batches.end(),[](const auto& batch) {
+        return batch.blendSpace==FxBlendSpace::Display;
+    });
+    const bool defer=hasDisplay && renderer.addDisplayDraw([this](gfx::Device& device,gfx::TextureHandle depth,int w,int h) {
         renderDisplay(device,depth,w,h);
     });
     render(fog,defer);

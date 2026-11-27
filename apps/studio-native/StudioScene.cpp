@@ -2821,7 +2821,7 @@ void StudioScene::frameSpectraDock(int framebufferWidth,int framebufferHeight) {
     }
     if(volume)spectraPreview_->contributeVolume(antialiasing_);
     renderer_.render(pass,&antialiasing_);
-    if(spectraPreview_->active())spectraPreview_->draw();
+    if(spectraPreview_->active())spectraPreview_->draw(&renderer_);
     renderer_.resolvePostFx();
     ++framesDrawn_;
     // Record the state actually used by this dock frame, before submission.
@@ -3544,8 +3544,8 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     renderer_.render(pass,useLighting?lightingRuntime_.pipeline(post_):static_cast<PostProcess*>(&post_));
     // Renderer3D keeps the HDR scene pass open; GPU/CPU FX draw here,
     // before PRISMA resolves it and before the frame/pass are retired.
-    if(spectraPreview_->active())spectraPreview_->draw();
-    spectraSources_.draw();
+    if(spectraPreview_->active())spectraPreview_->draw(&renderer_);
+    spectraSources_.draw(&renderer_);
     renderer_.resolvePrisma();
     spectraSources_.finish();
     lightingRuntime_.presented();
