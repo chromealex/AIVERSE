@@ -5,7 +5,7 @@ import type { Dispatch, DragEvent, PointerEvent as ReactPointerEvent, KeyboardEv
 import { concealNativeViews, setDockDrag } from '../nativeOverlay';
 import {
   STUDIO_PANELS, STUDIO_PANEL_TITLES, STUDIO_PANEL_HOME, activateTab, closeTab, defaultDockTree, dockStacks,
-  moveTab, panelStack, reopenTab, resizeDockSplit, splitDockRoot, splitDockStack
+  moveTab, panelStack, reopenTab, retainsExpandedStack, resizeDockSplit, splitDockRoot, splitDockStack
 } from '../nestedDock';
 import type { DockEdge, DockNode, DockSplit, DockStack, DockTree, StudioPanel } from '../nestedDock';
 import {nativeConnected, nativeWindowAction} from '../bridge';
@@ -294,7 +294,8 @@ export default function NestedDockWorkspace({ tree, setTree, renderPanel, onFloa
   const [actionsPanel,setActionsPanel]=useState<StudioPanel|null>(null);
   const stacks=dockStacks(tree);
   const [expanded,setExpanded]=useState<{stack:string;tree:DockTree}|null>(null);
-  const maximized=expanded?.tree===tree?expanded.stack:null;
+  const maximized=expanded && retainsExpandedStack(expanded.tree.root,tree.root,expanded.stack) ? expanded.stack : null;
+  useEffect(()=>{ if(expanded && maximized===null) setExpanded(null); },[expanded,maximized]);
   function toggleMaximize(stack:DockStack,panel:StudioPanel){
     if(nativeConnected()&&stacks.length===1){nativeWindowAction('studio.windowZoom');return;}
     if(maximized===stack.id){setExpanded(null);return;}

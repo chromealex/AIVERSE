@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   STUDIO_PANELS, STUDIO_PANEL_TITLES, STUDIO_PANEL_HOME, defaultDockTree, dockStacks, findDockStack, panelStack,
-  normalizeDockTree, moveTab, closeTab, reopenTab, activateTab,
+  retainsExpandedStack, normalizeDockTree, moveTab, closeTab, reopenTab, activateTab,
   resizeDockSplit, splitDockRoot, splitDockStack, migrateDockV2
 } from '../src/nestedDock.ts';
 
@@ -18,6 +18,13 @@ test('default tree has 4 nested stacks and exactly one copy of each default pane
   assert.equal(panelStack(t,'assets'),'dock-bottom');
   assert.deepEqual(findDockStack(t,'dock-left')?.tabs,['hierarchy','project']);
   assert.deepEqual(findDockStack(t,'dock-bottom')?.tabs,['assets','console','agent','frame_capture','texture_resources','simulation_profiler']);
+});
+test('maximized stack stays expanded when switching sibling tabs and releases on layout changes',()=>{
+  const tree=defaultDockTree(), stack='dock-bottom';
+  const switched=activateTab(tree,stack,'console');
+  assert.ok(retainsExpandedStack(tree.root,switched.root,stack));
+  assert.equal(retainsExpandedStack(tree.root,closeTab(switched,'assets').root,stack),false);
+  assert.equal(retainsExpandedStack(tree.root,activateTab(switched,'dock-left','project').root,stack),false);
 });
 test('on-demand tools reopen in their registered home exactly once',()=>{
   let t=defaultDockTree();

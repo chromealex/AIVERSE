@@ -242,6 +242,18 @@ export function closeTab(tree: DockTree, panel: StudioPanel): DockTree {
   const t=normalizeDockTree(tree);
   return compactDockTree({version:3,root:remove(t.root,panel)});
 }
+/** Switching tabs within the expanded stack keeps the same workspace geometry. */
+export function retainsExpandedStack(before: DockNode, after: DockNode, stackId: string): boolean {
+  if (before === after) return true;
+  if (before.id !== after.id) return false;
+  if (before.kind === 'split' && after.kind === 'split')
+    return before.axis === after.axis && before.ratio === after.ratio &&
+      retainsExpandedStack(before.first, after.first, stackId) && retainsExpandedStack(before.second, after.second, stackId);
+  return before.kind === 'stack' && after.kind === 'stack' &&
+    (before.id === stackId || before.active === after.active) &&
+    before.tabs.length === after.tabs.length && before.tabs.every((panel, index) => panel === after.tabs[index]);
+}
+
 export function activateTab(tree: DockTree, stackId: string, panel: StudioPanel): DockTree {
   const t=normalizeDockTree(tree);
   return {version:3,root:update(t.root,stackId,n=>n.kind==='stack' && n.tabs.includes(panel)?{...n,active:panel}:n)};
