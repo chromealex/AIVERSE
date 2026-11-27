@@ -211,11 +211,16 @@ export function ScriptsPanel(ctx: Ctx & {location:{path:string;line:number}|null
     setFileFilter('');void open(file,line);
   }, [ctx.location]);
   const save = async (p = current, body = text, createFile = false) => {
-    if (!p) return;
+    if (!p || busy) return;
+    const version=loadVersion.current;
     setBusy(true);
     try { await op('script_write', { path: p, text: body, ...(createFile ? { register:true, createOnly:true } : {}) });
-      if (createFile) {setFileFilter('');setText(body);setView('source');setNewPath(null);}
-      setSaved(body); setCurrent(p); setStatus({ ok: true, text: 'Saved ' + p }); await list(); refreshSnapshot(ctx); }
+      if (createFile) setNewPath(null);
+      if (version === loadVersion.current) {
+        if (createFile) {setFileFilter('');setText(body);setView('source');}
+        setSaved(body);setCurrent(p);setStatus({ok:true,text:'Saved '+p});
+      }
+      await list(); refreshSnapshot(ctx); }
     catch (e) { setStatus({ ok: false, text: message(e) }); }
     finally { setBusy(false); }
   };
