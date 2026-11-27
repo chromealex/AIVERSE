@@ -3441,7 +3441,7 @@ std::optional<float3> StudioScene::natureGroundPoint(float x,float y,float width
     return origin+direction*t;
 }
 Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,const World& source,const editor::MapDoc& map,
-                             const std::string& project,float levelHeight) {
+                             const std::string& project,float levelHeight,const editor::SceneScreenshotOptions& capture) {
     if(width<2 || height<2)return Json::object();
     if(!natureView_){
         natureView_=std::make_unique<NatureView>(*device_,deviceLifetime_->lease(),project,map);
@@ -3457,6 +3457,7 @@ Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,con
     camera.target={map.data.w*.5f,heightAt(map.data.w*.5f,map.data.h*.5f),map.data.h*.5f};
     camera.distance=state.distance;camera.pitch=state.pitch;camera.yaw=state.yaw;
     if (state.forestEnabled && state.forestHorizon) camera.zFar=std::max(camera.zFar,14000.f);
+    camera=capture.camera(camera);
     view.renderedCamera=camera;
     if(view.ignition!=state.ignitionRevision || view.display.settings.grass!=state.preview.settings.grass)
         view.display.invalidateFrame();

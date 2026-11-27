@@ -1597,12 +1597,12 @@ bool StudioSession::pollAgentLink() {
                     continue;
                 }
             }
-            if(nature && args.size()!=1){
-                agentServer_.send(m.client,reply(id,error("PHYSIS capture uses the panel camera and current viewport size")).dump(-1));
+            if(nature && args.size()!=size_t(1 + args.has("x") + args.has("y") + args.has("z") + args.has("distance") + args.has("pitch") + args.has("yaw"))){
+                agentServer_.send(m.client,reply(id,error("PHYSIS capture accepts camera coordinates and uses the current viewport size")).dump(-1));
                 continue;
             }
             editor::SceneScreenshotOptions scene;
-            if(window=="scene"){
+            if(window=="scene" || nature){
                 try {
                     if(args.has("device"))throw std::runtime_error("device preset requires Game capture");
                     scene=editor::SceneScreenshotOptions::parse(args,true);

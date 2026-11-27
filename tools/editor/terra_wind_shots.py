@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Drive a running aiverse_editor over its agent link (--listen PORT) and
+"""Drive HTML Studio over its agent link (--listen PORT) and
 capture beauty + debug screenshots of hierarchical wind masks on a
 TerraWeave landscape: generated relief, procedural Arbor forest, PHYSIS
 nature-preview grass and wind. Editor-only; the map is never saved.
@@ -25,7 +25,7 @@ sock = connect(); buf = b""; seq = 0
 def _hello():
     # Agent link v2: authenticate with the token the editor writes per port.
     global buf
-    path = os.path.expanduser("~/.aiverse/agent-link/%d.token" % port)
+    path = os.path.join(os.environ.get("AIVERSE_AGENT_LINK_DIR", os.path.expanduser("~/.aiverse/agent-link")), f"{port}.token")
     for _ in range(120):
         if os.path.exists(path): break
         time.sleep(1)
@@ -56,14 +56,15 @@ def call(_tool, **args):
             print(f"{_tool}: {json.dumps(short, ensure_ascii=False)[:300]}", flush=True)
             return r
 
-def shot(name, **cam):
+def shot(name, window="physis", **cam):
     for attempt in range(5):
-        r = call("view_screenshot", window="scene", clean=True, width=1920, height=1080, **cam)
+        r = call("view_screenshot", window=window, **cam)
         if "png_base64" in r:
             with open(os.path.join(out, name + ".png"), "wb") as f:
                 f.write(base64.b64decode(r["png_base64"]))
             return
         time.sleep(1)
+    raise RuntimeError(f"{name} capture failed: {r}")
 
 def height(x, z):
     r = call("terrain_heights", points=[[x, z]])
@@ -78,9 +79,9 @@ call("terraweave_generate", seed=20261121, baseHeightCm=0, reliefCm=1400,
 call("map_set", path="terrainPresentation", value="legacy")
 call("lighting_set", time=0.4, dayLength=0, clouds=0.25)
 call("postfx_preset", preset="vivid")
-call("view_focus", x=96, z=96, distance=80)
+call("editor_window", id="scene", open=True)
 time.sleep(3)
-shot("diag-terrain-only", x=96, y=height(96, 96) + 5, z=96, distance=80, pitch=25, yaw=35)
+shot("diag-terrain-only", window="scene", clean=True, width=1920, height=1080, x=96, y=height(96, 96) + 5, z=96, distance=80, pitch=25, yaw=35)
 r = call("view_screenshot", window="all")
 if "png_base64" in r:
     open(os.path.join(out, "diag-editor.png"), "wb").write(base64.b64decode(r["png_base64"]))
@@ -94,7 +95,7 @@ def cams():
     for tag, x, z, dist, pitch, yaw in views:
         yield tag, dict(x=x, y=height(x, z) + 5, z=z, distance=dist, pitch=pitch, yaw=yaw)
 
-call("view_focus", x=96, z=96, distance=70)
+call("editor_window", id="physis", open=True)
 time.sleep(6)  # forest + grass build, PHYSIS frame
 for tag, cam in cams():
     shot(f"{tag}-0-calm", **cam)

@@ -1210,6 +1210,8 @@ void StudioHost::tickNaturePreview() {
             const char* threaded=std::getenv("AIVERSE_STUDIO_RENDER_THREAD");
             renderThread_=std::make_unique<StudioRenderThread>([this]{renderSceneFrame();},!(threaded&&std::string(threaded)=="0"));
         }
+        const auto capture=agentShot_ && session_->agentNatureScreenshotPending() && natureShotSource_.lock()==shown
+            ?session_->agentSceneScreenshotOptions():editor::SceneScreenshotOptions{};
         onScene([&]{platform_.sceneThreadScope([&]{
             if (natureRendererGeometry_!=shown->treeGeometry || natureRendererHierarchical_!=shown->hierarchical) {
                 surface.renderer.reset();
@@ -1218,7 +1220,7 @@ void StudioHost::tickNaturePreview() {
             }
             if (!surface.renderer) surface.renderer=std::make_unique<StudioScene>(platform_.createDevice(StudioSurface::Nature));
             shown->presentation=surface.renderer->drawNature(surface.placement.pixelsW,surface.placement.pixelsH,
-                *shown,*source,ws.map,ws.project.dir,float(ws.project.rules.levelHeight.toDouble()));
+                *shown,*source,ws.map,ws.project.dir,float(ws.project.rules.levelHeight.toDouble()),capture);
         });});
     } catch (const std::exception& e) {
         platform_.log(std::string("PHYSIS preview: ")+e.what());
