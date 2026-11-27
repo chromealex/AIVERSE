@@ -61,6 +61,8 @@ else()
     set_target_properties(aiverse_studio PROPERTIES
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/mac/StudioInfo.plist.in"
         OUTPUT_NAME AiverseStudioHTML5
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
         MACOSX_BUNDLE_GUI_IDENTIFIER "${AIVERSE_STUDIO_BUNDLE_ID}")
     if(EXISTS "${AIVERSE_STUDIO_WEB_DIST}/index.html")
         # Run even when only frontend assets changed. CMake 3.22 uses CMP0112
