@@ -1,0 +1,10 @@
+{
+  "sha": "9670f6f9e09f14fee0a94e309298e9ecd2202d4d",
+  "argv": [
+    "bash",
+    "../fx-wire.sh"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/studio-fx-wire-asset.log.txt",
+  "sha256": "d75eb2ec39594f17873c341dc103f7b69db09abdd61926d2e4e3cac4a8f3237a"
+}
