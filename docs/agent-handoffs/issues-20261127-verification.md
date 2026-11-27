@@ -247,3 +247,18 @@ save/reload checksum, and the pure helper test covers fractional recovery.
 Source 913d83753 adds tests/tests.cpp scenario precise_windup_subtick_recovery_and_cancellation: multiple releases per tick, overlapping recovery/cooldown over 20 ticks, out-of-range cancellation and fresh windup after reacquisition. Manifest updated before test implementation. git diff --check passed. Compile/runtime not run yet; next use the cached aiverse_tests target and run the new filter.
 
 First focused compile terminated exit 2 (handle 43067): fixture incorrectly qualified shared Transform as game::Transform. Correction uses the ECS Transform owner. Source correction follows 913d83753; no runtime acceptance yet. Build log attack-acceptance-913d83753-build.log retains failure.
+
+Corrected source 7e69a4ef2 / tested tree 315fbbb32: cached aiverse_tests
+build completed exit 0 (handle 52839), log attack-acceptance-corrected-build.log.
+The new precise_windup_subtick_recovery_and_cancellation filter reports
+33 checks, 0 failures, [ OK ]. Log attack-acceptance-subtick.log in the same
+KINGSTON build directory. This proves multiple releases inside a tick,
+concurrent cooldown/recovery arithmetic, range cancellation event/no release,
+and a fresh full windup on reacquisition. No new shared source correction was
+needed. Final integrated quick gate is still pending.
+
+Next client acceptance implementation can use Rml::GetContext("main") to
+inspect/click actual GameClient documents, without exposing private state or
+adding test controls to engine runtime. Link existing aiverse_hosted_client,
+use platform::HostedView for the demo root and engine assets, inject native
+GameClient::event, inspect simulation commands and capture real Metal output.

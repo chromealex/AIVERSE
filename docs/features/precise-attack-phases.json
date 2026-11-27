@@ -90,8 +90,10 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Existing fractional helper and 200-tick period/save checks passed. Adding simulation acceptance for multiple releases within a tick, concurrent recovery and cancellation/reacquisition; new scenarios not run yet.",
-      "evidence": []
+      "note": "Focused native tests passed: fractional helper 7 checks; 200-tick period/save checksum 5 checks; multiple sub-tick releases, overlapping recovery/cooldown and range cancellation/reacquisition 33 checks at source 7e69a4ef2. Full integrated quick gate pending.",
+      "evidence": [
+        "docs/agent-handoffs/issues-20261127-verification.md"
+      ]
     },
     "handoff": {
       "status": "not_run",
