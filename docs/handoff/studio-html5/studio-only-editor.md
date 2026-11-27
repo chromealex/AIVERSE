@@ -1608,3 +1608,7 @@ Stage f4bfc187840af26ed4fb91b37fea8cf114621a5e updates examples/native/world_pro
 ### Statistics ECS counts
 
 684292b4ba09c278c391f9de25d9977b5b02718f changes apps/studio-native/StudioGameSurface.cpp to call the const countExisting API for units and projectiles. The current source compiled successfully with the studio-project-module-mac CMake object target. Linux live match lifecycle evidence remains pending: Docker failed to mount the reattached KINGSTON build tree before starting the test. Next run the live Statistics pause, restart and stop scenario and capture its graph.
+
+### Mac player Statistics lifecycle
+
+5f9a59bf4611cfadfb434205138124873873f27d records the player history capture in docs/handoff/studio-html5/captures/mac-player-history.png and updates docs/studio-html5-parity.md. The current Mac aiverse_studio target built successfully. The first fixture invocation rejected the Linux-only --engine argument; using the Mac --project entry point and the engine working directory succeeded. The real Watchtower Orders match displayed multiple samples and Казна at 12.5. Paused ECS counts matched at tick 75. Pause, restart, and stop assertions passed. Evidence on KINGSTON: stats-mac-k239yihn/live.log. Next continue the remaining scenario inventory before retiring the legacy editor.
