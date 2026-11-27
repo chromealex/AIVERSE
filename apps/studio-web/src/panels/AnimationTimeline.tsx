@@ -17,7 +17,7 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
   const path = snapshot?.project.path ?? '';
   const [models, setModels] = useState<string[]>([]);
   const [model, setModel] = useState('');
-  const [loaded, setLoaded] = useState<{model:string; document:AnimDoc} | null>(null);
+  const [loaded, setLoaded] = useState<{model:string; revision:number; document:AnimDoc} | null>(null);
   const doc = loaded?.model === model ? loaded.document : null;
   const [clip, setClip] = useState('');
   const [selection, setSelection] = useState<{channel:number; key:number} | null>(null);
@@ -38,7 +38,7 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
     let live=true;
     void op('animation_get', { name: model }).then(r => {
       if(!live)return;
-      const d = r.document as AnimDoc; setLoaded({model,document:d}); setClip(d.clips?.[0]?.id ?? ''); setTime(0); setError('');
+      const d = r.document as AnimDoc; setLoaded({model,revision:r.revision,document:d}); setClip(d.clips?.[0]?.id ?? ''); setTime(0); setError('');
     }).catch(e => {if(live)setError(message(e));});
     return ()=>{live=false;};
   }, [model]);
@@ -89,6 +89,44 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
   }, [playing, duration]);
   const skeleton = useMemo(() => projectSkeleton(doc, pose, view, 260, 200), [doc, pose, view]);
   const keys = current ? clipKeyTimes(current) : [];
+  const [saving, setSaving] = useState(false);
+  async function writeKey(action: 'save' | 'add' | 'delete', form: HTMLFormElement) {
+    if (!loaded || !current || !channel || !selection || !selectedValue || saving) return;
+    const { key } = selection;
+    const times = [...(channel.times ?? [])];
+    const values = [...(channel.values ?? [])];
+    const stride = channel.interpolation === 'cubic' ? 3 : 1;
+    let next = key;
+    if (action === 'save') {
+      const fields = new FormData(form);
+      const target = Number(fields.get('time'));
+      if ((key > 0 && target <= times[key - 1]) || (key + 1 < times.length && target >= times[key + 1])) {
+        setError('Key time must fall between its neighboring keys.'); return;
+      }
+      times[key] = target;
+      values[key * stride + (stride === 3 ? 1 : 0)] = selectedValue.map((_, i) => Number(fields.get('v' + i)));
+    } else if (action === 'add') {
+      next = times.length;
+      times.push(Number((times[next - 1] + 0.1).toFixed(6)));
+      values.push(...values.slice(key * stride, (key + 1) * stride));
+    } else {
+      if (times.length < 2) return;
+      times.splice(key, 1); values.splice(key * stride, stride);
+      next = Math.min(key, times.length - 1);
+    }
+    const channels = current.channels.map((entry, index) => index === selection.channel ? {...entry, times, values} : entry);
+    const value = {...current, channels, duration: Math.max(current.duration ?? 0, ...times)};
+    setSaving(true); setPlaying(false); setError('');
+    try {
+      const response = await invoke('studio.op', {expectedProject:path, op:'animation_edit', params:{
+        name:model, expectedRevision:loaded.revision, commands:[{op:'put', collection:'clips', id:clip, value}]
+      }});
+      const result = response.result as {document:AnimDoc; revision:number; error?:string};
+      if (result.error) throw new Error(result.error);
+      setLoaded(previous => previous === loaded ? {model, revision:result.revision, document:result.document} : previous);
+      setSelection({channel:selection.channel, key:next}); setTime(times[next]);
+    } catch (e) { setError(message(e)); } finally { setSaving(false); }
+  }
   if (!path) return <div className="tool__empty">Open a project to preview its animations.</div>;
   return <div className="ptp anim">
     <div className="ptp__edhead">
@@ -141,6 +179,17 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
               onClick={() => { setPlaying(false); setTime(t); setSelection({channel:i, key:k}); }}/>)}</div>
           </div>)}</div>
           {channel && selection && <output className="ptp__meta">{channel.node}.{channel.path ?? 'rotation'} · Key {selection.key + 1} · {channel.times?.[selection.key]} s · {selectedValue?.join(', ') ?? '—'}</output>}
+          {channel && selection && selectedValue && <form className="anim__edit"
+            key={[model, clip, selection.channel, selection.key, loaded?.revision].join('/')}
+            onSubmit={event => {event.preventDefault(); void writeKey('save', event.currentTarget);}}>
+            <fieldset disabled={saving}><legend>Edit selected key</legend>
+              <label>Time (s)<input type="number" name="time" required min="0" step="any" defaultValue={channel.times?.[selection.key]}/></label>
+              {selectedValue.map((v,i) => <label key={i}>{['X','Y','Z','W'][i] ?? i+1}<input type="number" name={'v'+i} required step="any" defaultValue={v}/></label>)}
+              <button className="au-button au-button--sm" type="submit">Save key</button>
+              <button className="au-button au-button--sm" type="button" onClick={e => void writeKey('add', e.currentTarget.form!)}>Append key</button>
+              <button className="au-button au-button--sm" type="button" disabled={(channel.times?.length ?? 0)<2} onClick={e => void writeKey('delete', e.currentTarget.form!)}>Delete key</button>
+            </fieldset>
+          </form>}
         </>}
       </div>
     </div>}
