@@ -652,4 +652,12 @@ Share the game terrain water-cell layout builder with HTML Scene so sheet, conne
 
 Expose Scene debug views directly in the toolbar: STRATA clusters and routes, model wind diagnostics, PHYSIS, TerraWeave and NEREID. Mac render evidence covers [STRATA geometry](evidence/studio-strata-obj-frame-images.log.txt), [model wind rig modes](evidence/studio-wind-visible-skeleton.log.txt) and [paused PHYSIS wind/fire](evidence/studio-debug-physis-field-frames.log.txt). [Detached Scene cluster fill](handoff/studio-html5/captures/mac-scene-cluster-fill.png) was rechecked with an off/on/off comparison.
 
+| Scene Debug control | Verified macOS HTML Studio behavior | Evidence |
+|---|---|---|
+| TerraWeave slope | Selected tile and camera target work individually and together. Radius and spacing were exercised on a sloped mesh. | [Independent controls and spacing](evidence/studio-terrain-slope-verified.log.txt) · [Combined field](handoff/studio-html5/captures/mac-scene-dual-slope.png) |
+| TerraWeave tree wind | Selecting a tree shows its crown wind direction. Reversing wind moves the arrow. Calm wind shows a ring. Deselecting clears it. | [Native frame comparison](evidence/studio-tree-crown-wind.log.txt) |
+| TerraWeave erosion zones | Highlighting one zone leaves the other outline unchanged. Native captions distinguish Cyrillic zone names. Clean exports omit these overlays. | [Zone selection](evidence/studio-erosion-highlight.log.txt) · [Caption frames](evidence/studio-erosion-cyrillic-captions.log.txt) |
+| NEREID river flow | The toolbar shows all rivers or isolates the selected river. Manual flow reversal was verified on long river segments. | [First selection](handoff/studio-html5/captures/mac-scene-selected-river-west.png) · [Second selection](handoff/studio-html5/captures/mac-scene-selected-river-east.png) · [Reversed current](handoff/studio-html5/captures/mac-river-flow-reversed.png) |
+
+
 Port editor_select to HTML Studio starting with map entity ordinals, canonical document IDs, camera focus, Inspector and clearing selection. Record selection follows in the same migration.
