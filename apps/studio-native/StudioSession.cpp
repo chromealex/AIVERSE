@@ -2718,6 +2718,14 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
         if (!knownBuildTarget(target)) throw std::runtime_error("Unknown build target");
         return ws_.toolchainCheck(target);
     }
+    if (method == "studio.installBuildTools") {
+        if (!knownBuildTarget(target)) throw std::runtime_error("Unknown build target");
+        if (params.getStr("project") != ws_.project.dir) throw std::runtime_error("Build project changed");
+        ws_.startTool("--install-toolchain " + target, "toolchain-" + target, false);
+        Json out = Json::object();
+        out.set("started", Json::fromBool(true));
+        return out;
+    }
     if (method == "studio.buildStart") {
         if (!knownBuildTarget(target)) throw std::runtime_error("Unknown build target");
         const std::string config = params.getStr("config", "Release");
@@ -5298,7 +5306,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             reply.set("result",sceneBrushJson());
         } else if (method == "studio.agentInfo" || method == "studio.agentStart" || method == "studio.agentStop" || method == "studio.agentReset") {
             reply.set("result", agentRequest(method, params));
-        } else if (method == "studio.buildGameWindow" || method == "studio.buildNativeProject" || method == "studio.buildInfo" || method == "studio.buildFileTextureSize" || method == "studio.buildFileExclusion" || method == "studio.buildFileCompression" || method == "studio.buildRemoveFileRule" || method == "studio.buildSplitLimit" || method == "studio.buildSplitMode" || method == "studio.buildCompression" || method == "studio.buildAtlasFixSizes" || method == "studio.buildAtlasPage" || method == "studio.buildAtlasEnabled" || method == "studio.buildToolchain" || method == "studio.buildStart" ||
+        } else if (method == "studio.buildGameWindow" || method == "studio.buildNativeProject" || method == "studio.buildInfo" || method == "studio.buildFileTextureSize" || method == "studio.buildFileExclusion" || method == "studio.buildFileCompression" || method == "studio.buildRemoveFileRule" || method == "studio.buildSplitLimit" || method == "studio.buildSplitMode" || method == "studio.buildCompression" || method == "studio.buildAtlasFixSizes" || method == "studio.buildAtlasPage" || method == "studio.buildAtlasEnabled" || method == "studio.installBuildTools" || method == "studio.buildToolchain" || method == "studio.buildStart" ||
                    method == "studio.buildLog" || method == "studio.buildEstimate") {
             reply.set("result", buildRequest(method, params));
         } else if(method=="studio.worldProcessAreaBatchResize"){

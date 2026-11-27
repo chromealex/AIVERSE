@@ -204,6 +204,18 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
   const steps = buildSteps(log);
   const errors = phase === 'failed' || phase === 'missing-toolchain' ? buildErrors(log) : [];
   const missing = missingToolchain(log);
+  const installingTools = state.label.startsWith('toolchain-');
+  const installTools = async () => {
+    setPendingEstimate(null);
+    setError('');
+    try {
+      await invoke('studio.installBuildTools', { project: projectPath, target });
+      follow.current = true;
+      setStartedAt(Date.now());
+      setNow(Date.now());
+      reloadTranscript('toolchain-' + target);
+    } catch (err) { setError(message(err)); }
+  };
   const run = runTarget(state.label);
 
   const elapsed = startedAt ? Math.max(0, Math.round((now - startedAt) / 1000)) : 0;
@@ -319,9 +331,9 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
       <div className={'build__status build__status--' + phase} role="status">
         {phase === 'running' ? <StudioLoader size={19}/> : phase === 'ok' ? <CheckCircle2 size={16}/> :
           phase === 'idle' ? <Hammer size={16}/> : phase === 'missing-toolchain' ? <CircleAlert size={16}/> : <XCircle size={16}/>}
-        <b>{phase === 'running' ? (run.estimate ? 'Estimating size' : 'Building ' + (run.target || target)) :
-            phase === 'ok' ? (run.estimate ? 'Estimate ready' : 'Build succeeded') :
-            phase === 'failed' ? 'Build failed' : phase === 'missing-toolchain' ? 'Missing tools' : 'Ready'}</b>
+        <b>{phase === 'running' ? (installingTools ? 'Installing tools' : run.estimate ? 'Estimating size' : 'Building ' + (run.target || target)) :
+            phase === 'ok' ? (installingTools ? 'Tool installation complete' : run.estimate ? 'Estimate ready' : 'Build succeeded') :
+            phase === 'failed' ? (installingTools ? 'Tool installation failed' : 'Build failed') : phase === 'missing-toolchain' ? 'Missing tools' : 'Ready'}</b>
         {steps.length > 0 && <span className="build__step">{steps[steps.length - 1]}</span>}
         {phase === 'running' && elapsed > 0 && <span className="build__time">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</span>}
         {phase !== 'running' && phase !== 'idle' && <span className="build__time">exit {state.exitCode}</span>}
@@ -369,6 +381,8 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
             {r.found ? <CheckCircle2 size={13}/> : r.required ? <XCircle size={13}/> : <CircleAlert size={13}/>}
             <span>{r.name}</span><small>{r.found ? (r.version || r.path || 'found') : (r.autoInstall ? 'installable' + (r.size ? ' · ' + r.size : '') : r.manual || r.install || 'install manually')}</small>
           </div>)}
+          {toolchain?.hostSupported && toolchain.requirements.some(r => !r.found && r.required && r.autoInstall) &&
+            <StudioButton disabled={state.running} onClick={() => void installTools()}>Install missing tools</StudioButton>}
           {toolchain?.ok && <p className="build__note">Everything needed is installed.</p>}
         </section>
         <section className="build__card" aria-label="Size estimate">
