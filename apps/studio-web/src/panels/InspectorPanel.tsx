@@ -17,6 +17,7 @@ import { fuzzyScore } from '../commandSearch';
 import type { StudioPanelContext } from './StudioPanelRenderer';
 import EvolveGroupNumeric from '../components/EvolveGroupNumeric';
 import './InspectorPanel.css';
+import { useLuaMenu } from './useLuaMenu';
 
 const ICONS: Record<string, typeof Box> = {
   Transform: Move3d, MeshRenderer: Box, Light: Lightbulb, Unit: User,
@@ -157,6 +158,8 @@ function AddComponent({ entityId, busy, onPick }: { entityId: string; busy: bool
 /** Unity-style Inspector: entity header + its document components. */
 export default function InspectorPanel({ inspector: primary, selected, busy, inspectorRecord, inspectorPinned, toggleInspectorPin,
   select, changeProperty, setBusy, commitSnapshot, showPanel, reportError, snapshot }: StudioPanelContext) {
+  const [status, setStatus] = useState('');
+  const lua = useLuaMenu(commitSnapshot, showPanel, setStatus, reportError);
   // Multi-selection: read every selected object and show their common components.
   const ids = !inspectorPinned && snapshot?.selectedIds && snapshot.selectedIds.length > 1 ? snapshot.selectedIds.slice(-50) : null;
   const [others, setOthers] = useState<StudioInspector[] | null>(null);
@@ -251,7 +254,12 @@ export default function InspectorPanel({ inspector: primary, selected, busy, ins
   }),[]);
   const mapScope=snapshot?.scene.mapProperties && snapshot.graphDocument;
   const showMap=mapScope && (mapView!=="object" || (!inspectorPinned && !selected && !inspector));
-  return <div className="insp">
+  return <div className="insp" onContextMenu={event => {
+    const field = (event.target as Element).closest<HTMLElement>('[data-property-key]');
+    if (field?.dataset.propertyKey) void lua.open(event, 'inspector.property', field.dataset.propertyKey);
+  }}>
+    {lua.popup}
+    {status && <div role="status" className="insp-comp__hint">{status}</div>}
     {mapScope && <nav className="insp__views" aria-label="Inspector views">
       <button type="button" aria-pressed={!showMap} disabled={!selected && !inspector} onClick={()=>setMapView("object")}>Object</button>
       <button type="button" aria-pressed={!!showMap && (mapView==="object" || mapView==="map")} onClick={()=>setMapView("map")}>{snapshot.scene.worldSpace?"Scene":"Map"}</button>
