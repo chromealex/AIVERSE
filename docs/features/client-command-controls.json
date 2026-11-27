@@ -152,7 +152,7 @@
     },
     "tests": {
       "status": "pass",
-      "note": "Complete Mac quick gate on clean 0a8ed3c9ef3858d539c1b38ade9036dd8391e64f: configure/build PASS; 592 CTests, 587 passed, 5 explicit GPU skips, 0 failures, 1126.43s. Includes real client_controls_frame and additive_blend_frame. Original recorder report-name collision did not fail native tests; retained logs were separately verified on the unchanged clean checkout. Windows/Linux/mobile runtime not established.",
+      "note": "Complete Mac quick gate on clean 0a8ed3c9ef3858d539c1b38ade9036dd8391e64f: configure/build PASS; 592 CTests, 587 passed, 5 explicit GPU skips, 0 failures, 1126.43s. Includes real client_controls_frame and additive_blend_frame. Original recorder report-name collision did not fail native tests; retained logs were separately verified on the unchanged clean checkout. Windows/Linux/mobile runtime not established. Issue206 Windows run46018209732 on main ed1e451f reproduced an always-on test abort at StudioSessionTests.cpp:1355: text-mode fixture writes translate LF to CRLF. Byte-exact fixture correction and fresh native validation are pending; prior Mac evidence remains historical.",
       "evidence": [
         "docs/evidence/issues-mac-quick-final-retained-20261127.json",
         "docs/evidence/issues-mac-quick-final-retained-20261127.log.txt",
