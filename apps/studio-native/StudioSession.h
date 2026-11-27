@@ -139,6 +139,7 @@ public:
     void setPreviewSelection(Json ids,Json detail) { selectedPreviewIds_=std::move(ids); previewInspector_=std::move(detail); }
     Json editWorldRegions();
     Json queryEditWorld(const Json& params,bool list);
+    bool selectedRoad(const std::vector<std::string>& ids, int& a, int& b, bool& linked) const;
     Json graphDocumentScope() const;
 private:
     Json snapshot() const;
@@ -177,7 +178,6 @@ private:
     std::vector<std::string> selection_;          // extra selected ids (primary kept in selected_)
     std::set<std::string> hidden_, locked_;
     void selectOnly(const std::string& id) { selected_=id; selection_.clear(); }
-    bool selectedRoad(const std::vector<std::string>& ids, int& a, int& b, bool& linked) const;
     void clearSelection() { selected_.clear(); selection_.clear();selectedPreviewIds_=Json(); }
     bool documentHas(const std::string& id) const;
     void dropOrdinalFlags(); // positional ids shift after structural edits

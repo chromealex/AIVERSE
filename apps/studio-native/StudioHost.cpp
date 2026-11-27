@@ -4065,6 +4065,21 @@ Json StudioHost::viewportInput(const Json& input) {
         result.set("highlight",Json::number(int64_t(erosionHighlightDocument_ && *erosionHighlightDocument_==document?erosionHighlight_:-2)));
         return result;
     }
+    if(kind=="focusRoad"){
+        if(projectLoading_ || !sameDocumentScope(input["scope"],session_->graphDocumentScope()))
+            throw std::runtime_error("Select the road again before showing it in Scene");
+        const auto ids=session_->selectedObjectIds();
+        int a,b;
+        bool linked;
+        if(ids.size()!=2 || input["ids"].size()!=2 || input["ids"][0].str()!=ids[0] || input["ids"][1].str()!=ids[1] ||
+           !session_->selectedRoad(ids,a,b,linked) || !linked)throw std::runtime_error("Select a current movement road");
+        const auto& entities=session_->workspace().map.data.entities;
+        const render::float3 target{(entities[a].x+entities[b].x)*0.5f,0.f,(entities[a].z+entities[b].z)*0.5f};
+        ensureScene();
+        onScene([&]{preview_->requestSceneFocus(target,18.f);});
+        sendEventPayload("ui.showPanel",Json::parse(R"({"panel":"scene"})"));
+        return Json::object();
+    }
     if(kind=="focusLight") {
         const auto id=input.getStr("entityId");
         if(projectLoading_ || input.getStr("expectedDocumentEpoch")!=session_->graphDocumentScope().getStr("epoch") ||
@@ -4078,7 +4093,7 @@ Json StudioHost::viewportInput(const Json& input) {
             editor::DocumentTransform position;
             if(!editor::readDocumentTransform(map,ref,position))break;
             ensureScene();
-            onScene([&]{preview_->requestLightFocus({float(position.x),float(position.y),float(position.z)});});
+            onScene([&]{preview_->requestSceneFocus({float(position.x),float(position.y),float(position.z)},14.f);});
             return Json::object();
         }
         throw std::runtime_error("The selected light is no longer available");

@@ -281,6 +281,9 @@ export default function InspectorPanel({ inspector: primary, selected, busy, ins
           ids={snapshot.selectedIds} scope={snapshot.graphDocument} onError={reportError}
           onApplied={async () => commitSnapshot(await invoke('studio.snapshot',{}))}/>}
       {multi && ids?.length===2 && snapshot?.selectedRoad && <div className="insp-map__actions">
+        {snapshot.graphDocument && <StudioButton disabled={busy} onClick={()=>void invoke('studio.viewportInput',{
+          kind:'focusRoad',ids,scope:snapshot.graphDocument!
+        }).catch(e=>reportError(String(e)))}>Show road in Scene</StudioButton>}
         {ids.map(id=><StudioButton key={id} disabled={busy} onClick={()=>void select(id)}>
           Inspect {snapshot.scene.entities.find(entity=>entity.id===id)?.name ?? id}
         </StudioButton>)}

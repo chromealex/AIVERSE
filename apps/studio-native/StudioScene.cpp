@@ -4354,11 +4354,11 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         lastMapHeight_ = map.h;
     }
     applyPendingSceneLens();
-    if(pendingFocusLight_) {
-        auto target=*pendingFocusLight_;
-        pendingFocusLight_.reset();
+    if(pendingSceneFocus_) {
+        auto [target,distance]=*pendingSceneFocus_;
+        pendingSceneFocus_.reset();
         if(!fpsProject)target.y+=terrainPreviewHeight(doc.data,target.x,target.z,levelHeight,baseTerrainView_);
-        startTween(target,14.f,camera_.yaw,camera_.pitch);
+        startTween(target,distance,camera_.yaw,camera_.pitch);
     }
     stepTween();
     const auto view=viewCamera();
