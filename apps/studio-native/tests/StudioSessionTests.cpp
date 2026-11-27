@@ -2419,6 +2419,14 @@ void entityWorkflow() {
                 AIVERSE_TEST_CHECK(result["rows"][0].getStr("ref")==std::to_string(editor::worldRef(entity)));
             };
             verifyRuntimeRow(actor::CharacterId{7}, "Actor #7", "Runtime Actors");
+            const auto otherActor = live.world().create();
+            live.world().add<actor::CharacterId>(otherActor,actor::CharacterId{42});
+            const auto index = std::to_string(otherActor.index);
+            const auto exact = inspector.entities(&live,"run-1",0,100,"Actor #" + index);
+            for (const auto& row : exact["rows"].items())
+                AIVERSE_TEST_CHECK(row.getStr("name") == "Actor #" + index);
+            const auto byIndex = inspector.entities(&live,"run-1",0,100,"id:" + index);
+            AIVERSE_TEST_CHECK(!rowFor(byIndex,std::to_string(editor::worldRef(otherActor))).isNull());
             verifyRuntimeRow(actor::Projectile{103}, "Projectile #103", "Projectiles");
             verifyRuntimeRow(actor::Loot{214}, "Loot #214", "Loot");
             verifyRuntimeRow(actor::Vehicle{325}, "Vehicle #325", "Vehicles");

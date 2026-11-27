@@ -776,6 +776,18 @@ bool worldRowMatches(const WorldModel& m, const Rules& R, const MapData* doc, co
         std::string tok = lower(query.substr(i, j - i));
         i = j;
         if (tok.empty()) continue;
+        if (!r.runtimeName.empty() && lower(r.runtimeName).starts_with(tok + " #")) {
+            const auto hash = query.find_first_not_of(' ', i);
+            if (hash != std::string::npos && query[hash] == '#') {
+                const auto end = query.find_first_not_of("0123456789", hash + 1);
+                if (end != hash + 1 && (end == std::string::npos || query[end] == ' ')) {
+                    const auto name = tok + " " + query.substr(hash, end - hash);
+                    if (lower(r.runtimeName) != name) return false;
+                    i = end == std::string::npos ? query.size() : end;
+                    continue;
+                }
+            }
+        }
         auto has = [](const std::string& hay, const std::string& needle) { return lower(hay).find(needle) != std::string::npos; };
         std::string prefix, v = tok;
         if (size_t c = tok.find(':'); c != std::string::npos && c > 0 && c <= 2) { prefix = tok.substr(0, c); v = tok.substr(c + 1); }
