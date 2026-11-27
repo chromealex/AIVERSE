@@ -1640,3 +1640,7 @@ f71ec09d2f7d4c40a70e8066452b44d838034b6c updates InsightPanels.tsx, ProjectToolP
 ### Snapshot Diff native file chooser
 
 Verified packaged Mac host at 0be4feee7. AppKit pointer events on the first snapshot file input opened an NSOpenPanel attached to the detached Snapshot Diff window. The driver's Cancel action fired the HTML input cancel event and preserved maps/courtyard.json in three independent runs. Evidence on KINGSTON: stats-mac-wau7nge7/live.log, stats-mac-hyv7xvfu/live.log and stats-mac-5x0ee62_/live.log. The automation could not select the fixture file in the subsequent native sheet within its timeout. Selection through the sheet remains unverified; the separate DOM File comparison and live project switch previously passed.
+
+### Snapshot Diff input boundary and retry
+
+d36ac0faed88182b8f29271a8271dbef4cdbec52 updates docs/studio-html5-parity.md and captures/mac-snapshot-file-limit.png. Packaged macOS Studio accepted File objects via the detached panel inputs. Malformed JSON produced the named parse error. 16777217 bytes produced the size limit error and a valid 16777216-byte file compared in the same panel without a stale error. Evidence: stats-mac-p0ayrpgx/live.log. Native chooser confirmation remains to verify independently.
