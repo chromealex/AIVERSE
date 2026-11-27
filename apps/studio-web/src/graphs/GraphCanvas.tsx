@@ -43,7 +43,7 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
  useLayoutEffect(()=>{const a=zoomAnchor.current,el=scroll.current;if(a&&el){el.scrollLeft=(a.left+a.x)*zoom/a.old-a.x;el.scrollTop=(a.top+a.y)*zoom/a.old-a.y;zoomAnchor.current=null;}},[zoom]);
  useEffect(()=>{
   const el=scroll.current;if(!enhancedNavigation||!el)return;
-  const wheel=(e:WheelEvent)=>{e.preventDefault();const old=zoomRef.current;const next=Math.max(.25,Math.min(2,old*Math.exp(-e.deltaY*.002)));if(next===old)return;const r=el.getBoundingClientRect();zoomAnchor.current={x:e.clientX-r.left,y:e.clientY-r.top,left:el.scrollLeft,top:el.scrollTop,old};setZoom(next);};
+  const wheel=(e:WheelEvent)=>{e.preventDefault();const old=zoomRef.current;const next=Math.max(Math.min(.25,old),Math.min(2,old*Math.exp(-e.deltaY*.002)));if(next===old)return;const r=el.getBoundingClientRect();zoomAnchor.current={x:e.clientX-r.left,y:e.clientY-r.top,left:el.scrollLeft,top:el.scrollTop,old};setZoom(next);};
   el.addEventListener('wheel',wheel,{passive:false});return()=>el.removeEventListener('wheel',wheel);
  },[enhancedNavigation]);
  const point=(event:PointerEvent<SVGElement>)=>{
@@ -78,7 +78,14 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
  const maxHeight=Math.max(320,...view.nodes.map(n=>n.y+(geometry.nodes.find(g=>g.id===n.id)?.height??54)+36));
  const maxWidth=Math.max(520,...view.nodes.map(n=>n.x+nodeWidth+36));
  useEffect(()=>{const el=scroll.current;if(!el||!enhancedNavigation)return;const update=()=>setViewport({x:el.scrollLeft/zoom,y:el.scrollTop/zoom,w:el.clientWidth/zoom,h:el.clientHeight/zoom});update();el.addEventListener("scroll",update);const observer=new ResizeObserver(update);observer.observe(el);return()=>{el.removeEventListener("scroll",update);observer.disconnect();};},[zoom,enhancedNavigation,maxWidth,maxHeight]);
- const fit=()=>{const el=scroll.current;if(!el)return;zoomAnchor.current=null;setZoom(Math.max(.25,Math.min(2,(el.clientWidth-12)/maxWidth,(el.clientHeight-12)/maxHeight)));el.scrollLeft=0;el.scrollTop=0;};
+ const fit=()=>{
+  const el=scroll.current;
+  if(!el||el.clientWidth<=12||el.clientHeight<=12)return;
+  zoomAnchor.current=null;
+  setZoom(Math.min(2,(el.clientWidth-12)/maxWidth,(el.clientHeight-12)/maxHeight));
+  el.scrollLeft=0;
+  el.scrollTop=0;
+ };
  const portColor=(type:string)=>typedPorts?({scalar:'#e4b35b',float:'#e4b35b',color:'#78c9a0',rgb:'#78c9a0',rgba:'#78c9a0',normal:'#a5a1ff',packed:'#d995ce',vec3:'#a5a1ff',vector:'#a5a1ff'} as Record<string,string>)[type.toLowerCase()]??'var(--au-accent)':'var(--au-accent)';
  const curve=(x1:number,y1:number,x2:number,y2:number)=>`M ${x1} ${y1} C ${x1+55} ${y1}, ${x2-55} ${y2}, ${x2} ${y2}`;
  return <div className="au-graph-workspace" onContextMenu={e=>{if(!disabled&&(commands?.length||onAddMenu)){e.preventDefault();setMenu(v=>!v)}}} onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))space.current=false;}} onKeyUp={e=>{if(e.code==='Space')space.current=false;}} onKeyDown={e=>{if(e.key==='Escape'){
