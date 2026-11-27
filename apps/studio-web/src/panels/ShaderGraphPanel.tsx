@@ -39,6 +39,7 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
  const [draft,setDraft]=useState<StudioShaderGraphDocument['graph']|null>(null);
  const history=useRef<DraftHistory<StudioShaderGraphDocument['graph']>|null>(null);
  const [pendingOutput,setPendingOutput]=useState<PortRef|null>(null);
+ const [toolsExpanded,setToolsExpanded]=useState(false);
  const [nodeQuery,setNodeQuery]=useState('');
  const resetDraft=(next:StudioShaderGraphDocument['graph']|null)=>{
   history.current=next?new DraftHistory(next):null;setDraft(next);setPendingOutput(null);
@@ -272,6 +273,8 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
       <div className="graph-summary"><strong>{selected}</strong><span>{document.graph.domain??'Unknown domain'}</span>
        <span>{draft?.nodes?.length??document.nodes} nodes · {document.samples} saved texture samples</span>
        <span>{dirty?'Unsaved changes':'Saved'}</span>
+       <button className="graph-tools-toggle" aria-expanded={toolsExpanded} onClick={()=>setToolsExpanded(!toolsExpanded)}>Editing tools</button>
+       <div className="graph-edit-tools" data-expanded={toolsExpanded}>
        <StudioInput aria-label="Search node catalog" placeholder="Find node…" value={nodeQuery} onChange={e=>setNodeQuery(e.target.value)}/>
        <select className="graph-add-select" aria-label="Graph node operation"
          value={chosenOp?.id??''} onChange={event=>setSelectedOp(event.target.value)}>
@@ -293,6 +296,7 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
         {previewName===selected?'Hide preview':'Preview draft'}</StudioButton>
        <button disabled={!dirty||busy} onClick={discard}><RotateCcw size={13}/> Discard</button>
        <button disabled={!dirty||busy} onClick={()=>void save()}><Save size={13}/> Save graph</button>
+       </div>
       </div>
 
       {previewName===selected&&<SpectraDockViewport id="shader" label="Shader draft GPU preview"/>}

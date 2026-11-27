@@ -36,13 +36,19 @@
 .graph-bindings input:not([type=checkbox]){min-width:0;max-width:17em;padding:4px;color:var(--au-text);background:var(--studio-background);border:1px solid var(--au-line);border-radius:4px}
 .graph-bindings input[type=number]{width:7em}
 .studio-shader-graphs{container-type:inline-size;height:100%}
+.graph-summary .graph-tools-toggle{display:none}
+.graph-edit-tools{display:contents}
 @container (max-width:460px){
   .graph-columns{flex-direction:column}
   .graph-library{display:flex;align-items:center;gap:4px;width:auto;min-width:0;max-width:none;flex:none;padding:4px;overflow-x:auto;border-right:0;border-bottom:1px solid #34475f}
   .graph-library>button{flex:none;width:auto;max-width:12em}
   .graph-search{flex:0 0 6.5em;min-width:0;margin:0}
-  .studio-shader-graphs .graph-summary{flex-wrap:nowrap;overflow-x:auto;gap:6px;padding:6px}
-  .graph-summary>*{flex:none;white-space:nowrap}
+  .studio-shader-graphs .graph-summary{flex-wrap:wrap;gap:6px;padding:6px}
+  .graph-summary strong{overflow-wrap:anywhere}
+  .graph-summary .graph-tools-toggle{display:inline-flex;margin-left:auto}
+  .graph-edit-tools{display:none}
+  .graph-edit-tools[data-expanded=true]{display:flex;flex:1 0 100%;flex-wrap:wrap;align-items:center;gap:6px}
+  .graph-edit-tools>input{min-width:0;max-width:100%}
   .graph-bindings{max-height:45%}
 }
 .graph-edit-port{cursor:crosshair}
