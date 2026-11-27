@@ -18849,3 +18849,32 @@ TEST(projectile_origin_versioned_archive) {
     Archive in(corrupt); in.formatVersion=13; in(restored);
     CHECK(!in.ok());
 }
+
+TEST(projectile_shared_branch_provenance) {
+    using namespace aiverse;
+    projectile::ProjectileFlight flight;
+    flight.enabled=true;
+    projectile::ProjectileModifier modifier;
+    modifier.kind=projectile::ProjectileModKind::Split;
+    modifier.count=2;
+    modifier.timed=true;
+    flight.modifiers.push_back(modifier);
+    projectile::State parent;
+    Fixed speed=1_fx;
+    projectile::initialize(parent,speed,flight,{1_fx,Fixed{},Fixed{}});
+    int children=0;
+    projectile::split(parent,speed,flight,0,{Fixed{},1_fx,Fixed{}},[&](projectile::Branch child) {
+        ++children;
+        CHECK(child.state.origin==projectile::FlightOrigin::Split);
+    });
+    CHECK(children==2);
+    CHECK(parent.origin==projectile::FlightOrigin::Emission);
+    flight.modifiers[0].kind=projectile::ProjectileModKind::Ricochet;
+    projectile::initialize(parent,speed,flight,{1_fx,Fixed{},Fixed{}});
+    auto child=projectile::contact(parent,speed,flight,[](size_t){},[](Fixed)->std::optional<projectile::Target> {
+        return projectile::Target{Entity{1,1},{Fixed{},Fixed{},1_fx}};
+    });
+    CHECK(child.has_value());
+    if(child)CHECK(child->state.origin==projectile::FlightOrigin::Ricochet);
+    CHECK(parent.origin==projectile::FlightOrigin::Emission);
+}

@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <optional>
 namespace aiverse::projectile {
-enum class FlightOrigin : uint8_t { Unknown, Emission, Split, Ricochet };
 struct State {
     FlightOrigin origin = FlightOrigin::Unknown;
     bool enabled=false;

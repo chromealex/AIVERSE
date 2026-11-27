@@ -366,10 +366,6 @@ struct Projectile {
     int8_t weapon = -1;       // weapon index of sourceType (bonus damage, armor class, crew kills)
 };
 
-inline bool projectileContinuesFromContact(const Projectile& p) {
-    return p.program.enabled && p.program.origin != projectile::FlightOrigin::Emission;
-}
-
 struct Hero { int level = 1; Fixed xp{}; uint8_t skill[8] = {}; uint8_t points = 0; };   // skill / points: rules heroes.skills
 struct Shield { Fixed value{}; uint32_t lastHit = 0; };       // StarCraft shields (health.shields)
 struct Eater { int kills = 0; };                              // neutral eats (sandworm)

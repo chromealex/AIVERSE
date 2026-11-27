@@ -105,7 +105,7 @@ struct SceneObject {
     float steer = 0;             // vehicles (rules "driving"): steering angle of the front wheels, rad, + = left
     render::float3 target;
     Entity source;               // projectiles: who fired (muzzle point)
-    bool projectileContinuation = false; // a split or ricochet starts at its contact point
+    projectile::FlightOrigin projectileOrigin = projectile::FlightOrigin::Emission;
     uint16_t shotTargetType = UINT16_MAX; // eligible straight flight; target holds interpolated ground coordinates
     uint16_t shooterType = UINT16_MAX; // projectiles: type of the unit that fired it (lights)
     // planets: body index and pos / facing / target body-local (origin = body centre); -1 = flat map

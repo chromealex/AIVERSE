@@ -449,7 +449,7 @@ void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o,
         ps.lastPos = o.pos;
         float3 launch = o.pos;
         auto src = o.source.valid() ? anims_.find(o.source.packed()) : anims_.end();
-        if (useMuzzle && !o.projectileContinuation && src != anims_.end() && src->second.initialized && src->second.type < looks_.size() &&
+        if (useMuzzle && o.projectileOrigin == projectile::FlightOrigin::Emission && src != anims_.end() && src->second.initialized && src->second.type < looks_.size() &&
             src->second.choice>=0 && size_t(src->second.choice)<looks_[src->second.type].models.size()) {
             const EntityAnim& s = src->second;
             const ModelChoice& ch = looks_[s.type].models[size_t(s.choice)];
@@ -459,9 +459,7 @@ void GameView::drawProjectile(Renderer3D& r, uint64_t key, const SceneObject& o,
             }
             events_.push_back({"launch", o.source, s.type, s.last.owner, launch});
         }
-        ps.projectilePresentation.begin({key,
-            o.projectileContinuation ? ::aiverse::view::FlightOrigin::Continuation
-                                     : ::aiverse::view::FlightOrigin::Emission, o.pos}, launch);
+        ps.projectilePresentation.begin({key, o.projectileOrigin, o.pos}, launch);
     }
     if (grid && o.shotTargetType < looks_.size()) {
         const auto& target = looks_[o.shotTargetType];
