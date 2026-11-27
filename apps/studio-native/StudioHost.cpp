@@ -702,7 +702,7 @@ void StudioHost::openProject(const std::string& path, int64_t requestId) {
             try { *snapshot = session->openProject(path); }
             catch (const std::exception& e) { *error = e.what(); }
         },
-        [this, alive, path, requestId, snapshot, error] {
+        [this, alive, requestId, snapshot, error] {
             if (!*alive) return;
             // Reopening the same directory is a new preview lifetime too.
             // Invalidate on successful project open before accepting commands.
@@ -731,7 +731,7 @@ void StudioHost::openProject(const std::string& path, int64_t requestId) {
                 simulationMsSinceSceneFrame_ = 0;
                 lastSceneFrame_ = 0;
                 sceneFrameMs_ = 0;
-                platform_.rememberLastProject(path);
+                platform_.rememberLastProject(session_->workspace().project.dir);
                 // Scene models stream in next; the tick reports their progress.
                 sendLoading("scene", "Preparing scene", 0, 0);
                 loadingShown_ = true;

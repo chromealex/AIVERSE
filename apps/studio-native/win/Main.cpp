@@ -245,7 +245,6 @@ public:
         core_->session().setBuildTool(aiverse::editor::findBuildTool(exe, root));
         core_->session().setMcpTool(exe + "\\aiversemcp.exe");
         if (project_.empty()) project_ = lastProject();
-        else rememberLastProject(project_);
         core_->setPendingProject(project_);
 
         ShowWindow(main_, SW_SHOWDEFAULT);

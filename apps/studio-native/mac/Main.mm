@@ -1441,11 +1441,7 @@ int aiverseMain(int argc,char** argv) {
         // Without --project, reopen the last project chosen in the Open panel.
         if(project.empty()) {
             NSString* last=[[NSUserDefaults standardUserDefaults] stringForKey:@"AiverseLastProject"];
-            BOOL isDir=NO;
-            if(last.length && [[NSFileManager defaultManager] fileExistsAtPath:last isDirectory:&isDir] && isDir)
-                project=last.UTF8String;
-        } else {
-            [[NSUserDefaults standardUserDefaults] setObject:[NSString stringWithUTF8String:project.c_str()] forKey:@"AiverseLastProject"];
+            if (last.length) project=aiverse::editor::resolveProjectDir(last.fileSystemRepresentation, nullptr);
         }
         try {
             [NSApplication sharedApplication];
