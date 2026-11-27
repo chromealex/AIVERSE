@@ -26,6 +26,10 @@ def check_files(package, require_build_tool):
         host = package / "Contents/MacOS/AiverseStudioHTML5"
         server = host.with_name("aiversemcp")
         resources = package / "Contents/Resources"
+    elif (package / "AiverseStudio").is_file():
+        host = package / "AiverseStudio"
+        server = package / "aiversemcp"
+        resources = package
     else:
         host = package / "AiverseStudio.exe"
         server = package / "aiversemcp.exe"
@@ -73,7 +77,7 @@ def check(package, files_only=False, require_build_tool=False):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("package", type=Path, help="macOS .app or Windows executable directory")
+    parser.add_argument("package", type=Path, help="macOS .app or Linux/Windows executable directory")
     parser.add_argument("--files-only", action="store_true", help="Inspect a cross-built package without running its MCP server")
     parser.add_argument("--require-build-tool", action="store_true", help="Verify the packager is bundled")
     args = parser.parse_args()

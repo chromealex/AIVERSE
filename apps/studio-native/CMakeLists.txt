@@ -36,6 +36,9 @@ elseif(AIVERSE_PLATFORM STREQUAL "linux")
     add_custom_target(aiverse_studio_web_assets
         COMMAND "${CMAKE_COMMAND}" -E copy_directory "${AIVERSE_STUDIO_WEB_DIST}" "$<TARGET_FILE_DIR:aiverse_studio>/studio-web"
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:aiversemcp>" "$<TARGET_FILE_DIR:aiverse_studio>/$<TARGET_FILE_NAME:aiversemcp>"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:aiverse_studio>/engine/fx/physis" "$<TARGET_FILE_DIR:aiverse_studio>/engine/fonts"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${STUDIO_NATURE_TEXTURES} "$<TARGET_FILE_DIR:aiverse_studio>/engine/fx/physis"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${STUDIO_CAPTION_FONT} "$<TARGET_FILE_DIR:aiverse_studio>/engine/fonts"
         DEPENDS aiversemcp
         VERBATIM)
     add_dependencies(aiverse_studio aiverse_studio_web_assets)
