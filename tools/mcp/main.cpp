@@ -347,7 +347,7 @@ int main(int argc, char** argv) {
     aiverse::editor::setEditorLanguage(opt.engine + "/engine/assets/lang");
     local.buildTool = findTool(self, "aiversebuild");
     for (fs::path c : {fs::path(self) / "AiverseGame", fs::path(self) / "AiverseGame.exe", fs::path(self) / "AiverseGame.app/Contents/MacOS/AiverseGame",
-                       fs::path(self) / "Release/AiverseGame.exe"}) {   // ui_preview renders screens with the client
+                       fs::path(self) / "Release/AiverseGame.exe", fs::path(self) / "aiverse_client"}) {   // ui_preview renders screens with the client
         std::error_code ec2;
         if (fs::exists(c, ec2)) { local.gameExe = c.string(); break; }
     }
