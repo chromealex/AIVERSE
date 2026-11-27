@@ -297,10 +297,10 @@ export default function NestedDockWorkspace({ tree, setTree, renderPanel, onFloa
   const maximized=expanded && retainsExpandedStack(expanded.tree.root,tree.root,expanded.stack) ? expanded.stack : null;
   useEffect(()=>{ if(expanded && maximized===null) setExpanded(null); },[expanded,maximized]);
   function toggleMaximize(stack:DockStack,panel:StudioPanel){
-    if(nativeConnected()&&stacks.length===1){nativeWindowAction('studio.windowZoom');return;}
-    if(maximized===stack.id){setExpanded(null);return;}
     const next=stack.active===panel?tree:activateTab(tree,stack.id,panel);
     if(next!==tree)setTree(next);
+    if(nativeConnected()&&stacks.length===1){nativeWindowAction('studio.windowZoom');return;}
+    if(maximized===stack.id){setExpanded(null);return;}
     setExpanded({stack:stack.id,tree:next});
   }
   const [rootHover,setRootHover]=useState<DockEdge|null>(null);
