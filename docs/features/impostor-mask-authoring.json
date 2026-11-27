@@ -7,6 +7,15 @@
     "apps/studio-native/StudioTools.h",
     "apps/studio-web/src/panels/ImpostorPanel.tsx",
     "apps/studio-web/src/panels/ToolPanel.tsx",
+    "docs/agent-handoffs/impostor-mask-authoring-initial.md",
+    "docs/agent-handoffs/impostor-mask-authoring-mac.md",
+    "docs/agent-handoffs/media/impostor-mask-studio.png",
+    "docs/agent-handoffs/terraweave-impostor-contour-metal.md",
+    "docs/agent-handoffs/terraweave-palm-bounds-metal.md",
+    "docs/devlog/systems.json",
+    "docs/evidence/impostor-mask-authoring-mac.json",
+    "docs/evidence/impostor-mask-authoring-mac.log.txt",
+    "docs/features/impostor-mask-authoring.json",
     "engine/render/ImpostorMaskBounds.h",
     "engine/render/Model.cpp",
     "engine/render/StaticImpostorLod.h",
@@ -16,6 +25,8 @@
     "tests/geometry/surface_proxy.cpp",
     "tests/render/static_impostor_lod.cpp",
     "tests/terraweave_model_test.cpp",
+    "tools/modeling/Export.cpp",
+    "tools/modeling/Modeling.h",
     "tools/modeling/SurfaceProxy.cpp"
   ],
   "traits": {
@@ -26,101 +37,150 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Fits padded mask rectangles while preserving UV mapping.",
+      "evidence": [
+        "tools/modeling/SurfaceProxy.cpp"
+      ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Shares the same alpha-mask selection policy across rigid, surface and forest representations.",
+      "evidence": [
+        "engine/render/ImpostorMaskBounds.h"
+      ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "bakeSurfaceProxy accepts fit and returns a chart report.",
+      "evidence": [
+        "tools/modeling/SurfaceProxy.cpp"
+      ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Documents analyze, manual overrides, digest validation and LOD binding.",
+      "evidence": [
+        "skills/world/aiverse-geometry/SKILL.md"
+      ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Built server produced atlas and wrote a digest-matched proxy through actual tools/call.",
+      "evidence": [
+        "docs/agent-handoffs/impostor-mask-authoring-mac.md"
+      ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "WebKit exercised three fit modes, two views and save.",
+      "evidence": [
+        "docs/agent-handoffs/media/impostor-mask-studio.png",
+        "docs/agent-handoffs/impostor-mask-authoring-mac.md"
+      ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Shows selected rectangle, areas and triangle count.",
+      "evidence": [
+        "docs/agent-handoffs/media/impostor-mask-studio.png"
+      ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "GLB geometry, UV, maps and recipe round-trip verified.",
+      "evidence": [
+        "docs/evidence/impostor-mask-authoring-mac.json"
+      ]
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "No editable graph or new graph domain; this operates on final model geometry.",
       "evidence": []
     },
     "performance": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Actual palm Metal orbit, and separate measured fixture area and topology.",
+      "evidence": [
+        "docs/evidence/impostor-mask-authoring-mac.json",
+        "docs/agent-handoffs/impostor-mask-authoring-mac.md"
+      ]
     },
     "platforms": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Mac x86_64 tested; Windows and Linux were not verified on this branch.",
+      "evidence": [
+        "docs/evidence/impostor-mask-authoring-mac.json"
+      ]
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Uses existing GLB encoder, PNG, digest, Workspace and Studio bridge.",
+      "evidence": [
+        "apps/editor/core/SurfaceProxyOps.cpp"
+      ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Standalone native importer/baker and headless MCP exercised.",
+      "evidence": [
+        "docs/evidence/impostor-mask-authoring-mac.json",
+        "docs/agent-handoffs/impostor-mask-authoring-mac.md"
+      ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Reproducible cutout fixture in the surface-proxy test.",
+      "evidence": [
+        "tests/geometry/surface_proxy.cpp"
+      ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Four focused CTests on the implementation commit.",
+      "evidence": [
+        "docs/evidence/impostor-mask-authoring-mac.json"
+      ]
     },
     "handoff": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Commands, limits and exact implementation revision.",
+      "evidence": [
+        "docs/agent-handoffs/impostor-mask-authoring-mac.md"
+      ]
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Operator workflow and click path.",
+      "evidence": [
+        "docs/agent-handoffs/impostor-mask-authoring-mac.md",
+        "skills/world/aiverse-geometry/SKILL.md"
+      ]
     },
     "publishing": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Studio capture prepared; external site publication pending integration.",
+      "evidence": [
+        "docs/agent-handoffs/media/impostor-mask-studio.png"
+      ]
     }
   },
   "integrations": {
-    "skills": [],
-    "mcp_tools": [],
-    "studio_panels": [],
-    "studio_methods": []
+    "skills": [
+      "aiverse-geometry"
+    ],
+    "mcp_tools": [
+      "geometry_proxy_analyze",
+      "geometry_proxy_bake"
+    ],
+    "studio_panels": [
+      "models"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ]
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/impostor-mask-authoring-mac.json"
+  ]
 }
