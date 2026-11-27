@@ -2965,8 +2965,8 @@ bool StudioHost::worldProcessDrag(int phase,double x,double y,
         const auto centerX=area.getInt("offsetXcm",0);
         const auto centerZ=area.getInt("offsetZcm",0);
         if(oldX<50||oldZ<50)return true;
-        const auto newX=std::llround(std::abs(double(current.value)-centerX));
-        const auto newZ=std::llround(std::abs(double(current.valueZ)-centerZ));
+        const std::int64_t newX=std::llround(std::abs(double(current.value)-centerX));
+        const std::int64_t newZ=std::llround(std::abs(double(current.valueZ)-centerZ));
         if(newX<50||newZ<50)return true;
         Json ids=Json::array();
         for(const auto& id:selected)ids.push(Json::string(id));
