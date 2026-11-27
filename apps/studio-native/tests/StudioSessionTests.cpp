@@ -1359,7 +1359,7 @@ void authoredEntityWorkflow() {
        value.set("seed",Json::number(int64_t(9007199254740993LL)));
        input.set("valueJson",Json::string(value.dump()));request.set("params",input);
        AIVERSE_TEST_CHECK(!call("studio.op",request.dump().c_str()).has("error"));
-       AIVERSE_TEST_CHECK(Json::parseFile((project/"game.json").string())["seed"].integer()==9007199254740993LL);
+       AIVERSE_TEST_CHECK(Json::parseFile((project/"game.json").string())["seed"].numberLiteral()=="9007199254740993");
        step.set("expectedVersion",owner.call("project_history_status",Json::object())["version"]);
        AIVERSE_TEST_CHECK(!owner.call("project_history_step",step).has("error"));
        AIVERSE_TEST_CHECK(editor::readProjectFileBytes(project/"game.json")==bytes);
