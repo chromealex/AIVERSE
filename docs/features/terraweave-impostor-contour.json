@@ -86,10 +86,12 @@
       ]
     },
     "platforms": {
-      "status": "not_run",
-      "note": "Measured arm64 Metal only. Other targets untested.",
+      "status": "pass",
+      "note": "Windows Server 2022 x64 and Ubuntu 24.04 x64 passed all three native Release tests. Mac x86_64 also exercised the Metal forest path. GPU timings are Mac-only.",
       "evidence": [
-        "docs/evidence/terraweave-palm-bounds-metal.json"
+        "docs/evidence/impostor-pr227-windows.json",
+        "docs/evidence/impostor-pr227-ubuntu.json",
+        "docs/evidence/impostor-mask-authoring-final.json"
       ]
     },
     "dependencies": {
@@ -145,6 +147,8 @@
     "studio_methods": []
   },
   "test_reports": [
-    "docs/evidence/impostor-mask-authoring-final.json"
+    "docs/evidence/impostor-mask-authoring-final.json",
+    "docs/evidence/impostor-pr227-windows.json",
+    "docs/evidence/impostor-pr227-ubuntu.json"
   ]
 }

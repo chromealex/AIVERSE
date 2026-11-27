@@ -1,0 +1,17 @@
+{
+  "sha": "59fb6f69e5262f977ea4d95384369b8c24ba7776",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "qa",
+    "-C",
+    "Release",
+    "--no-tests=error",
+    "--output-on-failure",
+    "-R",
+    "^(static_impostor_lod|surface_proxy|terraweave_model)$"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/impostor-pr227-ubuntu.log.txt",
+  "sha256": "4b91af1070f88996a36f38945c3233fad23b36184b1a4b38cb6e793d432c4af7"
+}

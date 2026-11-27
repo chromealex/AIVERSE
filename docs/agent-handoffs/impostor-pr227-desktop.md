@@ -1,0 +1,5 @@
+# Desktop acceptance for impostor fitting
+
+Tested engine revision `59fb6f69e5262f977ea4d95384369b8c24ba7776`. The hosted QA workflow checked out that exact revision on Windows Server 2022 and Ubuntu 24.04. Each built the three native Release targets and ran static_impostor_lod, surface_proxy and terraweave_model. Windows passed 3/3 in 4.71 seconds and Linux passed 3/3 in 3.53 seconds. The separate Mac four-test report also includes the Metal forest orbit. Desktop CPU tests cover geometry and GLB processing. GPU timing evidence is specific to Metal. A secondary local Docker attempt stopped on a read-only Docker filesystem. [Hosted run](https://github.com/chromealex/AIVERSE/actions/runs/46002976331)
+
+For the editor-tool publication path, Python 3.12 ran `tools/site/build.py check` (73 entries, zero errors) and `tools/site/build.py build --out <KINGSTON>/site-preview` (154 pages, 73 entries, 165 media files). Verified the entry in devblog-studio.html and ru/devblog-studio.html and compared the generated PNG byte-for-byte to docs/agent-handoffs/media/impostor-mask-studio.png. The release-site contract schedules gh-pages publication from origin/main after merge.

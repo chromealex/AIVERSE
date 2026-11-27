@@ -1,0 +1,17 @@
+{
+  "sha": "59fb6f69e5262f977ea4d95384369b8c24ba7776",
+  "argv": [
+    "ctest",
+    "--test-dir",
+    "qa",
+    "-C",
+    "Release",
+    "--no-tests=error",
+    "--output-on-failure",
+    "-R",
+    "^(static_impostor_lod|surface_proxy|terraweave_model)$"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/impostor-pr227-windows.log.txt",
+  "sha256": "b04c21da20f812639ffaab2d7103605e43a467ff3602fcb4f869d592082c9852"
+}
