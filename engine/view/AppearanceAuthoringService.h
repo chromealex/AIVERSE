@@ -101,14 +101,10 @@ public:
         if(o.has("sssColor"))mt.sssColor=vec3(o["sssColor"],mt.sssColor);
         if(o.has("emissive"))mt.emissive=vec3(o["emissive"],mt.emissive);
         mt.emissiveStrength=num(o["emissiveStrength"],mt.emissiveStrength);
-        if(o.has("alpha")) {
-            const auto alpha=o.getStr("alpha");
-            mt.alpha=alpha=="mask"?render::AlphaMode::Mask:
-                     alpha=="blend"?render::AlphaMode::Blend:
-                     render::AlphaMode::Opaque;
-            if(alpha!="mask"&&alpha!="blend"&&alpha!="opaque"&&warn)
-                warn("alpha must be opaque, mask or blend");
-        }
+        if(o.has("alpha") && !render::parseMaterialBlend(o.getStr("alpha"),mt.alpha) && warn)
+            warn("alpha must be opaque, mask, blend, additive or additive-unweighted");
+        if(o.has("blend") && !render::parseMaterialBlend(o.getStr("blend"),mt.alpha) && warn)
+            warn("blend must be opaque, mask, alpha, additive or additive-unweighted");
         mt.alphaCutoff=num(o["cutoff"],mt.alphaCutoff);
         mt.doubleSided=o.getBool("doubleSided",mt.doubleSided);
         if(o.has("unlit"))

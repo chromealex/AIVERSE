@@ -630,11 +630,12 @@ private:
             case 0: m.alpha = AlphaMode::Opaque; break;
             case 1: m.alpha = AlphaMode::Mask; m.alphaCutoff = 0.75f; break;
             case 2: m.alpha = AlphaMode::Blend; break;
-            case 3: case 4: m.alpha = AlphaMode::Blend; m.castShadow = false; warn("additive layers are approximated by alpha blending"); break;
+            case 3: m.alpha = AlphaMode::AdditiveUnweighted; break;
+            case 4: m.alpha = AlphaMode::Additive; break;
             default: m.alpha = AlphaMode::Blend; m.castShadow = false; warn("modulate layers are approximated by alpha blending"); break;
         }
-        if (l.alpha < 0.999f) { m.baseColor.w = std::clamp(l.alpha, 0.0f, 1.0f); m.alpha = AlphaMode::Blend; }
-        if (m.alpha == AlphaMode::Blend) m.castShadow = false;
+        if (l.alpha < 0.999f) { m.baseColor.w = std::clamp(l.alpha, 0.0f, 1.0f); if(!alphaBlended(m.alpha))m.alpha = AlphaMode::Blend; }
+        if (alphaBlended(m.alpha)) m.castShadow = false;
     }
 
     // ---- geometry

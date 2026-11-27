@@ -1117,7 +1117,7 @@ void Renderer3D::renderCurrentFrameReactiveMask(
             it.mat->shaderGraph || it.materialRole == 1 ||
             it.shadowRole == 2) return false;
         const bool translucent = it.tint.w < 0.99f ||
-            it.mat->transparent || it.mat->alpha == AlphaMode::Blend ||
+            it.mat->transparent || alphaBlended(it.mat->alpha) ||
             (it.flags & kDrawTransparent) != 0;
         // Fade parts are skipped by the velocity overlay until their
         // coverage is reproduced. Mark only actual dithered fragments
@@ -1140,7 +1140,7 @@ void Renderer3D::renderCurrentFrameReactiveMask(
         const bool deform = it.joints >= 0 || it.baked ||
             (it.prim->morphTargets > 0 && it.model->morphTex.valid());
         const bool translucent = it.tint.w < 0.99f ||
-            it.mat->transparent || it.mat->alpha == AlphaMode::Blend ||
+            it.mat->transparent || alphaBlended(it.mat->alpha) ||
             (it.flags & kDrawTransparent) != 0;
         // Current-pose reactive silhouettes also protect animated LOD
         // fades and dissolving characters. LOD dither is reproduced in

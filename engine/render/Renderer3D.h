@@ -1215,7 +1215,7 @@ public:
                         !item.prim || !item.mat || !item.indexCount ||
                         !item.model->vb.valid() || !item.model->ib.valid() ||
                         item.tint.w < 0.99f || item.dissolve > 0.0f ||
-                        item.mat->alpha == AlphaMode::Blend ||
+                        alphaBlended(item.mat->alpha) ||
                         item.mat->transparent ||
                         item.materialRole == 1 || item.shadowRole == 2)
                         continue;
@@ -2249,8 +2249,9 @@ private:
     struct ModelShaderKey {
         uint32_t variant;
         std::shared_ptr<const graph::Program> graph;
+        gfx::BlendMode blend = gfx::BlendMode::Opaque;
         bool operator==(const ModelShaderKey& other) const {
-            if (variant != other.variant) return false;
+            if (variant != other.variant || blend != other.blend) return false;
             if (graph == other.graph) return true;
             if (!graph || !other.graph) return false;
             // Material fragment and vertex shader source are backend-specific.

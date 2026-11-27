@@ -1,0 +1,134 @@
+{
+  "schema": 1,
+  "id": "model-additive-blending",
+  "owner": "rendering",
+  "changed_paths": [
+    "apps/studio-native/StudioScene.cpp",
+    "docs/models.md",
+    "engine/fx/AnimatedModelEffectView.h",
+    "engine/fx/FxEffect.cpp",
+    "engine/fx/FxEffect.h",
+    "engine/gfx/Gfx.h",
+    "engine/gfx/gl/GfxGL.cpp",
+    "engine/gfx/metal/GfxMetal.mm",
+    "engine/gfx/vulkan/VkDraw.cpp",
+    "engine/render/MaterialBlend.h",
+    "engine/render/Model.h",
+    "engine/render/ModelGltf.cpp",
+    "engine/render/ModelMdx.cpp",
+    "engine/render/ModelMerge.cpp",
+    "engine/render/ModelVirtualTextureFallback.h",
+    "engine/render/Renderer3D.cpp",
+    "engine/render/Renderer3D.h",
+    "engine/render/Renderer3DModels.cpp",
+    "engine/view/AppearanceAuthoringService.h",
+    "tests/tests.cpp",
+    "tools/modeling/Export.cpp",
+    "tools/modeling/SurfaceProxy.cpp"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": false,
+    "visible": true,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "architecture": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "native_api": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "skill": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "mcp": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "studio": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "inspector": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "persistence": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "platforms": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "dependencies": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "headless": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "examples": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "tests": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "handoff": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "documentation": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    },
+    "publishing": {
+      "status": "not_run",
+      "note": "Pending implementation and verification.",
+      "evidence": []
+    }
+  },
+  "integrations": {
+    "skills": [],
+    "mcp_tools": [],
+    "studio_panels": [],
+    "studio_methods": []
+  },
+  "test_reports": []
+}

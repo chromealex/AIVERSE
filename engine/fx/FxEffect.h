@@ -344,6 +344,7 @@ struct ModelMaterialTrack {
     std::vector<FxColorKey> color;
     float2 uvSpeed{};
     std::vector<std::string> textures;
+    std::string blend; // empty inherits the source material
 };
 struct AnimatedModelEffect {
     std::string source, clip;

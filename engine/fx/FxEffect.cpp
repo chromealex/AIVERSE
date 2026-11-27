@@ -1,4 +1,5 @@
 #include "FxEffect.h"
+#include "engine/render/MaterialBlend.h"
 #include "SpectraParticleProgram.h"
 #include "engine/render/graph/ShaderGraph.h"
 #include <algorithm>
@@ -1031,6 +1032,12 @@ bool parseEffect(const Json& j, const std::string& where, EffectDef& out, std::v
         for (const auto& item : m["materials"].items()) {
             ModelMaterialTrack track;
             track.material = item.getStr("material");
+            if(item.has("blend")) {
+                render::AlphaMode mode;
+                track.blend=item.getStr("blend");
+                if(!render::parseMaterialBlend(track.blend,mode))
+                    errors.push_back(where+".model.materials.blend: invalid material blend mode");
+            }
             if (item.has("color") && !colorKeys(item["color"],track.color))
                 errors.push_back(where+".model.materials.color: invalid RGBA gradient");
             Reader reader{item,where+".model.materials",errors};
@@ -1183,6 +1190,7 @@ Json effectToJson(const EffectDef& def,bool includeSdf) {
             Json item = Json::object();
             if (!track.material.empty()) item.set("material",Json::string(track.material));
             if (!track.color.empty()) item.set("color",colorKeysJ(track.color));
+            if (!track.blend.empty()) item.set("blend",Json::string(track.blend));
             Json speed=Json::array(); speed.push(numJ(track.uvSpeed.x)); speed.push(numJ(track.uvSpeed.y));
             item.set("uvSpeed",speed);
             Json frames=Json::array();

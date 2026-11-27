@@ -447,6 +447,17 @@
       "api_paths": [
         "engine/view/PortraitOptions.h"
       ]
+    },
+    "model-additive-blending": {
+      "requires": [],
+      "roadmap": {
+        "system": "render",
+        "id": "model-additive-blending"
+      },
+      "api_paths": [
+        "engine/render/Model.h",
+        "engine/gfx/Gfx.h"
+      ]
     }
   },
   "claims": []

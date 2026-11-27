@@ -771,7 +771,7 @@ void StudioScene::syncDocumentModels(
                 // are approximate until GPU ID/depth picking is available.
                 bool nonOpaque=false;
                 for(const auto& material:model->materials)
-                    nonOpaque |= material.alpha==render::AlphaMode::Blend ||
+                    nonOpaque |= render::alphaBlended(material.alpha) ||
                                  material.transparent || material.baseColor.w<.999f;
                 if (deformable || nonOpaque ||
                     model->vertices.size()>1000000 || model->indices.size()>3000000) {

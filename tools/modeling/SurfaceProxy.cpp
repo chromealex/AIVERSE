@@ -50,7 +50,7 @@ Build bakeSurfaceProxy(const Model& src, const Json& options) {
     require(src.skins.empty()&&src.clips.empty()&&src.variants.empty(), "surface proxy: animated models and material variants are unsupported");
     require(src.vertices.size()<=2000000&&src.indices.size()<=6000000,"surface proxy: source budget exceeded");
     for(const auto& mt:src.materials){
-        require(mt.shading==ShadingModel::Pbr&&!mt.shaderGraph&&!mt.transparent&&mt.alpha!=AlphaMode::Blend&&
+        require(mt.shading==ShadingModel::Pbr&&!mt.shaderGraph&&!mt.transparent&&!alphaBlended(mt.alpha)&&
                 mt.team==TeamMode::None&&mt.fixedLight.w==0,"surface proxy: requires static PBR opaque/masked materials without team colour or graphs");
         require(mt.emissive.x==0&&mt.emissive.y==0&&mt.emissive.z==0&&mt.emissiveTex<0,
                 "surface proxy: emissive materials are unsupported");

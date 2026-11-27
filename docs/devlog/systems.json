@@ -3580,6 +3580,13 @@
           "title": "projectile-trail-alignment",
           "titleEn": "projectile-trail-alignment",
           "target": null
+        },
+        {
+          "id": "model-additive-blending",
+          "status": "in-progress",
+          "title": "Аддитивные материалы моделей",
+          "titleEn": "Additive model materials",
+          "target": null
         }
       ]
     },

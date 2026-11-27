@@ -3749,11 +3749,12 @@ TEST(main_camera_shake_distance_pause_and_expiry) {
 
 TEST(animated_model_effect_uses_existing_handle_lifecycle) {
     const auto source = R"({"model":{"source":"models/aura.glb","clip":"idle","duration":0.5,"loop":true,"castShadow":false,
-        "materials":[{"material":"Glow","color":[[0,"#ffffff00"],[1,"#ff0000ff"]],"uvSpeed":[1,-2],"textures":["a","b"]}]}})";
+        "materials":[{"material":"Glow","blend":"additive","color":[[0,"#ffffff00"],[1,"#ff0000ff"]],"uvSpeed":[1,-2],"textures":["a","b"]}]}})";
     auto definition = fxParse(source);
     auto roundTrip = fxParse(fx::effectToJson(definition).dump().c_str());
     CHECK(roundTrip.model.source == definition.model.source);
     CHECK(!definition.model.castShadow && !roundTrip.model.castShadow);
+    CHECK(roundTrip.model.materials[0].blend=="additive");
     CHECK(roundTrip.model.materials.size() == 1 && roundTrip.model.materials[0].textures.size() == 2);
     fx::ParticleSystem ps;
     CHECK(ps.init(nullptr));
@@ -19004,4 +19005,16 @@ TEST(portrait_options_inheritance_and_background) {
     CHECK(std::abs(look.background.x-.1f)<1e-6f && look.background.w==1);
     look=view::PortraitOptions::resolve(Json::parse(R"({"background":[0,0,0,0.5]})"),Json{},player);
     CHECK(look.background.w==.5f);
+}
+
+TEST(model_material_additive_policy) {
+    using namespace aiverse::render;
+    auto mode=AlphaMode::Opaque;
+    CHECK(parseMaterialBlend("additive",mode));
+    CHECK(alphaBlended(mode) && materialBlendMode(mode)==aiverse::gfx::BlendMode::Additive);
+    CHECK(parseMaterialBlend("additive-unweighted",mode));
+    CHECK(alphaBlended(mode) && materialBlendMode(mode)==aiverse::gfx::BlendMode::AdditiveUnweighted);
+    CHECK(!parseMaterialBlend("invalid",mode));
+    CHECK(mode==AlphaMode::AdditiveUnweighted);
+    CHECK(!alphaBlended(AlphaMode::Mask) && !alphaBlended(AlphaMode::Opaque));
 }

@@ -17,6 +17,7 @@
 #include "../gfx/Gfx.h"
 #include "Math3D.h"
 #include "MaterialTechnique.h"
+#include "MaterialBlend.h"
 #include "TextureCodec.h"
 #include "GpuOwnedMemory.h"
 #include "graph/ShaderGraph.h"
@@ -29,7 +30,6 @@ class ModelTextureCache;
 struct GeometryData;
 struct GeometryPoolPage;
 
-enum class AlphaMode : uint8_t { Opaque, Mask, Blend };
 enum class ShadingModel : uint8_t { Pbr, Unlit, Skin, Eye, Hair };
 // Where the team (player) colour goes:
 //   Tint        whole material multiplied by the team colour (procedural shapes, simple models)

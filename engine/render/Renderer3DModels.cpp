@@ -465,7 +465,7 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
     const bool mask = (!outline || maskPass) && it.mat->alpha == AlphaMode::Mask;
     const bool normalMap = phase != 0 && !outline && it.mat->normalTex >= 0 && matQuality_ != MaterialQuality::Low;
     const bool blend = (outline && !maskPass) || (!outline && !shadow && !depthAfter &&
-        (it.mat->alpha == AlphaMode::Blend || it.tint.w < 0.99f || transparentItem(it.flags)));
+        (alphaBlended(it.mat->alpha) || it.tint.w < 0.99f || transparentItem(it.flags)));
     const bool twoSided = !outline && it.mat->doubleSided;
     const bool giPhase = phase == 1 || phase == 2;
     const bool surfaceCapture=lumaSurfaceCapture_ && giPhase;
@@ -509,12 +509,14 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
                                (instanced ? kKeyInstanced : 0u) | (outline ? kKeyOutline : 0u) |
                                ((drawCallDebug_ && geometryMainView_ && (phase == 1 || phase == 2)) ? kKeyDrawCallView : 0u) |
                                (lightmap ? kKeyLightmap : 0u) | (probes ? kKeyProbes : 0u) | (lodFade ? kKeyLodFade : 0u) | (materialPalette ? kKeyMaterialPalette : 0u) | (dynamicGi ? kKeyDynamicGi : 0u);
-    const bool fadeDepth = blend && !outline && it.mat->alpha != AlphaMode::Blend && (it.flags & kDrawFadeDepth) && !transparentItem(it.flags);
+    const bool fadeDepth = blend && !outline && !alphaBlended(it.mat->alpha) && (it.flags & kDrawFadeDepth) && !transparentItem(it.flags);
     const uint32_t pipeKey = shaderKey | (blend ? 16u : 0u) | (twoSided ? 32u : 0u) |
         (fadeDepth ? 64u : 0u) | (depthAfter ? 1024u : 0u) | (maskPass ? (1u << 29) : 0u);
 
     const ModelShaderKey skey{shaderKey, selectedGraph};
-    const ModelShaderKey pkey{pipeKey, selectedGraph};
+    const auto blendMode=blend ? (outline ? gfx::BlendMode::Alpha :
+        alphaBlended(it.mat->alpha) ? materialBlendMode(it.mat->alpha) : gfx::BlendMode::Alpha) : gfx::BlendMode::Opaque;
+    const ModelShaderKey pkey{pipeKey, selectedGraph, blendMode};
     for (auto& [k, p] : modelPipes_) if (k == pkey) {
         if(warmingPipelines_ && !p.valid())warmingFailed_=true;
         if(environment&&!p.valid())modelError_="HDR environment model pipeline unavailable";
@@ -765,7 +767,7 @@ gfx::PipelineHandle Renderer3D::modelPipeline(const ModelItem& it, int phase, bo
             pd.depthOnly = true;
             pd.depthBiasConstant = 2.0f; pd.depthBiasSlope = 2.5f;
         } else if (blend) {
-            pd.blend = gfx::BlendMode::Alpha;
+            pd.blend = blendMode;
             pd.depthWrite = fadeDepth;
         } else if (depthAfter) {
             pd.colorWrite = false;
@@ -1352,7 +1354,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
                 const bool opaque = d.tint.w >= .99f && d.dissolve <= 0 &&
                     !transparentItem(d.flags) &&
                     std::none_of(mats.begin(), mats.end(), [](const Material& mat) {
-                        return mat.alpha == AlphaMode::Blend || mat.transparent;
+                        return alphaBlended(mat.alpha) || mat.transparent;
                     });
                 const float fadeWidth = opaque && !m->geometry &&
                     matQuality_ != MaterialQuality::Low ? modelLodFadeWidth_ : 0.0f;
@@ -1585,7 +1587,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
                     : std::numeric_limits<float>::infinity();
             }
             const bool opaque = d.tint.w>=.99f && d.dissolve<=0 && !transparentItem(d.flags) &&
-                std::none_of(mats.begin(),mats.end(),[](const Material& mat){return mat.alpha==AlphaMode::Blend || mat.transparent;});
+                std::none_of(mats.begin(),mats.end(),[](const Material& mat){return alphaBlended(mat.alpha) || mat.transparent;});
             const float fadeWidth = opaque && !m->geometry && matQuality_!=MaterialQuality::Low ? modelLodFadeWidth_ : 0;
             lodBlend=d.lodLevel>=0?forcedModelLod(node.mesh,baseMesh.lods,d.lodLevel)
                                    :selectModelLod(node.mesh,baseMesh.lods,pixels,fadeWidth);
@@ -1773,7 +1775,7 @@ void Renderer3D::drawModel(const ModelDraw& d) {
             it.rigid = rigid;
             it.motionPersistentId = d.persistentId;
             it.motionNodeIndex = n;
-            it.castShadow = !(d.flags & kDrawNoCastShadow) && (d.tint.w >= 0.99f || (d.flags & kDrawKeepShadow)) && d.dissolve <= 0 && it.mat->castShadow && it.mat->alpha != AlphaMode::Blend && !transparentItem(it.flags);
+            it.castShadow = !(d.flags & kDrawNoCastShadow) && (d.tint.w >= 0.99f || (d.flags & kDrawKeepShadow)) && d.dissolve <= 0 && it.mat->castShadow && !alphaBlended(it.mat->alpha) && !transparentItem(it.flags);
             it.inView = nodeView && !shadowOnly &&
                 (bspCluster < 0 || meshIndex != node.mesh ||
                  m->bspVisibility->visible(bspCluster, originalPrimitive));
@@ -1956,7 +1958,7 @@ Renderer3D::ModelViewProvenance Renderer3D::modelViewProvenance(
         primitive.skinning=it.joints>=0;
         primitive.baked=it.baked;
         primitive.shaderVertexOffset=it.displacedVertexSource;
-        primitive.translucent=it.mat->alpha==AlphaMode::Blend ||
+        primitive.translucent=alphaBlended(it.mat->alpha) ||
             it.mat->transparent || it.tint.w<0.99f ||
             transparentItem(it.flags);
         primitive.customGpuStream=it.vertexOverride.valid();
@@ -2023,7 +2025,7 @@ void Renderer3D::recordModelSubmission(
     p.skinning=it.joints>=0;
     p.baked=it.baked;
     p.shaderVertexOffset=it.displacedVertexSource;
-    p.translucent=it.mat->alpha==AlphaMode::Blend ||
+    p.translucent=alphaBlended(it.mat->alpha) ||
         it.mat->transparent || it.tint.w<0.99f ||
         transparentItem(it.flags);
     p.customGpuStream=it.vertexOverride.valid();
@@ -3462,7 +3464,7 @@ void Renderer3D::renderModels(int phase) {
     auto started=profiling_?std::chrono::steady_clock::now():std::chrono::steady_clock::time_point{};
     for (uint32_t i = 0; i < modelItems_.size(); ++i) {
         const ModelItem& it = modelItems_[i];
-        const bool blended = it.mat->alpha == AlphaMode::Blend || it.tint.w < 0.99f || transparentItem(it.flags);
+        const bool blended = alphaBlended(it.mat->alpha) || it.tint.w < 0.99f || transparentItem(it.flags);
         bool visible = it.inView, shadow = it.inShadow;
         if (auxiliaryModelPass_ && it.rigid && modelCullingEnabled_) {
             visible = modelBoxVisible(viewProj_ * it.world, it.prim->boundsMin, it.prim->boundsMax);
@@ -3909,7 +3911,7 @@ void Renderer3D::renderModels(int phase) {
         const ModelItem& x = modelItems_[xIndex];
         const ModelItem& y = modelItems_[yIndex];
         if((x.lodThreshold<1 || x.lodInvert)!=(y.lodThreshold<1 || y.lodInvert))return false;
-        const bool bx = x.mat->alpha == AlphaMode::Blend || x.tint.w < 0.99f, by = y.mat->alpha == AlphaMode::Blend || y.tint.w < 0.99f;
+        const bool bx = alphaBlended(x.mat->alpha) || x.tint.w < 0.99f, by = alphaBlended(y.mat->alpha) || y.tint.w < 0.99f;
         return x.paletteMaterials == y.paletteMaterials && x.prim == y.prim &&
                materialGroup[xIndex] == materialGroup[yIndex] && x.baked == y.baked && bx == by && x.gi == y.gi && x.lmPage == y.lmPage &&
                (x.flags & (kDrawFadeDepth | kDrawTransparent | kDrawActorReveal)) == (y.flags & (kDrawFadeDepth | kDrawTransparent | kDrawActorReveal));

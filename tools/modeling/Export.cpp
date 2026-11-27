@@ -153,8 +153,10 @@ std::string exportGlb(const Model &m) {
         j.set("emissiveFactor", floats({mt.emissive.x, mt.emissive.y, mt.emissive.z}));
         j.set("doubleSided", Json::fromBool(mt.doubleSided));
         if(mt.thinTransmission>0){auto extras=Json::object();extras.set("aiverseThinTransmission",Json::number(double(mt.thinTransmission),8));j.set("extras",extras);}
-        if (mt.alpha == AlphaMode::Blend)
+        if (alphaBlended(mt.alpha))
             j.set("alphaMode", Json::string("BLEND"));
+        if(mt.alpha==AlphaMode::Additive || mt.alpha==AlphaMode::AdditiveUnweighted)
+            j.member("extras").set("aiverseBlend",Json::string(mt.alpha==AlphaMode::Additive ? "additive" : "additive-unweighted"));
         w.root.member("materials").push(j);
     }
     for (auto &mesh : m.meshes) {
