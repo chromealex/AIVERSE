@@ -21,15 +21,14 @@ meant for iOS, Android and web as well.
 ```sh
 cmake -S /path/to/AIVERSE -B build/my-game -DCMAKE_BUILD_TYPE=Release \
   -DAIVERSE_CONTENT_DIR=/path/to/project
-cmake --build build/my-game --target aiverse_client aiverse_editor aiverse_headless
+cmake --build build/my-game --target aiverse_client aiverse_headless
 build/my-game/aiverse_headless --project /path/to/project --seed 3
 ```
 
 `aiversebuild --target <target> --project /path/to/project` picks up `native/` too. When sources are exported, the C++
 travels with the project even if the data is packed into `.rpak`: the sources sit in `native/` next to the root
 CMakeLists. C++ is not included in the resource pack. To develop several games you can build a shared set of modules with
-`-DAIVERSE_NATIVE_DIR=/path/to/modules`. An empty value restores picking `native/` from `AIVERSE_CONTENT_DIR`. In the
-editor you must open the rebuilt version; the regular editor offers to build it itself (see "Editor with project modules").
+`-DAIVERSE_NATIVE_DIR=/path/to/modules`. An empty value restores picking `native/` from `AIVERSE_CONTENT_DIR`. For the HTML Studio build, use **Build → Project C++ modules** as described below.
 
 ## Inspecting native ECS components in the editor
 
