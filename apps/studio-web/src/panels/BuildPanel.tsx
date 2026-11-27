@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, CircleAlert, FolderOpen, Hammer, Ruler, Save, ScrollText, XCircle } from 'lucide-react';
 import { invoke } from '../bridge';
 import type { StudioBuildEstimate, StudioBuildInfo, StudioSnapshot, StudioToolchain } from '../types';
 import { StudioAlert, StudioBadge, StudioButton, StudioCheckbox, StudioField, StudioInput, StudioSelect, StudioLoader } from '../ui';
-import { buildErrors, buildPhase, buildSteps, formatBytes, missingToolchain, runTarget } from './buildLogic';
+import { buildErrors, buildPhase, buildSteps, formatBytes, missingToolchain, nativeBuildProgress, runTarget } from './buildLogic';
 import { useBuildTranscript } from './useBuildTranscript';
 import './BuildPanel.css';
 
@@ -196,12 +196,15 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
   const reveal = (params: { target?: string; log?: boolean }) =>
     void invoke('studio.buildReveal', params).catch(e => setError(message(e)));
 
+  const progress = useMemo(() => state.running && state.label === 'native-editor'
+    ? nativeBuildProgress(log) : null, [state.running,state.label,log]);
   if (!projectPath) return <div className="build__empty">Open a project to build it.</div>;
   const phase = buildPhase(state.running, state.runs, state.exitCode, log);
   const steps = buildSteps(log);
   const errors = phase === 'failed' || phase === 'missing-toolchain' ? buildErrors(log) : [];
   const missing = missingToolchain(log);
   const run = runTarget(state.label);
+
   const elapsed = startedAt ? Math.max(0, Math.round((now - startedAt) / 1000)) : 0;
   const selected = info?.targets.find(t => t.id === target);
   const rules = (ruleScope === 'project' ? info?.rules : selected?.rules) ?? [];
@@ -322,6 +325,11 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
         {phase === 'running' && elapsed > 0 && <span className="build__time">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</span>}
         {phase !== 'running' && phase !== 'idle' && <span className="build__time">exit {state.exitCode}</span>}
       </div>
+      {progress && <div className="build__native-progress">
+        <progress aria-label="Native build progress" max={progress.max} value={progress.value}/>
+        <span>{progress.label}</span>
+        <small title={progress.action}>{progress.action}</small>
+      </div>}
       {steps.length > 0 && <ol className="build__steps" aria-label="Build stages">
         {steps.slice(-8).map((s, i, all) => <li key={i + s} className={i === all.length - 1 && phase === 'running' ? 'is-current' : ''}>{s}</li>)}
       </ol>}

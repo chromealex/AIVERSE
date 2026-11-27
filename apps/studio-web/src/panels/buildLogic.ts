@@ -14,6 +14,17 @@ export function buildSteps(log: string): string[] {
   for (const line of log.split('\n')) if (line.startsWith('==> ')) out.push(line.slice(4).trim());
   return out;
 }
+/** Last completed Ninja action or CMake Makefile progress line in a native build. */
+export function nativeBuildProgress(log: string) {
+  let latest: { value: number; max: number; label: string; action: string } | null = null;
+  for (const line of log.matchAll(/^\[\s*(\d+)(?:\/(\d+)|%)\]\s+([^\r\n]+)/gm)) {
+    const value = Number(line[1]), max = line[2] ? Number(line[2]) : 100;
+    if (max > 0 && value <= max)
+      latest = {value, max, label: line[2] ? value + ' / ' + max : value + '%', action: line[3]};
+  }
+  return latest;
+}
+
 /** `AIVERSE_MISSING_TOOLCHAIN <target>: id, id` (exit code 3): the tools a build stopped on. */
 export function missingToolchain(log: string): { target: string; ids: string[] } | null {
   const m = /AIVERSE_MISSING_TOOLCHAIN ([a-z0-9-]+):\s*([^\n]*)/.exec(log);
