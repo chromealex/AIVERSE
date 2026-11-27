@@ -15,7 +15,7 @@ namespace {
 float encode(float x) { return x<=.0031308f?12.92f*x:1.055f*std::pow(x,1.f/2.4f)-.055f; }
 float decode(float x) { return x<=.04045f?x/12.92f:std::pow((x+.055f)/1.055f,2.4f); }
 void require(bool value,const char* message) { if(!value)throw std::runtime_error(message); }
-struct Case { const char* name; AlphaMode mode; bool particle=false,display=false,hidden=false,graph=false; float fog=0; bool resize=false; };
+struct Case { const char* name; AlphaMode mode; bool particle=false,display=false,hidden=false,graph=false; float fog=0; bool resize=false; int geometry=0; bool textureGraph=false; };
 const Case cases[]={
     {"model-weighted",AlphaMode::Additive},
     {"model-unweighted",AlphaMode::AdditiveUnweighted},
@@ -26,7 +26,13 @@ const Case cases[]={
     {"particle-display-occluded",AlphaMode::Opaque,true,true,true},
     {"particle-display-graph",AlphaMode::Opaque,true,true,false,true},
     {"particle-display-fog",AlphaMode::Opaque,true,true,false,false,.05f},
-    {"particle-display-resize",AlphaMode::Opaque,true,true,false,false,0,true}
+    {"particle-display-resize",AlphaMode::Opaque,true,true,false,false,0,true},
+    {"particle-display-mesh",AlphaMode::Opaque,true,true,false,false,0,false,1},
+    {"particle-display-mesh-occluded",AlphaMode::Opaque,true,true,true,false,0,false,1},
+    {"particle-display-ribbon",AlphaMode::Opaque,true,true,false,false,0,false,2},
+    {"particle-display-trail",AlphaMode::Opaque,true,true,false,false,0,false,3},
+    {"particle-display-graph-texture",AlphaMode::Opaque,true,true,false,false,0,false,0,true},
+    {"particle-display-graph-texture-occluded",AlphaMode::Opaque,true,true,true,false,0,false,0,true}
 };
 }
 int aiverseMain(int,char**) {
@@ -64,6 +70,11 @@ int aiverseMain(int,char**) {
             white=gpu.createTexture(desc);require(white.valid(),"white particle texture");
             particles.setQuality(fx::FxQuality::High);require(particles.init(&gpu),"particle init");
             particles.setTextureLoader([&](const std::string&,fx::FxTexture& out){out.tex=white;return true;});
+            particles.setMeshLoader([](const std::string&,fx::FxMesh& mesh) {
+                mesh.pos={{-1,-1,0},{1,-1,0},{1,1,0},{-1,1,0}};
+                mesh.nrm.assign(4,{0,0,1});mesh.uv.assign(4,{.5f,.5f});
+                mesh.idx={0,1,2,0,2,3};return true;
+            });
             if(capture)std::filesystem::create_directories(capture);
         }catch(const std::exception& e){std::cerr<<e.what()<<'\n';failed=true;}
     };
@@ -86,9 +97,23 @@ int aiverseMain(int,char**) {
                 emitter.color={{0,{encoded,encoded,encoded,1}},{1,{encoded,encoded,encoded,1}}};
                 emitter.blendSpace=test.display?fx::FxBlendSpace::Display:fx::FxBlendSpace::Linear;
                 if(test.graph)emitter.shaderGraph=Json::parse(R"({"version":1,"domain":"particle","nodes":[{"id":"input","op":"input"}],"outputs":{"color":"input"}})");
+                if(test.textureGraph)emitter.shaderGraph=Json::parse(R"({"version":1,"domain":"particle","nodes":[{"id":"uv","op":"uv"},{"id":"tex","op":"sampleTexture","inputs":["uv"],"texture":"white.png"},{"id":"input","op":"input"},{"id":"product","op":"multiply","inputs":["input","tex"]}],"outputs":{"color":"product"}})");
+                if(test.geometry==1)emitter.meshes={"plane"};
+                if(test.geometry>=2) {
+                    emitter.hidden=true;emitter.trail.enabled=true;emitter.trail.texture="white";
+                    emitter.trail.blendSpace=fx::FxBlendSpace::Display;
+                    emitter.trail.width={{0,.5f},{1,.5f}};emitter.trail.sizeAffectsWidth=false;
+                    emitter.trail.color={{0,{1,1,1,1}},{1,{1,1,1,1}}};
+                    if(test.geometry==2){emitter.trail.ribbon=true;emitter.burst=0;emitter.perMeter={1,1};emitter.loop=true;}
+                    else emitter.velocity={200,0,0};
+                }
                 particles.setView(camera,renderer.viewProj(),width,height);
                 const int definition=particles.define(test.name,effect);require(definition>=0,"particle definition");
-                particles.play(definition,{0,0,test.hidden?-1.f:1.f});particles.update(.01f);
+                const float z=test.hidden?-1.f:1.f;
+                auto handle=particles.play(definition,{test.geometry>=2?-2.f:0.f,0,z});
+                if(test.geometry==2)particles.move(handle,{2,0,z});
+                particles.update(.01f);
+                if(test.geometry==3)particles.update(.02f);
             }else {
                 foreground->materials[0].alpha=test.mode;
                 ModelDraw fg;fg.model=foreground.get();fg.world=mat4::translate({0,0,1});renderer.drawModel(fg);
