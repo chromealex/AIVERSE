@@ -4,6 +4,7 @@
 // Call only on a Mac with a real Metal device. No silent device skip.
 #include "engine/gfx/Gfx.h"
 #include "engine/render/AlphaCoverageMips.h"
+#include "engine/render/TexturePreviewGrid.h"
 #include "engine/gfx/VirtualTextureFeedbackPass.h"
 #include "engine/gfx/VirtualTextureStreamer.h"
 #include "engine/gfx/VirtualTextureFileStreamer.h"
@@ -332,7 +333,7 @@ void layered(Device& dev, TextureDimension dimension,int layers,
 
     std::printf("TIMING %s create_and_upload_ms=%.3f\n",
                 name,elapsedMs(setupStart,Clock::now()));
-    verifyReads(dev,{
+    const std::vector<std::shared_ptr<Read>> faces = {
         probe(h,0,0,4,4,solid(4,4,{10,70,33,255}),
               std::string(name)+" face/layer0"),
         probe(h,0,last,4,4,
@@ -340,7 +341,18 @@ void layered(Device& dev, TextureDimension dimension,int layers,
               std::string(name)+" last face/layer"),
         probe(h,1,last,2,2,mipData,
               std::string(name)+" authored mip1")
-    },name);
+    };
+    verifyReads(dev,faces,name);
+    for (const auto& face : faces) {
+        const auto grid = aiverse::render::texturePreviewGrid(face->output);
+        const auto& expected = face->expected;
+        const bool matches = grid.error.empty() && grid.columns == face->width &&
+            grid.rows == face->height && grid.colors.size() == expected.size()/4 &&
+            std::all_of(grid.colors.begin(),grid.colors.end(),[&](const auto& rgb){
+                return rgb[0] == expected[0] && rgb[1] == expected[1] && rgb[2] == expected[2];
+            });
+        check(matches,(face->label+" Studio preview RGB").c_str());
+    }
     dev.destroyTexture(h);
 }
 
