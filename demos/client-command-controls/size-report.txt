@@ -1,0 +1,38 @@
+web: web — 18.8 MB
+
+контент (content.rpak):
+файлов: 54, исходный размер 8.9 MB -> пак 6.8 MB (77.0%)
+по папкам (в паке):
+  6.3 MB	engine/  (исходно 6.9 MB)
+  539.8 KB	_atlas/  (исходно 2.0 MB)
+  1.3 KB	(корень)  (исходно 3.0 KB)
+  1.2 KB	models/  (исходно 4.2 KB)
+  207 B	maps/  (исходно 1.1 KB)
+  120 B	scripts/  (исходно 132 B)
+самые большие файлы (в паке):
+  2.2 MB	engine/fx/physis/flame_tall_full_16x4.png  [без сжатия]
+  1.5 MB	engine/fx/physis/smoke_full_8x8.png  [без сжатия]
+  1.3 MB	engine/fx/physis/fireball_full_8x8.png  [без сжатия]
+  539.2 KB	_atlas/effects-0.rtex
+  518.7 KB	engine/fx/physis/flame_tall_16x4.png  [без сжатия]
+  515.3 KB	engine/fx/physis/flame_16x4.png  [без сжатия]
+  215.4 KB	engine/fonts/ui.ttf
+  22.5 KB	engine/branding/mark.png  [без сжатия]
+  10.4 KB	engine/branding/splash_blade_right.png  [без сжатия]
+  10.3 KB	engine/lang/ru.json
+  10.1 KB	engine/branding/splash_blade_left.png  [без сжатия]
+  8.0 KB	engine/lang/en.json
+  7.8 KB	engine/branding/splash_blade_top.png  [без сжатия]
+  6.1 KB	engine/branding/splash_diamond.png  [без сжатия]
+  4.9 KB	engine/ui/lib/meta.lua
+атласы текстур (профиль web, страница до 2048):
+  4 текстур -> 2 стр., заполнение 98.2%, дубликатов 0
+  в паке: было 608.7 KB -> стало 539.8 KB (экономия 68.9 KB)
+  видеопамять: было 2.0 MB -> стало 2.0 MB
+  группа effects             2 текстур (2 уник.) -> 1 стр., 98.5%
+  группа ui                  2 текстур (2 уник.) -> 1 стр., 78.4%
+  не в атласе: engine/fx/physis/fireball_full_8x8.png — too large (1024x1024 > 512)
+  не в атласе: engine/fx/physis/flame_16x4.png — too large (1024x512 > 512)
+  не в атласе: engine/fx/physis/flame_tall_16x4.png — too large (1024x512 > 512)
+  не в атласе: engine/fx/physis/flame_tall_full_16x4.png — too large (2048x1024 > 512)
+  не в атласе: engine/fx/physis/smoke_full_8x8.png — too large (1024x1024 > 512)

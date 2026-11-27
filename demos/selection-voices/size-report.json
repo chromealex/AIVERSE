@@ -1,0 +1,91 @@
+{
+  "target": "web",
+  "artifact": "web",
+  "artifactBytes": 19731108,
+  "pack": {
+    "rawBytes": 9329956,
+    "packBytes": 7164166,
+    "entries": 54,
+    "duplicates": 0,
+    "top": [
+      {
+        "path": "engine/fx/physis/flame_tall_full_16x4.png",
+        "rawBytes": 2320868,
+        "storedBytes": 2320868
+      },
+      {"path": "engine/fx/physis/smoke_full_8x8.png", "rawBytes": 1557716, "storedBytes": 1557716},
+      {
+        "path": "engine/fx/physis/fireball_full_8x8.png",
+        "rawBytes": 1314761,
+        "storedBytes": 1314761
+      },
+      {"path": "_atlas/effects-0.rtex", "rawBytes": 2040216, "storedBytes": 552098},
+      {"path": "engine/fx/physis/flame_tall_16x4.png", "rawBytes": 531148, "storedBytes": 531148},
+      {"path": "engine/fx/physis/flame_16x4.png", "rawBytes": 527712, "storedBytes": 527712},
+      {"path": "engine/fonts/ui.ttf", "rawBytes": 512672, "storedBytes": 220575},
+      {"path": "engine/branding/mark.png", "rawBytes": 23010, "storedBytes": 23010},
+      {"path": "engine/branding/splash_blade_right.png", "rawBytes": 10644, "storedBytes": 10644},
+      {"path": "engine/lang/ru.json", "rawBytes": 35955, "storedBytes": 10547},
+      {"path": "engine/branding/splash_blade_left.png", "rawBytes": 10334, "storedBytes": 10334},
+      {"path": "engine/lang/en.json", "rawBytes": 25741, "storedBytes": 8231},
+      {"path": "engine/branding/splash_blade_top.png", "rawBytes": 7979, "storedBytes": 7979},
+      {"path": "engine/branding/splash_diamond.png", "rawBytes": 6242, "storedBytes": 6242},
+      {"path": "engine/ui/lib/meta.lua", "rawBytes": 18476, "storedBytes": 4973}
+    ]
+  },
+  "atlas": {
+    "enabled": true,
+    "profile": "web",
+    "maxPage": 2048,
+    "candidates": 7,
+    "atlased": 2,
+    "framedSheets": 0,
+    "duplicates": 0,
+    "pages": 1,
+    "occupancyPercent": 98.5,
+    "sourceBytes": 615412,
+    "atlasBytes": 2040554,
+    "storedBytes": 552316,
+    "bytesSaved": 63096,
+    "gpuBytesBefore": 2097152,
+    "gpuBytesAfter": 2040192,
+    "textureBindsBefore": 2,
+    "textureBindsAfter": 1,
+    "groups": [
+      {
+        "group": "effects",
+        "textures": 2,
+        "unique": 2,
+        "pages": 1,
+        "occupancyPercent": 98.5
+      }
+    ],
+    "excluded": [
+      {
+        "path": "engine/fx/physis/fireball_full_8x8.png",
+        "reason": "too large (1024x1024 > 512)",
+        "fixMaxSize": 512
+      },
+      {
+        "path": "engine/fx/physis/flame_16x4.png",
+        "reason": "too large (1024x512 > 512)",
+        "fixMaxSize": 512
+      },
+      {
+        "path": "engine/fx/physis/flame_tall_16x4.png",
+        "reason": "too large (1024x512 > 512)",
+        "fixMaxSize": 512
+      },
+      {
+        "path": "engine/fx/physis/flame_tall_full_16x4.png",
+        "reason": "too large (2048x1024 > 512)",
+        "fixMaxSize": 512
+      },
+      {
+        "path": "engine/fx/physis/smoke_full_8x8.png",
+        "reason": "too large (1024x1024 > 512)",
+        "fixMaxSize": 512
+      }
+    ]
+  }
+}

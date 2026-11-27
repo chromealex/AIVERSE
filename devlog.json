@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-25T21:37:34+00:00",
+ "generated": "2026-11-27T14:33:00+00:00",
  "lang": "en",
  "repo": "https://github.com/chromealex/AIVERSE",
  "systems": [
@@ -121,6 +121,190 @@
   }
  ],
  "entries": [
+  {
+   "id": "2026-11-27-studio-additive-materials",
+   "date": "2026-11-27",
+   "system": "studio",
+   "title": "Additive materials in Studio",
+   "summary": "The material library offers two additive modes: alpha weighted and unweighted. The selected mode is saved with the material.",
+   "body": [
+    "Open Materials, select a material, and set Alpha mode to Additive (alpha weighted) or Additive (unweighted). Apply & save writes the mode to materials.json; Reload retains the choice.",
+    "The same values are available through material_set in MCP. An invalid mode name is rejected before the file is written."
+   ],
+   "status": "done",
+   "verified": "Both modes were saved and reloaded in native macOS Studio. MCP also read the materials after a server restart.",
+   "limits": "Material library edits are not part of MapDoc Undo. Windows has not been verified. This native editor workflow has no standalone browser demo.",
+   "branch": "main",
+   "commit": "25d057a5195f6b6ade1a6b2c38e25a48cf9d184b",
+   "media": [
+    {
+     "src": "media/docs/evidence/issues-studio-materials-20261127/weighted.png",
+     "caption": "Material after saving the alpha-weighted mode."
+    },
+    {
+     "src": "media/docs/evidence/issues-studio-materials-20261127/unweighted.png",
+     "caption": "The same material after saving the unweighted mode."
+    }
+   ],
+   "links": [
+    {
+     "title": "Materials",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/models.md"
+    }
+   ],
+   "author": null
+  },
+  {
+   "id": "2026-11-27-selection-voices",
+   "date": "2026-11-27",
+   "system": "audio",
+   "title": "Selection voices in authored order",
+   "summary": "Repeated clicks cycle voices in order; commands and switching objects restart the sequence.",
+   "body": [
+    "The demo has two objects with short tones: two normal 440 Hz responses followed by 660 and 880 Hz. Click one object with gaps longer than 0.3 seconds.",
+    "Settings use ordinary audio.json data; a zero window retains the sequence across long pauses."
+   ],
+   "status": "done",
+   "verified": "Native mixer output capture confirmed ordering and resets after Stop and switching objects. Three regressions: 119 checks. WebGL scene loading and repeated selection checked.",
+   "limits": "Browser audio and physical speaker output were not recorded.",
+   "branch": "main",
+   "commit": "25d057a5195f6b6ade1a6b2c38e25a48cf9d184b",
+   "media": [
+    {
+     "src": "media/docs/evidence/issues-selection-voices-web-20261127/selected.png",
+     "caption": "WebGL: selected object with authored voices."
+    }
+   ],
+   "links": [
+    {
+     "title": "Play · Web",
+     "href": "https://chromealex.github.io/AIVERSE/demos/selection-voices/?map=0"
+    },
+    {
+     "title": "Source",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/demos/selection-voices/README.md"
+    }
+   ],
+   "author": null
+  },
+  {
+   "id": "2026-11-27-projectile-segments",
+   "date": "2026-11-27",
+   "system": "render",
+   "title": "Projectile and trail share one position",
+   "summary": "Model, trail and light consume one position sample. Ricochet and split continue from contact or branch positions.",
+   "body": [
+    "The demo has four scenes: straight, arc, ricochet and split. The launcher fires automatically; map=0…3 selects the scene.",
+    "At retirement the trail receives the final endpoint, including projectiles born and removed between rendered frames."
+   ],
+   "status": "done",
+   "verified": "Four scenes checked on Metal and loaded in WebGL. Real flight frames and browser ricochet/split captures are retained.",
+   "limits": "Static frames do not prove every-frame alignment. Windows and Vulkan are untested.",
+   "branch": "main",
+   "commit": "25d057a5195f6b6ade1a6b2c38e25a48cf9d184b",
+   "media": [
+    {
+     "src": "media/docs/evidence/issues-projectile-segments-web-20261127/ricochet.png",
+     "caption": "WebGL: continuation after ricochet."
+    },
+    {
+     "src": "media/docs/evidence/issues-projectile-segments-web-20261127/split.png",
+     "caption": "WebGL: split projectiles with trails."
+    }
+   ],
+   "links": [
+    {
+     "title": "Play · Web",
+     "href": "https://chromealex.github.io/AIVERSE/demos/projectile-segments/?map=0"
+    },
+    {
+     "title": "Source",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/demos/projectile-segments/README.md"
+    },
+    {
+     "title": "Shared presentation API",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/view.md"
+    }
+   ],
+   "author": null
+  },
+  {
+   "id": "2026-11-27-material-effects",
+   "date": "2026-11-27",
+   "system": "spectrafx",
+   "title": "Model shadows and additive effects",
+   "summary": "Effect models can disable shadows. Materials support two additive modes, and particles can add their contribution after tone mapping.",
+   "body": [
+    "Three scenes compare enabled and disabled shadows, alpha and two additive materials, and linear versus display-space particle addition."
+   ],
+   "status": "done",
+   "verified": "All three scenes ran in macOS Metal and WebGL. Separate Metal tests compare pixels; graph v1/v2 MCP checks cover persistence, baking and rejection without damaging saved data.",
+   "limits": "Windows/Vulkan and mobile devices remain unverified. Display-space uses CPU presentation and does not feed HDR bloom or exposure.",
+   "branch": "main",
+   "commit": "25d057a5195f6b6ade1a6b2c38e25a48cf9d184b",
+   "media": [
+    {
+     "src": "media/docs/evidence/issues-material-effects-web-20261127/models.png",
+     "caption": "Left to right: alpha, alpha-weighted additive, unweighted additive."
+    },
+    {
+     "src": "media/docs/evidence/issues-material-effects-web-20261127/particles.png",
+     "caption": "Linear addition on the left; display-space addition on the right."
+    }
+   ],
+   "links": [
+    {
+     "title": "Play · Web",
+     "href": "https://chromealex.github.io/AIVERSE/demos/material-effects/?map=0"
+    },
+    {
+     "title": "Demo · source",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/demos/material-effects/README.md"
+    }
+   ],
+   "author": null
+  },
+  {
+   "id": "2026-11-27-gameplay-client-controls",
+   "date": "2026-11-27",
+   "system": "gameplay",
+   "title": "Selection, commands and portraits in the game HUD",
+   "summary": "A shortcut selects a unit beside the minimap, Move targets a destination, and armed structures expose Attack and Stop. Portraits can use a model separate from the world model.",
+   "body": [
+    "In the demo, F6 selects the scout, M followed by a map click orders movement, and F7 selects the tower through view.select. Escape opens pause; Restart resets the scene. The tower shows a passive ability and Sell in its assigned cell.",
+    "A portrait can have its own model and background. The minimap displays a selected image region and hides types with view.minimap=false. The image also works after atlas packaging."
+   ],
+   "status": "done",
+   "verified": "The scene was exercised in a browser and the native macOS client: selection, movement, portraits and the minimap background are shown in real captures.",
+   "limits": "Audio is disabled in this web demo. Quit closes the native client; browser-tab behavior differs. Windows and mobile devices have not been verified.",
+   "branch": "main",
+   "commit": "25d057a5195f6b6ade1a6b2c38e25a48cf9d184b",
+   "media": [
+    {
+     "src": "media/docs/evidence/issues-client-controls-web-20261127/selected.png",
+     "caption": "Scout selected with F6: separate portrait, Move and the minimap background."
+    },
+    {
+     "src": "media/docs/evidence/issues-client-controls-web-20261127/tower.png",
+     "caption": "Tower selected through view.select: passive ability, Sell, Attack and Stop."
+    }
+   ],
+   "links": [
+    {
+     "title": "Play · Web",
+     "href": "https://chromealex.github.io/AIVERSE/demos/client-command-controls/?map=0"
+    },
+    {
+     "title": "Controls · source",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/demos/client-command-controls/README.md"
+    },
+    {
+     "title": "Game format",
+     "href": "https://github.com/chromealex/AIVERSE/blob/main/docs/game-format.md"
+    }
+   ],
+   "author": null
+  },
   {
    "id": "2026-11-25-world-building-caverns-web",
    "date": "2026-11-25",
