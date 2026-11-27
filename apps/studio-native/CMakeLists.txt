@@ -92,6 +92,8 @@ if(TARGET aiverse_studio)
             add_custom_target(aiverse_studio_game_player
                 COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:aiverse_client>"
                     "$<TARGET_FILE_DIR:aiverse_studio>/aiverse_client"
+                COMMAND "${CMAKE_COMMAND}" -E copy_directory "${AIVERSE_ENGINE_ASSETS}"
+                    "$<TARGET_FILE_DIR:aiverse_studio>/content/engine"
                 DEPENDS aiverse_client
                 VERBATIM)
             add_dependencies(aiverse_studio aiverse_studio_game_player)
