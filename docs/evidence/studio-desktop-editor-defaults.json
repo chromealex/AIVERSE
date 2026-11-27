@@ -1,0 +1,10 @@
+{
+  "sha": "918d41a0ad342b4794d2e3bde91138c7b279a211",
+  "argv": [
+    "/usr/local/bin/python3.11",
+    "../studio-desktop-default-check.py"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-desktop-editor-defaults.log.txt",
+  "sha256": "a11f13d9c6db2dfef137a1db60822fb2301cc9f5b5cc31d288f8f58243cf972d"
+}
