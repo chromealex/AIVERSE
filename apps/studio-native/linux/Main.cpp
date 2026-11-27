@@ -117,6 +117,23 @@ private:
         if (params.has("x") && params.has("y")) gtk_window_move(win,params.getInt("x"),params.getInt("y"));
         gtk_container_add(GTK_CONTAINER(win),GTK_WIDGET(web));
         floats_.emplace(key,Floating{win,std::move(bridge)});
+        g_signal_connect(win,"configure-event",G_CALLBACK(+[](GtkWidget* widget,GdkEventConfigure* event,gpointer data)->gboolean {
+            auto& self=*static_cast<GtkStudio*>(data);
+            for (const auto& entry : self.floats_) {
+                if (GTK_WIDGET(entry.second.window)!=widget) continue;
+                int x,y;
+                gtk_window_get_position(entry.second.window,&x,&y);
+                Json frame=Json::object();
+                frame.set("window",Json::string(entry.first));
+                frame.set("x",Json::number(int64_t(x)));
+                frame.set("y",Json::number(int64_t(y)));
+                frame.set("width",Json::number(int64_t(event->width)));
+                frame.set("height",Json::number(int64_t(event->height)));
+                self.host_.sendEventPayload("window.floatFrame",frame);
+                break;
+            }
+            return FALSE;
+        }),this);
         g_signal_connect(win,"destroy",G_CALLBACK(+[](GtkWidget* widget,gpointer data) {
             auto& self=*static_cast<GtkStudio*>(data);
             for (auto it=self.floats_.begin();it!=self.floats_.end();++it) {
