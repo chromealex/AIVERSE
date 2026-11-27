@@ -45,3 +45,8 @@ GitHub search on 2026-11-27 confirms 16 open issues: #206 and #210–224.
 No issues closed. No new build/test run; user requires final combined build.
 Next: implement shared provenance with explicit format compatibility, then replace
 legacy presentation calculations and the heuristic before claiming #222/#224 fixed.
+
+## Shared presentation state checkpoint
+
+Commit: 1179f9f86d9c0d3f62aeb20a76d397beb0e7e371
+Added engine/view/ProjectilePresentation.h with explicit segment origin, absolute-time convergence, straight endpoint fitting and terminal contact sample retention. Regression scenarios added in tests/tests.cpp. NOT RUN: final combined build deferred by user instruction. Not yet wired to hosts; no claim that #222/#224 are fixed. Next: add versioned shared simulation provenance, adapt both hosts, route all visual consumers to one sample, remove the old launch calculations. ActorDurableComponents currently registers projectile codec version 1; its compatibility must be handled explicitly.
