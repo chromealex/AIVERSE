@@ -195,3 +195,14 @@ Fixture velocity is effect-local, not world-space. Correction d3efe528943a6402d6
 uses local +Y along explicit world +X play direction, and asserts the live
 particle actually crossed the sampled center without changing depth.
 Graph texture cases were not reached. Corrected run pending.
+
+## Extended GPU cases verified
+
+Source d3efe5289 / tested tree 66844e3db: focused build and registered
+additive_blend_frame passed, 16/16 pixel cases, 0 pipeline failures.
+Report `test-reports/20261127-095645-22511`; build/test logs
+`additive-geometry2-build.log`, `additive-geometry2-tests.log`.
+Inspected all six added PNGs: mesh, mesh occlusion, ribbon, trail, textured graph
+and textured graph occlusion. Updated tracked evidence directory
+`docs/evidence/issues-additive-metal-20261127` with all 16 captures/result.json.
+No process remains live. Other host/UI and backend acceptance remains pending.

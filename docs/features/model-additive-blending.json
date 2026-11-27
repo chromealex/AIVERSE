@@ -37,7 +37,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Metal pixel fixture passes all ten cases; fixed depth tolerance defect found by that fixture. Broader delivery acceptance remains pending.",
+      "note": "Metal pixel fixture passes all 16 cases, including mesh, trail, ribbon and textured graph paths. Depth tolerance defect fixed. Broader host/platform delivery acceptance remains pending.",
       "evidence": [
         "docs/evidence/issues-additive-metal-20261127/result.json"
       ]
