@@ -11,7 +11,7 @@ struct StudioNatureLayers {
     bool physisWind=false,physisFire=false,nereidFlow=true,nereidAllWater=false;
     bool terraSlope=true,terraSlopeAtTarget=false,terraTreeWind=true,erosionZones=true;
     bool strataBounds=false,strataWire=false,strataFill=false,strataRoutes=false;
-    bool resourceFields=true,rampTiles=false,regionBorders=false,triggerAreas=true;
+    bool playerStarts=true,resourceFields=true,rampTiles=false,regionBorders=false,triggerAreas=true;
     unsigned char modelDebugMode=0;
     int strataColor=0;
     float radius=48,spacing=6;
@@ -30,6 +30,7 @@ struct StudioNatureLayers {
         {"terraSlope","terraSlope",&StudioNatureLayers::terraSlope},
         {"terraSlopeAtTarget","terraSlopeAtTarget",&StudioNatureLayers::terraSlopeAtTarget},
         {"terraTreeWind","terraTreeWind",&StudioNatureLayers::terraTreeWind},
+        {"playerStarts","playerStarts",&StudioNatureLayers::playerStarts},
         {"resourceFields","resourceFields",&StudioNatureLayers::resourceFields},
         {"rampTiles","rampTiles",&StudioNatureLayers::rampTiles},
         {"regionBorders","regionBorders",&StudioNatureLayers::regionBorders},

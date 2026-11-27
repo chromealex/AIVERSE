@@ -4575,6 +4575,17 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             renderer_.line({at.x,at.y-extent,at.z},{at.x,at.y+extent,at.z},color);
             renderer_.line({at.x,at.y,at.z-extent},{at.x,at.y,at.z+extent},color);
         }
+        if(natureLayers_.playerStarts && !fpsProject && !planetaryChart && !map.worldSpace){
+            for(size_t i=0;i<map.players.size();++i){
+                const auto& player=map.players[i];
+                if(!player.hasStart)continue;
+                const float x=player.startX,z=player.startZ;
+                const float ground=showTerrain?terrainPreviewHeight(map,x,z,levelHeight,baseTerrainView_):0.f;
+                const auto color=rgbaf(game::GameView::playerColor(int(i+1)));
+                renderer_.circleXZ({x,0,z},1.2f,color,24,ground+.15f);
+                renderer_.line({x,ground,z},{x,ground+2.5f,z},color);
+            }
+        }
         if((natureLayers_.rampTiles || natureLayers_.resourceFields) && !fpsProject && !planetaryChart){
             const auto point=[&](float x,float z,float lift){
                 return float3{x,(showTerrain?terrainPreviewHeight(map,x,z,levelHeight,baseTerrainView_):0.f)+lift,z};
@@ -5940,7 +5951,7 @@ uint64_t StudioScene::frameSignature(int width,int height,const editor::MapDoc& 
     value(wind_.revision);value(wind_.enabled);value(wind_.speed);value(wind_.directionDeg);
     value(wind_.gust);value(wind_.scale);value(wind_.debug);
     value(areaBounds_.has_value());if(areaBounds_)for(int coord:*areaBounds_)value(coord);
-    value(natureLayers_.resourceFields);value(natureLayers_.rampTiles);value(natureLayers_.regionBorders);value(regionBorderLetter_);value(brushVisible_);vec(brushCenter_);value(brushRadius_);
+    value(natureLayers_.playerStarts);value(natureLayers_.resourceFields);value(natureLayers_.rampTiles);value(natureLayers_.regionBorders);value(regionBorderLetter_);value(brushVisible_);vec(brushCenter_);value(brushRadius_);
     value(overlayShapes_.size());
     for(const auto& shape:overlayShapes_){value(shape.kind);vec(shape.a);vec(shape.b);value(shape.radius);
         value(shape.thickness);value(shape.r);value(shape.g);value(shape.bl);}
