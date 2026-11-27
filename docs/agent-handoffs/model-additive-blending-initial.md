@@ -10,3 +10,9 @@ Import: MDX Additive/AddAlpha retain actual additive semantics, including materi
 Evidence: git diff --check passed. Added common policy regression and FX JSON roundtrip assertion; tests and builds NOT RUN per final-build instruction. GPU blending equations, import/export fixture roundtrips, transparent sorting, cache separation, material overrides and captures still need actual verification. No #219 closure/merge/push.
 
 Next: inspect serialization/cooked material enum validation, shader output alpha semantics for both modes, all MDX multilayer paths (existing layer approximations may remain); extend import/export and GPU regression coverage. Implement #221 with PRISMA-owned display-space composition (no duplicate full-screen owner), then execute final build and all applicable gates. Other stages remain unverified; #206 requires native Windows evidence.
+
+## Import layer audit — 06817a3e3f44ad3b60bed4099df0d83cdea2b226
+
+Found extra additive MDX/MDL layers were dropped by the original first-layer conversion. Now additional Additive/AddAlpha layers become material passes sharing the same primitive indices/vertices/palette. HD texture channel layers retain their existing mapping. Team-glow uses its authored filter, and an additive main layer over team colour retains its blending. Added synthetic MDL regression for extra AddAlpha with 0.5 alpha and shared geometry. git diff --check passed; no build/tests run.
+
+Native compile and GPU acceptance remain pending. Next start final verification only after confirming main synchronization and reviewing all required test targets. Current model mode and FX space changes are not accepted merely from source inspection.
