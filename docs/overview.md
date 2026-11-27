@@ -356,11 +356,10 @@ and stores editor information:
   is no association or it points to another editor instance; it does not override another program you chose.
   Manually: "Project → Make the editor the default app for .aiverse"; the state is shown at the bottom left of the hub.
   Disable with `AIVERSE_FILE_ASSOC=off`.
-  - **macOS:** the `com.aiverse.project` type is declared in the Info.plist of `AiverseEditor.app`
-    (`platform/macos/EditorInfo.plist.in`; the `rtsproj.icns` document icon is drawn by `aiverse_projicon` from the
-    editor logo `apps/editor/branding/icon_1024.png`); the editor registers the bundle in LaunchServices
-    (`lsregister -f`) and becomes the default handler. A double click and `open -a AiverseEditor x.aiverse` open the
-    project in the running editor (if the map has unsaved changes, it asks whether to save).
+  - **macOS HTML Studio:** Finder can open both project extensions with AiverseStudioHTML5.app.
+    Choose Studio under Open With, or run `open -a AiverseStudioHTML5 x.aiverse`.
+    On launch Studio opens the selected project. Opening a different project while Studio is running
+    starts a separate instance so the current workspace and its drafts stay available.
   - **Windows:** `HKCU\Software\Classes\.aiverse` (+ `.rtsproj`) → `AIVERSE.Project` (icon
     `%USERPROFILE%\.aiverse\icons\rtsproj.ico`, command `"<aiverse_editor.exe>" "%1"`). If Windows already has
     another program chosen for `.aiverse`, the hub suggests "Open with → Always".

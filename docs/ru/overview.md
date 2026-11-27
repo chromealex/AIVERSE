@@ -259,12 +259,9 @@ python3 tools/importers/ta/import.py --source "~/Games/TotalA" --out ~/AiverseGa
   администратора), если связи нет или она ведёт к другому экземпляру редактора; выбранную вами другую
   программу не перебивает. Вручную: «Проект → Сделать редактор программой по умолчанию для .aiverse»;
   состояние — внизу слева в хабе. Отключить: `AIVERSE_FILE_ASSOC=off`.
-  - **macOS:** тип `com.aiverse.project` объявлен в Info.plist `AiverseEditor.app`
-    (`platform/macos/EditorInfo.plist.in`; иконку документа `rtsproj.icns` рисует `aiverse_projicon` из логотипа
-    редактора `apps/editor/branding/icon_1024.png`); редактор регистрирует бандл
-    в LaunchServices (`lsregister -f`) и становится обработчиком по умолчанию. Двойной клик и
-    `open -a AiverseEditor x.aiverse` открывают проект в уже запущенном редакторе (при несохранённой
-    карте он спросит, сохранить ли её).
+  - **HTML Studio на macOS:** в Finder выберите AiverseStudioHTML5.app через «Открыть в приложении»
+    для файлов `.aiverse` и `.rtsproj`. Из терминала можно вызвать `open -a AiverseStudioHTML5 x.aiverse`.
+    Если Studio уже открыта, другой проект запускается в отдельном экземпляре. Текущий проект и его правки остаются доступны.
   - **Windows:** `HKCU\Software\Classes\.aiverse` (+ `.rtsproj`) → `AIVERSE.Project` (иконка
     `%USERPROFILE%\.aiverse\icons\rtsproj.ico`, команда `"<aiverse_editor.exe>" "%1"`). Если в
     Windows для `.aiverse` уже выбрана другая программа, хаб подскажет «Открыть с помощью → Всегда».

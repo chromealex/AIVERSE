@@ -11,6 +11,7 @@
 #include "apps/studio-native/StudioNetworkPlay.h"
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/editor/core/BuildTool.h"
+#include "apps/editor/core/ProjectFile.h"
 #include "engine/platform/EngineDir.h"
 #include <algorithm>
 #include <cmath>
@@ -138,6 +139,8 @@ namespace studio = aiverse::studio;
     std::unique_ptr<studio::StudioHostPlatform> platform_;
     std::unique_ptr<studio::StudioHost> core_;
     BOOL htmlComposite_;
+    BOOL mainWebReady_;
+    BOOL hasFinderProject_;
     BOOL closeApproved_;
     // Floating panel windows (Unity-style undocked tabs), one panel per window.
     NSMutableDictionary<NSString*,NSWindow*>* floatWindows_;
@@ -799,6 +802,34 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
     return devURL_ && [url.scheme isEqualToString:@"http"] &&
            [url.host isEqualToString:@"127.0.0.1"] && url.port.integerValue==4173;
 }
+- (void)application:(NSApplication*)app openFiles:(NSArray<NSString*>*)files {
+    for (NSString* file in files) {
+        try {
+            const std::string path=file.fileSystemRepresentation;
+            std::string error;
+            if (!aiverse::editor::isProjectFilePath(path))
+                throw std::runtime_error("Select an AIVERSE project file.");
+            const auto dir=aiverse::editor::resolveProjectDir(path,&error);
+            if (dir.empty()) throw std::runtime_error(error);
+            if (!mainWebReady_ && !hasFinderProject_) {
+                core_->setPendingProject(dir);
+                hasFinderProject_=YES;
+            } else if (mainWebReady_ && core_->session().workspace().project.dir==dir) {
+                [window_ makeKeyAndOrderFront:nil];
+            } else {
+                platform_->openProjectStudio(NSBundle.mainBundle.executablePath.fileSystemRepresentation,dir);
+            }
+        } catch (const std::exception& e) {
+            NSAlert* alert=[[NSAlert alloc] init];
+            alert.messageText=@"Could not open project";
+            alert.informativeText=ns(e.what());
+            [alert runModal];
+            [app replyToOpenOrPrint:NSApplicationDelegateReplyFailure];
+            return;
+        }
+    }
+    [app replyToOpenOrPrint:NSApplicationDelegateReplySuccess];
+}
 - (void)applicationDidFinishLaunching:(NSNotification*)note {
     (void)note;
     window_=[[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,1440,900)
@@ -1336,7 +1367,7 @@ static NSString* studioFloatPanel(NSWindow* window,NSDictionary<NSString*,NSWind
     NSLog(@"[studio-web] top-level navigation finished: %@",view.URL);
     [view evaluateJavaScript:@"document.documentElement.classList.add('character-composite');" completionHandler:nil];
     if (htmlComposite_) [view evaluateJavaScript:@"document.documentElement.classList.add('native-composite');" completionHandler:nil];
-    if (view==web_) core_->webReady();
+    if (view==web_) { mainWebReady_=YES; core_->webReady(); }
 }
 - (void)webView:(WKWebView*)view decidePolicyForNavigationAction:(WKNavigationAction*)action decisionHandler:(void (^)(WKNavigationActionPolicy))done {
     (void)view;
