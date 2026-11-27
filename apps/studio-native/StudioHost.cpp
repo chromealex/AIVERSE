@@ -2031,12 +2031,19 @@ void StudioHost::moveCamera(double right, double up, double forward) {
     if (preview_ && finite({right, up, forward})) onScene([&] { preview_->move(float(right), float(up), float(forward)); });
 }
 void StudioHost::focusLiveSelection() {
-    if (!game_ || !preview_ || projectLoading_) return;
+    if (!game_ || projectLoading_) return;
     const auto position = game_->selectedEntityPosition();
-    if (position) onScene([&] {
-        const auto camera = preview_->cameraState();
-        preview_->tweenCamera(*position, 18.f, camera.yaw, camera.pitch);
-    });
+    if (!position) return;
+    ensureScene();
+    if (session_->workspace().map.data.worldSpace) {
+        onScene([&] { preview_->requestSceneFocus(*position, 18.f); });
+    } else {
+        onScene([&] {
+            const auto camera = preview_->cameraState();
+            preview_->tweenCamera(*position, 18.f, camera.yaw, camera.pitch);
+        });
+    }
+    sendEventPayload("ui.showPanel",Json::parse(R"({"panel":"scene"})"));
 }
 
 void StudioHost::focusSelection() {
