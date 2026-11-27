@@ -647,8 +647,8 @@ Json StudioGameSurface::playerHistory(int64_t afterTick, const std::string& epoc
     const auto* sim = liveSimulation();
     if (sim && canControl() && playerSampleEpoch_ == runtimeEpoch_) {
         out.set("tickRate",Json::number(int64_t(sim->tickRate())));
-        out.set("units",Json::number(int64_t(sim->world().count<game::Unit>())));
-        out.set("projectiles",Json::number(int64_t(sim->world().count<game::Projectile>())));
+        out.set("units",Json::number(int64_t(sim->world().countExisting<game::Unit>())));
+        out.set("projectiles",Json::number(int64_t(sim->world().countExisting<game::Projectile>())));
         if (epoch != std::to_string(runtimeEpoch_)) afterTick = -1;
         if (afterTick < 0) {
             if (const auto* module = dynamic_cast<const game::GameCore*>(&sim->module())) {
