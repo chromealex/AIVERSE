@@ -2,6 +2,7 @@
 #include "StudioWebBridge.h"
 #include "StudioScenePointer.h"
 #include "StudioPreviewPointer.h"
+#include "StudioGamePointer.h"
 #include "StudioSurfacePlatform.h"
 #include <iostream>
 
@@ -11,7 +12,8 @@ public:
     GtkStudio(GtkOverlay* overlay, GtkWindow* window, WebKitWebView* web, const std::string& root)
         : StudioSurfacePlatform(overlay), window_(window),
           bridge_(web,[this](std::string message){ host_.handleMessage(message); }), host_(*this,root,false),
-          pointer_(widget(StudioSurface::Scene), host_) {
+          pointer_(widget(StudioSurface::Scene), host_),
+          gamePointer_(widget(StudioSurface::Game), [this](const platform::Event& event){ host_.gameEvent(event); }) {
         for (auto surface : {StudioSurface::Character, StudioSurface::Appearance, StudioSurface::Nature,
                              StudioSurface::Fx, StudioSurface::EffectFile, StudioSurface::GpuEmitter})
             previewPointers_.push_back(std::make_unique<StudioPreviewPointer>(widget(surface), surface, host_));
@@ -36,6 +38,7 @@ private:
     StudioWebBridge bridge_;
     StudioHost host_;
     StudioScenePointer pointer_;
+    StudioGamePointer gamePointer_;
     std::vector<std::unique_ptr<StudioPreviewPointer>> previewPointers_;
 };
 }
