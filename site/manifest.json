@@ -100,6 +100,24 @@
       "manifest.webmanifest": "3155381102b2e40275edf00fae1e11f7597412ce890b306586ef113f3b66e067",
       "size-report.json": "5d3254135e81088eb225c713b3a360d7c700c3ef858d466329ab0e9b93883c70",
       "size-report.txt": "5e68c7584739944e3129dbef4d3c7ba4c0f97166dfa419d38ee83cba407f4c10"
+    },
+    "selection-voices": {
+      "THIRD_PARTY_NOTICES.txt": "cdf43ea44fca2eb2534756dfd142871c1f58e1b5c1800100c20668ab3233e95e",
+      "apple-touch-icon.png": "0a0dc87a6eb8e8e0d8451bc776ba5602b15ac5e59a73a75d6233ee40521a1700",
+      "branding-head.html": "c41c893c1db69ae7d9c04259d86eaff672e25ce03ca3f2cb2c690f52a356d845",
+      "favicon-32.png": "3af294b47b560ef72ab5456676e8897feb3ec03d12548384c34eba8dc30c4302",
+      "favicon.ico": "ce2410dc2b4d09ec9451b313b2ad8bc625a23751fce0f875003ac9ea44bbde68",
+      "icons/icon-192.png": "4be172452ba473a21db1455ebcf143b68690beda08c494f99f43f71f73b912fb",
+      "icons/icon-512.png": "8064f684d1cb4960fcde904cb32a094b3e51c823436dd501e932be92de3ed316",
+      "icons/maskable-192.png": "82b2a0758aea6c7cb30fbaa33893316a1ace9d37caddc9f7be28942b23a2854e",
+      "icons/maskable-512.png": "2270e405e6b058194fd92cfe34b36eeb2744a37f7f049e1eeab28907033629f6",
+      "index.data": "100ebf15ae9a76da8722ab7252bb9107821f2df3e25615f9cbbd98d087ebd23b",
+      "index.html": "efe12651dad9881ec5602aec29f05dfca9c06d202f6a44099e44ca5158f2c3cb",
+      "index.js": "a813c689504a3c16437080a2ca5ac4c3bfa1f50576503c7dcf4fbb5e50d6ca34",
+      "index.wasm": "4e9769e6fb23068aea3f1ebe9459d9ba614d8ac80b0f4a244f677f16da183597",
+      "manifest.webmanifest": "6238fe0cfc6e12e37393879c4239806e67843aa33edc86395af6d162ac4c3f1d",
+      "size-report.json": "7f5bd4ecefc79e59ee797fd67f89861628733961992e63731df8e19370f36d0d",
+      "size-report.txt": "4cff3b31f936caf16322f73b3d1a9b4f6f162516b38bb3cbdd305e17a6491cdb"
     }
   }
 }

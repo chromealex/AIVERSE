@@ -6,4 +6,4 @@ Pause between the third and fourth clicks for more than two seconds: window=0 mu
 
 All clips are generated sine tones with short fades, not third-party recordings. This scene uses the stock HUD and ordinary audio.json data. Browser audio needs an initial user gesture and may be muted by browser/host settings. Capture native output with AIVERSE_AUDIO=null and AIVERSE_AUDIO_CAPTURE pointing to a WAV on KINGSTON.
 
-Acceptance pending the current audio rebuild; do not treat this fixture alone as a passed listening or mixer test.
+Native callback capture verified the sequence 440, 440, 660, 880, 440, 440, 660 Hz and restart at 440 Hz after Stop and switching scouts. Three mixer regressions passed 119 checks, including positive-window expiry and explicit reset. See `docs/evidence/issues-selection-voices-native-20261127` and `docs/evidence/issues-audio-mixer-20261127.json`. WebGL loading and repeated selection were checked; browser audio was not recorded, so that smoke check does not establish audible ordering. Physical speakers and other native platforms remain unverified.
