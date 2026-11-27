@@ -1632,3 +1632,7 @@ f99fb848e154c661f4ecd2ce36254ef4c1fb60e1 updates InsightPanels.tsx, StudioPanelR
 ### External JSON and project switching in Snapshot Diff
 
 f71ec09d2f7d4c40a70e8066452b44d838034b6c updates InsightPanels.tsx, ProjectToolPanels.css and mac/Main.mm. The separate HTML5 window accepts a File for either snapshot, bounded to the legacy 16 MiB limit, or a project-relative path. The Mac host handles trusted file inputs with a sheet on the requesting window. Built web and native targets. In the packaged WKWebView, the fixture supplied two File objects via the real input change handlers, compared score 12 to 14, checked the TSV, then switched to a second registered project and confirmed both map defaults and the cleared result. The fixture did not operate Finder. Capture docs/handoff/studio-html5/captures/mac-snapshot-diff-files.png. Next test OS picker selection and cancellation.
+
+### Large Snapshot Diff reports
+
+07fb725d29b7d7944db233c4a0169ae5e1b5f3ae updates apps/studio-web/src/panels/InsightPanels.tsx. Built web and Mac Studio. Compared two maps with 2001 differing keys and visited all 20 retained pages, verified the boundary buttons and last row, filtered down to one row, exported the full retained TSV through the QA clipboard sink, checked its truncation marker and checked the empty filter result and reset. Screenshot docs/handoff/studio-html5/captures/mac-snapshot-diff-pages.png. OS file picker and cancellation remain to verify.
