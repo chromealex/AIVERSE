@@ -11,12 +11,14 @@ void require(bool ok,const char* why){if(!ok)throw std::runtime_error(why);}
 Rml::Element* element(const char* selector) {
     auto* context=Rml::GetContext("main");if(!context)return nullptr;
     for(int i=0;i<context->GetNumDocuments();++i)
-        if(auto* e=context->GetDocument(i)->QuerySelector(selector);e&&e->IsVisible())return e;
+        if(context->GetDocument(i)->IsVisible())
+            if(auto* e=context->GetDocument(i)->QuerySelector(selector);e&&e->IsVisible())return e;
     return nullptr;
 }
 Rml::Element* button(const char* text) {
     auto* context=Rml::GetContext("main");if(!context)return nullptr;
     for(int i=0;i<context->GetNumDocuments();++i){
+        if(!context->GetDocument(i)->IsVisible())continue;
         Rml::ElementList buttons;context->GetDocument(i)->QuerySelectorAll(buttons,"button");
         for(auto* e:buttons)if(e->IsVisible()&&e->GetInnerRML().find(text)!=std::string::npos)return e;
     }return nullptr;
@@ -67,6 +69,6 @@ int aiverseMain(int argc,char** argv) {
         }catch(const std::exception& e){std::cerr<<"stage "<<stage<<": "<<e.what()<<'\n';failed=true;}
         platform::setHostedView(nullptr);
     };
-    cb.shutdown=[&]{platform::setHostedView(&hosted);if(device&&device->waitForResourceIdle()){client.shutdown();targets.shutdownAfterGpuIdle();}else failed=true;platform::setHostedView(nullptr);};
+    cb.shutdown=[&]{platform::setHostedView(&hosted);if(device&&device->waitForResourceIdle()){client.shutdown();targets.shutdownAfterGpuIdle();}else failed=true;platform::setHostedView(nullptr);if(failed||!done){std::fflush(nullptr);std::exit(1);}};
     platform::run(app,cb);return failed||!done?1:0;
 }
