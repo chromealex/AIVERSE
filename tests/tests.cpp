@@ -16652,6 +16652,16 @@ TEST(native_editor_build_helpers) {
     fs::remove_all(root);
     fs::create_directories(root / "proj" / "native");
     fs::create_directories(root / "proj" / "Builds" / ".temp" / "editor-linux" / "gen");
+    for (const std::string host : {"macos", "windows"}) {
+        const fs::path cache = fs::path(nativeBuildDir((root / "proj").string(), host)) / "CMakeCache.txt";
+        fs::create_directories(cache.parent_path());
+        std::ofstream(cache) << "CMAKE_GENERATOR:INTERNAL=Ninja Multi-Config\n";
+        auto cached = planNativeBuild(eng, (root / "proj").string(), host, "cmake", "ninja", true, 1);
+        CHECK(fs::path(cached.launchTarget).parent_path().filename() == "Release");
+        std::ofstream(cache) << "CMAKE_GENERATOR:INTERNAL=Unix Makefiles\n";
+        cached = planNativeBuild(eng, (root / "proj").string(), host, "cmake", "", true, 1);
+        CHECK(fs::path(cached.launchTarget).parent_path().filename() == "studio-native");
+    }
     auto touch = [](const fs::path& f, int ageSec) {
         std::ofstream(f) << "x";
         fs::last_write_time(f, fs::file_time_type::clock::now() - std::chrono::seconds(ageSec));
