@@ -1,5 +1,7 @@
 #pragma once
 #include "../StudioHost.h"
+#include "../StudioNetworkPlay.h"
+#include "StudioChildProcess.h"
 #include "StudioViewportOverlay.h"
 #include "StudioFileDialog.h"
 #include "StudioUserPaths.h"
@@ -67,6 +69,15 @@ public:
 
     std::filesystem::path cacheDir() override { return g_get_user_cache_dir(); }
     void rememberLastProject(const std::string& dir) override { storeStudioLastProject(dir); }
+
+    PlayerExitStatus launchGamePlayer(const std::vector<std::string>& args) override {
+        const auto directory = std::filesystem::read_symlink("/proc/self/exe").parent_path();
+        return launchStudioChild(studioNetworkPlayer(directory / "aiverse_client"), args);
+    }
+
+    void openProjectStudio(const std::filesystem::path& executable, const std::string& project) override {
+        launchStudioChild(executable, {"--project", project});
+    }
 
     void chooseProject(std::function<void(std::string)> done) override {
         chooseFolder("Open Project", {}, std::move(done));
