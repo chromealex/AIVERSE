@@ -59,25 +59,31 @@
       "evidence": []
     },
     "studio": {
-      "status": "not_run",
-      "note": "Actual Rules Edit JSON saved per-type alternate portrait/background and minimap visibility, reopened text and disk matched. Project-level defaults/crop still need a native Studio route: set_manifest exists in Workspace but is absent from Studio tool allowlist/UI. Extend general project settings through existing owner; do not add per-feature exceptions.",
+      "status": "pass",
+      "note": "Actual native Project settings UI saved hotkey, portrait defaults and minimap crop through shared manifest owner; malformed JSON and stale draft rejected, Project Undo/Redo and reopen/readback verified. Per-type Rules editing retained separately where applicable. Generic JSON editor, not custom per-key widgets.",
       "evidence": [
-        "docs/evidence/issues-portrait-minimap-authoring-20261127/result.json",
-        "docs/evidence/issues-portrait-minimap-authoring-20261127/rules-saved.png",
-        "apps/studio-native/StudioTools.h"
+        "docs/evidence/issues-project-settings-ui-20261127/result.json",
+        "docs/evidence/issues-project-settings-ui-20261127/game-after.json",
+        "docs/evidence/issues-project-settings-native-corrected-20261127.json"
       ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Per-type Rules JSON inspection/editing verified; project-level settings authoring remains incomplete.",
+      "status": "pass",
+      "note": "Actual native Project settings UI saved hotkey, portrait defaults and minimap crop through shared manifest owner; malformed JSON and stale draft rejected, Project Undo/Redo and reopen/readback verified. Per-type Rules editing retained separately where applicable. Generic JSON editor, not custom per-key widgets.",
       "evidence": [
-        "docs/evidence/issues-portrait-minimap-authoring-20261127/result.json"
+        "docs/evidence/issues-project-settings-ui-20261127/result.json",
+        "docs/evidence/issues-project-settings-ui-20261127/game-after.json",
+        "docs/evidence/issues-project-settings-native-corrected-20261127.json"
       ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Actual native Project settings UI saved hotkey, portrait defaults and minimap crop through shared manifest owner; malformed JSON and stale draft rejected, Project Undo/Redo and reopen/readback verified. Per-type Rules editing retained separately where applicable. Generic JSON editor, not custom per-key widgets.",
+      "evidence": [
+        "docs/evidence/issues-project-settings-ui-20261127/result.json",
+        "docs/evidence/issues-project-settings-ui-20261127/game-after.json",
+        "docs/evidence/issues-project-settings-native-corrected-20261127.json"
+      ]
     },
     "graphs": {
       "status": "not_applicable",
@@ -149,9 +155,16 @@
     "skills": [
       "aiverse-view"
     ],
-    "mcp_tools": [],
-    "studio_panels": [],
-    "studio_methods": []
+    "mcp_tools": [
+      "game_info",
+      "set_manifest"
+    ],
+    "studio_panels": [
+      "project"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ]
   },
   "test_reports": []
 }

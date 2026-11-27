@@ -75,21 +75,31 @@
       "evidence": []
     },
     "studio": {
-      "status": "not_run",
-      "note": "Implemented shared Project settings editor through game_info/set_manifest, exact original-manifest and project fences, raw JSON native parsing, draft retention and existing Project history. TypeScript/native tests and live UI acceptance pending; no feature-specific schema bypass.",
+      "status": "pass",
+      "note": "Actual native Project settings UI saved hotkey, portrait defaults and minimap crop through shared manifest owner; malformed JSON and stale draft rejected, Project Undo/Redo and reopen/readback verified. Per-type Rules editing retained separately where applicable. Generic JSON editor, not custom per-key widgets.",
       "evidence": [
-        "apps/studio-native/StudioTools.h"
+        "docs/evidence/issues-project-settings-ui-20261127/result.json",
+        "docs/evidence/issues-project-settings-ui-20261127/game-after.json",
+        "docs/evidence/issues-project-settings-native-corrected-20261127.json"
       ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Actual native Project settings UI saved hotkey, portrait defaults and minimap crop through shared manifest owner; malformed JSON and stale draft rejected, Project Undo/Redo and reopen/readback verified. Per-type Rules editing retained separately where applicable. Generic JSON editor, not custom per-key widgets.",
+      "evidence": [
+        "docs/evidence/issues-project-settings-ui-20261127/result.json",
+        "docs/evidence/issues-project-settings-ui-20261127/game-after.json",
+        "docs/evidence/issues-project-settings-native-corrected-20261127.json"
+      ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Actual native Project settings UI saved hotkey, portrait defaults and minimap crop through shared manifest owner; malformed JSON and stale draft rejected, Project Undo/Redo and reopen/readback verified. Per-type Rules editing retained separately where applicable. Generic JSON editor, not custom per-key widgets.",
+      "evidence": [
+        "docs/evidence/issues-project-settings-ui-20261127/result.json",
+        "docs/evidence/issues-project-settings-ui-20261127/game-after.json",
+        "docs/evidence/issues-project-settings-native-corrected-20261127.json"
+      ]
     },
     "graphs": {
       "status": "not_applicable",

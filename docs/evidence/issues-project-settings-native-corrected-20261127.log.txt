@@ -1,0 +1,21 @@
+AIVERSE tests | commit=f84a38da2 | build=/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick | report=/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-130648-74669
+
+========== ctest ==========
+Command: ctest --test-dir /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick --config Debug --no-tests=error --output-on-failure --parallel 2 --output-junit /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-130648-74669/ctest.xml -R \^studio_session\$
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick
+Test project /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick
+    Start 590: studio_session
+1/1 Test #590: studio_session ...................   Passed    9.53 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+EDITOR    =   9.53 sec*proc (1 test)
+
+Total Test time (real) =   9.56 sec
+PASS ctest
+
+========== SUMMARY ==========
+Passed stages: 1 | Failed stages: 0
+Logs: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-130648-74669
+PASS: all selected test stages
