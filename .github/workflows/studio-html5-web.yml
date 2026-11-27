@@ -55,6 +55,13 @@ jobs:
         working-directory: apps/studio-web
         run: npm run build
 
+      - name: Open the built interface in Linux WebKitGTK
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y libwebkit2gtk-4.1-dev xvfb xauth
+          c++ -std=c++20 apps/studio-native/tests/StudioLinuxWebAssets.cpp -o "$RUNNER_TEMP/studio-webkit-test" $(pkg-config --cflags --libs webkit2gtk-4.1)
+          xvfb-run -a "$RUNNER_TEMP/studio-webkit-test" "$PWD/apps/studio-web/dist"
+
   boundary:
     name: ImGui boundary
     runs-on: ubuntu-latest

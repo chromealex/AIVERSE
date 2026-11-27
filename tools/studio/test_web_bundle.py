@@ -65,7 +65,9 @@ class StudioBundleTests(unittest.TestCase):
         handler=(ROOT/"apps/studio-native/mac/StudioAssetSchemeHandler.mm").read_text(encoding="utf-8")
         self.assertIn('setURLSchemeHandler:assets_',main)
         self.assertIn('aiverse-studio://shell/index.html',main)
-        self.assertIn('@"text/javascript"',handler)
+        self.assertIn('studioWebAsset(',handler)
+        resolver=(ROOT/"apps/studio-native/StudioWebAsset.h").read_text(encoding="utf-8")
+        self.assertIn('{".js","text/javascript"}',resolver)
 
 if __name__=="__main__":
     unittest.main()
