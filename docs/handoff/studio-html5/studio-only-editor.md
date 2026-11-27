@@ -1824,3 +1824,7 @@ c583dd34bf384bba401a3e35b4392ac9d0e135b6 adds apps/studio-web/src/panels/InputTr
 ### Input chord reference lifecycle
 
 920d4a271d8b4e4778ed73f0b2f5ca679c7e1f8c adds inputActionReferences.ts and updates ProjectToolPanels.tsx. Web production build passed. Detached Mac Input renamed the target to Sprint and native reload confirmed the action NotChord and binding Chord both referenced Sprint. Delete and Save preserved the unrelated binding and removed both dependent triggers, verified from disk. Initial automation retained stale DOM rows after deletion; fresh queries passed (stats-mac-ua417j84/live.log, captures/mac-input-chord-removal.png). Next transfer keyboard capture and its conflict policies.
+
+### HTML Input FPS and RTS reference presets
+
+2a6c1c0a0e02b3088a7a51f03983cbf57cce0fd4 exposes the existing engine presets via StudioSession.cpp and types.ts to ProjectToolPanels.tsx. The production web build and incremental native aiverse_studio target passed. Detached rebuilt Mac Input showed FPS LookStick without writing a file, replaced it with RTS AttackMove, saved RTS, and reverted another unsaved FPS change to the saved RTS actions. Parsed input/actions.json to verify the AttackMove mapping. Evidence: stats-mac-l08ellb5/live.log and docs/handoff/studio-html5/captures/mac-input-defaults.png. Next migrate keyboard capture and binding conflict policies.
