@@ -125,3 +125,21 @@ Batch zero initialization removes the newly introduced missing-field warning.
 `git diff --check` passed. Corrections not yet compiled/tested.
 Next: cached focused rebuild, repeat failed scenarios and old planet save
 compatibility; then resume remaining GPU acceptance and final integrated gate.
+
+## Corrected persistence scenarios verified
+
+Focused cached build at source b7ee98358 / handoff tree 5bcdd1387 succeeded
+(exit 0, handle 41300), targets aiverse_tests and
+aiverse_world_processes_gamecore_native_test. Log: `issues-fix-b7ee98358-build.log`.
+No warnings/errors in this incremental build. Direct aiverse_tests filters:
+`projectile_program` PASS (596 checks), `mech_save_states_all_games` PASS
+(123 checks), `particle_blend_space_roundtrip_and_trail_override` PASS.
+All three exited 0 (handle 45951); logs `fix-<filter>.log` in the build directory.
+`./run-tests.sh --quick --no-build --build-dir
+/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick
+--filter '^world_processes_gamecore_native_test$'` passed (1/1 CTest),
+including existing v12/legacy-v11 edited-planet compatibility.
+Report: `test-reports/20261127-094721-16998`, runner log
+`fix-planet-compatibility.log`; all paths relative to the same KINGSTON build.
+No live process remains from these checks. This does not replace the pending
+full integrated quick gate or additive GPU acceptance.
