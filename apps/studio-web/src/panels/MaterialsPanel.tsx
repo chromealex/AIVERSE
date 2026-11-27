@@ -91,6 +91,7 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
   setBusy(true);setError('');setMessage('');
   try{
    const response=await invoke('studio.materialCreate',{name:newName,preset:newPreset,...(newPreset==='triplanar'?{colorGuid:colorMap,normalGuid:normalMap,repeatMetres:Number(repeatMetres)}:{})});
+   setQuery(current=>newName.toLowerCase().includes(current.toLowerCase())?current:'');
    setLibrary(response);setName(newName);setDraft({});setPending(null);setNewName('');setCreating(false);
    const file=response.files?.[newName];
    if(file?.startsWith('content/'))revealProjectAsset(projectPath,file.slice('content/'.length));
@@ -247,6 +248,7 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
         <div className="property-row"><span>Normal texture (optional)</span><AssetReferencePicker label="Normal texture (optional)" value={normalMap} kinds={['image']} disabled={busy} onChange={setNormalMap}/></div>
         <label>Repeat length (metres)<input type="number" min="0.001" max="100000" step="any" value={repeatMetres} onChange={e=>setRepeatMetres(e.target.value)}/></label>
       </>}
+      {changes>0&&<small>Save or discard your edits to {name} before creating this material.</small>}
       <button disabled={busy||!newName||!recipeValid||changes>0} onClick={()=>void create()}>Create and save</button>
     </div>}
     <label className="materials-search"><Search size={14}/>
