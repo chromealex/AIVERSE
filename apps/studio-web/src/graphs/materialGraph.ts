@@ -21,11 +21,26 @@ export function materialGraph(name:string,material:MaterialData,patch:MaterialPa
  nodes.push({id:'factors',label:'PBR factors',x:300,y:30,inputs:[],outputs:[{id:'value',type:'pbr'}]});
  links.push({id:'factors',from:'factors',output:'value',to:'material',input:'factors'});
  if(effective.shaderGraph&&typeof effective.shaderGraph==='object'){
-  nodes.push({id:'shader',label:'Embedded shader snapshot',x:300,y:130,inputs:[],outputs:[{id:'value',type:'shader'}]});
+  const shaderNodes='nodes' in effective.shaderGraph ? effective.shaderGraph.nodes : null;
+  const textures=new Set<string>();
+  if(Array.isArray(shaderNodes)){
+   for(const sample of shaderNodes){
+    if(sample?.op==='sampleTexture' && typeof sample.texture==='string' && sample.texture)textures.add(sample.texture);
+   }
+  }
+  let y=Math.max(-60,...nodes.filter(node=>node.x===30).map(node=>node.y))+90;
+  const inputs=Array.from(textures,(path,index)=>{
+   const id='shaderTexture:'+path,port='texture'+(index+1);
+   nodes.push({id,label:path,x:30,y,inputs:[],outputs:[{id:'image',type:'texture'}]});
+   links.push({id,from:id,output:'image',to:'shader',input:port});
+   y+=90;
+   return {id:port,type:'texture'};
+  });
+  nodes.push({id:'shader',label:'Embedded shader snapshot',x:300,y:130,inputs,outputs:[{id:'value',type:'shader'}]});
   links.push({id:'shader',from:'shader',output:'value',to:'material',input:'shader'});
  }
  if(typeof effective.base==='string'&&effective.base){
-  nodes.push({id:'base',label:effective.base,x:300,y:230,inputs:[],outputs:[{id:'value',type:'material'}]});
+  nodes.push({id:'base',label:effective.base,x:300,y:Math.max(230,180+links.filter(link=>link.to==='shader').length*28),inputs:[],outputs:[{id:'value',type:'material'}]});
   links.push({id:'base',from:'base',output:'value',to:'material',input:'base'});
  }
  return {nodes,links};
