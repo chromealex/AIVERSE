@@ -1,6 +1,7 @@
 #pragma once
 #include "../StudioHost.h"
 #include "StudioViewportOverlay.h"
+#include "StudioFileDialog.h"
 #include "StudioVulkanWindow.h"
 #include <array>
 #include <stdexcept>
@@ -53,11 +54,26 @@ public:
 
     bool gameFocused() override { return gtk_widget_has_focus(widget(StudioSurface::Game)); }
 
+    void chooseProject(std::function<void(std::string)> done) override {
+        chooseFolder("Open Project", {}, std::move(done));
+    }
+
+    void chooseFolder(const std::string& title, const std::string& startDir,
+                      std::function<void(std::string)> done) override {
+        chooseStudioPath(parentWindow(), GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER, title, startDir, {}, std::move(done));
+    }
+
+    void chooseSaveFile(const std::string& startDir, const std::string& defaultName,
+                        std::function<void(std::string)> done) override {
+        chooseStudioPath(parentWindow(), GTK_FILE_CHOOSER_ACTION_SAVE, "Save Map", startDir, defaultName, std::move(done));
+    }
+
 protected:
     GtkWidget* widget(StudioSurface surface) const {
         return surfaces_.at(static_cast<size_t>(surface)).widget;
     }
 private:
+    GtkWindow* parentWindow() const { return GTK_WINDOW(gtk_widget_get_toplevel(widget(StudioSurface::Scene))); }
     struct Surface { GtkWidget* widget = nullptr; gfx::VulkanWindow window; };
     std::array<Surface, static_cast<size_t>(StudioSurface::Count)> surfaces_{};
     void destroySurfaces() {
