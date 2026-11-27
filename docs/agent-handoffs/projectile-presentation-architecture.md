@@ -1,0 +1,47 @@
+# Projectile presentation architecture — 2026-11-27
+
+Status: design verified against source; implementation pending. This supersedes the
+hit/consumed heuristic in checkpoint 8be0f0c0d. That checkpoint is not merge-ready.
+
+## Owners and observed paths
+
+- `engine/sim/ProjectileProgram.h`: shared deterministic chain policy. Both
+  `engine/game/ProjectilePrograms.cpp` and `engine/actor/ActorProjectiles.cpp`
+  call its split/contact operations. Extend this owner rather than duplicating
+  continuation decisions in either view host.
+- `engine/view/game/GameViewDraw.cpp`: legacy adapter; currently owns launch
+  convergence. It must consume shared presentation results.
+- `engine/fx/GameFx.cpp`: independently computes launch convergence today. Model,
+  trail and light must use the same presentation sample.
+- Persistence is not confined to projectile::io: actor durable serialization in
+  `engine/actor/ActorDurableProjectile.h` manually writes program fields. GameCore
+  also hashes fields explicitly. A new field requires all these paths and their
+  versioned readers to be reviewed together.
+
+## Required implementation
+
+1. Introduce explicit flight-segment provenance in shared projectile state. Initial
+   emission, split and ricochet must be distinguishable without inspecting hit or
+   consumed history. The shared branch operations assign provenance; hosts supply
+   segment origin and predecessor identity with their existing identity semantics.
+2. Preserve provenance across save/load and actor durable state, hashing and
+   applicable replication. Version format changes; do not silently append bytes to
+   an existing save version or assume actor target keys are ECS entity handles.
+3. Add shared presentation state/sample with launch anchor, segment origin and
+   rendered point. Evaluate once per frame from interpolated authoritative state;
+   models, trails and lights consume that sample. Only initial emissions apply
+   muzzle convergence. Existing straight-impact and curved paths use this owner.
+4. Preserve final contact samples before retiring trails; support replacement
+   continuity and deterministic split ownership without sharing a mutable ribbon
+   among multiple children. Rendering adapters only translate host data.
+5. Test initial emission, timed split (parent remains initial), contact split,
+   repeated ricochet, fly-through, save/load during continuation, short-flight
+   retirement and model/trail point equality. Include both existing host paths.
+
+## Integration status
+
+Fetched origin/main: fde390cac79d98fe7a643043984fb11d7c966b14.
+GitHub search on 2026-11-27 confirms 16 open issues: #206 and #210–224.
+No issues closed. No new build/test run; user requires final combined build.
+Next: implement shared provenance with explicit format compatibility, then replace
+legacy presentation calculations and the heuristic before claiming #222/#224 fixed.
