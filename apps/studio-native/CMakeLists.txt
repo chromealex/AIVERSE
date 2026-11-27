@@ -7,7 +7,6 @@
 include_directories("${PROJECT_SOURCE_DIR}/third_party/box3d/include")
 set(AIVERSE_STUDIO_SOURCES StudioHost.cpp StudioScene.cpp StudioGameSurface.cpp StudioFacialGpuPreview.cpp
     StudioSession.cpp StudioAssetCatalog.cpp StudioAssetTransfers.cpp)
-set(AIVERSE_STUDIO_WEB_DIST "${PROJECT_SOURCE_DIR}/apps/studio-web/dist" CACHE PATH "Built Studio web assets")
 if(NOT EXISTS "${AIVERSE_STUDIO_WEB_DIST}/index.html")
     message(FATAL_ERROR "HTML5 bundle missing: build apps/studio-web (npm run build) or set AIVERSE_STUDIO_WEB_DIST")
 endif()

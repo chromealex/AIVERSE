@@ -258,8 +258,7 @@ Windows：`studio_windows.cmd [project]` で `AiverseStudio.exe` をビルドし
 CMake、Node.js が必要。WebView2 Runtime と Vulkan で動作）。
 
 `studio_mac.command` は Web UI とネイティブの Studio をビルドして開きます。エンジンだけなら：
-`cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release && cmake --build build/mac -j 8`。従来の
-ImGui エディタ（`build/mac/AiverseEditor.app`）も引き続きビルドされ、Linux と Windows で動きます。
+`cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release && cmake --build build/mac -j 8`。
 
 Linux：`cmake --preset linux-release && cmake --build build/linux-release`。コンパイルしたくない場合は、
 `builds` ブランチにビルド済みのエディターとツールがあります

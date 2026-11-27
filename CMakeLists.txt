@@ -64,7 +64,6 @@ if(AIVERSE_PLATFORM STREQUAL "macos" AND AIVERSE_BUILD_TESTS)
 endif()
 option(AIVERSE_BUILD_HEADLESS "Build headless runner" ${AIVERSE_DESKTOP})
 option(AIVERSE_BUILD_CLIENT "Build the game client" ON)
-option(AIVERSE_BUILD_EDITOR "Build the map editor" ${AIVERSE_DESKTOP})
 option(AIVERSE_BUILD_TOOLS "Build aiversebuild packager" ${AIVERSE_DESKTOP})
 option(AIVERSE_BUILD_SERVER "Build the network game server and the network bot client" ${AIVERSE_DESKTOP})
 
@@ -73,11 +72,17 @@ option(AIVERSE_BUILD_SERVER "Build the network game server and the network bot c
 # to parent-scoped targets; otherwise it can fail with CMAKE_OBJCXX_COMPILE_OBJECT.
 # The HTML5 Studio is the main editor on macOS and Windows: built by default once its web bundle exists
 # (studio_mac.command / studio_windows.cmd build the bundle first; -DAIVERSE_BUILD_STUDIO_HTML5=OFF skips it).
+set(AIVERSE_STUDIO_WEB_DIST "${PROJECT_SOURCE_DIR}/apps/studio-web/dist" CACHE PATH "Built Studio web assets")
 set(_aiverse_studio_default OFF)
-if((APPLE OR WIN32) AND NOT IOS AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/apps/studio-web/dist/index.html")
+if(AIVERSE_PLATFORM MATCHES "^(macos|windows)$" AND EXISTS "${AIVERSE_STUDIO_WEB_DIST}/index.html")
     set(_aiverse_studio_default ON)
 endif()
 option(AIVERSE_BUILD_STUDIO_HTML5 "Build the HTML5 Studio (main editor; macOS and Windows)" ${_aiverse_studio_default})
+set(_aiverse_legacy_editor_default ${AIVERSE_DESKTOP})
+if(AIVERSE_BUILD_STUDIO_HTML5 AND AIVERSE_PLATFORM MATCHES "^(macos|windows)$")
+    set(_aiverse_legacy_editor_default OFF)
+endif()
+option(AIVERSE_BUILD_EDITOR "Build the legacy ImGui map editor" ${_aiverse_legacy_editor_default})
 if(APPLE AND AIVERSE_BUILD_STUDIO_HTML5)
     enable_language(OBJCXX)
 endif()

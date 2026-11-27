@@ -258,8 +258,7 @@ Windows: `studio_windows.cmd [project]` собирает и открывает `
 CMake, Node.js; работает на WebView2 Runtime и Vulkan).
 
 `studio_mac.command` собирает веб-интерфейс и нативную Studio и открывает её. Только движок:
-`cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release && cmake --build build/mac -j 8`. Прежний
-редактор на ImGui (`build/mac/AiverseEditor.app`) по-прежнему собирается и работает на Linux и Windows.
+`cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release && cmake --build build/mac -j 8`.
 
 Linux: `cmake --preset linux-release && cmake --build build/linux-release`. Если компилировать не хочется,
 в ветке `builds` есть готовые сборки редактора и инструментов

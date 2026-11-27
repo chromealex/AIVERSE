@@ -253,8 +253,7 @@ Windows：`studio_windows.cmd [project]` 构建并打开 `AiverseStudio.exe`（�
 CMake、Node.js；运行于 WebView2 Runtime 和 Vulkan）。
 
 `studio_mac.command` 会构建 Web 界面和原生 Studio 并打开它。只构建引擎：
-`cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release && cmake --build build/mac -j 8`。之前的
-ImGui 编辑器（`build/mac/AiverseEditor.app`）仍会构建，并可在 Linux 和 Windows 上使用。
+`cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release && cmake --build build/mac -j 8`。
 
 Linux：`cmake --preset linux-release && cmake --build build/linux-release`。如果不想编译，
 `builds` 分支提供预构建的编辑器和工具
