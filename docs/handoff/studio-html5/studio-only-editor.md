@@ -1460,3 +1460,5 @@ Stage 32e0c27056d88043292b36b70b1a4b690b2dba3d. apps/studio-native/CMakeLists.tx
 Stage faabce1ce6ef94d4e3eff828ee28ff3e652897a7. apps/studio-native/CMakeLists.txt stages aiverse_client beside the Linux host for StudioSurfacePlatform::launchGamePlayer. Verified the destination against the launcher and ran git diff --check. Launch from a relocated package remains pending.
 
 Linux engine resource lookup 0898c4708e01febe96e5ea12e8ed7b6203078f8b: apps/studio-native/linux/Main.cpp initializes platform engine assets before constructing StudioHost, matching Windows and macOS. git diff --check passed. Verify captions and PHYSIS textures in the packaged host.
+
+Live Hierarchy focus 72ab993d5fbf6ec0220dedc90e056fe0b92c66d2: apps/studio-web/src/{types.ts,panels/LivePanels.tsx} and apps/studio-native/StudioHost.{h,cpp}. Double clicking a live row selects its validated world reference and frames its Transform through the same Scene camera path as linked selection. TypeScript and git diff --check passed. Native camera movement requires live desktop verification.
