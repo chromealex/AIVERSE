@@ -5561,8 +5561,6 @@ endif()
 # Verification scripts build the editor shipped for the configured target platform.
 if(TARGET aiverse_studio)
     add_custom_target(aiverse_desktop_editor DEPENDS aiverse_studio)
-elseif(AIVERSE_PLATFORM STREQUAL "linux" AND TARGET aiverse_editor)
-    add_custom_target(aiverse_desktop_editor DEPENDS aiverse_editor)
 endif()
 
 if(AIVERSE_BUILD_TESTS AND AIVERSE_PLATFORM STREQUAL "linux" AND EXISTS "${AIVERSE_STUDIO_WEB_DIST}/index.html")

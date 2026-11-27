@@ -55,16 +55,11 @@ opts=(
     -DAIVERSE_BUILD_CLIENT=ON -DAIVERSE_BUILD_HEADLESS=ON
     -DAIVERSE_BUILD_TOOLS=ON
 )
-case "$OS" in
-    Darwin|MINGW*|MSYS*)
-        web="$ROOT/apps/studio-web"
-        dist="$BUILD/spectrafx-studio-web"
-        stage studio_dependencies npm --prefix "$web" install --no-audit --no-fund --package-lock=false
-        stage studio_web npm --prefix "$web" run build -- --outDir "$dist"
-        opts+=(-DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_STUDIO_HTML5=ON "-DAIVERSE_STUDIO_WEB_DIST=$dist")
-        ;;
-    *) opts+=(-DAIVERSE_BUILD_EDITOR=ON) ;;
-esac
+web="$ROOT/apps/studio-web"
+dist="$BUILD/spectrafx-studio-web"
+stage studio_dependencies npm --prefix "$web" install --no-audit --no-fund --package-lock=false
+stage studio_web npm --prefix "$web" run build -- --outDir "$dist"
+opts+=(-DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_STUDIO_HTML5=ON "-DAIVERSE_STUDIO_WEB_DIST=$dist")
 # Preserve an existing Mac build cache and avoid needlessly rebuilding.
 if [[ ! -f "$BUILD/CMakeCache.txt" ]]; then opts+=(-DCMAKE_BUILD_TYPE=Debug); fi
 if [[ "${AIVERSE_ACCEPTANCE_WARNINGS_AS_ERRORS:-0}" == 1 ]]; then
