@@ -64,6 +64,9 @@ def test_index():
                        "AIVERSE/bin/AiverseEditor.app/Contents/MacOS/AiverseEditor": b"x"}
         gtk = "linux/AIVERSE-0.3.0-dddddddd-linux.zip"
         pkgs[gtk] = {"AIVERSE/bin/AiverseStudio": fake_elf(183), "AIVERSE/bin/aiverse_editor": b"x"}
+        win_studio = "windows/AIVERSE-0.3.0-eeeeeeee-windows.zip"
+        pkgs[win_studio] = {"AIVERSE/bin/AiverseStudio.exe": fake_pe(0x8664),
+                            "AIVERSE/bin/aiverse_editor.exe": b"x"}
         for rel, files in pkgs.items():
             write_zip(os.path.join(work, rel), files)
         order = list(pkgs)
@@ -75,6 +78,7 @@ def test_index():
         by = {p["file"]: p for p in idx["packages"]}
         assert by[studio]["editor"] == "AIVERSE/bin/AiverseStudioHTML5.app"
         assert by[gtk]["editor"] == "AIVERSE/bin/AiverseStudio"
+        assert by[win_studio]["editor"] == "AIVERSE/bin/AiverseStudio.exe"
         w = by[order[0]]
         assert (w["platform"], w["arch"], w["version"], w["commit"]) == ("windows", "x86_64", "0.2.0", "aaaaaaaa"), w
         assert w["rtsmcp"] == "AIVERSE/bin/aiversemcp.exe" and w["editor"] == "AIVERSE/bin/aiverse_editor.exe", w
