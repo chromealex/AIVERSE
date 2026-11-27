@@ -35,7 +35,7 @@ public:
     Json entities(int offset,int limit,const std::string& query,const StudioRuntimeInspect::GroupQuery& group);
     std::optional<render::float3> selectedEntityPosition() const;
     size_t selectEntities(const Json& docs,const Json& refs,const std::string& epoch);
-    void selectEntity(const std::string& epoch,const std::string& ref);
+    void selectEntity(const std::string& epoch,const std::string& ref,const std::string& mode);
     Json queryWorld(const editor::Workspace& ws,const Json& params,bool list);
     Json inspect(const std::string& epoch,const std::string& ref);
     Json editRuntime(const Json& params);

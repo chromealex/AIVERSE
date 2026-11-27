@@ -505,8 +505,19 @@ size_t StudioGameSurface::selectEntities(const Json& docs,const Json& refs,const
     }
     return inspector_.selectMany(sim,std::to_string(runtimeEpoch_),epoch,selection);
 }
-void StudioGameSurface::selectEntity(const std::string& epoch,const std::string& ref) {
-    inspector_.select(liveSimulation(),std::to_string(runtimeEpoch_),epoch,ref);
+void StudioGameSurface::selectEntity(const std::string& epoch,const std::string& ref,const std::string& mode) {
+    auto* sim = liveSimulation();
+    const auto currentEpoch = std::to_string(runtimeEpoch_);
+    if (mode == "replace") {
+        inspector_.select(sim,currentEpoch,epoch,ref);
+        return;
+    }
+    if (mode != "add" && mode != "toggle") throw std::runtime_error("Invalid selection mode");
+    auto refs = inspector_.selectedRefs(sim,currentEpoch);
+    const auto found = std::find(refs.begin(),refs.end(),ref);
+    if (found == refs.end()) refs.push_back(ref);
+    else if (mode == "toggle") refs.erase(found);
+    inspector_.selectMany(sim,currentEpoch,epoch,refs);
 }
 Json StudioGameSurface::queryWorld(const editor::Workspace& ws,const Json& params,bool list) {
     auto* sim=liveSimulation();

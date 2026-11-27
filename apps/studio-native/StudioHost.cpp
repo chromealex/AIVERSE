@@ -4221,7 +4221,7 @@ Json StudioHost::localPlayOperation(const std::string& method, const Json& param
             throw std::runtime_error("Runtime inspection project changed");
         if(method=="studio.gameSelectEntity"){
             if(!game_ || !params.has("expectedProject"))throw std::runtime_error("Select an entity in an open game");
-            game_->selectEntity(params.getStr("epoch"),params.getStr("ref"));
+            game_->selectEntity(params.getStr("epoch"),params.getStr("ref"),params.getStr("mode","replace"));
             if (params.getBool("focus")) focusLiveSelection();
             return gameState();
         }

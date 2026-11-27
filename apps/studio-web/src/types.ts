@@ -544,7 +544,7 @@ export interface StudioParams {
   'studio.gameProfile': {expectedProject:string;action:'status'|'start'|'stop';steps?:number};
   'studio.gameRegions': {expectedProject:string};
   'studio.gameEntities': {offset:number;limit:number;query:string;expectedProject?:string;group?:number;path?:string[];collapsed?:string[]};
-  'studio.gameSelectEntity': {epoch:string;ref:string;expectedProject:string;focus?:boolean};
+  'studio.gameSelectEntity': {epoch:string;ref:string;expectedProject:string;focus?:boolean;mode?:"replace"|"add"|"toggle"};
   'studio.gameInspect': {epoch:string;ref:string;expectedProject?:string};
   'studio.gameEdit': {expectedProject:string;epoch:string;ref:string;expectedTick:number;field:StudioRuntimeEditField['id'];expectedRaw:string;value:string};
   'studio.gameDevices': Record<string,never>;
