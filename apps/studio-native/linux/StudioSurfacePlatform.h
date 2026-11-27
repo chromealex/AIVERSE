@@ -3,6 +3,7 @@
 #include "../StudioNetworkPlay.h"
 #include "StudioChildProcess.h"
 #include "StudioFileManager.h"
+#include "StudioWindowCapture.h"
 #include "StudioViewportOverlay.h"
 #include "StudioFileDialog.h"
 #include "StudioUserPaths.h"
@@ -82,6 +83,10 @@ public:
 
     void revealInFileManager(const std::filesystem::path& path, bool openFolder) override {
         revealStudioFile(path, openFolder);
+    }
+
+    void captureStudioWindow(gfx::Device::CaptureFn done) override {
+        captureStudioGtkWindow(parentWindow(), std::move(done));
     }
 
     void chooseProject(std::function<void(std::string)> done) override {
