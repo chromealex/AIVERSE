@@ -5204,22 +5204,52 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                 std::string err;
                 if (!StudioLuaPanel::createExample(ws_.project.dir,&err)) throw std::runtime_error(err);
             }
+            auto ctx=luaContext();
+            ctx.playing=menu && params.getBool("playing");
             if (method == "studio.contextMenu") {
                 Json out = Json::object();
-                out.set("items", contextMenus_.contextMenu(ws_.project.dir, luaContext(), window, element, nullptr));
+                out.set("items", contextMenus_.contextMenu(ws_.project.dir, ctx, window, element, nullptr));
                 reply.set("result", std::move(out));
             } else if (method == "studio.contextAction" || method == "studio.extensionAction") {
                 const auto id = params.getStr("id");
                 if (id.empty() || id.size() > 128) throw std::runtime_error("Invalid Lua action id");
-                Json command = menu ? contextMenus_.contextMenu(ws_.project.dir, luaContext(), window, element, &id)
-                                    : lua_.action(ws_.project.dir, luaContext(), id, params.has("value") ? &params["value"] : nullptr);
+                Json command = menu ? contextMenus_.contextMenu(ws_.project.dir, ctx, window, element, &id)
+                                    : lua_.action(ws_.project.dir, ctx, id, params.has("value") ? &params["value"] : nullptr);
                 // select_entity names a map index; the panel selects by Studio id.
                 if (command.isObject() && command.getStr("command")=="select_entity") {
                     const int64_t index=command["index"].integer(-1);
                     if (index>=0 && index<int64_t(ws_.map.data.entities.size()))
                         command.set("entityId",str(studioDocumentId(ws_.map,editor::DocumentEntityRef::mapEntity(size_t(index)))));
                 }
-                Json out=Json::object();out.set("command",command);
+                Json out=Json::object();
+                if (menu && command.getStr("command")=="set_entity_extra") {
+                    if (ctx.playing || stroking_) throw std::runtime_error("Finish play or the active Scene stroke before editing");
+                    const auto key=command.getStr("key");
+                    const auto& value=command["value"];
+                    if (key.empty() || key.size()>128 || key.find_first_of("/\\[]")!=std::string::npos)
+                        throw std::runtime_error("Invalid entity property key");
+                    if (!value.isString() && !value.isNumber() && value.type()!=Json::Type::Bool)
+                        throw std::runtime_error("Entity property must be text, a number or a boolean");
+                    std::vector<std::pair<size_t,Json>> edits;
+                    for (const auto& selected : selectedObjectIds()) {
+                        const int index=studioMapEntityIndex(selected,ws_.map);
+                        if (index<0) continue;
+                        auto extra=ws_.map.data.entities[size_t(index)].extra;
+                        if (extra[key]==value) continue;
+                        extra.set(key,value);
+                        edits.emplace_back(size_t(index),std::move(extra));
+                    }
+                    if (!edits.empty()) {
+                        ws_.map.beginEdit();
+                        for (auto& [index,extra] : edits) ws_.map.data.entities[index].extra=std::move(extra);
+                        ws_.map.touched();
+                        out.set("changed",Json::fromBool(true));
+                        command=Json::object();
+                        command.set("command",str("status"));
+                        command.set("text",str("Updated "+key));
+                    }
+                }
+                out.set("command",command);
                 reply.set("result",std::move(out));
             } else {
                 Json out=lua_.window(ws_.project.dir,luaContext());

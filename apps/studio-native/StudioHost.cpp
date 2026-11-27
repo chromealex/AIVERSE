@@ -5389,7 +5389,7 @@ void StudioHost::afterSessionReply(const Json& req, const Json& reply) {
         sendEvent("material.preview", req["params"].getStr("name"));
     }
     if(method=="studio.assetMetaPatch"||method=="studio.assetHistoryStep"||method=="studio.assetTransferCommit"||method=="studio.assetDelete"||method=="studio.assetFolderCreate"||method=="studio.assetTrashApply"||method=="studio.assetHistoryResetApply"||method=="studio.agentBatchApply"||(method=="studio.agentHistoryStep"&&req["params"].getStr("scope")=="assets"))sendEvent("assets.changed", "");
-    if (documentChangingMethods().count(method) || (method=="studio.projectRule" && req["params"].has("value")) || (method == "studio.op" && reply["result"].getBool("changed")))
+    if (documentChangingMethods().count(method) || (method=="studio.projectRule" && req["params"].has("value")) || ((method == "studio.op" || method == "studio.contextAction") && reply["result"].getBool("changed")))
         sendEvent("document.changed", "");
 }
 void StudioHost::handleMessage(const std::string& json) {
@@ -5400,6 +5400,8 @@ void StudioHost::handleMessage(const std::string& json) {
     try {
         if (handleHostMethod(req)) return;
         const std::string method = req.getStr("method");
+        if (method == "studio.contextAction" || method == "studio.contextMenu")
+            req.member("params").set("playing", Json::fromBool(game_ && game_->active()));
         if (game_ && (method == "studio.openMap" || method == "studio.newMap")){
             buildingGraphOverlayScene_=0;session_->setBuildingGraphReader({});game_->stop();wpLiveSnapshot_=Json();wpLivePlanetMapPath_.clear();rebuildOverlay();
         }

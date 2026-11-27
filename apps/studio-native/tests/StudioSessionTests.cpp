@@ -1995,7 +1995,7 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"Fixture co
        AIVERSE_TEST_CHECK(call("studio.contextMenu", R"({"window":"lua.widget"})")["result"]["items"].size()==0);
        std::ofstream(script) << "local opened=0\n"
            "function context_menu(ctx) opened=opened+1 return {{label=ctx.window,children={{id='inspect',label=ctx.element}}}} end\n"
-           "function on_context_action(ctx,id) if id=='identity' then return {command='status',text=tostring(ctx.entity_id)..'/'..tostring(ctx.entity_type)} end if id=='first' then return {command='select_entity',index=0} end return {command='status',text=ctx.element..id..opened} end";
+           "function on_context_action(ctx,id) if id=='tag' then return {command='set_entity_extra',key='menu_tag',value=false} end if id=='identity' then return {command='status',text=tostring(ctx.entity_id)..'/'..tostring(ctx.entity_type)} end if id=='first' then return {command='select_entity',index=0} end return {command='status',text=ctx.element..id..opened} end";
        const auto menu = call("studio.contextMenu", R"({"window":"lua.widget","element":"radius"})");
        AIVERSE_TEST_CHECK(menu["result"]["items"][0]["children"][0].getStr("label")=="radius");
        const auto action = call("studio.contextAction", R"({"window":"lua.widget","element":"radius","id":"inspect"})");
@@ -2013,6 +2013,24 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"Fixture co
        AIVERSE_TEST_CHECK(identity()==entity.id+"/"+entity.type);
        call("studio.select",R"({"id":null})");
        AIVERSE_TEST_CHECK(identity()=="nil/nil");
+       auto& doc=session.workspace().map;
+       const size_t added=doc.data.entities.size();
+       auto second=doc.data.entities.front();
+       second.id.clear();
+       doc.data.entities.push_back(second);
+       const auto before=doc.toJson();
+       const auto depth=doc.undoDepth();
+       Json targets=Json::array();
+       targets.push(Json::string(entityId));targets.push(Json::string("entity:"+std::to_string(added)));
+       Json selection=Json::object();selection.set("ids",targets);
+       AIVERSE_TEST_CHECK(!call("studio.select",selection.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(call("studio.contextAction",R"({"window":"scene","id":"tag","playing":true})").has("error"));
+       const auto tag=[&]{return call("studio.contextAction",R"({"window":"scene","id":"tag"})");};
+       AIVERSE_TEST_CHECK(tag()["result"].getBool("changed"));
+       for (size_t i : {size_t(0),added}) AIVERSE_TEST_CHECK(doc.data.entities[i].extra["menu_tag"]==Json::fromBool(false));
+       AIVERSE_TEST_CHECK(!tag()["result"].getBool("changed") && doc.undoDepth()==depth+1);
+       AIVERSE_TEST_CHECK(!call("studio.undo").has("error") && doc.toJson()==before);
+       doc.data.entities.pop_back();
        AIVERSE_TEST_CHECK(session.extensionGizmos()[0]["radius"].toDouble()==25);
    }
    // Attachments layout: invalid entries are refused, a valid one round-trips through the codec.
