@@ -17,7 +17,8 @@
   "selectionShortcut": {
     "type": "scout",
     "label": "Select scout",
-    "hotkey": "F6"
+    "hotkey": "F6",
+    "image": "ui/shortcut-probe.png"
   },
   "commandCard": {
     "columns": 4,

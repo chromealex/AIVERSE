@@ -20,7 +20,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "note": "Capture found cropped minimap texture stretched by full-grid HUD dimensions. Use actual texture width/height for shared panel aspect; correction awaiting runtime check.",
       "evidence": []
     },
     "architecture": {

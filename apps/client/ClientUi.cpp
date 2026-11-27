@@ -508,8 +508,9 @@ void GameClient::updateUi() {
         minimap_.update(*dev_, gs, rules_, scene_, spectator_ ? nullptr : &gs.vision[human_], q, haveQuad, &view_.overlays().minimapMarks());
         }
         const float side = s.touch ? 150.0f : 190.0f;
-        const float k = side / float(std::max(gs.grid.w, gs.grid.h));
-        s.minimapStyle = fmt("width: %.0fdp; height: %.0fdp;", gs.grid.w * k, gs.grid.h * k);
+        const int imageWidth = std::max(1, minimap_.width()), imageHeight = std::max(1, minimap_.height());
+        const float k = side / float(std::max(imageWidth, imageHeight));
+        s.minimapStyle = fmt("width: %.0fdp; height: %.0fdp;", imageWidth * k, imageHeight * k);
     }
 
     if (menuDoc_ && engineMenu_ != engineMenuShown_) {   // game.engineMenu(false): the game's own screens
