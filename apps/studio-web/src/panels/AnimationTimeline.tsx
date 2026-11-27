@@ -136,6 +136,9 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
       </div>
     </div>}
     <div className="anim__links">
+      <button type="button" className="au-button au-button--sm au-button--ghost" disabled={!doc}
+        onClick={() => void invoke('studio.op', {expectedProject:path, op:'animation_editor', params:{name:model,tab:'graph'}})
+          .catch(e => setError(message(e)))}>Open model graph</button>
       {(['anim_assets', 'anim_graph', 'anim_rig', 'model_anim'] as const).map(p =>
         <button key={p} type="button" className="au-button au-button--sm au-button--ghost" onClick={() => showPanel(p)}>{STUDIO_PANEL_TITLES[p]}</button>)}
     </div>
