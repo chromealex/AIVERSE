@@ -229,7 +229,7 @@ export default function SceneToolbar({ enabled, projectPath = '', documentScope 
        {([
          ['Scene',[['worldAxes','World axes'],['objectBounds','Object bounds'],['selectionBox','Selection box']]],
          ['Map',[['mapRoutes','Map routes'],['playerStarts','Player starts'],['resourceFields','Resource fields'],['rampTiles','Ramp tiles'],['regionBorders','Region borders'],['triggerAreas','Trigger areas']]],
-         ['STRATA',[['strataBounds','Cluster bounds'],['strataWire','Cluster wireframe'],['strataFill','Cluster fill'],['strataRoutes','Instance routes']]],
+         ['STRATA',[['strataBounds','Cluster bounds'],['strataWire','Cluster wireframe'],['strataFill','Cluster fill'],['strataRoutes','Instance bounds']]],
          ['PHYSIS · play-test',[['natureWind','Wind field'],['natureFire','Fire spread']]],
          ['TerraWeave',[['terraTreeWind','Wind at selected tree'],['erosionZones','Erosion zones'],['terraSlope','Slope at selected tile'],['terraSlopeAtTarget','Slope at camera target']]],
        ] as const).map(([name,items])=><fieldset key={name}><legend>{name}</legend>{items.map(([key,label])=>
