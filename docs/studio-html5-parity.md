@@ -1,5 +1,7 @@
 ## SpectraFX legacy layout
 
+Verify navigation by dragging the middle button across the reopened graph.
+
 Published v1 graph upgrades should preserve the legacy canvas arrangement through draft save and reopen.
 
 ## Stage 18 — native FX snapshot capture (2026-11-23; QA deferred)

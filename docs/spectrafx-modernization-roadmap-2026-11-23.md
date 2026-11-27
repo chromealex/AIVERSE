@@ -1,5 +1,7 @@
 ## HTML Studio migration
 
+Restore middle-button navigation on the HTML graph canvas.
+
 Carry saved v1 canvas arrangements into editable v2 graphs during explicit upgrade.
 
 ## Stage 18 — native FX snapshot capture (2026-11-23; QA deferred)

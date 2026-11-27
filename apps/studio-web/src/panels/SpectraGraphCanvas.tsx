@@ -54,6 +54,7 @@ export default function SpectraGraphCanvas({graph,nodeIdPrefix,disabled=false,on
   const [toPort,setToPort]=useState('');
   const [zoom,setZoom]=useState(1);
   const [working,setWorking]=useState(false);
+  const pan=useRef<{pointer:number;x:number;y:number;left:number;top:number}|null>(null);
   const drag=useRef<{base:SpectraGraphV2;pointerId:number;id:string;clientX:number;clientY:number;x:number;y:number}|null>(null);
   const [move,setMove]=useState<{base:SpectraGraphV2;next:SpectraGraphV2}|null>(null);
   const display=move?.base===graph?move.next:graph;
@@ -155,7 +156,23 @@ export default function SpectraGraphCanvas({graph,nodeIdPrefix,disabled=false,on
       </div>
     </div>
     <div className={'spectra-canvas__workspace'+(chosen?' has-inspector':'')}>
-    <div className="spectra-canvas__viewport graph-surface" role="region" aria-label="SpectraFX graph topology and node arrangement">
+    <div className="spectra-canvas__viewport graph-surface" role="region" aria-label="SpectraFX graph topology and node arrangement"
+      title="Drag with the middle mouse button to pan"
+      onPointerDownCapture={e=>{
+        if(e.button!==1 || pan.current || drag.current)return;
+        e.preventDefault();e.stopPropagation();
+        const viewport=e.currentTarget;
+        pan.current={pointer:e.pointerId,x:e.clientX,y:e.clientY,left:viewport.scrollLeft,top:viewport.scrollTop};
+        viewport.setPointerCapture(e.pointerId);
+      }}
+      onPointerMove={e=>{
+        const start=pan.current;
+        if(start?.pointer!==e.pointerId)return;
+        e.currentTarget.scrollLeft=start.left+start.x-e.clientX;
+        e.currentTarget.scrollTop=start.top+start.y-e.clientY;
+      }}
+      onLostPointerCapture={e=>{if(pan.current?.pointer===e.pointerId)pan.current=null;}}
+      onAuxClick={e=>{if(e.button===1)e.preventDefault();}}>
       <div className="spectra-canvas__extent" style={{width:width*zoom,height:height*zoom}}>
         <div className="spectra-canvas__world" style={{width,height,transform:`scale(${zoom})`}}>
           <svg viewBox={`${-originX} ${-originY} ${width} ${height}`} width={width} height={height} className="spectra-canvas__edges" aria-hidden="true">
