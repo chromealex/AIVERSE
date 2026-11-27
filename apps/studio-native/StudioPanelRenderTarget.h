@@ -15,19 +15,23 @@
 
 namespace aiverse::studio {
 class StudioPanelRenderTarget {
-public:
-    static constexpr int Side=512;
-    StudioPanelRenderTarget() {
+    static std::unique_ptr<gfx::Device> defaultDevice() {
 #if defined(__APPLE__)
-        device_=gfx::createMetalDevice(nullptr);
+        return gfx::createMetalDevice(nullptr);
 #elif defined(AIVERSE_WITH_VULKAN)
         gfx::VulkanWindow offscreen;
         std::string error;
-        device_=gfx::createVulkanDevice(offscreen,&error);
-        if(!device_)throw std::runtime_error("Panel offscreen Vulkan device: "+error);
+        auto device=gfx::createVulkanDevice(offscreen,&error);
+        if(!device)throw std::runtime_error("Panel offscreen Vulkan device: "+error);
+        return device;
 #else
         throw std::runtime_error("Independent panel GPU preview backend unavailable");
 #endif
+    }
+public:
+    static constexpr int Side=512;
+    StudioPanelRenderTarget():StudioPanelRenderTarget(defaultDevice()) {}
+    explicit StudioPanelRenderTarget(std::unique_ptr<gfx::Device> device):device_(std::move(device)) {
         if(!device_)throw std::runtime_error("Panel preview device unavailable");
         lease_=std::make_unique<render::RenderDeviceLifetime>(*device_);
         renderer_.setGpuDeviceLease(lease_->lease());

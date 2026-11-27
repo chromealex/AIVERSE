@@ -4,6 +4,7 @@
 namespace aiverse::studio {
 class StudioBuildingPanelPreview final : public StudioPanelModelTarget {
 public:
+    using StudioPanelModelTarget::StudioPanelModelTarget;
     std::vector<uint8_t> frame(float yaw,float pitch,float zoom,float panX=0.f,float panY=0.f){
         if(!ready_||!model_)throw std::runtime_error("No active Building preview");
         if(!std::isfinite(yaw)||!std::isfinite(pitch)||!std::isfinite(zoom)||!std::isfinite(panX)||!std::isfinite(panY)||zoom<.55f||zoom>2.5f||std::abs(panX)>2.f||std::abs(panY)>2.f)

@@ -4,6 +4,7 @@
 namespace aiverse::studio {
 class StudioPanelModelTarget : protected StudioPanelRenderTarget {
 public:
+    using StudioPanelRenderTarget::StudioPanelRenderTarget;
     using StudioPanelRenderTarget::Side;
     ~StudioPanelModelTarget() {
         if(model_) {

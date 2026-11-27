@@ -5547,10 +5547,11 @@ elseif(AIVERSE_PLATFORM STREQUAL "linux" AND TARGET aiverse_editor)
 endif()
 
 # Exercise Studio's private renderer even on Linux builds without a desktop shell.
-if(AIVERSE_BUILD_TESTS AND TARGET aiverse_gfx_vulkan AND AIVERSE_PLATFORM MATCHES "^(linux|windows)$")
+if(AIVERSE_BUILD_TESTS AND TARGET aiverse_gfx_vulkan AND AIVERSE_PLATFORM MATCHES "^(linux|windows|macos)$")
     add_executable(aiverse_studio_vulkan_panel_tests apps/studio-native/tests/StudioBuildingPreviewTests.cpp)
+    target_compile_definitions(aiverse_studio_vulkan_panel_tests PRIVATE AIVERSE_TEST_PANEL_VULKAN=1)
     target_include_directories(aiverse_studio_vulkan_panel_tests PRIVATE "${PROJECT_SOURCE_DIR}")
-    target_link_libraries(aiverse_studio_vulkan_panel_tests PRIVATE aiverse_editor_core aiverse_runtime aiverse_game_view AIVERSE::libraries)
+    target_link_libraries(aiverse_studio_vulkan_panel_tests PRIVATE aiverse_runtime aiverse_gfx_vulkan AIVERSE::libraries)
     add_test(NAME studio_vulkan_panel COMMAND aiverse_studio_vulkan_panel_tests "${PROJECT_SOURCE_DIR}")
     set_tests_properties(studio_vulkan_panel PROPERTIES LABELS "EDITOR;GPU;Vulkan" SKIP_RETURN_CODE 77 TIMEOUT 120)
     if(TARGET aiverse_studio_verification)
