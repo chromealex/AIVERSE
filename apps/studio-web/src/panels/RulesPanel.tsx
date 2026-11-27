@@ -115,7 +115,11 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged, ope
         {section==='damageTable'&&!!rules.armorTypes?.length&&<div className="rules__matrix"><table>
           <thead><tr><th>Attack / armor</th>{rules.armorTypes.map(armor=><th key={armor}>{armor}</th>)}</tr></thead>
           <tbody>{Object.entries(rules.damageTable??{}).map(([attack,row])=><tr key={attack}>
-            <th scope="row">{attack}</th>{rules.armorTypes!.map(armor=><td key={armor}>{typeof row?.[armor]==='number'?row[armor]:1}</td>)}
+            <th scope="row">{attack}</th>{rules.armorTypes!.map(armor=>{
+              const multiplier = typeof row?.[armor] === 'number' ? row[armor] : 1;
+              const effect = multiplier > 1.001 ? 'increased' : multiplier < 0.999 ? 'reduced' : 'normal';
+              return <td key={armor} data-effect={effect}>{multiplier}×</td>;
+            })}
           </tr>)}</tbody>
         </table></div>}
         <div className="rules__rawbox">

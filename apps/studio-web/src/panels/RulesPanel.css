@@ -32,6 +32,8 @@
 .rules__section{display:grid;gap:4px;padding:8px;color:var(--au-text-muted)}
 .rules__section select{width:100%;min-width:0;color:var(--au-text);background:var(--studio-background)}
 .rules__matrix{overflow:auto;margin:8px 0 14px}
+.rules__matrix td[data-effect="increased"]{color:var(--au-success)}
+.rules__matrix td[data-effect="reduced"]{color:var(--au-danger)}
 .rules__matrix table{border-collapse:collapse;font-variant-numeric:tabular-nums}
 .rules__matrix th,.rules__matrix td{padding:5px 9px;border:1px solid var(--au-line);text-align:right}
 .rules-container{container-type:inline-size;height:100%;min-width:0;min-height:0}
