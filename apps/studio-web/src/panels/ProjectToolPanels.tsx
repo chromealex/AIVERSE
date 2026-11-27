@@ -154,6 +154,7 @@ export function ScriptsPanel(ctx: Ctx & {location:{path:string;line:number}|null
   const path = ctx.snapshot?.project.path ?? '';
   const [files, setFiles] = useState<ScriptFile[]>([]);
   const [missing, setMissing] = useState<string[]>([]);
+  const [filesCollapsed,setFilesCollapsed]=useState(false);
   const [fileFilter,setFileFilter]=useState('');
   const [current, setCurrent] = useState('');
   const [text, setText] = useState('');
@@ -266,9 +267,10 @@ export function ScriptsPanel(ctx: Ctx & {location:{path:string;line:number}|null
   const visibleMissing=missing.filter(p=>p.toLowerCase().includes(query));
   if (!path) return <div className="tool__empty">Open a project to edit its Lua scripts.</div>;
   return <div className="ptp ptp--split scripts-page">
-    <aside className="ptp__files">
+    <aside className={'ptp__files'+(filesCollapsed?' scripts-files-collapsed':'')}>
       <div className="ptp__fileshead"><b>Scripts</b>
-        <button type="button" className="au-button au-button--icon au-button--ghost au-button--sm" title="New script" disabled={busy} aria-label="New script" onClick={() => setNewPath(files.length ? '' : 'main.lua')}><FilePlus2 size={13}/></button>
+        <button type="button" className="au-button au-button--sm scripts-files-toggle" aria-expanded={!filesCollapsed} onClick={()=>setFilesCollapsed(v=>!v)}>{filesCollapsed?'Show files':'Hide files'}</button>
+        <button type="button" className="au-button au-button--icon au-button--ghost au-button--sm" title="New script" disabled={busy} aria-label="New script" onClick={() => {setFilesCollapsed(false);setNewPath(files.length ? '' : 'main.lua');}}><FilePlus2 size={13}/></button>
         <button type="button" className="au-button au-button--icon au-button--ghost au-button--sm" title="Refresh" onClick={() => void list()}><RefreshCw size={13}/></button></div>
       {newPath !== null && <form className="ptp__new" onSubmit={e => { e.preventDefault(); void create(); }}>
         <label>Script path<input aria-label="Script path" autoFocus className="au-input" placeholder="scripts/name.lua" value={newPath} onChange={e => setNewPath(e.target.value)}

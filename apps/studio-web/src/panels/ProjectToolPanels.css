@@ -138,3 +138,10 @@ tr.diff__added td:first-child{color:#8ee6a0}tr.diff__removed td:first-child{colo
 .texture-resource__full{max-height:65vh;overflow:auto;margin-block:8px}
 .texture-resource__full img{display:block;max-width:none;image-rendering:pixelated}
 .texture-resource__pixels canvas:not([hidden]){display:block;box-sizing:content-box;max-width:calc(100% - 2px);height:auto;image-rendering:pixelated;margin-top:8px;border:1px solid var(--au-line)}
+
+.scripts-page .scripts-files-toggle{display:none}
+@container studio-page (max-width:520px){
+  .scripts-page .scripts-files-toggle{display:inline-flex}
+  .scripts-page .scripts-files-collapsed>:not(.ptp__fileshead){display:none}
+  .scripts-page .scripts-files-collapsed{padding-bottom:0}
+}
