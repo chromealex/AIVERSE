@@ -1,0 +1,10 @@
+{
+  "sha": "13f2afc401448d4e67d614b91d52e4c368ac7040",
+  "argv": [
+    "python3",
+    "../studio-open-built-project.py"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-open-ready-project.log.txt",
+  "sha256": "ddb46b7d401bceb728ac889982d912f30cad3e6a3ccc5de9b38f5fef9f0abffc"
+}

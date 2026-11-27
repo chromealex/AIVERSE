@@ -1,0 +1,1 @@
+Open project Studio created a window in the project-specific child process with the expected project argument.
