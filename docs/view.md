@@ -3208,3 +3208,24 @@ lifetime barrier, and must precede device destruction. Do not destroy or reset
 the preview between submission and completion of the host's render call.
 The compatibility `game::Portrait::renderModelPreview` only adapts its existing
 offscreen target to this native API.
+
+## Projectile presentation samples
+
+`engine/view/ProjectilePresentation.h` owns visual convergence of a projectile
+segment. A host supplies `FlightSegment` (identity, explicit `FlightOrigin`,
+authoritative start) and the muzzle position to `begin`. Only an `Emission`
+segment receives a muzzle offset; `Split`, `Ricochet` and unknown migrated
+origins begin at their supplied simulation position.
+
+Evaluate once per segment update and let model, trail and light consumers read
+the same `FlightSample`. `evaluate` uses absolute elapsed segment time;
+`evaluateStraight` fits a straight segment to its known impact point. The host
+must not use the straight fit for arcs or programmed flight. `finish(contact)`
+publishes the terminal position before consumers retire and prevents later
+evaluation from moving that sample.
+
+This class neither integrates flight nor detects collisions. Simulation owns
+segment transitions and deterministic state. `GameView` supplies its legacy
+host adapter; it does not independently reapply muzzle convergence while
+drawing. See `docs/particles.md` for trail retirement and
+`tests/tests.cpp` (`projectile_presentation_segment_origin_and_shared_sample`).

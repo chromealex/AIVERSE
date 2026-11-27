@@ -5,6 +5,7 @@
   "changed_paths": [
     "engine/audio/GameAudio.cpp",
     "engine/audio/GameAudio.h",
+    "skills/ui/aiverse-audio/SKILL.md",
     "tests/tests.cpp"
   ],
   "traits": {

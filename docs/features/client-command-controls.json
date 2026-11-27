@@ -18,6 +18,7 @@
     "engine/assets/ui/theme.rcss",
     "engine/platform/EnhancedInputPresets.h",
     "engine/world/TriangleCollision.cpp",
+    "skills/ui/aiverse-controls/SKILL.md",
     "tests/libraries/enhanced_input_config_tests.cpp",
     "tests/render/client_controls_frame.cpp"
   ],

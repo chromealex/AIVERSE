@@ -5,7 +5,9 @@
   "changed_paths": [
     "apps/client/ClientFx.cpp",
     "apps/editor/Editor.cpp",
+    "docs/ecs-mechanic-composition.md",
     "docs/particles.md",
+    "docs/view.md",
     "engine/actor/ActorDurableComponents.h",
     "engine/actor/ActorDurableProjectile.h",
     "engine/actor/ActorModule.cpp",
