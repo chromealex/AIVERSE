@@ -86,7 +86,7 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged, ope
       {section==='types'&&<>
       <button type="button" className={'rules__type'+(forestOpen?' is-active':'')} disabled={busy||typeDraftDirty} onClick={()=>setForestOpen(true)}>Planet forest</button>
       {rules && <StudioField label="Auto-target order" htmlFor="rules-acquire-order">
-        <StudioSelect id="rules-acquire-order" value={rules.acquireOrder} disabled={busy}
+        <StudioSelect id="rules-acquire-order" value={rules.acquireOrder} disabled={busy||typeDraftDirty}
           onChange={e => void write('targeting.acquireOrder', e.target.value)}>
           <option value="nearest">Nearest</option>
           <option value="rowMajor">By map row</option>
