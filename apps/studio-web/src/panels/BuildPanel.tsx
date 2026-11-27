@@ -105,7 +105,11 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
   const [autoEstimate,setAutoEstimate] = useState(true);
   const [pendingEstimate,setPendingEstimate] = useState<{project:string}|null>(null);
   const queueEstimate = () => { if (autoEstimate) setPendingEstimate({project:projectPath}); };
-  useEffect(()=>setPendingEstimate(null),[projectPath]);
+  const requestedEstimates = useRef(new Set<string>());
+  useEffect(()=>{
+    requestedEstimates.current.clear();
+    setPendingEstimate(null);
+  },[projectPath]);
   const [audio, setAudio] = useState('auto');
   const [installMissing, setInstallMissing] = useState(false);
   const [toolchain, setToolchain] = useState<StudioToolchain | null>(null);
@@ -143,9 +147,14 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
     if (!projectPath) return;
     let live = true;
     setEstimate(null);
-    void invoke('studio.buildEstimate', { target }).then(r => { if (live) setEstimate(r); }).catch(() => {});
+    void invoke('studio.buildEstimate', { target }).then(r => { if (live) setEstimate(r); }).catch(e => {
+      if (!live || !autoEstimate || requestedEstimates.current.has(target) ||
+          !message(e).includes('No size estimate yet')) return;
+      requestedEstimates.current.add(target);
+      setPendingEstimate({project:projectPath});
+    });
     return () => { live = false; };
-  }, [projectPath, target, state.runs, snapshot?.project.historyVersion]);
+  }, [projectPath, target, state.runs, snapshot?.project.historyVersion, autoEstimate]);
 
   useEffect(()=>{if(state.runs||state.running)void refreshInfo();},[state.runs,state.running,refreshInfo]);
   useEffect(() => {

@@ -1,5 +1,6 @@
 #include "StudioWebAssets.h"
 #include "engine/platform/EngineDir.h"
+#include "apps/editor/core/BuildTool.h"
 #include "apps/editor/core/Net.h"
 #include "StudioWebBridge.h"
 #include "StudioScenePointer.h"
@@ -231,6 +232,7 @@ int aiverseMain(int argc,char** argv) {
         registerStudioWebAssets(webkit_web_view_get_context(web),dist);
         aiverse::platform::setEngineAssetsDir((dist.parent_path()/"engine").string());
         GtkStudio studio(overlay,window,web,root);
+        studio.host().session().setBuildTool(aiverse::editor::findBuildTool(dist.parent_path().string(),root));
         studio.host().session().setMcpTool((dist.parent_path()/"aiversemcp").string());
         if (listenPort && !studio.host().session().listenForAgent(listenPort))
             throw std::runtime_error("Could not start the authenticated Studio agent listener");
