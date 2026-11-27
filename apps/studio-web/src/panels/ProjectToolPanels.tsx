@@ -154,6 +154,7 @@ export function ScriptsPanel(ctx: Ctx & {location:{path:string;line:number}|null
   const path = ctx.snapshot?.project.path ?? '';
   const [files, setFiles] = useState<ScriptFile[]>([]);
   const [missing, setMissing] = useState<string[]>([]);
+  const [fileFilter,setFileFilter]=useState('');
   const [current, setCurrent] = useState('');
   const [text, setText] = useState('');
   const [saved, setSaved] = useState('');
@@ -207,13 +208,13 @@ export function ScriptsPanel(ctx: Ctx & {location:{path:string;line:number}|null
     if (!ctx.location) return;
     const {path:file,line} = ctx.location;
     ctx.consumeLocation();
-    void open(file,line);
+    setFileFilter('');void open(file,line);
   }, [ctx.location]);
   const save = async (p = current, body = text, createFile = false) => {
     if (!p) return;
     setBusy(true);
     try { await op('script_write', { path: p, text: body, ...(createFile ? { register:true, createOnly:true } : {}) });
-      if (createFile) {setText(body);setView('source');setNewPath(null);}
+      if (createFile) {setFileFilter('');setText(body);setView('source');setNewPath(null);}
       setSaved(body); setCurrent(p); setStatus({ ok: true, text: 'Saved ' + p }); await list(); refreshSnapshot(ctx); }
     catch (e) { setStatus({ ok: false, text: message(e) }); }
     finally { setBusy(false); }
@@ -248,6 +249,9 @@ export function ScriptsPanel(ctx: Ctx & {location:{path:string;line:number}|null
     }
   };
   const lines = useMemo(() => text.split('\n').length, [text]);
+  const query=fileFilter.trim().toLowerCase();
+  const visibleFiles=files.filter(f=>(f.path+' '+f.role).toLowerCase().includes(query));
+  const visibleMissing=missing.filter(p=>p.toLowerCase().includes(query));
   if (!path) return <div className="tool__empty">Open a project to edit its Lua scripts.</div>;
   return <div className="ptp ptp--split scripts-page">
     <aside className="ptp__files">
@@ -260,10 +264,12 @@ export function ScriptsPanel(ctx: Ctx & {location:{path:string;line:number}|null
         <small>Use view/ for a presentation script.</small>
         <button type="submit" className="au-button au-button--sm au-button--primary" disabled={busy || !newPath.trim()}>Create script</button>
         <button type="button" className="au-button au-button--sm" disabled={busy} onClick={()=>setNewPath(null)}>Cancel</button></form>}
-      {files.map(f => <button key={f.path} type="button" className={'ptp__file' + (f.path === current ? ' is-on' : '')} onClick={() => void open(f.path)} title={f.role}>
+      <input type="search" className="au-input" aria-label="Filter scripts" placeholder="Filter by path or role…" value={fileFilter} onChange={e=>setFileFilter(e.currentTarget.value)}/>
+      {query && !visibleFiles.length && !visibleMissing.length && <p className="ptp__hint" role="status">No matching scripts.</p>}
+      {visibleFiles.map(f => <button key={f.path} type="button" className={'ptp__file' + (f.path === current ? ' is-on' : '')} onClick={() => void open(f.path)} title={f.role}>
         <span>{f.path.replace(/^scripts\//, '')}</span><small>{f.role.startsWith('module') ? 'module' : f.role}</small></button>)}
-      {missing.map(m => <div key={m} className="ptp__file is-missing" title="Listed in rules or the map, file not found"><AlertTriangle size={11}/><span>{m}</span></div>)}
-      {!files.length && !missing.length && <p className="ptp__hint">No scripts yet.</p>}
+      {visibleMissing.map(m => <div key={m} className="ptp__file is-missing" title="Listed in rules or the map, file not found"><AlertTriangle size={11}/><span>{m}</span></div>)}
+      {!query && !files.length && !missing.length && <p className="ptp__hint">No scripts yet.</p>}
     </aside>
     <section className="ptp__editor">
       <nav className="console__views" aria-label="Script views">
