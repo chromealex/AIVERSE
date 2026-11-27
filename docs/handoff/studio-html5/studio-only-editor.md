@@ -1716,3 +1716,7 @@ cd5056a300a6a0bfd7be469afe235ec71f438696 updates InsightPanels.tsx, docs/studio-
 ### Full-float texture preview
 
 8e61d5b546bb7a177835961e32c7ed64ac0f5631 changes engine/render/TexturePreviewGrid.h, StudioScene.cpp, InsightPanels.tsx and tests/render/metal_texture_gpu.mm. RGBA32F uses the same HDR display transform as half floats; the memory limit accounts for 16 bytes per pixel. Built production web and Mac Studio. Hardware suite passed with an authored 2x1 RGBA32F Metal texture, byte-exact readback and comparison against expected display channels. Logs on KINGSTON: texture-float32-{metal,native,web}.log. Next verify an RGBA32F selection end-to-end in the detached inspector and assess remaining single/dual-channel backend formats.
+
+### Detached RGBA32F preview acceptance
+
+e0cac53cf8300ab90e112b6e8a7bf727b6d773c6 adds docs/handoff/studio-html5/captures/mac-texture-rgba32f.png. A disposable test build allocated an authored two-pixel HDR texture on the Scene Metal device. Selecting its real inventory entry in the production detached WKWebView automatically rendered the two expected canvas colors (0,188,225,255 and 0,124,0,255). Evidence: stats-mac-8kcg_ba0/live.log. Next review remaining single/dual-channel and cross-backend parity.
