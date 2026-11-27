@@ -2460,6 +2460,29 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
     const Json& pages = manifest["atlas"]["maxPage"];
     const bool atlasEnabled = manifest["atlas"].getBool("enable",true);
     const auto compression = manifest["packaging"].getInt("level",0);
+    if (method == "studio.buildSplitLimit") {
+        const auto target = params.getStr("target"), field = params.getStr("field");
+        if (!knownBuildTarget(target) || ws_.building() || params.getStr("project") != ws_.project.dir ||
+            (field != "chunkSize" && field != "baseSize")) throw std::runtime_error("Build settings unavailable");
+        const auto& current = manifest["packaging"]["targets"][target];
+        if (!params.has("original") || current[field].dump() != params["original"].dump())
+            throw std::runtime_error("Package limit changed. Review the current value.");
+        const auto& limit = params["bytes"];
+        if (!params.has("bytes") || (!limit.isNull() && (!limit.isNumber() || limit.toDouble()<0 ||
+            limit.toDouble()>9007199254740991.0 || limit.toDouble()!=std::floor(limit.toDouble()) ||
+            (field=="chunkSize" && limit.toDouble()==0)))) throw std::runtime_error("Invalid package size in bytes");
+        Json next = current.isObject() ? current : Json::object();
+        if (limit.isNull()) next.erase(field);
+        else next.set(field,limit);
+        if (current[field].dump() != limit.dump()) {
+            Json patch = Json::object();
+            patch.set("path",str("packaging.targets." + target));
+            patch.set("value",next);
+            const auto saved = ws_.call("set_manifest",patch);
+            if (saved.has("error")) throw std::runtime_error(saved.getStr("error"));
+        }
+        return snapshot();
+    }
     if (method == "studio.buildSplitMode") {
         const auto target = params.getStr("target");
         if (!knownBuildTarget(target) || ws_.building() || params.getStr("project") != ws_.project.dir)
@@ -2535,11 +2558,13 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
             Json v = Json::object();
             v.set("id", str(t[0])); v.set("name", str(t[1]));
             std::error_code ec;
+            for (const auto* field : {"baseSize","chunkSize"}) v.set(field,manifest["packaging"]["targets"][t[0]][field]);
             v.set("split",manifest["packaging"]["targets"][t[0]]["split"]);
             v.set("built", Json::fromBool(fs::is_directory(builds / t[0], ec)));
             targets.push(std::move(v));
         }
         out.set("project", str(ws_.project.dir));
+        for (const auto* field : {"baseSize","chunkSize"}) out.set(field,manifest["packaging"][field]);
         out.set("splitDefault",Json::fromBool(manifest["packaging"].getBool("split",false)));
         out.set("compression",num(int64_t(compression)));
         out.set("atlasEnabled", Json::fromBool(atlasEnabled));
@@ -5144,7 +5169,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             reply.set("result",sceneBrushJson());
         } else if (method == "studio.agentInfo" || method == "studio.agentStart" || method == "studio.agentStop" || method == "studio.agentReset") {
             reply.set("result", agentRequest(method, params));
-        } else if (method == "studio.buildInfo" || method == "studio.buildSplitMode" || method == "studio.buildCompression" || method == "studio.buildAtlasFixSizes" || method == "studio.buildAtlasPage" || method == "studio.buildAtlasEnabled" || method == "studio.buildToolchain" || method == "studio.buildStart" ||
+        } else if (method == "studio.buildInfo" || method == "studio.buildSplitLimit" || method == "studio.buildSplitMode" || method == "studio.buildCompression" || method == "studio.buildAtlasFixSizes" || method == "studio.buildAtlasPage" || method == "studio.buildAtlasEnabled" || method == "studio.buildToolchain" || method == "studio.buildStart" ||
                    method == "studio.buildLog" || method == "studio.buildEstimate") {
             reply.set("result", buildRequest(method, params));
         } else if(method=="studio.worldProcessAreaBatchResize"){

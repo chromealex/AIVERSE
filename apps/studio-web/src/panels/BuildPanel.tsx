@@ -2,13 +2,32 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, CircleAlert, FolderOpen, Hammer, Ruler, Save, ScrollText, XCircle } from 'lucide-react';
 import { invoke } from '../bridge';
 import type { StudioBuildEstimate, StudioBuildInfo, StudioSnapshot, StudioToolchain } from '../types';
-import { StudioAlert, StudioBadge, StudioButton, StudioCheckbox, StudioField, StudioSelect, StudioLoader } from '../ui';
+import { StudioAlert, StudioBadge, StudioButton, StudioCheckbox, StudioField, StudioInput, StudioSelect, StudioLoader } from '../ui';
 import { buildErrors, buildPhase, buildSteps, formatBytes, missingToolchain, runTarget } from './buildLogic';
 import { useBuildTranscript } from './useBuildTranscript';
 import './BuildPanel.css';
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 const MAX_LOG = 400_000; // characters kept in the panel (the full log is in the log file)
+
+function PackageLimit({field, original, inherited, disabled, save}: {
+  field:'baseSize'|'chunkSize';original:string|number|null;inherited:string;disabled:boolean;save:(bytes:number|null)=>void;
+}) {
+  const initial = String(original ?? '');
+  const [draft,setDraft] = useState(initial);
+  const value = draft.trim();
+  const match = /^(\d+(?:\.\d+)?|\.\d+)\s*([KMG]?)B?$/i.exec(value);
+  const bytes = match ? Number(match[1]) * 1024 ** ' KMG'.indexOf(match[2].toUpperCase() || ' ') : NaN;
+  const valid = !value || (Number.isSafeInteger(bytes) && (field === 'baseSize' || bytes > 0));
+  return <StudioField label={field === 'baseSize' ? 'Base install limit' : 'Download package size'} htmlFor={'build-'+field}>
+    <StudioInput id={'build-'+field} value={draft} disabled={disabled} placeholder={'Project default · '+inherited}
+      aria-invalid={!valid} onChange={e=>setDraft(e.target.value)}/>
+    {!valid && <small>Enter a size in bytes, KB, MB or GB.</small>}
+    {draft !== initial && <StudioButton disabled={disabled || !valid} onClick={()=>save(value ? bytes : null)}>
+      {value ? 'Apply size' : 'Use project default'}
+    </StudioButton>}
+  </StudioField>;
+}
 
 /** Publish: package the open game for a platform with aiversebuild (background run, streamed log). */
 export default function BuildPanel({ snapshot, commitSnapshot }: {
@@ -163,6 +182,10 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
           <option value="true">Base install and download packages</option>
         </StudioSelect>
       </StudioField>
+      {selected && (selected.split ?? info?.splitDefault) && (['baseSize','chunkSize'] as const).map(field =>
+        <PackageLimit key={JSON.stringify([projectPath,target,field,selected[field]])} field={field} original={selected[field] ?? null}
+          inherited={String(info?.[field] ?? (field === 'chunkSize' ? '8 MB' : 'unlimited'))} disabled={atlasDisabled}
+          save={bytes=>void saveAtlas(()=>invoke('studio.buildSplitLimit',{project:projectPath,target,field,original:selected[field] ?? null,bytes}))}/>)}
       <StudioField label="Audio profile" htmlFor="build-audio">
         <StudioSelect id="build-audio" value={audio} disabled={state.running} onChange={e => setAudio(e.target.value)}>
           <option value="auto">Platform default</option><option value="desktop">Desktop</option>
