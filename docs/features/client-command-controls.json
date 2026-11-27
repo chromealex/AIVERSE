@@ -92,7 +92,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "note": "Preparing actual hosted GameClient Metal acceptance with native input and RmlUi document inspection; no runtime claim yet.",
       "evidence": []
     },
     "handoff": {

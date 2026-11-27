@@ -2668,6 +2668,14 @@ if(AIVERSE_BUILD_TESTS AND (AIVERSE_PLATFORM STREQUAL "linux" OR AIVERSE_PLATFOR
         target_link_libraries(aiverse_hosted_view_tests PRIVATE aiverse_hosted_client)
         target_compile_definitions(aiverse_hosted_view_tests PRIVATE AIVERSE_TEST_HOSTED_CLIENT=1)
     endif()
+    if(AIVERSE_PLATFORM STREQUAL "macos" AND TARGET aiverse_hosted_client)
+        add_executable(aiverse_client_controls_frame tests/render/client_controls_frame.cpp)
+        target_link_libraries(aiverse_client_controls_frame PRIVATE aiverse_client_runtime aiverse_hosted_client)
+        add_test(NAME client_controls_frame COMMAND aiverse_client_controls_frame
+            "${PROJECT_SOURCE_DIR}/demos/client-command-controls" "${PROJECT_SOURCE_DIR}/engine/assets")
+        set_tests_properties(client_controls_frame PROPERTIES TIMEOUT 120 RUN_SERIAL TRUE
+            ENVIRONMENT "AIVERSE_BACKGROUND=1;AIVERSE_AUDIO=off;AIVERSE_SHADOWS=off")
+    endif()
     add_test(NAME aiverse_hosted_view_tests COMMAND aiverse_hosted_view_tests)
 endif()
 

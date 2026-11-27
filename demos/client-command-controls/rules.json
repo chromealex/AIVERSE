@@ -1,0 +1,48 @@
+{
+  "ai": {
+    "controller": "scripted"
+  },
+  "fogOfWar": {
+    "mode": "none"
+  },
+  "types": {
+    "scout": {
+      "name": "Control scout",
+      "health": {
+        "max": 120
+      },
+      "move": {
+        "speed": 3
+      },
+      "sight": 20,
+      "view": {
+        "shape": "soldier"
+      }
+    },
+    "tower": {
+      "name": "Control tower",
+      "structure": {
+        "footprint": [
+          2,
+          2
+        ]
+      },
+      "health": {
+        "max": 500
+      },
+      "weapons": [
+        {
+          "range": 3,
+          "damage": 1,
+          "cooldown": 1
+        }
+      ],
+      "view": {
+        "shape": "tower"
+      }
+    }
+  },
+  "viewScripts": [
+    "scripts/view/controls.lua"
+  ]
+}
