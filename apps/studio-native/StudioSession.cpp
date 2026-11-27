@@ -865,6 +865,17 @@ Json StudioSession::mapProperties(const Json& params,bool write) {
         Json item=Json::object();item.set("id",str(body.id));item.set("size",num(body.faceSize));surfaces.push(std::move(item));
     }
     out.set("surfaces",std::move(surfaces));
+    if(params.getBool("includeBodies")){
+        Json bodies=Json::array();
+        for(const auto& body:data.bodies){
+            Json item=Json::object();
+            item.set("id",str(body.id));
+            item.set("faceSize",num(body.faceSize));
+            item.set("metadata",body.meta);
+            bodies.push(std::move(item));
+        }
+        out.set("bodies",std::move(bodies));
+    }
     out.set("roster",std::move(roster));out.set("factions",std::move(factions));out.set("resources",std::move(resources));
     if(params.getBool("validate")){
         if(data.worldSpace)throw std::runtime_error("Grid map validation is unavailable for world-space scenes.");

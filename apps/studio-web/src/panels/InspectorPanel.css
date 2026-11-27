@@ -103,3 +103,10 @@
 .insp-regions figure{margin:0}
 .insp-regions figure svg{display:block;width:100%;height:clamp(110px,25vh,230px);background:var(--studio-background);border:1px solid var(--au-line);border-radius:var(--au-radius-sm);box-sizing:border-box}
 .insp-regions figcaption{margin-top:5px;color:var(--au-text-muted);font-variant-numeric:tabular-nums}
+
+.insp-map__bodies details { border-bottom: 1px solid var(--au-line); }
+.insp-map__bodies summary { cursor: pointer; padding: 7px 0; }
+.insp-map__bodies dl { margin: 0 0 8px; }
+.insp-map__bodies dl > div { display: grid; grid-template-columns: minmax(6em, 1fr) 2fr; gap: 8px; padding: 3px 0; }
+.insp-map__bodies dt, .insp-map__bodies dd { min-width: 0; overflow-wrap: anywhere; }
+.insp-map__bodies dd { margin: 0; }

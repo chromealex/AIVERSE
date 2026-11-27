@@ -120,6 +120,7 @@ export interface StudioMapRegions {
 export interface StudioMapProperties {
   worldSpace?:{spawns:number;colliders:number};
   areas:Record<string,unknown>;
+  bodies?:{id:string;faceSize:number;metadata:Record<string,unknown>}[];
   surfaces:{id:string;size:number}[]; roster:MapPlayer[]; factions:{id:string;name:string}[]; resources:{id:string;name:string;initial:number}[];
   scope:StudioGraphDocumentScope; name:string; width:number; height:number; grid:boolean; maxSize:number;
   entities:number; players:number; roadsOnly:boolean; victory:Record<string,unknown>|null;
@@ -582,7 +583,7 @@ export interface StudioParams {
   'studio.newMap': {width: number; height: number; name: string};
   'studio.openMap': {file: string};
   'studio.saveAs': Record<string, never>;
-  'studio.mapProperties': {scope:StudioGraphDocumentScope;validate?:boolean};
+  'studio.mapProperties': {scope:StudioGraphDocumentScope;includeBodies?:boolean;validate?:boolean};
   'studio.playerStartPick': {token:string;armed:boolean};
   'studio.roadPick': {token:string;armed:boolean;scope?:StudioGraphDocumentScope};
   'studio.areaPick': {token:string;armed:boolean};

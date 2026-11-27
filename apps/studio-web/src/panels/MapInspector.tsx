@@ -29,7 +29,7 @@ export function MapInspector({scope,onApply,onSelect,busy,view,inspectorRecord}:
   useEffect(()=>{
     let live=true;
     setError('');
-    invoke('studio.mapProperties',{scope}).then(result=>{if(live)setData(result);})
+    invoke('studio.mapProperties',{scope,includeBodies:true}).then(result=>{if(live)setData(result);})
       .catch(e=>{if(live)setError(String(e));});
     return ()=>{live=false;};
   },[scope.projectPath,scope.mapPath,scope.epoch,scope.revision,reload]);
@@ -58,7 +58,7 @@ export function MapInspector({scope,onApply,onSelect,busy,view,inspectorRecord}:
   };
   const validate=async()=>{
     setPending(true);setError('');
-    try{setData(await invoke('studio.mapProperties',{scope,validate:true}));}
+    try{setData(await invoke('studio.mapProperties',{scope,validate:true,includeBodies:true}));}
     catch(e){setError(String(e));}
     finally{setPending(false);}
   };
@@ -69,6 +69,11 @@ export function MapInspector({scope,onApply,onSelect,busy,view,inspectorRecord}:
       <small>{data.worldSpace
         ? `${data.worldSpace.colliders} colliders · ${data.worldSpace.spawns} spawn points`
         : `${data.entities} objects · ${data.players} players`}</small></div></header>
+    {!!data.bodies?.length && <section className="insp-map__bodies" aria-label="Celestial bodies"><h3>Celestial bodies</h3>
+      {data.bodies.map(body=><details key={body.id}><summary>{body.id} · {body.faceSize ? body.faceSize+' × '+body.faceSize+' per face' : 'No surface'}</summary>
+        <dl>{Object.entries(body.metadata).map(([key,value])=><div key={key}><dt>{key}</dt>
+          <dd>{typeof value==='string' ? value : JSON.stringify(value)}</dd></div>)}</dl>
+      </details>)}</section>}
     <fieldset disabled={busy||pending}>
       <label>{data.worldSpace?"Scene name":"Map name"}<StudioInput value={fields.name} required onChange={e=>edit({name:e.target.value})}/></label>
       {data.grid && <div className="insp-map__size">{(['width','height'] as const).map(key=>
