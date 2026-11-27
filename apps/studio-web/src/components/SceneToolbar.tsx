@@ -4,6 +4,7 @@ import { CAMERA_SLOTS, importBookmarks, readBookmarks, removeBookmark, saveBookm
 import { invoke, onNativeEvent } from '../bridge';
 import ErosionZoneHighlight from './ErosionZoneHighlight';
 import { StudioSelect } from '../ui';
+import { EcologyLayerPicker } from '../panels/SceneBrushBar';
 import type { WindDebugView, StudioGraphDocumentScope } from '../types';
 import './SceneToolbar.css';
 
@@ -199,6 +200,7 @@ export default function SceneToolbar({ enabled, projectPath = '', documentScope 
          {(['off','parts','depth','weight','skeleton'] as const).map((value,i)=><option key={value} value={value}>{['Off','Parts','Hierarchy depth','Sway weight','Skeleton'][i]}</option>)}
         </StudioSelect></label>{windError&&<small role="alert">{windError}</small>}</fieldset>
 
+       <fieldset><legend>World processes</legend><EcologyLayerPicker key={projectPath} showDiagnostics={false}/></fieldset>
        <fieldset><legend>NEREID</legend><label><input type="checkbox" checked={state.nereidFlow} onChange={e=>set({nereidFlow:e.target.checked})}/>River flow</label>
        {state.nereidFlow&&<label><input type="checkbox" checked={state.nereidAllWater} onChange={e=>set({nereidAllWater:e.target.checked})}/>Show all rivers</label>}</fieldset>
        {(state.natureWind||state.natureFire||state.terraSlope||state.terraSlopeAtTarget)&&<fieldset className="scene-toolbar__sampling"><legend>Field sampling</legend>
