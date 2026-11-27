@@ -95,8 +95,10 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Native logical-image and projection checks passed. Preparing actual client captures for loose and atlas-packed minimap, authored crop, hidden types and rectangle camera frame; pending.",
-      "evidence": []
+      "note": "Real Metal client passed loose/atlas-only comparison with 0 differing minimap pixels; cropped aspect/background coordinates, hidden tower markers and complete rectangle frame verified. Native tests cover logical image failure atomicity/projection. Final integrated quick gate pending.",
+      "evidence": [
+        "docs/evidence/issues-minimap-metal-20261127/result.json"
+      ]
     },
     "handoff": {
       "status": "not_run",

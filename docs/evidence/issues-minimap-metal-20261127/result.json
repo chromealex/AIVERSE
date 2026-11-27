@@ -1,0 +1,60 @@
+{
+  "source": "e63324759",
+  "tested_tree": "4e9a58147",
+  "packed_data_source": "5036dab06",
+  "backend": "Metal",
+  "result": "pass",
+  "pipeline_failures": 0,
+  "minimap_rect": [
+    15,
+    603,
+    205,
+    745
+  ],
+  "different_pixels_loose_vs_atlas": 0,
+  "horizontal_white_edges_y": [
+    610,
+    611,
+    710
+  ],
+  "crop_top_left_rgba": [
+    72,
+    59,
+    70,
+    255
+  ],
+  "expected_crop_top_left_rgba": [
+    72,
+    59,
+    70,
+    255
+  ],
+  "pack_only_root_files": [
+    "content.rpak"
+  ],
+  "pack_sha256": "d4a6ff69cc90d41c5c2b85bcbc8788ae57c04829aa2fb9ce3c9080c5fca18f7d",
+  "captures": [
+    {
+      "file": "loose.png",
+      "scanline_sha256": "9ef5f6fa81e108482a2a1ab1d0aeb92da1912c4862d02ba491e9de04acb03842"
+    },
+    {
+      "file": "packed.png",
+      "scanline_sha256": "9ef5f6fa81e108482a2a1ab1d0aeb92da1912c4862d02ba491e9de04acb03842"
+    }
+  ],
+  "cases": [
+    "crop preserves texture aspect",
+    "gradient samples cropped map coordinates",
+    "tower type hidden while scout remains visible",
+    "complete rectangle camera footprint survives downsampling",
+    "logical background reconstructed from real atlas with no raw PNG",
+    "atlas output matches standalone PNG pixel-for-pixel"
+  ],
+  "reproduction": "aiversebuild --estimate --audio off --target macos; copy resulting content.rpak to empty project root; AIVERSE_CONTENT=root AIVERSE_CAM=12,8,8 aiverse_client_controls_frame root engine/assets captures. Loose run uses demo root without AIVERSE_CONTENT.",
+  "limits": [
+    "planet hide flag not visually captured",
+    "camera-bounds shorthand, fog and pointer crop have native/source evidence only",
+    "final integrated gate pending"
+  ]
+}

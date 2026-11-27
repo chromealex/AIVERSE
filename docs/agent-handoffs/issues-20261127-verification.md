@@ -345,3 +345,13 @@ Loose minimap run passed behavior (33026 exit 0), but capture found full-grid HU
 Aspect fix compiled (20539 exit 0); loose2 run passed. Atlas pack2 confirms ui group two unique textures and _atlas/ui-0.rtex. First pack-only fixture failed game.json lookup: auto-mount uses process AIVERSE_CONTENT, while HostedView contentRoot controls loose reads. Rerun with AIVERSE_CONTENT set to packed root, matching standalone deployment; no engine change needed. Demo shortcut path correction 5036dab068afef87915cf5839de498d81b404444 resolves relative to stock engine/ui/hud.rml. Next repack corrected data and rerun loose/packed.
 
 Loose3 and packed3 runs passed; packed root contains only content.rpak, report confirms no raw ui/minimap-probe.png and _atlas/ui-0.rtex present. Pixel comparison across 191x142 HUD crop: 0 differing scanlines. Near camera run (91839 exit 0) exposed missing bottom rectangle edge: 192x144 texture downsampled to 190x142 skips its one-texel row. Source e63324759112973c027964cecd758c6091cbac28 draws every camera footprint with two-texel coverage (frustum and rectangle). Not tested yet. Next cached rebuild and near-camera captures on both loose/pack.
+
+Final minimap source e63324759 / tree 4e9a58147 built (80767 exit 0).
+Loose and packed near-camera runs both passed (22654 exit 0), no pipeline
+failures. Logs minimap-outline-build.log, minimap-final-loose.log,
+minimap-final-packed.log. Inspected final rectangle: all four sides visible.
+Retained docs/evidence/issues-minimap-metal-20261127: loose/packed PNG,
+pack file inventory, hash, crop/pixel comparison and reproduction. Zero
+pixel differences over 190x142 minimap; top-left crop pixel [72,59,70,255]
+matches world(4,2) gradient. Only content.rpak present in packed root;
+raw minimap PNG absent from pack, UI atlas present. Final gate still pending.

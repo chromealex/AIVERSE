@@ -1,0 +1,256 @@
+{
+  "pack": {
+    "rawBytes": 19678566,
+    "packBytes": 6320032,
+    "entries": 50,
+    "duplicates": 0,
+    "top": [
+      {"path": "_atlas/effects-0.rtex", "rawBytes": 16353816, "storedBytes": 3645515},
+      {
+        "path": "engine/fx/physis/flame_tall_full_16x4.png",
+        "rawBytes": 2320868,
+        "storedBytes": 2320868
+      },
+      {"path": "engine/fonts/ui.ttf", "rawBytes": 512672, "storedBytes": 220575},
+      {"path": "engine/branding/mark.png", "rawBytes": 23010, "storedBytes": 23010},
+      {"path": "engine/branding/splash_blade_right.png", "rawBytes": 10644, "storedBytes": 10644},
+      {"path": "engine/lang/ru.json", "rawBytes": 35955, "storedBytes": 10547},
+      {"path": "engine/branding/splash_blade_left.png", "rawBytes": 10334, "storedBytes": 10334},
+      {"path": "engine/lang/en.json", "rawBytes": 25741, "storedBytes": 8231},
+      {"path": "engine/branding/splash_blade_top.png", "rawBytes": 7979, "storedBytes": 7979},
+      {"path": "engine/branding/splash_diamond.png", "rawBytes": 6242, "storedBytes": 6242},
+      {"path": "engine/ui/lib/meta.lua", "rawBytes": 18476, "storedBytes": 4973},
+      {"path": "engine/ui/theme.rcss", "rawBytes": 12773, "storedBytes": 3326},
+      {"path": "engine/building-styles/scifi.json", "rawBytes": 21182, "storedBytes": 2370},
+      {"path": "engine/ui/hud.rml", "rawBytes": 11319, "storedBytes": 2356},
+      {"path": "engine/building-styles/modern.json", "rawBytes": 20727, "storedBytes": 2225}
+    ]
+  },
+  "atlas": {
+    "enabled": true,
+    "profile": "macos",
+    "maxPage": 4096,
+    "candidates": 9,
+    "atlased": 8,
+    "framedSheets": 0,
+    "duplicates": 0,
+    "pages": 2,
+    "occupancyPercent": 86.6,
+    "sourceBytes": 4554601,
+    "atlasBytes": 16387421,
+    "storedBytes": 3646242,
+    "bytesSaved": 908359,
+    "gpuBytesBefore": 14705664,
+    "gpuBytesAfter": 16386432,
+    "textureBindsBefore": 8,
+    "textureBindsAfter": 2,
+    "groups": [
+      {
+        "group": "effects",
+        "textures": 6,
+        "unique": 6,
+        "pages": 1,
+        "occupancyPercent": 86.6
+      },
+      {
+        "group": "ui",
+        "textures": 2,
+        "unique": 2,
+        "pages": 1,
+        "occupancyPercent": 78.4
+      }
+    ],
+    "excluded": [
+      {
+        "path": "engine/fx/physis/flame_tall_full_16x4.png",
+        "reason": "too large (2048x1024 > 1024)",
+        "fixMaxSize": 1024
+      }
+    ]
+  },
+  "files": [
+    {"path": "README.md", "rawBytes": 771, "storedBytes": 473, "codec": "zstd"},
+    {"path": "_atlas/atlas.json", "rawBytes": 941, "storedBytes": 378, "codec": "zstd"},
+    {
+      "path": "_atlas/effects-0.rtex",
+      "rawBytes": 16353816,
+      "storedBytes": 3645515,
+      "codec": "zstd"
+    },
+    {"path": "_atlas/ui-0.rtex", "rawBytes": 32664, "storedBytes": 349, "codec": "zstd"},
+    {
+      "path": "engine/branding/mark.png",
+      "rawBytes": 23010,
+      "storedBytes": 23010,
+      "codec": "store"
+    },
+    {
+      "path": "engine/branding/splash_blade_left.png",
+      "rawBytes": 10334,
+      "storedBytes": 10334,
+      "codec": "store"
+    },
+    {
+      "path": "engine/branding/splash_blade_right.png",
+      "rawBytes": 10644,
+      "storedBytes": 10644,
+      "codec": "store"
+    },
+    {
+      "path": "engine/branding/splash_blade_top.png",
+      "rawBytes": 7979,
+      "storedBytes": 7979,
+      "codec": "store"
+    },
+    {
+      "path": "engine/branding/splash_diamond.png",
+      "rawBytes": 6242,
+      "storedBytes": 6242,
+      "codec": "store"
+    },
+    {
+      "path": "engine/building-recipes/multiuse-open.json",
+      "rawBytes": 900,
+      "storedBytes": 316,
+      "codec": "zstd"
+    },
+    {
+      "path": "engine/building-recipes/two-floor-workshop.json",
+      "rawBytes": 1207,
+      "storedBytes": 386,
+      "codec": "zstd"
+    },
+    {
+      "path": "engine/building-recipes/vertical-circulation.json",
+      "rawBytes": 1148,
+      "storedBytes": 391,
+      "codec": "zstd"
+    },
+    {
+      "path": "engine/building-styles/alien-civilization.json",
+      "rawBytes": 19118,
+      "storedBytes": 2125,
+      "codec": "zstd"
+    },
+    {
+      "path": "engine/building-styles/ancient-civilizations.json",
+      "rawBytes": 19171,
+      "storedBytes": 2144,
+      "codec": "zstd"
+    },
+    {
+      "path": "engine/building-styles/asian-historical.json",
+      "rawBytes": 19107,
+      "storedBytes": 2094,
+      "codec": "zstd"
+    },
+    {
+      "path": "engine/building-styles/cyberpunk.json",
+      "rawBytes": 19789,
+      "storedBytes": 2140,
+      "codec": "zstd"
+    },
+    {
+      "path": "engine/building-styles/dark-fantasy.json",
+      "rawBytes": 18583,
+      "storedBytes": 2074,
+      "codec": "zstd"
+    },
+    {
+      "path": "engine/building-styles/medieval-fantasy.json",
+      "rawBytes": 18631,
+      "storedBytes": 2090,
+      "codec": "zstd"
+    },
+    {
+      "path": "engine/building-styles/modern.json",
+      "rawBytes": 20727,
+      "storedBytes": 2225,
+      "codec": "zstd"
+    },
+    {
+      "path": "engine/building-styles/post-apocalypse.json",
+      "rawBytes": 20109,
+      "storedBytes": 2186,
+      "codec": "zstd"
+    },
+    {
+      "path": "engine/building-styles/scifi-space.json",
+      "rawBytes": 19099,
+      "storedBytes": 2115,
+      "codec": "zstd"
+    },
+    {
+      "path": "engine/building-styles/scifi.json",
+      "rawBytes": 21182,
+      "storedBytes": 2370,
+      "codec": "zstd"
+    },
+    {
+      "path": "engine/building-styles/solarpunk.json",
+      "rawBytes": 18984,
+      "storedBytes": 2094,
+      "codec": "zstd"
+    },
+    {
+      "path": "engine/building-styles/steampunk.json",
+      "rawBytes": 19117,
+      "storedBytes": 2106,
+      "codec": "zstd"
+    },
+    {
+      "path": "engine/building-styles/underwater.json",
+      "rawBytes": 18994,
+      "storedBytes": 2104,
+      "codec": "zstd"
+    },
+    {
+      "path": "engine/fonts/LICENSE-ui.txt",
+      "rawBytes": 4221,
+      "storedBytes": 1864,
+      "codec": "zstd"
+    },
+    {"path": "engine/fonts/ui.ttf", "rawBytes": 512672, "storedBytes": 220575, "codec": "zstd"},
+    {"path": "engine/fps_audio.json", "rawBytes": 2225, "storedBytes": 302, "codec": "zstd"},
+    {
+      "path": "engine/fx/physis/LICENSE-fx.txt",
+      "rawBytes": 1761,
+      "storedBytes": 826,
+      "codec": "zstd"
+    },
+    {
+      "path": "engine/fx/physis/flame_tall_full_16x4.png",
+      "rawBytes": 2320868,
+      "storedBytes": 2320868,
+      "codec": "store"
+    },
+    {"path": "engine/lang/en.json", "rawBytes": 25741, "storedBytes": 8231, "codec": "zstd"},
+    {"path": "engine/lang/ru.json", "rawBytes": 35955, "storedBytes": 10547, "codec": "zstd"},
+    {"path": "engine/ui/howto.rml", "rawBytes": 1541, "storedBytes": 599, "codec": "zstd"},
+    {"path": "engine/ui/hud.rml", "rawBytes": 11319, "storedBytes": 2356, "codec": "zstd"},
+    {"path": "engine/ui/keyboard.json", "rawBytes": 1649, "storedBytes": 826, "codec": "zstd"},
+    {"path": "engine/ui/keyboard.rcss", "rawBytes": 1206, "storedBytes": 571, "codec": "zstd"},
+    {"path": "engine/ui/keyboard.rml", "rawBytes": 770, "storedBytes": 414, "codec": "zstd"},
+    {"path": "engine/ui/lib/meta.lua", "rawBytes": 18476, "storedBytes": 4973, "codec": "zstd"},
+    {"path": "engine/ui/lib/scriptui.lua", "rawBytes": 2461, "storedBytes": 1058, "codec": "zstd"},
+    {"path": "engine/ui/lobby.rml", "rawBytes": 6466, "storedBytes": 1499, "codec": "zstd"},
+    {"path": "engine/ui/menu.rml", "rawBytes": 2586, "storedBytes": 785, "codec": "zstd"},
+    {"path": "engine/ui/screens.rcss", "rawBytes": 5085, "storedBytes": 1577, "codec": "zstd"},
+    {"path": "engine/ui/skin.rcss", "rawBytes": 679, "storedBytes": 434, "codec": "zstd"},
+    {"path": "engine/ui/theme.rcss", "rawBytes": 12773, "storedBytes": 3326, "codec": "zstd"},
+    {"path": "game.json", "rawBytes": 971, "storedBytes": 435, "codec": "zstd"},
+    {"path": "maps/controls.json", "rawBytes": 1080, "storedBytes": 207, "codec": "zstd"},
+    {
+      "path": "models/portrait-animated.gltf",
+      "rawBytes": 2342,
+      "storedBytes": 681,
+      "codec": "zstd"
+    },
+    {"path": "models/portrait-static.gltf", "rawBytes": 1996, "storedBytes": 587, "codec": "zstd"},
+    {"path": "rules.json", "rawBytes": 1324, "storedBytes": 471, "codec": "zstd"},
+    {"path": "scripts/view/controls.lua", "rawBytes": 132, "storedBytes": 120, "codec": "zstd"}
+  ],
+  "fileRules": [],
+  "target": "macos",
+  "level": 19
+}
