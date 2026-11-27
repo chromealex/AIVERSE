@@ -5,9 +5,10 @@ import { nestedDocumentRows, groupedHierarchy, matchesHierarchy, parseHierarchyF
 import { HierarchyPreviewRow } from './HierarchyPreviewRow';
 import { invoke } from '../bridge';
 import type { StudioMapProperties, StudioEntity, StudioEntityCatalog, StudioSnapshot, StudioHierarchyPaths } from '../types';
-import { StudioButton, StudioContextMenu, StudioIconButton, StudioSelect, type StudioMenuItem } from '../ui';
+import { StudioButton, StudioIconButton, StudioSelect, type StudioMenuItem } from '../ui';
 import type { StudioPanelContext } from './StudioPanelRenderer';
 import './HierarchyPanel.css';
+import { useLuaMenu } from './useLuaMenu';
 
 const DRAG_MIME = 'application/x-aiverse-entity';
 const kindIcon = (node: StudioEntity) => node.kind === 'Light' ? Lightbulb
@@ -15,7 +16,7 @@ const kindIcon = (node: StudioEntity) => node.kind === 'Light' ? Lightbulb
 
 /** Compact, content-first Hierarchy: search on top, dense rows, drag reorder, context menu. */
 export default function HierarchyPanel({ snapshot, busy, connected, search, setSearch,
-  rows, select, selectIds, hoverId, updateSnapshot, setBusy }: StudioPanelContext) {
+  rows, select, selectIds, hoverId, updateSnapshot, setBusy, showPanel }: StudioPanelContext) {
   const [grouping, setGrouping] = useState<HierarchyGrouping>('scene');
   const [preview,setPreview]=useState<StudioEntity[]>([]);
   const [paths,setPaths]=useState<StudioHierarchyPaths>();
@@ -28,7 +29,8 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
   const [type, setType] = useState('');
-  const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  const [status, setStatus] = useState('');
+  const lua = useLuaMenu(updateSnapshot, showPanel, setStatus, setError);
   const [drop, setDrop] = useState<{ id: string; placement: 'before' | 'after' } | null>(null);
   const [rename, setRename] = useState<{id: string; epoch: unknown; value: string} | null>(null);
   const renameTarget = snapshot?.inspector;
@@ -258,6 +260,9 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     { id: 'create', label: 'Create Entity…', icon: <Plus size={13}/>, separator: true, disabled: !canCreate || busy, onSelect: () => setCreating(true) },
   ];
 
+  const currentItems = useRef(menuItems);
+  currentItems.current = menuItems;
+
   return <div className="hier" onKeyDown={onKeyDown}>
     <div className="hier__toolbar">
       <label className="hier__search">
@@ -289,9 +294,15 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
       <StudioButton type="submit" variant="primary" disabled={busy || !type}>Create</StudioButton>
       <StudioIconButton aria-label="Cancel" icon={<X size={13}/>} onClick={() => setCreating(false)}/>
     </form>}
+    {status && <div className="hier__footer" role="status">{status}</div>}
     {error && <div className="hier__error" role="alert">{error}
       <button type="button" aria-label="Dismiss" onClick={() => setError('')}><X size={11}/></button></div>}
     <div ref={listRef} className="hier__list" role="listbox" aria-label="Scene objects" aria-multiselectable="true"
+      onContextMenu={event => {
+        if (!project || !(event.target === event.currentTarget || (event.target as Element).closest('.hier__empty'))) return;
+        void lua.open(event, 'hierarchy', '', [{ id: 'create', label: 'Create Entity…', disabled: !canCreate || busy,
+          onSelect: () => setCreating(true) }], 'Hierarchy actions');
+      }}
       onMouseLeave={() => hover('')}
       onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDrop(null); }}>
       {!project && <p className="hier__empty">Open a project to see its scene objects.</p>}
@@ -333,7 +344,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
           onClick={event => click(event, node.id, occurrence)}
           onMouseEnter={() => hover(node.id)}
           onDoubleClick={() => void focus(node.id)}
-          onContextMenu={event => { event.preventDefault(); if (!selectedSet.has(node.id)) void select(node.id); setMenu({ x: event.clientX, y: event.clientY, id: node.id }); }}>
+          onContextMenu={event => { if (!selectedSet.has(node.id)) void select(node.id); void lua.open(event, 'hierarchy', node.name, () => currentItems.current(node.id), 'Entity actions'); }}>
           {!!row.children && <button type="button" className="hier__disclosure" aria-expanded={!collapsed.has(node.id)}
             aria-label={(collapsed.has(node.id)?'Expand ':'Collapse ')+node.name}
             onClick={event=>{event.stopPropagation();toggleCollapsed(node.id);}}>{collapsed.has(node.id)?<ChevronRight size={13}/>:<ChevronDown size={13}/>}</button>}
@@ -428,7 +439,6 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
       </>}
     </details>}
     <div className="hier__footer">{search ? `${matches.length} / ${allRows.length}` : allRows.length} objects{preview.length>0 && ` · ${preview.length} preview`}{selectedSet.size > 1 ? ` · ${selectedSet.size} selected` : ''}</div>
-    {menu && <StudioContextMenu x={menu.x} y={menu.y} label="Entity actions"
-      items={menuItems(menu.id)} onClose={() => setMenu(null)}/>}
+    {lua.popup}
   </div>;
 }

@@ -24,7 +24,7 @@ const menuItems = (entries: LuaMenuEntry[], window: string, element: string, sel
 
 export function useLuaMenu(commitSnapshot: (s: StudioSnapshot) => void, showPanel: (p: StudioPanel) => void,
   setStatus: (s: string) => void, setError: (s: string) => void, afterAction?: () => void) {
-  const [menu, setMenu] = useState<{ x: number; y: number; items: StudioMenuItem[] } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; items: StudioMenuItem[]; builtins: () => StudioMenuItem[]; label?: string } | null>(null);
   const request = useRef(0);
   const close = () => { ++request.current; setMenu(null); };
   const dispatch = async (command: Record<string, unknown> | null, contextAction = false) => {
@@ -39,11 +39,12 @@ export function useLuaMenu(commitSnapshot: (s: StudioSnapshot) => void, showPane
       else if (command?.command === 'select_entity' && command.entityId) commitSnapshot(await invoke('studio.select', { id: String(command.entityId) }));
       else if (command?.command === 'open_window') { const p = extensionPanelFor(String(command.id ?? '')); if (p) showPanel(p as StudioPanel); }
   };
-  const open = async (event: MouseEvent, window: string, element: string, builtins: StudioMenuItem[] = []) => {
+  const open = async (event: MouseEvent, window: string, element: string, builtins: StudioMenuItem[] | (() => StudioMenuItem[]) = [], label?: string) => {
     event.preventDefault();
     event.stopPropagation();
     const x = event.clientX, y = event.clientY, version = ++request.current;
-    setMenu(builtins.length ? { x, y, items: builtins } : null);
+    const nativeItems = typeof builtins === 'function' ? builtins : () => builtins;
+    setMenu(nativeItems().length ? { x, y, items: [], builtins: nativeItems, label } : null);
     try {
       const result = await invoke('studio.contextMenu', { window, element });
       if (version !== request.current) return;
@@ -54,8 +55,8 @@ export function useLuaMenu(commitSnapshot: (s: StudioSnapshot) => void, showPane
         })
           .catch(error => setError(String(error)));
       });
-      if (actions.length) setMenu({ x, y, items: [...builtins, ...actions] });
+      if (actions.length) setMenu({ x, y, items: actions, builtins: nativeItems, label });
     } catch (error) { if (version === request.current) setError(String(error)); }
   };
-  return { open, dispatch, popup: menu && <StudioContextMenu {...menu} onClose={close} /> };
+  return { open, dispatch, popup: menu && <StudioContextMenu x={menu.x} y={menu.y} label={menu.label} items={[...menu.builtins(), ...menu.items]} onClose={close} /> };
 }
