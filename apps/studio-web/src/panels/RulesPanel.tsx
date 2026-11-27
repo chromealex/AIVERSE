@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { RotateCcw, Search } from 'lucide-react';
 import { invoke } from '../bridge';
 import { StudioButton, StudioField, StudioSelect } from '../ui';
@@ -22,9 +22,15 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged, ope
   if(raw===null)return '';
   try{JSON.parse(raw);return '';}catch(e){return String(e);}
  },[raw]);
+  const draftProject=useRef<string|null>(null);
+  useEffect(()=>{
+    draftProject.current=raw!==null&&(section==='global'||section==='document') ? projectPath : null;
+  },[raw,section]);
   useEffect(() => {
     let live = true;
-    setRules(null); setError(''); setRaw(null);
+    if(draftProject.current!==projectPath){
+      setRules(null); setError(''); setRaw(null);
+    }
     if (!projectPath) return;
     void invoke('studio.rules', {}).then(r => { if (live) { setRules(r); setTypeId(id => id && id in r.types ? id : Object.keys(r.types)[0] ?? ''); } })
       .catch(e => { if (live) setError(e instanceof Error ? e.message : String(e)); });
