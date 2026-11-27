@@ -809,7 +809,8 @@ private:
         if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\AIVERSE\\Studio", L"LastProject", RRF_RT_REG_SZ, nullptr, buf, &size) != ERROR_SUCCESS)
             return {};
         std::error_code ec;
-        return fs::is_directory(fs::path(buf), ec) ? narrow(buf) : std::string();
+        if (fs::is_directory(fs::path(buf), ec)) return narrow(buf);
+        return aiverse::editor::resolveProjectDir(narrow(buf), nullptr);
     }
     void setFolder(IFileDialog* dialog, const std::string& dir) {
         if (dir.empty()) return;

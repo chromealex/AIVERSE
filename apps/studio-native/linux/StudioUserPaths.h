@@ -1,5 +1,6 @@
 #pragma once
 #include <glib.h>
+#include "apps/editor/core/ProjectFile.h"
 #include <filesystem>
 #include <string>
 
@@ -28,8 +29,7 @@ inline std::string loadStudioLastProject() {
     if (!g_file_get_contents(studioLastProjectFile().c_str(), &contents, &length, nullptr)) return {};
     std::string path(contents, length);
     g_free(contents);
-    std::error_code error;
-    if (path.find('\0') != path.npos || !std::filesystem::is_directory(path, error)) return {};
-    return path;
+    if (path.find('\0') != path.npos) return {};
+    return editor::resolveProjectDir(path, nullptr);
 }
 }
