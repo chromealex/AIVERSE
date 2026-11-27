@@ -647,7 +647,15 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
       transferId=undefined; // Native queue owns the uploaded bytes.
     }catch(e){if(transferId)await invokePreview({action:'checkpointFileCancel',transferId,expectedGeneration:state?.generation}).catch(()=>{});setError(message(e));}finally{setBusy(false);}
   };
+  const stage=useRef<HTMLDivElement>(null);
+  const showPreview=async()=>{
+    stage.current?.querySelector('.spectra-native__surface')?.scrollIntoView({block:'center',inline:'nearest'});
+    // Let the viewport scroll listener publish its clipped native rectangle before dispatch.
+    await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
+  };
   const launch=async()=>{
+    await showPreview();
+    if(!mounted.current)return;
     // Actual graph validation and device eligibility occur in StudioScene.
     await command('load',{graph,gpuBirthRandom,gpuOwnedAllocation});
   };
@@ -666,7 +674,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
     }catch(e){setError(message(e));}finally{setBusy(false);}
   };
   return <StudioSection title="Particle Preview">
-    <div className="spectra-native__stage">
+    <div ref={stage} className="spectra-native__stage">
     <SpectraDockViewport/>
     <div className="spectra-native__toolbar">
       <StudioButton size="sm" variant="primary" disabled={!active||!state||busy||disabled}
@@ -687,7 +695,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
       </StudioField>
       <StudioButton size="sm" variant="secondary"
         disabled={!active||!state?.ready||busy||capturePending}
-        onClick={()=>void captureFrame()}>
+        onClick={()=>void showPreview().then(()=>{if(mounted.current)void captureFrame();})}>
         {capturePending?'Capturing GPU frame…':'Capture Frame'}
       </StudioButton>
     </div>
