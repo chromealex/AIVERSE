@@ -19,6 +19,7 @@ import NativeGraphPanel from '../graphs/NativeGraphPanel';
 import ModelGraphPanel from '../graphs/ModelGraphPanel';
 import ImportedClipPreview from './ImportedClipPreview';
 import SourceModelPreview from './SourceModelPreview';
+import ImpostorPanel from './ImpostorPanel';
 import MaterialTechniquePanel from './MaterialTechniquePanel';
 import StrataAnalysisPanel from '../graphs/StrataAnalysisPanel';
 
@@ -162,6 +163,7 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot, openAttachm
     <div className="tool__scroll">
       {panel==='model_anim'&&<ImportedClipPreview key={projectPath} project={projectPath}/>}
       {panel==='models'&&<SourceModelPreview key={'source:'+projectPath} project={projectPath}/>}
+      {panel==='models'&&<ImpostorPanel key={'impostor-'+projectPath} projectPath={projectPath}/>}
       {panel==='models'&&<MaterialTechniquePanel key={projectPath} projectPath={projectPath}/>}
       {panel==='models'&&<StrataAnalysisPanel projectPath={projectPath}/>}
       {panel==='generate' && snapshot?.graphDocument && <MapGeneratorPanel key={snapshot.graphDocument.epoch} scope={snapshot.graphDocument} onChanged={()=>done(true)}/>}

@@ -38,7 +38,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
         {"lightbake", {"lightbake_get", "lightbake_set", "lightbake_clear", "lightbake_atlas_preview"}},
         {"shader_graph", {"shader_graph_create","shader_graph_apply"}},
         {"static_geometry", {"geometry_instances_list","geometry_strata_set"}},
-        {"models", {"asset_list", "model_info", "material_techniques_get", "material_techniques_set", "geometry_catalog", "geometry_analyze", "strata_capabilities", "strata_model_analyze", "geometry_proxy_bake", "geometry_proxy_lod"}},
+        {"models", {"asset_list", "model_info", "material_techniques_get", "material_techniques_set", "geometry_catalog", "geometry_analyze", "strata_capabilities", "strata_model_analyze", "geometry_proxy_analyze", "geometry_proxy_bake", "geometry_proxy_lod"}},
         {"scripts", {"script_api", "script_list", "script_read", "script_write", "script_check"}},
         {"overlays", {"overlay_plan_preview", "overlay_placement_preview", "overlay_templates", "overlay_list", "overlay_get", "overlay_set", "overlay_delete", "overlay_preview"}},
         {"branding", {"branding_get", "branding_set", "splash_preview", "icons_preview"}},

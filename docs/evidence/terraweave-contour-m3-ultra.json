@@ -1,0 +1,20 @@
+{
+  "sha": "d050984baf6d47c6d143a00585cff659c72aeb55",
+  "argv": [
+    "env",
+    "TMPDIR=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/tmp",
+    "AIVERSE_COMPARE_FOREST_CONTOURS=1",
+    "AIVERSE_TERRAWEAVE_FOREST_CAPTURE=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final",
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac",
+    "-R",
+    "^terraweave_(model|metal_forest)$",
+    "--repeat",
+    "until-fail:3",
+    "-V"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/terraweave-contour-m3-ultra.log.txt",
+  "sha256": "02b1758cf59bde7f2a9f46daea7bae51cff858fe799767eef946373c1bd57128"
+}

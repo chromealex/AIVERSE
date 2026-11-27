@@ -35,6 +35,34 @@ int main(int argc,char** argv){try{
     Image alpha;alpha.width=alpha.height=1;alpha.rgba={255,255,255,0};texturedPlane.model->images.push_back(alpha);
     auto& pm=texturedPlane.model->materials[0];pm.baseTex=0;pm.alpha=AlphaMode::Mask;
     rejects([&]{bakeSurfaceProxy(*texturedPlane.model,options);});
+    Image cutout;cutout.width=cutout.height=32;cutout.rgba.assign(32*32*4,255);
+    for(int y=0;y<32;++y)for(int x=0;x<32;++x)
+        cutout.rgba[(y*32+x)*4+3]=x>=12&&x<20&&y>=6&&y<26?255:0;
+    texturedPlane.model->images[0]=cutout;
+    const std::string sparseSource=exportGlb(*texturedPlane.model);
+    auto trimOptions=Json::parse(R"({"mode":"plane","axis":"z","resolution":64,"fit":"auto"})");
+    auto trimmed=bakeSurfaceProxy(*texturedPlane.model,trimOptions);
+    check(trimmed.report["areaSaved"].toDouble()>.5,"sparse mask selects tight geometry");
+    auto fullOptions=trimOptions;fullOptions.set("fit",Json::string("full"));
+    auto full=bakeSurfaceProxy(*texturedPlane.model,fullOptions);
+    check(full.report["areaSaved"].toDouble()==0 && trimmed.model->indices==full.model->indices,"override preserves topology");
+    check(trimmed.model->images[0].rgba==full.model->images[0].rgba,"atlas unchanged by fitting");
+    for (const auto& chart : trimmed.report["charts"].items()) {
+        const auto& rect=chart["bounds"];const auto& im=trimmed.model->images[0];
+        for(int y=0;y<64;++y)for(int x=0;x<64;++x)
+            if(im.rgba[((chart.getInt("y")+y)*im.width+chart.getInt("x")+x)*4+3])
+                check(x>=rect[size_t(0)].integer() && y>=rect[size_t(1)].integer() &&
+                      x<rect[size_t(2)].integer() && y<rect[size_t(3)].integer(),"contour contains alpha");
+    }
+    auto cropBytes=exportGlb(*trimmed.model);
+    auto reopened=loadModel("crop.glb",[&](const std::string& p,std::string& out){
+        if(p!="crop.glb")return false;out=cropBytes;return true;});
+    check(reopened->vertices.size()==trimmed.model->vertices.size(),"fitted GLB reopened");
+    for(size_t i=0;i<reopened->vertices.size();++i){
+        const auto& a=reopened->vertices[i];const auto& b=trimmed.model->vertices[i];
+        check(length(a.pos-b.pos)<1e-5f && std::abs(a.uv.x-b.uv.x)<1e-5f && std::abs(a.uv.y-b.uv.y)<1e-5f,"fitted positions/UVs persisted");
+    }
+    texturedPlane.model->images[0]=alpha;
     pm.alpha=AlphaMode::Opaque; // opaque alpha must not punch holes
     auto opaque=bakeSurfaceProxy(*texturedPlane.model,options);check(!opaque.model->indices.empty(),"opaque ignores texture alpha");
     pm.baseTex=-1;pm.normalTex=0;texturedPlane.model->images[0].rgba={220,128,220,255};
@@ -63,7 +91,21 @@ int main(int argc,char** argv){try{
     check(ws.project.load(root.string(),&loadError),"load project documents before saving rules");
     {std::ofstream f(root/"wall.glb",std::ios::binary);f<<exportGlb(*source.model);}
     auto request=Json::parse(R"({"model":"wall.glb","target":"models/wall_proxy.glb","mode":"plane","resolution":32})");
+    auto preview=ws.call("geometry_proxy_analyze",request);
+    check(!preview.has("error") && preview["charts"].size()==2 && !preview.getStr("png_base64").empty(),"workspace preview contains actual faces");
+    request.set("expectedDigest",Json::string("stale"));
+    check(ws.call("geometry_proxy_bake",request).has("error") && !fs::exists(root/"models/wall_proxy.glb"),"stale preview cannot publish");
+    request.set("expectedDigest",preview["digest"]);
     auto baked=ws.call("geometry_proxy_bake",request);if(baked.has("error"))throw std::runtime_error(baked.dump());
+    {std::ifstream file(root/"models/wall_proxy.glb",std::ios::binary);
+        std::string bytes((std::istreambuf_iterator<char>(file)),{});
+        const auto* data=reinterpret_cast<const unsigned char*>(bytes.data());
+        check(bytes.size()>=20,"saved proxy header");
+        const size_t n=data[12]|size_t(data[13])<<8|size_t(data[14])<<16|size_t(data[15])<<24;
+        const auto doc=Json::parse(bytes.substr(20,n));
+        const auto& recipe=doc["asset"]["extras"]["aiverseSurfaceProxy"];
+        check(recipe.getStr("fit")=="auto" && recipe.getStr("source")=="wall.glb","authoring recipe persisted");
+    }
     check(fs::exists(root/"models/wall_proxy.glb"),"MCP publishes GLB");check(ws.call("geometry_proxy_bake",request).has("error"),"no overwrite");
     request.set("target",Json::string("../escaped.glb"));check(ws.call("geometry_proxy_bake",request).has("error"),"path confinement");
     auto bind=Json::parse(R"({"type":"wall","source":"wall.glb","model":"models/wall_proxy.glb","distance":50})");
@@ -75,7 +117,7 @@ int main(int argc,char** argv){try{
     check(ws.call("geometry_proxy_lod",bind).has("error"),"procedural graph view rejected");
     auto scene=Json::parse(R"({"version":1,"hlod":{"enabled":true},"instances":[{"id":"wall","model":"wall.glb","proxy":{"model":"models/wall_proxy.glb","maxPixels":96}}]})");render::GeometryScene::validate(scene);++checks;
     scene.member("instances").at(0).member("proxy").set("maxPixels",Json::number(int64_t(-1)));rejects([&]{render::GeometryScene::validate(scene);});
-    if(argc>1){fs::create_directories(argv[1]);for(auto pair:{std::pair{"source.glb",source.model.get()},std::pair{"plane.glb",result.model.get()},std::pair{"box.glb",box.model.get()},std::pair{"hole.glb",gap.model.get()}}){std::ofstream f(fs::path(argv[1])/pair.first,std::ios::binary);f<<exportGlb(*pair.second);}}
+    if(argc>1){fs::create_directories(argv[1]);{std::ofstream f(fs::path(argv[1])/"masked-source.glb",std::ios::binary);f<<sparseSource;}for(auto pair:{std::pair{"source.glb",source.model.get()},std::pair{"plane.glb",result.model.get()},std::pair{"box.glb",box.model.get()},std::pair{"hole.glb",gap.model.get()},std::pair{"masked.glb",trimmed.model.get()}}){std::ofstream f(fs::path(argv[1])/pair.first,std::ios::binary);f<<exportGlb(*pair.second);}}
     fs::remove_all(root);
     std::cout<<checks<<" surface proxy checks passed\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<"\n";return 1;}}

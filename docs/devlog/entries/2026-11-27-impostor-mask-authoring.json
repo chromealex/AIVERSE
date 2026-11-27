@@ -1,0 +1,21 @@
+{
+  "id": "2026-11-27-impostor-mask-authoring",
+  "date": "2026-11-27",
+  "system": "studio",
+  "branch": "codex/forest-impostor-contour",
+  "commit": "a1765eee9",
+  "author": "rendering",
+  "title": "Подрезка импостеров по альфа-маске",
+  "titleEn": "Fit impostor cards to the alpha mask",
+  "summary": "В панели моделей можно увидеть границы карточки до экспорта импостера.",
+  "summaryEn": "The Models panel previews each card boundary before exporting the proxy.",
+  "body": ["Режим Auto оценивает каждый ракурс. Карточка получает более узкие границы, если её площадь уменьшается как минимум на 20%. Результат сохраняется в новый GLB вместе с UV, текстурами и параметрами запекания."],
+  "bodyEn": ["Auto evaluates each chart and fits its card when the area falls by at least 20%. The new GLB stores the fitted geometry, UVs, textures and bake settings."],
+  "verified": "В WebKit проверены два ракурса и три режима. Для тестовой маски площадь сократилась на 81,5% при четырёх треугольниках. Повторное открытие GLB проверено нативным тестом.",
+  "verifiedEn": "WebKit checks covered two views and three fit modes. The masked fixture used 81.5% less card area with four triangles. A native test reopened the GLB.",
+  "limits": "Инструмент редактора для статических моделей. На странице показан кадр панели Studio. Экономия площади измеряется до растеризации.",
+  "limitsEn": "Editor tool for rigid assets, illustrated with a Studio panel capture. Area reduction is measured before rasterization.",
+  "status": "in-progress",
+  "links": [],
+  "media": [{"src":"docs/agent-handoffs/media/impostor-mask-studio.png","caption":"Контур подрезанной карточки и площадь до и после","captionEn":"Fitted card boundary and original and selected areas"}]
+}

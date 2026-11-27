@@ -1,0 +1,34 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/DartConfiguration.tcl
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/DartConfiguration.tcl
+Test project /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 266
+    Start 266: modeling_volume_csg
+
+266: Test command: /Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12 "/Users/aleksandrfeer/Projects/AIVERSE/.worktrees/forest-impostor-contour/tests/modeling/volume_csg.py" "/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/aiverse_modeling"
+266: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+266: Test timeout computed to be: 10000000
+266: PASS: reopened source, 7662 -> 7736 triangles after bore edit, GLB changed, rejected invalid revision/cycle, undo restored identical GLB
+1/2 Test #266: modeling_volume_csg ..............   Passed    8.97 sec
+test 267
+    Start 267: surface_proxy
+
+267: Test command: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/aiverse_surface_proxy_tests
+267: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+267: Test timeout computed to be: 10000000
+267: 1331 surface proxy checks passed
+2/2 Test #267: surface_proxy ....................   Passed    4.41 sec
+
+The following tests passed:
+	modeling_volume_csg
+	surface_proxy
+
+100% tests passed, 0 tests failed out of 2
+
+Total Test time (real) =  13.48 sec

@@ -1,4 +1,7 @@
 #include "Workspace.h"
+#include "BrandingOps.h"
+#include "engine/pack/Sha256.h"
+#include "tools/branding/BrandImage.h"
 #include "tools/modeling/SurfaceProxy.h"
 #include <filesystem>
 #include <fstream>
@@ -17,9 +20,40 @@ fs::path path(const Workspace& ws,const std::string& name){
 render::FileReader reader(const Workspace& ws){return [&ws](const std::string& name,std::string& out){std::ifstream f(path(ws,name),std::ios::binary);if(!f)return false;std::ostringstream s;s<<f.rdbuf();out=s.str();return true;};}
 }
 void registerSurfaceProxyOps(Workspace& ws){
+    const auto analyze = [&ws](const Json& p) {
+        std::vector<std::string> warnings;auto source=render::loadModel(p.getStr("model"),reader(ws),&warnings);
+        if(!warnings.empty())throw std::runtime_error("surface proxy: resolve source loader warning before baking: "+warnings.front());
+        Json options=Json::object();for(const auto key:{"mode","axis","resolution","fit"})if(p.has(key))options.set(key,p[key]);
+        return modeling::bakeSurfaceProxy(*source,options);
+    };
+    const auto exportProxy = [](const modeling::Build& baked, const Json& request) {
+        Json recipe=Json::object();
+        recipe.set("source",request["model"]);
+        for(const char* key:{"fit","mode","resolution"}) recipe.set(key,baked.report[key]);
+        recipe.set("axis",Json::string(request.getStr("axis","auto")));
+        Json extras=Json::object();
+        extras.set("aiverseSurfaceProxy",recipe);
+        return modeling::exportGlb(*baked.model,extras);
+    };
+    const auto digest = [](const std::string& bytes) {
+        const auto hash=pack::sha256(bytes.data(),bytes.size());
+        return pack::toHex(hash.data(),hash.size());
+    };
+    ws.registerOp({"geometry_proxy_analyze","Preview the baked alpha atlas, per-face rectangles and geometric area before saving.",
+        Json::parse(R"({"type":"object","properties":{"model":{"type":"string"},"mode":{"enum":["plane","box"]},"axis":{"enum":["auto","x","y","z"]},"resolution":{"type":"integer","minimum":16,"maximum":512},"fit":{"enum":["auto","full","trim"]}},"required":["model"]})"),
+        [analyze,digest,exportProxy](const Json& p) {
+            auto baked=analyze(p);
+            baked.report.set("digest",Json::string(digest(exportProxy(baked,p))));
+            auto& image=baked.model->images.front();
+            branding::Image raster{image.width,image.height,std::move(image.rgba)};
+            baked.report.set("png_base64",Json::string(base64Encode(branding::encodePng(raster))));
+            baked.report.set("width",Json::number(int64_t(image.width)));
+            baked.report.set("height",Json::number(int64_t(image.height)));
+            return baked.report;
+        }});
     ws.registerOp({"geometry_proxy_bake","Bake a rigid model into a distant plane (2 faces) or box (6 faces) GLB with embedded base colour, normal and metallic/roughness/occlusion maps. Preserves sampled holes. New target only; source is unchanged. Inspect oblique views before binding as LOD.",
-        Json::parse(R"({"type":"object","properties":{"model":{"type":"string"},"target":{"type":"string"},"mode":{"enum":["plane","box"]},"axis":{"enum":["auto","x","y","z"]},"resolution":{"type":"integer","minimum":16,"maximum":512}},"required":["model","target"]})"),
-        [&ws](const Json& p){
+        Json::parse(R"({"type":"object","properties":{"model":{"type":"string"},"target":{"type":"string"},"expectedDigest":{"type":"string"},"fit":{"enum":["auto","full","trim"]},"mode":{"enum":["plane","box"]},"axis":{"enum":["auto","x","y","z"]},"resolution":{"type":"integer","minimum":16,"maximum":512}},"required":["model","target"]})"),
+        [&ws,analyze,digest,exportProxy](const Json& p){
             const std::string name=p.getStr("target");const auto dest=path(ws,name);
             if(dest.extension()!=".glb"||fs::exists(dest))throw std::runtime_error("surface proxy: target must be a new .glb file");
             // Serialize cooperating bakers without truncating an existing output or following temp symlinks.
@@ -27,10 +61,9 @@ void registerSurfaceProxyOps(Workspace& ws){
             if(!fs::create_directory(lock))throw std::runtime_error("surface proxy: target is locked");
             struct Guard{fs::path p;~Guard(){std::error_code ec;fs::remove(p/"output.glb",ec);fs::remove(p,ec);}} guard{lock};
             if(fs::exists(dest))throw std::runtime_error("surface proxy: target already exists");
-            std::vector<std::string> warnings;auto source=render::loadModel(p.getStr("model"),reader(ws),&warnings);
-            if(!warnings.empty())throw std::runtime_error("surface proxy: resolve source loader warning before baking: "+warnings.front());
-            Json options=Json::object();for(const auto key:{"mode","axis","resolution"})if(p.has(key))options.set(key,p[key]);
-            auto baked=modeling::bakeSurfaceProxy(*source,options);const auto bytes=modeling::exportGlb(*baked.model);
+            auto baked=analyze(p);const auto bytes=exportProxy(baked,p);
+            if (p.has("expectedDigest") && p.getStr("expectedDigest")!=digest(bytes))
+                throw std::runtime_error("source changed since preview; analyze the model again");
             const auto tmp=lock/"output.glb";
             {std::ofstream f(tmp,std::ios::binary);f.write(bytes.data(),std::streamsize(bytes.size()));f.close();if(!f)throw std::runtime_error("surface proxy: write failed");}
             // Hard-link publication is atomic and fails if another writer created the destination.

@@ -1,0 +1,69 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/DartConfiguration.tcl
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/DartConfiguration.tcl
+Test project /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 31
+    Start  31: static_impostor_lod
+
+31: Test command: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/aiverse_static_impostor_lod_tests
+31: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+31: Test timeout computed to be: 10000000
+31: static impostor lod: ok
+1/4 Test  #31: static_impostor_lod ..............   Passed    0.54 sec
+test 267
+    Start 267: surface_proxy
+
+267: Test command: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/aiverse_surface_proxy_tests
+267: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+267: Test timeout computed to be: 10000000
+267: 1331 surface proxy checks passed
+2/4 Test #267: surface_proxy ....................   Passed    4.13 sec
+test 340
+    Start 340: terraweave_metal_forest
+
+340: Test command: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/aiverse_terraweave_metal_forest_test
+340: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+340: Test timeout computed to be: 10000000
+340: [metal-assets] libraries=0 sourceMisses=13 pipelines=19 pipelineFailures=0 archive=0 strict=0
+340: [terraweave-metal-forest] near=6490 far=5831 holes=6433 resized=1504 azimuthA=0.00012 azimuthB=0.12512
+340: palm distance=80 mode=full diagnosticFragments=62949533 medianMs=0.146000 samples=64 views=8
+340: palm distance=80 mode=trim diagnosticFragments=15992019 medianMs=0.102417 samples=64 views=8
+340: palm distance=80 maxMaskDelta=35 maxMaskFraction=0.000171 maxRgbDelta=46
+340: palm distance=140 mode=full diagnosticFragments=19732526 medianMs=0.108334 samples=64 views=8
+340: palm distance=140 mode=trim diagnosticFragments=4807426 medianMs=0.075980 samples=64 views=8
+340: palm distance=140 maxMaskDelta=14 maxMaskFraction=0.000225 maxRgbDelta=16
+340: palm distance=220 mode=full diagnosticFragments=7486521 medianMs=0.086063 samples=64 views=8
+340: palm distance=220 mode=trim diagnosticFragments=1812461 medianMs=0.074375 samples=64 views=8
+340: palm distance=220 maxMaskDelta=13 maxMaskFraction=0.000573 maxRgbDelta=15
+340: [terraweave-metal-forest] failures=0
+340: PASS [terraweave-metal-forest] real Metal BranchLOD, masked 8-view impostor, RT resize and GPU-idle retirement
+3/4 Test #340: terraweave_metal_forest ..........   Passed    3.72 sec
+test 400
+    Start 400: terraweave_model
+
+400: Test command: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/aiverse_terraweave_model_test
+400: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+400: Test timeout computed to be: 10000000
+4/4 Test #400: terraweave_model .................   Passed    3.26 sec
+
+The following tests passed:
+	static_impostor_lod
+	surface_proxy
+	terraweave_metal_forest
+	terraweave_model
+
+100% tests passed, 0 tests failed out of 4
+
+Label Time Summary:
+MetalGPU      =   3.72 sec*proc (1 test)
+RHI           =   3.72 sec*proc (1 test)
+Renderer3D    =   3.72 sec*proc (1 test)
+TERRAWEAVE    =   3.72 sec*proc (1 test)
+
+Total Test time (real) =  11.70 sec
