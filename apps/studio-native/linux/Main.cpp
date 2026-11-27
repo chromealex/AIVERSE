@@ -1,5 +1,6 @@
 #include "StudioWebAssets.h"
 #include "StudioWebBridge.h"
+#include "StudioScenePointer.h"
 #include "StudioSurfacePlatform.h"
 #include <iostream>
 
@@ -8,7 +9,8 @@ class GtkStudio final : public StudioSurfacePlatform {
 public:
     GtkStudio(GtkOverlay* overlay, GtkWindow* window, WebKitWebView* web, const std::string& root)
         : StudioSurfacePlatform(overlay), window_(window),
-          bridge_(web,[this](std::string message){ host_.handleMessage(message); }), host_(*this,root,false) {
+          bridge_(web,[this](std::string message){ host_.handleMessage(message); }), host_(*this,root,false),
+          pointer_(widget(StudioSurface::Scene), host_) {
         if (!bridge_.registered()) throw std::runtime_error("Studio web bridge unavailable");
     }
     ~GtkStudio() override { stopBackgroundWork(); host_.shutdown(); }
@@ -29,6 +31,7 @@ private:
     GtkWindow* window_;
     StudioWebBridge bridge_;
     StudioHost host_;
+    StudioScenePointer pointer_;
 };
 }
 
