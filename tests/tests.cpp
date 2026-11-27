@@ -16605,11 +16605,11 @@ TEST(native_editor_build_helpers) {
     auto has = [](const std::vector<std::string>& v, const std::string& a) { return std::find(v.begin(), v.end(), a) != v.end(); };
     CHECK(has(p.configureArgs, "-DAIVERSE_CONTENT_DIR=/games/My Game") && has(p.configureArgs, "-DCMAKE_BUILD_TYPE=Release"));
     CHECK(has(p.configureArgs, "-G") && has(p.configureArgs, "-DCMAKE_MAKE_PROGRAM=/usr/bin/ninja") && has(p.configureArgs, "-DAIVERSE_NATIVE_DIR="));
-    CHECK(has(p.buildArgs, "aiverse_editor") && has(p.buildArgs, "aiverse_headless") && has(p.buildArgs, "3"));
+    CHECK(has(p.configureArgs, "-DAIVERSE_BUILD_EDITOR=OFF") && has(p.configureArgs, "-DAIVERSE_BUILD_STUDIO_HTML5=ON") && has(p.buildArgs, "aiverse_studio") && has(p.buildArgs, "aiverse_headless") && has(p.buildArgs, "3"));
     // the client too (the project's modules reach "launch client"), without a content copy inside the project
     CHECK(has(p.buildArgs, "aiverse_client") && has(p.configureArgs, "-DAIVERSE_CLIENT_BUNDLE_CONTENT=OFF") && has(p.configureArgs, "-DAIVERSE_BUILD_CLIENT=ON"));
     CHECK(fs::path(p.clientBinary) == fs::path("/games/My Game/Builds/.temp/editor-linux/AiverseGame"));
-    CHECK(fs::path(p.editorBinary) == fs::path("/games/My Game/Builds/.temp/editor-linux/aiverse_editor") && p.launchTarget == p.editorBinary);
+    CHECK(fs::path(p.editorBinary) == fs::path("/games/My Game/Builds/.temp/editor-linux/apps/studio-native/AiverseStudio") && p.launchTarget == p.editorBinary);
     const std::string cmd = nativeBuildCommand(p);
     CHECK(cmd.rfind("'/usr/bin/cmake' '-S' '/eng' '-B' '" + p.buildDir + "'", 0) == 0);
     CHECK(cmd.find(" 2>&1 && '/usr/bin/cmake' '--build' ") != std::string::npos);
@@ -16621,9 +16621,10 @@ TEST(native_editor_build_helpers) {
     CHECK(!has(mac.buildArgs, "--parallel") && !has(mac.configureArgs, "-G"));
     CHECK(has(mac.buildArgs, "aiverse_studio") && has(mac.configureArgs, "-DAIVERSE_BUILD_EDITOR=OFF"));
     CHECK(fs::path(planNativeBuild("/eng", "/g", "windows", "cmake", "", false, 0).editorBinary) == fs::path("/g/Builds/.temp/editor-windows/apps/studio-native/Release/AiverseStudio.exe"));
-    CHECK(nativeRestartCommand("macos", "/g/B/AiverseStudioHTML5.app", "/g/My Game", "/eng/build") ==
+    CHECK(nativeRestartCommand("macos", "/g/B/AiverseStudioHTML5.app", "/g/My Game") ==
           "open -n '/g/B/AiverseStudioHTML5.app' --args --project '/g/My Game'");
-    CHECK(nativeRestartCommand("linux", "/g/aiverse_editor", "/g", "").find("AIVERSE_NATIVE_EDITOR=1 '/g/aiverse_editor' '/g' --native-editor") != std::string::npos);
+    CHECK(nativeRestartCommand("linux", "/g/AiverseStudio", "/g/My Game") ==
+          "( '/g/AiverseStudio' --project '/g/My Game' >/dev/null 2>&1 & )");
     CHECK(isProjectBuildExe("/g/Builds/.temp/editor-linux/aiverse_editor") && isProjectBuildExe("/g/Builds/editor-linux/aiverse_editor") && isProjectBuildExe("/g/Builds/.temp/editor-macos/AiverseEditor.app/Contents/MacOS/AiverseEditor"));
     CHECK(!isProjectBuildExe("/eng/build/lin/aiverse_editor") && !isProjectBuildExe("/Applications/AiverseEditor.app/Contents/MacOS/AiverseEditor"));
 

@@ -140,10 +140,9 @@ NativeBuildPlan planNativeBuild(const std::string& engineDir, const std::string&
         "-DAIVERSE_BUILD_TESTS=OFF", "-DAIVERSE_BUILD_SERVER=OFF",
         // the client with the project's modules: run on the project folder (AIVERSE_CONTENT), no content copy
         "-DAIVERSE_BUILD_CLIENT=ON", "-DAIVERSE_CLIENT_BUNDLE_CONTENT=OFF", "-DAIVERSE_GAME_EXECUTABLE=AiverseGame"});
-    const bool studio = host == "macos" || host == "windows";
-    if (studio) p.configureArgs.insert(p.configureArgs.end(), {"-DAIVERSE_BUILD_STUDIO_HTML5=ON", "-DAIVERSE_BUILD_EDITOR=OFF"});
+    p.configureArgs.insert(p.configureArgs.end(), {"-DAIVERSE_BUILD_STUDIO_HTML5=ON", "-DAIVERSE_BUILD_EDITOR=OFF"});
     if (host == "macos") p.configureArgs.push_back("-DAIVERSE_STUDIO_BUNDLE_ID=com.aiverse.studio.html5.project");
-    p.buildArgs = {"--build", p.buildDir, "--config", "Release", "--target", studio ? "aiverse_studio" : "aiverse_editor", "aiverse_headless", "aiverse_client"};
+    p.buildArgs = {"--build", p.buildDir, "--config", "Release", "--target", "aiverse_studio", "aiverse_headless", "aiverse_client"};
     if (jobs > 0) p.buildArgs.insert(p.buildArgs.end(), {"--parallel", std::to_string(jobs)});
     const fs::path bd(p.buildDir);
     const bool multiConfig = usesConfigurationDirectory(bd, host, ninja, cacheExists);
@@ -159,7 +158,7 @@ NativeBuildPlan planNativeBuild(const std::string& engineDir, const std::string&
         p.headlessBinary = (bin / "aiverse_headless.exe").string();
         p.clientBinary = (bin / "AiverseGame.exe").string();
     } else {
-        p.editorBinary = p.launchTarget = (bin / "aiverse_editor").string();
+        p.editorBinary = p.launchTarget = (studioBin / "AiverseStudio").string();
         p.headlessBinary = (bin / "aiverse_headless").string();
         p.clientBinary = (bin / "AiverseGame").string();
     }
@@ -278,14 +277,11 @@ NativeOpenAction nativeOpenAction(bool modulesMissing, bool buildReady, bool nat
     return NativeOpenAction::Offer;
 }
 
-std::string nativeRestartCommand(const std::string& host, const std::string& launchTarget, const std::string& projectArg, const std::string& toolsDir) {
+std::string nativeRestartCommand(const std::string& host, const std::string& launchTarget, const std::string& projectArg) {
     auto q = [&](const std::string& s) { return quoteFor(host, s); };
     if (host == "macos") return "open -n " + q(launchTarget) + " --args --project " + q(projectArg);
     if (host == "windows") return "start \"\" " + q(launchTarget) + " --project " + q(projectArg);
-    std::string args = q(projectArg) + " --native-editor";
-    if (!toolsDir.empty()) args += " --tools-from " + q(toolsDir);
-    // double fork: the new editor is not a child of this one (survives its exit, no zombie)
-    return "( AIVERSE_NATIVE_EDITOR=1 " + q(launchTarget) + " " + args + " >/dev/null 2>&1 & )";
+    return "( " + q(launchTarget) + " --project " + q(projectArg) + " >/dev/null 2>&1 & )";
 }
 
 bool isProjectBuildExe(const std::string& exe) {

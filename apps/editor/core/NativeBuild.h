@@ -80,10 +80,8 @@ bool nativeBuildHasModules(const std::string& buildDir, const std::vector<std::s
 enum class NativeOpenAction { None, Switch, Offer };
 NativeOpenAction nativeOpenAction(bool modulesMissing, bool buildReady, bool nativeChild);
 
-// Shell line that starts the built editor detached on `projectArg` (.aiverse or folder). toolsDir:
-// where aiversebuild / aiversemcp / AiverseGame of the regular build are (the project build has only the editor).
-// The child gets --native-editor (and AIVERSE_NATIVE_EDITOR=1 where the shell can set it): it never switches again.
-std::string nativeRestartCommand(const std::string& host, const std::string& launchTarget, const std::string& projectArg, const std::string& toolsDir);
+// Launch the built HTML Studio detached with the selected project folder.
+std::string nativeRestartCommand(const std::string& host, const std::string& launchTarget, const std::string& projectArg);
 
 // The executable is a per-project build (<...>/Builds/.temp/editor-*/...): it must not take over the .aiverse
 // file association of the regular editor.

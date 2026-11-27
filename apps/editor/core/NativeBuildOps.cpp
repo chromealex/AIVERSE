@@ -74,12 +74,10 @@ NativeBuildPlan nativePlanFor(const Workspace& ws, const NativeTools& tools) {
     dropForeignCMakeCache(bd, ws.engineDir);   // configured from an old engine folder: cmake would refuse it
     const bool cache = fs::exists(fs::path(bd) / "CMakeCache.txt", ec);
     auto plan = planNativeBuild(ws.engineDir, ws.project.dir, nativeHost(), tools.cmake, tools.ninja, cache, nativeBuildJobs());
-    if (plan.host == "macos" || plan.host == "windows") {
-        const auto bin = platform::hostExecutablePath(nullptr).parent_path();
-        const auto bundled = plan.host == "macos" ? bin.parent_path() / "Resources/studio-web" : bin / "studio-web";
-        if (!isProjectBuildExe(bin.string()) && fs::is_regular_file(bundled / "index.html", ec))
-            plan.configureArgs.push_back("-DAIVERSE_STUDIO_WEB_DIST=" + bundled.string());
-    }
+    const auto bin = platform::hostExecutablePath(nullptr).parent_path();
+    const auto bundled = plan.host == "macos" ? bin.parent_path() / "Resources/studio-web" : bin / "studio-web";
+    if (!isProjectBuildExe(bin.string()) && fs::is_regular_file(bundled / "index.html", ec))
+        plan.configureArgs.push_back("-DAIVERSE_STUDIO_WEB_DIST=" + bundled.string());
     return plan;
 }
 
@@ -184,7 +182,7 @@ void registerNativeBuildOps(Workspace& ws, const std::string& engineExe) {
         "binary paths, built, buildModules, upToDate (newer than native/ sources and the engine binary), ready (up to date and has every module: the editor switches to it on open without asking), why. See docs/native-modules.md.",
         Json::parse("{}"), [w, engineExe](const Json&) { return nativeStatus(*w, engineExe); }, false});
     ws.registerOp({"native_build",
-        "Configure + build the engine for the open project (-DAIVERSE_CONTENT_DIR=<project>, Release, targets aiverse_studio on macOS/Windows or aiverse_editor on Linux, plus aiverse_headless and aiverse_client: "
+        "Configure + build the engine for the open project (-DAIVERSE_CONTENT_DIR=<project>, Release, targets aiverse_studio, plus aiverse_headless and aiverse_client: "
         "the AiverseGame the editor launches then has the project's modules too) "
         "into <project>/Builds/.temp/editor-<host> (git-ignored; never touches the engine checkout). Output streams into the build log: "
         "poll build_status, then native_status. wait=true blocks until the build ends (aiversemcp without the editor; inside the "

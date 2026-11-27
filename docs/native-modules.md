@@ -46,13 +46,13 @@ for the full contract and example.
 
 ## Editor with project modules
 
-On macOS and Windows, open **Build → Project C++ modules** in HTML Studio. The list shows each module required by the open project's rules and whether the running Studio contains it. Choose **Build Studio with project modules** to start a background build. Follow the output in the Build window. Choose **Show log file** to locate the active transcript in the engine's `logs/native-editor-*.log`.
+On macOS, Windows and Linux, open **Build → Project C++ modules** in HTML Studio. The list shows each module required by the open project's rules and whether the running Studio contains it. Choose **Build Studio with project modules** to start a background build. Follow the output in the Build window. Choose **Show log file** to locate the active transcript in the engine's `logs/native-editor-*.log`.
 
 The build configures the engine with `-DAIVERSE_CONTENT_DIR=<project>` in
 `<project>/Builds/.temp/editor-<platform>` and builds the Release targets
 `aiverse_studio`, `aiverse_headless` and `aiverse_client`. Each receives the project's
 native modules. Set `AIVERSE_NATIVE_BUILD_JOBS` to control compilation parallelism.
-On Linux the editor target is currently `aiverse_editor`.
+On Linux the project editor is built at `apps/studio-native/AiverseStudio` inside the build directory.
 
 When the build is ready, save any project changes and choose **Open project Studio** to open the same project in a new window. The button tooltip contains the executable or bundle path. To open the project
 on macOS, run `open -n "<path to AiverseStudioHTML5.app>" --args --project "<project directory>"`.
