@@ -482,6 +482,26 @@ std::vector<uint64_t> linkMapEntities(Simulation& sim, GameCore& mod, const MapD
 
 namespace {
 // The row fields of one alive entity into r (reused: clears what it sets).
+std::string runtimeEntityName(const World& w, Entity e, const char*& category) {
+    if (const auto* character = w.tryGetConst<actor::CharacterId>(e)) {
+        category = "Runtime Actors";
+        return "Actor #" + std::to_string(character->slot);
+    }
+    if (const auto* projectile = w.tryGetConst<actor::Projectile>(e)) {
+        category = "Projectiles";
+        return "Projectile #" + std::to_string(projectile->id);
+    }
+    if (const auto* loot = w.tryGetConst<actor::Loot>(e)) {
+        category = "Loot";
+        return "Loot #" + std::to_string(loot->id);
+    }
+    if (const auto* vehicle = w.tryGetConst<actor::Vehicle>(e)) {
+        category = "Vehicles";
+        return "Vehicle #" + std::to_string(vehicle->id);
+    }
+    return {};
+}
+
 void fillRow(Simulation& sim, GameCore& mod, const WorldConfig& cfg, const GameState* gs, Entity e, WorldRow& r, const WorldReadOptions& opt) {
     World& w = sim.world();
     const Rules& R = mod.rules();
@@ -525,20 +545,7 @@ void fillRow(Simulation& sim, GameCore& mod, const WorldConfig& cfg, const GameS
             for (size_t ti = 0; ti < R.tagNames.size() && ti < 64 && !has; ++ti) has = R.tagNames[ti] == tag && (ut->tags >> ti & 1);
             if (has) { category = tag.c_str(); break; }
         }
-    r.runtimeName.clear();
-    if (const auto* character = w.tryGetConst<actor::CharacterId>(e)) {
-        category = "Runtime Actors";
-        r.runtimeName = "Actor #" + std::to_string(character->slot);
-    } else if (const auto* projectile = w.tryGetConst<actor::Projectile>(e)) {
-        category = "Projectiles";
-        r.runtimeName = "Projectile #" + std::to_string(projectile->id);
-    } else if (const auto* loot = w.tryGetConst<actor::Loot>(e)) {
-        category = "Loot";
-        r.runtimeName = "Loot #" + std::to_string(loot->id);
-    } else if (const auto* vehicle = w.tryGetConst<actor::Vehicle>(e)) {
-        category = "Vehicles";
-        r.runtimeName = "Vehicle #" + std::to_string(vehicle->id);
-    }
+    r.runtimeName = runtimeEntityName(w, e, category);
     r.category = category;
     r.label.clear();
     r.data.clear();
@@ -613,6 +620,9 @@ Json inspectEntity(Simulation& sim, GameCore& mod, Entity e, const Json& rulesJs
     Json r = Json::object();
     if (!w.alive(e)) { r.set("error", Json::string("object is gone")); return r; }
     const Rules& R = mod.rules();
+    const char* category = nullptr;
+    const auto runtimeName = runtimeEntityName(w, e, category);
+    if (!runtimeName.empty()) r.set("runtimeName", Json::string(runtimeName));
     Json comps = Json::object();
     for (auto& d : descs()) {
         if (!d.has(w, e)) continue;

@@ -151,7 +151,7 @@ export function LiveInspector({project,selection}:{project?:string;selection?:Li
     </label>}
     {error ? <p className="live__error" role="alert">{error}</p>
       : !detail || detail.ref!==ref || detail.epoch!==epoch ? <div className="live__empty">Reading entity…</div>
-      : <EntityDetails detail={detail} title={'Entity '+detail.ref} subtitle={'tick '+detail.tick}/>}
+      : <EntityDetails detail={detail} title={detail.runtimeName ?? 'Entity '+detail.ref} subtitle={(detail.runtimeName ? 'Entity '+detail.ref+' · ' : '')+'tick '+detail.tick}/>}
   </div>;
 }
 

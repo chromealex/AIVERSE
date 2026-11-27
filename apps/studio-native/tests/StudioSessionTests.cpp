@@ -2417,6 +2417,8 @@ void entityWorkflow() {
                 AIVERSE_TEST_CHECK(result.getInt("total")==1);
                 AIVERSE_TEST_CHECK(result["rows"][0].getStr("name")==name);
                 AIVERSE_TEST_CHECK(result["rows"][0].getStr("ref")==std::to_string(editor::worldRef(entity)));
+                const auto detail = inspector.inspect(&live,"run-1","run-1",result["rows"][0].getStr("ref"));
+                AIVERSE_TEST_CHECK(detail.getStr("runtimeName")==name);
                 return entity;
             };
             verifyRuntimeRow(actor::CharacterId{7}, "Actor #7", "Runtime Actors");
