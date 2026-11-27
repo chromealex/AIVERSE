@@ -4,6 +4,8 @@ import {StudioAlert,StudioButton,StudioInput,StudioSelect,StudioSection} from '.
 import PropertyField from '../components/PropertyField';
 import {materialFields} from '../panels/materialSchema';
 import type {MaterialData,MaterialPatch,MaterialKey,FieldValue} from '../panels/materialSchema';
+import {revealProjectAsset} from '../assetNavigation';
+import {safeAssetPath} from '../assetTree';
 import GraphCanvas from './GraphCanvas';
 import TextureGraphPanel from './TextureGraphPanel';
 import {materialGraph,textureRecipeParams,textureChannelForOutput} from './materialGraph';
@@ -45,12 +47,18 @@ export default function MaterialGraphPanel({documentEpoch,name,material,draft,pr
   finally{if(epoch.current===token){lock.current=false;setBusy(false)}}
  };
  const view=materialGraph(name,material,draft);
+ const textureNode=view.nodes.find(node=>node.id===selected && node.id.startsWith('shaderTexture:'));
+ const assetPath=textureNode?.label.startsWith('content/') ? textureNode.label.slice('content/'.length) : '';
  const fields=materialFields(material,draft).filter(f=>selected==='material'||selected==='factors'?f.type!=='asset':selected==='texture:'+f.key);
  return <div className="material-graph-modes">
   <div hidden={mode!=='dependencies'} className="material-dependency-view"><StudioSection title="Material dependencies">
   <div className="material-dependency-canvas">
    <GraphCanvas view={view} selected={selected} label="Material dependency graph" enhancedNavigation readOnly onSelect={setSelected} onMove={()=>{}}/>
   </div>
+  {assetPath && safeAssetPath(assetPath) && <StudioButton size="sm" onClick={()=>{
+   revealProjectAsset(projectPath,assetPath);
+   window.dispatchEvent(new CustomEvent('studio:show-panel',{detail:'assets'}));
+  }}>Show texture in Assets</StudioButton>}
   {fields.map(f=><PropertyField key={f.key} property={f} disabled={disabled||busy} onChange={v=>onEdit(f.key,v)}/>)}
   <small>Dependency view of the material draft; edit channels using the existing asset picker. Shader evaluation remains in Shader Graph.</small>
   </StudioSection></div>
