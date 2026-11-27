@@ -70,16 +70,26 @@ option(AIVERSE_BUILD_SERVER "Build the network game server and the network bot c
 # Register Objective-C++ in the ROOT directory before creating any targets.
 # CMake does not propagate a language enabled only in a child directory back
 # to parent-scoped targets; otherwise it can fail with CMAKE_OBJCXX_COMPILE_OBJECT.
-# The HTML5 Studio is the main editor on macOS and Windows: built by default once its web bundle exists
+# Desktop builds prefer HTML5 Studio when the web bundle and platform dependencies exist
 # (studio_mac.command / studio_windows.cmd build the bundle first; -DAIVERSE_BUILD_STUDIO_HTML5=OFF skips it).
 set(AIVERSE_STUDIO_WEB_DIST "${PROJECT_SOURCE_DIR}/apps/studio-web/dist" CACHE PATH "Built Studio web assets")
 set(_aiverse_studio_default OFF)
 if(AIVERSE_PLATFORM MATCHES "^(macos|windows)$" AND EXISTS "${AIVERSE_STUDIO_WEB_DIST}/index.html")
     set(_aiverse_studio_default ON)
+elseif(AIVERSE_PLATFORM STREQUAL "linux" AND EXISTS "${AIVERSE_STUDIO_WEB_DIST}/index.html"
+       AND (NOT DEFINED AIVERSE_VULKAN OR AIVERSE_VULKAN))
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(STUDIO_GTK_DEFAULT QUIET webkit2gtk-4.1>=2.40)
+        find_package(SQLite3 QUIET)
+        if(STUDIO_GTK_DEFAULT_FOUND AND SQLite3_FOUND)
+            set(_aiverse_studio_default ON)
+        endif()
+    endif()
 endif()
-option(AIVERSE_BUILD_STUDIO_HTML5 "Build the HTML5 Studio (main editor; macOS and Windows)" ${_aiverse_studio_default})
+option(AIVERSE_BUILD_STUDIO_HTML5 "Build the HTML5 Studio desktop editor" ${_aiverse_studio_default})
 set(_aiverse_legacy_editor_default ${AIVERSE_DESKTOP})
-if(AIVERSE_PLATFORM MATCHES "^(macos|windows)$")
+if(AIVERSE_BUILD_STUDIO_HTML5 OR AIVERSE_PLATFORM MATCHES "^(macos|windows)$")
     # Omitting the web bundle is also valid for runtime-only builds.
     set(_aiverse_legacy_editor_default OFF)
 endif()
