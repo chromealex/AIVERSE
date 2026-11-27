@@ -70,8 +70,10 @@
     },
     "studio": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Confirmed general project-settings gap: selectionShortcut/commandCard authored through set_manifest are not exposed by current native Studio tool allowlist. Reuse native manifest owner in general project settings UI; no command-specific file write bypass.",
+      "evidence": [
+        "apps/studio-native/StudioTools.h"
+      ]
     },
     "inspector": {
       "status": "not_run",

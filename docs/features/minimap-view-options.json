@@ -60,13 +60,19 @@
     },
     "studio": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Actual Rules Edit JSON saved per-type alternate portrait/background and minimap visibility, reopened text and disk matched. Project-level defaults/crop still need a native Studio route: set_manifest exists in Workspace but is absent from Studio tool allowlist/UI. Extend general project settings through existing owner; do not add per-feature exceptions.",
+      "evidence": [
+        "docs/evidence/issues-portrait-minimap-authoring-20261127/result.json",
+        "docs/evidence/issues-portrait-minimap-authoring-20261127/rules-saved.png",
+        "apps/studio-native/StudioTools.h"
+      ]
     },
     "inspector": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Per-type Rules JSON inspection/editing verified; project-level settings authoring remains incomplete.",
+      "evidence": [
+        "docs/evidence/issues-portrait-minimap-authoring-20261127/result.json"
+      ]
     },
     "persistence": {
       "status": "not_run",
