@@ -265,9 +265,9 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
      <button key={name} className={selected===name?'active':''} onClick={()=>switchGraph(name)}>{name}</button>)}
     {!busy&&names.length===0&&<p>No project graphs found.</p>}
    </aside>
-   <main className="graph-inspector">
+   <main className="graph-inspector" aria-busy={busy} inert={busy}>
     {!selected ? <div className="graph-empty">Select a graph to inspect its nodes and connections.</div> :
-     busy ? <div className="graph-empty">Compiling and loading graph…</div> :
+     busy && !document ? <div className="graph-empty">Compiling and loading graph…</div> :
      document ? <>
       <div className="graph-summary"><strong>{selected}</strong><span>{document.graph.domain??'Unknown domain'}</span>
        <span>{draft?.nodes?.length??document.nodes} nodes · {document.samples} saved texture samples</span>
@@ -288,11 +288,14 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
        <StudioButton size="sm" disabled={!history.current?.canRedo()||busy} onClick={()=>{if(history.current)setDraft(history.current.redo());setPendingOutput(null)}}>Redo</StudioButton>
        <button disabled={!selectedNode||busy} onClick={deleteNode}>Delete node</button>
        <button disabled={!draft||busy} onClick={()=>void validate()}><CheckCircle2 size={13}/> Validate</button>
-       <StudioButton size="sm" disabled={busy||!draft} onClick={()=>void previewDraft()}>Preview draft</StudioButton>
+       <StudioButton size="sm" disabled={busy||!draft} aria-pressed={previewName===selected}
+        onClick={()=>{if(previewName===selected){setPreviewName('');setGpuError('');}else void previewDraft();}}>
+        {previewName===selected?'Hide preview':'Preview draft'}</StudioButton>
        <button disabled={!dirty||busy} onClick={discard}><RotateCcw size={13}/> Discard</button>
        <button disabled={!dirty||busy} onClick={()=>void save()}><Save size={13}/> Save graph</button>
       </div>
 
+      {previewName===selected&&<SpectraDockViewport id="shader" label="Shader draft GPU preview"/>}
       <GraphCanvas view={view} selected={selectedNode} label={'Editable node layout for '+selected}
        disabled={!draft||busy} onSelect={setSelectedNode} selection={selectedIds} onSelection={setSelection}
        onMoveGroup={positions=>{if(draft)editDraft(moveShaderNodes(draft,positions))}} pendingOutput={pendingOutput}
@@ -309,7 +312,6 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
        ]}
        onMove={(id,x,y)=>{if(draft)editDraft(shaderAdapters.get(draft.domain??'material')?.move(draft,id,x,y)??draft)}}/>
       <GraphDiagnosticsPanel view={view} policy={{cycles:'reject'}}/>
-      {previewName===selected&&<SpectraDockViewport id="shader" label="Shader draft GPU preview"/>}
       <GraphGpuProfilePanel projectPath={projectPath}/>
       {pendingOutput&&<StudioButton size="sm" onClick={()=>setPendingOutput(null)}>Cancel connection from {pendingOutput.node}</StudioButton>}
       {activeNode&&draft&&<StudioSection title={'Node: '+activeNode.id}>
