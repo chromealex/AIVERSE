@@ -174,14 +174,14 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
   }, [state.running]);
   useEffect(() => { if (follow.current && logBox.current) logBox.current.scrollTop = logBox.current.scrollHeight; }, [log]);
 
-  const start = useCallback(async (kind: 'build' | 'estimate', withInstall = installMissing) => {
+  const start = useCallback(async (kind: 'build' | 'estimate', withInstall = installMissing, buildTarget = target) => {
     setPendingEstimate(null);
     setError('');
     try {
       follow.current = true;
-      await invoke('studio.buildStart', { target, config, audio, installMissing: withInstall, estimate: kind === 'estimate' });
+      await invoke('studio.buildStart', { target: buildTarget, config, audio, installMissing: withInstall, estimate: kind === 'estimate' });
       setStartedAt(Date.now()); setNow(Date.now());
-      reloadTranscript(kind === 'estimate' ? 'estimate' : 'build-'+target);
+      reloadTranscript(kind === 'estimate' ? 'estimate' : 'build-'+buildTarget);
     } catch (e) { setError(message(e)); }
   },[target,config,audio,installMissing,reloadTranscript]);
   useEffect(()=>{
@@ -205,15 +205,15 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
   const errors = phase === 'failed' || phase === 'missing-toolchain' ? buildErrors(log) : [];
   const missing = missingToolchain(log);
   const installingTools = state.label.startsWith('toolchain-');
-  const installTools = async () => {
+  const installTools = async (installTarget: string) => {
     setPendingEstimate(null);
     setError('');
     try {
-      await invoke('studio.installBuildTools', { project: projectPath, target });
+      await invoke('studio.installBuildTools', { project: projectPath, target: installTarget });
       follow.current = true;
       setStartedAt(Date.now());
       setNow(Date.now());
-      reloadTranscript('toolchain-' + target);
+      reloadTranscript('toolchain-' + installTarget);
     } catch (err) { setError(message(err)); }
   };
   const run = runTarget(state.label);
@@ -348,7 +348,8 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
       </ol>}
       {errors.length > 0 && <StudioAlert tone="danger" title="Errors">{errors.map((e, i) => <div key={i}>{e}</div>)}</StudioAlert>}
       {missing && phase === 'missing-toolchain' && <StudioAlert tone="warning" title={'Missing for ' + missing.target + ': ' + missing.ids.join(', ')}>
-        <StudioButton size="sm" onClick={() => void start('build', true)}>Install and build</StudioButton></StudioAlert>}
+        <StudioButton size="sm" onClick={() => void start('build', true, missing.target)}>Install and build</StudioButton>
+        <StudioButton size="sm" onClick={() => void installTools(missing.target)}>Install only</StudioButton></StudioAlert>}
       <div className="build__cards">
         {info?.project === projectPath && !!info.nativeModules?.required?.length && <section className="build__card" aria-label="Project C++ modules">
           <h3>Project C++ modules</h3>
@@ -382,7 +383,7 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
             <span>{r.name}</span><small>{r.found ? (r.version || r.path || 'found') : (r.autoInstall ? 'installable' + (r.size ? ' · ' + r.size : '') : r.manual || r.install || 'install manually')}</small>
           </div>)}
           {toolchain?.hostSupported && toolchain.requirements.some(r => !r.found && r.required && r.autoInstall) &&
-            <StudioButton disabled={state.running} onClick={() => void installTools()}>Install missing tools</StudioButton>}
+            <StudioButton disabled={state.running} onClick={() => void installTools(target)}>Install missing tools</StudioButton>}
           {toolchain?.ok && <p className="build__note">Everything needed is installed.</p>}
         </section>
         <section className="build__card" aria-label="Size estimate">
