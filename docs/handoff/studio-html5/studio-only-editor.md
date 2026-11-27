@@ -1668,3 +1668,7 @@ f36c755b97cb50f9b9b6a14420e21ae40ee63ba4 updates InsightPanels.tsx. Packaged mac
 ### Frame Capture active clear and project isolation
 
 26593485c104cb48f162c9970859cda111704973 updates InsightPanels.tsx. Web and native Mac builds passed. Mac Studio cleared a resumed recording with 99 previously retained frames, remained in recording mode and exported only 45 new frames. Verified first new frame against live native boundaries and no earlier IDs in the result. Switched to a second project in the same detached panel and verified fresh controls, no old slider or CSV. Capture: docs/handoff/studio-html5/captures/mac-frame-record-clear.png. Continue remaining legacy window coverage and Windows checks.
+
+### Texture Resources inventory
+
+bb3166cea3761275282b6fee5a6b9850b6ad49b5 exposes native dimension in StudioScene.cpp and types.ts, updates InsightPanels.tsx and scopes TextureResourcesPanel in StudioPanelRenderer.tsx. Full inventory supports ID, dimension, format, pixel size, targets-only, byte-descending and handle-ascending order. Web and Mac builds passed. Initial fixture collided with a restored Frame Capture window ID. Using a distinct window, verified 16 native textures, 9 filtered targets, ascending handles, empty search and recovery. Screenshot docs/handoff/studio-html5/captures/mac-texture-resources-filters.png. Next migrate the selected-texture mip/layer and GPU readback workflow.
