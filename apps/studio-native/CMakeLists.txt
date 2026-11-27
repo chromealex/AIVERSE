@@ -88,6 +88,14 @@ if(TARGET aiverse_studio)
     if(TARGET aiverse_client)
         target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_GAME_CLIENT="$<TARGET_FILE:aiverse_client>")
         add_dependencies(aiverse_studio aiverse_client)
+        if(AIVERSE_PLATFORM STREQUAL "linux")
+            add_custom_target(aiverse_studio_game_player
+                COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:aiverse_client>"
+                    "$<TARGET_FILE_DIR:aiverse_studio>/aiverse_client"
+                DEPENDS aiverse_client
+                VERBATIM)
+            add_dependencies(aiverse_studio aiverse_studio_game_player)
+        endif()
     endif()
     target_sources(aiverse_studio PRIVATE ../fps/client.cpp)
     target_compile_definitions(aiverse_studio PRIVATE AIVERSE_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
