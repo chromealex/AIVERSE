@@ -1724,3 +1724,7 @@ e0cac53cf8300ab90e112b6e8a7bf727b6d773c6 adds docs/handoff/studio-html5/captures
 ### Scene Debug search by individual setting
 
 6cddca6676ce37d4ac43c7187808035e6dafc645 updates SceneToolbar.tsx and SceneToolbar.css with label-level filtering including subsystem names and select option text. Production web build passed. Initial run looked for Scene in the restored main layout and timed out; reran explicitly in a detached Scene. stats-mac-47tadykb/live.log verifies one result each for strata wire and physis wind, empty results for an unknown term and all five STRATA controls for STRATA. Screenshot captures/mac-scene-strata-search.png. This verifies menu discovery, not render output for every mode. Next audit the rendered diagnostic modes against the owners.
+
+### Rendered world axes from detached Scene Debug
+
+beb3676a563566b15140b219abbef4ea6616a77e adds captures/mac-scene-world-axes.png. In a disposable order-upgrade project the real detached toolbar toggled World axes off/on/off. Metal viewport screenshots with the menu closed are in stats-mac-el1e9p4k/{before,axes,restored}.png. Pixel comparison away from window chrome found 36 red/green/blue pixels at x369–439, y178–252 whose channels changed by more than 30 and returned exactly to baseline. This covers the native three-line world-axis path; other overlays require their own scene fixtures.
