@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pause, Play, SkipBack } from 'lucide-react';
+import { StudioSelect } from '../ui';
 import { invoke } from '../bridge';
 import type { StudioSnapshot } from '../types';
 import type { StudioPanel } from '../nestedDock';
@@ -158,8 +159,11 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
         </div>
       </div>
       <div className="anim__side">
-        <div className="tbrush__chips">{(doc.clips ?? []).map(c => <button key={c.id} type="button" className={c.id === clip ? 'is-on' : ''}
-          onClick={() => { setClip(c.id); setTime(0); }}>{c.id}</button>)}</div>
+        {!!doc.clips?.length && <label className="anim__clip-picker">Clip
+          <StudioSelect value={clip} onChange={event => {
+            setPlaying(false); setClip(event.currentTarget.value); setTime(0);
+          }}>{doc.clips.map(c => <option key={c.id} value={c.id}>{c.id}</option>)}</StudioSelect>
+        </label>}
         {!doc.clips?.length && <p className="ptp__hint">This model has no clips yet (Animation Clips ▸ Generate).</p>}
         {current && <>
           <div className="anim__transport">
