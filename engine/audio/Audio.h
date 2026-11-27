@@ -160,7 +160,7 @@ struct AudioConfig {
     bool openDevice = true;  // false: silent engine driven by render() (tests, headless)
     int sampleRate = 0;      // 0 = device native (usually 48000)
     int maxVoices = 32;
-    int periodMs = 0;        // 0 = backend default (~10 ms; larger on web)
+    int periodMs = 0;        // 0 = backend default (~10 ms; web: 60 ms -> 4096 frames, see AudioEngine::init)
     bool reverb = true;      // distance reverb (switch off on the weakest devices)
     bool nullBackend = false; // real audio thread without hardware (CI): miniaudio's null device
     std::string capturePath;  // debug: record everything the device plays into this WAV on shutdown
