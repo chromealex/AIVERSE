@@ -734,6 +734,7 @@
         "Проверить, подойдёт ли ассет, ещё до импорта — через MCP."
       ],
       "roadmap": [
+        {"id":"impostor-mask-authoring","status":"in-progress","title":"Выбор геометрии импостера по маске","titleEn":"Alpha-mask impostor authoring"},
         {
           "status": "done",
           "date": "2026-11-19",
