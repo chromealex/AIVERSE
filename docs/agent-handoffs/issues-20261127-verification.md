@@ -355,3 +355,23 @@ pack file inventory, hash, crop/pixel comparison and reproduction. Zero
 pixel differences over 190x142 minimap; top-left crop pixel [72,59,70,255]
 matches world(4,2) gradient. Only content.rpak present in packed root;
 raw minimap PNG absent from pack, UI atlas present. Final gate still pending.
+
+## Projectile native and Metal smoke acceptance
+
+Checkout d79d09eec, branch codex/issue223-minimap-atlas-20261126.
+Existing aiverse_tests binary: projectile_program 596 checks passed; presentation
+segment, origin archive, shared branch provenance, terminal particle motion and
+between-frame retirement: 33 checks passed (handles 92116 and direct run exit 0).
+Existing standalone client from full build source 2cd2d9ee6 rendered demo straight
+flight and isolated timed-split/ricochet variants; handles 24847 and 28838 exit 0,
+0 Metal pipeline failures. Inspected all three captures: ricochet starts at the
+first target, split fan starts mid-flight, no continuation trail returns to muzzle.
+Evidence: docs/evidence/issues-projectile-metal-20261127, including exact variant
+rules and logs. Source for projectile owner paths last changed at 51ea262e035d3372530bb05d59d573a6ebf49075.
+Limit: client predates later save/UI/FX-depth fixes; this is smoke evidence only,
+not the final current-tree acceptance. Custom imported projectile model not yet
+captured. GitHub recheck still shows 16 open issues (#206 and #210–224).
+No issues closed, no merge/push performed. Next: final cached all-target build,
+quick gate and current-client captures, then truthful manifests and integration.
+
+Evidence stage commit: 5feafd955e908fa7cd2f56b5fd5427ebe98901b2.
