@@ -77,6 +77,7 @@ struct Read {
     std::vector<uint8_t> expected;
     std::string label;
     int tolerance = 0; // zero for blits, <=1 LSB for sampled float->UNORM
+    PixelFormat expectedFormat = PixelFormat::RGBA8;
     TextureReadbackResult output;
     bool done = false;
 };
@@ -137,7 +138,7 @@ void verifyReads(Device& dev, const std::vector<std::shared_ptr<Read>>& probes,
             continue;
         }
         const bool shape=p->output.success() &&
-            p->output.format==PixelFormat::RGBA8 &&
+            p->output.format==p->expectedFormat &&
             p->output.width==p->width && p->output.height==p->height &&
             p->output.pixels.size()==p->expected.size();
         if (!shape) {
@@ -158,7 +159,7 @@ void verifyReads(Device& dev, const std::vector<std::shared_ptr<Read>>& probes,
                 "FAIL: %s GPU bytes differ at %zu (wanted %u, got %u, tolerance %d)\n",
                 p->label.c_str(),at,unsigned(*mismatch.first),
                 unsigned(p->output.pixels[at]),p->tolerance);
-        } else std::printf("PASS: %s (%dx%d GPU RGBA8 bytes; tolerance %d)\n",
+        } else std::printf("PASS: %s (%dx%d GPU bytes; tolerance %d)\n",
                            p->label.c_str(),p->width,p->height,p->tolerance);
     }
     timing.compareMs=elapsedMs(compareStart,Clock::now());
@@ -305,6 +306,27 @@ void volume(Device& dev) {
         return r.handle==h;
     }),"Metal resource inventory removes destroyed 3D texture");
 }
+void floatTexturePreview(Device& dev) {
+    const std::array<float, 8> pixels{0.f, 1.f, 3.f, 1.f, -1.f, 0.25f, 0.f, 1.f};
+    TextureDesc desc;
+    desc.width = 2;
+    desc.height = 1;
+    desc.format = PixelFormat::RGBA32F;
+    desc.data = pixels.data();
+    const auto texture = dev.createTexture(desc);
+    check(texture.valid(), "allocate RGBA32F preview texture");
+    if (!texture.valid()) return;
+    std::vector<uint8_t> bytes(sizeof(pixels));
+    std::memcpy(bytes.data(), pixels.data(), bytes.size());
+    auto read = probe(texture, 0, 0, 2, 1, bytes, "RGBA32F authored preview colors");
+    read->expectedFormat = desc.format;
+    verifyReads(dev, {read}, "Studio RGBA32F preview");
+    const auto grid = aiverse::render::texturePreviewGrid(read->output, true);
+    const std::vector<std::array<uint8_t, 3>> expected{{0,188,225}, {0,124,0}};
+    check(grid.colors == expected, "RGBA32F Metal preview tone maps authored channels");
+    dev.destroyTexture(texture);
+}
+
 void layered(Device& dev, TextureDimension dimension,int layers,
              const char* name) {
     const auto setupStart=Clock::now();
@@ -1317,6 +1339,7 @@ int main() {
                     elapsedMs(testStart,deviceReady));
         orderedArrayReuse(*device);
         volume(*device);
+        floatTexturePreview(*device);
         layered(*device,TextureDimension::Texture2DArray,2,"Texture2DArray");
         layered(*device,TextureDimension::Cube,6,"Cube");
         layered(*device,TextureDimension::CubeArray,12,"CubeArray");

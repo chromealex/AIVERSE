@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -15,18 +16,27 @@ struct TexturePreviewGrid {
     std::string error;
 };
 
+constexpr size_t texturePreviewPixelBytes(gfx::PixelFormat format) {
+    switch (format) {
+        case gfx::PixelFormat::RGBA8:
+        case gfx::PixelFormat::RGBA8_sRGB: return 4;
+        case gfx::PixelFormat::RGBA16F: return 8;
+        case gfx::PixelFormat::RGBA32F: return 16;
+        default: return 0;
+    }
+}
+
 inline TexturePreviewGrid texturePreviewGrid(const gfx::TextureReadbackResult& image, bool preview2D = false) {
     TexturePreviewGrid grid;
     if (!image.success()) {
         grid.error = "GPU readback failed or resource was released.";
         return grid;
     }
-    const bool hdr = image.format == gfx::PixelFormat::RGBA16F;
-    if (!hdr && image.format != gfx::PixelFormat::RGBA8 && image.format != gfx::PixelFormat::RGBA8_sRGB) {
+    const size_t stride = texturePreviewPixelBytes(image.format);
+    if (!stride) {
         grid.error = "Readback returned an unsupported preview format.";
         return grid;
     }
-    const size_t stride = hdr ? 8 : 4;
     const uint64_t pixels = uint64_t(image.width) * uint64_t(image.height);
     if (image.pixels.size() % stride != 0 || image.pixels.size() / stride != pixels) {
         grid.error = "Readback pixel count does not match the texture dimensions.";
@@ -49,9 +59,14 @@ inline TexturePreviewGrid texturePreviewGrid(const gfx::TextureReadbackResult& i
             const auto* sample = image.pixels.data() + (sy * grid.width + sx) * stride;
             std::array<uint8_t, 3> rgb{};
             for (int c = 0; c < 3; ++c) {
-                if (!hdr) { rgb[c] = sample[c]; continue; }
-                const auto bits = uint16_t(sample[c * 2]) | (uint16_t(sample[c * 2 + 1]) << 8);
-                const float linear = bake::halfToFloat(bits);
+                if (stride == 4) { rgb[c] = sample[c]; continue; }
+                float linear;
+                if (stride == 16) {
+                    std::memcpy(&linear, sample + c * sizeof(float), sizeof(float));
+                } else {
+                    const auto bits = uint16_t(sample[c * 2]) | (uint16_t(sample[c * 2 + 1]) << 8);
+                    linear = bake::halfToFloat(bits);
+                }
                 const float value = std::isfinite(linear) ? std::max(0.f, linear) : 0.f;
                 const float mapped = value / (1.f + value);
                 const float display = mapped <= .0031308f ? mapped * 12.92f : 1.055f * std::pow(mapped, 1.f / 2.4f) - .055f;

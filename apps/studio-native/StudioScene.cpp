@@ -2514,11 +2514,10 @@ Json StudioScene::textureReadback(const Json& params) {
     if (mip < 0 || mip >= t.mipLevels || mip >= 31 || layer < 0 ||
         layer >= (t.dimension == gfx::TextureDimension::Texture3D ? std::max(1,t.depth >> mip) : t.arrayLayers))
         throw std::runtime_error("Texture subresource changed");
-    const auto hdr = t.format == gfx::PixelFormat::RGBA16F;
-    if (t.sampleCount != 1 || t.dimension == gfx::TextureDimension::Texture1D ||
-        (!hdr && t.format != gfx::PixelFormat::RGBA8 && t.format != gfx::PixelFormat::RGBA8_sRGB))
+    const size_t pixelBytes = render::texturePreviewPixelBytes(t.format);
+    if (!pixelBytes || t.sampleCount != 1 || t.dimension == gfx::TextureDimension::Texture1D)
         throw std::runtime_error("Unsupported texture readback format or sampling");
-    if (uint64_t(std::max(1,t.width >> mip)) * std::max(1,t.height >> mip) > (16u << 20) / (hdr ? 8u : 4u))
+    if (uint64_t(std::max(1,t.width >> mip)) * std::max(1,t.height >> mip) > (16u << 20) / pixelBytes)
         throw std::runtime_error("Selected mip exceeds the 16 MiB readback limit");
     auto completion = std::make_shared<std::promise<Json>>();
     auto future = completion->get_future().share();

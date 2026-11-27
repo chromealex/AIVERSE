@@ -366,7 +366,7 @@ function TexturePixels({ project, texture, mip, layer }: { project: string; text
     {error && <p role="alert">{error}</p>}
     <canvas ref={canvas} hidden={!ready} aria-label="GPU pixel preview"
       style={{ aspectRatio: mipWidth + " / " + mipHeight, width: Math.max(1, 160 * Math.min(1, mipWidth / mipHeight)) }}/>
-    {ready && <p className="ptp__hint">Preview sample: {canvas.current?.width} × {canvas.current?.height} pixels.{texture.format === 'RGBA16F' && ' HDR colors use approximate tone mapping.'}</p>}
+    {ready && <p className="ptp__hint">Preview sample: {canvas.current?.width} × {canvas.current?.height} pixels.{(texture.format === 'RGBA16F' || texture.format === 'RGBA32F') && ' HDR colors use approximate tone mapping.'}</p>}
   </div>;
 }
 
@@ -377,9 +377,10 @@ function TextureSubresource({ texture, project }: { texture: StudioGpuTexture; p
   const cube = texture.dimension?.startsWith('Cube');
   const slices = volume ? extent(texture.depth) : Math.max(1, texture.layers);
   const sliceLabel = volume ? 'Depth slice' : cube ? 'Cube face' : 'Array layer';
-  const canRead = texture.samples === 1 && texture.dimension !== '1D' &&
-    ['RGBA8', 'RGBA8_sRGB', 'RGBA16F'].includes(texture.format) &&
-    extent(texture.width) * extent(texture.height) * (texture.format === 'RGBA16F' ? 8 : 4) <= 16 * 1024 * 1024;
+  const pixelBytes: Record<string, number> = { RGBA8: 4, RGBA8_sRGB: 4, RGBA16F: 8, RGBA32F: 16 };
+  const stride = pixelBytes[texture.format];
+  const canRead = texture.samples === 1 && texture.dimension !== '1D' && stride > 0 &&
+    extent(texture.width) * extent(texture.height) * stride <= 16 * 1024 * 1024;
   const face = ['+X', '−X', '+Y', '−Y', '+Z', '−Z'][layer % 6];
   return <section className="texture-resource__detail" aria-label="Texture subresource">
     <h4>Texture #{texture.id} · {texture.dimension} · {texture.format}</h4>
@@ -398,7 +399,7 @@ function TextureSubresource({ texture, project }: { texture: StudioGpuTexture; p
     </div>
     <p className="ptp__meta">{extent(texture.width)} × {extent(texture.height)} pixels · {texture.samples}× sampling</p>
     {canRead ? <TexturePixels key={mip + '/' + layer} project={project} texture={texture} mip={mip} layer={layer}/> :
-      <p className="ptp__hint">Readback requires a single-sample RGBA8 or RGBA16F subresource up to 16 MiB.</p>}
+      <p className="ptp__hint">Readback requires a single-sample RGBA8, RGBA16F or RGBA32F subresource up to 16 MiB.</p>}
   </section>;
 }
 
