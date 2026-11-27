@@ -1,0 +1,10 @@
+{
+  "sha": "cc68c00db86d9b30010f524b6de267c8f612b61a",
+  "argv": [
+    "python3",
+    "../studio-project-module-live.py"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-native-project-module.log.txt",
+  "sha256": "a2257b730dd593fb1cc21934ee44cbd46f08616d326ef2f2fd6bf01df8eb722a"
+}
