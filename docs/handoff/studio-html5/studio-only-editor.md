@@ -1454,3 +1454,7 @@ Desktop shortcut labels bd48fff0c: apps/studio-web/src/{App.tsx,keyboard.ts,comp
 ## Linux Studio preview resources
 
 Stage 32e0c27056d88043292b36b70b1a4b690b2dba3d. apps/studio-native/CMakeLists.txt now stages the PHYSIS flipbooks, caption font and licenses. apps/studio-native/tests/standalone_bundle.py recognizes the Linux host. git diff --check passed. Next run the package test against the linked host and capture the modeling previews.
+
+## Linux multiplayer player distribution
+
+Stage faabce1ce6ef94d4e3eff828ee28ff3e652897a7. apps/studio-native/CMakeLists.txt stages aiverse_client beside the Linux host for StudioSurfacePlatform::launchGamePlayer. Verified the destination against the launcher and ran git diff --check. Launch from a relocated package remains pending.
