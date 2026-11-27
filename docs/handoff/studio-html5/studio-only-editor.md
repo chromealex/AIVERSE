@@ -1748,3 +1748,7 @@ b9296de84a641e61fbd420084a561f45d0b4b22d extends tests/editor/scene_entity_adapt
 ### Selected-river isolation in a detached Scene
 
 2dca3cd67c1aac0e9ae97b3b78917f29e1d8828d adds captures/mac-scene-selected-river-{west,east}.png. Two named entities with NereidWater surfaces 7 and 8 occupied separate positions. For each studio.select-confirmed selection the real Scene Debug controls toggled River flow with Show all rivers disabled. Captures with the menu closed are in stats-mac-653av_6k/{westoff,weston,eastoff,easton}.png. Comparing each pair within the viewport at channel difference >50 yielded 1163 and 684 changed pixel positions, with zero overlap. Next audit TerraWeave overlays and outstanding editor workflows.
+
+### Simultaneous tile and camera slope fields
+
+0502abaa728df521005aa3e7430ce719f1ef9776 updates apps/studio-native/StudioScene.cpp and captures/mac-scene-dual-slope.png. Previously selecting a terrain tile suppressed the enabled camera-target slope field. Now both controls draw independently, coalescing equal centers. Initial compile failed due to a stray closure; corrected native Studio build passed. A detached Scene with two sloped OBJ tiles exercised off, selected, camera and combined modes at radius 8 m and spacing 2 m. In the combined screenshot 98 tile-only pixels and 163 camera-only pixels matched their respective independent captures exactly while differing from baseline by >40. Evidence: stats-mac-cy0dka5e/{off,selected,camera,both}.png. Next reconcile remaining TerraWeave controls with the editor parity matrix.
