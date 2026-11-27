@@ -335,3 +335,7 @@ Existing fallback tower framing reaches the top image edge; this stage does
 not claim to change automatic world-model framing. No cross-platform claim.
 Next: minimap packed/standalone and crop/hide/frame runtime acceptance,
 projectile visual checks, Windows #206, final gate/manifests/publishing/integration.
+
+## Minimap runtime acceptance data
+
+Source d3a60f824c6be1fdd893f4d3713d6f91a8eec484 adds deterministic RGBA gradient to ordinary ui path, authored bounds [4,2,20,14], rectangle camera frame and hidden tower types to existing real-client demo. Both minimap manifests updated first. Capture/pack NOT RUN. Next run loose client, pack via existing aiversebuild --estimate with KINGSTON output, run packed-only project and compare minimap pixels.
