@@ -55,7 +55,7 @@ The build configures the engine with `-DAIVERSE_CONTENT_DIR=<project>` in
 native modules. Set `AIVERSE_NATIVE_BUILD_JOBS` to control compilation parallelism.
 On Linux the editor target is currently `aiverse_editor`.
 
-When the build is ready, the panel displays the project Studio path. To open the project
+When the build is ready, save any project changes and choose **Open project Studio** to open the same project in a new window. The button tooltip contains the executable or bundle path. To open the project
 on macOS, run `open -n "<path to AiverseStudioHTML5.app>" --args --project "<project directory>"`.
 On Windows, run `"<path to AiverseStudio.exe>" --project "<project directory>"`.
 The Mac project bundle uses the identifier `com.aiverse.studio.html5.project`.

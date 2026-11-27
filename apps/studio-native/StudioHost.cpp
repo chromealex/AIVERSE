@@ -9,6 +9,7 @@
 #include "StudioFpsLightingDocument.h"
 #include "apps/editor/core/LegacyCameraBookmarks.h"
 #include "StudioNetworkPlay.h"
+#include "apps/editor/core/NativeBuildOps.h"
 #include "StudioGameWizard.h"
 #include "apps/editor/core/PortOps.h"
 #include "apps/editor/core/WizardOps.h"
@@ -4741,6 +4742,18 @@ bool StudioHost::handleHostMethod(const Json& req) {
         if (event.rfind("ui.", 0) != 0 || event.size() > 64) throw std::runtime_error("Invalid window event");
         sendEventPayload(event, params["payload"]);
         Json r = Json::object(); r.set("ok", Json::fromBool(true)); return r;
+    });
+    if (method == "studio.openProjectStudio") return answer([&] {
+        const auto& ws = session_->workspace();
+        if (ws.project.dir.empty() || ws.project.dir != params.getStr("project") || ws.building())
+            throw std::runtime_error("Project or build state changed");
+        if (ws.map.dirty || ws.project.rulesDirty || ws.project.manifestDirty)
+            throw std::runtime_error("Save the project before opening its Studio");
+        const auto built = editor::findNativeBuilt(ws);
+        std::string reason;
+        if (!editor::nativeBuildReady(ws, built, {}, &reason)) throw std::runtime_error(reason);
+        platform_.openProjectStudio(built.editor, ws.project.dir);
+        Json result = Json::object(); result.set("ok", Json::fromBool(true)); return result;
     });
     if (method == "studio.buildReveal") return answer([&] {
         // Show a build folder (or the last build log); the path is the session's, never JS-provided.

@@ -416,6 +416,12 @@ public:
     }
     PlayerExitStatus launchGamePlayer(const std::vector<std::string>& args) override {
         const auto exe=studio::studioNetworkPlayer(exeDir()/L"AiverseGame.exe");
+        return launchExecutable(exe,args);
+    }
+    void openProjectStudio(const std::filesystem::path& executable, const std::string& project) override {
+        launchExecutable(executable, {"--project", project});
+    }
+    static PlayerExitStatus launchExecutable(const std::filesystem::path& exe, const std::vector<std::string>& args) {
         // CreateProcess receives one command line. Escape quotes and trailing backslashes for the CRT.
         auto quote=[](const std::wstring& value){
             std::wstring out(1,L'"');size_t slashes=0;
@@ -429,7 +435,7 @@ public:
         for(const auto& arg:args)command+=L" "+quote(widen(arg));
         STARTUPINFOW startup{};startup.cb=sizeof(startup);PROCESS_INFORMATION process{};
         if(!CreateProcessW(exe.c_str(),command.data(),nullptr,nullptr,FALSE,0,nullptr,nullptr,&startup,&process))
-            throw std::runtime_error("AiverseGame could not start (Windows error "+std::to_string(GetLastError())+").");
+            throw std::runtime_error(exe.filename().string()+" could not start (Windows error "+std::to_string(GetLastError())+").");
         CloseHandle(process.hThread);
         auto child=std::shared_ptr<void>(process.hProcess,[](HANDLE h){CloseHandle(h);});
         return [child]() -> std::optional<int> {

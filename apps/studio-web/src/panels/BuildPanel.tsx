@@ -309,7 +309,10 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
               <span>{id}</span><small>{missing ? 'Missing in this Studio' : 'Loaded in this Studio'}</small>
             </div>;
           })}
-          {info.nativeModules.ready && <p className="build__note">Project Studio · {info.nativeModules.launch}</p>}
+          {info.nativeModules.ready && <StudioButton disabled={info.dirty || startingNative || state.running}
+            title={info.nativeModules.launch} onClick={() => {
+              void invoke('studio.openProjectStudio',{project:projectPath}).catch(err=>setError(message(err)));
+            }}>Open project Studio</StudioButton>}
           <StudioButton disabled={startingNative || state.running} onClick={async () => {
             setStartingNative(true); setError('');
             try {

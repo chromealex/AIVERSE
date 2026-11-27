@@ -338,6 +338,12 @@ public:
     PlayerExitStatus launchGamePlayer(const std::vector<std::string>& args) override {
         const std::filesystem::path bundle=NSBundle.mainBundle.bundlePath.UTF8String;
         const auto exe=studio::studioNetworkPlayer(bundle.parent_path()/"AiverseGame.app/Contents/MacOS/AiverseGame");
+        return launchExecutable(exe,args);
+    }
+    void openProjectStudio(const std::filesystem::path& executable, const std::string& project) override {
+        launchExecutable(executable, {"--project", project});
+    }
+    static PlayerExitStatus launchExecutable(const std::filesystem::path& exe, const std::vector<std::string>& args) {
         NSTask* task=[[NSTask alloc] init];
         task.executableURL=[NSURL fileURLWithPath:ns(exe.string())];
         NSMutableArray<NSString*>* argv=[NSMutableArray array];

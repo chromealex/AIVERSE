@@ -66,6 +66,7 @@ public:
     virtual void chooseSaveFile(const std::string& startDir, const std::string& defaultName, std::function<void(std::string)> done) = 0;
     virtual void chooseImportSources(const std::string& startDir, std::function<void(std::vector<std::filesystem::path>)> done) = 0;
     using PlayerExitStatus = std::function<std::optional<int>()>;
+    virtual void openProjectStudio(const std::filesystem::path& executable, const std::string& project) = 0;
     virtual PlayerExitStatus launchGamePlayer(const std::vector<std::string>& args) = 0;
     virtual void revealInFileManager(const std::filesystem::path& path, bool openFolder) = 0;
     // Per-user cache folder (asset thumbnails) and the last opened project (reopened on the next launch).
