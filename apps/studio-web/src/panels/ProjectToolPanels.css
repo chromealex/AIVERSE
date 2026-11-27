@@ -128,3 +128,5 @@ tr.diff__added td:first-child{color:#8ee6a0}tr.diff__removed td:first-child{colo
 .scripts-page .ptp__new{display:flex;flex-wrap:wrap;gap:6px}
 .scripts-page .ptp__new label{width:100%;color:var(--au-text-muted)}
 .scripts-page .ptp__new small{flex-basis:100%;color:var(--au-text-muted)}
+
+.frame-capture__scrub{display:grid;gap:6px;margin:10px 0}.frame-capture__scrub input{width:100%}
