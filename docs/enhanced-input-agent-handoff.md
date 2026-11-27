@@ -975,3 +975,7 @@ f885b73f39fe73e2108115949b92405b160dbc19 adds studio.inputConflicts in StudioSes
 ### Input modifier chain persistence
 
 7013663eb73aa492771c133fa86c8180f375130e updates docs/studio-html5-parity.md and adds docs/handoff/studio-html5/captures/mac-input-negate-normalize-deadzone.png. Detached Mac Input saved action modifiers negate then normalize, and a keyboard binding deadzone of 0.375. Revert restored the saved action name and the independent disk check confirmed modifier order and threshold. Evidence: stats-mac-ft6i997w/live.log. The bounded native conflict query awaits the integrated rebuild.
+
+### Complete Input trigger chain persistence
+
+de00861f91bae4579a1f2b698f798661877812fb updates docs/studio-html5-parity.md and adds captures/mac-input-trigger-chain.png. A detached Mac Input window authored all ten trigger kinds on one action. The independently parsed input/actions.json matched their exact order, all five time values and both referenced action names. Evidence in stats-mac-er4xhbzh/live.log. This verifies editor persistence. Continue integrated conflict verification and remaining runtime and window acceptance.
