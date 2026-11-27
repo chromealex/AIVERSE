@@ -50,6 +50,7 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
   },[route.request,path]);
   const current = doc?.clips?.find(c => c.id === clip);
   const channel = selection && current?.channels[selection.channel];
+  const selectedValue = channel && selection ? channel.values?.[channel.interpolation === 'cubic' ? selection.key * 3 + 1 : selection.key] : undefined;
   const duration = current ? clipDuration(current) : 0;
   useEffect(() => {
     setPose([]);
@@ -139,7 +140,7 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
               style={{ left: (duration ? t / duration : 0) * 100 + '%' }}
               onClick={() => { setPlaying(false); setTime(t); setSelection({channel:i, key:k}); }}/>)}</div>
           </div>)}</div>
-          {channel && selection && <output className="ptp__meta">{channel.node}.{channel.path ?? 'rotation'} · Key {selection.key + 1} · {channel.times?.[selection.key]} s · {String(channel.values?.[selection.key] ?? '—')}</output>}
+          {channel && selection && <output className="ptp__meta">{channel.node}.{channel.path ?? 'rotation'} · Key {selection.key + 1} · {channel.times?.[selection.key]} s · {selectedValue?.join(', ') ?? '—'}</output>}
         </>}
       </div>
     </div>}
