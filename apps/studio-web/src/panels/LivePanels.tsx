@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, Radio, Search } from 'lucide-react';
-import { StudioIconButton } from '../ui';
+import { StudioIconButton, StudioSelect } from '../ui';
 import { invoke } from '../bridge';
 import type { StudioRuntimeEntity, StudioRuntimePage, StudioGameState, StudioSnapshot } from '../types';
 import { type LiveRef, setShowLive, useLivePlay } from './livePlay';
@@ -61,10 +61,10 @@ export function LiveHierarchy({project,groupings,selection,onSelected}:{project?
     <label className="live-hier__search"><Search size={12} aria-hidden="true"/>
       <input value={query} onChange={e => {setQuery(e.target.value); setOffset(0);}} placeholder="Search live · t:type p:owner c:component #id" aria-label="Search live entities"/></label>
     {!!groupings?.length && <label className="live-hier__grouping">Group by
-      <select value={group} onChange={e=>{setCollapsed([]);setGroup(Number(e.target.value));navigate([]);}}>
+      <StudioSelect value={group} onChange={e=>{setCollapsed([]);setGroup(Number(e.target.value));navigate([]);}}>
         <option value={-1}>All entities</option>
         {groupings.map((name,index)=><option key={index} value={index}>{name}</option>)}
-      </select>
+      </StudioSelect>
     </label>}
     {path.length>0 && <nav className="live-hier__path" aria-label="Live group path">
       <button type="button" onClick={()=>navigate([])}>All groups</button>
@@ -144,10 +144,10 @@ export function LiveInspector({project,selection}:{project?:string;selection?:Li
   return <div className="live-inspector">
     {selection.refs && selection.refs.length > 1 && <label className="live-inspector__selection">
       <span>{selection.refs.length} selected</span>
-      <select aria-label="Inspect selected entity" value={ref}
+      <StudioSelect aria-label="Inspect selected entity" value={ref}
         onChange={event => setInspected({epoch:selection.epoch,ref:event.target.value})}>
         {selection.refs.map(id => <option value={id} key={id}>{selection.names?.[id] ?? 'Entity '+id}</option>)}
-      </select>
+      </StudioSelect>
     </label>}
     {error ? <p className="live__error" role="alert">{error}</p>
       : !detail || detail.ref!==ref || detail.epoch!==epoch ? <div className="live__empty">Reading entity…</div>

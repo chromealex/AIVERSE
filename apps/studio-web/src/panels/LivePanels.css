@@ -38,7 +38,7 @@
 .live-hier__row{flex:none}
 
 .live-hier__grouping{display:flex;align-items:center;gap:8px;padding:0 6px 6px;color:var(--au-text-muted);font-size:var(--au-font-sm)}
-.live-hier__grouping select{flex:1;height:26px}
+.live-hier__grouping select{flex:1;min-width:0}
 .live-hier__path{padding:5px 9px;overflow-wrap:anywhere;border-block:1px solid var(--au-line);font-size:var(--au-font-sm)}
 .live-hier__path button{padding:2px;border:0;background:none;color:var(--au-accent);cursor:pointer}
 .live-hier__group{min-height:30px}
