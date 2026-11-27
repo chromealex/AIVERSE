@@ -18825,3 +18825,27 @@ TEST(projectile_presentation_segment_origin_and_shared_sample) {
     CHECK(render::length(a.sample().position-render::float3{10,1,0})<1e-6f);
     CHECK(!a.sample().terminal);
 }
+
+TEST(projectile_origin_versioned_archive) {
+    using namespace aiverse;
+    projectile::State state;
+    state.origin = projectile::FlightOrigin::Ricochet;
+    state.enabled = true;
+    state.age = Fixed::fromRatio(1,2);
+    for(uint32_t version : {12u,13u}) {
+        std::string bytes;
+        Archive out(&bytes); out.formatVersion=version; out(state);
+        CHECK(out.ok());
+        projectile::State restored;
+        Archive in(bytes); in.formatVersion=version; in(restored);
+        CHECK(in.ok() && in.remaining()==0);
+        CHECK(restored.age==state.age);
+        CHECK(restored.origin==(version==13 ? projectile::FlightOrigin::Ricochet : projectile::FlightOrigin::Unknown));
+    }
+    std::string corrupt;
+    Archive out(&corrupt); out.formatVersion=13; out(state);
+    corrupt.back()=char(255);
+    projectile::State restored;
+    Archive in(corrupt); in.formatVersion=13; in(restored);
+    CHECK(!in.ok());
+}

@@ -5,8 +5,17 @@
   "changed_paths": [
     "apps/client/ClientFx.cpp",
     "apps/editor/Editor.cpp",
+    "engine/actor/ActorDurableComponents.h",
+    "engine/actor/ActorDurableProjectile.h",
+    "engine/actor/ActorModule.cpp",
+    "engine/actor/ActorModule.h",
     "engine/fx/GameFx.cpp",
     "engine/game/Components.h",
+    "engine/game/GameCore.cpp",
+    "engine/game/HostSystems.h",
+    "engine/game/Planets.cpp",
+    "engine/sim/ProjectileProgram.h",
+    "engine/sim/Simulation.cpp",
     "engine/view/ProjectilePresentation.h",
     "engine/view/game/GameView.cpp",
     "engine/view/game/GameView.h",
@@ -15,7 +24,7 @@
   ],
   "traits": {
     "editable": true,
-    "simulation": false,
+    "simulation": true,
     "visible": true,
     "runtime": true
   },

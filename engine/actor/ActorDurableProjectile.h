@@ -11,7 +11,7 @@ inline bool validProjectileTargetKey(Entity key,bool nullable){
     if(!key.valid())return false;
     return key.gen ? key.index>=1&&key.index<=200 : key.index>201;
 }
-inline bool ioDurableProjectile(Archive& a,Projectile& p){
+inline bool ioDurableProjectile(Archive& a,Projectile& p,bool provenance=true){
     io(a,p);
     auto& s=p.program;
     a(s.enabled,s.direction,s.distanceLeft,s.lifetimeLeft,s.age,s.radius,s.damageScale,
@@ -31,6 +31,9 @@ inline bool ioDurableProjectile(Archive& a,Projectile& p){
         if(!a.ok()||!validProjectileTargetKey(key,false)||!seen.insert(key.packed()).second)return false;
     }
     a(s.gravity,s.verticalSpeed,s.ballistic,p.programSpeed,p.programTarget.index,p.programTarget.gen);
+    if(provenance)a(s.origin);
+    else if(!a.writing())s.origin=projectile::FlightOrigin::Unknown;
+    if(uint8_t(s.origin)>uint8_t(projectile::FlightOrigin::Ricochet))a.fail();
     return a.ok()&&p.id&&p.owner&&p.owner<=200&&p.kind<=4&&p.piercedCount<=8&&
         validProjectileTargetKey(p.programTarget,true)&&(!s.enabled||s.cursor<=s.remaining.size());
 }

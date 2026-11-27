@@ -367,7 +367,7 @@ struct Projectile {
 };
 
 inline bool projectileContinuesFromContact(const Projectile& p) {
-    return p.program.enabled && (p.program.consumed != 0 || !p.program.hit.empty());
+    return p.program.enabled && p.program.origin != projectile::FlightOrigin::Emission;
 }
 
 struct Hero { int level = 1; Fixed xp{}; uint8_t skill[8] = {}; uint8_t points = 0; };   // skill / points: rules heroes.skills

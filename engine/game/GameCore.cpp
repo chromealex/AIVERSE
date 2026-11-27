@@ -1798,6 +1798,7 @@ void GameCore::hashArchivedState(Simulation& sim, Hasher& h, uint32_t layout) {
         h.i32(p.effList); h.i32(p.effIndex); h.i32(p.onHit); h.fx(p.onHitChance); h.u32(p.sourceType);
         h.v3(p.start); h.fx(p.travel); h.fx(p.total); h.fx(p.scale); h.i32(p.weapon);
         if(s.ballistic||s.gravity.raw||s.verticalSpeed.raw){h.fx(s.gravity);h.fx(s.verticalSpeed);h.u32(s.ballistic);}
+        if(s.origin!=projectile::FlightOrigin::Unknown)h.u32(uint32_t(s.origin));
         h.u32(s.enabled); h.v3(s.direction); h.fx(s.distanceLeft); h.fx(s.lifetimeLeft); h.fx(s.age);
         h.fx(s.radius); h.fx(s.damageScale); h.u32(s.cursor); h.u32(s.consumed); h.u32(s.splitBudget);
         h.u32(uint32_t(s.remaining.size())); for (auto n : s.remaining) h.u32(n);

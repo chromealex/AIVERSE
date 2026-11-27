@@ -6,7 +6,9 @@
 #include <algorithm>
 #include <optional>
 namespace aiverse::projectile {
+enum class FlightOrigin : uint8_t { Unknown, Emission, Split, Ricochet };
 struct State {
+    FlightOrigin origin = FlightOrigin::Unknown;
     bool enabled=false;
     Vec3 direction{};
     Fixed distanceLeft{},lifetimeLeft{},age{},radius{},damageScale=1_fx;
@@ -20,6 +22,9 @@ inline void io(Archive& a,State& s) {
     a(s.enabled,s.direction,s.distanceLeft,s.lifetimeLeft,s.age,s.radius,s.damageScale,
       s.cursor,s.consumed,s.splitBudget,s.remaining,s.hit);
     if(a.formatVersion>=6)a(s.gravity,s.verticalSpeed,s.ballistic);
+    if(a.formatVersion>=13)a(s.origin);
+    else if(!a.writing())s.origin=FlightOrigin::Unknown;
+    if(uint8_t(s.origin)>uint8_t(FlightOrigin::Ricochet))a.fail();
     if(s.cursor>16||s.remaining.size()>16||s.hit.size()>256||s.splitBudget>256) a.fail();
 }
 inline bool seen(const State& s,Entity e){return std::find(s.hit.begin(),s.hit.end(),e)!=s.hit.end();}
@@ -36,7 +41,7 @@ inline void bake(State& s,Fixed& speed,const ProjectileFlight& f) {
     }
 }
 inline void initialize(State& s,Fixed& speed,const ProjectileFlight& f,Vec3 direction) {
-    s={};s.enabled=true;s.direction=fxNormalize(direction);s.radius=f.radius;
+    s={};s.origin=FlightOrigin::Emission;s.enabled=true;s.direction=fxNormalize(direction);s.radius=f.radius;
     s.distanceLeft=f.maxDistance;s.lifetimeLeft=f.lifetime;s.splitBudget=f.splitBudget;
     s.gravity=f.gravity;s.verticalSpeed=f.verticalSpeed;s.ballistic=s.gravity.raw||s.verticalSpeed.raw;
     for(const auto& m:f.modifiers)s.remaining.push_back(m.count);
@@ -83,6 +88,7 @@ template<class Emit> void split(State& s,Fixed speed,const ProjectileFlight& f,s
     const uint16_t available=uint16_t(s.splitBudget-m.count);s.splitBudget=0;
     for(uint16_t k=0;k<m.count;++k){
         Branch b{s,speed,{}};
+        b.state.origin=FlightOrigin::Split;
         b.state.splitBudget=uint16_t(available/m.count+(k<available%m.count?1:0));
         b.state.age={};
         b.state.direction=fxNormalize(fan(s.direction,up,(Fixed::fromRatio(k,m.count-1)-Fixed::fromRatio(1,2))*m.angle/360));
@@ -102,6 +108,7 @@ template<class Split,class Find> std::optional<Branch> contact(State& s,Fixed& s
         if(!target){s.remaining[i]=0;s.consumed|=uint16_t(1u<<i);if(s.cursor==i+1)bake(s,speed,f);continue;}
         if(!--s.remaining[i])s.consumed|=uint16_t(1u<<i);
         Branch b{s,speed,target->id};
+        b.state.origin=FlightOrigin::Ricochet;
         if(target->direction.lengthSq()>Fixed{})b.state.direction=target->direction;
         if(b.state.cursor==i+1)bake(b.state,b.speed,f);
         return b;
@@ -132,6 +139,7 @@ inline Fixed sliceTime(const State& s,Fixed speed,Fixed dt,bool curved) {
     return fxMin(dt,fxMax(Fixed::fromRaw(1),fxMin(Fixed::fromRatio(1,120),Fixed::fromRatio(1,4)/(speed+fxAbs(s.verticalSpeed)+1_fx))));
 }
 inline bool valid(const State& s,Fixed speed,const ProjectileFlight& f) {
+    if(uint8_t(s.origin)>uint8_t(FlightOrigin::Ricochet))return false;
     if(!s.enabled)return true;
     if(!f.enabled||s.cursor>f.modifiers.size()||s.remaining.size()!=f.modifiers.size()||s.hit.size()>256||s.splitBudget>256||
        speed<=Fixed{}||speed>2000_fx||s.radius<Fixed{}||s.radius>4_fx||s.damageScale<Fixed{}||s.damageScale>64_fx||
