@@ -14,6 +14,26 @@ function Trend({ label, values, ticks }: { label: string; values: number[]; tick
   </div>;
 }
 
+function PlayerTrends({ player, samples, initiallyOpen }: {
+  player: StudioPlayerSample['players'][number]; samples: StudioPlayerSample[]; initiallyOpen: boolean;
+}) {
+  const [open, setOpen] = useState(initiallyOpen);
+  const entries = open ? samples.flatMap(sample => {
+    const row = sample.players.find(item => item.slot === player.slot);
+    return row ? [{tick: sample.tick, row}] : [];
+  }) : [];
+  const ticks = entries.map(entry => entry.tick);
+  return <details open={open} onToggle={event => setOpen(event.currentTarget.open)}>
+    <summary>{player.name} · Player {player.slot} · {player.units} units · {player.structures} structures</summary>
+    {open && <>
+      <Trend label="Army" values={entries.map(entry => entry.row.units)} ticks={ticks}/>
+      <Trend label="Structures" values={entries.map(entry => entry.row.structures)} ticks={ticks}/>
+      {Object.keys(player.resources).map(resource => <Trend key={resource} label={resource} ticks={ticks}
+        values={entries.map(entry => entry.row.resources[resource] ?? 0)}/>)}
+    </>}
+  </details>;
+}
+
 export default function PlayerHistory({ project }: { project: string }) {
   const [samples, setSamples] = useState<StudioPlayerSample[]>([]);
   const [error, setError] = useState('');
@@ -48,18 +68,7 @@ export default function PlayerHistory({ project }: { project: string }) {
   return <section aria-label="Player history"><h4>Player history</h4>
     {error && <p role="alert">{error}</p>}
     {!latest && !error && <p className="ptp__hint">Start a local match to track armies, structures and resources.</p>}
-    {latest?.players.map(player => {
-      const entries = samples.flatMap(sample => {
-        const row = sample.players.find(item => item.slot === player.slot);
-        return row ? [{tick:sample.tick, row}] : [];
-      });
-      const ticks = entries.map(e => e.tick);
-      return <details key={player.slot}><summary>{player.name} · Player {player.slot} · {player.units} units · {player.structures} structures</summary>
-        <Trend label="Army" values={entries.map(e => e.row.units)} ticks={ticks}/>
-        <Trend label="Structures" values={entries.map(e => e.row.structures)} ticks={ticks}/>
-        {Object.keys(player.resources).map(resource => <Trend key={resource} label={resource} ticks={ticks}
-          values={entries.map(e => e.row.resources[resource] ?? 0)}/>)}
-      </details>;
-    })}
+    {latest?.players.map((player, index) => <PlayerTrends key={player.slot} player={player}
+      samples={samples} initiallyOpen={index < 2}/>)}
   </section>;
 }
