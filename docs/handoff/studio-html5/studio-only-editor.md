@@ -1468,3 +1468,17 @@ Live Hierarchy multi-selection f1c7dd504cf536f179a0e4abdfeb9c3b0a901f83: apps/st
 Live Inspector selection 0cc2db1b5818e959cae3c141a647b85d3231817e: apps/studio-web/src/panels/LivePanels.tsx and LivePanels.css. Inspect any selected live entity without mutating Hierarchy selection. Reads use project, epoch and the inspected reference. TypeScript, git diff --check and 301 web tests passed (../linux-studio-build/live-inspector-web-tests.log). Desktop visual acceptance pending.
 
 Modeling desktop verification b66a5c0c18823797e6b037fd3f6406b94bd2ffdd: tests/modeling/mcp_preview.py uses its private temporary preference home for macOS. CLI help and git diff --check passed. Run the real Modeling test after the current native build; inspect mac-modeling-current/verification.log and generated frames.
+
+### November 27 macOS Modeling verification
+
+Production macOS Studio built from bbadb47f0 with the isolated test runner from b66a5c0c1. Command: python3 -B tests/modeling/mcp_preview.py --build ../studio-project-module-mac --output ../mac-modeling-current. Result: MCP discovery, create/apply/edit, stale revisions, graph sampling and five real screenshots passed.
+
+Standalone bundle verification with --require-build-tool passed: 2 web entry assets and 489 MCP tools. Captures in ../mac-modeling-current:
+
+- walk.png (512 × 512), SHA-256 6519c7e7df3e2e58e6cc872ff5be10e35484b8bb5dc62e9675803095212cbbe3
+- death.png (512 × 512), SHA-256 db28c241cd6d40ec4d51ca1213b76525af19e913250583e89fc98c01f79240d3
+- timeline.png (1280 × 800), SHA-256 a5ca19f00c2d33dd43b21f0397273da69a5d50ff26281b701877443bf2b3d98d
+- graph-pose.png (512 × 512), SHA-256 e7026decf8218ea572f949af3d0da50d619ebfd7cab4fdb52255f792f50e7966
+- graph-editor.png (1280 × 800), SHA-256 b79629cb408de53486586dac6d3a5bdd5a07da4775401132dfba03bb0b742d55
+
+Linux StudioHost.cpp compiled with reduced-memory flags. Linux runtime and Live Inspector modifier input remain pending.
