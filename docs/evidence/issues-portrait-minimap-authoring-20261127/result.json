@@ -1,0 +1,14 @@
+{
+  "source": "b0a23abb3",
+  "runtime": "Studio built before combined build; no later runtime source changes",
+  "observed": [
+    "Native Rules Edit JSON changes selected scout view.minimapfalse and alternate portrait model/background",
+    "Validate & save accepted",
+    "Reopening Edit JSON showed the same saved values",
+    "Disk JSON independently read and checked"
+  ],
+  "limits": [
+    "Per-type authoring only; map/project minimap configuration and project portrait defaults not verified by this interaction",
+    "Not a fresh process reopen or rendered portrait/minimap capture; rendering evidence is separate"
+  ]
+}

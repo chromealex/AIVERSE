@@ -12,7 +12,7 @@
      boxStyle, lines[], modeHint, hintStyle, screen, overTitle, overTime, shadows, materials (0..2: terrain / model material tier), particles (0..3), volume, music (0..100).
      dispatchCount, dispatchCaption, dispatchRatio, dispatchStyle (floating region order preview).
      netMatch (online match: no restart, "leave match" instead of "main menu").
-     Events: act(id), howto() (toggles the "How to play" panel, howto.rml), pause(), resume(), restart(), tomenu(). Static text: {{ 'key' | tr(lang) }}, keys in engine/assets/lang (engine/i18n/README.md). -->
+     Events: act(id), howto() (toggles the "How to play" panel, howto.rml), pause(), resume(), restart(), tomenu(), quit(). Static text: {{ 'key' | tr(lang) }}, keys in engine/assets/lang (engine/i18n/README.md). -->
 <body>
 <!-- the model is bound on a div: <body> is the document element itself and binds too late -->
 <div class="root" data-model="game" data-class-touch="touch">
@@ -43,7 +43,7 @@
 
     <div id="minimap" class="panel" data-attr-style="minimapStyle">
         <button class="selection-shortcut" data-for="a : selectionShortcuts" data-class-disabled="!a.enabled" data-event-click="act(a.id)">
-            <img data-if="a.image != ''" data-attr-src="a.image"/>{{a.label}}
+            <img data-if="a.image != ''" data-attr-src="a.image"/>{{a.label}}<span class="hotkey" data-if="a.hotkey != ''">{{a.hotkey}}</span>
         </button>
         <img id="minimap-img" src="#minimap"/>
     </div>
@@ -146,6 +146,7 @@
             <button class="wide" data-if="!netMatch" data-event-click="restart()">{{ 'pause.restart' | tr(lang) }}</button>
             <button class="wide" data-if="!netMatch" data-event-click="tomenu()">{{ 'pause.to_menu' | tr(lang) }}</button>
             <button class="wide" data-if="netMatch" data-event-click="tomenu()">{{ 'ui.leave_match' | tr(lang) }}</button>
+            <button class="wide" data-event-click="quit()">{{ 'pause.quit' | tr(lang) }}</button>
         </div>
     </div>
 </div>

@@ -1,0 +1,27 @@
+[ui info] Loading Lua plugin using the provided Lua state.
+[streaming] initial=1 background=0 radius=35.8 focus=12.0,8.0
+[loading] map=maps/controls.json types=1/2
+[loading] map assets ready in 341.6 ms (1 types)
+[view] t=0 SELECTION_BOUNDARY_PASS
+[metal-assets] libraries=0 sourceMisses=35 pipelines=87 pipelineFailures=0 archive=0 strict=0
+[loading] first map frame in 7574.4 ms
+real 15.77
+user 4.59
+sys 0.30
+           276463616  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               81038  page reclaims
+                 136  page faults
+                   0  swaps
+                   0  block input operations
+                   2  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  42  voluntary context switches
+                4614  involuntary context switches
+         65840830676  instructions retired
+         17157265068  cycles elapsed
+          1098641088  peak memory footprint

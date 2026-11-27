@@ -3658,3 +3658,9 @@ Changing the source revision recreates the field. `world` keeps the original pla
 ## GPU checkpoint restore portability (in progress)
 
 PR #190 tracks GCC compilation of the GPU-owned restore path and a Metal restore/readback check for all eight program parameters and all eight custom attributes in a live slot.
+
+## Display-space additive particles
+
+SpectraFX additive emitters and trails accept `blendSpace:"display"`; the default is `linear`. Renderer3D replays prepared particle geometry after PRISMA tone mapping and before HUD, using original scene depth. PRISMA remains the only tone-map owner. Source alpha, fog and opaque occlusion remain active; display contributions do not feed HDR bloom/exposure or temporal effects. Other blend modes reject display space. GPU-only execution must reject this mode; ordinary graph routing uses CPU presentation.
+
+Actual Metal pixel cases and the three-scene Metal/WebGL example are retained under `docs/evidence/issues-additive-metal-20261127` and `docs/evidence/issues-material-effects-{metal,web}-20261127`. Windows/Vulkan and mobile hardware remain unverified. Main integration and publication are separate final steps. See `demos/material-effects` and `docs/particles.md`.

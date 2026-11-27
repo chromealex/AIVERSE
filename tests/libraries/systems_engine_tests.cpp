@@ -157,7 +157,7 @@ int main(){
     {
         using namespace aiverse::lib::mechanics;
         Simulation timed(SimConfig{31,8,0,true},std::make_unique<game::GameCore>());
-        timed.setup(Json::parse(R"({"victory":"noUnits","types":{"shooter":{"health":{"max":100},"weapons":[{"range":8,"damage":10,"cooldown":0.125,"windup":0.25,"backswing":0.375}]},"target":{"health":{"max":100}}}})"),Json::parse(R"({"size":[8,8],"players":[{"name":"A","team":1},{"name":"B","team":2}],"terrain":{"rows":["........","........","........","........","........","........","........","........"]},"entities":[{"type":"shooter","owner":1,"pos":[2,2]},{"type":"target","owner":2,"pos":[4,2]}]})"));
+        timed.setup(Json::parse(R"({"victory":"noUnits","types":{"shooter":{"health":{"max":100},"weapons":[{"range":8,"damage":10,"cooldown":0.125,"preciseCooldown":false,"windup":0.25,"backswing":0.375}]},"target":{"health":{"max":100}}}})"),Json::parse(R"({"size":[8,8],"players":[{"name":"A","team":1},{"name":"B","team":2}],"terrain":{"rows":["........","........","........","........","........","........","........","........"]},"entities":[{"type":"shooter","owner":1,"pos":[2,2]},{"type":"target","owner":2,"pos":[4,2]}]})"));
         Entity shooter,target;
         timed.world().each<game::Unit>([&](Entity e,auto&){if(timed.world().has<game::Combat>(e))shooter=e;else target=e;});
         CHECK(shooter.valid()&&target.valid());

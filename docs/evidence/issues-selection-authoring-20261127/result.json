@@ -1,0 +1,11 @@
+{
+  "checkout": "653ffdace",
+  "runtime_source": "4d6f08f19",
+  "mcp": "88243 exit0: script_write/read exact disk roundtrip; viewScripts contains script",
+  "studio": "Scripts panel opened file, changed source, Save confirmed, reopened same file; disk contains exact edited source",
+  "runtime_proof": "docs/evidence/issues-client-controls-web-20261127/result.json",
+  "limitations": [
+    "No new persisted selection state; only authoring source is saved.",
+    "Native Studio acceptance is macOS only."
+  ]
+}

@@ -1,0 +1,182 @@
+{
+  "schema": 1,
+  "id": "precise-attack-phases",
+  "owner": "gameplay",
+  "changed_paths": [
+    "docs/game-format.md",
+    "engine/game/Combat.cpp",
+    "engine/game/GameCore.cpp",
+    "engine/game/TopDown.cpp",
+    "engine/mechanics/AttackTiming.h",
+    "tests/libraries/systems_engine_tests.cpp",
+    "tests/tests.cpp",
+    "skills/gameplay/aiverse-weapon-policies/SKILL.md"
+  ],
+  "traits": {
+    "runtime": true,
+    "simulation": true,
+    "editable": false,
+    "visible": false
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Three current focused regressions45checks0fail cover time remainder,200-tick authored period, multiple subtick releases, overlapping rest, cancellation/reacquisition and restore checksum. Shared precise pre-movement stage advances once; combat consumes remaining budget and discards idle credit.",
+      "evidence": [
+        "docs/evidence/issues-attack-phases-current-20261127.json",
+        "engine/game/GameCore.cpp",
+        "engine/game/Combat.cpp"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Shared AttackTiming/WeaponCadence policies use Fixed math and existing ECS Combat state. GameCore is an adapter; no parallel cooldown owner or genre-specific solver. Existing TopDown free-fire skips an active timed slot to avoid bypassing its owner.",
+      "evidence": [
+        "engine/mechanics/AttackTiming.h",
+        "engine/mechanics/WeaponCadence.h",
+        "engine/game/Components.h",
+        "engine/game/TopDown.cpp"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "Public consumeAttackPhase returns unused time; consumeAttackRest consumes concurrent cooldown/recovery exactly once. Existing always-on library consumer and actual simulation regressions exercise the same header.",
+      "evidence": [
+        "engine/mechanics/AttackTiming.h",
+        "tests/libraries/systems_engine_tests.cpp",
+        "docs/evidence/issues-attack-phases-current-20261127.json"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "Existing weapon-policies recipe now documents shared Fixed phase/remainder API, release cap, single state owner, scope of adapter wiring and required regression cases.",
+      "evidence": [
+        "skills/gameplay/aiverse-weapon-policies/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "not_applicable",
+      "note": "Timing correction adds no authoring field or operation. Existing preciseCooldown/windup/backswing rules data remain owned by the established rules editors; no additional authoring surface is introduced. This does not claim new editor acceptance.",
+      "evidence": [
+        "docs/game-format.md",
+        "engine/mechanics/AttackTiming.h"
+      ]
+    },
+    "studio": {
+      "status": "not_applicable",
+      "note": "Timing correction adds no authoring field or operation. Existing preciseCooldown/windup/backswing rules data remain owned by the established rules editors; no additional authoring surface is introduced. This does not claim new editor acceptance.",
+      "evidence": [
+        "docs/game-format.md",
+        "engine/mechanics/AttackTiming.h"
+      ]
+    },
+    "inspector": {
+      "status": "not_applicable",
+      "note": "Timing correction adds no authoring field or operation. Existing preciseCooldown/windup/backswing rules data remain owned by the established rules editors; no additional authoring surface is introduced. This does not claim new editor acceptance.",
+      "evidence": [
+        "docs/game-format.md",
+        "engine/mechanics/AttackTiming.h"
+      ]
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "Existing ATP1 save stores phase,target,remaining and rejects invalid state; existing cooldown stays authoritative. Actual regression saves after200ticks, advances30, restores, advances30 and matches checksum. No format change introduced.",
+      "evidence": [
+        "engine/game/Save.cpp",
+        "docs/evidence/issues-attack-phases-current-20261127.json",
+        "tests/tests.cpp"
+      ]
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "Correction to native phase arithmetic consumes existing scalar rules; no authored graph or graph evaluator is added.",
+      "evidence": [
+        "engine/mechanics/AttackTiming.h"
+      ]
+    },
+    "performance": {
+      "status": "pass",
+      "note": "Existing fractional phased-weapon scenarios cover200-tick cadence, subtick recovery/cancellation and restore. Three actual native Debug process repeats below1CPU-second and512MiB per complete scenario; recorded maxima0.59s/49,860,608bytes across all three suites. Source allocation/work bounds reviewed. Coarse whole-workload budget, not per-operation latency, p95 or full-game throughput.",
+      "evidence": [
+        "docs/evidence/issues-cpu-costs-20261127/result.json",
+        "engine/mechanics/AttackTiming.h",
+        "engine/game/Combat.cpp"
+      ]
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "Native macOS CPU fixed-point simulation regressions passed for fractional attack phases and save/restore. No backend-specific timing implementation; Windows/Linux/mobile runtime tests NOT RUN and are not implied by this result.",
+      "evidence": [
+        "docs/evidence/issues-attack-phases-current-20261127.json",
+        "engine/mechanics/AttackTiming.h"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Reuses Fixed,ECS,WeaponCadence and existing combat/save owners with no new libraries or scheduling subsystem.",
+      "evidence": [
+        "engine/mechanics/AttackTiming.h",
+        "engine/game/GameCore.cpp"
+      ]
+    },
+    "headless": {
+      "status": "pass",
+      "note": "Actual makeSimJson Simulation runs without rendering and validates combat event cadence and restore checksum. No UI/device dependency.",
+      "evidence": [
+        "docs/evidence/issues-attack-phases-current-20261127.json",
+        "tests/tests.cpp"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "Executable simulation fixtures demonstrate0.3windup/0.02cooldown over200ticks and0.005windup/0.01recovery with multiple releases; native library example consumes shared phase helper.",
+      "evidence": [
+        "tests/tests.cpp",
+        "tests/libraries/systems_engine_tests.cpp"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Complete Mac quick gate on clean 0a8ed3c9ef3858d539c1b38ade9036dd8391e64f: configure/build PASS; 592 CTests, 587 passed, 5 explicit GPU skips, 0 failures, 1126.43s. Includes real client_controls_frame and additive_blend_frame. Original recorder report-name collision did not fail native tests; retained logs were separately verified on the unchanged clean checkout. Windows/Linux/mobile runtime not established.",
+      "evidence": [
+        "docs/evidence/issues-mac-quick-final-retained-20261127.json",
+        "docs/evidence/issues-mac-quick-final-retained-20261127.log.txt",
+        "docs/agent-handoffs/issues-20261127-verification.md"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Cumulative staged handoff records exact implementation/evidence SHAs, actual checks and failures, ownership, known backend limits and remaining final integration steps. Final gate result will be appended after terminal completion.",
+      "evidence": [
+        "docs/agent-handoffs/issues-20261127-verification.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "Game-format describes Fixed remainder, concurrent rest,32release cap, legacy/charge scope, existing events and ATP1 persistence.",
+      "evidence": [
+        "docs/game-format.md",
+        "skills/gameplay/aiverse-weapon-policies/SKILL.md"
+      ]
+    },
+    "publishing": {
+      "status": "not_applicable",
+      "note": "Internal simulation timing correction with no new visible surface; executable regression and updated rules/API documentation are the deliverables. No rendering screenshot can establish fractional cadence.",
+      "evidence": [
+        "docs/game-format.md",
+        "tests/tests.cpp"
+      ]
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-weapon-policies"
+    ],
+    "mcp_tools": [],
+    "studio_panels": [],
+    "studio_methods": []
+  },
+  "test_reports": [
+    "docs/evidence/issues-mac-quick-final-retained-20261127.json"
+  ]
+}

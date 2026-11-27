@@ -771,7 +771,7 @@ void StudioScene::syncDocumentModels(
                 // are approximate until GPU ID/depth picking is available.
                 bool nonOpaque=false;
                 for(const auto& material:model->materials)
-                    nonOpaque |= material.alpha==render::AlphaMode::Blend ||
+                    nonOpaque |= render::alphaBlended(material.alpha) ||
                                  material.transparent || material.baseColor.w<.999f;
                 if (deformable || nonOpaque ||
                     model->vertices.size()>1000000 || model->indices.size()>3000000) {
@@ -2821,7 +2821,7 @@ void StudioScene::frameSpectraDock(int framebufferWidth,int framebufferHeight) {
     }
     if(volume)spectraPreview_->contributeVolume(antialiasing_);
     renderer_.render(pass,&antialiasing_);
-    if(spectraPreview_->active())spectraPreview_->draw();
+    if(spectraPreview_->active())spectraPreview_->draw(&renderer_);
     renderer_.resolvePostFx();
     ++framesDrawn_;
     // Record the state actually used by this dock frame, before submission.
@@ -3544,8 +3544,8 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     renderer_.render(pass,useLighting?lightingRuntime_.pipeline(post_):static_cast<PostProcess*>(&post_));
     // Renderer3D keeps the HDR scene pass open; GPU/CPU FX draw here,
     // before PRISMA resolves it and before the frame/pass are retired.
-    if(spectraPreview_->active())spectraPreview_->draw();
-    spectraSources_.draw();
+    if(spectraPreview_->active())spectraPreview_->draw(&renderer_);
+    spectraSources_.draw(&renderer_);
     renderer_.resolvePrisma();
     spectraSources_.finish();
     lightingRuntime_.presented();

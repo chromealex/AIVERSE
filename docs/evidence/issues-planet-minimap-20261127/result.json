@@ -1,0 +1,60 @@
+{
+  "sha": "758b9d4ef7ec66f04ae3465f6ddae32ca5a005ea",
+  "runtime_binary_source": "99f71adcf8873f2743903ff40c53184d630c3a7d",
+  "backend": "macOS Metal",
+  "frames_per_case": 180,
+  "exits": [
+    0,
+    0,
+    0
+  ],
+  "capture": "actual Minimap::updatePlanet texture dump via existing AIVERSE_MINIMAP_DUMP; 192x192",
+  "cases": [
+    "both types visible",
+    "left hidden/right visible",
+    "both hidden"
+  ],
+  "left_marker_pixels": [
+    [
+      95,
+      95
+    ],
+    [
+      96,
+      95
+    ],
+    [
+      95,
+      96
+    ],
+    [
+      96,
+      96
+    ]
+  ],
+  "right_marker_pixels": [
+    [
+      95,
+      44
+    ],
+    [
+      96,
+      44
+    ],
+    [
+      95,
+      45
+    ],
+    [
+      96,
+      45
+    ]
+  ],
+  "all_other_pixels_identical": true,
+  "observed": "Each hidden type removes exactly its four owner-colored marker pixels, restores underlying globe; camera rectangle and all remaining pixels unchanged. All three real captures visually inspected.",
+  "limits": [
+    "Planet marker visibility only; planar image crop does not imply spherical crop support.",
+    "Static camera and two units; not large-population or mobile performance evidence.",
+    "Initial PNG conversion attempted PIL unavailable; native sips conversion succeeded without package installation."
+  ]
+}

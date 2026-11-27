@@ -1,0 +1,24 @@
+
+> @aiverse/studio-web@0.1.0 build
+> tsc --noEmit && vite build
+
+vite v7.3.8 building client environment for production...
+transforming...
+✓ 1842 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                          2.26 kB │ gzip:   1.07 kB
+dist/assets/sky-storm-BQB4hRNS.jpg      14.77 kB
+dist/assets/mark-D12d3ouS.png           23.01 kB
+dist/assets/sky-day-CwNvmNJ_.jpg        27.81 kB
+dist/assets/sky-dawn-CPkS8XPJ.jpg       43.49 kB
+dist/assets/sky-golden-S5uHUIjB.jpg     48.32 kB
+dist/assets/sky-dusk-Dp3AnNGr.jpg      102.83 kB
+dist/assets/index-BY3__gR8.css         212.65 kB │ gzip:  36.42 kB
+dist/assets/index-B_ZDWnuI.js        1,333.63 kB │ gzip: 399.96 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 1.94s

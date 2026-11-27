@@ -1,6 +1,7 @@
 // AIVERSE Studio: strict safe subset of the shared materials.json authoring API.
 // No filesystem paths, arbitrary JSON, shader source or dangerous material keys.
 #pragma once
+#include "engine/render/MaterialBlend.h"
 #include <array>
 #include <cmath>
 #include <optional>
@@ -62,7 +63,10 @@ inline bool validStudioMaterialBoolean(std::string_view key) {
 }
 inline bool validStudioMaterialText(std::string_view key,std::string_view value) {
     if(key=="sssColor")return parseStudioSssColor(value).has_value();
-    if(key=="alpha")return value=="opaque"||value=="mask"||value=="blend";
+    if(key=="alpha") {
+        render::AlphaMode mode;
+        return render::parseMaterialBlend(value,mode);
+    }
     if(key=="team")return value=="none"||value=="tint"||
            value=="mask"||value=="alpha"||value=="vertex";
     if(key=="description")return value.size()<=256;

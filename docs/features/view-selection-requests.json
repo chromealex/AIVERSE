@@ -1,0 +1,177 @@
+{
+  "schema": 1,
+  "id": "view-selection-requests",
+  "owner": "gameplay",
+  "changed_paths": [
+    "apps/client/GameClient.cpp",
+    "engine/view/game/GameViewScript.cpp",
+    "engine/view/game/GameViewScript.h",
+    "tests/tests.cpp",
+    "skills/gameplay/aiverse-view/SKILL.md"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": false,
+    "visible": true,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Real native and browser clients accept F7 view.select request and display tower selection/portrait/commands. Script regression verifies de-duplication and single-consumption requests.",
+      "evidence": [
+        "docs/evidence/issues-client-controls-web-20261127/result.json",
+        "docs/evidence/issues-client-controls-metal-20261127/result.json",
+        "tests/tests.cpp",
+        "docs/evidence/issues-selection-boundary-20261127/result.json"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Requests are local presentation state; client filters through visibleSelectionUnit and clears command-card paging. No authoritative simulation write or networking protocol added.",
+      "evidence": [
+        "engine/view/game/GameViewScript.cpp",
+        "apps/client/GameClient.cpp"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "ViewScripts::takeSelectionRequest transfers the queued handles once; native regression checks exact entity and that a second consume returns false.",
+      "evidence": [
+        "engine/view/game/GameViewScript.h",
+        "tests/tests.cpp"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "Existing aiverse-view recipe documents author/readback/Studio workflow, bounded generation-safe local requests and the browser/native-verified F7 demo. Catalog check validated 303 skills.",
+      "evidence": [
+        "skills/gameplay/aiverse-view/SKILL.md",
+        "demos/client-command-controls/scripts/view/controls.lua",
+        "docs/evidence/issues-client-controls-web-20261127/result.json"
+      ]
+    },
+    "mcp": {
+      "status": "pass",
+      "note": "Real script_write/read and viewScripts registration passed; built-server registry audit confirms all declared tools with no missing registrations.",
+      "evidence": [
+        "docs/evidence/issues-selection-authoring-20261127/result.json",
+        "docs/evidence/issues-selection-authoring-20261127/registry.log.txt"
+      ]
+    },
+    "studio": {
+      "status": "pass",
+      "note": "Native Studio Scripts panel changed, saved and reopened the view.select source; disk matches. Actual selection behavior covered by native/browser client captures.",
+      "evidence": [
+        "docs/evidence/issues-selection-authoring-20261127/result.json",
+        "docs/evidence/issues-selection-authoring-20261127/studio.png"
+      ]
+    },
+    "inspector": {
+      "status": "pass",
+      "note": "Selection behavior is authored as Lua source in existing Scripts editor; no separate entity property was introduced. Editable source loaded, saved and read back in native Studio.",
+      "evidence": [
+        "docs/evidence/issues-selection-authoring-20261127/result.json",
+        "docs/evidence/issues-selection-authoring-20261127/studio.png"
+      ]
+    },
+    "persistence": {
+      "status": "not_applicable",
+      "note": "Current selection and pending requests are transient local UI state. This change introduces no persisted selection or new data format. Lua source is saved through existing script authoring.",
+      "evidence": []
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "Local selection requests are Lua presentation commands; no authorable graph or graph evaluation contract is added.",
+      "evidence": []
+    },
+    "performance": {
+      "status": "pass",
+      "note": "Scoped native Debug/Rosetta workload:256-handle selection every update, separate selected animated portrait, and four projectile scenes. Post-warmup CPU120-frame means<=16.04ms, sampled GPU frames<16.67ms,RSS<512MiB. First selection warmup block17.96ms is retained. Allocation review records bounded vectors/pools and fixed-size presentation; no p95/zero-allocation/mobile claim.",
+      "evidence": [
+        "docs/evidence/issues-client-performance-20261127/result.json"
+      ]
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "Native macOS/Metal and Emscripten7.0.1 browser client exercised the F7 selection request. Windows/Linux/mobile are unverified; no platform-specific selection implementation introduced.",
+      "evidence": [
+        "docs/evidence/issues-client-controls-web-20261127/result.json",
+        "docs/evidence/issues-client-controls-metal-20261127/result.json"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Uses existing view VM, generation-safe Entity handles and client visibility selection policy; no new dependency.",
+      "evidence": [
+        "engine/view/game/GameViewScript.cpp",
+        "apps/client/GameClient.cpp"
+      ]
+    },
+    "headless": {
+      "status": "not_applicable",
+      "note": "Selection affects local presentation only and is not a headless simulation capability. Native script regression uses an isolated simulation as read-only input.",
+      "evidence": []
+    },
+    "examples": {
+      "status": "pass",
+      "note": "Controls demo F7 uses view.select on the tower, verified in the actual native client and browser.",
+      "evidence": [
+        "demos/client-command-controls/scripts/view/controls.lua",
+        "docs/evidence/issues-client-controls-web-20261127/result.json"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Complete Mac quick gate on clean 0a8ed3c9ef3858d539c1b38ade9036dd8391e64f: configure/build PASS; 592 CTests, 587 passed, 5 explicit GPU skips, 0 failures, 1126.43s. Includes real client_controls_frame and additive_blend_frame. Original recorder report-name collision did not fail native tests; retained logs were separately verified on the unchanged clean checkout. Windows/Linux/mobile runtime not established.",
+      "evidence": [
+        "docs/evidence/issues-mac-quick-final-retained-20261127.json",
+        "docs/evidence/issues-mac-quick-final-retained-20261127.log.txt",
+        "docs/agent-handoffs/issues-20261127-verification.md"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Cumulative staged handoff records exact implementation/evidence SHAs, actual checks and failures, ownership, known backend limits and remaining final integration steps. Final gate result will be appended after terminal completion.",
+      "evidence": [
+        "docs/agent-handoffs/issues-20261127-verification.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "UI scripting reference documents replace/add selection, handle limit, filtering and local-only behavior.",
+      "evidence": [
+        "docs/ui-scripting.md"
+      ]
+    },
+    "publishing": {
+      "status": "pass",
+      "note": "Pre-main publishing deliverables prepared: actual captures, bilingual devlog and browser-verified Web demo pinned by SHA-256. Full site built successfully and all112 demo files rehashed. Per release-site contract actual publish runs only AFTER main push; remote deployment remains an explicit integration task, not claimed complete here.",
+      "evidence": [
+        "docs/evidence/issues-client-controls-web-20261127/result.json",
+        "docs/devlog/entries/2026-11-27-gameplay-client-controls.json",
+        "site/manifest.json",
+        "docs/evidence/issues-site-preflight-20261127/result.json"
+      ]
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-view"
+    ],
+    "mcp_tools": [
+      "script_write",
+      "script_read",
+      "rules_get"
+    ],
+    "studio_panels": [
+      "scripts"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ]
+  },
+  "test_reports": [
+    "docs/evidence/issues-mac-quick-final-retained-20261127.json"
+  ]
+}

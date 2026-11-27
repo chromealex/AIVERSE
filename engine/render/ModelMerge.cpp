@@ -206,7 +206,7 @@ ModelMergeResult mergeStaticPrimitives(Model& m, const ModelMergeOptions& o) {
     auto kept = [&](size_t index) { return protectedNodes[index]; };
     auto mergeable = [&](const Primitive& p) {
         const auto& mt = m.materials.at(size_t(p.material));
-        return mt.alpha != AlphaMode::Blend && !mt.transparent;   // blended parts keep their own depth sort
+        return !alphaBlended(mt.alpha) && !mt.transparent;   // blended parts keep their own depth sort
     };
     // Groups: material -> (node, primitive) pairs that become one primitive.
     std::map<int, std::vector<std::pair<int, int>>> groups;

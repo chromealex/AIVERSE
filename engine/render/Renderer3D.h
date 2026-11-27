@@ -1039,6 +1039,15 @@ public:
     void addMotionReactiveDraw(MotionReactiveDraw fn) {
         if (fn) motionReactiveDraws_.push_back(std::move(fn));
     }
+    // Frame-scoped display-referred draws after PRISMA resolve and before UI.
+    // Callback only submits to the open output pass, with original scene depth
+    // available read-only. Width/height describe OUTPUT pixels (depth UV is normalized).
+    // Returns false without an active postprocessor: the host must use its LDR path.
+    using DisplayDraw = MotionReactiveDraw;
+    bool addDisplayDraw(DisplayDraw fn) {
+        if(!post_ || !resolvedDepthSource_.valid() || !fn)return false;
+        displayDraws_.push_back(std::move(fn));return true;
+    }
     void resolvePostFx() { resolvePrisma(); } // legacy API
     // Extra renderers (sprites, tiles) that draw with their own pipelines inside the main pass: run
     // after opaque and translucent meshes, before overlays (fog of war stays on top).
@@ -1215,7 +1224,7 @@ public:
                         !item.prim || !item.mat || !item.indexCount ||
                         !item.model->vb.valid() || !item.model->ib.valid() ||
                         item.tint.w < 0.99f || item.dissolve > 0.0f ||
-                        item.mat->alpha == AlphaMode::Blend ||
+                        alphaBlended(item.mat->alpha) ||
                         item.mat->transparent ||
                         item.materialRole == 1 || item.shadowRole == 2)
                         continue;
@@ -2117,6 +2126,7 @@ private:
     uint64_t motionLastSubmittedFence_ = 0; // 0: unknown, never guess
     ObjectMotionStats objectMotionStats_{};
     std::vector<MotionReactiveDraw> motionReactiveDraws_;
+    std::vector<DisplayDraw> displayDraws_;
     gfx::ShaderHandle objectMotionShader_;
     gfx::PipelineHandle objectMotionPipeline_;
     gfx::ShaderHandle objectMotionInstancedShader_;
@@ -2249,8 +2259,9 @@ private:
     struct ModelShaderKey {
         uint32_t variant;
         std::shared_ptr<const graph::Program> graph;
+        gfx::BlendMode blend = gfx::BlendMode::Opaque;
         bool operator==(const ModelShaderKey& other) const {
-            if (variant != other.variant) return false;
+            if (variant != other.variant || blend != other.blend) return false;
             if (graph == other.graph) return true;
             if (!graph || !other.graph) return false;
             // Material fragment and vertex shader source are backend-specific.

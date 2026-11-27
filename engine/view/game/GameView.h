@@ -58,6 +58,7 @@ namespace kingston { struct CabinResidentDraw; }
 #include "GameModelPreparationService.h"
 #include "GameTerrainRender.h"
 #include "ProjectileAppearance.h"
+#include "engine/view/ProjectilePresentation.h"
 #include "EntityFx.h"
 
 namespace aiverse::render { class CameraModelSnapshot; }
@@ -104,6 +105,7 @@ struct SceneObject {
     float steer = 0;             // vehicles (rules "driving"): steering angle of the front wheels, rad, + = left
     render::float3 target;
     Entity source;               // projectiles: who fired (muzzle point)
+    projectile::FlightOrigin projectileOrigin = projectile::FlightOrigin::Emission;
     uint16_t shotTargetType = UINT16_MAX; // eligible straight flight; target holds interpolated ground coordinates
     uint16_t shooterType = UINT16_MAX; // projectiles: type of the unit that fired it (lights)
     // planets: body index and pos / facing / target body-local (origin = body centre); -1 = flat map
@@ -676,6 +678,7 @@ public:
     // facing; false when the unit is not drawn yet or its model has no muzzle (effects then use the simulation point).
     bool muzzleOf(Entity e, render::float3& pos, render::float3& dir) const;
     // Current fitted projectile point in particle space, sampled after the view draw.
+    bool projectileDrawPoint(Entity projectile, render::float3& point) const;
     bool projectileImpactPathPoint(Entity projectile, render::float3& point) const;
     // Named node in particle space; no model ownership escapes this query.
     bool effectNodeOf(Entity e, const std::string& node, render::mat4& frame) const;
@@ -976,7 +979,7 @@ private:
         float prevTime[render::Animator::kLayers] = {0, 0, 0};
         float lodAccum = 0;                       // animation LOD: time not yet applied to the pose
         bool poseValid = false;
-        render::float3 launch;                    // projectiles: offset from the muzzle, decays
+        ::aiverse::view::ProjectilePresentation projectilePresentation;
         bool launched = false;
         bool straightImpact = false; // projectile last.pos is its rendered point, last.target the endpoint
         double lastSeenTime = -1;                 // previews keep their own clock

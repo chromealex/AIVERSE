@@ -126,6 +126,11 @@ int main() {
         CHECK(conf::installAsset(runtime,decoded,&err));
         CHECK(runtime.registeredContexts().size()==preset.contexts.size());
     }
+    const auto rts=p::inputflow_presets::rtsReference();
+    const auto& orders=rts.contexts.front().context.mappings;
+    CHECK(orders.size()>=8);
+    CHECK(orders[0].action=="AttackMove" && orders[0].id==1);
+    CHECK(orders[7].action=="Move" && orders[7].id==8 && orders[7].control.code==int(p::Key::M));
     // Host profile persistence: disk roundtrip, invalid writes do not replace prior state.
     const auto unique=std::chrono::steady_clock::now().time_since_epoch().count();
     const auto file=std::filesystem::temp_directory_path()/

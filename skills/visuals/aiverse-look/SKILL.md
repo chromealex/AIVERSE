@@ -30,3 +30,19 @@ Runtime library: none. Workflow over the engine MCP view tools.
 ## Offline model preview in a host application
 
 Use the Python, C# or Java renderer bindings in `sdk/render/README.md` for a bind-pose thumbnail. Load the installed native library, open the model once, render top-down RGBA8 at the required dimensions and camera angles, then release its handle. The CPU backend runs headlessly.
+
+## Additive model materials
+
+Use the existing shared material owner, for example
+`material_set {"name":"glow","material":{"alpha":"additive"}}`, then
+`material_apply` on the intended type. `additive` adds source RGB multiplied by
+source alpha; `additive-unweighted` adds source RGB without that factor. Read
+back with `material_get`. Both modes depth-test, do not write depth, and do not
+cast ordinary shadows. They remain scene-linear in HDR; this is independent of
+SpectraFX particle `blendSpace`. Studio Materials exposes the same material.
+The material library uses the field `alpha`; FX model overrides use `blend`.
+For an FX model, author `model.materials[].blend` through `fx_set`; omitted blend
+inherits the imported material. See `docs/models.md` and the three-scene
+`demos/material-effects` example. Native Metal and WebGL example captures are
+retained in `docs/evidence/issues-material-effects-{metal,web}-20261127`;
+other backend parity is not established by those captures.

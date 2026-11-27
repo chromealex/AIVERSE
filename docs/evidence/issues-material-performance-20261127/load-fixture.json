@@ -1,0 +1,13 @@
+{
+  "fixture": "/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/fixtures/material-load-7v2ail_m",
+  "rate_per_emitter": 256,
+  "life": 2,
+  "emitters": 2,
+  "steady_particles_expected": 1024,
+  "size": 0.3,
+  "cap_per_emitter": 1024,
+  "frames": 720,
+  "cpu_block_budget_ms": 16.67,
+  "gpu_sample_budget_ms": 16.67,
+  "rss_budget_bytes": 536870912
+}

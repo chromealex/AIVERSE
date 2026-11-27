@@ -1,0 +1,162 @@
+{
+  "victory": "keyUnits",
+  "fogOfWar": {
+    "mode": "none"
+  },
+  "types": {
+    "shadow": {
+      "name": "shadow",
+      "key": true,
+      "stance": "passive",
+      "health": {
+        "max": 100
+      },
+      "view": {
+        "model": "models/target.obj",
+        "height": 0.3,
+        "fx": [
+          {
+            "effect": "shadow",
+            "offset": [
+              0,
+              1,
+              0
+            ]
+          }
+        ]
+      }
+    },
+    "no_shadow": {
+      "name": "no_shadow",
+      "key": true,
+      "stance": "passive",
+      "health": {
+        "max": 100
+      },
+      "view": {
+        "model": "models/target.obj",
+        "height": 0.3,
+        "fx": [
+          {
+            "effect": "no_shadow",
+            "offset": [
+              0,
+              1,
+              0
+            ]
+          }
+        ]
+      }
+    },
+    "alpha": {
+      "name": "alpha",
+      "key": true,
+      "stance": "passive",
+      "health": {
+        "max": 100
+      },
+      "view": {
+        "model": "models/target.obj",
+        "height": 0.3,
+        "fx": [
+          {
+            "effect": "alpha",
+            "offset": [
+              0,
+              1,
+              0
+            ]
+          }
+        ]
+      }
+    },
+    "weighted": {
+      "name": "weighted",
+      "key": true,
+      "stance": "passive",
+      "health": {
+        "max": 100
+      },
+      "view": {
+        "model": "models/target.obj",
+        "height": 0.3,
+        "fx": [
+          {
+            "effect": "weighted",
+            "offset": [
+              0,
+              1,
+              0
+            ]
+          }
+        ]
+      }
+    },
+    "unweighted": {
+      "name": "unweighted",
+      "key": true,
+      "stance": "passive",
+      "health": {
+        "max": 100
+      },
+      "view": {
+        "model": "models/target.obj",
+        "height": 0.3,
+        "fx": [
+          {
+            "effect": "unweighted",
+            "offset": [
+              0,
+              1,
+              0
+            ]
+          }
+        ]
+      }
+    },
+    "linear": {
+      "name": "linear",
+      "key": true,
+      "stance": "passive",
+      "health": {
+        "max": 100
+      },
+      "view": {
+        "model": "models/target.obj",
+        "height": 0.3,
+        "fx": [
+          {
+            "effect": "linear",
+            "offset": [
+              0,
+              1,
+              0
+            ]
+          }
+        ]
+      }
+    },
+    "display": {
+      "name": "display",
+      "key": true,
+      "stance": "passive",
+      "health": {
+        "max": 100
+      },
+      "view": {
+        "model": "models/target.obj",
+        "height": 0.3,
+        "fx": [
+          {
+            "effect": "display",
+            "offset": [
+              0,
+              1,
+              0
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

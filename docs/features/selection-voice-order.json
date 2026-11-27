@@ -1,0 +1,208 @@
+{
+  "schema": 1,
+  "id": "selection-voice-order",
+  "owner": "gameplay",
+  "changed_paths": [
+    "apps/editor/core/DataOps.cpp",
+    "apps/studio-native/StudioSession.cpp",
+    "apps/studio-native/StudioTools.h",
+    "apps/studio-native/tests/StudioSessionTests.cpp",
+    "apps/studio-web/src/nestedDock.ts",
+    "apps/studio-web/src/panels/StudioPanelRenderer.tsx",
+    "apps/studio-web/src/panels/generated/ProjectDataPanel.css",
+    "apps/studio-web/src/panels/generated/ProjectDataPanel.tsx",
+    "apps/studio-web/src/windowGroups.ts",
+    "apps/studio-web/tests/nested-dock.mjs",
+    "demos/selection-voices/README.md",
+    "demos/selection-voices/audio.json",
+    "demos/selection-voices/audio/first.wav",
+    "demos/selection-voices/audio/normal.wav",
+    "demos/selection-voices/audio/second.wav",
+    "demos/selection-voices/game.json",
+    "demos/selection-voices/maps/voices.json",
+    "demos/selection-voices/rules.json",
+    "engine/audio/GameAudio.cpp",
+    "engine/audio/GameAudio.h",
+    "skills/ui/aiverse-audio/SKILL.md",
+    "tests/tests.cpp"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": false,
+    "visible": true,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Shared GameAudio sequential/cycle/window path and command reset exercised by three mixer regressions (119 checks) and actual native client PCM. Seven repeated clicks, Stop, and entity switch produced measured 440/440/660/880/440/440/660/440/440Hz output. Browser proof remains visual/input only.",
+      "evidence": [
+        "engine/audio/GameAudio.cpp",
+        "docs/evidence/issues-audio-mixer-20261127.json",
+        "docs/evidence/issues-selection-voices-native-20261127/result.json"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Sequence state stays in the existing local GameAudio owner. The client forwards explicit clicks, selection changes and orders; AudioEngine owns actual playback and receives the requested variant index. No simulation state or alternate mixer added.",
+      "evidence": [
+        "engine/audio/GameAudio.cpp",
+        "engine/audio/GameAudio.h",
+        "apps/client/GameClient.cpp",
+        "apps/client/GameClient.h"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "Existing onSelectionClick, resetSelectionClicks and onCommand use AudioEngine PlayParams.variant. Actual mixer tests exercise order, cycle, entity switch, command reset, explicit reset and positive timeout.",
+      "evidence": [
+        "engine/audio/GameAudio.h",
+        "engine/audio/GameAudio.cpp",
+        "engine/audio/Audio.h"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "Existing aiverse-audio recipe documents sequential/cycle/window semantics, game_file read/write and real capture rather than JSON-only acceptance. Catalog check previously validated303skills; no new skill introduced.",
+      "evidence": [
+        "skills/ui/aiverse-audio/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "pass",
+      "note": "Built server registry audit passed. Actual game_file_read/write round trip on isolated project checked exact expectedText write, stale-original and invalid-JSON rejection, unchanged bytes after rejection and exact reopen/readback.",
+      "evidence": [
+        "docs/evidence/issues-audio-mcp-registry-20261127.json",
+        "docs/evidence/issues-studio-project-data-20261127/mcp-roundtrip.json"
+      ]
+    },
+    "studio": {
+      "status": "pass",
+      "note": "Native WKWebView Project Data panel loads existing audio.json through shared Workspace operations. Actual UI saved count3 to4 and reread it in a new process; rejected malformed JSON retained draft. Dedicated rules/game/map owners remain separate. UI does not validate audio semantics and file saves are outside Undo.",
+      "evidence": [
+        "docs/evidence/issues-studio-project-data-20261127/ui-result.json",
+        "docs/evidence/issues-studio-project-data-20261127/saved.png",
+        "docs/evidence/issues-studio-project-data-20261127/reopened.png"
+      ]
+    },
+    "inspector": {
+      "status": "pass",
+      "note": "Generic project text inspection/editing exposes authored audio settings without a competing audio-only store. Loaded text, dirty controls, error and discard behavior verified in native UI; JSON syntax validation is not audio semantic validation.",
+      "evidence": [
+        "apps/studio-web/src/panels/generated/ProjectDataPanel.tsx",
+        "docs/evidence/issues-studio-project-data-20261127/invalid.png",
+        "docs/evidence/issues-studio-project-data-20261127/ui-result.json"
+      ]
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "Authored JSON persists exactly through MCP reopen and native process restart; failed writes preserve saved bytes. Local click sequence is transient presentation state, intentionally not persisted in simulation saves or copied between entities.",
+      "evidence": [
+        "docs/evidence/issues-studio-project-data-20261127/audio-after.json",
+        "docs/evidence/issues-studio-project-data-20261127/mcp-roundtrip.json",
+        "docs/evidence/issues-studio-project-data-20261127/reopened.png"
+      ]
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "This change extends scalar audio.json event-binding options. It introduces no authored graph, graph evaluator or node-editing workflow. Existing audio bank remains the data owner.",
+      "evidence": [
+        "engine/audio/GameAudio.cpp"
+      ]
+    },
+    "performance": {
+      "status": "pass",
+      "note": "Existing119-check audio scenario covers windowed/sequential clicks and actual mixer order/reset behavior. Three actual native Debug process repeats below1CPU-second and512MiB per complete scenario; recorded maxima0.59s/49,860,608bytes across all three suites. Source allocation/work bounds reviewed. Coarse whole-workload budget, not per-operation latency, p95 or full-game throughput.",
+      "evidence": [
+        "docs/evidence/issues-cpu-costs-20261127/result.json",
+        "engine/audio/GameAudio.cpp"
+      ]
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "Native macOS actual audio callback PCM sequence verified; browser demo loads and selection clicks work, but browser audio ordering was not captured. Windows/Linux/mobile are NOT RUN. This is scoped native audio acceptance, not cross-platform sound parity.",
+      "evidence": [
+        "docs/evidence/issues-selection-voices-native-20261127/result.json",
+        "docs/evidence/issues-selection-voices-web-20261127/result.json"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Reuses GameAudio and AudioEngine bank/variant selection; no new library, simulation dependency or platform-specific playback path.",
+      "evidence": [
+        "engine/audio/GameAudio.cpp",
+        "engine/audio/AudioEngine.cpp"
+      ]
+    },
+    "headless": {
+      "status": "not_applicable",
+      "note": "Repeated selection is a local presentation event; there is no server-side selection or authoritative simulation capability. Offline mixer tests exercise audio without a device, not a server feature.",
+      "evidence": [
+        "engine/audio/GameAudio.h"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "Ordinary selection-voices project contains generated PCM tones and a repeatable click/order/switch scenario. Native capture and WebGL scene/input smoke completed; browser audible ordering not measured.",
+      "evidence": [
+        "demos/selection-voices/README.md",
+        "demos/selection-voices/audio.json",
+        "docs/evidence/issues-selection-voices-web-20261127/result.json",
+        "docs/evidence/issues-selection-voices-native-20261127/result.json"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Complete Mac quick gate on clean 0a8ed3c9ef3858d539c1b38ade9036dd8391e64f: configure/build PASS; 592 CTests, 587 passed, 5 explicit GPU skips, 0 failures, 1126.43s. Includes real client_controls_frame and additive_blend_frame. Original recorder report-name collision did not fail native tests; retained logs were separately verified on the unchanged clean checkout. Windows/Linux/mobile runtime not established.",
+      "evidence": [
+        "docs/evidence/issues-mac-quick-final-retained-20261127.json",
+        "docs/evidence/issues-mac-quick-final-retained-20261127.log.txt",
+        "docs/agent-handoffs/issues-20261127-verification.md"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Cumulative staged handoff records exact implementation/evidence SHAs, actual checks and failures, ownership, known backend limits and remaining final integration steps. Final gate result will be appended after terminal completion.",
+      "evidence": [
+        "docs/agent-handoffs/issues-20261127-verification.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "English and Russian audio.json documentation and the existing audio skill describe sequential variants, cycle, optional window and command/selection reset. Example README gives an audible reproduction sequence.",
+      "evidence": [
+        "docs/game-format.md",
+        "docs/ru/game-format.md",
+        "demos/selection-voices/README.md"
+      ]
+    },
+    "publishing": {
+      "status": "pass",
+      "note": "Pre-main publishing deliverables prepared: actual captures, bilingual devlog and browser-verified Web demo pinned by SHA-256. Full site built successfully and all112 demo files rehashed. Per release-site contract actual publish runs only AFTER main push; remote deployment remains an explicit integration task, not claimed complete here.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-27-selection-voices.json",
+        "site/manifest.json",
+        "docs/evidence/issues-selection-voices-web-20261127/result.json",
+        "docs/evidence/issues-site-preflight-20261127/result.json"
+      ]
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-audio"
+    ],
+    "mcp_tools": [
+      "game_file_read",
+      "game_file_write"
+    ],
+    "studio_panels": [
+      "project_data"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ]
+  },
+  "test_reports": [
+    "docs/evidence/issues-mac-quick-final-retained-20261127.json"
+  ]
+}

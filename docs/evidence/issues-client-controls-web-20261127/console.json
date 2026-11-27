@@ -1,0 +1,38 @@
+[
+  {
+    "level": "error",
+    "message": "[pack] mounted /content/content.rpak (54 files)",
+    "timestamp": "2026-11-27T11:27:52.220Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[ui info] Loading Lua plugin using the provided Lua state.",
+    "timestamp": "2026-11-27T11:27:54.652Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[streaming] initial=2 background=0 radius=36.6 focus=12.0,8.0",
+    "timestamp": "2026-11-27T11:27:54.692Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[loading] map=maps/controls.json types=2/2",
+    "timestamp": "2026-11-27T11:27:54.695Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[loading] map assets ready in 444.1 ms (2 types)",
+    "timestamp": "2026-11-27T11:27:55.136Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[loading] first map frame in 5113.9 ms",
+    "timestamp": "2026-11-27T11:27:57.249Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  }
+]

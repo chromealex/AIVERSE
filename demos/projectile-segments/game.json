@@ -1,0 +1,32 @@
+{
+  "id": "org.aiverse.demos.projectile_segments",
+  "name": "Projectile segments",
+  "version": "1.0",
+  "module": "game",
+  "rules": "rules.json",
+  "maps": [
+    {
+      "file": "maps/straight.json",
+      "title": "Straight trajectory"
+    },
+    {
+      "file": "maps/arc.json",
+      "title": "Arc trajectory"
+    },
+    {
+      "file": "maps/ricochet.json",
+      "title": "Ricochet trajectory"
+    },
+    {
+      "file": "maps/split.json",
+      "title": "Split trajectory"
+    }
+  ],
+  "camera": {
+    "projection": "ortho",
+    "pitch": 24,
+    "yaw": 0,
+    "pixelsPerCell": 36,
+    "rotate": true
+  }
+}

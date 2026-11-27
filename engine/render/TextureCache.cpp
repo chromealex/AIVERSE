@@ -27,6 +27,17 @@
 
 namespace aiverse::render {
 
+bool loadContentImage(const std::string& path, atlas::Image& image) {
+    auto read = [](const std::string& name, std::string& bytes) {
+        return platform::readContentFile(name, bytes);
+    };
+    auto decode = [](const std::string& bytes, atlas::Image& out) {
+        return decodeImage(bytes, out.width, out.height, out.rgba);
+    };
+    atlas::ImageSource source(read, decode);
+    return source.loadImage(path, image);
+}
+
 bool decodeImage(const std::string& bytes, int& w, int& h, std::vector<uint8_t>& rgba) {
     int n = 0;
     unsigned char* px = stbi_load_from_memory(reinterpret_cast<const unsigned char*>(bytes.data()), int(bytes.size()), &w, &h, &n, 4);

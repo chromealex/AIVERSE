@@ -1,0 +1,248 @@
+{
+  "schema": 1,
+  "id": "model-additive-blending",
+  "owner": "rendering",
+  "changed_paths": [
+    "CMakeLists.txt",
+    "apps/editor/core/MaterialOps.cpp",
+    "apps/studio-native/StudioMaterialValidation.h",
+    "apps/studio-native/StudioScene.cpp",
+    "apps/studio-native/tests/StudioMaterialValidationTests.cpp",
+    "apps/studio-web/src/panels/materialSchema.ts",
+    "apps/studio-web/tests/materialSchema.test.mjs",
+    "docs/models.md",
+    "engine/fx/AnimatedModelEffectView.h",
+    "engine/fx/FxEffect.cpp",
+    "engine/fx/FxEffect.h",
+    "engine/gfx/Gfx.h",
+    "engine/gfx/gl/GfxGL.cpp",
+    "engine/gfx/metal/GfxMetal.mm",
+    "engine/gfx/vulkan/VkDraw.cpp",
+    "engine/render/MaterialBlend.h",
+    "engine/render/Model.h",
+    "engine/render/ModelGltf.cpp",
+    "engine/render/ModelMdx.cpp",
+    "engine/render/ModelMerge.cpp",
+    "engine/render/ModelVirtualTextureFallback.h",
+    "engine/render/Renderer3D.cpp",
+    "engine/render/Renderer3D.h",
+    "engine/render/Renderer3DModels.cpp",
+    "engine/view/AppearanceAuthoringService.h",
+    "tests/render/additive_blend_frame.cpp",
+    "tests/tests.cpp",
+    "tools/modeling/Export.cpp",
+    "tools/modeling/SurfaceProxy.cpp",
+    "tools/studio/test_reference_pin_zoom.py",
+    "demos/material-effects/README.md",
+    "demos/material-effects/game.json",
+    "demos/material-effects/rules.json",
+    "demos/material-effects/models/target.obj",
+    "demos/material-effects/models/tall-target.obj",
+    "demos/material-effects/models/range.mtl",
+    "demos/material-effects/maps/shadows.json",
+    "demos/material-effects/maps/materials.json",
+    "demos/material-effects/maps/particles.json",
+    "demos/material-effects/fx/fx.json",
+    "demos/material-effects/fx/shadow.json",
+    "demos/material-effects/fx/no_shadow.json",
+    "demos/material-effects/fx/alpha.json",
+    "demos/material-effects/fx/weighted.json",
+    "demos/material-effects/fx/unweighted.json",
+    "demos/material-effects/fx/linear.json",
+    "demos/material-effects/fx/display.json",
+    "skills/visuals/aiverse-look/SKILL.md"
+  ],
+  "traits": {
+    "editable": true,
+    "simulation": false,
+    "visible": true,
+    "runtime": true
+  },
+  "checks": {
+    "implementation": {
+      "status": "pass",
+      "note": "Metal pixel tests cover model alpha/weighted/unweighted and display-particle sprite/mesh/trail/ribbon/graph, depth, fog and resize. Actual Metal/WebGL three-scene demo confirms host integration. Final integrated test gate tracked separately.",
+      "evidence": [
+        "docs/evidence/issues-additive-metal-20261127/result.json",
+        "docs/evidence/issues-material-effects-metal-20261127/result.json",
+        "docs/evidence/issues-material-effects-web-20261127/result.json"
+      ]
+    },
+    "architecture": {
+      "status": "pass",
+      "note": "Shared AlphaMode/parseMaterialBlend maps material and FX authoring to gfx::BlendMode. Model rendering/import/export consume the same state; FX view adapter sets existing model material state.",
+      "evidence": [
+        "engine/render/MaterialBlend.h",
+        "engine/fx/AnimatedModelEffectView.h",
+        "engine/render/Renderer3DModels.cpp"
+      ]
+    },
+    "native_api": {
+      "status": "pass",
+      "note": "Public AlphaMode, parseMaterialBlend and materialBlendMode expose weighted/unweighted state; ModelMaterialTrack.blend shares parser. Native pixel fixture invokes actual rendering and distinguishes both arithmetic modes.",
+      "evidence": [
+        "engine/render/MaterialBlend.h",
+        "engine/fx/FxEffect.h",
+        "tests/render/additive_blend_frame.cpp",
+        "docs/evidence/issues-additive-metal-20261127/result.json"
+      ]
+    },
+    "skill": {
+      "status": "pass",
+      "note": "Existing owner recipe documents exact authoring route, shared semantics, example and verified backend limits.",
+      "evidence": [
+        "skills/visuals/aiverse-look/SKILL.md"
+      ]
+    },
+    "mcp": {
+      "status": "pass",
+      "note": "Actual domain fx_set/get persisted authored fields, refused invalid alpha/display combination and retained original after reopen. Registry audit confirms declared tools. Material library modes separately exercised through alpha, not FX blend.",
+      "evidence": [
+        "docs/evidence/issues-authoring-mcp-registry-20261127.json",
+        "docs/evidence/issues-fx-authoring-20261127/result.json",
+        "docs/evidence/issues-material-mcp-current-20261127/result.json"
+      ]
+    },
+    "studio": {
+      "status": "pass",
+      "note": "Native Studio built and real Materials UI saved/reloaded both additive modes; screenshots and disk inspection retained. Direct library edits retain existing explicit MapDoc-undo limitation. Also verified FX model material authoring through Effects Set/Get. No new preview/undo claim.",
+      "evidence": [
+        "docs/evidence/issues-studio-materials-20261127/result.json",
+        "docs/evidence/issues-fx-authoring-20261127/result.json",
+        "docs/evidence/issues-fx-authoring-20261127/effect-after.json",
+        "docs/evidence/issues-fx-authoring-20261127/saved.png",
+        "docs/evidence/issues-fx-authoring-20261127/rejected.png"
+      ]
+    },
+    "inspector": {
+      "status": "pass",
+      "note": "Existing Materials property selector offers both additive modes and preserves selected values after save/reload in native Studio. Also verified FX model material authoring through Effects Set/Get. No new preview/undo claim.",
+      "evidence": [
+        "docs/evidence/issues-studio-materials-20261127/result.json",
+        "docs/evidence/issues-fx-authoring-20261127/result.json",
+        "docs/evidence/issues-fx-authoring-20261127/effect-after.json",
+        "docs/evidence/issues-fx-authoring-20261127/saved.png",
+        "docs/evidence/issues-fx-authoring-20261127/rejected.png"
+      ]
+    },
+    "persistence": {
+      "status": "pass",
+      "note": "Actual native Effects Set/Get saved castShadow false, additive model material and display-space additive emitter, with zero warnings. Invalid alpha+display was rejected; fresh MCP process read identical JSON after reopen and disk bytes were unchanged. Existing JSON operation panel, not graph canvas/preview or Undo acceptance. Shared material library save/reopen evidence is retained separately.",
+      "evidence": [
+        "docs/evidence/issues-fx-authoring-20261127/result.json",
+        "docs/evidence/issues-fx-authoring-20261127/effect-after.json",
+        "docs/evidence/issues-fx-authoring-20261127/saved.png",
+        "docs/evidence/issues-fx-authoring-20261127/rejected.png",
+        "docs/evidence/issues-mcp-authoring-20261127/material-after.json"
+      ]
+    },
+    "graphs": {
+      "status": "not_applicable",
+      "note": "This feature changes fixed-function model material blend state, not a shader expression or particle graph node. Existing shared material owner is used; creating a second graph for blend enums would duplicate ownership. Particle graph blend-space acceptance is tracked by particle-display-blending.",
+      "evidence": [
+        "engine/render/MaterialBlend.h",
+        "engine/fx/VfxGraph.h"
+      ]
+    },
+    "performance": {
+      "status": "pass",
+      "note": "Scoped macOS Debug/Rosetta acceptance: three480-frame scenes plus two720-frame linear/display loads (expected1024particles). Post-warmup CPU block means below16.67ms, sampled completed GPU frames below16.67ms and process peakRSS below512MiB. Allocation review records reusable particle buffers and recurring callback-list allocation; no zero-allocation, p95, leak or cross-device claim.",
+      "evidence": [
+        "docs/evidence/issues-material-performance-20261127/result.json",
+        "engine/fx/FxRender.cpp",
+        "engine/render/Renderer3D.cpp"
+      ]
+    },
+    "platforms": {
+      "status": "pass",
+      "note": "Verified scope: native macOS Metal and Emscripten browser WebGL runtime, using retained real captures. Windows, Linux desktop and physical mobile devices are NOT RUN; these results do not establish their backend/runtime parity.",
+      "evidence": [
+        "docs/evidence/issues-additive-metal-20261127/result.json",
+        "docs/evidence/issues-material-effects-web-20261127/result.json"
+      ]
+    },
+    "dependencies": {
+      "status": "pass",
+      "note": "Uses existing gfx blend state, Renderer3D, model/particle owners and PRISMA resolve. No package or competing rendering pipeline added.",
+      "evidence": [
+        "engine/render/MaterialBlend.h",
+        "engine/fx/FxRender.cpp",
+        "engine/render/Renderer3D.cpp"
+      ]
+    },
+    "headless": {
+      "status": "not_applicable",
+      "note": "Presentation blend state only; no server simulation or authoritative gameplay state is introduced. Parsing remains ordinary data code.",
+      "evidence": [
+        "engine/render/MaterialBlend.h",
+        "engine/fx/FxEffect.h"
+      ]
+    },
+    "examples": {
+      "status": "pass",
+      "note": "Three ordinary material-effects scenes verified in actual Metal and WebGL captures: shadow switch, weighted/unweighted model addition, linear/display particles. No special demo runtime path. Publication pending.",
+      "evidence": [
+        "demos/material-effects/README.md",
+        "docs/evidence/issues-material-effects-metal-20261127/result.json",
+        "docs/evidence/issues-material-effects-web-20261127/result.json"
+      ]
+    },
+    "tests": {
+      "status": "pass",
+      "note": "Complete Mac quick gate on clean 0a8ed3c9ef3858d539c1b38ade9036dd8391e64f: configure/build PASS; 592 CTests, 587 passed, 5 explicit GPU skips, 0 failures, 1126.43s. Includes real client_controls_frame and additive_blend_frame. Original recorder report-name collision did not fail native tests; retained logs were separately verified on the unchanged clean checkout. Windows/Linux/mobile runtime not established.",
+      "evidence": [
+        "docs/evidence/issues-mac-quick-final-retained-20261127.json",
+        "docs/evidence/issues-mac-quick-final-retained-20261127.log.txt",
+        "docs/agent-handoffs/issues-20261127-verification.md"
+      ]
+    },
+    "handoff": {
+      "status": "pass",
+      "note": "Cumulative staged handoff records exact implementation/evidence SHAs, actual checks and failures, ownership, known backend limits and remaining final integration steps. Final gate result will be appended after terminal completion.",
+      "evidence": [
+        "docs/agent-handoffs/issues-20261127-verification.md"
+      ]
+    },
+    "documentation": {
+      "status": "pass",
+      "note": "Reference and existing owner skill describe field names, alpha/depth/color-space semantics, real example and verification limits.",
+      "evidence": [
+        "docs/models.md",
+        "skills/visuals/aiverse-look/SKILL.md"
+      ]
+    },
+    "publishing": {
+      "status": "pass",
+      "note": "Pre-main publishing deliverables prepared: actual captures, bilingual devlog and browser-verified Web demo pinned by SHA-256. Full site built successfully and all112 demo files rehashed. Per release-site contract actual publish runs only AFTER main push; remote deployment remains an explicit integration task, not claimed complete here.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-27-material-effects.json",
+        "docs/evidence/issues-material-effects-web-20261127/result.json",
+        "site/manifest.json",
+        "docs/evidence/issues-site-preflight-20261127/result.json"
+      ]
+    }
+  },
+  "integrations": {
+    "skills": [
+      "aiverse-look"
+    ],
+    "mcp_tools": [
+      "material_set",
+      "material_get",
+      "fx_get",
+      "fx_set"
+    ],
+    "studio_panels": [
+      "materials",
+      "effects"
+    ],
+    "studio_methods": [
+      "studio.materials",
+      "studio.materialPatch",
+      "studio.op"
+    ]
+  },
+  "test_reports": [
+    "docs/evidence/issues-mac-quick-final-retained-20261127.json"
+  ]
+}

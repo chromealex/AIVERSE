@@ -1,0 +1,14 @@
+{
+  "sha": "fbb07d99637924cb676a3e7daf541e400fd7efae",
+  "argv": [
+    "./run-tests.sh",
+    "--no-build",
+    "--filter",
+    "^studio_session$",
+    "--build-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick"
+  ],
+  "exit_code": 1,
+  "log": "docs/evidence/issues-project-settings-native-20261127.log.txt",
+  "sha256": "6d551678f6074e9db1846a200f5a3e608a455076b6ce65d5a4dc1235e14c69a4"
+}

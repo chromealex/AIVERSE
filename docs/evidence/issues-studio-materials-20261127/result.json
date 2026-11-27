@@ -1,0 +1,24 @@
+{
+  "source_sha": "4d6f08f19",
+  "checkout_sha": "d569f6c6c",
+  "build": "9692 exit 0: aiversemcp, aiverse_studio, aiverse_studio_material_validation_tests",
+  "tests": "run-tests.sh --quick --no-build --filter studio_material_(validation|schema): 2 passed, 0 failures",
+  "runtime": "native macOS Studio, bundled production frontend, isolated issues-mcp-authoring project",
+  "steps": [
+    "Open project through native file dialog",
+    "Materials: issue219_0 initially Additive (alpha weighted)",
+    "Select Additive (unweighted), Apply & save; UI confirms saved, no pending edits",
+    "Reload materials retains Additive (unweighted)",
+    "Select Additive (alpha weighted), Apply & save and Reload retains selection",
+    "Inspect materials.json on disk: issue219_0 additive, issue219_1 additive-unweighted"
+  ],
+  "captures": [
+    "unweighted.png",
+    "weighted.png"
+  ],
+  "limits": [
+    "Material panel states MapDoc Undo does not include direct library edits; no MapDoc undo claim.",
+    "Native renderer blend behavior covered separately by additive Metal fixture; this panel capture verifies authoring.",
+    "Windows Studio remains unverified."
+  ]
+}

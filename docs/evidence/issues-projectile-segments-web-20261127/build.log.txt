@@ -1,0 +1,117 @@
+aiversebuild: Projectile segments 1.0 (org.aiverse.demos.projectile_segments)
+  проект: /private/tmp/aiverse-projectile-segments
+  движок: /private/tmp/aiverse-issue223
+  вывод:  /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/web-controls
+  хост:   macos, конфигурация Release
+    $ cmake -DAIVERSE_NOTICE_ROOT='/private/tmp/aiverse-issue223' -DAIVERSE_NOTICE_OUTPUT='/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/web-controls/web/THIRD_PARTY_NOTICES.txt' -DAIVERSE_PROJECT_NOTICES='/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/web-controls/.temp/project-notices.txt' -DAIVERSE_PLUGIN_NOTICES='/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/web-controls/.temp/notices/web/plugin-notices.txt' -DAIVERSE_TOOLCHAIN_NOTICES='' -P '/private/tmp/aiverse-issue223/platform/cmake/GenerateNotices.cmake'
+
+==> Web: иконки, PWA manifest, заставка
+    предупреждение: icons: no master image (icons.default) — the built-in default icon is used
+    иконки web + PWA manifest: 9 файл(ов)
+
+==> Web: конфигурация (Emscripten)
+
+==> Контент: сборка ресурс-пака (атласы: web, страница до 2048)
+    engine/materials не нужен проекту (материалы копируются в проект): не входит в пак
+    файлов: 61, исходный размер 8.8 MB -> пак 6.8 MB (77.2%)
+    по папкам (в паке):
+      6.3 MB	engine/  (исходно 6.9 MB)
+      539.4 KB	_atlas/  (исходно 1.9 MB)
+      1.5 KB	models/  (исходно 4.3 KB)
+      1.3 KB	(корень)  (исходно 6.0 KB)
+      1.2 KB	maps/  (исходно 6.0 KB)
+      256 B	fx/  (исходно 427 B)
+    самые большие файлы (в паке):
+      2.2 MB	engine/fx/physis/flame_tall_full_16x4.png  [без сжатия]
+      1.5 MB	engine/fx/physis/smoke_full_8x8.png  [без сжатия]
+      1.3 MB	engine/fx/physis/fireball_full_8x8.png  [без сжатия]
+      539.2 KB	_atlas/effects-0.rtex
+      518.7 KB	engine/fx/physis/flame_tall_16x4.png  [без сжатия]
+      515.3 KB	engine/fx/physis/flame_16x4.png  [без сжатия]
+      215.4 KB	engine/fonts/ui.ttf
+      22.5 KB	engine/branding/mark.png  [без сжатия]
+      10.4 KB	engine/branding/splash_blade_right.png  [без сжатия]
+      10.3 KB	engine/lang/ru.json
+      10.1 KB	engine/branding/splash_blade_left.png  [без сжатия]
+      8.0 KB	engine/lang/en.json
+      7.8 KB	engine/branding/splash_blade_top.png  [без сжатия]
+      6.1 KB	engine/branding/splash_diamond.png  [без сжатия]
+      4.9 KB	engine/ui/lib/meta.lua
+    атласы текстур (профиль web, страница до 2048):
+      2 текстур -> 1 стр., заполнение 98.5%, дубликатов 0
+      в паке: было 601.0 KB -> стало 539.4 KB (экономия 61.6 KB)
+      видеопамять: было 2.0 MB -> стало 1.9 MB
+      группа effects             2 текстур (2 уник.) -> 1 стр., 98.5%
+      не в атласе: engine/fx/physis/fireball_full_8x8.png — too large (1024x1024 > 512)
+      не в атласе: engine/fx/physis/flame_16x4.png — too large (1024x512 > 512)
+      не в атласе: engine/fx/physis/flame_tall_16x4.png — too large (1024x512 > 512)
+      не в атласе: engine/fx/physis/flame_tall_full_16x4.png — too large (2048x1024 > 512)
+      не в атласе: engine/fx/physis/smoke_full_8x8.png — too large (1024x1024 > 512)
+    $ '/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/toolchains/emsdk/upstream/emscripten/emcmake' cmake -S '/private/tmp/aiverse-issue223' -B '/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/web-controls/.temp/build/web' -DCMAKE_BUILD_TYPE=Release -DAIVERSE_CONTENT_DIR='/private/tmp/aiverse-projectile-segments' -DAIVERSE_PROJECT_NOTICES='/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/web-controls/.temp/project-notices.txt' -DAIVERSE_NATIVE_DIR= -DAIVERSE_GAME_NAME='Projectile segments' -DAIVERSE_GAME_ID=org.aiverse.demos.projectile_segments -DAIVERSE_GAME_VERSION=1.0 -DAIVERSE_GAME_BUILD=1 -DAIVERSE_GAME_EXECUTABLE=Projectile_segments -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TOOLS=OFF -DAIVERSE_BUILD_TESTS=OFF -DAIVERSE_BUILD_HEADLESS=OFF -DAIVERSE_BUILD_SERVER=OFF -DAIVERSE_BUILD_FPS_CLIENT=OFF -DAIVERSE_SCENE_CLIENT=OFF -DAIVERSE_SPLASH_BACKGROUND= -DAIVERSE_CONTENT_PACK='/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/web-controls/.temp/pack/p2048/content.rpak' -DAIVERSE_PLUGINS_FILE='/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/web-controls/.temp/build/web/gen/plugins.cmake'
+emcmake: cmake -S /private/tmp/aiverse-issue223 -B /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/web-controls/.temp/build/web -DCMAKE_BUILD_TYPE=Release -DAIVERSE_CONTENT_DIR=/private/tmp/aiverse-projectile-segments -DAIVERSE_PROJECT_NOTICES=/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/web-controls/.temp/project-notices.txt -DAIVERSE_NATIVE_DIR= '-DAIVERSE_GAME_NAME=Projectile segments' -DAIVERSE_GAME_ID=org.aiverse.demos.projectile_segments -DAIVERSE_GAME_VERSION=1.0 -DAIVERSE_GAME_BUILD=1 -DAIVERSE_GAME_EXECUTABLE=Projectile_segments -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TOOLS=OFF -DAIVERSE_BUILD_TESTS=OFF -DAIVERSE_BUILD_HEADLESS=OFF -DAIVERSE_BUILD_SERVER=OFF -DAIVERSE_BUILD_FPS_CLIENT=OFF -DAIVERSE_SCENE_CLIENT=OFF -DAIVERSE_SPLASH_BACKGROUND= -DAIVERSE_CONTENT_PACK=/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/web-controls/.temp/pack/p2048/content.rpak -DAIVERSE_PLUGINS_FILE=/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/web-controls/.temp/build/web/gen/plugins.cmake -DCMAKE_TOOLCHAIN_FILE=/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/toolchains/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake -DCMAKE_CROSSCOMPILING_EMULATOR=/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/toolchains/emsdk/node/24.19.0_64bit/bin/node in directory /private/tmp/aiverse-issue223
+-- AIVERSE platform: web
+-- AIVERSE plugins: 
+-- Configuring done (5.2s)
+-- Generating done (0.6s)
+-- Build files have been written to: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/web-controls/.temp/build/web
+
+==> Web: сборка
+    $ cmake --build '/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/web-controls/.temp/build/web' --target aiverse_client -j 6
+[  1%] Built target aiverse_zstd_dec
+[  1%] Built target aiverse_meshoptimizer_lod
+[  2%] Built target aiverse_imgui
+[  7%] Built target aiverse_native_registry
+[  7%] Built target aiverse_lua
+[  8%] Built target aiverse_engine
+[  9%] Built target aiverse_ufbx
+[ 10%] Built target aiverse_pack
+[ 10%] Built target aiverse_strata_builder
+[ 11%] Built target aiverse_plugins
+[ 11%] Built target aiverse_notices
+[ 11%] Built target aiverse_atlas
+[ 11%] Built target aiverse_content_reader
+[ 11%] Built target aiverse_spine
+[ 13%] Built target aiverse_world
+[ 13%] Built target aiverse_vehicles
+[ 16%] Built target aiverse_net
+[ 17%] Built target aiverse_roads
+[ 19%] Built target aiverse_audio
+[ 19%] Built target aiverse_shader_graph
+[ 19%] Built target aiverse_render2d
+[ 20%] Built target aiverse_splash
+[ 20%] Built target aiverse_client_notices
+[ 22%] Built target aiverse_fps
+[ 27%] Built target aiverse_models
+[ 55%] Built target aiverse_rmlui
+[ 57%] Built target aiverse_postfx_data
+[ 58%] Built target aiverse_fx
+[ 58%] Built target aiverse_view_visibility
+[ 58%] Built target aiverse_voxelgame
+[ 59%] Built target aiverse_strata_model_adapter
+[ 59%] Built target aiverse_roads_view
+[ 59%] Built target aiverse_strata_gpu_scene
+[ 59%] Built target aiverse_strata_view
+[ 60%] Built target aiverse_strata_disk
+[ 65%] Built target aiverse_rmlui_lua
+[ 65%] Built target aiverse_strata_gpu_culling
+[ 66%] Built target aiverse_strata_render_routing
+[ 66%] Built target aiverse_strata_portable
+[ 67%] Built target aiverse_ui
+[ 85%] Built target aiverse_game
+[ 89%] Built target aiverse_runtime
+[ 89%] Built target aiverse_overlay_data
+[ 89%] Built target aiverse_game_fx
+[ 90%] Built target aiverse_game_audio
+[ 90%] Built target aiverse_i18n
+[ 90%] Built target aiverse_terrain_detail
+[ 90%] Built target aiverse_net_city
+[ 90%] Built target aiverse_client_runtime
+[ 95%] Built target aiverse_game_view
+[ 96%] Linking CXX executable index.html
+[100%] Built target aiverse_client
+    предупреждение: icons: no master image (icons.default) — the built-in default icon is used
+    иконки web + PWA manifest: 9 файл(ов)
+    Готово: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/web-controls/web  (проверка: python3 -m http.server -d '/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/web-controls/web')
+    размер: web: web — 18.8 MB
+
+Сборка завершена.

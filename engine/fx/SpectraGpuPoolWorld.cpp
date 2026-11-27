@@ -872,11 +872,11 @@ bool GpuPoolWorld::step(float dt) {
     return allOk;
 }
 
-void GpuPoolWorld::draw(const fx::FxFog& fog) {
+void GpuPoolWorld::draw(const fx::FxFog& fog,render::Renderer3D* renderer) {
     if(!initialized_||presentationBlocked()||
        !frameOpen_||!stepped_||drawn_)return;
     drawn_=true;
-    cpu_.draw(fog);
+    cpu_.draw(fog,renderer);
     stats_.cpuDrawCalls=uint32_t(cpu_.stats().drawCalls);
     stats_.gpuDrawCalls=0;
     for(auto& group:gpuGroups_) {

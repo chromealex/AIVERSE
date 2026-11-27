@@ -1,6 +1,7 @@
 #include "SpatialWorld.h"
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 
 
 namespace aiverse::world {

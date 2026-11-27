@@ -1,0 +1,39 @@
+{
+  "source_sha": "4d6f08f19",
+  "build": "25810 exit 0; Emscripten 7.0.1; Release web; audio off",
+  "bytes": 19725237,
+  "url": "http://127.0.0.1:8765/index.html?map=0",
+  "browser": "Codex in-app browser, WebGL canvas",
+  "cases": [
+    "Pack mounted and scene rendered",
+    "F6 selected scout and showed animated alternate portrait with owner background",
+    "M plus pointer destination moved scout and minimap marker",
+    "F7 selected tower via view.select, showing alternate model and authored background",
+    "Armed tower exposes Attack/Stop, disabled Guard aura and configured Sell position",
+    "Atlas-only gradient minimap rendered; tower markers hidden",
+    "Escape opened pause with Restart and settings controls"
+  ],
+  "limits": [
+    "Audio disabled in this build; no web audio acceptance claim.",
+    "Quit button clicked without console exception; final paused frame remains, host termination not proven from image alone.",
+    "Near-camera rectangular footprint proven in native capture, not this default browser view."
+  ],
+  "files": {
+    "THIRD_PARTY_NOTICES.txt": "cdf43ea44fca2eb2534756dfd142871c1f58e1b5c1800100c20668ab3233e95e",
+    "apple-touch-icon.png": "0a0dc87a6eb8e8e0d8451bc776ba5602b15ac5e59a73a75d6233ee40521a1700",
+    "branding-head.html": "c41c893c1db69ae7d9c04259d86eaff672e25ce03ca3f2cb2c690f52a356d845",
+    "favicon-32.png": "3af294b47b560ef72ab5456676e8897feb3ec03d12548384c34eba8dc30c4302",
+    "favicon.ico": "ce2410dc2b4d09ec9451b313b2ad8bc625a23751fce0f875003ac9ea44bbde68",
+    "icons/icon-192.png": "4be172452ba473a21db1455ebcf143b68690beda08c494f99f43f71f73b912fb",
+    "icons/icon-512.png": "8064f684d1cb4960fcde904cb32a094b3e51c823436dd501e932be92de3ed316",
+    "icons/maskable-192.png": "82b2a0758aea6c7cb30fbaa33893316a1ace9d37caddc9f7be28942b23a2854e",
+    "icons/maskable-512.png": "2270e405e6b058194fd92cfe34b36eeb2744a37f7f049e1eeab28907033629f6",
+    "index.data": "e982543573b23e40632e74c1b5303881e0b8d9962fefef99a67143c793e8428a",
+    "index.html": "99fee9db4c0ddab07ad26d3a40aa7453e4d60b41022de7b22e2b84c4ea1a657c",
+    "index.js": "f5469ba72931c06d6c0033663e66d9b99bd7ae2b64be743881d3db6b45ec17b3",
+    "index.wasm": "6c66bccc722d4c65c61d550d0984f7ed5dd1bddf8abb757325c642c08201172c",
+    "manifest.webmanifest": "fd03cf4ed215917ade5a8236226eb089619017eec784f470bdda6a8152975a1c",
+    "size-report.json": "01edc114350fc788143c14982bc7f1dfd9a41bd99ebcd993cd77743da6b07b92",
+    "size-report.txt": "fdec8a2414c7e481663259ab7676605ddc29b218c6f045ebe953e4d2431b2da3"
+  }
+}

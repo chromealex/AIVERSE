@@ -113,8 +113,10 @@ void BatchWorld::setView(const fx::SpectraFxView& view) {
 void BatchWorld::update(float dt) {
     if (initialized_) particles_.update(dt);
 }
-void BatchWorld::draw(const fx::FxFog& fog) {
-    if (initialized_) particles_.render(fog);
+void BatchWorld::draw(const fx::FxFog& fog,render::Renderer3D* renderer) {
+    if(initialized_) {
+        if(renderer)particles_.renderScene(*renderer,fog);else particles_.render(fog);
+    }
 }
 void BatchWorld::collectLights(std::vector<fx::FxPointLight>& lights,
                                 int maxLights) const {

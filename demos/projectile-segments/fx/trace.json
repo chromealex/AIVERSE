@@ -1,0 +1,23 @@
+{
+  "emitters": [
+    {
+      "texture": "builtin:soft",
+      "loop": true,
+      "perMeter": 16,
+      "blend": "additive",
+      "life": 0.8,
+      "speed": 0,
+      "size": 0.24,
+      "color": [
+        [
+          0,
+          "#ffdb64ff"
+        ],
+        [
+          1,
+          "#ff9c4300"
+        ]
+      ]
+    }
+  ]
+}

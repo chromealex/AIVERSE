@@ -1,0 +1,13 @@
+{
+  "sha": "849e94ca3ea7c11dffef9eebca269db456951c79",
+  "argv": [
+    "npm",
+    "--prefix",
+    "/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/studio-source/apps/studio-web",
+    "run",
+    "build"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/issues-project-settings-web-20261127.log.txt",
+  "sha256": "c517252cff3bede000e0ad1e5fb026348083f07cc22c6dea2b3810651f68d3d7"
+}

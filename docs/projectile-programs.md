@@ -194,3 +194,7 @@ can be used in any FPS project without RTS dependencies.
 - Windows, Linux, Android, iOS and Web builds/runtimes were not verified in this change.
 
 FPS state version 6 extends the version 3 layout; version 3 saves remain readable with default projectile-program state.
+
+### Flight provenance and saves
+
+The shared projectile state records `Emission`, `Split` or `Ricochet` when the common chain policy creates each flight. Timed splitting does not change the parent origin. Presentation adapters must use this explicit provenance rather than modifier consumption or hit history. Save v13 preserves it; older saves read as `Unknown` and do not reapply a muzzle offset. Portable actor projectile components use codec v2 with a v1 reader. Runtime compatibility verification is pending.

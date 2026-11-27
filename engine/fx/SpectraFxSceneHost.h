@@ -304,18 +304,19 @@ public:
 
     // With the main colour/depth pass open, after Renderer3D::render.
     void render(const render::Lighting& lighting,
-                const SpectraFxView& view) {
+                const SpectraFxView& view,render::Renderer3D* renderer=nullptr) {
         if(!enabled_ || !view.valid()) return;
         cpu_.setLightDir(lighting.sunDir);
-        cpu_.render({lighting.fogColor,lighting.fogDensity});
+        if(renderer)cpu_.renderScene(*renderer,{lighting.fogColor,lighting.fogDensity});
+        else cpu_.render({lighting.fogColor,lighting.fogDensity});
         if(playback_)
             playback_->renderGpu(view.viewProj,view.right,view.up);
     }
     template<class Camera>
     void render(const render::Lighting& lighting,
-                const render::mat4& viewProj,const Camera& camera) {
+                const render::mat4& viewProj,const Camera& camera,render::Renderer3D* renderer=nullptr) {
         render(lighting,SpectraFxView::fromCamera(
-            camera,viewProj,1,1));
+            camera,viewProj,1,1),renderer);
     }
     // Call outside render/compute encoders (host teardown or re-init).
     void shutdown() {

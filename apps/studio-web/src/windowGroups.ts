@@ -32,7 +32,7 @@ export const PANEL_WINDOW_GROUP: Record<StudioPanel, WindowGroup> = {
   physis: 'gameplay', actor: 'gameplay', raid: 'gameplay', balance: 'gameplay',
   game: 'runtime', runtime: 'runtime', console: 'runtime', stats: 'runtime',
   frame_capture: 'runtime', simulation_profiler: 'runtime', snapshot_diff: 'runtime', agent: 'runtime',
-  project: 'project', build: 'project', branding: 'project', project_import: 'project', extensions: 'project',
+  project_data: 'project', project: 'project', build: 'project', branding: 'project', project_import: 'project', extensions: 'project',
 };
 
 export function windowPanelGroups() {

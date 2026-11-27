@@ -1,5 +1,5 @@
 {
-  "sha": "59fb6f69e5262f977ea4d95384369b8c24ba7776",
+  "sha": "b9394a98c60de794303b05ac0ba3dc2d2b977759",
   "argv": [
     "ctest",
     "--test-dir",
@@ -13,5 +13,5 @@
   ],
   "exit_code": 0,
   "log": "docs/evidence/impostor-pr227-ubuntu.log.txt",
-  "sha256": "4b91af1070f88996a36f38945c3233fad23b36184b1a4b38cb6e793d432c4af7"
+  "sha256": "a055d08a30b516a05bb40925043d1fbd5895a1f3023493a5a0825b44382d4fdc"
 }

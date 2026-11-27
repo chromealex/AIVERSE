@@ -1,0 +1,146 @@
+[
+  {
+    "level": "error",
+    "message": "[pack] mounted /content/content.rpak (61 files)",
+    "timestamp": "2026-11-27T11:53:42.687Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[ui info] Loading Lua plugin using the provided Lua state.",
+    "timestamp": "2026-11-27T11:53:43.430Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[streaming] initial=3 background=0 radius=42.3 focus=12.0,9.0",
+    "timestamp": "2026-11-27T11:53:43.465Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[loading] map=maps/straight.json types=3/6",
+    "timestamp": "2026-11-27T11:53:43.467Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[loading] map assets ready in 445.0 ms (3 types)",
+    "timestamp": "2026-11-27T11:53:43.910Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[loading] first map frame in 1395.4 ms",
+    "timestamp": "2026-11-27T11:53:44.068Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "error",
+    "message": "[pack] mounted /content/content.rpak (61 files)",
+    "timestamp": "2026-11-27T11:54:03.592Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[ui info] Loading Lua plugin using the provided Lua state.",
+    "timestamp": "2026-11-27T11:54:04.268Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[streaming] initial=3 background=0 radius=42.3 focus=12.0,9.0",
+    "timestamp": "2026-11-27T11:54:04.282Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[loading] map=maps/arc.json types=3/6",
+    "timestamp": "2026-11-27T11:54:04.284Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[loading] map assets ready in 467.2 ms (3 types)",
+    "timestamp": "2026-11-27T11:54:04.750Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[loading] first map frame in 1303.4 ms",
+    "timestamp": "2026-11-27T11:54:04.884Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "error",
+    "message": "[pack] mounted /content/content.rpak (61 files)",
+    "timestamp": "2026-11-27T11:54:16.141Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[ui info] Loading Lua plugin using the provided Lua state.",
+    "timestamp": "2026-11-27T11:54:16.818Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[streaming] initial=3 background=0 radius=42.3 focus=12.0,9.0",
+    "timestamp": "2026-11-27T11:54:16.832Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[loading] map=maps/ricochet.json types=3/6",
+    "timestamp": "2026-11-27T11:54:16.834Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[loading] map assets ready in 468.0 ms (3 types)",
+    "timestamp": "2026-11-27T11:54:17.300Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[loading] first map frame in 1305.7 ms",
+    "timestamp": "2026-11-27T11:54:17.434Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "error",
+    "message": "[pack] mounted /content/content.rpak (61 files)",
+    "timestamp": "2026-11-27T11:54:26.174Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[ui info] Loading Lua plugin using the provided Lua state.",
+    "timestamp": "2026-11-27T11:54:26.858Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[streaming] initial=3 background=0 radius=42.3 focus=12.0,9.0",
+    "timestamp": "2026-11-27T11:54:26.872Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[loading] map=maps/split.json types=3/6",
+    "timestamp": "2026-11-27T11:54:26.874Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[loading] map assets ready in 469.0 ms (3 types)",
+    "timestamp": "2026-11-27T11:54:27.341Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  },
+  {
+    "level": "log",
+    "message": "[loading] first map frame in 1321.5 ms",
+    "timestamp": "2026-11-27T11:54:27.482Z",
+    "url": "http://127.0.0.1:8765/index.js"
+  }
+]

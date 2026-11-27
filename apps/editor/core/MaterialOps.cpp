@@ -153,7 +153,7 @@ Json patternSchema() {
 
 const char* kMaterialDoc =
     "Material keys: color [r,g,b(,a)] linear 0..1, metallic 0..1, roughness 0..1, thinTransmission 0..1, shadowDiffusion 0..1 world units, sssStrength 0..1, sssScale 0..1, sssThickness 0..1 world units (0 = artistic backlight), sssColor [r,g,b] linear 0..1, emissive [r,g,b], emissiveStrength, "
-    "alpha opaque|mask|blend, cutoff, doubleSided, unlit, castShadow, receiveShadow, vertexColors, team tint|mask|alpha|vertex|none, "
+    "alpha opaque|mask|blend|additive|additive-unweighted, cutoff, doubleSided, unlit, castShadow, receiveShadow, vertexColors, team tint|mask|alpha|vertex|none, "
     "teamStrength, texture / normalMap / emissiveMap / teamMask (PNG/JPEG/TGA/KTX2 paths in the game folder, e.g. made by texture_generate), "
     "metallicRoughnessMap (glTF layout: G roughness, B metallic) / occlusionMap (R) with occlusionStrength, normalScale, "
     "uvScale [u,v] tiling, uvOffset [u,v], base (inherit another library material), replace (start from a blank material instead of the model's), description.";
@@ -186,7 +186,11 @@ std::vector<std::string> checkMaterial(const Json& m) {
         }
         if ((k == "metallic" || k == "roughness" || k == "thinTransmission" || k == "shadowDiffusion" || k == "sssStrength" || k == "sssScale" || k == "sssThickness" || k == "cutoff" || k == "teamStrength") && (!v.isNumber() || !std::isfinite(v.toDouble()) || v.toDouble() < 0 || v.toDouble() > 1))
             out.push_back(k + " must be a number 0..1");
-        if (k == "alpha" && v.str() != "opaque" && v.str() != "mask" && v.str() != "blend") out.push_back("alpha must be opaque, mask or blend");
+        if (k == "alpha") {
+            render::AlphaMode mode;
+            if (!v.isString() || !render::parseMaterialBlend(v.str(), mode))
+                out.push_back("alpha must be opaque, mask, blend, additive or additive-unweighted");
+        }
         if (k == "team" && v.str() != "tint" && v.str() != "mask" && v.str() != "alpha" && v.str() != "vertex" && v.str() != "none")
             out.push_back("team must be tint, mask, alpha, vertex or none");
         if ((k == "uvScale" || k == "uvOffset") && (!v.isArray() || v.size() != 2)) out.push_back(k + " must be [u, v]");

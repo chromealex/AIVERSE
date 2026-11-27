@@ -1,0 +1,19 @@
+{
+  "source": "04fde3c45a008b55dab7469d4923dca916ca136b",
+  "build_exit": 0,
+  "build_handle": 17690,
+  "backend": "WebGL, Emscripten7.0.1",
+  "observed": [
+    "All three map URLs loaded in actual in-app browser",
+    "Only left model casts shadow",
+    "Alpha/weighted/unweighted model blend visibly distinct",
+    "Right display-space emitter brighter than linear on left"
+  ],
+  "console": "Only expected pack-mounted messages on stderr; no runtime errors observed",
+  "limits": [
+    "Qualitative example comparison; numerical blend acceptance remains native pixel-test evidence",
+    "No Windows/Vulkan acceptance"
+  ],
+  "pinned_files": 16,
+  "publish_copy": "/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/site-demos/material-effects"
+}

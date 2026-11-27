@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="(empty)"
+	tests="1"
+	failures="0"
+	disabled="0"
+	skipped="0"
+	hostname=""
+	time="23"
+	timestamp="2026-11-27T15:18:46"
+	>
+	<testcase name="studio_session" classname="studio_session" time="23.271" status="run">
+		<system-out>studio session contract PASS
+</system-out>
+	</testcase>
+</testsuite>

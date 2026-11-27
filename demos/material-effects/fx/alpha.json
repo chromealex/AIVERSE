@@ -1,0 +1,23 @@
+{
+  "model": {
+    "source": "models/tall-target.obj",
+    "duration": 10,
+    "loop": true,
+    "castShadow": false,
+    "materials": [
+      {
+        "blend": "alpha",
+        "color": [
+          [
+            0,
+            "#ffffff60"
+          ],
+          [
+            1,
+            "#ffffff60"
+          ]
+        ]
+      }
+    ]
+  }
+}

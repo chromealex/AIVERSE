@@ -1,3 +1,4 @@
+#include "ProjectileEvents.h"
 // Ordered projectile programs on flat maps and planetary surfaces. All structural ECS edits occur outside world.each.
 #include "Internal.h"
 #include "engine/mechanics/EcsOrderedImpactSystems.h"
@@ -95,9 +96,9 @@ void GameCore::bakeProjectileProgram(Projectile& p, const ProjectileFlight& f) c
     projectile::bake(p.program,p.speed,f);
 }
 void GameCore::initProjectileProgram(Simulation& sim, Projectile& p, Vec3 start) const {
+    p.start=start;
     const auto* f=projectileFlight(p);
     if (!f || !f->enabled) return;
-    p.start=start;
     const auto* surface=sim.world().resource<GameState>()->surface.get();
     Vec3 toward=surface ? fxNormalize(surface->tangent(start,p.aim-start)) : direction(p.aim-start);
     projectile::initialize(p.program,p.speed,*f,toward);
@@ -405,7 +406,10 @@ void GameCore::sysProjectilePrograms(Simulation& sim, const std::vector<Entity>&
         if (w.alive(entity) && w.has<Projectile>(entity)) {
             w.get<Projectile>(entity)=std::move(p);
             auto& tr=w.get<Transform>(entity); tr.prevPos=previous; tr.pos=position;
-            if (!alive) w.destroyLater(entity);
+            if (!alive) {
+                sim.emit(projectileFinishedEvent(entity, w.get<Projectile>(entity), position));
+                w.destroyLater(entity);
+            }
         }
     }
     // New projectiles never get a second movement update in their birth tick.

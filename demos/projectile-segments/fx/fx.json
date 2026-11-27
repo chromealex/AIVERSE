@@ -1,0 +1,7 @@
+{
+  "weapons": {
+    "bolt": {
+      "trail": "trace"
+    }
+  }
+}

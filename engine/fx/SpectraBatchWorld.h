@@ -69,7 +69,7 @@ public:
         return setView(fx::SpectraFxView::fromCamera(camera,projection,width,height));
     }
     void update(float dt);
-    void draw(const fx::FxFog& fog = {});
+    void draw(const fx::FxFog& fog = {},render::Renderer3D* renderer=nullptr);
     void collectLights(std::vector<fx::FxPointLight>& lights, int maxLights = 32) const;
 
     // Clear the entire match/scene, including all connected graph instances.

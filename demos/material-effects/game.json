@@ -1,0 +1,27 @@
+{
+  "id": "org.aiverse.demos.material_effects",
+  "name": "Material effects",
+  "module": "game",
+  "rules": "rules.json",
+  "maps": [
+    {
+      "file": "maps/shadows.json",
+      "title": "Model shadows: on / off"
+    },
+    {
+      "file": "maps/materials.json",
+      "title": "Model blend: alpha / additive / unweighted"
+    },
+    {
+      "file": "maps/particles.json",
+      "title": "Particles: linear / display"
+    }
+  ],
+  "camera": {
+    "projection": "ortho",
+    "pitch": 45,
+    "yaw": 0,
+    "pixelsPerCell": 48,
+    "rotate": true
+  }
+}
