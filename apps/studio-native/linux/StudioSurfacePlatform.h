@@ -54,6 +54,11 @@ public:
 
     bool gameFocused() override { return gtk_widget_has_focus(widget(StudioSurface::Game)); }
 
+    bool confirmDiscardChanges(const std::string& title, const std::string& message,
+                               const std::string& discardLabel) override {
+        return confirmStudioDiscard(parentWindow(), title, message, discardLabel);
+    }
+
     void chooseProject(std::function<void(std::string)> done) override {
         chooseFolder("Open Project", {}, std::move(done));
     }
