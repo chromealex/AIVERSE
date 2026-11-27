@@ -279,6 +279,10 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
       <div className="graph-summary"><strong>{selected}</strong><span>{document.graph.domain??'Unknown domain'}</span>
        <span>{draft?.nodes?.length??document.nodes} {(draft?.nodes?.length??document.nodes)===1?'node':'nodes'} · {document.samples} saved texture {document.samples===1?'sample':'samples'}</span>
        <span>{dirty?'Unsaved changes':'Saved'}</span>
+       <StudioButton size="sm" disabled={busy||!draft} aria-pressed={previewName===selected}
+        onClick={()=>{if(previewName===selected){setPreviewName('');setGpuError('');}else void previewDraft();}}>
+        {previewName===selected?'Hide preview':'Preview draft'}</StudioButton>
+       <button disabled={!dirty||busy} onClick={()=>void save()}><Save size={13}/> Save graph</button>
        <button className="graph-tools-toggle" aria-expanded={toolsExpanded} onClick={()=>setToolsExpanded(!toolsExpanded)}>Editing tools</button>
        <div className="graph-edit-tools" data-expanded={toolsExpanded}>
        <StudioInput aria-label="Search node catalog" placeholder="Find node…" value={nodeQuery} onChange={e=>setNodeQuery(e.target.value)}/>
@@ -297,11 +301,7 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
        <StudioButton size="sm" disabled={!history.current?.canRedo()||busy} onClick={()=>{if(history.current)setDraft(history.current.redo());setPendingOutput(null)}}>Redo</StudioButton>
        <button disabled={!selectedNode||busy} onClick={deleteNode}>Delete node</button>
        <button disabled={!draft||busy} onClick={()=>void validate()}><CheckCircle2 size={13}/> Validate</button>
-       <StudioButton size="sm" disabled={busy||!draft} aria-pressed={previewName===selected}
-        onClick={()=>{if(previewName===selected){setPreviewName('');setGpuError('');}else void previewDraft();}}>
-        {previewName===selected?'Hide preview':'Preview draft'}</StudioButton>
        <button disabled={!dirty||busy} onClick={discard}><RotateCcw size={13}/> Discard</button>
-       <button disabled={!dirty||busy} onClick={()=>void save()}><Save size={13}/> Save graph</button>
        </div>
       </div>
 
