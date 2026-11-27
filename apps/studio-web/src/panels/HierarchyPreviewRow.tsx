@@ -13,7 +13,7 @@ interface Props {
 
 export function HierarchyPreviewRow({node,depth,selected,onSelect,childCount,collapsed,toggle}:Props){
   const details=node.preview!;
-  return <div className="hier-preview" data-selected={selected || undefined} style={{paddingInlineStart:6+depth*12}} data-preview-id={node.id} data-nested-leaf={childCount===0 || undefined}
+  return <div className="hier-preview" data-hierarchy-label={node.name} data-selected={selected || undefined} style={{paddingInlineStart:6+depth*12}} data-preview-id={node.id} data-nested-leaf={childCount===0 || undefined}
     onKeyDown={event=>{
       // A focused preview must not dispatch map deletion or duplication shortcuts.
       if(['Delete','Backspace'].includes(event.key) || ((event.metaKey||event.ctrlKey) && event.key.toLowerCase()==='d')){

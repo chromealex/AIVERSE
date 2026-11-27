@@ -263,7 +263,10 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
   const currentItems = useRef(menuItems);
   currentItems.current = menuItems;
 
-  return <div className="hier" onKeyDown={onKeyDown}>
+  return <div className="hier" onKeyDown={onKeyDown} onContextMenu={event => {
+    const row = (event.target as Element).closest<HTMLElement>('[data-hierarchy-label]');
+    if (project && row) void lua.open(event, 'hierarchy', row.dataset.hierarchyLabel ?? '');
+  }}>
     <div className="hier__toolbar">
       <label className="hier__search">
         <Search size={12} aria-hidden="true"/>
@@ -311,7 +314,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
         if ('members' in row) {
           const documentMembers=row.members.filter(id=>!id.startsWith('preview:'));
           const Chevron = row.collapsed ? ChevronRight : ChevronDown;
-          return <div key={'group:'+row.key} className="hier__group" style={{paddingInlineStart:4+row.depth*12}}>
+          return <div key={'group:'+row.key} className="hier__group" data-hierarchy-label={row.label} style={{paddingInlineStart:4+row.depth*12}}>
             <button type="button" aria-label={(row.collapsed?'Expand ':'Collapse ')+row.label} aria-expanded={!row.collapsed}
               onClick={() => toggleCollapsed(row.key)}><Chevron size={13}/></button>
             <button type="button" title={documentMembers.length?'Select '+documentMembers.length+' map objects':'Preview objects'} disabled={busy || !documentMembers.length}
@@ -380,7 +383,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
       onToggle={event => { if (!searching) setPlayersOpen(event.currentTarget.open); }}>
       <summary>Map players</summary>
       {(playersOpen || searching) && players.map(({name,index}) => <StudioButton key={index} size="sm" disabled={busy}
-          onClick={() => selectRecord({kind:'player',index})}>
+          data-hierarchy-label={name} onClick={() => selectRecord({kind:'player',index})}>
           {index} · {name}
         </StudioButton>)}
     </details>}
@@ -388,14 +391,14 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
       onToggle={event => { if (!searching) setAreasOpen(event.currentTarget.open); }}>
       <summary>Map areas</summary>
       {(areasOpen || searching) && currentRecords && (areas.length ? areas.map(key =>
-        <StudioButton key={key} size="sm" disabled={busy} onClick={() => selectRecord({kind:'area',key})}>{key}</StudioButton>)
+        <StudioButton key={key} size="sm" disabled={busy} data-hierarchy-label={key} onClick={() => selectRecord({kind:'area',key})}>{key}</StudioButton>)
         : <span>No named areas</span>)}
     </details>}
     {scope && snapshot?.scene.mapRegions && (!searching || regions.length > 0) && <details className="hier__players" open={searching || regionsOpen}
       onToggle={event => { if (!searching) setRegionsOpen(event.currentTarget.open); }}>
       <summary>Map regions</summary>
       {(regionsOpen || searching) && currentRegions && (regions.length ? regions.map(({letter,name,cells}) =>
-        <StudioButton key={letter} size="sm" disabled={busy} onClick={()=>selectRecord({kind:'region',key:letter})}>
+        <StudioButton key={letter} size="sm" disabled={busy} data-hierarchy-label={name || letter} onClick={()=>selectRecord({kind:'region',key:letter})}>
           {letter}{name && ' · '+name} ({cells})
         </StudioButton>) : <span>No named or painted regions</span>)}
     </details>}
@@ -403,10 +406,10 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
       onToggle={e=>{if(!searching)setBlocksOpen(e.currentTarget.open);}}>
       <summary>Additional map blocks</summary>
       {(searching || blocksOpen) && blocks.map(({key,children})=><div key={key}>
-        <StudioButton size="sm" disabled={busy} onClick={()=>selectRecord({kind:'block',key})}>{key}</StudioButton>
+        <StudioButton size="sm" disabled={busy} data-hierarchy-label={key} onClick={()=>selectRecord({kind:'block',key})}>{key}</StudioButton>
         {!!children.length && <details open={searching || undefined}><summary>Entries ({children.length})</summary>
           {children.map(({name,index})=><StudioButton key={index} size="sm" disabled={busy}
-            onClick={()=>selectRecord({kind:'block',key,index})}>{name}</StudioButton>)}</details>}
+            data-hierarchy-label={name} onClick={()=>selectRecord({kind:'block',key,index})}>{name}</StudioButton>)}</details>}
       </div>)}
       {blocksOpen && !searching && currentRecords && !blocks.length && <span>No additional blocks</span>}
     </details>}
@@ -414,14 +417,14 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
       onToggle={event=>{if(!searching)setRoadsOpen(event.currentTarget.open);}}>
       <summary>Movement roads</summary>
       {(searching || roadsOpen) && roads.map(({index,name})=><StudioButton key={index} size="sm" disabled={busy}
-        onClick={()=>selectRecord({kind:'road',index})}>{name}</StudioButton>)}
+        data-hierarchy-label={name} onClick={()=>selectRecord({kind:'road',index})}>{name}</StudioButton>)}
       {roadsOpen && !searching && currentRecords && !roads.length && <span>No movement roads</span>}
     </details>}
     {scope && !snapshot?.scene.worldSpace && (!searching || scenario.length>0) && <details className="hier__players" open={searching || scenarioOpen}
       onToggle={event=>{if(!searching)setScenarioOpen(event.currentTarget.open);}}>
       <summary>Waves and triggers</summary>
       {(searching || scenarioOpen) && scenario.map(({kind,index,name})=><StudioButton key={kind+index} size="sm" disabled={busy}
-        onClick={()=>selectRecord({kind,index})}>{name}</StudioButton>)}
+        data-hierarchy-label={name} onClick={()=>selectRecord({kind,index})}>{name}</StudioButton>)}
       {scenarioOpen && !searching && currentRecords && !scenario.length && <span>No waves or triggers</span>}
     </details>}
     {planetary && (!searching || bodies.length > 0) && <details className="hier__players" open={searching || surfacesOpen}
@@ -430,7 +433,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
       {(surfacesOpen || searching) && currentRecords && <>
         {!searching && <StudioButton size="sm" disabled={busy} onClick={()=>showSurface('')}>Follow entity selection</StudioButton>}
         {bodies.map(({id,faceSize})=><div key={id}>
-          <StudioButton size="sm" disabled={busy} onClick={()=>selectRecord({kind:'body',key:id})}>
+          <StudioButton size="sm" disabled={busy} data-hierarchy-label={id} onClick={()=>selectRecord({kind:'body',key:id})}>
             {id} · {faceSize ? faceSize+' × '+faceSize+' per face' : 'No surface'}
           </StudioButton>
           {faceSize>0 && <StudioIconButton aria-label={'Show '+id+' in Scene'} title={'Show '+id+' in Scene'} disabled={busy}
