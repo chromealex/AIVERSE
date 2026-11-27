@@ -25,6 +25,7 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
  const [pending,setPending]=useState<string|null>(null);
  const [loading,setLoading]=useState(true);
  const [busy,setBusy]=useState(false);
+ const [targetExpanded,setTargetExpanded]=useState(false);
  const [previewing,setPreviewing]=useState(false);
  const [previewError,setPreviewError]=useState('');
  const [error,setError]=useState('');
@@ -199,15 +200,17 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
   if(pending!==null){setName(pending);setPending(null);}
   setMessage('Draft discarded.');
  };
+ const showTarget=!textureOnly||targetExpanded||!name||changes>0;
  return <section className="materials-editor">
   <div className="materials-heading">
-   <span><Layers size={16}/> {textureOnly?'Texture Graph · target material':'Material Library'}</span>
+   {textureOnly?<StudioButton size="sm" title={name} aria-expanded={showTarget} disabled={!name||changes>0}
+    onClick={()=>setTargetExpanded(v=>!v)}>Target material · {name||'Choose material'} {showTarget?'▴':'▾'}</StudioButton>:<span><Layers size={16}/> Material Library</span>}
    <button className="icon-button" aria-label="Reload materials" title="Reload materials"
     disabled={busy||loading||changes>0} onClick={reload}><RefreshCw size={15}/></button>
   </div>
   {names.some(n=>!library.files?.[n])&&<button disabled={busy||changes>0} onClick={()=>void convert()}>Convert library to material files</button>}
-  <p className="materials-warning"><ShieldAlert size={15}/>
-   Apply saves the material file. Map Undo applies to scene edits.</p>
+  {showTarget&&<p className="materials-warning"><ShieldAlert size={15}/>
+   Apply saves the material file. Map Undo applies to scene edits.</p>}
   {!connected&&<p className="materials-notice">DEMO — no native material library; editing is disabled.</p>}
   {connected&&!projectPath&&<p className="materials-notice">Open a project to view the material library.</p>}
   {error&&<p role="alert" className="materials-error">{error}</p>}
@@ -230,7 +233,7 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
   </details>}
   {!!library.quarantinedPublications?.length&&<details className="materials-warning"><summary>Quarantined material publications ({library.quarantinedPublications.length})</summary>{library.quarantinedPublications.map(p=><div key={p.id}>{p.id}{p.reason&&<small> — {p.reason}</small>}{p.restorable&&<StudioButton size="sm" disabled={busy||loading||changes>0||!connected||!documentEpoch} onClick={()=>void recoverPublication('restore',p.id)}>Restore to pending</StudioButton>}</div>)}</details>}
   <div className="materials-main">
-   <aside className="materials-list">
+   {showTarget&&<aside className="materials-list">
     <button className="materials-new-button" disabled={!connected||!projectPath||busy}
       onClick={()=>setCreating(value=>!value)}>{creating?'Cancel new material':'+ New material'}</button>
     {creating&&<div className="materials-new-form">
@@ -253,10 +256,10 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
        <span title={n}>{n}</span>
       </button>)
     }
-   </aside>
+   </aside>}
    <div className={'materials-detail'+(materialMode==='texture'?' materials-detail--graph':'')}>
     {!name||!names.includes(name)?<div className="materials-empty">{name?'Selected material is no longer present. Discard the draft and choose another material.':'Select a material from the library.'}</div>:
-     <><div className="materials-selected">
+     <>{showTarget&&<div className="materials-selected">
       <span className="materials-swatch" style={{background:materialSwatchColor(selected)}}/>
       <div className="materials-file-info"><strong>{name}</strong>
        {library.files?.[name]&&<small>{library.files[name]}</small>}
@@ -264,11 +267,11 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
        revealProjectAsset(projectPath, library.files![name].slice('content/'.length));
        window.dispatchEvent(new CustomEvent('studio:show-panel',{detail:'assets'}));
       }}>Show in Assets</button>}
-     </div>
-     <div className="materials-modes" role="group" aria-label="Material workspace">
-      {(textureOnly?(['texture'] as const):(['properties','dependencies','quick'] as const)).map(mode=><StudioButton key={mode} size="sm" aria-pressed={materialMode===mode} disabled={mode!=='properties'&&(!connected||!projectPath)} onClick={()=>setMaterialMode(mode)}>{mode==='properties'?'Properties':mode==='texture'?'Texture Graph':mode==='dependencies'?'Dependencies':'Quick texture'}</StudioButton>)}
-      {!textureOnly&&<StudioButton size="sm" disabled={!connected||!projectPath} onClick={openTextureGraph}>Open Texture Graph</StudioButton>}
-     </div>
+     </div>}
+     {!textureOnly&&<div className="materials-modes" role="group" aria-label="Material workspace">
+      {(['properties','dependencies','quick'] as const).map(mode=><StudioButton key={mode} size="sm" aria-pressed={materialMode===mode} disabled={mode!=='properties'&&(!connected||!projectPath)} onClick={()=>setMaterialMode(mode)}>{mode==='properties'?'Properties':mode==='dependencies'?'Dependencies':'Quick texture'}</StudioButton>)}
+      <StudioButton size="sm" disabled={!connected||!projectPath} onClick={openTextureGraph}>Open Texture Graph</StudioButton>
+     </div>}
      {connected&&projectPath&&<div hidden={materialMode==='properties'} className="materials-graph-host"><MaterialGraphPanel documentEpoch={documentEpoch} name={name} material={selected} draft={draft} projectPath={projectPath} disabled={busy||loading} onEdit={edit} mode={materialMode}/></div>}
      <div className="materials-fields" hidden={materialMode!=='properties'}>
       {props.map(field=><PropertyField key={name+':'+field.key} property={field}
@@ -276,7 +279,7 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
      </div></>}
    </div>
   </div>
-  <footer className="materials-footer">
+  {showTarget&&<footer className="materials-footer">
    <span>{changes>0 ? changes+' pending PBR edits' : 'No pending edits'}</span>
    <button className="materials-preview" disabled={!connected||!projectPath||!name||changes>0||busy||previewing}
      title="Preview the saved material on a GPU-rendered sphere"
@@ -285,6 +288,6 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
    <button className="materials-discard" onClick={discard} disabled={busy||changes===0}>{pending===null?'Discard':'Discard & switch'}</button>
    <button className="materials-apply" disabled={busy||loading||changes===0||!connected||!projectPath||!names.includes(name)}
     onClick={()=>void apply()}><Save size={14}/> {pending===null?'Apply & save':'Save & switch'}</button>
-  </footer>
+  </footer>}
  </section>;
 }
