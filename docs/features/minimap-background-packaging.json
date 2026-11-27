@@ -26,19 +26,31 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Implementation changed to shared logical image loading; previous packaging evidence does not verify this revision.",
-      "evidence": []
+      "status": "pass",
+      "note": "The actual Metal client renders the atlas-only background identically to loose PNG (0 differing pixels over 190x142); content.rpak contains the atlas and no raw background image.",
+      "evidence": [
+        "docs/evidence/issues-minimap-metal-20261127/result.json"
+      ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Implementation changed to shared logical image loading; previous packaging evidence does not verify this revision.",
-      "evidence": []
+      "status": "pass",
+      "note": "ImageSource owns logical-image reconstruction and transactional output; TextureLibrary and render::loadContentImage delegate to it. AtlasBuild has no minimap-specific exception. Reviewed against the current source.",
+      "evidence": [
+        "engine/atlas/AtlasFormat.cpp",
+        "engine/atlas/TextureLibrary.cpp",
+        "engine/render/TextureCache.cpp",
+        "tools/atlas/AtlasBuild.cpp"
+      ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Shared ImageSource::loadImage and render::loadContentImage require current runtime verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Public ImageSource::loadImage supports atlased and standalone images, keeps output on missing input, and fails on a broken declared atlas instead of loading stale raw pixels. atlas_pack_integration_and_runtime_lookup: 22 checks passed; current consumer capture confirms render::loadContentImage.",
+      "evidence": [
+        "engine/atlas/AtlasFormat.h",
+        "engine/render/TextureCache.h",
+        "tests/tests.cpp",
+        "docs/evidence/issues-minimap-metal-20261127/result.json"
+      ]
     },
     "skill": {
       "status": "not_applicable",
@@ -77,13 +89,18 @@
     },
     "platforms": {
       "status": "not_run",
-      "note": "Current shared image loader has not yet passed platform verification. Historical packer-exception evidence does not apply.",
-      "evidence": []
+      "note": "Metal loose/packed runtime passed; Emscripten build is in progress. Windows/Linux and browser runtime are not yet verified.",
+      "evidence": [
+        "docs/evidence/issues-minimap-metal-20261127/result.json"
+      ]
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Implementation changed to shared logical image loading; previous packaging evidence does not verify this revision.",
-      "evidence": []
+      "status": "pass",
+      "note": "Uses existing atlas extraction, platform content reads and image decoder; introduces no dependency, pack-format change or special packer policy.",
+      "evidence": [
+        "engine/atlas/AtlasFormat.cpp",
+        "engine/render/TextureCache.cpp"
+      ]
     },
     "headless": {
       "status": "not_applicable",
@@ -97,8 +114,10 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Real Metal client passed loose/atlas-only comparison with 0 differing minimap pixels; cropped aspect/background coordinates, hidden tower markers and complete rectangle frame verified. Native tests cover logical image failure atomicity/projection. Final integrated quick gate pending.",
+      "note": "Focused atlas regression rerun: 22 checks, 0 failures using the previously built native binary. Full Mac quick gate passed on d88e86901 (548 pass, 5 skip), but later source changes require a fresh final gate.",
       "evidence": [
+        "tests/tests.cpp",
+        "docs/evidence/issues-final-mac-quick-20261127.json",
         "docs/evidence/issues-minimap-metal-20261127/result.json"
       ]
     },
@@ -108,9 +127,12 @@
       "evidence": []
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Implementation changed to shared logical image loading; previous packaging evidence does not verify this revision.",
-      "evidence": []
+      "status": "pass",
+      "note": "Game-format documentation explains transparent logical loading of atlased minimap backgrounds; English and Russian descriptions agree.",
+      "evidence": [
+        "docs/game-format.md",
+        "docs/ru/game-format.md"
+      ]
     },
     "publishing": {
       "status": "not_applicable",
