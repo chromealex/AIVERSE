@@ -54,6 +54,8 @@ export function SnapshotDiffPanel({ snapshot }: Ctx) {
   const [a, setA] = useState(''), [b, setB] = useState('');
   const [firstFile, setFirstFile] = useState<File | null>(null), [secondFile, setSecondFile] = useState<File | null>(null);
   const [notice, setNotice] = useState('');
+  const [page, setPage] = useState(0);
+  const pageSize = 100;
   const [truncated, setTruncated] = useState(false);
   const [changes, setChanges] = useState<JsonChange[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -76,7 +78,7 @@ export function SnapshotDiffPanel({ snapshot }: Ctx) {
     try { return JSON.parse(r.text ?? ''); } catch { throw new Error(file + ' is not JSON'); }
   };
   const compare = async () => {
-    setBusy(true); setChanges(null); setNotice(''); setError('');
+    setPage(0); setBusy(true); setChanges(null); setNotice(''); setError('');
     try {
       const [first, second] = await Promise.all([read(a.trim(), firstFile), read(b.trim(), secondFile)]);
       const rows = jsonDiff(first, second, 1e-6, 2001);
@@ -129,10 +131,16 @@ export function SnapshotDiffPanel({ snapshot }: Ctx) {
         <span className="diff__changed">~{changes.filter(c => c.kind === 'changed').length}</span>
         <button type="button" className="au-button au-button--sm" disabled={!changes.length} onClick={() => void copyReport()}>Copy report</button>
         <span role="status">{notice}</span>
-        <input className="au-input" placeholder="Filter paths" value={filter} onChange={e => setFilter(e.target.value)}/>
+        <input className="au-input" placeholder="Filter paths" aria-label="Filter paths" value={filter} onChange={e => { setFilter(e.target.value); setPage(0); }}/>
       </div>}
       {changes && !changes.length && <p className="ptp__ok">The files are the same.</p>}
-      {!!shown.length && <table className="ptp__table ptp__audit"><thead><tr><th>Path</th><th>First</th><th>Second</th></tr></thead><tbody>{shown.slice(0, 500).map((c, i) =>
+      {shown.length > pageSize && <nav className="diff__summary" aria-label="Difference pages">
+        <button type="button" className="au-button au-button--sm" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous</button>
+        <span aria-live="polite">{page * pageSize + 1}–{Math.min((page + 1) * pageSize, shown.length)} of {shown.length}</span>
+        <button type="button" className="au-button au-button--sm" disabled={(page + 1) * pageSize >= shown.length} onClick={() => setPage(page + 1)}>Next</button>
+      </nav>}
+      {changes && changes.length > 0 && !shown.length && <p className="ptp__hint">No paths match this filter.</p>}
+      {!!shown.length && <table className="ptp__table ptp__audit"><thead><tr><th>Path</th><th>First</th><th>Second</th></tr></thead><tbody>{shown.slice(page * pageSize, (page + 1) * pageSize).map((c, i) =>
         <tr key={i} className={'diff__' + c.kind}><td>{c.kind === 'added' ? '+' : c.kind === 'removed' ? '−' : '~'} {c.path}</td>
           <td>{previewValue(c.before)}</td><td>{previewValue(c.after)}</td></tr>)}</tbody></table>}
       {!changes && <p className="ptp__hint">Compares two JSON files of the project path by path (numbers within 1e-6 count as equal). Read-only.</p>}
