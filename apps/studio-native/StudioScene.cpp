@@ -3918,7 +3918,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         }
         if (materialRequested && graphPreviewError_.empty()) {
             const bool graphDraft=previewFactors.has("studioGraphDraft")&&previewName.rfind("Shader Graph / ",0)==0;
-            const Json& previewGraph=previewFactors["studioGraphDraft"];
+            const Json& previewGraph=graphDraft ? previewFactors["studioGraphDraft"] : previewFactors["shaderGraph"];
             if(graphDraft&&previewGraph.getStr("domain")=="particle"){
                 auto particles=std::make_unique<GraphParticlePreview>(*device_);
                 if(!particles->system.init(device_.get()))graphPreviewError_="Cannot initialize particle renderer";
@@ -3963,7 +3963,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                     graphPreviewPost_=std::move(chain);
                 }catch(const std::exception& e){chain->shutdown();graphPreviewError_=e.what();}
             }
-            const bool materialGraph=graphDraft&&previewGraph.getStr("domain")=="material";
+            const bool materialGraph=previewGraph.isObject() && previewGraph.getStr("domain","material")=="material";
             if (!graphParticles_ && (!materialSphere_ || materialGraph || materialSphere_->materials.at(0).shaderGraph)) {
                 render::MeshBuilder sphere;
                 sphere.color(render::rgba(255,255,255));
@@ -3973,7 +3973,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                 try {
                     if(!next)throw std::runtime_error("Material preview geometry missing");
                     if(materialGraph){
-                        Json ref=Json::object();ref.set("shaderGraph",previewFactors["studioGraphDraft"]);
+                        Json ref=Json::object();ref.set("shaderGraph",previewGraph);
                         view::AppearanceAuthoringService::applyMaterial(next->materials.at(0),Json::object(),ref,
                             [&](const std::string& path){
                                 std::string bytes;
