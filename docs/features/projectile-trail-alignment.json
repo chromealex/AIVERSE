@@ -49,6 +49,7 @@
     "engine/view/game/GameView.cpp",
     "engine/view/game/GameView.h",
     "engine/view/game/GameViewDraw.cpp",
+    "skills/gameplay/aiverse-view/SKILL.md",
     "tests/tests.cpp"
   ],
   "traits": {
@@ -60,8 +61,11 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Shared presentation and native four-scene captures are implemented. Earlier save regressions were corrected and historical 553-test gate passed; current Studio-enabled gate failed during KINGSTON I/O loss. Final gate and browser acceptance remain pending.",
-      "evidence": []
+      "note": "Shared presentation and terminal path implemented. Native four-scene captures and Web scene smoke retained. Final current Studio-enabled gate remains pending after previous KINGSTON I/O failure; no full readiness claim.",
+      "evidence": [
+        "docs/evidence/issues-projectile-segments-20261127/result.json",
+        "docs/evidence/issues-projectile-segments-web-20261127/result.json"
+      ]
     },
     "architecture": {
       "status": "pass",
@@ -84,9 +88,11 @@
       ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Existing View recipe documents the shared native presentation/projection owner, host responsibilities, ordinary authoring route and actual acceptance scenarios without consumer-specific algorithms.",
+      "evidence": [
+        "skills/gameplay/aiverse-view/SKILL.md"
+      ]
     },
     "mcp": {
       "status": "not_run",
@@ -139,9 +145,13 @@
       "evidence": []
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Four ordinary-data scenes cover straight,arc,ricochet,split with real Metal and browser captures. Retained straight/arc browser frames have explicit timing/occlusion limits; native flight captures supplement them.",
+      "evidence": [
+        "demos/projectile-segments/README.md",
+        "docs/evidence/issues-projectile-segments-20261127/result.json",
+        "docs/evidence/issues-projectile-segments-web-20261127/result.json"
+      ]
     },
     "tests": {
       "status": "not_run",
@@ -165,12 +175,17 @@
     },
     "publishing": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Actual captures retained, bilingual devlog and exact Web payload hashes prepared. Main integration/publication still pending.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-27-projectile-segments.json",
+        "site/manifest.json"
+      ]
     }
   },
   "integrations": {
-    "skills": [],
+    "skills": [
+      "aiverse-view"
+    ],
     "mcp_tools": [],
     "studio_panels": [],
     "studio_methods": []

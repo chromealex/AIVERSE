@@ -11,6 +11,7 @@
     "demos/client-command-controls/rules.json",
     "docs/game-format.md",
     "engine/view/MapProjection.h",
+    "skills/gameplay/aiverse-view/SKILL.md",
     "tests/tests.cpp"
   ],
   "traits": {
@@ -46,9 +47,11 @@
       ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Existing View recipe documents the shared native presentation/projection owner, host responsibilities, ordinary authoring route and actual acceptance scenarios without consumer-specific algorithms.",
+      "evidence": [
+        "skills/gameplay/aiverse-view/SKILL.md"
+      ]
     },
     "mcp": {
       "status": "not_run",
@@ -137,7 +140,9 @@
     }
   },
   "integrations": {
-    "skills": [],
+    "skills": [
+      "aiverse-view"
+    ],
     "mcp_tools": [],
     "studio_panels": [],
     "studio_methods": []
