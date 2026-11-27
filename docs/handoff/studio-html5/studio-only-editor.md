@@ -1700,3 +1700,7 @@ d00ff868f128e489bbba0ab10d9e8b11fb28097c adds docs/handoff/studio-html5/captures
 ### Automatic texture inventory refresh
 
 63d0a8435f0f95af446938812dfe78e002db09d1 updates apps/studio-web/src/panels/InsightPanels.tsx and adds docs/handoff/studio-html5/captures/mac-texture-auto-refresh.png. Refreshes every two seconds while the document is visible and on return, with one pending request per mounted project. Detached WKWebView test replaced a selected cube with a multisampled target in a synthetic inventory; without Refresh, the obsolete row and inspector disappeared and the new row and totals appeared. stats-mac-utye4a07/live.log recorded success. Production build and npm run test:web passed. Next port continuous 2D preview.
+
+### Live 2D diagnostic preview in the HTML inspector
+
+cd5056a300a6a0bfd7be469afe235ec71f438696 updates InsightPanels.tsx, docs/studio-html5-parity.md and captures/mac-texture-live-preview.png. Selecting a supported 2D subresource starts one-second sampled reads, keeps the previous image on screen during refresh, and supports pausing with manual reads. Web build and npm run test:web passed. Detached Studio WKWebView on Mac presented three physical Metal readbacks automatically, stopped painting after pause, rendered one manual read and resumed automatic painting. Evidence: stats-mac-w440x79m/live.log. Remaining parity: larger native 2D preview with format coverage beyond the 32x32 diagnostic and validation on other backends.
