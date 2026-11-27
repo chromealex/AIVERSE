@@ -6,6 +6,7 @@ int main(int argc, char** argv) {
     if (argc != 2) return 2;
     if (!gtk_init_check(&argc, &argv)) return 77;
     auto* window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_default_size(GTK_WINDOW(window),1280,800);
     auto* view = WEBKIT_WEB_VIEW(webkit_web_view_new());
     webkit_settings_set_enable_write_console_messages_to_stdout(webkit_web_view_get_settings(view),true);
     aiverse::studio::registerStudioWebAssets(webkit_web_view_get_context(view),argv[1]);
@@ -50,7 +51,23 @@ int main(int argc, char** argv) {
     webkit_web_view_load_uri(view,"aiverse-studio://shell/index.html");
     g_timeout_add_seconds(30,[](gpointer)->gboolean{ gtk_main_quit(); return G_SOURCE_REMOVE; },nullptr);
     gtk_main();
+    const char* screenshot = g_getenv("STUDIO_WINDOW_CAPTURE");
+    bool captured = false;
+    if (mounted && roundTrip && screenshot) {
+        webkit_web_view_get_snapshot(view, WEBKIT_SNAPSHOT_REGION_VISIBLE, WEBKIT_SNAPSHOT_OPTIONS_NONE,
+            nullptr, +[](GObject* object, GAsyncResult* result, gpointer data) {
+                GError* error = nullptr;
+                auto* surface = webkit_web_view_get_snapshot_finish(WEBKIT_WEB_VIEW(object), result, &error);
+                if (surface) {
+                    *static_cast<bool*>(data) = cairo_surface_write_to_png(surface, g_getenv("STUDIO_WINDOW_CAPTURE")) == CAIRO_STATUS_SUCCESS;
+                    cairo_surface_destroy(surface);
+                }
+                if (error) { std::cerr << error->message << std::endl; g_error_free(error); }
+                gtk_main_quit();
+            }, &captured);
+        gtk_main();
+    }
     gtk_widget_destroy(window);
     if (!mounted) std::cerr << "Studio did not mount from its bundled HTML, modules and styles\n";
-    return mounted && roundTrip ? 0 : 1;
+    return mounted && roundTrip && (!screenshot || captured) ? 0 : 1;
 }
