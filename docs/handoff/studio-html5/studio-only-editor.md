@@ -1728,3 +1728,7 @@ e0cac53cf8300ab90e112b6e8a7bf727b6d773c6 adds docs/handoff/studio-html5/captures
 ### Rendered world axes from detached Scene Debug
 
 beb3676a563566b15140b219abbef4ea6616a77e adds captures/mac-scene-world-axes.png. In a disposable order-upgrade project the real detached toolbar toggled World axes off/on/off. Metal viewport screenshots with the menu closed are in stats-mac-el1e9p4k/{before,axes,restored}.png. Pixel comparison away from window chrome found 36 red/green/blue pixels at x369–439, y178–252 whose channels changed by more than 30 and returned exactly to baseline. This covers the native three-line world-axis path; other overlays require their own scene fixtures.
+
+### Detached Scene STRATA cluster fill
+
+46409865f2a6b3ae3f20526c80937c10b603193e updates docs/studio-html5-parity.md and captures/mac-scene-cluster-fill.png. In the order-upgrade fixture a launcher OBJ was registered in geometryScene with STRATA enabled. Detached Scene Debug switched Cluster fill off/on/off. With the menu closed, 413 viewport pixels at x485–687, y256–513 changed by more than 30 and returned exactly to their original values. Evidence: stats-mac-3uc_s06m/{before,fill,restored}.png. The earlier PHYSIS and wind-rig evidence already records native frame comparisons; see the linked logs in the matrix. Continue auditing TerraWeave and NEREID mode coverage.
