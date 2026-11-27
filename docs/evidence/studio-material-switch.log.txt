@@ -1,0 +1,2 @@
+2026-11-27 05:07:05.276 AiverseStudioHTML5[32484:87124677] [studio-web] JS: CROSS main VERIFIED saved draft and opened requested material
+Only the edited material received the new roughness

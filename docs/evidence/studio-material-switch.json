@@ -1,0 +1,10 @@
+{
+  "sha": "4889e833212f4374c32c4305e0cde1940e8ce473",
+  "argv": [
+    "bash",
+    "../material-switch.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-material-switch.log.txt",
+  "sha256": "1082ed1887207afcf7637f9f17ae9344c09b596b1491010583e3843e159e48c0"
+}
