@@ -204,10 +204,12 @@ export function FrameCapturePanel({ snapshot }: Ctx) {
   const path = snapshot?.project.path ?? '';
   const [live, setLive] = useState<StudioGpuStats | null>(null);
   const [selected, setSelected] = useState(0);
+  type Capture = StudioGpuStats & { frameIds?: number[] };
+  const [recording, setRecording] = useState<{ after: number; previous: Capture | null } | null>(null);
   const [clearedThrough, setClearedThrough] = useState(0);
   const [capturing, setCapturing] = useState(false);
   const [copyStatus, setCopyStatus] = useState('');
-  const [frozen, setFrozen] = useState<StudioGpuStats | null>(null);
+  const [frozen, setFrozen] = useState<Capture | null>(null);
   const [error, setError] = useState('');
   useEffect(() => {
     if (!path || frozen) return;
@@ -226,9 +228,34 @@ export function FrameCapturePanel({ snapshot }: Ctx) {
   const data = frozen ?? live;
   const ms = (data?.history ?? []).map(h => h[0]), draws = (data?.history ?? []).map(h => h[1]);
   const sum = frameSummary(ms);
+  const frameId = (capture: Capture, index: number) =>
+    capture.frameIds?.[index] ?? capture.frames - capture.history.length + index + 1;
+  const toggleRecording = async () => {
+    setCapturing(true); setCopyStatus('');
+    try {
+      const state = await invoke('studio.gpuStats', recording ? { capture: true, project: path } : {});
+      if (recording) {
+        const first = Math.max(0, recording.after - state.frames + state.history.length);
+        const batch = state.history.slice(first);
+        const previous = recording.previous;
+        const history = [...(previous?.history ?? []), ...batch].slice(-6000);
+        const ids = previous?.history.map((_, i) => frameId(previous, i)) ?? [];
+        const addedIds = batch.map((_, i) => state.frames - batch.length + i + 1);
+        setFrozen({ ...state, history, frameIds: ids.concat(addedIds).slice(-6000) });
+        setSelected(Math.max(0, history.length - 1)); setRecording(null);
+      } else {
+        setRecording({ after: state.frames, previous: frozen?.frameIds ? frozen : null });
+        setClearedThrough(state.frames); setFrozen(null); setLive(null);
+      }
+      setError(state.error ?? '');
+    } catch (e) { setError(message(e)); }
+    finally { setCapturing(false); }
+  };
   return <div className="ptp">
     <div className="ptp__edhead">
-      <button type="button" className={'au-button au-button--sm' + (frozen ? '' : ' au-button--primary')} disabled={capturing || (!frozen && !sum.count)} onClick={async () => {
+      <button type="button" className="au-button au-button--sm" disabled={capturing} onClick={() => void toggleRecording()}>
+        {recording ? 'Pause recording' : frozen?.frameIds?.length ? 'Resume recording' : 'Start recording'}</button>
+      {!recording && <button type="button" className={'au-button au-button--sm' + (frozen ? '' : ' au-button--primary')} disabled={capturing || (!frozen && !sum.count)} onClick={async () => {
         setCopyStatus('');
         if (frozen) { setFrozen(null); return; }
         setCapturing(true);
@@ -240,19 +267,19 @@ export function FrameCapturePanel({ snapshot }: Ctx) {
         } catch (e) { setError(message(e)); }
         finally { setCapturing(false); }
       }}>
-        {frozen ? 'Resume live' : 'Capture'}</button>
+        {frozen ? 'Resume live' : 'Capture'}</button>}
       {frozen && <>
         <button type="button" className="au-button au-button--sm" disabled={!sum.count} onClick={async () => {
-          const rows = frozen.history.map(([cpu, calls, sim], i) => [frozen.frames - sum.count + i + 1, cpu.toFixed(4), calls, sim?.toFixed(4) ?? ''].join(','));
+          const rows = frozen.history.map(([cpu, calls, sim], i) => [frameId(frozen, i), cpu.toFixed(4), calls, sim?.toFixed(4) ?? ''].join(','));
           setCopyStatus(await copyText(['frame,cpu_ms,draw_calls,simulation_ms', ...rows, ''].join('\n')) ? 'CSV copied' : 'Clipboard unavailable');
         }}>Copy CSV</button>
         <button type="button" className="au-button au-button--sm" disabled={!sum.count} onClick={() => {
           setClearedThrough(frozen.frames); setLive(null);
-          setFrozen({ ...frozen, history: [], drawCalls: undefined }); setSelected(0); setCopyStatus('');
+          setFrozen({ ...frozen, history: [], frameIds: [], drawCalls: undefined }); setSelected(0); setCopyStatus('');
         }}>Clear</button>
         <span role="status">{copyStatus}</span>
       </>}
-      <span className="ptp__meta">{frozen ? 'Captured' : 'Live'} · {sum.count} frames · draw calls {data?.drawCalls ?? '—'}</span>
+      <span className="ptp__meta">{recording ? 'Recording' : frozen ? 'Captured' : 'Live'} · {recording ? Math.min(6000, (recording.previous?.history.length ?? 0) + Math.max(0, (live?.frames ?? recording.after) - recording.after)) : sum.count} frames · draw calls {data?.drawCalls ?? '—'}</span>
     </div>
     {error && <div className="tool__error" role="alert">{error}</div>}
     <div className="ptp__scroll">
@@ -264,7 +291,7 @@ export function FrameCapturePanel({ snapshot }: Ctx) {
         <div><b>{draws.length ? Math.max(...draws) : '—'}</b><span>draw calls (max)</span></div>
       </div>
       {frozen && sum.count > 0 && <label className="frame-capture__scrub">
-        <span>Frame {frozen.frames - sum.count + selected + 1} · {ms[selected].toFixed(2)} ms · {draws[selected]} draw calls{frozen.history[selected][2] !== undefined && ` · Simulation ${frozen.history[selected][2].toFixed(4)} ms`}</span>
+        <span>Frame {frameId(frozen, selected)} · {ms[selected].toFixed(2)} ms · {draws[selected]} draw calls{frozen.history[selected][2] !== undefined && ` · Simulation ${frozen.history[selected][2].toFixed(4)} ms`}</span>
         <input type="range" aria-label="Captured frame" min={0} max={sum.count - 1} value={selected}
           onChange={event => setSelected(Number(event.target.value))}/>
       </label>}
