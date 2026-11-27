@@ -1620,3 +1620,7 @@ b1ef64a5d2d9abcb9e8f74c18bc66272fde69fb9 reads the game device pool in StudioGam
 ### Populated Metal geometry pool
 
 911e7871658e58dceab9642fbfabfabf6cf2e5c2 adds docs/handoff/studio-html5/captures/mac-game-geometry-populated.png and updates docs/studio-html5-parity.md. In a disposable Watchtower Orders project the outpost used demos/model-triplanar/models/sculpt.glb. Default Metal reported zero pool counters. A separate supported CPU MDI run (AIVERSE_METAL_CPU_MDI=1) verified 1903416 occupied bytes, 2097152 allocated, one page and 28 pooled models. Compared all four DOM cards to the native response and verified pause, restart and stop. Full log: stats-mac-ldal_3ky/live.log on KINGSTON. Next address the legacy asset residency and retirement diagnostics.
+
+### Model assets in game Statistics
+
+fb82c4ef210e807585506cd802a6e6b7dea2f094 forwards the GameView residency snapshot through GameClient, HostedClient and StudioGameSurface to PlayerHistory.tsx (types.ts). Built the Mac aiverse_studio target, built the web bundle and passed all 303 web tests. The separate Mac Statistics window verified all ten cards against native game data with two loaded types and 28 cached models. No pending GPU releases in this sample. Pause/restart/stop passed. Screenshot: docs/handoff/studio-html5/captures/mac-model-residency.png; live log: stats-mac-p6xujf8k/live.log on KINGSTON. Next cover GPU release/backpressure during churn and remaining owner diagnostics.
