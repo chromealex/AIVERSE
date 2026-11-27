@@ -1,0 +1,10 @@
+{
+  "sha": "691709b0e843f16be24cee9f7c0d05189711204f",
+  "argv": [
+    "bash",
+    "../icon-check.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-mac-export-icon-path.log.txt",
+  "sha256": "84dfa3aae0c3157ce1487e1b21be96c8cc2c814ba596b68031710628c5aeb421"
+}
