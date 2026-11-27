@@ -61,3 +61,7 @@
   .materials-footer{padding:6px 10px;gap:6px}
   .materials-fields{padding:10px}
 }
+
+@container (max-width:540px){
+  .material-dependency-canvas{height:clamp(240px,72cqw,360px)}
+}
