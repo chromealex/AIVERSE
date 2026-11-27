@@ -858,6 +858,22 @@ Json StudioSession::mapProperties(const Json& params,bool write) {
         out.set("worldSpace",std::move(world));
     }
     out.set("maxSize",num(game::kMaxMapSize));out.set("entities",num(data.entities.size()));out.set("players",num(data.players.size()));
+    if(params.getBool("roadIndex")){
+        Json roads=Json::array();
+        auto label=[&](int i){
+            const auto& entity=data.entities[size_t(i)];
+            return entity.id.empty()?entity.type+" #"+std::to_string(i):entity.id;
+        };
+        for(size_t i=0;i<data.roads.size();++i){
+            const auto [a,b]=data.roads[i];
+            if(a<0 || b<0 || size_t(a)>=data.entities.size() || size_t(b)>=data.entities.size())continue;
+            Json row=Json::object();
+            row.set("index",num(int64_t(i)));
+            row.set("name",str(label(a)+" — "+label(b)));
+            roads.push(std::move(row));
+        }
+        out.set("roadIndex",std::move(roads));
+    }
     if(params.getBool("scenarioIndex")){
         Json records=Json::array();
         for(const auto* group:{"waves","triggers"}){

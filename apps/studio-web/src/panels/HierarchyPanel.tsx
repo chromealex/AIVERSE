@@ -50,21 +50,22 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
   }, [connected, project]);
   const [playersOpen, setPlayersOpen] = useState(false);
   const [areasOpen, setAreasOpen] = useState(false);
+  const [roadsOpen,setRoadsOpen]=useState(false);
   const [scenarioOpen,setScenarioOpen]=useState(false);
   const [surfacesOpen,setSurfacesOpen] = useState(false);
   const planetary = snapshot?.scene.mapProperties && snapshot.scene.mapRegions === false && !snapshot.scene.worldSpace;
-  const [records, setRecords] = useState<{revision: string; epoch: string; names: string[]; scenario:NonNullable<StudioMapProperties['scenarioIndex']>; areas: string[]; bodies: {id:string;faceSize:number;metadata:Record<string,unknown>}[]}>();
+  const [records, setRecords] = useState<{revision: string; epoch: string; names: string[]; roads:NonNullable<StudioMapProperties['roadIndex']>; scenario:NonNullable<StudioMapProperties['scenarioIndex']>; areas: string[]; bodies: {id:string;faceSize:number;metadata:Record<string,unknown>}[]}>();
   const searching = search.trim().length > 0;
-  const needRecords = playersOpen || areasOpen || scenarioOpen || (planetary && surfacesOpen) || searching;
+  const needRecords = playersOpen || areasOpen || roadsOpen || scenarioOpen || (planetary && surfacesOpen) || searching;
   const scope = snapshot?.graphDocument;
   useEffect(() => {
     if (!needRecords || !scope || snapshot?.scene.worldSpace) return;
     let current = true;
-    void invoke('studio.mapProperties', {scope,includeBodies:!!planetary,scenarioIndex:searching || scenarioOpen}).then(data => {
-      if (current) setRecords({ revision: data.scope.revision, epoch: data.scope.epoch, names: data.roster.map(p => p.name), areas: Object.keys(data.areas).sort(), scenario:data.scenarioIndex ?? [], bodies:data.bodies ?? [] });
+    void invoke('studio.mapProperties', {scope,includeBodies:!!planetary,scenarioIndex:searching || scenarioOpen,roadIndex:searching || roadsOpen}).then(data => {
+      if (current) setRecords({ revision: data.scope.revision, epoch: data.scope.epoch, names: data.roster.map(p => p.name), areas: Object.keys(data.areas).sort(), roads:data.roadIndex ?? [], scenario:data.scenarioIndex ?? [], bodies:data.bodies ?? [] });
     }).catch(e => { if (current) setError(String(e)); });
     return () => { current = false; };
-  }, [needRecords, searching, scenarioOpen, planetary, scope?.projectPath, scope?.mapPath, scope?.epoch, scope?.revision, snapshot?.scene.worldSpace]);
+  }, [needRecords, searching, roadsOpen, scenarioOpen, planetary, scope?.projectPath, scope?.mapPath, scope?.epoch, scope?.revision, snapshot?.scene.worldSpace]);
   const currentRecords = scope && records?.revision === scope.revision && records.epoch === scope.epoch ? records : undefined;
   const [regionsOpen,setRegionsOpen] = useState(false);
   const [regionList,setRegionList] = useState<{epoch:string;revision:string;items:{letter:string;name:string;cells:number}[]}>();
@@ -78,7 +79,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     return ()=>{current=false;};
   },[needRegions,scope?.projectPath,scope?.mapPath,scope?.epoch,scope?.revision]);
   const currentRegions = scope && regionList?.epoch===scope.epoch && regionList.revision===scope.revision ? regionList.items : undefined;
-  const selectRecord = (params: {kind:'player'|'wave'|'trigger';index:number} | {kind:'area'|'region'|'body';key:string}) => {
+  const selectRecord = (params: {kind:'player'|'wave'|'trigger'|'road';index:number} | {kind:'area'|'region'|'body';key:string}) => {
     if (scope && (params.kind==='region' ? currentRegions : currentRecords)) void invoke('studio.op', { op:'editor_select', expectedProject:scope.projectPath,
       expectedDocumentEpoch:scope.epoch, expectedDocumentRevision:scope.revision, params }).catch(e => setError(String(e)));
   };
@@ -98,6 +99,8 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
   const regions = (currentRegions ?? []).filter(({letter,name}) =>
     matchesHierarchy({id:`region:${letter}`,name:letter+' '+name,kind:'region'},filter,selectedSet));
 
+  const roads=(currentRecords?.roads ?? []).filter(({name,index})=>
+    matchesHierarchy({id:'road:'+index,kind:'road',name},filter,selectedSet));
   const scenario=(currentRecords?.scenario ?? []).filter(({kind,name,index})=>
     matchesHierarchy({id:kind+':'+index,kind,name},filter,selectedSet));
   const bodies = (currentRecords?.bodies ?? []).filter(({id,faceSize,metadata}) =>
@@ -286,7 +289,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
       onMouseLeave={() => hover('')}
       onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDrop(null); }}>
       {!project && <p className="hier__empty">Open a project to see its scene objects.</p>}
-      {project && matches.length === 0 && (!searching || (!players.length && !areas.length && !regions.length && !bodies.length && !scenario.length)) && <p className="hier__empty">{search ? 'No matching objects.' : 'The scene is empty.'}</p>}
+      {project && matches.length === 0 && (!searching || (!players.length && !areas.length && !regions.length && !bodies.length && !scenario.length && !roads.length)) && <p className="hier__empty">{search ? 'No matching objects.' : 'The scene is empty.'}</p>}
       {display.map(row => {
         if ('members' in row) {
           const documentMembers=row.members.filter(id=>!id.startsWith('preview:'));
@@ -375,6 +378,13 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
         <StudioButton key={letter} size="sm" disabled={busy} onClick={()=>selectRecord({kind:'region',key:letter})}>
           {letter}{name && ' · '+name} ({cells})
         </StudioButton>) : <span>No named or painted regions</span>)}
+    </details>}
+    {scope && snapshot?.scene.mapRegions && (!searching || roads.length>0) && <details className="hier__players" open={searching || roadsOpen}
+      onToggle={event=>{if(!searching)setRoadsOpen(event.currentTarget.open);}}>
+      <summary>Movement roads</summary>
+      {(searching || roadsOpen) && roads.map(({index,name})=><StudioButton key={index} size="sm" disabled={busy}
+        onClick={()=>selectRecord({kind:'road',index})}>{name}</StudioButton>)}
+      {roadsOpen && !searching && currentRecords && !roads.length && <span>No movement roads</span>}
     </details>}
     {scope && !snapshot?.scene.worldSpace && (!searching || scenario.length>0) && <details className="hier__players" open={searching || scenarioOpen}
       onToggle={event=>{if(!searching)setScenarioOpen(event.currentTarget.open);}}>
