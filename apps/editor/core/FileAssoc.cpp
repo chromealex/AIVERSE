@@ -365,11 +365,10 @@ AssocStatus statusMac(const std::string& exe) {
     s.supported = !bundle.empty();
     if (!s.supported) { s.detail = "редактор запущен не из AiverseEditor.app: тип .aiverse объявляет Info.plist бандла"; return s; }
     const std::string h = defaultHandlerMac();
-    if (registeredBundle() != bundle) s.detail = "бандл " + bundle + " ещё не зарегистрирован в LaunchServices";
-    else if (h.empty() || h != ownBundleId()) {
-        s.detail = h.empty() ? "у .aiverse нет программы по умолчанию" : "по умолчанию .aiverse открывает " + h;
-        s.otherDefault = !h.empty();
-    }
+    s.otherDefault = !h.empty() && h != ownBundleId();
+    if (s.otherDefault) s.detail = "по умолчанию .aiverse открывает " + h;
+    else if (registeredBundle() != bundle) s.detail = "бандл " + bundle + " ещё не зарегистрирован в LaunchServices";
+    else if (h.empty()) s.detail = "у .aiverse нет программы по умолчанию";
     else { s.registered = true; s.detail = ".aiverse открывается этим редактором"; }
     return s;
 }

@@ -11,6 +11,7 @@
 #include "apps/studio-native/StudioNetworkPlay.h"
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/editor/core/BuildTool.h"
+#include "apps/editor/core/FileAssoc.h"
 #include "apps/editor/core/ProjectFile.h"
 #include "engine/platform/EngineDir.h"
 #include <algorithm>
@@ -1448,6 +1449,8 @@ int aiverseMain(int argc,char** argv) {
         }
         try {
             [NSApplication sharedApplication];
+            const auto association = aiverse::editor::ensureFileAssociation(NSBundle.mainBundle.executablePath.fileSystemRepresentation);
+            if (!association.empty()) std::fprintf(stderr, "%s\n", association.c_str());
             [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
             StudioShell* shell=[[StudioShell alloc] initWithProject:project dev:dev composite:composite listenPort:listenPort];
             [NSApp setDelegate:shell];
