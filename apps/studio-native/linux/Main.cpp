@@ -6,6 +6,7 @@
 #include "StudioPreviewPointer.h"
 #include "StudioGamePointer.h"
 #include "StudioSurfacePlatform.h"
+#include <gdk/gdkx.h>
 #include <iostream>
 
 namespace aiverse::studio {
@@ -25,7 +26,21 @@ public:
     void evaluateScript(const std::string& js, bool) override { bridge_.evaluate(js); }
     Json windowRequest(const std::string& method,const Json& params) override {
         Json result=Json::object();
-        if (method=="studio.windowZoom") {
+        if (method=="studio.windowDrag") {
+            auto* widget = GTK_WIDGET(window_);
+            auto* seat = gdk_display_get_default_seat(gtk_widget_get_display(widget));
+            auto* pointer = seat ? gdk_seat_get_pointer(seat) : nullptr;
+            auto* surface = gtk_widget_get_window(widget);
+            if (pointer && surface) {
+                GdkModifierType state{};
+                gdk_window_get_device_position(surface, pointer, nullptr, nullptr, &state);
+                if (state & GDK_BUTTON1_MASK) {
+                    int x, y;
+                    gdk_device_get_position(pointer, nullptr, &x, &y);
+                    gtk_window_begin_move_drag(window_, 1, x, y, gdk_x11_get_server_time(surface));
+                }
+            }
+        } else if (method=="studio.windowZoom") {
             if (gtk_window_is_maximized(window_)) gtk_window_unmaximize(window_);
             else gtk_window_maximize(window_);
         } else if (method=="studio.windowMinimize") gtk_window_iconify(window_);
