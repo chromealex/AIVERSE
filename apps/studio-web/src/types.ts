@@ -251,7 +251,7 @@ export interface StudioSceneBrush { armed: boolean; kind: 'terrain' | 'sparse' |
 export interface StudioStats { map: string; width: number; height: number; entities: number; players: number; roads: number; ruleTypes: number;
   undoSteps: number; dirty: boolean; sceneFrameMs: number; sceneFrames: number;
   types: Array<{ type: string; count: number }>; owners: Array<{ owner: number; name: string; count: number }> }
-export interface StudioGpuTexture { id: number; format: string; width: number; height: number; depth: number; layers: number; mips: number; samples: number; renderTarget: boolean; bytes: number }
+export interface StudioGpuTexture { id: number; dimension?: string; format: string; width: number; height: number; depth: number; layers: number; mips: number; samples: number; renderTarget: boolean; bytes: number }
 export interface StudioCavernsBudgets { perSourceBytes:number; perShardBytes:number; deviceBytes:number; perSourceUploadBytes:number; perShardUploadBytes:number; deviceUploadBytes:number }
 export interface StudioCavernsPreview {
   budgets:StudioCavernsBudgets;

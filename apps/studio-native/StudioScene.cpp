@@ -2493,6 +2493,9 @@ Json StudioScene::textureResources() const {
     for(const auto& t:device_->textureResources()){
         Json o=Json::object();
         const size_t f=size_t(t.format);
+        static constexpr const char* dimensions[]={"1D","2D","3D","2D Array","Cube","Cube Array"};
+        const size_t dimension=size_t(t.dimension);
+        o.set("dimension",Json::string(dimension<std::size(dimensions)?dimensions[dimension]:"Unknown"));
         o.set("id",Json::number(int64_t(t.handle.id)));
         o.set("format",Json::string(f<sizeof(formats)/sizeof(formats[0])?formats[f]:"?"));
         o.set("width",Json::number(int64_t(t.width)));o.set("height",Json::number(int64_t(t.height)));

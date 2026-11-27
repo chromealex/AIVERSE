@@ -164,7 +164,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'attachments': return <AttachmentsPanel snapshot={snapshot}/>;
       case 'extensions': return <ExtensionsPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot} showPanel={ctx.showPanel}/>;
       case 'frame_capture': return <FrameCapturePanel key={snapshot?.project.path} snapshot={snapshot}/>;
-      case 'texture_resources': return <TextureResourcesPanel snapshot={snapshot}/>;
+      case 'texture_resources': return <TextureResourcesPanel key={snapshot?.project.path} snapshot={snapshot}/>;
       case 'snapshot_diff': return <SnapshotDiffPanel key={snapshot?.project.path} snapshot={snapshot}/>;
       case 'agent': return <AgentPanel key={snapshot?.project.path} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'asset_audit': return <AuditPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;

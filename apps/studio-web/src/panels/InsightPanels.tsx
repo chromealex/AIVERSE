@@ -318,6 +318,8 @@ export function FrameCapturePanel({ snapshot }: Ctx) {
 /** Texture Resources: live GPU textures of the Scene renderer with a format-based size estimate. */
 export function TextureResourcesPanel({ snapshot }: Ctx) {
   const path = snapshot?.project.path ?? '';
+  const [targetsOnly, setTargetsOnly] = useState(false);
+  const [largestFirst, setLargestFirst] = useState(true);
   const [gpu, setGpu] = useState<StudioGpuStats['gpu'] | null>(null);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('');
@@ -325,23 +327,30 @@ export function TextureResourcesPanel({ snapshot }: Ctx) {
     .catch(e => setError(message(e))), []);
   useEffect(() => { if (path) read(); }, [path, read]);
   if (!path) return <div className="tool__empty">Open a project to list GPU textures.</div>;
-  const rows = [...(gpu?.textures ?? [])].sort((a, b) => b.bytes - a.bytes)
-    .filter(t => !filter || t.format.toLowerCase().includes(filter.toLowerCase()) || `${t.width}x${t.height}`.includes(filter));
+  const query = filter.trim().toLowerCase().replaceAll('×', 'x');
+  const rows = (gpu?.textures ?? []).filter(t => (!targetsOnly || t.renderTarget) &&
+    [String(t.id), t.dimension ?? '', t.format, `${t.width}x${t.height}`].some(field => field.toLowerCase().includes(query)))
+    .sort((a, b) => (largestFirst ? b.bytes - a.bytes : 0) || a.id - b.id);
   return <div className="ptp">
     <div className="ptp__edhead">
       <button type="button" className="au-button au-button--sm" onClick={read}><RefreshCw size={13}/>Refresh</button>
       <span className="ptp__meta">{gpu ? `${gpu.textures.length} textures · ${formatBytes(gpu.totalBytes)} estimated` : ''}</span>
-      <input className="au-input" placeholder="Filter (format, 1024x1024)" value={filter} onChange={e => setFilter(e.target.value)}/>
+    </div>
+    <div className="ptp__edhead texture-resources__filters">
+      <label><input type="checkbox" checked={targetsOnly} onChange={e => setTargetsOnly(e.target.checked)}/> Render targets only</label>
+      <label><input type="checkbox" checked={largestFirst} onChange={e => setLargestFirst(e.target.checked)}/> Largest first</label>
+      <input className="au-input" aria-label="Filter textures" placeholder="ID, dimension, format or size" value={filter} onChange={e => setFilter(e.target.value)}/>
     </div>
     {error && <div className="tool__error" role="alert">{error}</div>}
     <div className="ptp__scroll">
       <table className="ptp__table ptp__audit">
-        <thead><tr><th>#</th><th>Size</th><th>Format</th><th>Mips</th><th>Kind</th><th>Estimate</th></tr></thead>
-        <tbody>{rows.slice(0, 1000).map(t => <tr key={t.id}>
-          <td>{t.id}</td><td>{t.width}×{t.height}{t.depth > 1 ? `×${t.depth}` : ''}{t.layers > 1 ? ` [${t.layers}]` : ''}</td>
+        <thead><tr><th>ID</th><th>Dimension</th><th>Size</th><th>Format</th><th>Mips</th><th>Kind</th><th>Estimate</th></tr></thead>
+        <tbody>{rows.map(t => <tr key={t.id}>
+          <td>{t.id}</td><td>{t.dimension ?? '—'}</td><td>{t.width}×{t.height}{t.depth > 1 ? `×${t.depth}` : ''}{t.layers > 1 ? ` [${t.layers}]` : ''}</td>
           <td>{t.format}</td><td>{t.mips}</td><td>{t.renderTarget ? 'target' : 'sampled'}{t.samples > 1 ? ` ×${t.samples}` : ''}</td>
           <td className="stats__num">{formatBytes(t.bytes)}</td></tr>)}</tbody>
       </table>
+      {gpu && !rows.length && <p className="ptp__hint">{gpu.textures.length ? 'No textures match these filters.' : 'No Scene textures allocated.'}</p>}
       <p className="ptp__hint">Estimated from format and size (tightly packed); drivers may pad. Scene renderer only.</p>
     </div>
   </div>;
