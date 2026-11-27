@@ -339,3 +339,5 @@ projectile visual checks, Windows #206, final gate/manifests/publishing/integrat
 ## Minimap runtime acceptance data
 
 Source d3a60f824c6be1fdd893f4d3713d6f91a8eec484 adds deterministic RGBA gradient to ordinary ui path, authored bounds [4,2,20,14], rectangle camera frame and hidden tower types to existing real-client demo. Both minimap manifests updated first. Capture/pack NOT RUN. Next run loose client, pack via existing aiversebuild --estimate with KINGSTON output, run packed-only project and compare minimap pixels.
+
+Loose minimap run passed behavior (33026 exit 0), but capture found full-grid HUD aspect stretching cropped texture. Source 65d8137fcadd2e5fa6fc7f7d85390c323849f137 derives shared panel aspect from actual minimap dimensions, including planet textures. Added ordinary shortcut image so atlas UI group has two distinct resources; first pack legitimately excluded lone minimap image. First pack completed (94358 exit 0), no atlas-only claim. Next cached client fixture rebuild, rebuild pack and rerun loose/packed with AIVERSE_CAM=12,8,14 to expose rectangular camera footprint.
