@@ -54,6 +54,7 @@ namespace studio = aiverse::studio;
 @interface StudioMetalView : NSView {
     NSTrackingArea* hoverTracking_;
     NSTimeInterval lastHover_;
+    BOOL sceneMenuPress_;
 }
 @property(nonatomic, assign) StudioShell* shell;
 @end
@@ -580,9 +581,34 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
 }
 - (void)mouseDragged:(NSEvent*)event { [self primaryMouse:event phase:1]; }
 - (void)mouseUp:(NSEvent*)event { [self primaryMouse:event phase:2]; }
-- (void)rightMouseDown:(NSEvent*)event { [self.window makeFirstResponder:self]; (void)event; }
+- (void)rightMouseDown:(NSEvent*)event {
+    [self.window makeFirstResponder:self];
+    sceneMenuPress_ = (event.modifierFlags & NSEventModifierFlagShift) != 0;
+}
+- (void)rightMouseUp:(NSEvent*)event {
+    if (!sceneMenuPress_) return;
+    sceneMenuPress_ = NO;
+    StudioShell* shell = self.shell;
+    if (!shell || self != shell->viewport_ || !self.window) return;
+    WKWebView* web = shell->web_;
+    if (web.window != self.window) {
+        web = nil;
+        for (WKWebView* candidate in shell->floatWebs_.allValues) {
+            if (candidate.window == self.window) { web = candidate; break; }
+        }
+    }
+    if (!web) return;
+    const NSPoint point = [web convertPoint:event.locationInWindow fromView:nil];
+    const double x = point.x, y = web.isFlipped ? point.y : web.bounds.size.height - point.y;
+    if (!std::isfinite(x) || !std::isfinite(y)) return;
+    [self.window makeFirstResponder:web];
+    NSString* js = [NSString stringWithFormat:
+        @"document.elementFromPoint(%f,%f)?.closest('.viewport')?.dispatchEvent(new MouseEvent('contextmenu',"
+         "{bubbles:true,cancelable:true,shiftKey:true,button:2,clientX:%f,clientY:%f}))", x,y,x,y];
+    [web evaluateJavaScript:js completionHandler:nil];
+}
 - (void)rightMouseDragged:(NSEvent*)event {
-    if (![self core]) return;
+    if (sceneMenuPress_ || ![self core]) return;
     if (event.modifierFlags & NSEventModifierFlagOption) [self core]->zoom((event.deltaX+event.deltaY)*0.6);
     else [self core]->look(event.deltaX,event.deltaY);
 }
