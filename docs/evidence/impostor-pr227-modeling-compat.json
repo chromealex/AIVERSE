@@ -1,0 +1,17 @@
+{
+  "sha": "63d0a4ef1047f252f8bcbad8169de31f1d5ca84e",
+  "argv": [
+    "env",
+    "TMPDIR=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/tmp",
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac",
+    "--no-tests=error",
+    "-V",
+    "-R",
+    "^(modeling_volume_csg|surface_proxy)$"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/impostor-pr227-modeling-compat.log.txt",
+  "sha256": "05cde0633996ef723c87c9b81b501d649eff82a72e18d0b39e77d248230000e2"
+}
