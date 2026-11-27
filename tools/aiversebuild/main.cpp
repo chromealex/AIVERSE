@@ -70,6 +70,7 @@
 #include "tools/atlas/AtlasBuild.h"
 #include "tools/audiopack/AudioPack.h"
 #include "tools/aiversebuild/Branding.h"
+#include "ShellPath.h"
 #include "tools/aiversebuild/FileRules.h"
 #include "tools/aiversebuild/TextureCompress.h"
 #include "tools/aiversebuild/Plugins.h"
@@ -178,15 +179,7 @@ void step(const std::string& s) { std::cout << "\n==> " << s << std::endl; }
 void info(const std::string& s) { std::cout << "    " << s << std::endl; }
 [[noreturn]] void die(const std::string& s) { std::cout << "ОШИБКА: " << s << std::endl; std::exit(1); }
 
-std::string quote(const fs::path& p) {
-#if defined(_WIN32)
-    return "\"" + p.string() + "\"";
-#else
-    std::string s = p.string(), o = "'";
-    for (char c : s) { if (c == '\'') o += "'\\''"; else o += c; }
-    return o + "'";
-#endif
-}
+using aiverse::build::quote;
 
 int run(const std::string& cmd) {
     std::cout << "    $ " << cmd << std::endl;
