@@ -19,6 +19,9 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+// Legacy Win16 pointer macros collide with engine distance and geometry names.
+#undef near
+#undef far
 #undef MoveFile // windows.h macro clashes with ProjectHistory::MoveFile; this header calls MoveFileExW directly
 #elif defined(__unix__) || defined(__APPLE__)
 #include <fcntl.h>

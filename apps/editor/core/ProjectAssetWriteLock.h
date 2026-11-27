@@ -11,6 +11,9 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+// Legacy Win16 pointer macros collide with engine distance and geometry names.
+#undef near
+#undef far
 #elif defined(__unix__) || defined(__APPLE__)
 #include <fcntl.h>
 #include <sys/file.h>
