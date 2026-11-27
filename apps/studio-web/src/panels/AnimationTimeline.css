@@ -20,3 +20,13 @@
 .anim__channel>div{position:relative;height:10px;border-bottom:1px solid var(--au-line);margin:0 6px}
 .anim__channel>div i{position:absolute;top:2px;width:5px;height:5px;margin-left:-2.5px;transform:rotate(45deg);background:var(--au-text-muted)}
 .anim__links{display:flex;gap:6px;flex-wrap:wrap;padding:6px 10px;border-top:1px solid var(--au-line)}
+
+.anim{container-type:inline-size}
+@container (max-width:600px){
+  .anim__body{flex-direction:column}
+  .anim__preview{width:auto}
+  .anim__preview svg{height:clamp(110px,34cqw,180px)}
+  .anim__side{flex:none}
+  .anim__transport{flex-wrap:wrap}
+  .anim__channel{grid-template-columns:minmax(0,40%) minmax(0,1fr)}
+}
