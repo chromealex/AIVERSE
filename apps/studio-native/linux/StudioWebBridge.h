@@ -13,6 +13,18 @@ public:
     StudioWebBridge(WebKitWebView* view, std::function<void(std::string)> receive)
         : view_(WEBKIT_WEB_VIEW(g_object_ref(view))), receive_(std::move(receive)) {
         auto* manager=webkit_web_view_get_user_content_manager(view_);
+        // Every Studio WebView, including detached docks, uses the same navigation policy.
+        policy_=g_signal_connect(view_,"decide-policy",G_CALLBACK(+[](WebKitWebView*,WebKitPolicyDecision* decision,
+        WebKitPolicyDecisionType type,gpointer)->gboolean {
+        if (type==WEBKIT_POLICY_DECISION_TYPE_RESPONSE) return FALSE;
+        if (type==WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION) {
+        auto* nav=webkit_navigation_policy_decision_get_navigation_action(WEBKIT_NAVIGATION_POLICY_DECISION(decision));
+        const char* uri=webkit_uri_request_get_uri(webkit_navigation_action_get_request(nav));
+        if (uri && std::string_view(uri).substr(0,std::strcspn(uri,"?#"))=="aiverse-studio://shell/index.html") return FALSE;
+        }
+        webkit_policy_decision_ignore(decision);
+        return TRUE;
+    }),nullptr);
         char* uuid=g_uuid_string_random();
         token_=uuid;
         g_free(uuid);
@@ -34,6 +46,7 @@ public:
             webkit_user_content_manager_remove_script(manager,script_);
             webkit_user_content_manager_unregister_script_message_handler(manager,"studioRequest");
         }
+        g_signal_handler_disconnect(view_,policy_);
         g_signal_handler_disconnect(manager,signal_);
         webkit_user_script_unref(script_);
         g_object_unref(view_);
@@ -67,7 +80,7 @@ private:
     std::function<void(std::string)> receive_;
     std::string token_;
     WebKitUserScript* script_;
-    gulong signal_;
+    gulong signal_, policy_;
     bool registered_;
 };
 }

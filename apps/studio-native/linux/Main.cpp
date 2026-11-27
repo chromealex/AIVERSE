@@ -95,17 +95,6 @@ int aiverseMain(int argc,char** argv) {
         if (listenPort && !studio.host().session().listenForAgent(listenPort))
             throw std::runtime_error("Could not start the authenticated Studio agent listener");
         studio.host().setPendingProject(project);
-        g_signal_connect(web,"decide-policy",G_CALLBACK(+[](WebKitWebView*,WebKitPolicyDecision* decision,
-            WebKitPolicyDecisionType type,gpointer)->gboolean {
-            if (type==WEBKIT_POLICY_DECISION_TYPE_RESPONSE) return FALSE;
-            if (type==WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION) {
-                auto* nav=webkit_navigation_policy_decision_get_navigation_action(WEBKIT_NAVIGATION_POLICY_DECISION(decision));
-                const char* uri=webkit_uri_request_get_uri(webkit_navigation_action_get_request(nav));
-                if (uri && std::string_view(uri).substr(0,std::strcspn(uri,"?#"))=="aiverse-studio://shell/index.html") return FALSE;
-            }
-            webkit_policy_decision_ignore(decision);
-            return TRUE;
-        }),nullptr);
         g_signal_connect(web,"load-failed",G_CALLBACK(+[](WebKitWebView*,WebKitLoadEvent,const gchar*,GError* error,gpointer data)->gboolean {
             std::cerr << "Studio page load failed: " << error->message << '\n';
             *static_cast<int*>(data)=1;
