@@ -17,7 +17,9 @@
       "sight": 20,
       "view": {
         "shape": "soldier"
-      }
+      },
+      "key": true
     }
-  }
+  },
+  "victory": "keyUnits"
 }

@@ -475,3 +475,9 @@ Combined incremental all-target native build96536 started from8cccc49a7 in the e
 ## Mixer test compile correction
 
 Build96536 terminal exit2: tests/tests.cpp3471 attempted assignment through const Json::operator[]. Product audio/client/Studio targets linked; test binary failed compilation. Stage 0ed8dddaa8b777277b05cdacd1587c3199085433 replaces that test-only mutation with member/set and Json::number(int64_t(1)), the actual repository editing API. Diff check passed; corrected test not yet run. Resume the same cache, no clean rebuild. Failure log remains KINGSTON issues-audio-final-build.log.
+
+## Actual mixer regression passed
+
+Evidence stage9c5c11709 retains current report issues-audio-mixer-20261127: checkout99f71adcf8873f2743903ff40c53184d630c3a7d, three tests119checks0failed, including frequency-discriminated PCM ordering and command reset. Combined build26478 terminal exit0 after test mutation correction.
+
+First native capture75303 used --project, which does not select GameClient content root; it loaded bundled valley, so its WAV is not selection acceptance. Closed both own test instances. Relaunch95371 with AIVERSE_CONTENT correctly showed Selection voices but immediately Defeat: fixture used default victory without qualifying key units. Corrected ordinary fixture data to keyUnits and added an enemy key scout, avoiding any engine exception. This native scene attempt is FAILED acceptance; rerun required, no engine rebuild for data-only correction.
