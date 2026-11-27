@@ -63,6 +63,7 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
   const [config, setConfig] = useState<'Release' | 'Debug'>('Release');
   const [compressionDraft, setCompressionDraft] = useState<number | null>(null);
   useEffect(() => setCompressionDraft(null), [projectPath, info?.compression]);
+  const [ruleScope,setRuleScope] = useState<'project'|'target'>('project');
   const [savingAtlas, setSavingAtlas] = useState(false);
   const [audio, setAudio] = useState('auto');
   const [installMissing, setInstallMissing] = useState(false);
@@ -136,6 +137,7 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
   const run = runTarget(state.label);
   const elapsed = startedAt ? Math.max(0, Math.round((now - startedAt) / 1000)) : 0;
   const selected = info?.targets.find(t => t.id === target);
+  const rules = (ruleScope === 'project' ? info?.rules : selected?.rules) ?? [];
   const pack = estimate?.pack as { packBytes?: number; rawBytes?: number; entries?: number; duplicates?: number } | undefined;
   const saveAtlas = async (action: () => Promise<StudioSnapshot>) => {
     setSavingAtlas(true);setError('');
@@ -267,6 +269,21 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
               <li key={i}><span title={f.path}>{f.path ?? f.file}</span><small>{formatBytes(f.storedBytes)}</small></li>)}</ul>
           </> : <p className="build__note">Run <b>Estimate size</b> to pack the content and see what is heavy.</p>}
         </section>
+        <details className="build__card build__files">
+          <summary>Configured file rules</summary>
+          <StudioField label="Rule scope" htmlFor="build-rule-scope">
+            <StudioSelect id="build-rule-scope" value={ruleScope} onChange={e=>setRuleScope(e.target.value==='target'?'target':'project')}>
+              <option value="project">All platforms</option><option value="target">{selected?.name ?? target} only</option>
+            </StudioSelect>
+          </StudioField>
+          {rules.length ? <table aria-label="Configured file rules"><thead><tr><th>Path or pattern</th><th>Settings</th><th>Action</th></tr></thead>
+            <tbody>{rules.map(({rule,original},index)=><tr key={index}><td>{rule.match}</td><td>{[
+              rule.exclude && 'Excluded',rule.level==null ? '' : rule.level===0 ? 'Store' : 'zstd '+rule.level,
+              rule.maxSize && rule.maxSize+' px',rule.scale && (100*rule.scale)+'%',
+            ].filter(Boolean).join(' · ')}</td><td><StudioButton disabled={atlasDisabled} aria-label={'Remove rule for '+rule.match}
+              onClick={()=>void saveAtlas(()=>invoke('studio.buildRemoveFileRule',{project:projectPath,target,scope:ruleScope,index,original}))}>Remove</StudioButton></td></tr>)}</tbody>
+          </table> : <p>No rules for this scope.</p>}
+        </details>
         {estimate?.files && <PackageInventory key={JSON.stringify([projectPath,target])} files={estimate.files}/>}
         {estimate?.split && <section className="build__card" aria-label="Downloadable content">
           <h3>Downloadable content</h3>
