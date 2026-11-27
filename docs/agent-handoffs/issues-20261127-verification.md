@@ -290,3 +290,13 @@ publication and squash/push. No issue has been closed or main advanced yet.
 ## Expanded client input acceptance
 
 Source 1a86c5069 extends the actual GameClient fixture: focused RmlUi text input suppresses F6, blur restores it; Stop followed by touch Move button and world tap must start movement; armed tower passive aura must be a disabled button with tooltip. Demo rule adds shared authored aura. Compile/runtime NOT RUN yet. Next cached client_controls_frame rebuild and capture run.
+
+Expanded fixture source 1a86c5069 / tree cb13a8d00 passed (handle 54873 exit 0),
+including typing suppression/blur, touch Move after Stop, and passive aura.
+Logs client-controls-expanded-build.log and client-controls-expanded-run.log;
+captures client-controls-expanded/touch.png and tower.png inspected.
+Visual inspection found the aura description clipped by the fixed cell's
+50dp button overflow. Source 530764e8e changes shared card-slot descriptions
+into hover/focus tips above the button, preserving the grid and applying to all
+actions. Fixture now hovers aura and captures visible tooltip. Corrected capture
+NOT RUN yet; next targeted rebuild and real client run. No issue closure.
