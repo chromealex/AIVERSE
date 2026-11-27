@@ -1,6 +1,6 @@
 ## Game window settings
 
-Linux GTK Studio saved shared 1024 x 768 settings and a fixed 960 x 540 Linux override. A separate AiverseGame launch on the saved project created a visible 960 x 540 X11 window with both minimum and maximum size set to 960 x 540. After resetting the override in Studio, a second launch restored the shared fixed 1024 x 768 size and limits. These runs used the standalone Linux client with project content; packaged export and the other desktop hosts remain open.
+Linux GTK Studio saved shared 1024 x 768 settings and a fixed 960 x 540 Linux override. A separate AiverseGame launch on the saved project created a visible 960 x 540 X11 window with both minimum and maximum size set to 960 x 540. After resetting the override in Studio, a second launch restored the shared fixed 1024 x 768 size and limits. A Linux Release export of a minimal scene project also launched from its packaged binary and content.rpak in a clean container without the original project or staging directory. X11 confirmed 960 x 540 with matching fixed limits. Other desktop hosts remain open.
 
 ## SpectraFX legacy layout
 
