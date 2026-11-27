@@ -1788,3 +1788,7 @@ b0fec432c5d7d229e7c5fe466178d7e1b7120211 changes GraphCanvas.tsx and GraphCanvas
 ### Project Data concurrent editing
 
 684f6742e293166c744551e0a122a28eba8b8a65 adds captures/mac-project-data-conflict.png. Detached native Mac UI retained the unsaved draft after an independent game_file_write changed lang/en.json. Discard and Load displayed the external edit, also verified by parsing the disk file. Evidence in stats-mac-m87jqwoo/live.log on KINGSTON. First harness attempt timed out during startup, second omitted the native write precondition. The passing run supplied the original file text. Tested the prior native build; branch now includes ed1e451f2 (roadmap/devlog publication). Continue remaining window parity and merged-tree quick gate.
+
+### SpectraFX preview controls while scrolling
+
+db0e120d6af74b572a412313b038031cbdb762c9 updates SpectraNativePreview.tsx and SpectraDockViewport.css and adds captures/mac-spectra-scrolled-capture.png. Production web build passed. In a detached 980 x 720 Mac window the first stacked control row still scrolled the surface away (stats-mac-_phjnjkp/live.log). With the side column, scrolling separately to Load graph and Capture Frame produced a decoded native 512 x 246 JPEG (stats-mac-_ku93ke4/live.log). Prior native CTest run passed studio_spectrafx_preview and studio_spectrafx_fire_smoke. Narrow fallback and remaining window parity still require verification.
