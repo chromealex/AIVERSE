@@ -38,6 +38,7 @@ export function buildErrors(log: string, limit = 6): string[] {
 }
 /** Label of the running/last run → which target and whether it was a size estimate. */
 export function runTarget(label: string): { target: string; estimate: boolean } {
+  if (label === 'native-editor') return { target: 'Studio with project modules', estimate: false };
   if (label === 'estimate') return { target: '', estimate: true };
   return { target: label.startsWith('build-') ? label.slice(6) : '', estimate: false };
 }

@@ -20,6 +20,7 @@ test('steps, errors and missing toolchains from the aiversebuild log', () => {
   assert.equal(buildPhase(false, 1, 1, 'x\n=== FAILED ===\n'), 'failed');
 });
 test('run label', () => {
+  assert.deepEqual(runTarget('native-editor'), { target: 'Studio with project modules', estimate: false });
   assert.deepEqual(runTarget('build-ios'), { target: 'ios', estimate: false });
   assert.deepEqual(runTarget('estimate'), { target: '', estimate: true });
 });
