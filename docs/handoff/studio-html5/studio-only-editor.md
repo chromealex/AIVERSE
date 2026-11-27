@@ -1624,3 +1624,7 @@ b1ef64a5d2d9abcb9e8f74c18bc66272fde69fb9 reads the game device pool in StudioGam
 ### Model assets in game Statistics
 
 fb82c4ef210e807585506cd802a6e6b7dea2f094 forwards the GameView residency snapshot through GameClient, HostedClient and StudioGameSurface to PlayerHistory.tsx (types.ts). Built the Mac aiverse_studio target, built the web bundle and passed all 303 web tests. The separate Mac Statistics window verified all ten cards against native game data with two loaded types and 28 cached models. No pending GPU releases in this sample. Pause/restart/stop passed. Screenshot: docs/handoff/studio-html5/captures/mac-model-residency.png; live log: stats-mac-p6xujf8k/live.log on KINGSTON. Next cover GPU release/backpressure during churn and remaining owner diagnostics.
+
+### Snapshot Diff report and scope
+
+f99fb848e154c661f4ecd2ce36254ef4c1fb60e1 updates InsightPanels.tsx, StudioPanelRenderer.tsx and jsonDiff.ts. Packaged Mac Studio compared two map files, exported the added row via the copy handler, swapped files, cleared its previous result and exported the removed row. The QA clipboard sink retained both TSV payloads without changing the system pasteboard. Web build and test:web passed. Capture: docs/handoff/studio-html5/captures/mac-snapshot-diff.png. Next exercise an actual project switch with the panel open and restore native external snapshot file selection.
