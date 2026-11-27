@@ -35,6 +35,7 @@ public:
         }
         host_.shutdown();
     }
+    bool hasFloatingWindows() override { return !floats_.empty(); }
     bool placeSurface(StudioSurface surface, const ViewportRect& rect, NativeViewportPlacement& out) override {
         auto* destination = current_ ? current_->overlay : mainOverlay_;
         auto* area = widget(surface);
