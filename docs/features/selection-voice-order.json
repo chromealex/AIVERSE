@@ -12,6 +12,7 @@
     "apps/studio-web/src/panels/generated/ProjectDataPanel.css",
     "apps/studio-web/src/panels/generated/ProjectDataPanel.tsx",
     "apps/studio-web/src/windowGroups.ts",
+    "apps/studio-web/tests/nested-dock.mjs",
     "demos/selection-voices/README.md",
     "demos/selection-voices/audio.json",
     "demos/selection-voices/audio/first.wav",
