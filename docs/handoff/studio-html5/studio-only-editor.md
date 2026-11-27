@@ -1784,3 +1784,7 @@ b0fec432c5d7d229e7c5fe466178d7e1b7120211 changes GraphCanvas.tsx and GraphCanvas
 ### Integrated native Studio build and Project Data
 
 4fab96cd776d574a0a6526bcd08d1e1d1136cce8 adds captures/mac-project-data-save.png. Built source 6f3c94867 with cmake --build ../studio-project-module-mac --target aiverse_studio -j 6, exit 0 (studio-after-main-build.log on KINGSTON). In the rebuilt Mac app a detached Project Data panel loaded lang/en.json from a disposable project, changed its title, saved and reloaded it. Native file contents were parsed and compared after exit. Evidence: stats-mac-itq03ba1/live.log. Whole-tree quick gate and remaining legacy window workflows are still outstanding.
+
+### Project Data concurrent editing
+
+684f6742e293166c744551e0a122a28eba8b8a65 adds captures/mac-project-data-conflict.png. Detached native Mac UI retained the unsaved draft after an independent game_file_write changed lang/en.json. Discard and Load displayed the external edit, also verified by parsing the disk file. Evidence in stats-mac-m87jqwoo/live.log on KINGSTON. First harness attempt timed out during startup, second omitted the native write precondition. The passing run supplied the original file text. Tested the prior native build; branch now includes ed1e451f2 (roadmap/devlog publication). Continue remaining window parity and merged-tree quick gate.
