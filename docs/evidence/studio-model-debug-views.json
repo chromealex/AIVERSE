@@ -1,0 +1,10 @@
+{
+  "sha": "f26e6b0650ca73a69197ff27f8eeaebdd71cdf00",
+  "argv": [
+    "bash",
+    "../model-views.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-model-debug-views.log.txt",
+  "sha256": "d6fdb0b8c60d91ff2eff9475fcf8e0d832505875972874dddef262652fe55f3b"
+}
