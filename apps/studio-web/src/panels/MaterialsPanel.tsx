@@ -263,7 +263,9 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
     {!name||!names.includes(name)?<div className="materials-empty">{name?'Selected material is no longer present. Discard the draft and choose another material.':'Select a material from the library.'}</div>:
      <><div className="materials-selected">
       <span className="materials-swatch" style={{background:materialSwatchColor(selected)}}/>
-      <strong>{name}</strong>{library.files?.[name]&&<button title={library.files[name]} onClick={()=>{
+      <div className="materials-file-info"><strong>{name}</strong>
+       {library.files?.[name]&&<small>{library.files[name]}</small>}
+      </div>{library.files?.[name]&&<button title={library.files[name]} onClick={()=>{
        revealProjectAsset(projectPath, library.files![name].slice('content/'.length));
        window.dispatchEvent(new CustomEvent('studio:show-panel',{detail:'assets'}));
       }}>Show in Assets</button>}
