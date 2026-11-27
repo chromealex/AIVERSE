@@ -1744,3 +1744,7 @@ c90f93c71756fdcc68818e7c38f0a13829bdcbb9 fixes apps/editor/AuthoringWater.h and 
 ### Two unnamed river entities, undo and redo
 
 b9296de84a641e61fbd420084a561f45d0b4b22d extends tests/editor/scene_entity_adapter_tests.cpp with two unnamed entity-local surfaces (IDs 7 and 8). Editing surface 8 preserved surface 7 and the unrelated unnamed object. Parsed both resulting surfaces and compared full map JSON after undo and redo. Native two-river-editor-test linked against the current Mac Studio libraries exited zero. This covers document edits; viewport selection isolation remains a separate check.
+
+### Selected-river isolation in a detached Scene
+
+2dca3cd67c1aac0e9ae97b3b78917f29e1d8828d adds captures/mac-scene-selected-river-{west,east}.png. Two named entities with NereidWater surfaces 7 and 8 occupied separate positions. For each studio.select-confirmed selection the real Scene Debug controls toggled River flow with Show all rivers disabled. Captures with the menu closed are in stats-mac-653av_6k/{westoff,weston,eastoff,easton}.png. Comparing each pair within the viewport at channel difference >50 yielded 1163 and 684 changed pixel positions, with zero overlap. Next audit TerraWeave overlays and outstanding editor workflows.
