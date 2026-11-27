@@ -10,6 +10,30 @@ import './BuildPanel.css';
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 const MAX_LOG = 400_000; // characters kept in the panel (the full log is in the log file)
 
+function PackageInventory({files}: {files:NonNullable<StudioBuildEstimate['files']>}) {
+  const [query,setQuery] = useState('');
+  const [page,setPage] = useState(0);
+  const filtered = files.filter(file=>file.path.toLowerCase().includes(query.trim().toLowerCase()));
+  const pageSize = 25;
+  const last = Math.max(0,Math.ceil(filtered.length/pageSize)-1);
+  const current = Math.min(page,last);
+  return <details className="build__card build__files">
+    <summary>Packaged files ({files.length})</summary>
+    <StudioField label="Filter by path" htmlFor="build-file-filter">
+      <StudioInput id="build-file-filter" type="search" value={query} onChange={e=>{setQuery(e.target.value);setPage(0);}}/>
+    </StudioField>
+    {filtered.length ? <table aria-label="Packaged files"><thead><tr><th>Path</th><th>Original</th><th>Packed</th><th>Codec</th></tr></thead>
+      <tbody>{filtered.slice(current*pageSize,(current+1)*pageSize).map(file=><tr key={file.path}><td>{file.path}</td>
+        <td>{formatBytes(file.rawBytes)}</td><td>{formatBytes(file.storedBytes)}</td><td>{file.codec}</td></tr>)}</tbody>
+    </table> : <p>No matching files.</p>}
+    {last>0 && <nav aria-label="Packaged file pages">
+      <StudioButton disabled={!current} onClick={()=>setPage(current-1)}>Previous</StudioButton>
+      <span> {current+1} / {last+1} </span>
+      <StudioButton disabled={current===last} onClick={()=>setPage(current+1)}>Next</StudioButton>
+    </nav>}
+  </details>;
+}
+
 function PackageLimit({field, original, inherited, disabled, save}: {
   field:'baseSize'|'chunkSize';original:string|number|null;inherited:string;disabled:boolean;save:(bytes:number|null)=>void;
 }) {
@@ -243,6 +267,7 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
               <li key={i}><span title={f.path}>{f.path ?? f.file}</span><small>{formatBytes(f.storedBytes)}</small></li>)}</ul>
           </> : <p className="build__note">Run <b>Estimate size</b> to pack the content and see what is heavy.</p>}
         </section>
+        {estimate?.files && <PackageInventory key={JSON.stringify([projectPath,target])} files={estimate.files}/>}
         {estimate?.split && <section className="build__card" aria-label="Downloadable content">
           <h3>Downloadable content</h3>
           <div className="build__size"><b>{formatBytes(estimate.split.baseBytes)}</b><span>installed with the app</span></div>

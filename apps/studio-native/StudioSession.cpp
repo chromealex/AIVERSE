@@ -2654,6 +2654,9 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
     Json files = Json::array();
     for (size_t i = 0; i < all.size() && i < 25; ++i) files.push(*all[i]);
     out.set("heaviest", files);
+    Json inventory = Json::array();
+    for (const auto* file : all) inventory.push(*file);
+    out.set("files",std::move(inventory));
     return out;
 }
 std::string StudioSession::historyLabel(const std::string& method, const Json& params) {

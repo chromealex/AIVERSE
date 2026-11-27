@@ -1093,6 +1093,7 @@ export interface StudioBuildEstimate { fixRun?: number; fixToken?: string; targe
     gpuBytesBefore?: number; gpuBytesAfter?: number; textureBindsBefore?: number; textureBindsAfter?: number;
     excluded?: { path: string; reason: string; fixMaxSize?: number }[] } | null; split?: { baseBytes: number; totalBytes: number; chunkSize: number; chunks: { file: string; bytes: number; files: number }[] };
   fileRules?: Array<{path: string; what: string; before?: number; after?: number}>;
+  files?: Array<{ path:string; rawBytes:number; storedBytes:number; codec:string }>;
   heaviest: Array<{ path?: string; file?: string; bytes?: number; storedBytes?: number }> }
 
 export interface MetaHumanReport { pending?:boolean; detected:boolean; score:number; headBone:string; faceMeshes:string[]; hiddenMaterials:string[]; materialRoles:Record<string,string>;
