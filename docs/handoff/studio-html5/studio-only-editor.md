@@ -2040,3 +2040,5 @@ cf59da9c7b637769786bd602bc787d7eea600364 adapts AnimationTimeline.css to panel w
 a63ec1f679a6286d58a9c1c2beeaff9b3f05f25d adds Open model graph to AnimationTimeline.tsx using the project-scoped animation_editor route. Web build passed. Detached Timeline selected walker and opened the main Modeling panel with Model asset=walker and Model graph view=pose (../debug-keys-2c_sbg3m/live.log).
 
 f148a03f462da48797e3a8d9f9e924cdc564b68b adds Open timeline in ModelGraphPanel.tsx for saved models with clips. Unsaved graph edits keep the command disabled. Web build and 113 graph tests passed. Packaged macOS opened walker in Modeling, then its timeline via the new button and verified walker remained selected with Attack present. Evidence ../debug-keys-_q2zk7fu/live.log.
+
+d5b053869f07bca0dff1d0f4da548bfabee43c3c makes individual channel keys selectable in AnimationTimeline.tsx and AnimationTimeline.css. Web build passed. Packaged macOS selected body.translation key 2 during playback, paused at 0.25 s and displayed 0,1,0. Evidence ../debug-keys-hfqhw6os/live.log and restored.png. Next verify key editing parity and Windows.
