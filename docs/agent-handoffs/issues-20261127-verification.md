@@ -42,3 +42,13 @@ check as passed. Historical atlas-packer-exception evidence is retained only as
 history and no longer cited as current platform evidence.
 
 Manifest correction commit: b79da7db77b7672e1129d19f4cae772c7021ebcf. Structural checker: 11 manifests, 0 errors (without --ready). Build handle 80539 still live at last poll, log at 33%; no compiler errors found yet. This is not build/test acceptance.
+
+## Final build correction — prepared VFX API
+
+Build handle 80539 terminated with exit 2 at 49%. The only compiler error in
+its log was the stale exact member-pointer signature in
+`tests/render/camera_sprite_vfx_prepared_api.cpp`. Source correction: 2cd2d9ee6005075a88160f15bdbd6c0e7bfa6767.
+The API test now checks the renderer-aware signature and retains a compile-time
+check that the original five-argument LDR invocation is valid.
+`git diff --check` passed; build and runtime tests remain pending.
+Next: resume the same KINGSTON build cache, then run the quick gate.
