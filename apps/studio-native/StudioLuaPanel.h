@@ -18,7 +18,7 @@ extern "C" {
 
 namespace aiverse::studio {
 
-struct StudioLuaContext { int selectionCount = 0, selectionIndex = -1, objectCount = 0, mapWidth = 0, mapHeight = 0; double time = 0; bool playing = false; };
+struct StudioLuaContext { int selectionCount = 0, selectionIndex = -1, objectCount = 0, mapWidth = 0, mapHeight = 0; double time = 0; bool playing = false; std::string entityId, entityType; };
 
 class StudioLuaPanel {
 public:
@@ -177,6 +177,10 @@ private:
     void pushCtx(const StudioLuaContext& c) {
         lua_newtable(L_);
         lua_pushinteger(L_, c.selectionCount > 0 ? 1 : 0); lua_setfield(L_, -2, "selection_kind");
+        if (c.selectionIndex >= 0) {
+            lua_pushstring(L_, c.entityId.c_str()); lua_setfield(L_, -2, "entity_id");
+            lua_pushstring(L_, c.entityType.c_str()); lua_setfield(L_, -2, "entity_type");
+        }
         lua_pushinteger(L_, c.selectionIndex); lua_setfield(L_, -2, "selection_index");
         lua_pushinteger(L_, c.selectionCount); lua_setfield(L_, -2, "selection_count");
         lua_pushinteger(L_, c.objectCount); lua_setfield(L_, -2, "object_count");

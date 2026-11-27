@@ -1845,7 +1845,12 @@ StudioLuaContext StudioSession::luaContext() const {
     StudioLuaContext c;
     const auto ids=selectedObjectIds();
     c.selectionCount=int(ids.size());
-    c.selectionIndex=ids.empty()?-1:indexFor(ids.back());
+    c.selectionIndex=ids.empty()?-1:studioMapEntityIndex(ids.back(),ws_.map);
+    if (c.selectionIndex >= 0) {
+        const auto& entity=ws_.map.data.entities[size_t(c.selectionIndex)];
+        c.entityId=entity.id;
+        c.entityType=entity.type;
+    }
     c.objectCount=int(ws_.map.data.entities.size());
     c.mapWidth=ws_.map.data.w;c.mapHeight=ws_.map.data.h;
     return c;

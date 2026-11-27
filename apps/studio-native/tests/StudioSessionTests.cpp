@@ -1995,7 +1995,7 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"Fixture co
        AIVERSE_TEST_CHECK(call("studio.contextMenu", R"({"window":"lua.widget"})")["result"]["items"].size()==0);
        std::ofstream(script) << "local opened=0\n"
            "function context_menu(ctx) opened=opened+1 return {{label=ctx.window,children={{id='inspect',label=ctx.element}}}} end\n"
-           "function on_context_action(ctx,id) if id=='first' then return {command='select_entity',index=0} end return {command='status',text=ctx.element..id..opened} end";
+           "function on_context_action(ctx,id) if id=='identity' then return {command='status',text=tostring(ctx.entity_id)..'/'..tostring(ctx.entity_type)} end if id=='first' then return {command='select_entity',index=0} end return {command='status',text=ctx.element..id..opened} end";
        const auto menu = call("studio.contextMenu", R"({"window":"lua.widget","element":"radius"})");
        AIVERSE_TEST_CHECK(menu["result"]["items"][0]["children"][0].getStr("label")=="radius");
        const auto action = call("studio.contextAction", R"({"window":"lua.widget","element":"radius","id":"inspect"})");
@@ -2006,6 +2006,13 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"Fixture co
        Json select = Json::object();
        select.set("id",Json::string(entityId));
        AIVERSE_TEST_CHECK(call("studio.select",select.dump(-1).c_str())["result"].getStr("selectedId")==entityId);
+       const auto identity = [&] {
+           return call("studio.contextAction", R"({"window":"scene","id":"identity"})")["result"]["command"].getStr("text");
+       };
+       const auto& entity=session.workspace().map.data.entities.front();
+       AIVERSE_TEST_CHECK(identity()==entity.id+"/"+entity.type);
+       call("studio.select",R"({"id":null})");
+       AIVERSE_TEST_CHECK(identity()=="nil/nil");
        AIVERSE_TEST_CHECK(session.extensionGizmos()[0]["radius"].toDouble()==25);
    }
    // Attachments layout: invalid entries are refused, a valid one round-trips through the codec.
