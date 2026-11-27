@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeftRight, FolderOpen, RefreshCw } from 'lucide-react';
 import { invoke } from '../bridge';
-import type { StudioGpuStats, StudioProjectState, StudioSnapshot, StudioStats } from '../types';
+import type { StudioGpuStats, StudioGpuTexture, StudioProjectState, StudioSnapshot, StudioStats } from '../types';
 import { formatBytes, frameSummary, jsonDiff, previewValue, type JsonChange } from './jsonDiff';
 import { copyText } from '../clipboard';
 import PlayerHistory from './PlayerHistory';
@@ -315,18 +315,43 @@ export function FrameCapturePanel({ snapshot }: Ctx) {
   </div>;
 }
 
+function TextureSubresource({ texture }: { texture: StudioGpuTexture }) {
+  const [mip, setMip] = useState(0), [layer, setLayer] = useState(0);
+  const extent = (side: number) => Math.max(1, Math.floor(side / 2 ** mip));
+  const volume = texture.dimension === '3D';
+  const cube = texture.dimension?.startsWith('Cube');
+  const slices = volume ? extent(texture.depth) : Math.max(1, texture.layers);
+  const sliceLabel = volume ? 'Depth slice' : cube ? 'Cube face' : 'Array layer';
+  const face = ['+X', '−X', '+Y', '−Y', '+Z', '−Z'][layer % 6];
+  return <section className="texture-resource__detail" aria-label="Texture subresource">
+    <h4>Texture #{texture.id} · {texture.dimension} · {texture.format}</h4>
+    <div className="texture-resource__controls">
+      <label>Mip level <output>{mip}</output>
+        <input type="range" min={0} max={Math.max(0, texture.mips - 1)} value={mip} disabled={texture.mips <= 1}
+          aria-label="Mip level" onChange={e => { setMip(Number(e.target.value)); setLayer(0); }}/>
+      </label>
+      {slices > 1 && <label>{sliceLabel} <output>{cube ? Math.floor(layer / 6) + ' · ' + face : layer}</output>
+        <input type="range" min={0} max={slices - 1} value={layer} aria-label={sliceLabel} onChange={e => setLayer(Number(e.target.value))}/>
+      </label>}
+    </div>
+    <p className="ptp__meta">{extent(texture.width)} × {extent(texture.height)} pixels · {texture.samples}× sampling</p>
+  </section>;
+}
+
 /** Texture Resources: live GPU textures of the Scene renderer with a format-based size estimate. */
 export function TextureResourcesPanel({ snapshot }: Ctx) {
   const path = snapshot?.project.path ?? '';
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [targetsOnly, setTargetsOnly] = useState(false);
   const [largestFirst, setLargestFirst] = useState(true);
   const [gpu, setGpu] = useState<StudioGpuStats['gpu'] | null>(null);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('');
-  const read = useCallback(() => void invoke('studio.gpuStats', { textures: true }).then(s => { setGpu(s.gpu ?? null); setError(s.error ?? ''); })
+  const read = useCallback(() => void invoke('studio.gpuStats', { textures: true }).then(s => { setGpu(s.gpu ?? null); setSelectedId(id => s.gpu?.textures.some(texture => texture.id === id) ? id : null); setError(s.error ?? ''); })
     .catch(e => setError(message(e))), []);
   useEffect(() => { if (path) read(); }, [path, read]);
   if (!path) return <div className="tool__empty">Open a project to list GPU textures.</div>;
+  const selected = gpu?.textures.find(texture => texture.id === selectedId);
   const query = filter.trim().toLowerCase().replaceAll('×', 'x');
   const rows = (gpu?.textures ?? []).filter(t => (!targetsOnly || t.renderTarget) &&
     [String(t.id), t.dimension ?? '', t.format, `${t.width}x${t.height}`].some(field => field.toLowerCase().includes(query)))
@@ -343,10 +368,11 @@ export function TextureResourcesPanel({ snapshot }: Ctx) {
     </div>
     {error && <div className="tool__error" role="alert">{error}</div>}
     <div className="ptp__scroll">
+      {selected && <TextureSubresource key={[selected.id, selected.dimension, selected.width, selected.height, selected.depth, selected.layers, selected.mips, selected.format].join('/')} texture={selected}/>}
       <table className="ptp__table ptp__audit">
         <thead><tr><th>ID</th><th>Dimension</th><th>Size</th><th>Format</th><th>Mips</th><th>Kind</th><th>Estimate</th></tr></thead>
         <tbody>{rows.map(t => <tr key={t.id}>
-          <td>{t.id}</td><td>{t.dimension ?? '—'}</td><td>{t.width}×{t.height}{t.depth > 1 ? `×${t.depth}` : ''}{t.layers > 1 ? ` [${t.layers}]` : ''}</td>
+          <td><button type="button" className="au-button au-button--sm" aria-label={'Inspect texture '+t.id} aria-pressed={selectedId === t.id} onClick={() => setSelectedId(t.id)}>{t.id}</button></td><td>{t.dimension ?? '—'}</td><td>{t.width}×{t.height}{t.depth > 1 ? `×${t.depth}` : ''}{t.layers > 1 ? ` [${t.layers}]` : ''}</td>
           <td>{t.format}</td><td>{t.mips}</td><td>{t.renderTarget ? 'target' : 'sampled'}{t.samples > 1 ? ` ×${t.samples}` : ''}</td>
           <td className="stats__num">{formatBytes(t.bytes)}</td></tr>)}</tbody>
       </table>

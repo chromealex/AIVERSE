@@ -132,3 +132,5 @@ tr.diff__added td:first-child{color:#8ee6a0}tr.diff__removed td:first-child{colo
 .frame-capture__scrub{display:grid;gap:6px;margin:10px 0}.frame-capture__scrub input{width:100%}
 
 .frame-capture__plots{display:grid;gap:10px}.frame-capture__plots figure{margin:0}.frame-capture__plots figcaption{margin-bottom:4px}.frame-capture__plots .frames__chart{display:block;height:64px}.frames__cursor{stroke:currentColor;stroke-width:1;stroke-dasharray:3 2;vector-effect:non-scaling-stroke}
+
+.texture-resource__detail{padding:10px;border:1px solid var(--au-line);border-radius:var(--au-radius-md);margin-bottom:10px}.texture-resource__controls{display:flex;flex-wrap:wrap;gap:12px}.texture-resource__controls label{flex:1 1 140px}.texture-resource__controls input{display:block;width:100%}.texture-resource__controls output{float:right}
