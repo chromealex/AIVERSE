@@ -971,3 +971,7 @@ de4004e7ad79045d2ef1984cfb388ee964359c00 adds InputKeyCapture.tsx and updates Pr
 ### Input context conflict diagnostics
 
 f885b73f39fe73e2108115949b92405b160dbc19 adds studio.inputConflicts in StudioSession.cpp and a draft report in ProjectToolPanels.tsx with bridge types and mock handling. EnhancedInputCore.h returns ordered bounded rows with an exact total; tests/libraries/enhanced_input_tests.cpp passed via clang++ -std=c++20 -I. Source web build passed. In detached WKWebView, priority 5 preceded priority 0, consuming the key shadowed the later binding, shared controls were reported when consumption was disabled, and disabling the context cleared the result. No input/actions.json was created. See stats-mac-dfs0ng17/live.log and captures/mac-input-context-conflicts.png. The first Mac UI check used the pre-optimization binary. Final integrated native rebuild and RPC limit check remain pending.
+
+### Input modifier chain persistence
+
+7013663eb73aa492771c133fa86c8180f375130e updates docs/studio-html5-parity.md and adds docs/handoff/studio-html5/captures/mac-input-negate-normalize-deadzone.png. Detached Mac Input saved action modifiers negate then normalize, and a keyboard binding deadzone of 0.375. Revert restored the saved action name and the independent disk check confirmed modifier order and threshold. Evidence: stats-mac-ft6i997w/live.log. The bounded native conflict query awaits the integrated rebuild.
