@@ -212,6 +212,18 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
     if(result.error){setError(result.error);return;}
     editGraph(result.graph);
   };
+  const applySource=async(source:Record<string,unknown>)=>{
+    const next=graphV2(source);
+    if(!next)throw Error('Expected a SpectraFX v2 graph with nodes, links and outputs.');
+    const local=validateInterfaces(next);
+    if(local)throw Error(local);
+    setBusy(true);
+    try{
+      const result=await nativeOp('fx_graph_validate',{graph:next});
+      if(result.ok!==true)throw Error(diagnostics(result));
+      editGraph(next);
+    }finally{setBusy(false);}
+  };
   const validate=async()=>{
     if(!graph)return;
     const local=validateInterfaces(graph);
@@ -348,6 +360,8 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
             {(['parameters','functions'] as const).map(field=><GraphObjectEditor key={field+JSON.stringify(graph[field])}
               label={field==='parameters'?'Shared parameters':'Local functions'} value={graph[field]} disabled={busy}
               apply={value=>editGraph({...graph,[field]:value})}/>)}
+            <GraphObjectEditor key={selected.name+JSON.stringify(graph)} label="Full graph JSON"
+              value={graph} disabled={busy} apply={applySource}/>
             <SpectraFunctionLibrary key={selected.name} graph={graph} disabled={busy} op={nativeOp} onEdit={editGraph}/>
           </StudioSection>
           <SpectraCurveEditor graph={graph} disabled={busy} onError={setError} onEdit={editGraph}/>

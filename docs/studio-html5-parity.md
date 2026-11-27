@@ -1,5 +1,7 @@
 ## SpectraFX legacy layout
 
+Exercise full-graph source edits, invalid input, undo and draft persistence.
+
 Verify navigation by dragging the middle button across the reopened graph.
 
 Published v1 graph upgrades should preserve the legacy canvas arrangement through draft save and reopen.

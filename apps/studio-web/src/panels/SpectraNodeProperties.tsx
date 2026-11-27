@@ -12,16 +12,16 @@ type ObjectValue=Record<string,unknown>;
 const object=(value:unknown):value is ObjectValue=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 
 export function GraphObjectEditor({label,value,disabled,apply}:{
-  label:string;value:unknown;disabled:boolean;apply:(value:ObjectValue)=>void;
+  label:string;value:unknown;disabled:boolean;apply:(value:ObjectValue)=>void|Promise<void>;
 }){
   const original=JSON.stringify(value??{},null,2);
   const [draft,setDraft]=useState(original);
   const [error,setError]=useState('');
-  function submit(){
+  async function submit(){
     try{
       const parsed:unknown=JSON.parse(draft);
       if(!object(parsed))throw Error('Enter a JSON object.');
-      apply(parsed);setError('');
+      await apply(parsed);setError('');
     }catch(e){setError(e instanceof Error?e.message:String(e));}
   }
   return <details className="spectra-property-source"><summary>{label}</summary>
