@@ -317,7 +317,7 @@ void GameClient::toMenu() {
     pendingPings_.clear();
     pendingOrders_.clear();
     markers_.clear();
-    hostPaused_ = hostStep_ = false;
+    hostPaused_ = false; pendingHostSteps_ = 0;
     hostSpeed_=0;
     hostCheckpoint_.clear();
     mapLoading_ = false; loadingTypes_.clear(); loadingSplash_.shutdown();
@@ -756,7 +756,7 @@ bool GameClient::startMatch(size_t idx, const Json& initialVars, const MatchFile
         matchSetup_ = std::move(setup); matchContentHash_ = content.value();
         mapCamera_ = map["camera"];
         startPlayers_ = startDeck_ = Json(); startRuleSets_.clear();
-        hostPaused_ = hostStep_ = false;
+        hostPaused_ = false; pendingHostSteps_ = 0;
         if (!file && !city_) for (const auto& seat : sim_->players()) {
             const auto& authored = map["players"][size_t(seat.slot - 1)];
             const auto controller = authored.has("controller") ? seat.controller :
@@ -1619,7 +1619,7 @@ bool GameClient::hostCheckpoint(bool restore) {
     if(hostCheckpoint_.empty())return false;
     std::string error;
     if(!sim_->deserialize(hostCheckpoint_,&error))return false;
-    hostStep_=false;
+    pendingHostSteps_=0;
     return true;
 }
 double GameClient::simulationSpeed() const {
@@ -1632,13 +1632,14 @@ bool GameClient::setHostSpeed(double speed) {
 }
 bool GameClient::setHostPaused(bool paused) {
     if (!hostCanControl()) return false;
-    hostPaused_ = paused; hostStep_ = false;
+    if (!paused) pendingHostSteps_ = 0;
+    hostPaused_ = paused;
     if (!paused && screen_ == Screen::Paused) setScreen(Screen::Playing);
     return true;
 }
 bool GameClient::requestHostStep() {
-    if (!hostCanStep()) return false;
-    hostStep_ = true;
+    if (!hostCanStep() || pendingHostSteps_ == UINT32_MAX) return false;
+    ++pendingHostSteps_;
     return true;
 }
 
@@ -1736,8 +1737,9 @@ void GameClient::frame(gfx::Device& dev, double dt) {
     g_stages.start();
     lensCameras_.collectRetiredTargets();
     const bool hostFrozen = hostCanControl() && hostPaused_;
-    const bool singleStep = hostFrozen && hostCanStep() && hostStep_;
-    hostStep_ = false;
+    const bool singleStep = hostFrozen && hostCanStep() && pendingHostSteps_ > 0;
+    if (singleStep) --pendingHostSteps_;
+    else pendingHostSteps_ = 0;
     if (hostFrozen) dt = 0;
     // Even on menus/loading screens there may be previous per-view motion
     // textures awaiting the GPU completion fence from an old match.

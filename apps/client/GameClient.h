@@ -228,7 +228,8 @@ public:
 private:
     bool appendRuntimeGraphImageRoots(const render::Model& model,
         std::vector<std::span<const render::Material>>& roots)const;
-    bool hostPaused_ = false, hostStep_ = false;
+    bool hostPaused_ = false;
+    uint32_t pendingHostSteps_ = 0;
     enum class Screen { Menu, Lobby, Playing, Paused, Over };
     enum class Mode { Normal, Move, AttackMove, Patrol, Place, Rally, Ability, Claim, Skill, Dig, Undig, Room, Road, Unroad, Drop, ScriptCmd, Repair, Reclaim };
 
