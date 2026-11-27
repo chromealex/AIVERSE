@@ -1,3 +1,4 @@
+import InputKeyCapture from './InputKeyCapture';
 import { changeInputAction } from './inputActionReferences';
 import InputTriggers from './InputTriggers';
 import InputModifiers from './InputModifiers';
@@ -286,6 +287,7 @@ function InputActionName({ name, rename, reject }: { name: string; rename: (valu
 }
 export function InputPanel(ctx: Ctx) {
   const path = ctx.snapshot?.project.path ?? '';
+  const [capturePolicy, setCapturePolicy] = useState('swap');
   const [info, setInfo] = useState<StudioInputInfo | null>(null);
   const [asset, setAsset] = useState<StudioInputAsset>({ version: 1, actions: [], contexts: [] });
   const [dirty, setDirty] = useState(false);
@@ -305,6 +307,24 @@ export function InputPanel(ctx: Ctx) {
   const setContext = (i: number, c: Partial<InputContext>) => edit({ ...asset, contexts: asset.contexts.map((x, n) => n === i ? { ...x, ...c } : x) });
   const setMapping = (ci: number, mi: number, m: Partial<InputMapping>) =>
     setContext(ci, { mappings: asset.contexts[ci].mappings.map((x, n) => n === mi ? { ...x, ...m } : x) });
+  const bindKey = (ci: number, mi: number, code: string) => {
+    const mappings = asset.contexts[ci].mappings;
+    const conflicts = mappings.filter((m, i) => i !== mi && m.control.device === 'keyboard' && m.control.code === code);
+    if (conflicts.length && capturePolicy === 'reject') {
+      setStatus({ ok: false, text: 'That key is already used in this context.' });
+      return;
+    }
+    if (conflicts.length > 1 && capturePolicy === 'swap') {
+      setStatus({ ok: false, text: 'Cannot swap a key used by multiple bindings.' });
+      return;
+    }
+    setContext(ci, { mappings: mappings.map((m, i) => {
+      if (i === mi) return { ...m, control: { device: 'keyboard', code } };
+      if (capturePolicy === 'swap' && m === conflicts[0]) return { ...m, control: mappings[mi].control };
+      return m;
+    }) });
+    setStatus({ ok: true, text: 'Bound ' + code + ' to ' + mappings[mi].action + '.' });
+  };
   const codes = (device: string): string[] => device === 'keyboard' ? info?.keys ?? [] : device === 'gamepadButton' ? info?.padButtons ?? []
     : device === 'gamepadAxis' ? info?.padAxes ?? [] : device === 'mouseButton' ? ['left', 'right', 'middle', 'x1', 'x2']
     : device === 'mouseAxis' || device === 'mouseWheel' ? ['x', 'y'] : [];
@@ -317,6 +337,9 @@ export function InputPanel(ctx: Ctx) {
           onClick={() => { edit(info.presets![key]); setStatus({ ok: true, text: key.toUpperCase() + ' defaults loaded into the draft.' }); }}>
           Use {key.toUpperCase()} defaults
         </button>)}
+      <label>On key conflict <select className="au-input" value={capturePolicy} onChange={e => setCapturePolicy(e.target.value)}>
+        <option value="swap">Swap keys</option><option value="reject">Reject duplicate</option><option value="allow">Allow duplicate</option>
+      </select></label>
       <b>{info?.path ?? 'input/actions.json'}{!info?.exists && ' (new)'}{dirty && ' •'}</b>
       <button type="button" className="au-button au-button--sm au-button--primary" disabled={!dirty} onClick={() => void save()}><Save size={13}/>Save</button>
       <button type="button" className="au-button au-button--sm" disabled={!dirty} onClick={() => void load()}><RotateCcw size={13}/>Revert</button>
@@ -367,6 +390,7 @@ export function InputPanel(ctx: Ctx) {
               </select></label>}</td>
             <td><InputModifiers items={m.modifiers} onChange={modifiers => setMapping(ci, mi, { modifiers })}/></td>
             <td><InputTriggers items={m.triggers} actions={asset.actions} onChange={triggers => setMapping(ci, mi, { triggers })}/></td>
+            <td><InputKeyCapture keys={info?.keys ?? []} bind={code => bindKey(ci, mi, code)}/></td>
             <td className="ptp__consume"><label className="ptp__check" title="Stop lower-priority contexts from seeing this input"><input type="checkbox" checked={m.consume ?? false} onChange={e => setMapping(ci, mi, { consume: e.target.checked })}/>Consume</label></td>
             <td><button type="button" className="au-button au-button--icon au-button--ghost au-button--sm" title="Delete binding" onClick={() => setContext(ci, { mappings: c.mappings.filter((_, n) => n !== mi) })}><Trash2 size={12}/></button></td>
           </tr>)}
