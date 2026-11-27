@@ -1804,3 +1804,7 @@ ba54858b8ae8fce4297bea809535f4a06d4c5c33 updates SpectraNativePreview.tsx and ad
 ### Detached Asset Audit reference resolution
 
 6426e1405aadd540f9e79ce33ca96d2c39ebf51f updates docs/studio-html5-parity.md with captures/mac-asset-audit-references.png. In the native WKWebView the Scan references action reported ui/audit-fixture/refs.lua and missing-proof.png. Its sibling present.png was correctly absent from missing rows. Evidence: stats-mac-0lgnjnvc/live.log. Next check project lifecycle session tests and remaining legacy workflows.
+
+### Detached Input action and context persistence
+
+7b9b9e095d8bd8bfe4cf15d80ebcd4fe7e90c85b updates the parity matrix and captures/mac-input-action-binding.png. A native detached Input panel created Action, Gameplay and a keyboard binding. Renaming Action to Interact updated the binding; Save wrote both names to input/actions.json. Revert restored both after another rename. Independently parsed the disk JSON. Evidence in stats-mac-uswrttnc/live.log on KINGSTON. The integrated studio_session CTest also passed in 21.90 seconds. Continue remaining legacy workflows before retirement.
