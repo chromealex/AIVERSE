@@ -1644,3 +1644,7 @@ Verified packaged Mac host at 0be4feee7. AppKit pointer events on the first snap
 ### Snapshot Diff input boundary and retry
 
 d36ac0faed88182b8f29271a8271dbef4cdbec52 updates docs/studio-html5-parity.md and captures/mac-snapshot-file-limit.png. Packaged macOS Studio accepted File objects via the detached panel inputs. Malformed JSON produced the named parse error. 16777217 bytes produced the size limit error and a valid 16777216-byte file compared in the same panel without a stale error. Evidence: stats-mac-p0ayrpgx/live.log. Native chooser confirmation remains to verify independently.
+
+### Individual frame inspection and CSV
+
+918dce60d12def2db3811793becb8a8e2c974fc5 updates InsightPanels.tsx, ProjectToolPanels.css and StudioPanelRenderer.tsx. Mac web/native builds passed. Detached Scene and Frame Capture produced 63 real frames. Verified freeze stability, scrub to first frame, displayed time and draws against the exported CSV, Clear disabling CSV, and Resume live collecting frames again. CSV payload tested with isolated clipboard sink. Capture: docs/handoff/studio-html5/captures/mac-frame-capture-scrub.png. Next cover recording across the 240-frame ring and simulation time from its owner.
