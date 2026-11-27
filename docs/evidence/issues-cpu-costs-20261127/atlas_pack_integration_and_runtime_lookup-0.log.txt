@@ -1,0 +1,21 @@
+[ OK ] atlas_pack_integration_and_runtime_lookup
+
+22 checks, 0 failed
+        0.51 real         0.44 user         0.04 sys
+            33062912  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                9268  page reclaims
+                 127  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   0  voluntary context switches
+                 933  involuntary context switches
+          7950473877  instructions retired
+          1738718385  cycles elapsed
+            19135424  peak memory footprint

@@ -83,9 +83,13 @@
       "evidence": []
     },
     "performance": {
-      "status": "not_run",
-      "note": "Atlas reconstruction performance has not been measured for the revised implementation.",
-      "evidence": []
+      "status": "pass",
+      "note": "Existing packed atlas integration scenario reconstructs logical/standalone images and preserves output on failure. Three actual native Debug process repeats below1CPU-second and512MiB per complete scenario; recorded maxima0.59s/49,860,608bytes across all three suites. Source allocation/work bounds reviewed. Coarse whole-workload budget, not per-operation latency, p95 or full-game throughput.",
+      "evidence": [
+        "docs/evidence/issues-cpu-costs-20261127/result.json",
+        "engine/atlas/AtlasFormat.cpp",
+        "apps/client/Minimap.cpp"
+      ]
     },
     "platforms": {
       "status": "pass",

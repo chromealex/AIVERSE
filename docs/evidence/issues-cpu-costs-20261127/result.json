@@ -1,0 +1,104 @@
+{
+  "sha": "6f0a49e803fed2ba24c9f2a5a1e0facdb006fbc2",
+  "binary_source": "85414a9ca-era aggregate build; relevant tests and production owners unchanged since build",
+  "budgets": {
+    "cpu_seconds_per_complete_case": 1,
+    "peak_process_rss_bytes": 536870912
+  },
+  "scope": "Whole native regression process including fixture creation, load, operations and teardown.3repeats each. These are coarse bounded-workload costs, not latency per callback or frame budgets.",
+  "runs": [
+    {
+      "case": "atlas_pack_integration_and_runtime_lookup",
+      "iteration": 0,
+      "exit_code": 0,
+      "log": "atlas_pack_integration_and_runtime_lookup-0.log.txt",
+      "whole_process_cpu_seconds": 0.48,
+      "wall_seconds_including_launch": 0.54787175,
+      "peak_rss_bytes": 33062912
+    },
+    {
+      "case": "atlas_pack_integration_and_runtime_lookup",
+      "iteration": 1,
+      "exit_code": 0,
+      "log": "atlas_pack_integration_and_runtime_lookup-1.log.txt",
+      "whole_process_cpu_seconds": 0.47,
+      "wall_seconds_including_launch": 0.51694025,
+      "peak_rss_bytes": 32817152
+    },
+    {
+      "case": "atlas_pack_integration_and_runtime_lookup",
+      "iteration": 2,
+      "exit_code": 0,
+      "log": "atlas_pack_integration_and_runtime_lookup-2.log.txt",
+      "whole_process_cpu_seconds": 0.47,
+      "wall_seconds_including_launch": 0.518957917,
+      "peak_rss_bytes": 33058816
+    },
+    {
+      "case": "audio_repeated_selection",
+      "iteration": 0,
+      "exit_code": 0,
+      "log": "audio_repeated_selection-0.log.txt",
+      "whole_process_cpu_seconds": 0.54,
+      "wall_seconds_including_launch": 0.60482575,
+      "peak_rss_bytes": 40185856
+    },
+    {
+      "case": "audio_repeated_selection",
+      "iteration": 1,
+      "exit_code": 0,
+      "log": "audio_repeated_selection-1.log.txt",
+      "whole_process_cpu_seconds": 0.54,
+      "wall_seconds_including_launch": 0.5964518750000001,
+      "peak_rss_bytes": 39923712
+    },
+    {
+      "case": "audio_repeated_selection",
+      "iteration": 2,
+      "exit_code": 0,
+      "log": "audio_repeated_selection-2.log.txt",
+      "whole_process_cpu_seconds": 0.54,
+      "wall_seconds_including_launch": 0.6038351249999998,
+      "peak_rss_bytes": 40439808
+    },
+    {
+      "case": "precise_windup",
+      "iteration": 0,
+      "exit_code": 0,
+      "log": "precise_windup-0.log.txt",
+      "whole_process_cpu_seconds": 0.5900000000000001,
+      "wall_seconds_including_launch": 0.6524060830000002,
+      "peak_rss_bytes": 49860608
+    },
+    {
+      "case": "precise_windup",
+      "iteration": 1,
+      "exit_code": 0,
+      "log": "precise_windup-1.log.txt",
+      "whole_process_cpu_seconds": 0.5800000000000001,
+      "wall_seconds_including_launch": 0.6392689999999996,
+      "peak_rss_bytes": 49672192
+    },
+    {
+      "case": "precise_windup",
+      "iteration": 2,
+      "exit_code": 0,
+      "log": "precise_windup-2.log.txt",
+      "whole_process_cpu_seconds": 0.5700000000000001,
+      "wall_seconds_including_launch": 0.635284875,
+      "peak_rss_bytes": 49741824
+    }
+  ],
+  "source_confirmation": "git diff 85414a9ca HEAD for tests/tests.cpp and tested atlas/audio/attack owners returned empty",
+  "allocation_review": [
+    "ImageSource uses one cached decoded atlas page and allocates logical RGBA output. Successful load moves decoded storage; caller output preserved on failure. Minimap invokes loadContentImage during build, not each frame. Temporary image memory scales with page and logical image area.",
+    "Sequential selection uses scalar counter/index and does not grow selectionClicks. Legacy click deque is capped at repeatCount validated2..64. Existing mixer voices/clip resources remain the owner.",
+    "AttackTimingState and phase helpers use fixed-size values with no dynamic allocation. Combat uses existing kMaxCadenceShotsPerTick bound per weapon, preventing unbounded sub-tick catch-up."
+  ],
+  "limitations": [
+    "Small bounded acceptance workloads, not stress/maximum throughput or isolated per-operation latency.",
+    "Whole-process CPU includes startup, allocator/runtime setup, fixtures and shutdown. RSS includes those costs.",
+    "GPU not applicable to these CPU owner checks; actual rendering/audio evidence retained separately.",
+    "No blanket zero-allocation claim for pack decoding, simulation events or audio mixer."
+  ]
+}

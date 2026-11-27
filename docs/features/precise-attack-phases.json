@@ -95,11 +95,11 @@
       ]
     },
     "performance": {
-      "status": "not_run",
-      "note": "Source bounds four weapon slots and32releases/slot/tick; helpers use scalar stack state. Runtime CPU/memory budget measurement remains pending.",
+      "status": "pass",
+      "note": "Existing fractional phased-weapon scenarios cover200-tick cadence, subtick recovery/cancellation and restore. Three actual native Debug process repeats below1CPU-second and512MiB per complete scenario; recorded maxima0.59s/49,860,608bytes across all three suites. Source allocation/work bounds reviewed. Coarse whole-workload budget, not per-operation latency, p95 or full-game throughput.",
       "evidence": [
+        "docs/evidence/issues-cpu-costs-20261127/result.json",
         "engine/mechanics/AttackTiming.h",
-        "engine/mechanics/WeaponCadence.h",
         "engine/game/Combat.cpp"
       ]
     },

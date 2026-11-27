@@ -111,11 +111,11 @@
       ]
     },
     "performance": {
-      "status": "not_run",
-      "note": "Source review: sequential click counting is constant-space and does not append to the legacy deque; legacy random history capped at authored count2..64. Real CPU/allocation measurement and budget evidence remain pending; successful playback is not performance acceptance.",
+      "status": "pass",
+      "note": "Existing119-check audio scenario covers windowed/sequential clicks and actual mixer order/reset behavior. Three actual native Debug process repeats below1CPU-second and512MiB per complete scenario; recorded maxima0.59s/49,860,608bytes across all three suites. Source allocation/work bounds reviewed. Coarse whole-workload budget, not per-operation latency, p95 or full-game throughput.",
       "evidence": [
-        "engine/audio/GameAudio.cpp",
-        "engine/audio/GameAudio.h"
+        "docs/evidence/issues-cpu-costs-20261127/result.json",
+        "engine/audio/GameAudio.cpp"
       ]
     },
     "platforms": {

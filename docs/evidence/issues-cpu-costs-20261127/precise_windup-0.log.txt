@@ -1,0 +1,22 @@
+[ OK ] precise_windup_cooldown_preserves_authored_period
+[ OK ] precise_windup_subtick_recovery_and_cancellation
+
+38 checks, 0 failed
+        0.62 real         0.55 user         0.04 sys
+            49860608  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               13466  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   0  voluntary context switches
+                 795  involuntary context switches
+          9071115057  instructions retired
+          2156432016  cycles elapsed
+            31202240  peak memory footprint
