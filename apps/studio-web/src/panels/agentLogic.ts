@@ -19,3 +19,7 @@ const LEGACY_TO_PANEL: Record<string, string> = {
   project_import: 'project_import', studio_snapshot_diff: 'snapshot_diff', studio_frame_capture: 'frame_capture', texture_resources: 'texture_resources', animation_attachments: 'attachments', studio_extensions: 'extensions',
 };
 export function extensionPanelFor(id: string): string | null { return LEGACY_TO_PANEL[id] ?? null; }
+
+export function extensionWindowFor(panel: string): string {
+  return Object.keys(LEGACY_TO_PANEL).find(id => LEGACY_TO_PANEL[id] === panel) ?? panel;
+}

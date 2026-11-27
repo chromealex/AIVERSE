@@ -1,3 +1,5 @@
+import { useLuaMenu } from './panels/useLuaMenu';
+import { extensionWindowFor } from './panels/agentLogic';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { revealProjectAsset } from './assetNavigation';
 import { menuShortcut, shortcutKey } from './keyboard';
@@ -639,8 +641,21 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapshot, paletteAssets, dock, floating, workspace, busy, connected, switchWorkspace]);
 
+  const [projectMenuStatus,setProjectMenuStatus]=useState('');
+  const projectMenu=useLuaMenu(setSnapshot,showPanel,setProjectMenuStatus,setError);
+  const openProjectMenu=(event:React.MouseEvent)=>{
+    if (!project || event.defaultPrevented || !(event.target instanceof Element)) return;
+    if (event.target.closest('input,textarea,select,[contenteditable="true"],[role=menu],canvas')) return;
+    const panel=event.target.closest<HTMLElement>('[role=tabpanel][data-panel]')?.dataset.panel;
+    if (panel && panel!=='scene' && panel!=='hierarchy') void projectMenu.open(event,extensionWindowFor(panel),'');
+  };
+  const projectMenuFeedback=<>{projectMenu.popup}{projectMenuStatus && <div className="demo-banner" role="status">
+    {projectMenuStatus} <button type="button" aria-label="Dismiss status" onClick={()=>setProjectMenuStatus('')}>×</button>
+  </div>}</>;
+
   // Floating window: its own small dock, no header, menus or workspaces.
-  if (FLOAT) return <div className={'studio compact-shell floating-shell'+(connected?' compact-shell--native':'')}>
+  if (FLOAT) return <div onContextMenu={openProjectMenu} className={'studio compact-shell floating-shell'+(connected?' compact-shell--native':'')}>
+    {projectMenuFeedback}
     {error && <div role="alert" className="error-banner">{error}
       <button onClick={() => setError('')} aria-label="Dismiss">×</button></div>}
     <NestedDockWorkspace compact tree={dock} setTree={setDock} renderPanel={renderPanel}
@@ -649,7 +664,7 @@ export default function App() {
     {palette !== null && <CommandPalette entries={paletteEntries} initial={palette} onClose={() => setPalette(null)}/>}
   </div>;
 
-  return <div className={'studio compact-shell'+(windowsHost?' compact-shell--windows':connected?' compact-shell--native':'')+(game?.active?' is-playing':'')}>
+  return <div onContextMenu={openProjectMenu} className={'studio compact-shell'+(windowsHost?' compact-shell--windows':connected?' compact-shell--native':'')+(game?.active?' is-playing':'')}>
     <header className="titlebar"
       onMouseDown={event => {
         // Empty title-bar areas move the native window. The outer pixels resize it instead.
@@ -700,6 +715,7 @@ export default function App() {
     </section>}
     {!connected && <div className="demo-banner"><span>Preview mode:</span> interface and edits
       are demonstrated locally. Native C++ Workspace and GPU renderer are not connected yet.</div>}
+    {projectMenuFeedback}
     {error && <div role="alert" className="error-banner">{error}
       <button onClick={() => setError('')} aria-label="Dismiss">×</button></div>}
     <NestedDockWorkspace tree={dock} setTree={setDock} renderPanel={renderPanel}
