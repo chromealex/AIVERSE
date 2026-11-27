@@ -8,6 +8,8 @@
 #include "StudioSurfacePlatform.h"
 #include <gdk/gdkx.h>
 #include <iostream>
+#include <map>
+#include <regex>
 
 namespace aiverse::studio {
 class GtkStudio final : public StudioSurfacePlatform {
@@ -22,12 +24,26 @@ public:
             previewPointers_.push_back(std::make_unique<StudioPreviewPointer>(widget(surface), surface, host_));
         if (!bridge_.registered()) throw std::runtime_error("Studio web bridge unavailable");
     }
-    ~GtkStudio() override { stopBackgroundWork(); host_.shutdown(); }
-    void evaluateScript(const std::string& js, bool) override { bridge_.evaluate(js); }
+    ~GtkStudio() override {
+        stopBackgroundWork();
+        while (!floats_.empty()) {
+            auto& panel = floats_.begin()->second;
+            g_signal_handlers_disconnect_by_data(panel.window,this);
+            gtk_widget_destroy(GTK_WIDGET(panel.window));
+            floats_.erase(floats_.begin());
+        }
+        host_.shutdown();
+    }
+    void evaluateScript(const std::string& js, bool currentOnly) override {
+        if (currentOnly && current_) { current_->bridge->evaluate(js); return; }
+        bridge_.evaluate(js);
+        if (!currentOnly) for (auto& entry : floats_) entry.second.bridge->evaluate(js);
+    }
     Json windowRequest(const std::string& method,const Json& params) override {
         Json result=Json::object();
+        auto* target=current_ ? current_->window : window_;
         if (method=="studio.windowDrag") {
-            auto* widget = GTK_WIDGET(window_);
+            auto* widget = GTK_WIDGET(target);
             auto* seat = gdk_display_get_default_seat(gtk_widget_get_display(widget));
             auto* pointer = seat ? gdk_seat_get_pointer(seat) : nullptr;
             auto* surface = gtk_widget_get_window(widget);
@@ -37,20 +53,84 @@ public:
                 if (state & GDK_BUTTON1_MASK) {
                     int x, y;
                     gdk_device_get_position(pointer, nullptr, &x, &y);
-                    gtk_window_begin_move_drag(window_, 1, x, y, gdk_x11_get_server_time(surface));
+                    gtk_window_begin_move_drag(target, 1, x, y, gdk_x11_get_server_time(surface));
                 }
             }
         } else if (method=="studio.windowZoom") {
-            if (gtk_window_is_maximized(window_)) gtk_window_unmaximize(window_);
-            else gtk_window_maximize(window_);
-        } else if (method=="studio.windowMinimize") gtk_window_iconify(window_);
-        else if (method=="studio.windowClose" && params.getStr("window").empty()) gtk_window_close(window_);
-        else if (method=="studio.windowOpen") result.set("opened",Json::fromBool(false));
-        else if (method=="studio.windowClose") result.set("closed",Json::fromBool(false));
+            if (gtk_window_is_maximized(target)) gtk_window_unmaximize(target);
+            else gtk_window_maximize(target);
+        } else if (method=="studio.windowMinimize") gtk_window_iconify(target);
+        else if (method=="studio.windowOpen") result.set("opened",Json::fromBool(openFloat(params)));
+        else if (method=="studio.windowTitle" && current_) gtk_window_set_title(target,params.getStr("title").c_str());
+        else if (method=="studio.windowClose") {
+            const auto key=params.getStr("window");
+            auto it=floats_.find(key);
+            auto* closing=it!=floats_.end() ? it->second.window : key.empty() ? target : nullptr;
+            if (closing) {
+                // Finish the web request before destroying its bridge.
+                g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,+[](gpointer data)->gboolean {
+                    gtk_window_close(GTK_WINDOW(data));
+                    return G_SOURCE_REMOVE;
+                },g_object_ref(closing),g_object_unref);
+            }
+            result.set("closed",Json::fromBool(closing!=nullptr));
+        }
         return result;
     }
     StudioHost& host() { return host_; }
 private:
+    struct Floating {
+        GtkWindow* window{};
+        std::unique_ptr<StudioWebBridge> bridge;
+    };
+    std::map<std::string,Floating> floats_;
+    Floating* current_{};
+    bool openFloat(const Json& params) {
+        const auto key=params.getStr("window"), title=params.getStr("title");
+        static const std::regex keyPattern("[a-z0-9-]{1,40}"), panelPattern("[a-z][a-z0-9_]{0,31}");
+        if (!std::regex_match(key,keyPattern) || title.size()>256) throw std::runtime_error("Invalid floating window");
+        auto existing=floats_.find(key);
+        if (existing!=floats_.end()) { gtk_window_present(existing->second.window); return true; }
+        std::string panels;
+        for (const auto& item : params["panels"].items()) {
+            const auto id=item.str();
+            if (!std::regex_match(id,panelPattern) || panels.size()>512) throw std::runtime_error("Invalid floating panel");
+            panels+=(panels.empty()?"":",")+id;
+        }
+        if (panels.empty()) throw std::runtime_error("A floating window needs a panel");
+        if (params.getBool("ifOutside")) {
+            auto* seat=gdk_display_get_default_seat(gtk_widget_get_display(GTK_WIDGET(window_)));
+            auto* pointer=seat?gdk_seat_get_pointer(seat):nullptr;
+            if (pointer && gdk_device_get_window_at_position(pointer,nullptr,nullptr)) return false;
+        }
+        auto* web=WEBKIT_WEB_VIEW(webkit_web_view_new());
+        auto bridge=std::make_unique<StudioWebBridge>(web,[this,key](std::string message) {
+            auto* previous=current_;
+            current_=&floats_.at(key);
+            host_.handleMessage(message);
+            current_=previous;
+        });
+        if (!bridge->registered()) { g_object_ref_sink(web);g_object_unref(web);throw std::runtime_error("Floating bridge unavailable"); }
+        auto* win=GTK_WINDOW(gtk_window_new(GTK_WINDOW_TOPLEVEL));
+        gtk_window_set_title(win,title.empty()?"AIVERSE Studio":title.c_str());
+        gtk_window_set_default_size(win,std::clamp(params.getInt("width",640),220,6000),std::clamp(params.getInt("height",560),160,4000));
+        if (params.has("x") && params.has("y")) gtk_window_move(win,params.getInt("x"),params.getInt("y"));
+        gtk_container_add(GTK_CONTAINER(win),GTK_WIDGET(web));
+        floats_.emplace(key,Floating{win,std::move(bridge)});
+        g_signal_connect(win,"destroy",G_CALLBACK(+[](GtkWidget* widget,gpointer data) {
+            auto& self=*static_cast<GtkStudio*>(data);
+            for (auto it=self.floats_.begin();it!=self.floats_.end();++it) {
+                if (GTK_WIDGET(it->second.window)!=widget) continue;
+                const auto key=it->first;
+                self.floats_.erase(it);
+                self.host_.sendEvent("window.floatClosed",key);
+                break;
+            }
+        }),this);
+        gtk_widget_show_all(GTK_WIDGET(win));
+        webkit_web_view_load_uri(web,("aiverse-studio://shell/index.html?window="+key+"&panels="+panels).c_str());
+        return true;
+    }
     GtkWindow* window_;
     StudioWebBridge bridge_;
     StudioHost host_;
