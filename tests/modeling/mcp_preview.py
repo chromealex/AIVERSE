@@ -137,6 +137,17 @@ def main():
                 assert metadata['revision'] == 2
                 assert (output / 'walk.png').read_bytes() != (output / 'death.png').read_bytes()
                 tool('editor_window', {'id': 'animation_authoring', 'open': True})
+                if studio:
+                    deadline = time.monotonic() + 20
+                    while True:
+                        panels = tool('editor_windows', {})['windows']
+                        if any(panel['id'] == 'animation' and panel['open'] for panel in panels):
+                            break
+                        if time.monotonic() >= deadline:
+                            raise AssertionError('Animation timeline did not open')
+                        time.sleep(.1)
+                    # Layout acknowledgement precedes the native webview compositor.
+                    time.sleep(.5)
                 tool('view_screenshot', {'window': 'all'}, image='timeline.png')
                 graph = {'nodes': [{'id': 'idle', 'kind': 'clip', 'clip': 'Idle'},
                                    {'id': 'walk', 'kind': 'clip', 'clip': 'Walk'},
