@@ -124,9 +124,9 @@ jobs:
       - name: Configure Studio (Visual Studio 2022, x64)
         run: cmake -S . -B build/studio-windows-ci -G "Visual Studio 17 2022" -A x64 -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TOOLS=ON -DAIVERSE_BUILD_CLIENT=OFF -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_BUILD_STUDIO_HTML5=ON
       - name: Build AiverseStudio.exe and the session contract
-        run: cmake --build build/studio-windows-ci --config Release --target aiverse_studio aiversemcp aiverse_studio_owner_history_tests aiverse_studio_session_tests aiverse_studio_asset_transfer_tests aiverse_studio_move_journal_tests --parallel 4
+        run: cmake --build build/studio-windows-ci --config Release --target aiverse_studio aiversemcp aiverse_studio_owner_history_tests aiverse_studio_session_tests aiverse_studio_asset_transfer_tests aiverse_studio_move_journal_tests aiverse_studio_win_device_overlay_tests --parallel 4
       - name: Studio session contract (Windows)
-        run: ctest --test-dir build/studio-windows-ci -C Release --output-on-failure --no-tests=error -R "^studio_(session|asset_transfers|move_journal|owner_history|mcp_registry)$"
+        run: ctest --test-dir build/studio-windows-ci -C Release --output-on-failure --no-tests=error -R "^studio_(session|asset_transfers|move_journal|owner_history|mcp_registry|win_device_overlay)$"
       - name: Launch the staged Studio distribution and open a project
         shell: pwsh
         timeout-minutes: 4
