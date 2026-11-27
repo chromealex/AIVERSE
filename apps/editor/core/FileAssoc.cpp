@@ -154,11 +154,12 @@ std::string mimeXml() {
 }
 
 std::string desktopEntry(const std::string& exe) {
-    return "[Desktop Entry]\n"
+    const bool studio = fs::path(exe).filename() == "AiverseStudio";
+    return std::string("[Desktop Entry]\n"
            "Type=Application\n"
-           "Version=1.0\n"
-           "Name=AIVERSE Editor\n"
-           "Name[ru]=Редактор AIVERSE Engine\n"
+           "Version=1.0\n") +
+           (studio ? "Name=AIVERSE Studio\nName[ru]=AIVERSE Studio\n" :
+                     "Name=AIVERSE Editor\nName[ru]=Редактор AIVERSE Engine\n") +
            "GenericName=Game Editor\n"
            "Comment=Edit AIVERSE game projects\n"
            "Comment[ru]=Редактор проектов игр AIVERSE\n"
@@ -167,7 +168,7 @@ std::string desktopEntry(const std::string& exe) {
            "Terminal=false\n"
            "Categories=Development;Game;\n"
            "MimeType=" + kProjectMimeType + ";\n"
-           "StartupWMClass=aiverse_editor\n"
+           + (studio ? "" : "StartupWMClass=aiverse_editor\n") +
            "X-AIVERSE-Exe=" + exe + "\n";
 }
 
@@ -181,7 +182,9 @@ AssocStatus statusLinux(const std::string& exe) {
     s.supported = !home().empty() && !exe.empty();
     if (!s.supported) { s.detail = "нет домашней папки (HOME)"; return s; }
     std::error_code ec;
-    const bool desk = readText(desktopFile()).find("X-AIVERSE-Exe=" + exe + "\n") != std::string::npos;
+    const std::string entry = readText(desktopFile());
+    const bool desk = entry.find("X-AIVERSE-Exe=" + exe + "\n") != std::string::npos &&
+                      (fs::path(exe).filename() != "AiverseStudio" || entry.find("\nName=AIVERSE Studio\n") != std::string::npos);
     const bool mime = readText(mimeXmlFile()).find("*.aiverse") != std::string::npos;   // installs before .aiverse re-register
     const std::string def = defaultHandler();
     s.otherDefault = !def.empty() && def != kEditorDesktopId;
