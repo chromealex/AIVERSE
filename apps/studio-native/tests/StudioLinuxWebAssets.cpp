@@ -1,20 +1,31 @@
 #include "../linux/StudioWebAssets.h"
 #include "../linux/StudioWebBridge.h"
 #include <iostream>
+#include "../linux/StudioViewportOverlay.h"
 #include "../linux/StudioVulkanWindow.h"
 
 int main(int argc, char** argv) {
     if (argc != 2) return 2;
     if (!gtk_init_check(&argc, &argv)) return 77;
     auto* surfaceWindow = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_default_size(GTK_WINDOW(surfaceWindow), 400, 300);
+    auto* overlay = GTK_OVERLAY(gtk_overlay_new());
     auto* box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-    auto* scene = gtk_drawing_area_new();
-    auto* preview = gtk_drawing_area_new();
-    gtk_container_add(GTK_CONTAINER(surfaceWindow), box);
-    gtk_container_add(GTK_CONTAINER(box), scene);
-    gtk_container_add(GTK_CONTAINER(box), preview);
+    gtk_container_add(GTK_CONTAINER(surfaceWindow), GTK_WIDGET(overlay));
+    gtk_container_add(GTK_CONTAINER(overlay), box);
+    auto* scene = aiverse::studio::addStudioViewport(overlay);
+    auto* preview = aiverse::studio::addStudioViewport(overlay);
     if (aiverse::studio::studioVulkanWindow(preview)) return 1;
     gtk_widget_show_all(surfaceWindow);
+    aiverse::studio::placeStudioViewport(scene,{0,0,150,200,1,true});
+    const auto placed = aiverse::studio::placeStudioViewport(preview,{240.25,30.5,200,90,1,true});
+    if (!placed.visible || placed.width != 160 || placed.height != 91) return 1;
+    gtk_container_check_resize(GTK_CONTAINER(surfaceWindow));
+    GtkAllocation allocation;
+    gtk_widget_get_allocation(preview,&allocation);
+    if (allocation.width != 160 || allocation.height != 91) return 1;
+    int x = 0, y = 0;
+    if (!gtk_widget_translate_coordinates(preview,GTK_WIDGET(overlay),0,0,&x,&y) || x != 240 || y != 30) return 1;
     const auto sceneTarget = aiverse::studio::studioVulkanWindow(scene);
     const auto previewTarget = aiverse::studio::studioVulkanWindow(preview);
     if (!sceneTarget || !previewTarget || !sceneTarget->display ||
@@ -24,6 +35,8 @@ int main(int argc, char** argv) {
         std::cerr << "Expected independent X11 drawables for Scene and preview\n";
         return 1;
     }
+    aiverse::studio::placeStudioViewport(preview,{});
+    if (gtk_widget_get_visible(preview) || !gtk_widget_get_visible(scene)) return 1;
     gtk_widget_destroy(surfaceWindow);
     auto* window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_default_size(GTK_WINDOW(window),1280,800);
