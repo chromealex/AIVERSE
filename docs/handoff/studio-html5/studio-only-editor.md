@@ -1672,3 +1672,7 @@ f36c755b97cb50f9b9b6a14420e21ae40ee63ba4 updates InsightPanels.tsx. Packaged mac
 ### Texture Resources inventory
 
 bb3166cea3761275282b6fee5a6b9850b6ad49b5 exposes native dimension in StudioScene.cpp and types.ts, updates InsightPanels.tsx and scopes TextureResourcesPanel in StudioPanelRenderer.tsx. Full inventory supports ID, dimension, format, pixel size, targets-only, byte-descending and handle-ascending order. Web and Mac builds passed. Initial fixture collided with a restored Frame Capture window ID. Using a distinct window, verified 16 native textures, 9 filtered targets, ascending handles, empty search and recovery. Screenshot docs/handoff/studio-html5/captures/mac-texture-resources-filters.png. Next migrate the selected-texture mip/layer and GPU readback workflow.
+
+### Texture subresource selection
+
+b8db645e64ac85f08d6d1aa39e9bc27363696456 updates InsightPanels.tsx and ProjectToolPanels.css. The detached panel selects a resource by handle, shows mip extents, sampling and layer/depth-slice/cube-face controls when applicable. Built web and Mac Studio. Verified on a real 1x1 2D texture with one mip and layer (stats-mac-1c3pkqqe/live.log). This fixture did not contain a mip chain. Capture docs/handoff/studio-html5/captures/mac-texture-subresource.png. Next exercise multi-level arrays/cubes and add GPU readback for the selected subresource.
