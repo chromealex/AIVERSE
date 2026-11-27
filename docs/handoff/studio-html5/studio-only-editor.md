@@ -1808,3 +1808,7 @@ ba54858b8ae8fce4297bea809535f4a06d4c5c33 updates SpectraNativePreview.tsx and ad
 ### Detached Input action and context persistence
 
 7b9b9e095d8bd8bfe4cf15d80ebcd4fe7e90c85b updates the parity matrix and captures/mac-input-action-binding.png. A native detached Input panel created Action, Gameplay and a keyboard binding. Renaming Action to Interact updated the binding; Save wrote both names to input/actions.json. Revert restored both after another rename. Independently parsed the disk JSON. Evidence in stats-mac-uswrttnc/live.log on KINGSTON. The integrated studio_session CTest also passed in 21.90 seconds. Continue remaining legacy workflows before retirement.
+
+### Input binding device index
+
+d59d11903045978e8e031f4847331ba265e7cd65 updates apps/studio-web/src/panels/ProjectToolPanels.tsx and captures/mac-input-device-index.png. Production web build passed. Detached native Mac panel selected touch index 31, changed to gamepadButton, verified the reset to 0 and saved index 3. Revert reloaded 3 and the disk JSON contained deviceIndex 3. Evidence in stats-mac-k5koxatf/live.log. Remaining Input parity includes modifier and trigger authoring.
