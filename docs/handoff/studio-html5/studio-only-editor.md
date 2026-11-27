@@ -1628,3 +1628,7 @@ fb82c4ef210e807585506cd802a6e6b7dea2f094 forwards the GameView residency snapsho
 ### Snapshot Diff report and scope
 
 f99fb848e154c661f4ecd2ce36254ef4c1fb60e1 updates InsightPanels.tsx, StudioPanelRenderer.tsx and jsonDiff.ts. Packaged Mac Studio compared two map files, exported the added row via the copy handler, swapped files, cleared its previous result and exported the removed row. The QA clipboard sink retained both TSV payloads without changing the system pasteboard. Web build and test:web passed. Capture: docs/handoff/studio-html5/captures/mac-snapshot-diff.png. Next exercise an actual project switch with the panel open and restore native external snapshot file selection.
+
+### External JSON and project switching in Snapshot Diff
+
+f71ec09d2f7d4c40a70e8066452b44d838034b6c updates InsightPanels.tsx, ProjectToolPanels.css and mac/Main.mm. The separate HTML5 window accepts a File for either snapshot, bounded to the legacy 16 MiB limit, or a project-relative path. The Mac host handles trusted file inputs with a sheet on the requesting window. Built web and native targets. In the packaged WKWebView, the fixture supplied two File objects via the real input change handlers, compared score 12 to 14, checked the TSV, then switched to a second registered project and confirmed both map defaults and the cleared result. The fixture did not operate Finder. Capture docs/handoff/studio-html5/captures/mac-snapshot-diff-files.png. Next test OS picker selection and cancellation.
