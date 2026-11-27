@@ -377,7 +377,7 @@ function TextureSubresource({ texture, project }: { texture: StudioGpuTexture; p
   const cube = texture.dimension?.startsWith('Cube');
   const slices = volume ? extent(texture.depth) : Math.max(1, texture.layers);
   const sliceLabel = volume ? 'Depth slice' : cube ? 'Cube face' : 'Array layer';
-  const pixelBytes: Record<string, number> = { RGBA8: 4, RGBA8_sRGB: 4, RGBA16F: 8, RGBA32F: 16 };
+  const pixelBytes: Record<string, number> = { R8: 1, RGBA8: 4, RGBA8_sRGB: 4, RGBA16F: 8, RGBA32F: 16 };
   const stride = pixelBytes[texture.format];
   const canRead = texture.samples === 1 && texture.dimension !== '1D' && stride > 0 &&
     extent(texture.width) * extent(texture.height) * stride <= 16 * 1024 * 1024;
@@ -399,7 +399,7 @@ function TextureSubresource({ texture, project }: { texture: StudioGpuTexture; p
     </div>
     <p className="ptp__meta">{extent(texture.width)} × {extent(texture.height)} pixels · {texture.samples}× sampling</p>
     {canRead ? <TexturePixels key={mip + '/' + layer} project={project} texture={texture} mip={mip} layer={layer}/> :
-      <p className="ptp__hint">Readback requires a single-sample RGBA8, RGBA16F or RGBA32F subresource up to 16 MiB.</p>}
+      <p className="ptp__hint">Readback requires a single-sample R8, RGBA8, RGBA16F or RGBA32F subresource up to 16 MiB.</p>}
   </section>;
 }
 

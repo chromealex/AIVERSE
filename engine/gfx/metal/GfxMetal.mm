@@ -750,15 +750,16 @@ public:
                             pixelFormat == MTLPixelFormatRGBA8Unorm_sRGB;
         const bool isHalf = pixelFormat == MTLPixelFormatRGBA16Float;
         const bool isFloat = pixelFormat == MTLPixelFormatRGBA32Float;
-        if ((!isBGRA && !isRGBA && !isHalf && !isFloat) ||
-            (isFloat ? t->fmt != PixelFormat::RGBA32F : isHalf ? t->fmt != PixelFormat::RGBA16F :
+        const bool isRed = pixelFormat == MTLPixelFormatR8Unorm;
+        if ((!isBGRA && !isRGBA && !isHalf && !isFloat && !isRed) ||
+            (isRed ? t->fmt != PixelFormat::R8 : isFloat ? t->fmt != PixelFormat::RGBA32F : isHalf ? t->fmt != PixelFormat::RGBA16F :
              t->fmt != PixelFormat::RGBA8 && t->fmt != PixelFormat::RGBA8_sRGB))
             return false;
         const size_t width = size_t(std::max<NSUInteger>(1,
                               t->tex.width >> request.mipLevel));
         const size_t height = size_t(std::max<NSUInteger>(1,
                                t->tex.height >> request.mipLevel));
-        const size_t bpp = isFloat ? 16u : isHalf ? 8u : 4u;
+        const size_t bpp = uncompressedTexturePixelBytes(t->fmt);
         // Align bytesPerRow for the Metal texture-to-buffer blit.
         if (width > SIZE_MAX / bpp) return false;
         const size_t packedRow = width*bpp;

@@ -306,6 +306,26 @@ void volume(Device& dev) {
         return r.handle==h;
     }),"Metal resource inventory removes destroyed 3D texture");
 }
+void redTexturePreview(Device& dev) {
+    const std::vector<uint8_t> pixels{0, 127, 255, 9, 33, 180};
+    TextureDesc desc;
+    desc.width = 3;
+    desc.height = 2;
+    desc.format = PixelFormat::R8;
+    desc.data = pixels.data();
+    const auto texture = dev.createTexture(desc);
+    check(texture.valid(), "allocate R8 preview texture");
+    if (!texture.valid()) return;
+    auto read = probe(texture, 0, 0, 3, 2, pixels, "R8 packed rows");
+    read->expectedFormat = desc.format;
+    verifyReads(dev, {read}, "Studio R8 preview");
+    const auto grid = aiverse::render::texturePreviewGrid(read->output, true);
+    std::vector<std::array<uint8_t, 3>> expected;
+    for (auto value : pixels) expected.push_back({value, value, value});
+    check(grid.colors == expected, "R8 Metal preview displays grayscale");
+    dev.destroyTexture(texture);
+}
+
 void floatTexturePreview(Device& dev) {
     const std::array<float, 8> pixels{0.f, 1.f, 3.f, 1.f, -1.f, 0.25f, 0.f, 1.f};
     TextureDesc desc;
@@ -1339,6 +1359,7 @@ int main() {
                     elapsedMs(testStart,deviceReady));
         orderedArrayReuse(*device);
         volume(*device);
+        redTexturePreview(*device);
         floatTexturePreview(*device);
         layered(*device,TextureDimension::Texture2DArray,2,"Texture2DArray");
         layered(*device,TextureDimension::Cube,6,"Cube");

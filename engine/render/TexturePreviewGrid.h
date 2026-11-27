@@ -18,6 +18,7 @@ struct TexturePreviewGrid {
 
 constexpr size_t texturePreviewPixelBytes(gfx::PixelFormat format) {
     switch (format) {
+        case gfx::PixelFormat::R8: return 1;
         case gfx::PixelFormat::RGBA8:
         case gfx::PixelFormat::RGBA8_sRGB: return 4;
         case gfx::PixelFormat::RGBA16F: return 8;
@@ -59,6 +60,7 @@ inline TexturePreviewGrid texturePreviewGrid(const gfx::TextureReadbackResult& i
             const auto* sample = image.pixels.data() + (sy * grid.width + sx) * stride;
             std::array<uint8_t, 3> rgb{};
             for (int c = 0; c < 3; ++c) {
+                if (stride == 1) { rgb.fill(sample[0]); break; }
                 if (stride == 4) { rgb[c] = sample[c]; continue; }
                 float linear;
                 if (stride == 16) {
