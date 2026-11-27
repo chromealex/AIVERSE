@@ -32,6 +32,7 @@ export function StatsPanel({ snapshot }: Ctx) {
         <div><b>{stats.ruleTypes}</b><span>rule types</span></div>
         <div><b>{fps ? fps.toFixed(0) : '—'}</b><span>Scene fps{stats.sceneFrameMs ? ` · ${stats.sceneFrameMs.toFixed(1)} ms` : ''}</span></div>
       </div>
+      <StatsFrameHistory key={path} project={path}/>
       <h4>By owner</h4>
       <table className="ptp__table"><tbody>{stats.owners.map(o =>
         <tr key={o.owner}><td>{o.name}</td><td className="ptp__meta">{o.owner}</td><td className="stats__num">{o.count}</td></tr>)}</tbody></table>
@@ -98,6 +99,51 @@ export function SnapshotDiffPanel({ snapshot }: Ctx) {
   </div>;
 }
 
+function FrameTimeChart({ ms, peak }: { ms: number[]; peak: number }) {
+  const W = 480, H = 90, top = Math.max(33.4, peak * 1.1);
+  const line = ms.map((v, i) => `${(i / Math.max(1, ms.length - 1)) * W},${H - (v / top) * H}`).join(' ');
+  const y16 = H - (16.7 / top) * H, y33 = H - (33.3 / top) * H;
+  return <svg className="frames__chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Frame times">
+        <line x1={0} x2={W} y1={y16} y2={y16} className="frames__budget"/><line x1={0} x2={W} y1={y33} y2={y33} className="frames__budget"/>
+        <polyline points={line} className="frames__line"/>
+      </svg>;
+}
+
+function StatsFrameHistory({ project }: { project: string }) {
+  const [frames, setFrames] = useState<StudioGpuStats | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let active = true;
+    let timer = 0;
+    async function refresh() {
+      try {
+        const next = await invoke('studio.gpuStats', {});
+        if (active) { setFrames(next); setError(next.error ?? ''); }
+      } catch (e) {
+        if (active) { setFrames(null); setError(message(e)); }
+      }
+      if (active) timer = window.setTimeout(refresh, 2000);
+    }
+    void refresh();
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [project]);
+  const ms = (frames?.history ?? []).map(sample => sample[0]);
+  const sum = frameSummary(ms);
+  return <section aria-label="Scene frame history">
+    <h4>Scene frame time</h4>
+    {sum.count > 0 && <>
+      <div className="stats__cards">
+        <div><b>{sum.avg.toFixed(1)} ms</b><span>average</span></div>
+        <div><b>{sum.p95.toFixed(1)} ms</b><span>95th percentile</span></div>
+        <div><b>{sum.max.toFixed(1)} ms</b><span>peak</span></div>
+        <div><b>{frames?.history[ms.length - 1]?.[1]}</b><span>latest draw calls</span></div>
+      </div>
+      <FrameTimeChart ms={ms} peak={sum.max}/>
+    </>}
+    <p className="ptp__hint">{error || (sum.count ? sum.count + ' Scene frames · reference lines at 60 and 30 fps' : 'Waiting for Scene frames')}</p>
+  </section>;
+}
+
 /** Frame Capture: the Scene's last 240 frames (time between frames, draw calls), live or frozen with Capture. */
 export function FrameCapturePanel({ snapshot }: Ctx) {
   const path = snapshot?.project.path ?? '';
@@ -113,9 +159,6 @@ export function FrameCapturePanel({ snapshot }: Ctx) {
   const data = frozen ?? live;
   const ms = (data?.history ?? []).map(h => h[0]), draws = (data?.history ?? []).map(h => h[1]);
   const sum = frameSummary(ms);
-  const W = 480, H = 90, top = Math.max(33.4, sum.max * 1.1);
-  const line = ms.map((v, i) => `${(i / Math.max(1, ms.length - 1)) * W},${H - (v / top) * H}`).join(' ');
-  const y16 = H - (16.7 / top) * H, y33 = H - (33.3 / top) * H;
   return <div className="ptp">
     <div className="ptp__edhead">
       <button type="button" className={'au-button au-button--sm' + (frozen ? '' : ' au-button--primary')} onClick={() => setFrozen(frozen ? null : live)}>
@@ -131,10 +174,7 @@ export function FrameCapturePanel({ snapshot }: Ctx) {
         <div><b>{sum.max.toFixed(1)}</b><span>ms worst</span></div>
         <div><b>{draws.length ? Math.max(...draws) : '—'}</b><span>draw calls (max)</span></div>
       </div>
-      <svg className="frames__chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Frame times">
-        <line x1={0} x2={W} y1={y16} y2={y16} className="frames__budget"/><line x1={0} x2={W} y1={y33} y2={y33} className="frames__budget"/>
-        <polyline points={line} className="frames__line"/>
-      </svg>
+      <FrameTimeChart ms={ms} peak={sum.max}/>
       <p className="ptp__hint">Time between Scene frames (CPU side, includes waiting for the display); lines at 60 and 30 fps. Draw calls of the Scene renderer. Not a GPU command capture.</p>
     </div>
   </div>;
