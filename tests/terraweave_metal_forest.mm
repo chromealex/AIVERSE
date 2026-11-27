@@ -98,6 +98,131 @@ Difference diff(const std::vector<uint8_t>& empty,
     }
     return d;
 }
+// Count fragments reaching a diagnostic shader before alpha/depth rejection.
+// The production render below is timed separately with its normal shaders.
+uint32_t countCoverage(id<MTLDevice> metal, terra::ArborForestAdapter& forest,
+                       const std::vector<terra::FloraBatch>& grove,
+                       render::Renderer3D& renderer, Target target) {
+    std::vector<render::float4> clips;
+    const auto camera = renderer.cameraPos();
+    forest.forEachDraw(grove, {}, [&](const render::ModelDraw& draw) {
+        const auto transform = renderer.viewProj() * draw.world;
+        for (auto i : draw.model->indices) {
+            const auto p = draw.model->vertices[i].pos;
+            clips.push_back(transform * render::float4{p.x,p.y,p.z,1});
+        }
+    }, terra::ForestCameraCm{int64_t(std::llround(camera.x*100)),int64_t(std::llround(camera.z*100))});
+    if (clips.empty()) return 0;
+    NSString* source = @"#include <metal_stdlib>\nusing namespace metal;\n"
+        @"vertex float4 vs(uint i [[vertex_id]], device const float4* p [[buffer(0)]]) { return p[i]; }\n"
+        @"fragment half4 fs(device atomic_uint* n [[buffer(0)]]) { atomic_fetch_add_explicit(n,1u,memory_order_relaxed); return half4(0); }";
+    NSError* error = nil;
+    auto library = [metal newLibraryWithSource:source options:nil error:&error];
+    auto descriptor = [MTLRenderPipelineDescriptor new];
+    descriptor.vertexFunction = [library newFunctionWithName:@"vs"];
+    descriptor.fragmentFunction = [library newFunctionWithName:@"fs"];
+    descriptor.colorAttachments[0].pixelFormat = MTLPixelFormatRGBA8Unorm;
+    auto pipeline = [metal newRenderPipelineStateWithDescriptor:descriptor error:&error];
+    if (!pipeline) return 0;
+    auto vertices = [metal newBufferWithBytes:clips.data() length:clips.size()*sizeof(clips[0])
+                                       options:MTLResourceStorageModeShared];
+    uint32_t zero = 0;
+    auto count = [metal newBufferWithBytes:&zero length:sizeof(zero) options:MTLResourceStorageModeShared];
+    auto tex = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
+        width:target.width height:target.height mipmapped:NO];
+    tex.usage = MTLTextureUsageRenderTarget;
+    auto rp = [MTLRenderPassDescriptor renderPassDescriptor];
+    rp.colorAttachments[0].texture = [metal newTextureWithDescriptor:tex];
+    auto queue = [metal newCommandQueue];
+    auto cmd = [queue commandBuffer];
+    auto enc = [cmd renderCommandEncoderWithDescriptor:rp];
+    [enc setRenderPipelineState:pipeline];
+    [enc setVertexBuffer:vertices offset:0 atIndex:0];
+    [enc setFragmentBuffer:count offset:0 atIndex:0];
+    [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:clips.size()];
+    [enc endEncoding];
+    [cmd commit];
+    [cmd waitUntilCompleted];
+    return cmd.status == MTLCommandBufferStatusCompleted ? *static_cast<uint32_t*>(count.contents) : 0;
+}
+
+std::vector<terra::FloraBatch> comparisonGrove(const terra::TreeProfile& profile) {
+    std::vector<terra::FloraBatch> grove{{profile.speciesId,terra::TreeLOD::Impostor,{}}};
+    for (int z=0; z<12; ++z) for (int x=0; x<24; ++x) {
+        terra::FoliageInstance tree;
+        tree.speciesId = profile.speciesId;
+        tree.key = 1 + z*24 + x;
+        tree.xCm = (x-12)*450 + (z%2)*225;
+        tree.zCm = (z-6)*480;
+        tree.scalePermille = 900 + tree.key % 201;
+        grove[0].instances.push_back(tree);
+    }
+    return grove;
+}
+
+#include "terraweave_palm_comparison.inc"
+
+bool compareContours(id<MTLDevice> metal, gfx::Device& device, render::Renderer3D& renderer,
+                     const terra::TreeProfile& profile, render::Camera camera) {
+    constexpr int modes = 3;
+    const int bands[modes] = {0,3,8};
+    const char* names[modes] = {"grove-cards","grove-three","grove-eight"};
+    terra::ArborForestAdapter forests[modes];
+    auto grove = comparisonGrove(profile);
+    auto target = makeTarget(device,1024,640);
+    camera.distance = 110;
+    camera.pitch = 0.3f;
+    camera.fovY = 0.78f;
+    uint32_t fragments[modes]{}, calls[modes]{};
+    std::vector<uint8_t> pixels[modes];
+    std::vector<double> samples[modes];
+    for (int i=0; i<modes; ++i) {
+        forests[i].setImpostorContourBands(bands[i]);
+        forests[i].addPrototype(profile,0x517eeda1u);
+        renderer.beginScene(camera,target.width,target.height);
+        fragments[i] = countCoverage(metal,forests[i],grove,renderer,target);
+        if (!forests[i].uploadModels(device)) return false;
+    }
+    const auto modeForFrame = [](int frame) {
+        // Rotate which geometry goes first in each triplet.
+        return (frame/3 + frame%3)%3;
+    };
+    for (int frame=0; frame<108; ++frame) {
+        const int mode = modeForFrame(frame);
+        if (!device.beginOffscreenFrame()) return false;
+        renderer.beginScene(camera,target.width,target.height);
+        forests[mode].submit(renderer,grove);
+        if (!device.timeGpuFrame(frame+1)) return false;
+        renderer.render(pass(target));
+        device.endPass();
+        calls[mode] = renderer.drawCalls();
+        device.endFrame();
+        if (!device.waitForResourceIdle()) return false;
+        for (const auto& sample : device.takeGpuTimings())
+            if (sample.valid && sample.tag > 12) {
+                const int f = int(sample.tag)-1;
+                samples[modeForFrame(f)].push_back(sample.milliseconds);
+            }
+        if (frame < modes && !device.readColorRGBA8(target.color,pixels[mode])) return false;
+    }
+    for (int i=0; i<modes; ++i) {
+        if (samples[i].size()!=32) return false;
+        std::sort(samples[i].begin(),samples[i].end());
+        std::printf("forest mode=%s trees=288 draws=%u coverageFragments=%u gpuMedianMs=%.6f samples=%zu\n",
+            names[i],calls[i],fragments[i],(samples[i][15]+samples[i][16])/2,samples[i].size());
+        if (!capture(names[i],target,pixels[i])) return false;
+        forests[i].releaseModels(device);
+    }
+    bool ok = calls[0] > 0;
+    for (int i=1; i<modes; ++i) {
+        const auto delta = diff(pixels[0],pixels[i],target);
+        std::printf("%s pixels with RGB difference >16: %d\n",names[i],delta.changed);
+        ok &= calls[i]==calls[0] && fragments[i]>0 && fragments[i]<fragments[0]
+            && delta.changed <= target.width * target.height / 1000;
+    }
+    destroyTarget(device,target);
+    return ok;
+}
 }
 
 int aiverseMain(int,char**) {
@@ -286,6 +411,10 @@ int aiverseMain(int,char**) {
             std::fputs("FAIL [terraweave-metal-forest] GPU idle barrier failed\n",stderr);
             return 1;
         }
+        if (std::getenv("AIVERSE_COMPARE_PALM_BOUNDS"))
+            check(comparePalmBounds(metal,*device,renderer,profile,cameraA),"Metal palm orbit comparison");
+        if (std::getenv("AIVERSE_COMPARE_FOREST_CONTOURS"))
+            check(compareContours(metal,*device,renderer,profile,cameraA),"Metal grove contour comparison");
         forest.releaseModels(*device);
         renderer.shutdown();
         for(Target* t:{&emptyA,&nearA,&farA,&farB,&emptyResized,&nearResized})

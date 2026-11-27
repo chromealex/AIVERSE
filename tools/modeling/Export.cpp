@@ -66,7 +66,9 @@ struct Writer {
     }
 };
 } // namespace
-std::string exportGlb(const Model &m) {
+std::string exportGlb(const Model &m) { return exportGlb(m,Json{}); }
+
+std::string exportGlb(const Model &m, const Json& assetExtras) {
     // Export serializes CPU assets, not live graph slots or tombstones.
     // Require an explicit authored bake instead of exporting a session
     // generation by its recycled numerical index.
@@ -75,6 +77,7 @@ std::string exportGlb(const Model &m) {
     for(const auto& material:m.materials)
         require(!material.proceduralGraphPins,"GLB export: runtime material binding requires offline bake");
     Writer w;
+    if (!assetExtras.isNull()) w.root.member("asset").set("extras",assetExtras);
     auto scene = Json::object(), roots = Json::array();
     for (size_t i = 0; i < m.nodes.size(); ++i) {
         auto &n = m.nodes[i];

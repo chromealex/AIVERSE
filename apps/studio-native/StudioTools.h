@@ -36,7 +36,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
                     "postfx_preset", "postfx_estimate", "postfx_lut_neutral"}},
         {"effects", {"fx_list", "fx_templates", "fx_get", "fx_set", "fx_bind", "fx_delete"}},
         {"lightbake", {"lightbake_get", "lightbake_set", "lightbake_clear"}},
-        {"models", {"asset_list", "model_info", "material_techniques_get", "material_techniques_set", "geometry_catalog", "geometry_analyze", "strata_capabilities", "strata_model_analyze", "geometry_proxy_bake", "geometry_proxy_lod"}},
+        {"models", {"asset_list", "model_info", "material_techniques_get", "material_techniques_set", "geometry_catalog", "geometry_analyze", "strata_capabilities", "strata_model_analyze", "geometry_proxy_analyze", "geometry_proxy_bake", "geometry_proxy_lod"}},
         {"scripts", {"script_api", "script_list", "script_read", "script_write", "script_check"}},
         {"overlays", {"overlay_templates", "overlay_list", "overlay_get", "overlay_set", "overlay_delete", "overlay_preview"}},
         {"branding", {"branding_get", "branding_set", "splash_preview", "icons_preview"}},

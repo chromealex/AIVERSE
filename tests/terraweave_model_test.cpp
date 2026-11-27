@@ -415,12 +415,12 @@ int main() {
     bakeArborImpostorFromModel(billboardRepeat, *shared, hiRes);
     assert(billboardRepeat.model->images[0].rgba == billboard->images[0].rgba);
     assert(legacyPixels.size() != billboard->images[0].rgba.size());
-    {   // Quad matches the near tree's real height.
+    {   // Full card matches near height before fitting the baked mask.
         float top = 0;
         for (const auto& v : shared->vertices) top = std::max(top, v.pos.y);
         float quadTop = 0;
-        for (const auto& v : billboard->vertices) quadTop = std::max(quadTop, v.pos.y);
-        assert(std::fabs(quadTop - top) < 1e-4f);
+        for (const auto& v : billboardRepeat.model->vertices) quadTop = std::max(quadTop, v.pos.y);
+        assert(std::fabs(quadTop-top)<1e-4f);
     }
     {   // Legacy silhouette stays available.
         ArborForestAdapter legacyForest;
@@ -428,7 +428,12 @@ int main() {
         legacyForest.addPrototype(oak, 17);
         assert(legacyForest.billboardPrototype(oak.speciesId)->images[0].rgba == legacyPixels);
     }
+    if (billboardRepeat.trimBakedLayers) trimArborImpostorCards(billboardRepeat,1);
     assert(billboardRepeat.model->indices == billboard->indices);
+    for (size_t i=0; i<billboard->vertices.size(); ++i) {
+        assert(billboard->vertices[i].uv.x == billboardRepeat.model->vertices[i].uv.x);
+        assert(billboard->vertices[i].uv.y == billboardRepeat.model->vertices[i].uv.y);
+    }
     assert(billboardRepeat.viewMaterials.size() == 8);
     for (size_t i = 0; i < billboardRepeat.viewMaterials.size(); ++i) {
         const auto& layers = billboardRepeat.viewMaterials[i];
@@ -445,6 +450,40 @@ int main() {
             for (size_t layer = 0; layer < 2; ++layer)
                 assert(layers[layer].uvOffset.x >
                        billboardRepeat.viewMaterials[i - 1][layer].uvOffset.x);
+    }
+    for (int bands : {1, 3, 8}) {
+        ArborForestAdapter contours;
+        contours.setImpostorContourBands(bands);
+        contours.addPrototype(oak,17);
+        const auto* trimmed = contours.billboardPrototype(oak.speciesId);
+        assert(trimmed && trimmed->images[0].rgba == image);
+        if (bands == 1) assert(trimmed->indices.size() == 12 && trimmed->vertices.size() == 8);
+        else assert(trimmed->indices.size() > 12 && trimmed->indices.size() <= size_t(12 * bands));
+        assert(trimmed->meshes[0].primitives.size() == 2);
+        // Every nontransparent texel of every view must fall inside its
+        // layer envelope, including the texels on either side of a band seam.
+        const int width = hiRes.tile.width, height = hiRes.tile.height;
+        const int stride = trimmed->images[0].width;
+        for (const auto& prim : trimmed->meshes[0].primitives) {
+            for (int y = 0; y < height; ++y) {
+                const float v = float(y) / (height-1);
+                for (int x = 0; x < width; ++x) {
+                    bool opaque = false;
+                    for (int frame = 0; frame < 8; ++frame) {
+                        const int page = prim.material*8 + frame;
+                        opaque |= image[4*(y*stride + page*width + x)+3] != 0;
+                    }
+                    if (!opaque) continue;
+                    const float u = float(x)/(width-1);
+                    bool inside = false;
+                    for (uint32_t i=prim.firstVertex; i<prim.firstVertex+prim.vertexCount; i+=4) {
+                        const auto a = trimmed->vertices[i].uv, c = trimmed->vertices[i+2].uv;
+                        inside |= u>=a.x && u<=c.x && v>=c.y && v<=a.y;
+                    }
+                    assert(inside);
+                }
+            }
+        }
     }
     assert(selectArborImpostorAzimuth(0, 0, 0, 0, 1000, 8) == 0);
     assert(selectArborImpostorAzimuth(0, 0, 0, 1000, 0, 8) == 2);

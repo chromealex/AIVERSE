@@ -1,0 +1,116 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/DartConfiguration.tcl
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/DartConfiguration.tcl
+Test project /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 340
+    Start 340: terraweave_metal_forest
+
+340: Test command: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/aiverse_terraweave_metal_forest_test
+340: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+340: Test timeout computed to be: 10000000
+340: [metal-assets] libraries=0 sourceMisses=13 pipelines=19 pipelineFailures=0 archive=0 strict=0
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-baseline.ppm
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-branch-lod.ppm
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-impostor-a.ppm
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-impostor-b.ppm
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-baseline-resized.ppm
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-branch-resized.ppm
+340: [terraweave-metal-forest] near=6490 far=5831 holes=6433 resized=1504 azimuthA=0.00012 azimuthB=0.12512
+340: forest mode=grove-cards trees=288 draws=6 coverageFragments=2374772 gpuMedianMs=0.124604 samples=32
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-grove-cards.ppm
+340: forest mode=grove-three trees=288 draws=6 coverageFragments=1839665 gpuMedianMs=0.126501 samples=32
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-grove-three.ppm
+340: forest mode=grove-eight trees=288 draws=6 coverageFragments=1097941 gpuMedianMs=0.163104 samples=32
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-grove-eight.ppm
+340: grove-three pixels with RGB difference >16: 5
+340: grove-eight pixels with RGB difference >16: 10
+340: [terraweave-metal-forest] failures=0
+340: PASS [terraweave-metal-forest] real Metal BranchLOD, masked 8-view impostor, RT resize and GPU-idle retirement
+    Test #340: terraweave_metal_forest ..........   Passed    4.09 sec
+    Start 340: terraweave_metal_forest
+
+340: Test command: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/aiverse_terraweave_metal_forest_test
+340: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+340: Test timeout computed to be: 10000000
+340: [metal-assets] libraries=0 sourceMisses=13 pipelines=19 pipelineFailures=0 archive=0 strict=0
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-baseline.ppm
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-branch-lod.ppm
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-impostor-a.ppm
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-impostor-b.ppm
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-baseline-resized.ppm
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-branch-resized.ppm
+340: [terraweave-metal-forest] near=6490 far=5831 holes=6433 resized=1504 azimuthA=0.00012 azimuthB=0.12512
+340: forest mode=grove-cards trees=288 draws=6 coverageFragments=2374772 gpuMedianMs=0.122958 samples=32
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-grove-cards.ppm
+340: forest mode=grove-three trees=288 draws=6 coverageFragments=1839665 gpuMedianMs=0.128000 samples=32
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-grove-three.ppm
+340: forest mode=grove-eight trees=288 draws=6 coverageFragments=1097941 gpuMedianMs=0.165271 samples=32
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-grove-eight.ppm
+340: grove-three pixels with RGB difference >16: 5
+340: grove-eight pixels with RGB difference >16: 10
+340: [terraweave-metal-forest] failures=0
+340: PASS [terraweave-metal-forest] real Metal BranchLOD, masked 8-view impostor, RT resize and GPU-idle retirement
+    Test #340: terraweave_metal_forest ..........   Passed    1.16 sec
+    Start 340: terraweave_metal_forest
+
+340: Test command: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/aiverse_terraweave_metal_forest_test
+340: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+340: Test timeout computed to be: 10000000
+340: [metal-assets] libraries=0 sourceMisses=13 pipelines=19 pipelineFailures=0 archive=0 strict=0
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-baseline.ppm
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-branch-lod.ppm
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-impostor-a.ppm
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-impostor-b.ppm
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-baseline-resized.ppm
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-branch-resized.ppm
+340: [terraweave-metal-forest] near=6490 far=5831 holes=6433 resized=1504 azimuthA=0.00012 azimuthB=0.12512
+340: forest mode=grove-cards trees=288 draws=6 coverageFragments=2374772 gpuMedianMs=0.126146 samples=32
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-grove-cards.ppm
+340: forest mode=grove-three trees=288 draws=6 coverageFragments=1839665 gpuMedianMs=0.130083 samples=32
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-grove-three.ppm
+340: forest mode=grove-eight trees=288 draws=6 coverageFragments=1097941 gpuMedianMs=0.167229 samples=32
+340: [terraweave-metal-forest] capture=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/final-grove-eight.ppm
+340: grove-three pixels with RGB difference >16: 5
+340: grove-eight pixels with RGB difference >16: 10
+340: [terraweave-metal-forest] failures=0
+340: PASS [terraweave-metal-forest] real Metal BranchLOD, masked 8-view impostor, RT resize and GPU-idle retirement
+1/2 Test #340: terraweave_metal_forest ..........   Passed    1.17 sec
+test 400
+    Start 400: terraweave_model
+
+400: Test command: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/aiverse_terraweave_model_test
+400: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+400: Test timeout computed to be: 10000000
+    Test #400: terraweave_model .................   Passed    3.18 sec
+    Start 400: terraweave_model
+
+400: Test command: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/aiverse_terraweave_model_test
+400: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+400: Test timeout computed to be: 10000000
+    Test #400: terraweave_model .................   Passed    2.30 sec
+    Start 400: terraweave_model
+
+400: Test command: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/aiverse_terraweave_model_test
+400: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+400: Test timeout computed to be: 10000000
+2/2 Test #400: terraweave_model .................   Passed    2.35 sec
+
+The following tests passed:
+	terraweave_metal_forest
+	terraweave_model
+
+100% tests passed, 0 tests failed out of 2
+
+Label Time Summary:
+MetalGPU      =   1.17 sec*proc (1 test)
+RHI           =   1.17 sec*proc (1 test)
+Renderer3D    =   1.17 sec*proc (1 test)
+TERRAWEAVE    =   1.17 sec*proc (1 test)
+
+Total Test time (real) =  14.36 sec

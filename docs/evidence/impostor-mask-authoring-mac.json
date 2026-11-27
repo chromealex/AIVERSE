@@ -1,0 +1,17 @@
+{
+  "sha": "a1765eee936fa8bf1904e46334de1049a2a24a65",
+  "argv": [
+    "env",
+    "TMPDIR=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/tmp",
+    "AIVERSE_COMPARE_PALM_BOUNDS=1",
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac",
+    "-R",
+    "^(surface_proxy|static_impostor_lod|terraweave_metal_forest|terraweave_model)$",
+    "-V"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/impostor-mask-authoring-mac.log.txt",
+  "sha256": "20cab2d3f8e6b792cb41a91068ffe413921282efe558d0740d641a0e96e5c988"
+}

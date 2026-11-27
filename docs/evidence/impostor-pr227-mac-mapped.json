@@ -1,0 +1,18 @@
+{
+  "sha": "b9394a98c60de794303b05ac0ba3dc2d2b977759",
+  "argv": [
+    "env",
+    "TMPDIR=/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/tmp",
+    "AIVERSE_COMPARE_PALM_BOUNDS=1",
+    "ctest",
+    "--test-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac",
+    "--no-tests=error",
+    "-V",
+    "-R",
+    "^(surface_proxy|static_impostor_lod|terraweave_metal_forest|terraweave_model)$"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/impostor-pr227-mac-mapped.log.txt",
+  "sha256": "c054415d999812120b49543a83a71253d3ddfa23296d24bdb772831eccd0885d"
+}

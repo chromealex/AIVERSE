@@ -19,6 +19,16 @@ Recommendations and counters are not proof of speedup. No streamed pages or GPU 
 
 ## Offline surface replacements
 
+In Studio Models → Impostor geometry, analyze a rigid model to preview
+each directional alpha chart with its selected bounds. The same read-only operation is
+`geometry_proxy_analyze`. Set `fit` to `auto`, `full` or `trim` on analyze and bake.
+Auto trims a face when its padded rectangle saves at least 20% of the face area.
+The report gives total physical card area and triangle count. Whole-face coverage includes
+transparent holes inside the rectangle. Pass the preview digest as `expectedDigest` to
+`geometry_proxy_bake` to ensure the newly written GLB matches the preview. Reload the GLB
+as a normal asset or bind it through `geometry_proxy_lod`. This metric is geometric;
+GPU cost needs a device measurement.
+
 For a distant rigid log wall or solid decorative object, use `geometry_proxy_bake` with
 `model`, a NEW `target` GLB, `mode:plane|box`, `axis:auto|x|y|z`, `resolution:16..512`.
 The plane has two opposing faces, box up to six. Embedded base/normal/ORM textures preserve

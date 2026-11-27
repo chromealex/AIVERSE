@@ -11,6 +11,7 @@ import './ToolPanel.css';
 import { StudioLoader, StudioButton } from '../ui';
 import NativeGraphPanel from '../graphs/NativeGraphPanel';
 import ModelGraphPanel from '../graphs/ModelGraphPanel';
+import ImpostorPanel from './ImpostorPanel';
 import MaterialTechniquePanel from './MaterialTechniquePanel';
 import StrataAnalysisPanel from '../graphs/StrataAnalysisPanel';
 
@@ -142,6 +143,7 @@ export default function ToolPanel({ panel, snapshot, commitSnapshot }: {
     </div>
     {error && <div className="tool__error" role="alert">{error}</div>}
     <div className="tool__scroll">
+      {panel==='models'&&<ImpostorPanel key={'impostor-'+projectPath} projectPath={projectPath}/>}
       {panel==='models'&&<MaterialTechniquePanel key={projectPath} projectPath={projectPath}/>}
       {panel==='models'&&<StrataAnalysisPanel projectPath={projectPath}/>}
       {BRUSHES[panel] && <SceneBrushBar kinds={BRUSHES[panel]!}/>}

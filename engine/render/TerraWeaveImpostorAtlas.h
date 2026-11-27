@@ -13,6 +13,8 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include "engine/render/ImpostorMaskBounds.h"
+#include <array>
 #include <utility>
 #include <vector>
 
@@ -29,6 +31,7 @@ struct ArborImpostorAtlas {
     std::unique_ptr<render::Model> model;
     std::vector<std::vector<render::Material>> viewMaterials;
     uint32_t views = 0;
+    bool trimBakedLayers = false;
 };
 
 inline ArborImpostorAtlas makeArborImpostorAtlas(
@@ -216,6 +219,9 @@ inline void bakeArborImpostorFromModel(ArborImpostorAtlas& out,
     if (atlas.width != W * int(views) * 2 || atlas.height != H)
         throw std::invalid_argument("TerraWeave impostor atlas size");
 
+    // Union of opaque texel centres across baked views, in tile coordinates.
+    render::ImpostorMaskBounds silhouette[2];
+
     // Real extent of the near geometry (metres).
     float radius = 0.5f, top = 1.0f;
     for (const auto& node : nearModel.nodes) {
@@ -348,6 +354,7 @@ inline void bakeArborImpostorFromModel(ArborImpostorAtlas& out,
                         atlas.rgba[o + size_t(k)] = uint8_t(std::clamp(
                             std::pow(sum[k] / float(n), 1.f / 2.2f) * 255.f + 0.5f, 0.f, 255.f));
                     atlas.rgba[o + 3] = n * 2 >= SS * SS ? 255 : 0;
+                    if (atlas.rgba[o + 3]) silhouette[layer].include(x,y);
                 }
             // Bleed colour into transparent texels (alpha stays 0) so mips and
             // bilinear filtering do not pull black halos into the silhouette.
@@ -380,11 +387,103 @@ inline void bakeArborImpostorFromModel(ArborImpostorAtlas& out,
             }
         }
     }
+    out.trimBakedLayers = std::any_of(std::begin(silhouette), std::end(silhouette), [&](const auto& mask) {
+        return mask.select(W,H,render::ImpostorFit::Auto).area() < W*H;
+    });
     // Textured bake: the atlas already carries the albedo; keep the impostor
     // materials untinted, and copy the near foliage cutout threshold.
     for (auto& variant : out.viewMaterials)
         for (auto& m : variant) { m.baseColor = {1, 1, 1, 1}; m.alphaCutoff = 0.5f; }
     for (auto& m : out.model->materials) { m.baseColor = {1, 1, 1, 1}; m.alphaCutoff = 0.5f; }
+}
+
+// Build once, after the final atlas bake and before upload. A shared envelope
+// over all azimuths keeps the same model and two material slots for instancing.
+inline void trimArborImpostorCards(ArborImpostorAtlas& atlas, int bands) {
+    if (!atlas.model || !atlas.views || (bands != 1 && bands != 3 && bands != 8))
+        throw std::invalid_argument("expected one, three or eight tree atlas bands");
+    auto& model = *atlas.model;
+    const auto& image = model.images.at(0);
+    const int width = image.width / int(2 * atlas.views);
+    const int height = image.height;
+    constexpr int padding = 2;
+    if (model.vertices.size() != 8 || model.indices.size() != 12 ||
+        image.rgba.size() != size_t(image.width) * height * 4)
+        throw std::logic_error("expected baked CPU impostor cards");
+
+    const auto corners = model.vertices;
+    model.vertices.clear();
+    model.indices.clear();
+    for (int layer = 0; layer < 2; ++layer) {
+        struct Span { int left, right, top, bottom; };
+        std::array<Span, 8> spans{};
+        float covered = 0;
+        for (int band = 0; band < bands; ++band) {
+            auto& span = spans[band];
+            span = {width, -1, height, -1};
+            const int top = band * (height - 1) / bands;
+            const int bottom = (band + 1) * (height - 1) / bands;
+            for (int y = std::max(0, top - padding); y <= std::min(height-1, bottom + padding); ++y)
+                for (uint32_t view = 0; view < atlas.views; ++view) {
+                    const size_t start = size_t(y) * image.width + (layer * atlas.views + view) * width;
+                    for (int x = 0; x < width; ++x) {
+                        if (!image.rgba[4 * (start + x) + 3]) continue;
+                        span.left = std::min(span.left, x);
+                        span.right = std::max(span.right, x);
+                        span.top = std::min(span.top, y);
+                        span.bottom = std::max(span.bottom, y);
+                    }
+                }
+            if (span.right < 0) continue;
+            if (bands == 1) {
+                render::ImpostorMaskBounds bounds;
+                bounds.include(span.left,span.top);
+                bounds.include(span.right,span.bottom);
+                const auto rect=bounds.select(width,height,render::ImpostorFit::Auto);
+                span={rect.left,rect.right-1,rect.top,rect.bottom-1};
+                covered=float(rect.area());
+                continue;
+            }
+            span.left = std::max(0, span.left - padding);
+            span.right = std::min(width - 1, span.right + padding);
+            span.top = top;
+            span.bottom = bottom;
+            covered += float(span.right - span.left) * (span.bottom - span.top);
+        }
+
+        auto& prim = model.meshes[0].primitives[layer];
+        prim.firstVertex = uint32_t(model.vertices.size());
+        prim.firstIndex = uint32_t(model.indices.size());
+        const auto& base = corners[4 * layer];
+        const auto rectangle = [&](float left, float right, float top, float bottom) {
+            const uint32_t first = uint32_t(model.vertices.size());
+            for (auto uv : {render::float2{left,bottom}, {right,bottom}, {right,top}, {left,top}}) {
+                auto vertex = base;
+                vertex.uv = uv;
+                vertex.pos.x += uv.x * (corners[4 * layer + 1].pos.x - base.pos.x);
+                vertex.pos.y += (1 - uv.y) * (corners[4 * layer + 3].pos.y - base.pos.y);
+                if (layer == 1)
+                    vertex.color = 0x00ffffffu | (uint32_t(std::lround(255 * (1 - uv.y))) << 24);
+                model.vertices.push_back(vertex);
+            }
+            for (uint32_t offset : {0u,1u,2u,0u,2u,3u}) model.indices.push_back(first + offset);
+        };
+        // Dense cards have little to gain; keep empty layers valid as well.
+        if (covered == 0 || (bands > 1 && covered >= 0.8f * (width - 1) * (height - 1))) {
+            rectangle(0, 1, 0, 1);
+        } else {
+            for (int band = 0; band < bands; ++band) {
+                const auto& span = spans[band];
+                if (span.right < 0) continue;
+                rectangle(float(span.left)/(width-1), float(span.right)/(width-1),
+                          float(span.top)/(height-1),
+                          float(span.bottom)/(height-1));
+            }
+        }
+        prim.vertexCount = uint32_t(model.vertices.size()) - prim.firstVertex;
+        prim.indexCount = uint32_t(model.indices.size()) - prim.firstIndex;
+    }
+    model.finalize();
 }
 
 // Nearest captured azimuth relative to the *tree's local yaw*.

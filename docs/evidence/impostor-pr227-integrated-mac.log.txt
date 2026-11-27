@@ -1,0 +1,78 @@
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/DartConfiguration.tcl
+UpdateCTestConfiguration  from :/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/DartConfiguration.tcl
+Test project /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+Constructing a list of tests
+Done constructing a list of tests
+Updating test list for fixtures
+Added 0 tests to meet fixture requirements
+Checking test dependency graph...
+Checking test dependency graph end
+test 31
+    Start  31: static_impostor_lod
+
+31: Test command: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/aiverse_static_impostor_lod_tests
+31: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+31: Test timeout computed to be: 10000000
+31: static impostor lod: ok
+1/5 Test  #31: static_impostor_lod ..............   Passed    0.10 sec
+test 267
+    Start 267: modeling_volume_csg
+
+267: Test command: /Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12 "/Users/aleksandrfeer/Projects/AIVERSE/.worktrees/forest-impostor-contour/tests/modeling/volume_csg.py" "/Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/aiverse_modeling"
+267: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+267: Test timeout computed to be: 10000000
+267: PASS: reopened source, 7662 -> 7736 triangles after bore edit, GLB changed, rejected invalid revision/cycle, undo restored identical GLB
+2/5 Test #267: modeling_volume_csg ..............   Passed    7.94 sec
+test 268
+    Start 268: surface_proxy
+
+268: Test command: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/aiverse_surface_proxy_tests
+268: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+268: Test timeout computed to be: 10000000
+268: 1331 surface proxy checks passed
+3/5 Test #268: surface_proxy ....................   Passed    3.80 sec
+test 341
+    Start 341: terraweave_metal_forest
+
+341: Test command: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/aiverse_terraweave_metal_forest_test
+341: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+341: Test timeout computed to be: 10000000
+341: [metal-assets] libraries=0 sourceMisses=13 pipelines=19 pipelineFailures=0 archive=0 strict=0
+341: [terraweave-metal-forest] near=6490 far=5831 holes=6433 resized=1504 azimuthA=0.00012 azimuthB=0.12512
+341: palm distance=80 mode=full diagnosticFragments=62949533 medianMs=0.145375 samples=64 views=8
+341: palm distance=80 mode=trim diagnosticFragments=15992019 medianMs=0.094583 samples=64 views=8
+341: palm distance=80 maxMaskDelta=35 maxMaskFraction=0.000171 maxRgbDelta=46
+341: palm distance=140 mode=full diagnosticFragments=19732526 medianMs=0.102104 samples=64 views=8
+341: palm distance=140 mode=trim diagnosticFragments=4807426 medianMs=0.082187 samples=64 views=8
+341: palm distance=140 maxMaskDelta=14 maxMaskFraction=0.000225 maxRgbDelta=16
+341: palm distance=220 mode=full diagnosticFragments=7486521 medianMs=0.081000 samples=64 views=8
+341: palm distance=220 mode=trim diagnosticFragments=1812461 medianMs=0.070396 samples=64 views=8
+341: palm distance=220 maxMaskDelta=13 maxMaskFraction=0.000573 maxRgbDelta=15
+341: [terraweave-metal-forest] failures=0
+341: PASS [terraweave-metal-forest] real Metal BranchLOD, masked 8-view impostor, RT resize and GPU-idle retirement
+4/5 Test #341: terraweave_metal_forest ..........   Passed   10.65 sec
+test 402
+    Start 402: terraweave_model
+
+402: Test command: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac/aiverse_terraweave_model_test
+402: Working Directory: /Volumes/KINGSTON/AIVERSE-builds/forest-impostor-contour/mac
+402: Test timeout computed to be: 10000000
+5/5 Test #402: terraweave_model .................   Passed   19.46 sec
+
+The following tests passed:
+	static_impostor_lod
+	modeling_volume_csg
+	surface_proxy
+	terraweave_metal_forest
+	terraweave_model
+
+100% tests passed, 0 tests failed out of 5
+
+Label Time Summary:
+MetalGPU      =  10.65 sec*proc (1 test)
+RHI           =  10.65 sec*proc (1 test)
+Renderer3D    =  10.65 sec*proc (1 test)
+TERRAWEAVE    =  10.65 sec*proc (1 test)
+
+Total Test time (real) =  41.99 sec
