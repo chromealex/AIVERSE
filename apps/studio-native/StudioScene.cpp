@@ -4170,6 +4170,11 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         terrainLevelHeight_=levelHeight;
         terrainWasShown_=showTerrain;terrainCavernsAuthored_=caveAuthored;
         regionBordersDirty_=true;
+        rampTiles_.clear();
+        if(!map.worldSpace && !planetaryChart && map.w>0 && map.cells.size()==size_t(map.w)*map.h){
+            for(size_t i=0;i<map.cells.size();++i)
+                if(map.cells[i]=='/')rampTiles_.push_back({int(i%map.w),int(i/map.w)});
+        }
         terrainRevision_=doc.revision;
         planetTerrainDoc_=planetaryChart?&doc:nullptr;
         planetTerrainProject_=planetaryChart?projectPath:std::string{};
@@ -4565,6 +4570,18 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             renderer_.line({at.x-extent,at.y,at.z},{at.x+extent,at.y,at.z},color);
             renderer_.line({at.x,at.y-extent,at.z},{at.x,at.y+extent,at.z},color);
             renderer_.line({at.x,at.y,at.z-extent},{at.x,at.y,at.z+extent},color);
+        }
+        if(natureLayers_.rampTiles && !fpsProject && !planetaryChart){
+            const auto point=[&](float x,float z){
+                return float3{x,(showTerrain?terrainPreviewHeight(map,x,z,levelHeight,baseTerrainView_):0.f)+.07f,z};
+            };
+            for(const auto& [x,z]:rampTiles_){
+                const auto a=point(x+.2f,z+.2f), b=point(x+.8f,z+.2f);
+                const auto c=point(x+.8f,z+.8f), d=point(x+.2f,z+.8f);
+                const auto color=rgba(255,255,255,110);
+                renderer_.triangle(a,d,c,color);
+                renderer_.triangle(a,c,b,color);
+            }
         }
         if((areaBounds_ || natureLayers_.triggerAreas) && !fpsProject && !planetaryChart){
             const auto point=[&](int x,int z){return float3{float(x),showTerrain?terrainPreviewCorner(map,x,z,levelHeight)+.08f:.08f,float(z)};};
@@ -5912,7 +5929,7 @@ uint64_t StudioScene::frameSignature(int width,int height,const editor::MapDoc& 
     value(wind_.revision);value(wind_.enabled);value(wind_.speed);value(wind_.directionDeg);
     value(wind_.gust);value(wind_.scale);value(wind_.debug);
     value(areaBounds_.has_value());if(areaBounds_)for(int coord:*areaBounds_)value(coord);
-    value(natureLayers_.regionBorders);value(regionBorderLetter_);value(brushVisible_);vec(brushCenter_);value(brushRadius_);
+    value(natureLayers_.rampTiles);value(natureLayers_.regionBorders);value(regionBorderLetter_);value(brushVisible_);vec(brushCenter_);value(brushRadius_);
     value(overlayShapes_.size());
     for(const auto& shape:overlayShapes_){value(shape.kind);vec(shape.a);vec(shape.b);value(shape.radius);
         value(shape.thickness);value(shape.r);value(shape.g);value(shape.bl);}
