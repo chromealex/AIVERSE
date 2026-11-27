@@ -1,7 +1,7 @@
 import SpectraDockViewport from './SpectraDockViewport';
 import {shaderOutputNames,setShaderDomain,effectiveShaderValue,setShaderComponent} from './shaderGraphLayout';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { GitBranch, RefreshCw, Save, Search, RotateCcw, CheckCircle2 } from 'lucide-react';
+import { CircleHelp, GitBranch, RefreshCw, Save, Search, RotateCcw, CheckCircle2 } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import type { StudioShaderGraphDocument, StudioShaderGraphOp } from '../types';
 import { addShaderGraphNode, removeShaderGraphNode, shaderNodeCatalog, connectShaderInput, disconnectShaderInput, duplicateShaderNode, copyShaderNodes, pasteShaderNodes, moveShaderNodes, arrangeShaderNodes, shaderTintTemplate, setShaderOutput } from './shaderGraphLayout';
@@ -24,6 +24,7 @@ const projectDrafts=new Map<string,{
 }>();
 
 export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{projectPath:string;documentEpoch?:string;mapPath?:string}) {
+ const [showControls,setShowControls]=useState(false);
  const [names,setNames]=useState<string[]>([]);
  const [operations,setOperations]=useState<StudioShaderGraphOp[]>([]);
  const [selectedOp,setSelectedOp]=useState('');
@@ -237,11 +238,14 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
  return <section className="studio-shader-graphs">
   <header className="graph-heading"><span><GitBranch size={16}/> Shader Graphs</span>
    <button disabled={busy||dirty||!projectPath} onClick={()=>setCreating(v=>!v)}>New graph</button>
+   <button className="icon-button" aria-label="Graph controls" title="Graph controls" aria-expanded={showControls}
+    onClick={()=>setShowControls(value=>!value)}><CircleHelp size={15}/></button>
    <button className="icon-button" aria-label="Reload Shader Graphs"
     disabled={busy||dirty} onClick={()=>{setSelected('');setDocument(null);resetDraft(null);setNonce(n=>n+1)}}><RefreshCw size={15}/></button>
   </header>
-  <p className="graph-readonly">Drag nodes to arrange the graph. Validate before explicit Save.
-    Select output then input to connect. Shift-click or drag a selection box; middle-drag or Alt-drag to pan.</p>
+  {showControls&&<p className="shader-graph-help">Connect an output to an input by dragging or selecting each port in turn.
+   Shift-click or drag a box to select multiple nodes. Use middle-drag or Alt-drag to pan.
+   Validate checks the draft. Save graph writes it to the project.</p>}
   {creating&&<form className="graph-asset-form" onSubmit={e=>{e.preventDefault();void createGraph();}}>
    <label>Asset name<input required value={newName} pattern="[A-Za-z0-9_\-]{1,64}" maxLength={64}
     onChange={event=>setNewName(event.target.value)}/></label>
@@ -273,7 +277,7 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
      busy && !document ? <div className="graph-empty">Compiling and loading graph…</div> :
      document ? <>
       <div className="graph-summary"><strong>{selected}</strong><span>{document.graph.domain??'Unknown domain'}</span>
-       <span>{draft?.nodes?.length??document.nodes} nodes · {document.samples} saved texture samples</span>
+       <span>{draft?.nodes?.length??document.nodes} {(draft?.nodes?.length??document.nodes)===1?'node':'nodes'} · {document.samples} saved texture {document.samples===1?'sample':'samples'}</span>
        <span>{dirty?'Unsaved changes':'Saved'}</span>
        <button className="graph-tools-toggle" aria-expanded={toolsExpanded} onClick={()=>setToolsExpanded(!toolsExpanded)}>Editing tools</button>
        <div className="graph-edit-tools" data-expanded={toolsExpanded}>

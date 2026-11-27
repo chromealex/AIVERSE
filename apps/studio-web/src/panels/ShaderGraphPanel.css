@@ -1,7 +1,7 @@
 .studio-shader-graphs{display:flex;min-width:0;min-height:0;flex:1;flex-direction:column;color:var(--studio-foreground);background:#101b2a}
 .graph-heading{height:41px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;border-bottom:1px solid #2b4057;font-size:12px;font-weight:700}
 .graph-heading span{display:flex;align-items:center;gap:7px}
-.graph-readonly{margin:0;padding:9px 14px;color:#e0b787;background:#302921;font-size:11px}
+.shader-graph-help{margin:0;padding:9px 14px;color:var(--au-text-soft);background:var(--au-panel);font-size:12px;line-height:1.45}
 .graph-error{color:#ffacb9;padding:9px 14px;font-size:11px;margin:0}
 .graph-columns{display:flex;flex:1;min-height:0;overflow:hidden}
 .graph-library{min-width:140px;width:24%;max-width:250px;background:#162237;border-right:1px solid #34475f;overflow:auto}
