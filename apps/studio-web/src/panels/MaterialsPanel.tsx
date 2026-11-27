@@ -75,7 +75,7 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
  useEffect(()=>{setDraft({});setPending(null);setName('');setMessage('');},[projectPath]);
  const switchTo=(next:string)=>{
   if(next===name)return;
-  if(changes>0){setPending(next);setMessage('Unsaved draft. Apply or discard changes to switch materials.');return;}
+  if(changes>0){setPending(next);setMessage('Open '+next+'? Save or discard the changes to '+name+', or keep editing.');return;}
   setName(next);setError('');setMessage('');setPending(null);setDraft({});
  };
  const edit=(key:string,value:string|number|boolean)=>{
@@ -284,6 +284,7 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
    <button className="materials-preview" disabled={!connected||!projectPath||!name||changes>0||busy||previewing}
      title="Preview the saved material on a GPU-rendered sphere"
      onClick={()=>void preview()}><Eye size={14}/> {previewMaterial===name?'Hide preview':'Preview material'}</button>
+   {pending!==null&&<button className="materials-discard" disabled={busy} onClick={()=>{setPending(null);setMessage('');}}>Keep editing</button>}
    <button className="materials-discard" onClick={discard} disabled={busy||changes===0}>{pending===null?'Discard':'Discard & switch'}</button>
    <button className="materials-apply" disabled={busy||loading||changes===0||!connected||!projectPath||!names.includes(name)}
     onClick={()=>void apply()}><Save size={14}/> {pending===null?'Apply & save':'Save & switch'}</button>
