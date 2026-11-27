@@ -7,7 +7,7 @@ class StudioScenePointer {
 public:
     StudioScenePointer(GtkWidget* area, StudioHost& host) : area_(area), host_(host) {
         gtk_widget_add_events(area_, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | GDK_POINTER_MOTION_MASK |
-            GDK_LEAVE_NOTIFY_MASK | GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK);
+            GDK_KEY_PRESS_MASK | GDK_KEY_RELEASE_MASK | GDK_FOCUS_CHANGE_MASK | GDK_LEAVE_NOTIFY_MASK | GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK);
         connection_ = g_signal_connect(area_, "event", G_CALLBACK(+[](GtkWidget*, GdkEvent* event, gpointer data)->gboolean {
             return static_cast<StudioScenePointer*>(data)->handle(event);
         }), this);
@@ -16,6 +16,31 @@ public:
     StudioScenePointer(const StudioScenePointer&) = delete;
     StudioScenePointer& operator=(const StudioScenePointer&) = delete;
 private:
+    static StudioSceneKey sceneKey(guint symbol) {
+        using K = StudioSceneKey;
+        switch (gdk_keyval_to_lower(symbol)) {
+        case GDK_KEY_a: return K::A;
+        case GDK_KEY_d: return K::D;
+        case GDK_KEY_e: return K::E;
+        case GDK_KEY_f: return K::F;
+        case GDK_KEY_q: return K::Q;
+        case GDK_KEY_r: return K::R;
+        case GDK_KEY_s: return K::S;
+        case GDK_KEY_v: return K::V;
+        case GDK_KEY_w: return K::W;
+        case GDK_KEY_Left: return K::Left;
+        case GDK_KEY_Right: return K::Right;
+        case GDK_KEY_Up: return K::Up;
+        case GDK_KEY_Down: return K::Down;
+        case GDK_KEY_Home: return K::Home;
+        case GDK_KEY_Delete: return K::Delete;
+        case GDK_KEY_Escape: return K::Escape;
+        case GDK_KEY_BackSpace: return K::Delete;
+        case GDK_KEY_bracketleft: return K::BracketLeft;
+        case GDK_KEY_bracketright: return K::BracketRight;
+        default: return K::Other;
+        }
+    }
     bool handle(GdkEvent* event) {
         const int width = gtk_widget_get_allocated_width(area_), height = gtk_widget_get_allocated_height(area_);
         GdkModifierType flags{};
@@ -27,6 +52,27 @@ private:
         double x = lastX_, y = lastY_;
         int phase = 1, button = held_ < 0 ? 0 : held_;
         switch (event->type) {
+        case GDK_KEY_PRESS:
+        case GDK_KEY_RELEASE: {
+            auto key = sceneKey(event->key.keyval);
+            if (key == StudioSceneKey::Other) {
+                // A secondary layout or shifted symbol may hide the shortcut's base key.
+                auto* map = gdk_keymap_get_for_display(gtk_widget_get_display(area_));
+                GdkKeymapKey* keys = nullptr;
+                guint* symbols = nullptr;
+                gint count = 0;
+                if (gdk_keymap_get_entries_for_keycode(map, event->key.hardware_keycode, &keys, &symbols, &count)) {
+                    for (int i = 0; i < count && key == StudioSceneKey::Other; ++i)
+                        if (keys[i].level == 0) key = sceneKey(symbols[i]);
+                    g_free(keys);
+                    g_free(symbols);
+                }
+            }
+            return key != StudioSceneKey::Other && host_.sceneKey(key, event->type == GDK_KEY_PRESS, mods, held_ == 1);
+        }
+        case GDK_FOCUS_CHANGE:
+            if (!event->focus_change.in) host_.setPivotSnap(false);
+            return false;
         case GDK_BUTTON_PRESS:
         case GDK_BUTTON_RELEASE:
             switch (event->button.button) {
