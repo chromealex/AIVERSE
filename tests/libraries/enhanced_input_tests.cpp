@@ -206,6 +206,18 @@ int main() {
     CHECK(conflicts.size()==1);
     CHECK(conflicts[0].higherContext=="Player");
     CHECK(conflicts[0].shadowed);
+    MappingContext overlay{"Overlay"};
+    overlay.bind("Walk",{Device::Keyboard,12},{},{},false);
+    CHECK(collisions.registerContext(overlay));
+    CHECK(collisions.activateContext("Overlay",5));
+    std::uint64_t conflictTotal=0;
+    const auto page=collisions.conflicts(true,1,&conflictTotal);
+    CHECK(conflictTotal==3 && page.size()==1);
+    CHECK(page.front().higherContext=="Overlay" && page.front().lowerAction=="Walk" && !page.front().shadowed);
+    CHECK(collisions.conflicts(true,0,&conflictTotal).empty() && conflictTotal==3);
+    collisions.deactivateContext("Overlay");
+    CHECK(collisions.conflicts(true,1,&conflictTotal).size()==1 && conflictTotal==1);
+
 
     // Advanced trigger timings + inverted chord gate. Assertions are executed in CI later.
     InputFlow advanced;

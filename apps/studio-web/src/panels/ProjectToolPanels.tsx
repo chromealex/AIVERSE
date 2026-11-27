@@ -287,6 +287,8 @@ function InputActionName({ name, rename, reject }: { name: string; rename: (valu
 }
 export function InputPanel(ctx: Ctx) {
   const path = ctx.snapshot?.project.path ?? '';
+  const [conflictReport, setConflictReport] = useState<{asset: StudioInputAsset; project: string; total: number;
+    rows: { higher: string; lower: string; shadowed: boolean }[] } | null>(null);
   const [capturePolicy, setCapturePolicy] = useState('swap');
   const [info, setInfo] = useState<StudioInputInfo | null>(null);
   const [asset, setAsset] = useState<StudioInputAsset>({ version: 1, actions: [], contexts: [] });
@@ -337,6 +339,10 @@ export function InputPanel(ctx: Ctx) {
           onClick={() => { edit(info.presets![key]); setStatus({ ok: true, text: key.toUpperCase() + ' defaults loaded into the draft.' }); }}>
           Use {key.toUpperCase()} defaults
         </button>)}
+      <button type="button" className="au-button au-button--sm" onClick={() => {
+        void invoke('studio.inputConflicts', { asset }).then(report => setConflictReport({ ...report, asset, project: path }))
+          .catch(e => setStatus({ ok: false, text: message(e) }));
+      }}>Check conflicts</button>
       <label>On key conflict <select className="au-input" value={capturePolicy} onChange={e => setCapturePolicy(e.target.value)}>
         <option value="swap">Swap keys</option><option value="reject">Reject duplicate</option><option value="allow">Allow duplicate</option>
       </select></label>
@@ -346,6 +352,14 @@ export function InputPanel(ctx: Ctx) {
     </div>
     {status && <div className={'ptp__status ' + (status.ok ? 'is-ok' : 'is-error')} role={status.ok ? 'status' : 'alert'}>{status.text}</div>}
     <div className="ptp__scroll">
+      {conflictReport?.asset === asset && conflictReport.project === path && <section aria-label="Control conflicts">
+        <h4>Control conflicts ({conflictReport.total})</h4>
+        {conflictReport.total === 0 ? <p>No shared controls in active contexts.</p> :
+          <table className="ptp__table"><thead><tr><th>Earlier binding</th><th>Later binding</th><th>Result</th></tr></thead>
+            <tbody>{conflictReport.rows.map((row, i) => <tr key={i}><td>{row.higher}</td><td>{row.lower}</td>
+              <td>{row.shadowed ? 'Later binding shadowed' : 'Shared control'}</td></tr>)}</tbody></table>}
+        {conflictReport.total > conflictReport.rows.length && <p>Showing the first {conflictReport.rows.length} conflicts.</p>}
+      </section>}
       <h4>Actions <small>what the player can do</small>
         <button type="button" className="au-button au-button--ghost au-button--sm" onClick={() => edit({ ...asset, actions: [...asset.actions, { name: unique('Action', asset.actions.map(a => a.name)), type: 'bool' }] })}><Plus size={12}/>Action</button></h4>
       <table className="ptp__table ptp__table--rows"><tbody>

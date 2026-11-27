@@ -4074,6 +4074,27 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             Json out=Json::object();
             out.set("op",str(op));out.set("result",result);out.set("changed",Json::fromBool(changed));
             reply.set("result",std::move(out));
+        } else if (method == "studio.inputConflicts") {
+            namespace cfg=platform::enhanced_config;
+            cfg::Asset asset;
+            cfg::ei::InputFlow inspector;
+            std::string error;
+            if (!cfg::readAsset(params["asset"],asset,&error) || !cfg::installAsset(inspector,asset,&error))
+                throw std::runtime_error(error);
+            Json rows=Json::array();
+            std::uint64_t total=0;
+            const auto conflicts=inspector.conflicts(true,256,&total);
+            for (const auto& conflict:conflicts) {
+                Json row=Json::object();
+                row.set("higher",str(conflict.higherContext+" / "+conflict.higherAction+" #"+std::to_string(conflict.higherMappingId)));
+                row.set("lower",str(conflict.lowerContext+" / "+conflict.lowerAction+" #"+std::to_string(conflict.lowerMappingId)));
+                row.set("shadowed",Json::fromBool(conflict.shadowed));
+                rows.push(std::move(row));
+            }
+            Json out=Json::object();
+            out.set("total",Json::number(std::int64_t(total)));
+            out.set("rows",std::move(rows));
+            reply.set("result",std::move(out));
         } else if (method == "studio.inputGet" || method == "studio.inputSet") {
             // Input actions and contexts (input/actions.json, InputFlow asset); presentation only, never the simulation.
             namespace ecfg=platform::enhanced_config;
