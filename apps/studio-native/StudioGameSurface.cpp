@@ -19,6 +19,7 @@
 #include "engine/sim/Simulation.h"
 #include "engine/sim/CommonComponents.h"
 #include "engine/game/GameCore.h"
+#include "engine/actor/ActorModule.h"
 #include "engine/render/StaticGeometryReport.h"
 #include "engine/render/GlobalGeometryPool.h"
 #include "engine/game/Script.h"
@@ -483,10 +484,10 @@ std::optional<render::float3> StudioGameSurface::selectedEntityPosition() const 
     if(!sim)return {};
     const auto ref=inspector_.selectedRef(sim,std::to_string(runtimeEpoch_));
     if(ref.empty())return {};
-    const auto* transform=sim->world().tryGetConst<Transform>(editor::worldEntity(std::stoull(ref)));
-    if(!transform)return {};
-    const auto& pos=transform->pos;
-    return render::float3{float(pos.x.toDouble()),float(pos.y.toDouble()),float(pos.z.toDouble())};
+    const auto entity=editor::worldEntity(std::stoull(ref));
+    const auto position=actor::ActorHost::regionPositionReader()(sim->world(),entity);
+    if(!position)return {};
+    return render::float3{float(position->x.toDouble()),float(position->y.toDouble()),float(position->z.toDouble())};
 }
 size_t StudioGameSurface::selectEntities(const Json& docs,const Json& refs,const std::string& epoch) {
     auto* sim=liveSimulation();
