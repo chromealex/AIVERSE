@@ -1852,3 +1852,7 @@ b6e6f3b57a5f7151137574117e17a61a938c8eb9 adds docs/handoff/studio-html5/captures
 ### Rename editable display names in Hierarchy
 
 36ea832b9fce1ebb6f31ff807683b5959c18ae85 updates HierarchyPanel.tsx and adds captures/mac-hierarchy-light-rename.png. F2 and the context menu use the selected Inspector nameEditable capability and native Entity/name property. Production web build passed. Detached Mac Hierarchy used F2 to cancel one rename, verified the original value on re-entry, committed Courtyard Lamp with Enter, saved and verified that text in maps/courtyard.json. Evidence: stats-mac-w_ks0prm/live.log. Entity IDs and record names need their own existing document owners or native operations; the verified operation edits the display name of a map light.
+
+### Inspector Escape during rename
+
+b59daa3766d05b83b55cb0b66f212bc07b64c60b updates InspectorPanel.tsx and adds captures/mac-inspector-name-cancel.png. Baseline stats-mac-l4pdzz01/live.log reproduced the canceled name on the native object. Production web build and detached macOS regression passed in stats-mac-tjbewn6q: Esc restored the original in the DOM and native inspector, Enter committed Courtyard Lamp and Save wrote it into the disposable map. Continue Hierarchy document record authoring.
