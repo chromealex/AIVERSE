@@ -1,0 +1,72 @@
+name: Issue 206 Windows Studio session verification
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact current-main commit to verify
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  studio-session:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          submodules: recursive
+      - name: Record source and toolchain
+        shell: pwsh
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          $actual = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $actual -ne $env:EXPECTED_SOURCE_SHA) { throw 'Source SHA mismatch' }
+          $actual | Out-File evidence/source-sha.txt
+          cmake --version | Out-File evidence/toolchain.txt
+          Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,OSArchitecture | Out-File evidence/windows.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build required Studio web assets
+        working-directory: apps/studio-web
+        shell: pwsh
+        run: |
+          npm install --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build
+          exit $LASTEXITCODE
+      - name: Configure native Windows session target
+        shell: pwsh
+        run: |
+          cmake -S . -B build/issue206 -G "Visual Studio 17 2022" -A x64 -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TOOLS=ON -DAIVERSE_BUILD_CLIENT=OFF -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_BUILD_STUDIO_HTML5=ON *> evidence/configure.log
+          $result = $LASTEXITCODE
+          Get-Content evidence/configure.log
+          exit $result
+      - name: Build native session regression
+        shell: pwsh
+        run: |
+          cmake --build build/issue206 --config Release --target aiverse_studio_session_tests --parallel 4 *> evidence/build.log
+          $result = $LASTEXITCODE
+          Get-Content evidence/build.log
+          exit $result
+      - name: Run studio_session on Windows
+        shell: pwsh
+        run: |
+          ctest --test-dir build/issue206 -C Release --no-tests=error --output-on-failure --output-junit "$pwd/evidence/ctest.xml" -R '^studio_session$' *> evidence/ctest.log
+          $result = $LASTEXITCODE
+          $result | Out-File evidence/ctest-exit.txt
+          Get-Content evidence/ctest.log
+          exit $result
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: issue206-windows-session-evidence
+          path: |
+            evidence/
+            build/issue206/Testing/Temporary/
+            build/issue206/CMakeCache.txt
+          retention-days: 14
