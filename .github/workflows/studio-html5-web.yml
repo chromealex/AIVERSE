@@ -136,7 +136,7 @@ jobs:
           foreach ($file in 'AiverseStudio.exe','aiversemcp.exe','aiversebuild.exe','WebView2Loader.dll','studio-web','engine') {
             Copy-Item (Join-Path $out $file) $stage.FullName -Recurse
           }
-          python -B apps/studio-native/tests/standalone_bundle.py $stage.FullName
+          python -B apps/studio-native/tests/standalone_bundle.py --require-build-tool $stage.FullName
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $project = Join-Path $env:RUNNER_TEMP 'Studio launch project'
           Copy-Item demos/order-upgrade $project -Recurse

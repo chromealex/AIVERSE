@@ -20,26 +20,44 @@ class PageAssets(HTMLParser):
             self.urls.append(attributes["href"])
 
 
-def check(package):
+def check_files(package, require_build_tool):
+    required = []
     if package.suffix == ".app":
         host = package / "Contents/MacOS/AiverseStudioHTML5"
         server = host.with_name("aiversemcp")
-        web = package / "Contents/Resources/studio-web"
+        resources = package / "Contents/Resources"
     else:
         host = package / "AiverseStudio.exe"
         server = package / "aiversemcp.exe"
-        web = package / "studio-web"
+        resources = package
+        required.append(package / "WebView2Loader.dll")
 
-    if not host.is_file():
-        raise FileNotFoundError(host)
+    required.extend([host, server, resources / "engine/fonts/ui.ttf"])
+    if require_build_tool:
+        required.append(server.with_name("aiversebuild" + server.suffix))
+    for relative in ("flame_16x4.png", "smoke_8x8.png"):
+        required.append(resources / "engine/fx/physis" / relative)
+    web = resources / "studio-web"
     page = PageAssets()
     page.feed((web / "index.html").read_text(encoding="utf-8"))
     if not page.urls:
         raise ValueError("Studio page has no bundled entry assets")
     for url in page.urls:
         asset = web / unquote(urlsplit(url).path).lstrip("/")
-        if not asset.is_file():
-            raise FileNotFoundError(asset)
+        required.append(asset)
+    for path in required:
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        if path.stat().st_size == 0:
+            raise ValueError(f"Empty bundled file: {path}")
+    return server, len(page.urls)
+
+
+def check(package, files_only=False, require_build_tool=False):
+    server, entries = check_files(package, require_build_tool)
+    if files_only:
+        print(f"Verified Studio distribution files and {entries} web entry assets")
+        return
 
     calls = [{"jsonrpc": "2.0", "id": index, "method": method, "params": {}}
              for index, method in enumerate(["initialize", "tools/list"], start=1)]
@@ -50,10 +68,13 @@ def check(package):
     names = {tool["name"] for tool in catalog["result"]["tools"]}
     if info["result"]["serverInfo"]["name"] != "aiverse" or "game_file_read" not in names:
         raise ValueError("Bundled MCP server did not expose Studio project operations")
-    print(f"Found Studio, {len(page.urls)} web entry assets and {len(names)} MCP tools")
+    print(f"Found Studio, {entries} web entry assets and {len(names)} MCP tools")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("package", type=Path, help="macOS .app or Windows executable directory")
-    check(parser.parse_args().package.resolve())
+    parser.add_argument("--files-only", action="store_true", help="Inspect a cross-built package without running its MCP server")
+    parser.add_argument("--require-build-tool", action="store_true", help="Verify the packager is bundled")
+    args = parser.parse_args()
+    check(args.package.resolve(), args.files_only, args.require_build_tool)
