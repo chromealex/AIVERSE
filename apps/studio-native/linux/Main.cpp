@@ -1,6 +1,7 @@
 #include "StudioWebAssets.h"
 #include "StudioWebBridge.h"
 #include "StudioScenePointer.h"
+#include "StudioPreviewPointer.h"
 #include "StudioSurfacePlatform.h"
 #include <iostream>
 
@@ -11,6 +12,9 @@ public:
         : StudioSurfacePlatform(overlay), window_(window),
           bridge_(web,[this](std::string message){ host_.handleMessage(message); }), host_(*this,root,false),
           pointer_(widget(StudioSurface::Scene), host_) {
+        for (auto surface : {StudioSurface::Character, StudioSurface::Appearance, StudioSurface::Nature,
+                             StudioSurface::Fx, StudioSurface::EffectFile, StudioSurface::GpuEmitter})
+            previewPointers_.push_back(std::make_unique<StudioPreviewPointer>(widget(surface), surface, host_));
         if (!bridge_.registered()) throw std::runtime_error("Studio web bridge unavailable");
     }
     ~GtkStudio() override { stopBackgroundWork(); host_.shutdown(); }
@@ -32,6 +36,7 @@ private:
     StudioWebBridge bridge_;
     StudioHost host_;
     StudioScenePointer pointer_;
+    std::vector<std::unique_ptr<StudioPreviewPointer>> previewPointers_;
 };
 }
 
