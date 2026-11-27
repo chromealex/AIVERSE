@@ -1848,3 +1848,7 @@ de00861f91bae4579a1f2b698f798661877812fb updates docs/studio-html5-parity.md and
 ### Integrated native bounded conflict report
 
 b6e6f3b57a5f7151137574117e17a61a938c8eb9 adds docs/handoff/studio-html5/captures/mac-input-bounded-conflicts.png. The completed native rebuild is recorded in studio-input-conflicts-refresh.log on KINGSTON. The detached WKWebView queried 30 mappings over the native bridge and independently created 30 mappings via panel controls. Both checks verified 435 total conflicts with 256 returned/displayed rows. The visible table indicated truncation, and input/actions.json remained absent. Evidence: stats-mac-k2snfe2u/live.log. Continue remaining window acceptance and the integrated Mac quick gate.
+
+### Rename editable display names in Hierarchy
+
+36ea832b9fce1ebb6f31ff807683b5959c18ae85 updates HierarchyPanel.tsx and adds captures/mac-hierarchy-light-rename.png. F2 and the context menu use the selected Inspector nameEditable capability and native Entity/name property. Production web build passed. Detached Mac Hierarchy used F2 to cancel one rename, verified the original value on re-entry, committed Courtyard Lamp with Enter, saved and verified that text in maps/courtyard.json. Evidence: stats-mac-w_ks0prm/live.log. Entity IDs and record names need their own existing document owners or native operations; the verified operation edits the display name of a map light.
