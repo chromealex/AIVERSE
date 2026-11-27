@@ -155,8 +155,12 @@ function RulesDocumentEditor({section,projectPath,raw,setRaw,onChanged}:{
    .catch(e=>{if(live)setError(String(e));});
   return ()=>{live=false;};
  },[section,revision]);
+ const syntaxError=useMemo(()=>{
+  if(raw===null)return '';
+  try{JSON.parse(raw);return '';}catch(e){return String(e);}
+ },[raw]);
  async function save(){
-  if(original===null||raw===null||busy)return;
+  if(original===null||raw===null||busy||syntaxError)return;
   setBusy(true);setError('');
   try{
    const result=await invoke('studio.rulesDocumentSave',{section,projectPath,original,value:JSON.parse(raw)});
@@ -165,10 +169,10 @@ function RulesDocumentEditor({section,projectPath,raw,setRaw,onChanged}:{
  }
  const title=section==='global'?'Global settings':'Complete rules.json';
  return <div className="rules__rawbox"><h3>{title}</h3>
-  {error&&<div role="alert" className="rules__error">{error}</div>}
+  {(syntaxError||error)&&<div role="alert" className="rules__error">{syntaxError||error}</div>}
   {original!==null&&<textarea value={raw??original} aria-label={title} spellCheck={false}
-   disabled={busy} onChange={e=>setRaw(e.target.value===original?null:e.target.value)}/>}
-  <button disabled={busy||raw===null} onClick={()=>void save()}>Validate &amp; save</button>
+   disabled={busy} aria-invalid={!!syntaxError} onChange={e=>{setError('');setRaw(e.target.value===original?null:e.target.value);}}/>}
+  <button disabled={busy||raw===null||!!syntaxError} onClick={()=>void save()}>Validate &amp; save</button>
   <button disabled={busy} onClick={()=>{setRaw(null);reload(v=>v+1);}}>{raw===null?'Reload':'Discard & reload'}</button>
  </div>;
 }
