@@ -1732,3 +1732,7 @@ beb3676a563566b15140b219abbef4ea6616a77e adds captures/mac-scene-world-axes.png.
 ### Detached Scene STRATA cluster fill
 
 46409865f2a6b3ae3f20526c80937c10b603193e updates docs/studio-html5-parity.md and captures/mac-scene-cluster-fill.png. In the order-upgrade fixture a launcher OBJ was registered in geometryScene with STRATA enabled. Detached Scene Debug switched Cluster fill off/on/off. With the menu closed, 413 viewport pixels at x485–687, y256–513 changed by more than 30 and returned exactly to their original values. Evidence: stats-mac-3uc_s06m/{before,fill,restored}.png. The earlier PHYSIS and wind-rig evidence already records native frame comparisons; see the linked logs in the matrix. Continue auditing TerraWeave and NEREID mode coverage.
+
+### Detached scene NEREID river flow
+
+296155d6159e5a94f3297a179b565ecc1b9b75e5 adds captures/mac-scene-river-flow.png. A disposable courtyard map contained one 24-point NereidWater river. The detached toolbar enabled River flow and Show all rivers; toggling River flow off/on/off changed 300 viewport pixels by >30 channel levels that then exactly returned to baseline (x413–900, y319–554). Menu closed for each capture. Evidence: stats-mac-1frad3zy/{before,river,restored}.png. This covers the all-rivers overlay on a single river; selected-river isolation and flow reversal require separate fixtures.
