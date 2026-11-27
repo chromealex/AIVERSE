@@ -51,3 +51,13 @@
 .material-dependency-view,.material-quick-view{padding:12px}
 .material-dependency-canvas{height:420px;display:flex;flex-direction:column}
 .material-dependency-view .au-row>.au-button,.material-quick-view .au-row>.au-button{flex:0 1 auto}
+
+.materials-editor{container-type:inline-size}
+@container (max-width:540px){
+  .materials-main{flex-direction:column}
+  .materials-list{flex:none;width:100%;min-width:0;max-width:none;max-height:35%;border-right:0;border-bottom:1px solid var(--studio-border)}
+  .materials-selected{padding:10px}
+  .materials-heading,.materials-footer{flex-wrap:wrap}
+  .materials-footer{padding:6px 10px;gap:6px}
+  .materials-fields{padding:10px}
+}
