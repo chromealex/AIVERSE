@@ -66,6 +66,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
             "world_save_create", "world_save_checkpoint", "world_save_retention_preview", "world_save_retention_apply", "world_save_fork",
             "world_job_start", "world_job_status", "world_job_cancel", "world_job_release",
             "world_simulation_lod_get", "world_simulation_lod_validate", "world_simulation_lod_set"}},
+        {"hierarchy", {"editor_select"}},
         {"project_import", {"port_scan", "port_report", "port_item", "port_resolve", "port_import"}},
         // Package catalog (AIVERSE-PACKAGES): search and install content into the open project.
         {"catalog", {"package_search", "package_info", "package_status", "package_add", "package_remove", "package_install"}},
@@ -91,6 +92,7 @@ inline bool studioToolAllowed(const std::string& op) {
 // document refresh.
 inline bool studioToolReadOnly(const std::string& op) {
     if(op=="animation_graph_edit"||op=="animation_graph_preview"||op=="animation_ragdoll_generate"||op=="animation_root_motion_generate")return true;
+    if(op=="editor_select")return true;
     if(op=="building_graph_diagnostics" || op=="view_postfx")return true;
     if (op == "feature_readiness_query" || op == "feature_readiness_refresh") return true; // engine report only, no project mutation
     if (op == "texture_graph_preview" || op == "texture_graph_image_asset" || op == "texture_graph_catalog" || op == "texture_graph_templates" || op == "texture_graph_cache") return true;

@@ -48,6 +48,17 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     }).catch(e => { if (active) setError(String(e)); });
     return () => { active = false; };
   }, [connected, project]);
+  const [playersOpen, setPlayersOpen] = useState(false);
+  const [roster, setRoster] = useState<{revision: string; epoch: string; names: string[]}>();
+  const scope = snapshot?.graphDocument;
+  useEffect(() => {
+    if (!playersOpen || !scope || snapshot?.scene.worldSpace) return;
+    let current = true;
+    void invoke('studio.mapProperties', {scope}).then(data => {
+      if (current) setRoster({ revision: data.scope.revision, epoch: data.scope.epoch, names: data.roster.map(p => p.name) });
+    }).catch(e => { if (current) setError(String(e)); });
+    return () => { current = false; };
+  }, [playersOpen, scope?.projectPath, scope?.mapPath, scope?.epoch, scope?.revision, snapshot?.scene.worldSpace]);
   const mapEntities = !!catalog?.mapEntities;
   const canCreate = mapEntities && (catalog?.types.length ?? 0) > 0;
   const selectedId = snapshot?.selectedId ?? null;
@@ -59,7 +70,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     const filter = parseHierarchyFilter(search);
     return allRows.filter(({node}) => matchesHierarchy(node, filter, selectedSet));
   }, [allRows, search, selectedSet]);
-  const scope=snapshot?.graphDocument;
+
   const selectPreview=async(id:string)=>{
     if(!scope || !snapshot || busy)return;
     try {
@@ -306,6 +317,16 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
         </div>;
       })}
     </div>
+    {scope && !snapshot?.scene.worldSpace && <details className="hier__players" open={playersOpen}
+      onToggle={event => setPlayersOpen(event.currentTarget.open)}>
+      <summary>Map players</summary>
+      {playersOpen && roster?.revision === scope.revision && roster.epoch === scope.epoch &&
+        roster.names.map((name, i) => <StudioButton key={i} size="sm" disabled={busy}
+          onClick={() => void invoke('studio.op', {op:'editor_select', expectedProject:scope.projectPath, expectedDocumentEpoch:scope.epoch, expectedDocumentRevision:scope.revision,
+            params:{kind:'player',index:i+1}}).catch(e => setError(String(e)))}>
+          {i+1} · {name}
+        </StudioButton>)}
+    </details>}
     <div className="hier__footer">{search ? `${matches.length} / ${allRows.length}` : allRows.length} objects{preview.length>0 && ` · ${preview.length} preview`}{selectedSet.size > 1 ? ` · ${selectedSet.size} selected` : ''}</div>
     {menu && <StudioContextMenu x={menu.x} y={menu.y} label="Entity actions"
       items={menuItems(menu.id)} onClose={() => setMenu(null)}/>}

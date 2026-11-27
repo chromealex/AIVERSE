@@ -60,3 +60,7 @@
 .hier-preview dd{margin:0;color:var(--au-text);overflow-wrap:anywhere}
 
 .hier-preview[data-selected]{background:var(--au-field);box-shadow:inset 2px 0 var(--au-accent);color:var(--au-text)}
+
+.hier__players { padding: var(--au-space-2); max-height: 35%; overflow: auto; }
+.hier__players summary { cursor: pointer; }
+.hier__players button { margin: var(--au-space-1); }
