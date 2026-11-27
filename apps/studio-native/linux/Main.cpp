@@ -44,7 +44,7 @@ private:
 };
 }
 
-int main(int argc,char** argv) {
+int aiverseMain(int argc,char** argv) {
     using namespace aiverse::studio;
     gdk_set_allowed_backends("x11");
     if (!gtk_init_check(&argc,&argv)) { std::cerr << "Studio requires an X11 display\n"; return 1; }
