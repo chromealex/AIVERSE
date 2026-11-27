@@ -369,11 +369,16 @@ export interface StudioInputModifier {
   type: 'scale' | 'negate' | 'deadzone' | 'swizzle' | 'normalize';
   x?: number; y?: number; z?: number; threshold?: number; order?: number[];
 }
+export interface StudioInputTrigger {
+  type: 'down' | 'pressed' | 'released' | 'hold' | 'tap' | 'doubleTap' | 'holdAndRelease' | 'pulse' | 'chord' | 'notChord';
+  seconds?: number;
+  action?: string;
+}
 export interface StudioInputAsset {
   version: 1;
-  actions: Array<{ name: string; type: 'bool' | 'axis1D' | 'axis2D' | 'axis3D'; modifiers?: StudioInputModifier[]; triggers?: unknown[] }>;
+  actions: Array<{ name: string; type: 'bool' | 'axis1D' | 'axis2D' | 'axis3D'; modifiers?: StudioInputModifier[]; triggers?: StudioInputTrigger[] }>;
   contexts: Array<{ name: string; priority?: number; active?: boolean;
-    mappings: Array<{ id?: number; action: string; control: StudioInputControl; modifiers?: StudioInputModifier[]; triggers?: unknown[]; consume?: boolean }> }>;
+    mappings: Array<{ id?: number; action: string; control: StudioInputControl; modifiers?: StudioInputModifier[]; triggers?: StudioInputTrigger[]; consume?: boolean }> }>;
 }
 export interface StudioInputInfo { asset: StudioInputAsset; exists: boolean; path: string; error?: string; keys: string[]; padButtons: string[]; padAxes: string[]; devices: string[] }
 export type HumanCreatorFieldKind = 'number' | 'integer' | 'string' | 'color' | 'bone' | 'bones';
