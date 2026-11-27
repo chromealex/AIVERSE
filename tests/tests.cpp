@@ -18942,3 +18942,20 @@ TEST(attack_phase_fractional_time_is_conserved) {
     CHECK(!step.complete && step.unused==Fixed{});
     CHECK(state.remaining==Fixed::fromRatio(3,100)-rest.available);
 }
+
+TEST(precise_windup_cooldown_preserves_authored_period) {
+    using namespace aiverse;
+    auto map=Json::parse(flatMap(12,12,""));
+    map.set("entities",Json::parse(R"([{"type":"shooter","owner":1,"pos":[2,2]},{"type":"target","owner":2,"pos":[4,2]}])"));
+    auto sim=makeSimJson(R"({"types":{"shooter":{"weapons":[{"range":8,"damage":1,"cooldown":0.02,"windup":0.3,"preciseCooldown":true}]},"target":{"health":{"max":100000}}}})",map.dump());
+    Entity shooter,target;
+    sim->world().each<game::Unit>([&](Entity e,const auto&){if(sim->world().has<game::Combat>(e))shooter=e;else target=e;});
+    CHECK(shooter.valid()&&target.valid());
+    if(!shooter.valid()||!target.valid())return;
+    auto& combat=sim->world().get<game::Combat>(shooter);combat.target=target;combat.autoTarget=false;
+    int releases=0;
+    for(int tick=0;tick<200;++tick){sim->step();for(const auto& event:sim->events())if(event.a==shooter&&event.type==game::kEvAttackReleased)++releases;}
+    const auto elapsed=sim->dt()*200;
+    const auto period=Fixed::fromRatio(3,10)+Fixed::fromRatio(2,100);
+    CHECK(releases==int(((elapsed-Fixed::fromRatio(3,10))/period).floorInt())+1);
+}

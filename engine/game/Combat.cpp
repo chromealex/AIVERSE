@@ -188,8 +188,18 @@ void GameCore::sysWeapons(Simulation& sim) {
             if (!t.weapons[i].preciseCooldown)
                 c.cooldown[i] = advanceWeaponCadence(c.cooldown[i], dt * atkSpeed, false);
         bool keepWindup[4]{};
+        Fixed phaseTime[4]{};
         for (size_t i = 0; i < 4; ++i) {
             auto& phase = c.attackTiming[i];
+            if (c.target.valid() && i < t.weapons.size() && t.weapons[i].preciseCooldown &&
+                t.weapons[i].hasAttackTiming() && t.weapons[i].chargeTime.raw <= 0) {
+                const Entity previous = phase.target;
+                const auto rest = consumeAttackRest(phase, c.cooldown[i], dt * atkSpeed);
+                phaseTime[i] = rest.available;
+                if (rest.recoveryCompleted)
+                    sim.emit({kEvAttackRecoveryEnd, o.player, e, previous, int64_t(i), tr.pos});
+                continue;
+            }
             if (phase.phase == WeaponAttackPhase::Recovery && advanceAttackPhase(phase, dt * atkSpeed)) {
                 sim.emit({kEvAttackRecoveryEnd, o.player, e, phase.target, int64_t(i), tr.pos});
                 phase = {};
@@ -244,7 +254,8 @@ void GameCore::sysWeapons(Simulation& sim) {
                 continue;
             }
             const bool phased = wd.hasAttackTiming();
-            const uint32_t budget = !phased && wd.preciseCooldown && wd.chargeTime.raw <= 0 ? kMaxCadenceShotsPerTick : 1;
+            const bool precisePhases = phased && wd.preciseCooldown && wd.chargeTime.raw <= 0;
+            const uint32_t budget = wd.preciseCooldown && wd.chargeTime.raw <= 0 ? kMaxCadenceShotsPerTick : 1;
             for (uint32_t shot = 0; shot < budget && cadenceReady(c.cooldown[i]); ++shot) {
             if (phased && u.hp.raw <= 0) break;
             if ((phased || wd.preciseCooldown) && (!w.alive(c.target) || tu.hp.raw <= 0)) break;
@@ -260,13 +271,16 @@ void GameCore::sysWeapons(Simulation& sim) {
                     keepWindup[i] = true;
                     sim.emit({kEvAttack, o.player, e, c.target, int64_t(i), tr.pos, kAttackStartsWindup});
                     sim.emit({kEvAttackWindup, o.player, e, c.target, int64_t(i), tr.pos});
-                    break;
+                    if (!precisePhases) break;
                 }
-                if (!advanceAttackPhase(phase, dt * atkSpeed)) {
+                const auto progress = consumeAttackPhase(phase, precisePhases ? phaseTime[i] : dt * atkSpeed);
+                if (precisePhases) phaseTime[i] = progress.unused;
+                if (!progress.complete) {
                     keepWindup[i] = true;
                     break;
                 }
             }
+            keepWindup[i] = false;
             if (mechOn(sim) && !mechOnFire(sim, e, i, c.target)) break;   // acceptance, including ammo, only at release
             c.cooldown[i] = acceptCadenceShot(c.cooldown[i], wd.cooldown, !phased && wd.preciseCooldown && wd.chargeTime.raw <= 0);
             if (phased) {
@@ -387,6 +401,14 @@ void GameCore::sysWeapons(Simulation& sim) {
                 Fixed victimMult = baseMult;
                 if (victimAdv.raw > 0) victimMult = victimMult * (kOne + rules_.heights.damagePerLevel * victimAdv);
                 fireAt(victim, victimPos, victimAdv, victimMult, flat(victimPos - tr.pos), 1);
+            }
+            if (precisePhases) {
+                const Entity previous = phase.target;
+                const auto rest = consumeAttackRest(phase, c.cooldown[i], phaseTime[i]);
+                phaseTime[i] = rest.available;
+                if (rest.recoveryCompleted)
+                    sim.emit({kEvAttackRecoveryEnd, o.player, e, previous, int64_t(i), tr.pos});
+                if (phaseTime[i].raw <= 0 || phase.phase == WeaponAttackPhase::Recovery) break;
             }
             }
         }

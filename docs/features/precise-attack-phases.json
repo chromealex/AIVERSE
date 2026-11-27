@@ -3,6 +3,9 @@
   "id": "precise-attack-phases",
   "owner": "gameplay",
   "changed_paths": [
+    "docs/game-format.md",
+    "engine/game/Combat.cpp",
+    "engine/game/GameCore.cpp",
     "engine/mechanics/AttackTiming.h",
     "tests/tests.cpp"
   ],

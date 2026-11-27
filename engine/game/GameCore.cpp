@@ -116,7 +116,7 @@ void GameCore::setup(Simulation& sim, const Json& rulesIn, const Json& map) {
             const auto& weapons = rules_.types[unit.type].weapons;
             const Fixed elapsed = s.dt() * fxMax(stat(s, e, Stat::AttackSpeed), Fixed::fromRatio(1, 10));
             for (size_t i = 0; i < weapons.size() && i < 4; ++i)
-                if (weapons[i].preciseCooldown)
+                if (weapons[i].preciseCooldown && !(combat.target.valid() && weapons[i].hasAttackTiming() && weapons[i].chargeTime.raw <= 0))
                     combat.cooldown[i] = lib::mechanics::advanceWeaponCadence(combat.cooldown[i], elapsed, true);
         });
     });
