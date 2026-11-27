@@ -18969,6 +18969,7 @@ TEST(precise_windup_cooldown_preserves_authored_period) {
 }
 
 #include "engine/view/MapProjection.h"
+#include <limits>
 TEST(map_projection_crop_roundtrip_and_frame) {
     using namespace aiverse;
     view::MapProjection projection;
@@ -18978,6 +18979,8 @@ TEST(map_projection_crop_roundtrip_and_frame) {
     CHECK(std::abs(uv.x-.25f)<1e-6f&&std::abs(uv.y-.75f)<1e-6f);
     CHECK(!projection.intersects(2,30,1));
     CHECK(!projection.set(20,20,10,30));
+    CHECK(!projection.set(-3.0e38f,0,3.0e38f,1));
+    CHECK(!projection.set(0,0,std::numeric_limits<float>::infinity(),1));
     CHECK(projection.left==10&&projection.bottom==60);
     view::MapProjection grid; CHECK(grid.set(0,0,24,40));
     CHECK(projection.clipTo(grid));

@@ -278,8 +278,7 @@ void GameClient::setScreen(Screen s) {
 void GameClient::minimapPointer(float u, float v, bool ping, bool pressed) {
     if (!sim_) return;
     if (planet()) { minimap_.planetPointer(view_, u, v); return; }   // MinimapPlanet.cpp
-    const auto& g = mod().state(*sim_).grid;
-    const float3 point{u * float(g.w), 0, v * float(g.h)};
+    const float3 point=minimap_.pointer(u,v);
     if (ping) { if (pressed) pingMap(point); }
     else cam_.target = point;
 }

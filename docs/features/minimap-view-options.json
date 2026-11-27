@@ -4,7 +4,12 @@
   "owner": "gameplay",
   "changed_paths": [
     "engine/view/MapProjection.h",
-    "tests/tests.cpp"
+    "tests/tests.cpp",
+    "apps/client/GameClient.h",
+    "apps/client/Minimap.cpp",
+    "apps/client/MinimapPlanet.cpp",
+    "apps/client/ClientUi.cpp",
+    "docs/game-format.md"
   ],
   "traits": {
     "runtime": true,

@@ -3080,3 +3080,32 @@ In `game.json`, map pointer states to project images. A hotspot is a pixel posit
 ```
 
 The client selects `normal`, `attack`, `ability`, `place`, `invalid`, `enemy` or `ally` over the world. Active edge scrolling uses `edgeNorth`, `edgeSouth`, `edgeEast`, `edgeWest` or a diagonal such as `edgeNorthWest`. Over the HUD, an RmlUi cursor name selects the matching entry. Unconfigured states fall back to `normal`. Linux builds with libXcursor support full colour. Base X11 builds use a monochrome pointer.
+
+
+### Minimap visibility and planar bounds
+
+Set a unit type's `view.minimap` to `false` to hide its marker, or `true` to
+explicitly show it (including small neutral resource nodes hidden by the legacy
+default). The flag applies to flat and planetary maps and does not reveal objects
+hidden by visibility/fog.
+
+Flat maps accept `minimap` settings in the map or game.json; each map setting
+overrides its corresponding game default:
+
+```json
+"minimap": {
+  "bounds": [10, 20, 90, 70],
+  "cameraFrame": "rectangle"
+}
+```
+
+`bounds` is `[left, top, right, bottom]` in world X/Z coordinates. It is clipped
+to the grid and must have a nonempty intersection. Omit it for the whole grid,
+or use `"camera"` for the map's authored `screen` coverage: screen center plus
+half-size and allowed center displacement. This requires an enabled map screen.
+The background image still spans the whole grid: cropping samples the matching
+part of that image rather than stretching the entire image into the crop.
+Terrain, fog, markers, overlays and pointer actions use the same cropped area.
+`cameraFrame` is `"frustum"` by default; `"rectangle"` draws the axis-aligned
+bounding rectangle of the camera footprint. These planar settings do not change
+the planetary globe projection.

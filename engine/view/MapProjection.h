@@ -10,7 +10,7 @@ namespace aiverse::view {
 struct MapProjection {
     float left=0, top=0, right=1, bottom=1;
     bool set(float x0,float z0,float x1,float z1) {
-        if(!std::isfinite(x0)||!std::isfinite(z0)||!std::isfinite(x1)||!std::isfinite(z1)||x1<=x0||z1<=z0)return false;
+        if(!std::isfinite(x0)||!std::isfinite(z0)||!std::isfinite(x1)||!std::isfinite(z1)||!std::isfinite(x1-x0)||!std::isfinite(z1-z0)||x1<=x0||z1<=z0)return false;
         left=x0;top=z0;right=x1;bottom=z1;return true;
     }
     float width() const {return right-left;}
