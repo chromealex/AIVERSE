@@ -1816,3 +1816,7 @@ d59d11903045978e8e031f4847331ba265e7cd65 updates apps/studio-web/src/panels/Proj
 ### HTML Studio Input modifier editors
 
 9d2906145aca6612242480d49b797a3df91b3ae0 adds apps/studio-web/src/panels/InputModifiers.tsx, used by ProjectToolPanels.tsx with the existing codec shapes in apps/studio-web/src/types.ts. Action and mapping chains support scale, negate, deadzone, swizzle and normalize. npm --prefix apps/studio-web run build passed. Detached native Mac UI saved action scale X=2.5 and mapping swizzle [2,1,2], verified by independent JSON parse. Evidence in stats-mac-5n_9fa75/live.log and docs/handoff/studio-html5/captures/mac-input-modifiers.png. Remaining work includes trigger authoring and verification of the other modifier kinds.
+
+### Input trigger authoring in HTML Studio
+
+c583dd34bf384bba401a3e35b4392ac9d0e135b6 adds apps/studio-web/src/panels/InputTriggers.tsx with the existing input schema in apps/studio-web/src/types.ts and both authoring locations in ProjectToolPanels.tsx. Production web build passed. The detached Mac Input panel saved a 1.75 second hold on Interact and a chord referencing Action on its keyboard binding. Disk JSON verified both trigger objects. See stats-mac-t0w1d8my/live.log and docs/handoff/studio-html5/captures/mac-input-triggers.png. Remaining checks include chord reference maintenance when renaming and deleting actions, defaults and keyboard capture.
