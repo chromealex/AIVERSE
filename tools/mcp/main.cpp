@@ -48,13 +48,30 @@ struct Options {
 
 std::string findEditor(const Options& o, const std::string& self) {
     if (!o.editorPath.empty()) return o.editorPath;
-    for (fs::path c : {fs::path(self) / "AiverseStudioHTML5", fs::path(self) / "AiverseStudioHTML5.app/Contents/MacOS/AiverseStudioHTML5",
-                       fs::path(self) / "apps/studio-native/AiverseStudioHTML5.app/Contents/MacOS/AiverseStudioHTML5",
-                       fs::path(self) / "AiverseStudio.exe", fs::path(self) / "apps/studio-native/Release/AiverseStudio.exe",
-                       fs::path(self) / "aiverse_editor", fs::path(self) / "AiverseEditor.app/Contents/MacOS/AiverseEditor",
-                       fs::path(self) / "aiverse_editor.exe", fs::path(self) / "Release/aiverse_editor.exe"}) {
-        std::error_code ec;
-        if (fs::exists(c, ec)) return c.string();
+    const fs::path directory(self);
+    std::vector<fs::path> roots{directory, directory / "apps/studio-native"};
+    const fs::path config = directory.filename();
+    if (config == "Release" || config == "Debug" || config == "RelWithDebInfo" || config == "MinSizeRel")
+        roots.push_back(directory.parent_path() / "apps/studio-native" / config);
+#if defined(__APPLE__) || defined(_WIN32)
+#ifdef __APPLE__
+    const fs::path studio = "AiverseStudioHTML5.app/Contents/MacOS/AiverseStudioHTML5";
+    // The MCP bundled inside the app is beside its executable.
+    std::error_code ec;
+    if (fs::is_regular_file(directory / "AiverseStudioHTML5", ec))
+        return (directory / "AiverseStudioHTML5").string();
+#else
+    const fs::path studio = "AiverseStudio.exe";
+#endif
+    for (const char* build : {"Release", "RelWithDebInfo", "Debug", "MinSizeRel"})
+        roots.push_back(directory / "apps/studio-native" / build);
+#else
+    const fs::path studio = "aiverse_editor";
+#endif
+    for (const auto& root : roots) {
+        std::error_code error;
+        const auto candidate = root / studio;
+        if (fs::is_regular_file(candidate, error)) return candidate.string();
     }
     return {};
 }
