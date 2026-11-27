@@ -161,11 +161,12 @@ int ParticleSystem::Impl::mesh(const std::string& name, std::vector<std::string>
     return int(meshes.size() - 1);
 }
 
-uint16_t ParticleSystem::Impl::batchFor(const FxTexture& t, FxBlend blend, const Json& graphData) {
+uint16_t ParticleSystem::Impl::batchFor(const FxTexture& t, FxBlend blend, const Json& graphData, FxBlendSpace space) {
     const std::string key = graphData.isNull() ? "" : graphData.dump(-1);
     for (size_t i = 0; i < batches.size(); ++i)
-        if (batches[i].texId == t.tex.id && batches[i].blend == blend && batches[i].graphKey == key) return uint16_t(i);
+        if (batches[i].texId == t.tex.id && batches[i].blend == blend && batches[i].blendSpace == space && batches[i].graphKey == key) return uint16_t(i);
     Batch batch{t.tex.id, blend, t.tex, key, {}, {}, {}, {}};
+    batch.blendSpace=space;
     if (dev && !key.empty()) {
         try {
             const auto program = render::graph::compile(graphData, "particle");
@@ -238,7 +239,7 @@ void ParticleSystem::Impl::build(EffectRT& e, std::vector<std::string>& errors) 
             }
         }
         r.tex = texture(d.texture, errors, where);
-        r.batch = batchFor(r.tex, d.blend, d.shaderGraph);
+        r.batch = batchFor(r.tex, d.blend, d.shaderGraph,d.blendSpace);
         if(!batches[r.batch].error.empty()) errors.push_back(where + ": " + batches[r.batch].error);
         lutColor(r.color, d.color);
         float maxK = 0;
@@ -272,7 +273,7 @@ void ParticleSystem::Impl::build(EffectRT& e, std::vector<std::string>& errors) 
             lutColor(r.trailLife, d.trail.lifeColor);
             lutScalar(r.trailWidth, d.trail.width);
             r.trailTex = texture(d.trail.texture, errors, where + ".trail");
-            r.trailBatch = batchFor(r.trailTex, d.trail.blend);
+            r.trailBatch = batchFor(r.trailTex, d.trail.blend,{},d.trail.blendSpace);
         }
         r.shapeRot = Mat3::euler(d.shapeRotation);
         if (d.shape == FxShape::Mesh && !d.mesh.empty()) r.shapeMesh = mesh(d.mesh, errors, where + ".mesh");
@@ -285,7 +286,7 @@ void ParticleSystem::Impl::build(EffectRT& e, std::vector<std::string>& errors) 
         for (auto& sp : d.sprites) {
             FxTexture t = texture(sp, errors, where + ".sprites");
             r.spriteTex.push_back(t);
-            r.spriteBatch.push_back(batchFor(t, d.blend, d.shaderGraph));
+            r.spriteBatch.push_back(batchFor(t, d.blend, d.shaderGraph,d.blendSpace));
         }
         e.em.push_back(r);
         if (!d.loop) e.emitEnd = std::max(e.emitEnd, d.endTime());
@@ -810,9 +811,12 @@ void ParticleSystem::shutdown() {
         for (auto& p : I.meshPipe) releasePipeline(p);
         releasePipeline(I.reactiveQuadPipe);
         releasePipeline(I.reactiveMeshPipe);
+        releasePipeline(I.displayQuadPipe);
+        releasePipeline(I.displayMeshPipe);
         releaseShader(I.shader);
         releaseShader(I.mulShader);
         releaseShader(I.reactiveShader);
+        releaseShader(I.displayShader);
         releaseBuffer(I.vb);
         releaseBuffer(I.ib);
         releaseTexture(I.atlas);

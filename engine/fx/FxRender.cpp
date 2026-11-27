@@ -4,6 +4,7 @@
 #include <cstring>
 #include "FxInternal.h"
 #include "FxReactiveShaders.h"
+#include "FxDisplayShaders.h"
 
 namespace aiverse::fx {
 
@@ -25,8 +26,9 @@ struct Frame { float u0, v0, u1, v1; int sprite = -1; };
 
 } // namespace
 
-void ParticleSystem::render(const FxFog& fog) {
+void ParticleSystem::render(const FxFog& fog,bool deferDisplay) {
     auto& I = *impl_;
+    I.displayRuns.clear(); I.displayFog=fog;
     I.reactiveRuns.clear(); // stale frames must never leak reactive coverage
     if(I.dev && !deviceLeaseValid(*I.dev))return; // expired GPU epoch, no draw
     stats_.drawn = stats_.batches = stats_.drawCalls = 0;
@@ -456,6 +458,14 @@ void ParticleSystem::render(const FxFog& fog) {
         size_t j = i;
         while (j < I.recs.size() && I.recs[j].batch == b && (I.recs[j].kind == Impl::MeshPart) == meshRun) ++j;
         const auto& batch = I.batches[b];
+        // Display contributions keep the exact already-uploaded geometry.
+        // They are replayed once after tone mapping, never into the HDR buffer.
+        if(deferDisplay && batch.blendSpace==FxBlendSpace::Display) {
+            uint32_t count=0;
+            for(size_t k=i;k<j;++k)count+=vcount[k];
+            if(count)I.displayRuns.push_back({b,meshRun?meshBase+vstart[i]:vstart[i],count,meshRun});
+            i=j;continue;
+        }
         const int pi = int(batch.blend);
         const gfx::PipelineHandle pipe = batch.graphPipe[meshRun ? 1 : 0].valid() ? batch.graphPipe[meshRun ? 1 : 0] : (meshRun ? I.meshPipe[pi] : I.pipe[pi]);
         if (!(pipe == lastPipe)) { I.dev->setPipeline(pipe); lastPipe = pipe; }
@@ -573,6 +583,56 @@ uint32_t ParticleSystem::renderReactive(gfx::Device& device,
             }
         }
     }
+    return draws;
+}
+
+uint32_t ParticleSystem::renderDisplay(gfx::Device& device,gfx::TextureHandle depth,int width,int height) {
+    auto& I=*impl_;
+    if(!deviceLeaseValid(device) || &device!=I.dev || !depth.valid() || width<=0 || height<=0 ||
+       I.displayRuns.empty() || !I.vb.valid() || !I.ib.valid())return 0;
+    if(!I.displayShader.valid()) {
+        gfx::ShaderDesc shader;
+        shader.glslVertex=display_shaders::kVS;shader.glslFragment=display_shaders::kFS;
+        shader.msl=display_shaders::kMSL;shader.textureSlots=2;shader.uniformSlots=1;
+        shader.label="display additive particles";
+        I.displayShader=device.createShader(shader);
+    }
+    if(!I.displayShader.valid())return 0;
+    auto prepare=[&](bool mesh) {
+        auto& pipe=mesh?I.displayMeshPipe:I.displayQuadPipe;
+        if(!pipe.valid()) {
+            gfx::PipelineDesc desc;desc.shader=I.displayShader;
+            desc.attrs[0]={0,gfx::VertexFormat::Float3,0};
+            desc.attrs[1]={1,gfx::VertexFormat::Float2,12};
+            desc.attrs[2]={2,gfx::VertexFormat::UByte4N,20};
+            desc.attrCount=3;desc.stride=sizeof(Vertex);
+            desc.indexType=mesh?gfx::IndexType::None:gfx::IndexType::UInt16;
+            desc.cull=gfx::CullMode::None;desc.depthTest=false;desc.depthWrite=false;
+            desc.blend=gfx::BlendMode::Additive;desc.colorFormat=gfx::PixelFormat::RGBA8;
+            desc.label="display additive particle geometry";
+            pipe=device.createPipeline(desc);
+        }
+        return pipe;
+    };
+    struct Uniforms {float viewProj[16];float cameraFog[4];float outputSize[4];} u{};
+    std::memcpy(u.viewProj,I.viewProj.m,sizeof u.viewProj);
+    u.cameraFog[0]=I.eye.x;u.cameraFog[1]=I.eye.y;u.cameraFog[2]=I.eye.z;u.cameraFog[3]=I.displayFog.density;
+    u.outputSize[0]=float(width);u.outputSize[1]=float(height);
+    device.setViewport({0,0,width,height});device.setVertexBuffer(I.vb);device.setIndexBuffer(I.ib);
+    uint32_t draws=0;
+    for(const auto& run:I.displayRuns) {
+        const auto& batch=I.batches[run.batch];
+        const auto pipe=prepare(run.mesh);
+        if(!pipe.valid())continue;
+        device.setPipeline(pipe);device.setUniforms(0,&u,sizeof u);
+        device.setTexture(0,batch.tex.valid()?batch.tex:I.atlas);device.setTexture(1,depth);
+        if(run.mesh){device.draw(run.count,run.first);++draws;}
+        else for(uint32_t q=0;q<run.count/4;q+=kQuadsPerDraw) {
+            const auto n=std::min(kQuadsPerDraw,run.count/4-q);
+            device.drawIndexed(n*6,0,int32_t(run.first+q*4));++draws;
+        }
+    }
+    I.displayRuns.clear(); // one replay per prepared view
     return draws;
 }
 

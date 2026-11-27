@@ -210,7 +210,10 @@ public:
         setView(SpectraFxView::fromCamera(camera,viewProj,fbW,fbH));
     }
     void update(float dt);
-    void render(const FxFog& fog);
+    void render(const FxFog& fog,bool deferDisplay=false);
+    // Reuses the most recent render() upload. Host supplies a display-referred
+    // output pass and original depth, via Renderer3D::addDisplayDraw.
+    uint32_t renderDisplay(gfx::Device&,gfx::TextureHandle sceneDepth,int width,int height);
     // Stage 31: optional presentation-only reactive coverage from the
     // ALREADY uploaded current-frame particle geometry. Call after render()
     // inside Renderer3D::addMotionReactiveDraw's open RGBA8 mask pass.

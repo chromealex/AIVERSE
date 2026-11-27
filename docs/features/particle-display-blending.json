@@ -7,7 +7,12 @@
     "engine/fx/FxEffect.h",
     "engine/render/Renderer3D.cpp",
     "engine/render/Renderer3D.h",
-    "tests/tests.cpp"
+    "tests/tests.cpp",
+    "engine/fx/FxInternal.h",
+    "engine/fx/FxDisplayShaders.h",
+    "engine/fx/FxRender.cpp",
+    "engine/fx/ParticleSystem.cpp",
+    "engine/fx/ParticleSystem.h"
   ],
   "traits": {
     "editable": true,
@@ -18,7 +23,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Stage 1: emitter/trail blendSpace data and generic after-resolve draw hook. Particle shader/batch dispatch not connected yet; no runtime verification.",
+      "note": "Batch key and deferred geometry replay added, with GLSL/MSL depth-aware display shaders. Hosts and shader graph support still pending; no build or GPU verification.",
       "evidence": []
     },
     "architecture": {
