@@ -1,0 +1,27 @@
+[mac-frame] timer=120.0 Hz, uncapped=0, displaySync=1 (not an FPS guarantee)
+[mac-frame] avg/120 events=0.015 ms prep=0.001 ms begin=0.110 ms editor=7.467 ms end=0.039 ms gpu=1.536 ms
+[client-stages] avg/120 sim=1.12 scene=0.07 ui=2.21 view=1.63 fx=0.07 render=1.80 hud=0.27 other=0.33 total=7.49 ms
+[metal-assets] libraries=0 sourceMisses=40 pipelines=88 pipelineFailures=0 archive=0 strict=0
+[ui info] Loading Lua plugin using the provided Lua state.
+[streaming] initial=2 background=0 radius=47.5 focus=0.0,0.0
+[loading] map=maps/planet.json types=2/2
+[loading] map assets ready in 417.9 ms (2 types)
+[loading] first map frame in 3870.7 ms
+        5.76 real         4.94 user         0.30 sys
+           283561984  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               80489  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   1  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   0  voluntary context switches
+                5677  involuntary context switches
+         74850762300  instructions retired
+         18406721305  cycles elapsed
+          1146998016  peak memory footprint

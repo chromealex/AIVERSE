@@ -1,0 +1,86 @@
+{
+  "path": "/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/fixtures/planet-minimap-yjk7f_k2",
+  "rules": {
+    "victory": {
+      "mode": "survive",
+      "seconds": 120
+    },
+    "types": {
+      "left": {
+        "health": {
+          "max": 100
+        },
+        "sight": 40,
+        "view": {
+          "shape": "soldier",
+          "scale": 1,
+          "minimap": false
+        }
+      },
+      "right": {
+        "health": {
+          "max": 100
+        },
+        "sight": 40,
+        "view": {
+          "shape": "soldier",
+          "scale": 1,
+          "minimap": false
+        }
+      }
+    }
+  },
+  "map": {
+    "players": [
+      {
+        "start": {
+          "body": "p",
+          "face": 0,
+          "x": 8,
+          "y": 8
+        }
+      },
+      {
+        "start": {
+          "body": "p",
+          "face": 4,
+          "x": 8,
+          "y": 8
+        }
+      }
+    ],
+    "world": {
+      "start": "p",
+      "bodies": [
+        {
+          "id": "p",
+          "kind": "planet",
+          "radius": 20,
+          "faceSize": 16
+        }
+      ]
+    },
+    "entities": [
+      {
+        "type": "left",
+        "owner": 1,
+        "at": {
+          "body": "p",
+          "face": 0,
+          "x": 5,
+          "y": 8
+        }
+      },
+      {
+        "type": "right",
+        "owner": 1,
+        "at": {
+          "body": "p",
+          "face": 0,
+          "x": 11,
+          "y": 8
+        }
+      }
+    ]
+  }
+}

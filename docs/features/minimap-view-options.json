@@ -22,10 +22,11 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Flat-map capture acceptance passed: corrected texture aspect, coordinate crop, hidden tower/visible scout and complete rectangular camera footprint. Planet marker hiding still lacks its own visual acceptance.",
+      "status": "pass",
+      "note": "Actual planar Metal loose/atlas capture proves crop, texture aspect, marker filtering and complete camera rectangle. Actual planetary renderer A/B/C captures prove hiding either type changes only its marker pixels, preserving globe and camera rectangle.",
       "evidence": [
-        "docs/evidence/issues-minimap-metal-20261127/result.json"
+        "docs/evidence/issues-minimap-metal-20261127/result.json",
+        "docs/evidence/issues-planet-minimap-20261127/result.json"
       ]
     },
     "architecture": {
@@ -121,9 +122,14 @@
       ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Ordinary controls demo contains minimap background/crop and type visibility with actual Metal/WebGL captures. Planetary visibility separately exercised using isolated copy of existing examples/projectiles, no demo-specific runtime.",
+      "evidence": [
+        "demos/client-command-controls/game.json",
+        "demos/client-command-controls/rules.json",
+        "docs/evidence/issues-client-controls-web-20261127/result.json",
+        "docs/evidence/issues-planet-minimap-20261127/result.json"
+      ]
     },
     "tests": {
       "status": "not_run",
