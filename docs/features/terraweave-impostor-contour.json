@@ -3,6 +3,13 @@
   "id": "terraweave-impostor-contour",
   "owner": "terraweave",
   "changed_paths": [
+    "docs/agent-handoffs/media/terraweave-contour-grove.png",
+    "docs/agent-handoffs/terraweave-impostor-contour-initial.md",
+    "docs/agent-handoffs/terraweave-impostor-contour-metal.md",
+    "docs/devlog/systems.json",
+    "docs/evidence/terraweave-contour-m3-ultra.json",
+    "docs/evidence/terraweave-contour-m3-ultra.log.txt",
+    "docs/features/terraweave-impostor-contour.json",
     "engine/render/TerraWeaveForestAdapter.h",
     "engine/render/TerraWeaveImpostorAtlas.h",
     "tests/terraweave_metal_forest.mm",
@@ -16,93 +23,113 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Alpha bounds derived from final baked atlas.",
+      "evidence": [
+        "engine/render/TerraWeaveImpostorAtlas.h"
+      ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Shared per-prototype geometry retains both draw materials and azimuth selection.",
+      "evidence": [
+        "engine/render/TerraWeaveImpostorAtlas.h"
+      ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Adapter selects contour mode during prototype creation.",
+      "evidence": [
+        "engine/render/TerraWeaveForestAdapter.h"
+      ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "Benchmark-only tuning in the native test.",
       "evidence": []
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "No editable operation or saved setting.",
       "evidence": []
     },
     "studio": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "Prototype-time experiment has no authored Studio property.",
       "evidence": []
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "Comparison switches only in native prototype construction.",
       "evidence": []
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "Derived geometry carries no serialized state.",
       "evidence": []
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "No authored graph changes.",
       "evidence": []
     },
     "performance": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "fail",
+      "note": "Both contours reduce coverage. On the 288-tree M3 Ultra grove, median GPU time rises by 2.7% for three bands and 32.6% for eight bands. Keep opt-in.",
+      "evidence": [
+        "docs/evidence/terraweave-contour-m3-ultra.log.txt"
+      ]
     },
     "platforms": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Measured arm64 Metal only. Other targets untested.",
+      "evidence": [
+        "docs/evidence/terraweave-contour-m3-ultra.json"
+      ]
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Uses existing model geometry, texture and Metal test target.",
+      "evidence": [
+        "engine/render/TerraWeaveImpostorAtlas.h"
+      ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "Render-only comparison with CPU geometry tests.",
       "evidence": []
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "The offscreen grove exercises all three geometry modes.",
+      "evidence": [
+        "tests/terraweave_metal_forest.mm"
+      ]
     },
     "tests": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "CPU and Metal checks repeated three times on the tested SHA.",
+      "evidence": [
+        "docs/evidence/terraweave-contour-m3-ultra.json"
+      ]
     },
     "handoff": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Includes workload, limitations, tested SHA and next step.",
+      "evidence": [
+        "docs/agent-handoffs/terraweave-impostor-contour-metal.md"
+      ]
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Describes the experiment and invocation.",
+      "evidence": [
+        "docs/agent-handoffs/terraweave-impostor-contour-metal.md"
+      ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "No visual feature release. Real hardware captures accompany the experiment.",
       "evidence": []
     }
   },
@@ -112,5 +139,7 @@
     "studio_panels": [],
     "studio_methods": []
   },
-  "test_reports": []
+  "test_reports": [
+    "docs/evidence/terraweave-contour-m3-ultra.json"
+  ]
 }
