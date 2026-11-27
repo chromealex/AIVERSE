@@ -1,0 +1,23 @@
+{
+  "ai": {
+    "controller": "scripted"
+  },
+  "fogOfWar": {
+    "mode": "none"
+  },
+  "types": {
+    "scout": {
+      "name": "Voice scout",
+      "health": {
+        "max": 120
+      },
+      "move": {
+        "speed": 3
+      },
+      "sight": 20,
+      "view": {
+        "shape": "soldier"
+      }
+    }
+  }
+}
