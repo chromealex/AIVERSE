@@ -20,6 +20,8 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
   const [loaded, setLoaded] = useState<{model:string; document:AnimDoc} | null>(null);
   const doc = loaded?.model === model ? loaded.document : null;
   const [clip, setClip] = useState('');
+  const [selection, setSelection] = useState<{channel:number; key:number} | null>(null);
+  useEffect(() => setSelection(null), [model, clip, path]);
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [pose, setPose] = useState<SampledNode[]>([]);
@@ -47,6 +49,7 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
     }
   },[route.request,path]);
   const current = doc?.clips?.find(c => c.id === clip);
+  const channel = selection && current?.channels[selection.channel];
   const duration = current ? clipDuration(current) : 0;
   useEffect(() => {
     setPose([]);
@@ -128,10 +131,15 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
               onChange={e => { setPlaying(false); setTime(Number(e.target.value)); }}/>
             <div className="anim__keys">{keys.map((k, i) => <i key={i} style={{ left: (duration ? k / duration : 0) * 100 + '%' }} onClick={() => { setPlaying(false); setTime(k); }}/>)}</div>
           </div>
-          <div className="anim__channels">{current.channels.slice(0, 40).map((c, i) => <div key={i} className="anim__channel">
+          <div className="anim__channels">{current.channels.map((c, i) => <div key={i} className="anim__channel">
             <span title={c.node + '.' + (c.path ?? 'rotation')}>{c.node}<small>.{c.path ?? 'rotation'}</small></span>
-            <div>{(c.times ?? []).map((t: number, k: number) => <i key={k} style={{ left: (duration ? t / duration : 0) * 100 + '%' }}/>)}</div>
+            <div>{(c.times ?? []).map((t: number, k: number) => <button key={k} type="button"
+              aria-label={c.node + '.' + (c.path ?? 'rotation') + ' key ' + (k + 1) + ' at ' + t + ' s'}
+              aria-pressed={selection?.channel === i && selection.key === k}
+              style={{ left: (duration ? t / duration : 0) * 100 + '%' }}
+              onClick={() => { setPlaying(false); setTime(t); setSelection({channel:i, key:k}); }}/>)}</div>
           </div>)}</div>
+          {channel && selection && <output className="ptp__meta">{channel.node}.{channel.path ?? 'rotation'} · Key {selection.key + 1} · {channel.times?.[selection.key]} s · {String(channel.values?.[selection.key] ?? '—')}</output>}
         </>}
       </div>
     </div>}
