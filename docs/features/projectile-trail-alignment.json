@@ -28,6 +28,7 @@
     "engine/sim/Simulation.cpp",
     "engine/sim/Simulation.h",
     "engine/view/ProjectilePresentation.h",
+    "engine/view/game/GameLights.cpp",
     "engine/view/game/GameView.cpp",
     "engine/view/game/GameView.h",
     "engine/view/game/GameViewDraw.cpp",
