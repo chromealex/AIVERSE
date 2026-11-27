@@ -912,7 +912,7 @@ std::string cmakeVars(const Game& g, const Options& o, const fs::path& content, 
     s += " -DAIVERSE_GAME_VERSION=" + g.version;
     s += " -DAIVERSE_GAME_BUILD=" + std::to_string(g.build);
     s += " -DAIVERSE_GAME_EXECUTABLE=" + g.exe;
-    s += " -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TOOLS=OFF -DAIVERSE_BUILD_TESTS=OFF -DAIVERSE_BUILD_HEADLESS=OFF -DAIVERSE_BUILD_SERVER=OFF -DAIVERSE_BUILD_FPS_CLIENT=OFF";
+    s += " -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_STUDIO_HTML5=OFF -DAIVERSE_BUILD_TOOLS=OFF -DAIVERSE_BUILD_TESTS=OFF -DAIVERSE_BUILD_HEADLESS=OFF -DAIVERSE_BUILD_SERVER=OFF -DAIVERSE_BUILD_FPS_CLIENT=OFF";
     s += engineModuleVars(o);
     if (!gen.empty()) s += " -DAIVERSE_GEN_DIR=" + quote(gen);
     s += " -DAIVERSE_SPLASH_BACKGROUND=" + aiverse::build::splashBackgroundHex(o.gameJson);   // window colour before the first frame
@@ -1262,7 +1262,7 @@ void buildWindows(const Game& g, Options& o) {
               "@echo off\r\nrem Requires Visual Studio 2022 (Desktop C++) and CMake.\r\n"
               "cmake -S . -B build -A x64 -DAIVERSE_CONTENT_DIR=%~dp0content -DAIVERSE_GAME_NAME=\"" + g.name + "\" -DAIVERSE_GAME_ID=" + g.id +
               " -DAIVERSE_GAME_EXECUTABLE=" + g.exe + packArg + " -DAIVERSE_GEN_DIR=%~dp0gen" +
-              (splashBg.empty() ? std::string() : " -DAIVERSE_SPLASH_BACKGROUND=" + splashBg) + " -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_TOOLS=OFF -DAIVERSE_BUILD_TESTS=OFF -DAIVERSE_BUILD_HEADLESS=OFF -DAIVERSE_BUILD_SERVER=OFF -DAIVERSE_BUILD_FPS_CLIENT=OFF" + engineModuleVars(o) + " || exit /b 1\r\n"
+              (splashBg.empty() ? std::string() : " -DAIVERSE_SPLASH_BACKGROUND=" + splashBg) + " -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_STUDIO_HTML5=OFF -DAIVERSE_BUILD_TOOLS=OFF -DAIVERSE_BUILD_TESTS=OFF -DAIVERSE_BUILD_HEADLESS=OFF -DAIVERSE_BUILD_SERVER=OFF -DAIVERSE_BUILD_FPS_CLIENT=OFF" + engineModuleVars(o) + " || exit /b 1\r\n"
               "cmake --build build --target aiverse_client --config Release || exit /b 1\r\n"
               "echo Done: build\\Release\\" + g.exe + ".exe\r\n");
     info("Исходники: " + src.string() + " — на Windows запустите build.bat.");
