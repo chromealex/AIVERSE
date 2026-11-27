@@ -15,6 +15,8 @@
     "docs/devlog/entries/2026-11-25-modeling-volume-csg.json",
     "docs/devlog/systems.json",
     "docs/evidence/.gitattributes",
+    "docs/evidence/impostor-pr227-integrated-mac.json",
+    "docs/evidence/impostor-pr227-integrated-mac.log.txt",
     "docs/evidence/impostor-pr227-modeling-compat.json",
     "docs/evidence/impostor-pr227-modeling-compat.log.txt",
     "docs/evidence/modeling-volume-csg-editor.png",
@@ -66,7 +68,8 @@
       "note": "Existing native Modeling workspace successfully created, loaded, edited and exported the example. PR #227 retains the single-argument GLB exporter and adds an overload for asset extras. The volume CSG roundtrip and surface proxy export passed together.",
       "evidence": [
         "docs/evidence/modeling-volume-csg-rebuild-20261125.log.txt",
-        "docs/evidence/impostor-pr227-modeling-compat.json"
+        "docs/evidence/impostor-pr227-modeling-compat.json",
+        "docs/evidence/impostor-pr227-integrated-mac.json"
       ]
     },
     "skill": {
@@ -206,6 +209,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/impostor-pr227-modeling-compat.json"
+    "docs/evidence/impostor-pr227-integrated-mac.json"
   ]
 }

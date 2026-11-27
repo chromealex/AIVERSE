@@ -147,7 +147,7 @@
     "studio_methods": []
   },
   "test_reports": [
-    "docs/evidence/impostor-pr227-mac-mapped.json",
+    "docs/evidence/impostor-pr227-integrated-mac.json",
     "docs/evidence/impostor-pr227-windows.json",
     "docs/evidence/impostor-pr227-ubuntu.json"
   ]
