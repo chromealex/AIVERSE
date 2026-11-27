@@ -219,6 +219,32 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
       if (id) { event.preventDefault(); anchor.current = focused ?? id; void select(id, event.metaKey || event.ctrlKey ? 'toggle' : 'replace'); }
       return;
     }
+    if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && event.target instanceof HTMLElement) {
+      const element = event.target.closest<HTMLElement>('[data-hierarchy-key]');
+      if (!element) return;
+      const key = element.dataset.hierarchyKey!;
+      const rowIndex = display.findIndex(row => ('members' in row ? row.key : row.occurrence ?? row.node.id) === key);
+      const row = display[rowIndex];
+      if (!row) return;
+      const branch = 'members' in row || !!row.children;
+      const collapseKey = 'members' in row ? row.key : row.node.id;
+      event.preventDefault();
+      if (branch && collapsed.has(collapseKey) === (event.key === 'ArrowRight')) {
+        toggleCollapsed(collapseKey);
+      } else if (event.key === 'ArrowLeft') {
+        const parent = display.slice(0, rowIndex).reverse().find(candidate => candidate.depth < row.depth);
+        if (!parent) return;
+        const parentKey = 'members' in parent ? parent.key : parent.occurrence ?? parent.node.id;
+        const target = listRef.current?.querySelector<HTMLElement>(`[data-hierarchy-key="${CSS.escape(parentKey)}"]`);
+        if ('members' in parent) target?.querySelector('button')?.focus();
+        else if (!parent.node.preview) {
+          target?.focus();
+          anchor.current = parentKey;
+          void select(parent.node.id, 'replace');
+        }
+      }
+      return;
+    }
     if (!visible.length) return;
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
@@ -314,7 +340,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
         if ('members' in row) {
           const documentMembers=row.members.filter(id=>!id.startsWith('preview:'));
           const Chevron = row.collapsed ? ChevronRight : ChevronDown;
-          return <div key={'group:'+row.key} className="hier__group" data-hierarchy-label={row.label} style={{paddingInlineStart:4+row.depth*12}}>
+          return <div key={'group:'+row.key} className="hier__group" data-hierarchy-key={row.key} data-hierarchy-label={row.label} style={{paddingInlineStart:4+row.depth*12}}>
             <button type="button" aria-label={(row.collapsed?'Expand ':'Collapse ')+row.label} aria-expanded={!row.collapsed}
               onClick={() => toggleCollapsed(row.key)}><Chevron size={13}/></button>
             <button type="button" title={documentMembers.length?'Select '+documentMembers.length+' map objects':'Preview objects'} disabled={busy || !documentMembers.length}
@@ -334,7 +360,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
         const occurrence=row.occurrence ?? node.id;
         if(node.preview)return <HierarchyPreviewRow key={occurrence} onSelect={()=>void selectPreview(node.id)} selected={snapshot?.selectedPreviewIds?.includes(node.id)} node={node} depth={depth}
           childCount={row.children} collapsed={collapsed.has(node.id)} toggle={()=>toggleCollapsed(node.id)}/>;
-        return <div key={occurrence} data-occurrence={occurrence} data-id={node.id} data-nested-leaf={row.children===0 || undefined} role="option" aria-selected={selected} tabIndex={selected ? 0 : -1}
+        return <div key={occurrence} data-hierarchy-key={occurrence} data-occurrence={occurrence} data-id={node.id} data-nested-leaf={row.children===0 || undefined} role="option" aria-selected={selected} tabIndex={selected ? 0 : -1}
           className={'hier__row' + (selected ? ' is-selected' : '') + (node.id === selectedId ? ' is-primary' : '') +
             (node.id === hoverId ? ' is-hover' : '') + (hidden ? ' is-hidden' : '') +
             (drop?.id === node.id ? ' is-drop-' + drop.placement : '')}
