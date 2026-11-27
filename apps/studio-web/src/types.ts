@@ -127,7 +127,7 @@ export interface StudioMapProperties {
   entities:number; players:number; roadsOnly:boolean; victory:Record<string,unknown>|null;
   issues?:{error:boolean;text:string;entityId?:string}[];
 }
-export interface StudioMapChanges {scenarioRecord?:{group:"waves"|"triggers";index:number;value:Record<string,unknown>};name?:string;size?:[number,number];roadsOnly?:boolean;victory?:Record<string,unknown>|null}
+export interface StudioMapChanges {scenarioRecord?:{group:"waves"|"triggers";index:number} & ({value:Record<string,unknown>} | {remove:true});name?:string;size?:[number,number];roadsOnly?:boolean;victory?:Record<string,unknown>|null}
 export interface StudioSnapshot {
   graphDocument?: StudioGraphDocumentScope;
   project: { name: string; path: string; dirty: boolean; actorSession?:boolean; historyVersion?: string; assetHistoryVersion?: string };

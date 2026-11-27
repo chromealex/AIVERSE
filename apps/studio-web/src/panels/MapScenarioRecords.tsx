@@ -29,6 +29,13 @@ export function MapScenarioRecords({scope,busy,onApply}:{scope:StudioGraphDocume
   },[scope.projectPath,scope.mapPath,scope.revision,scope.epoch,group,open]);
   const rows=entries?.revision===scope.revision && entries.group===group ? entries.rows : undefined;
   const selected=rows?.[index];
+  async function remove(){
+    if(!selected || draft || pending)return;
+    setPending(true);setError('');
+    try{
+      onApply(await invoke('studio.mapPropertiesSet',{scope,changes:{scenarioRecord:{group,index,remove:true}}}));
+    }catch(e){setError(String(e));}finally{setPending(false);}
+  }
   async function apply(){
     if(!draft || draft.revision!==scope.revision || !selected)return;
     setPending(true);setError('');
@@ -49,6 +56,7 @@ export function MapScenarioRecords({scope,busy,onApply}:{scope:StudioGraphDocume
       {(selected || draft) && <><label>Record JSON<textarea className="au-textarea" rows={8} value={draft?.text??JSON.stringify(selected,null,2)}
         onChange={e=>setDraft({revision:draft?.revision??scope.revision,text:e.target.value})}/></label>
         <StudioButton type="button" disabled={!draft || draft.revision!==scope.revision} onClick={()=>void apply()}>Apply record</StudioButton>
+        {!draft && <StudioButton type="button" onClick={()=>void remove()}>Delete {group==='waves'?'wave':'trigger'}</StudioButton>}
         {draft && <StudioButton type="button" onClick={()=>setDraft(undefined)}>Discard record edits</StudioButton>}</>}
       {draft && draft.revision!==scope.revision && <p role="alert">Map changed. Discard record edits to reload.</p>}
       {rows?.length===0 && <p>No {group} on this map.</p>}

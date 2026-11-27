@@ -804,12 +804,17 @@ Json StudioSession::mapProperties(const Json& params,bool write) {
             const auto& record=patch["scenarioRecord"];
             const auto group=record.getStr("group");
             const auto& index=record["index"];
+            const bool remove=record.getBool("remove");
+            const bool validAction=remove ? !record.has("value") : record["value"].isObject();
             if(data.worldSpace || patch.size()!=1 || (group!="waves" && group!="triggers") ||
                !index.isNumber() || index.toDouble()!=index.integer() || index.integer()<0 ||
-               !data.extra[group].isArray() || size_t(index.integer())>=data.extra[group].size() || !record["value"].isObject())
+               !data.extra[group].isArray() || size_t(index.integer())>=data.extra[group].size() || !validAction)
                 throw std::runtime_error("Invalid map scenario record");
             auto& current=data.extra.member(group).at(size_t(index.integer()));
-            if(current!=record["value"]){
+            if(remove){
+                doc.beginEdit();
+                data.extra.member(group).eraseAt(size_t(index.integer()));
+            } else if(current!=record["value"]){
                 doc.beginEdit();
                 data.extra.member(group).at(size_t(index.integer()))=record["value"];
             }
