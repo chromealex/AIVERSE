@@ -537,6 +537,8 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
       backend:state.backend,camera:state.camera??null,snapshotMaxSide:captureSide,
       capturedAt:new Date().toISOString()};
     try {
+      await showPreview();
+      if(!mounted.current)return;
       const result=await invokePreview({
         action:'capture',maxSide:captureSide,expectedGeneration:state.generation,
         ...(replayPreset&&state.replayReady?{requireReplayReady:true}:{})
@@ -695,7 +697,7 @@ export default function SpectraNativePreview({graph,projectPath,disabled=false,l
       </StudioField>
       <StudioButton size="sm" variant="secondary"
         disabled={!active||!state?.ready||busy||capturePending}
-        onClick={()=>void showPreview().then(()=>{if(mounted.current)void captureFrame();})}>
+        onClick={()=>void captureFrame()}>
         {capturePending?'Capturing GPU frame…':'Capture Frame'}
       </StudioButton>
     </div>
