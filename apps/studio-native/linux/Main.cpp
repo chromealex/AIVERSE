@@ -20,7 +20,7 @@ public:
     GtkStudio(GtkOverlay* overlay, GtkWindow* window, WebKitWebView* web, const std::string& root)
         : StudioSurfacePlatform(overlay), window_(window), mainOverlay_(overlay),
           bridge_(web,[this](std::string message){ host_.handleMessage(message); }), host_(*this,root,false),
-          pointer_(widget(StudioSurface::Scene), host_),
+          pointer_(widget(StudioSurface::Scene), host_, [this](double u, double v) { openSceneMenu(u, v); }),
           gamePointer_(widget(StudioSurface::Game), [this](const platform::Event& event){ host_.gameEvent(event); }) {
         for (auto surface : {StudioSurface::Character, StudioSurface::Appearance, StudioSurface::Nature,
                              StudioSurface::Fx, StudioSurface::EffectFile, StudioSurface::GpuEmitter})
@@ -100,6 +100,19 @@ private:
     };
     std::map<std::string,Floating> floats_;
     Floating* current_{};
+    void openSceneMenu(double u, double v) {
+        auto* overlay = studioViewportHost(widget(StudioSurface::Scene));
+        StudioWebBridge* bridge = overlay == mainOverlay_ ? &bridge_ : nullptr;
+        for (const auto& entry : floats_) {
+            if (entry.second.overlay == overlay) { bridge = entry.second.bridge.get(); break; }
+        }
+        if (!bridge) return;
+        bridge->focus();
+        bridge->evaluate("(()=>{const el=document.querySelector('.viewport');if(!el)return;"
+            "const r=el.getBoundingClientRect();el.dispatchEvent(new MouseEvent('contextmenu',"
+            "{bubbles:true,cancelable:true,shiftKey:true,button:2,clientX:r.left+r.width*" +
+            std::to_string(u) + ",clientY:r.top+r.height*" + std::to_string(v) + "}));})()");
+    }
     bool openFloat(const Json& params) {
         const auto key=params.getStr("window"), title=params.getStr("title");
         static const std::regex keyPattern("[a-z0-9-]{1,40}"), panelPattern("[a-z][a-z0-9_]{0,31}");

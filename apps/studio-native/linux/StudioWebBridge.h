@@ -43,6 +43,7 @@ public:
     }
     StudioWebBridge(const StudioWebBridge&)=delete;
     StudioWebBridge& operator=(const StudioWebBridge&)=delete;
+    void focus() const { gtk_widget_grab_focus(GTK_WIDGET(view_)); }
     bool registered() const { return registered_; }
     void evaluate(const std::string& script) const {
         const char* uri=webkit_web_view_get_uri(view_);

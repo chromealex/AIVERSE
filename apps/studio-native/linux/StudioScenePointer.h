@@ -1,11 +1,14 @@
 #pragma once
 #include "../StudioHost.h"
 #include <gtk/gtk.h>
+#include <functional>
+#include <utility>
 
 namespace aiverse::studio {
 class StudioScenePointer {
 public:
-    StudioScenePointer(GtkWidget* area, StudioHost& host) : area_(area), host_(host) {
+    StudioScenePointer(GtkWidget* area, StudioHost& host, std::function<void(double,double)> menu)
+        : area_(area), host_(host), menu_(std::move(menu)) {
         gtk_widget_add_events(area_, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | GDK_POINTER_MOTION_MASK |
             GDK_KEY_PRESS_MASK | GDK_KEY_RELEASE_MASK | GDK_FOCUS_CHANGE_MASK | GDK_LEAVE_NOTIFY_MASK | GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK);
         connection_ = g_signal_connect(area_, "event", G_CALLBACK(+[](GtkWidget*, GdkEvent* event, gpointer data)->gboolean {
@@ -51,6 +54,23 @@ private:
         mods.ctrl = mods.command = flags & GDK_CONTROL_MASK;
         double x = lastX_, y = lastY_;
         int phase = 1, button = held_ < 0 ? 0 : held_;
+        if (event->type == GDK_BUTTON_PRESS && event->button.button == 3 && mods.shift && held_ < 0) {
+            gtk_widget_grab_focus(area_);
+            menuPress_ = true;
+            return true;
+        }
+        if (menuPress_) {
+            if (event->type == GDK_BUTTON_RELEASE && event->button.button == 3) {
+                menuPress_ = false;
+                x = event->button.x;
+                y = event->button.y;
+                if (x >= 0 && x < width && y >= 0 && y < height) menu_(x / width, y / height);
+                return true;
+            }
+            if (event->type == GDK_MOTION_NOTIFY || event->type == GDK_BUTTON_PRESS || event->type == GDK_BUTTON_RELEASE) return true;
+            if (event->type == GDK_UNMAP || event->type == GDK_GRAB_BROKEN ||
+                (event->type == GDK_FOCUS_CHANGE && !event->focus_change.in)) menuPress_ = false;
+        }
         switch (event->type) {
         case GDK_KEY_PRESS:
         case GDK_KEY_RELEASE: {
@@ -113,6 +133,8 @@ private:
     }
     GtkWidget* area_;
     StudioHost& host_;
+    std::function<void(double,double)> menu_;
+    bool menuPress_ = false;
     gulong connection_;
     int held_ = -1;
     double lastX_ = 0, lastY_ = 0;
