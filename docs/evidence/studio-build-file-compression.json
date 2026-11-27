@@ -1,0 +1,10 @@
+{
+  "sha": "c8cd40e82164e5fa5106a0ae8d53951e26f926e9",
+  "argv": [
+    "bash",
+    "../build-filecodec.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-build-file-compression.log.txt",
+  "sha256": "89782abfff25f8b5d2820fa4c9965ca090df3625358fac8e529eb3f8d7b792e7"
+}
