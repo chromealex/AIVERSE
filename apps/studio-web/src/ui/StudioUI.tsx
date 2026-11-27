@@ -189,7 +189,13 @@ export function StudioDialog({ label, className, onDismiss, dismissOnBackdrop = 
     aria-modal="true" aria-label={label} data-native-overlay
     onCancel={event => { event.preventDefault(); onDismiss(); }}
     onMouseDown={event => { if (dismissOnBackdrop && event.target === event.currentTarget) onDismiss(); }}
-    onKeyDown={event => event.stopPropagation()}>
+    onKeyDown={event => {
+      event.stopPropagation();
+      if (event.key === 'Escape' && !event.defaultPrevented && !event.nativeEvent.isComposing) {
+        event.preventDefault();
+        onDismiss();
+      }
+    }}>
     {children}
   </dialog>;
 }
