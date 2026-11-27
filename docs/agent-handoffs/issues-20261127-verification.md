@@ -52,3 +52,14 @@ The API test now checks the renderer-aware signature and retains a compile-time
 check that the original five-argument LDR invocation is valid.
 `git diff --check` passed; build and runtime tests remain pending.
 Next: resume the same KINGSTON build cache, then run the quick gate.
+
+## API regression verification
+
+At tree `2f7a16276`, `./run-tests.sh --quick --no-build --build-dir
+/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick
+--filter '^(camera_sprite_vfx_prepared_api|view_portrait_appearance_api)$'`
+passed 2/2 tests. Report: `/Volumes/KINGSTON/AIVERSE-builds/
+codex-issue223-minimap-atlas-quick/test-reports/20261127-085438-71582/summary.txt`.
+This establishes only native API compilation, not visual or runtime acceptance.
+The full incremental build remains live under handle 75542; log
+`issues-final-2cd2d9ee6-build.log` in the same build directory.
