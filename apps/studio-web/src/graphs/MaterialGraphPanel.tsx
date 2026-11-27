@@ -51,18 +51,28 @@ export default function MaterialGraphPanel({documentEpoch,name,material,draft,pr
  const fields=materialFields(material,draft).filter(f=>selected==='material'||selected==='factors'?f.type!=='asset':selected==='texture:'+f.key);
  const reference=textureNode?.label ?? fields.find(f=>f.type==='asset')?.value;
  const [revealError,setRevealError]=useState('');
- useEffect(()=>setRevealError(''),[selected,name,reference]);
+ const revealRequest=useRef(0);
+ useEffect(()=>{
+  setRevealError('');
+  return ()=>{revealRequest.current++;};
+ },[selected,name,reference,mode]);
  const revealTexture=async(value:string)=>{
-  const token=epoch.current;
+  const token=epoch.current,request=++revealRequest.current;
   try{
-   const path=/^[0-9a-f]{16,64}$/i.test(value)
-    ? (await invoke('studio.assetByGuid',{guid:value})).path : value;
-   if(epoch.current!==token)return;
-   const relative=safeAssetPath(path.replace(/^content\//,''));
+   let relative:string|null;
+   if(/^[0-9a-f]{16,64}$/i.test(value)){
+    relative=safeAssetPath((await invoke('studio.assetByGuid',{guid:value})).path);
+   }else{
+    relative=safeAssetPath(value.replace(/^content\//,''));
+    if(!relative)throw new Error('Invalid texture path: '+value);
+    const catalog=await invoke('studio.assets',{});
+    if(!catalog.files.some(file=>file.path===relative))throw new Error('Texture not found in Assets: '+value);
+   }
+   if(epoch.current!==token||request!==revealRequest.current)return;
    if(!relative)throw new Error('Texture file is unavailable.');
    setRevealError('');revealProjectAsset(projectPath,relative);
    window.dispatchEvent(new CustomEvent('studio:show-panel',{detail:'assets'}));
-  }catch(e){if(epoch.current===token)setRevealError(e instanceof Error?e.message:String(e));}
+  }catch(e){if(epoch.current===token && request===revealRequest.current)setRevealError(e instanceof Error?e.message:String(e));}
  };
  return <div className="material-graph-modes">
   <div hidden={mode!=='dependencies'} className="material-dependency-view"><StudioSection title="Material dependencies">
