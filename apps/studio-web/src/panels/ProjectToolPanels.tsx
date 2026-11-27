@@ -344,6 +344,12 @@ export function InputPanel(ctx: Ctx) {
               ? <select className="au-input" value={String(m.control.code)} onChange={e => setMapping(ci, mi, { control: { ...m.control, code: e.target.value } })}>
                   {codes(m.control.device).map(k => <option key={k}>{k}</option>)}</select>
               : <input className="au-input ptp__narrow" type="number" value={Number(m.control.code) || 0} onChange={e => setMapping(ci, mi, { control: { ...m.control, code: Math.round(Number(e.target.value) || 0) } })}/>}</td>
+            <td>{(m.control.device === 'touch' || m.control.device === 'gamepadAxis' || m.control.device === 'gamepadButton') &&
+              <label>Device index <select className="au-input ptp__narrow" value={m.control.deviceIndex ?? 0}
+                onChange={e => setMapping(ci, mi, { control: { ...m.control, deviceIndex: Number(e.target.value) } })}>
+                {Array.from({ length: m.control.device === 'touch' ? 32 : 4 }, (_, index) =>
+                  <option key={index} value={index}>{index}</option>)}
+              </select></label>}</td>
             <td className="ptp__consume"><label className="ptp__check" title="Stop lower-priority contexts from seeing this input"><input type="checkbox" checked={m.consume ?? false} onChange={e => setMapping(ci, mi, { consume: e.target.checked })}/>Consume</label></td>
             <td><button type="button" className="au-button au-button--icon au-button--ghost au-button--sm" title="Delete binding" onClick={() => setContext(ci, { mappings: c.mappings.filter((_, n) => n !== mi) })}><Trash2 size={12}/></button></td>
           </tr>)}
