@@ -217,23 +217,23 @@ void projectOwnerSaveContract(){
     const std::string manifestBytes=R"({ "name": "Fixture", "module": "game", "rules": "rules.json" })";
     const std::string rulesBytes=R"({ "include": ["extra.json"], "types": {"unit": {"health":{"max":100}}} })";
     const std::string extraBytes=R"({ "types": {"tree": {"health":{"max":100}}} })";
-    std::ofstream(manifest)<<manifestBytes;std::ofstream(rules)<<rulesBytes;std::ofstream(extra)<<extraBytes;
+    std::ofstream(manifest,std::ios::binary|std::ios::trunc)<<manifestBytes;std::ofstream(rules,std::ios::binary|std::ios::trunc)<<rulesBytes;std::ofstream(extra,std::ios::binary|std::ios::trunc)<<extraBytes;
     Workspace ws;std::string error;
     AIVERSE_TEST_CHECK(ws.project.load(root.string(),&error));
     AIVERSE_TEST_CHECK(ws.project.saveRules(&error)&&ws.project.saveManifest(&error));
     AIVERSE_TEST_CHECK(readProjectFileBytes(manifest)==manifestBytes&&readProjectFileBytes(rules)==rulesBytes&&readProjectFileBytes(extra)==extraBytes);
     const auto original=ws.project.rulesJson.dump();
-    std::ofstream(extra)<<extraBytes<<"\n";
+    std::ofstream(extra,std::ios::binary|std::ios::trunc)<<extraBytes<<"\n";
     const auto edit=Json::parse(R"({"path":"types.unit.health.max","value":200})");
     AIVERSE_TEST_CHECK(ws.call("rules_set",edit).has("error"));
     AIVERSE_TEST_CHECK(ws.project.rulesJson.dump()==original&&!ws.project.rulesDirty&&ws.changes.empty());
     AIVERSE_TEST_CHECK(readProjectFileBytes(rules)==rulesBytes&&readProjectFileBytes(extra)==extraBytes+"\n");
-    std::ofstream(extra)<<extraBytes;
+    std::ofstream(extra,std::ios::binary|std::ios::trunc)<<extraBytes;
     AIVERSE_TEST_CHECK(!ws.call("rules_set",edit).has("error"));
     AIVERSE_TEST_CHECK(ws.project.rulesJson["types"]["unit"]["health"]["max"].integer()==200);
     AIVERSE_TEST_CHECK(readProjectFileBytes(extra)==extraBytes);
     AIVERSE_TEST_CHECK(ws.changes.size()==1);
-    std::ofstream(manifest)<<manifestBytes<<"\n";
+    std::ofstream(manifest,std::ios::binary|std::ios::trunc)<<manifestBytes<<"\n";
     AIVERSE_TEST_CHECK(ws.call("set_manifest",Json::parse(R"({"path":"name","value":"New name"})")).has("error"));
     AIVERSE_TEST_CHECK(ws.project.manifest.getStr("name")=="Fixture"&&readProjectFileBytes(manifest)==manifestBytes+"\n");
     fs::remove_all(root);
@@ -246,7 +246,7 @@ void projectHistoryContract(){
     const std::string m=R"({ "name": "Fixture", "module": "game", "rules": "rules.json" })";
     const std::string r=R"({ "include": ["extra.json"], "types": {"unit": {"health":{"max":100}}} })";
     const std::string e=R"({ "types": {"tree": {"health":{"max":100}}} })";
-    std::ofstream(manifest)<<m;std::ofstream(rules)<<r;std::ofstream(extra)<<e;
+    std::ofstream(manifest,std::ios::binary|std::ios::trunc)<<m;std::ofstream(rules,std::ios::binary|std::ios::trunc)<<r;std::ofstream(extra,std::ios::binary|std::ios::trunc)<<e;
     Workspace ws;std::string error;
     AIVERSE_TEST_CHECK(ws.project.load(root.string(),&error));
     ws.map.reset(16,16);ws.map.beginEdit();ws.map.data.name="independent map edit";
@@ -263,10 +263,10 @@ void projectHistoryContract(){
     auto s=status();AIVERSE_TEST_CHECK(s["position"].integer()==2&&s["steps"].size()==2);
     AIVERSE_TEST_CHECK(step("undo","stale").has("error"));
     const auto version=s.getStr("version");
-    std::ofstream(rules)<<r<<"\n";
+    std::ofstream(rules,std::ios::binary|std::ios::trunc)<<r<<"\n";
     AIVERSE_TEST_CHECK(step("undo",version).has("error"));
     AIVERSE_TEST_CHECK(status().getStr("version")==version&&ws.project.manifest.getStr("name")=="Edited");
-    std::ofstream(rules)<<r;
+    std::ofstream(rules,std::ios::binary|std::ios::trunc)<<r;
     AIVERSE_TEST_CHECK(!step("undo",version).has("error"));
     AIVERSE_TEST_CHECK(readProjectFileBytes(manifest)==m&&readProjectFileBytes(extra)==editedExtra);
     AIVERSE_TEST_CHECK(!step("undo",status().getStr("version")).has("error"));
@@ -315,7 +315,7 @@ void projectHistoryPersistenceContract(){
     const auto checkpoint=root/".aiverse-cache"/"project-history.json";
     const std::string initial=R"({"name":"Fixture","module":"game","rules":"rules.json"})";
     const std::string originalRules=R"({"types":{"unit":{"health":{"max":100}}}})";
-    std::ofstream(manifest)<<initial;std::ofstream(rules)<<originalRules;
+    std::ofstream(manifest,std::ios::binary|std::ios::trunc)<<initial;std::ofstream(rules,std::ios::binary|std::ios::trunc)<<originalRules;
     std::string error,stale,checkpointBytes;
     {
         Workspace ws;AIVERSE_TEST_CHECK(ws.project.load(root.string(),&error));
@@ -336,13 +336,13 @@ void projectHistoryPersistenceContract(){
     }
     // External modification must not resurrect a history with a different cursor baseline.
     const auto savedRules=readProjectFileBytes(rules);
-    std::ofstream(rules)<<savedRules<<"\n";
+    std::ofstream(rules,std::ios::binary|std::ios::trunc)<<savedRules<<"\n";
     {
         Workspace ws;AIVERSE_TEST_CHECK(ws.project.load(root.string(),&error));
         const auto status=ws.project.historyStatus();
         AIVERSE_TEST_CHECK(!status.getBool("canUndo")&&!status.getBool("canRedo")&&status.has("persistenceWarning"));
     }
-    std::ofstream(rules)<<savedRules;
+    std::ofstream(rules,std::ios::binary|std::ios::trunc)<<savedRules;
     // Corrupt checkpoint: project remains readable, no unvalidated history is exposed.
     std::ofstream(checkpoint)<<"corrupt";
     {
@@ -684,7 +684,7 @@ void projectFileRecoveryWorkflow() {
         bool rejected=false;try{(void)studio::StudioMaterialPublicationJournal::quarantineIsolated(project,"exposed");}catch(...){rejected=true;}
         AIVERSE_TEST_CHECK(rejected);exposed.finish();
     }
-    std::ofstream(project/"game.json") << R"({"name":"Recovery fixture","module":"game","rules":"rules.json"})";
+    std::ofstream(project/"game.json",std::ios::binary|std::ios::trunc) << R"({"name":"Recovery fixture","module":"game","rules":"rules.json"})";
     std::ofstream(project/"rules.json") << R"({"types":{"unit":{"health":{"max":100}}}})";
     std::ofstream(project/"Fixture.aiverse") << R"({"format":1,"name":"Recovery fixture","manifest":"game.json"})";
     const auto original=project/"content"/"A"/"sample.txt";
@@ -713,7 +713,7 @@ void planetWorldProcessAuthoringWorkflow(){
     using namespace aiverse;namespace fs=std::filesystem;
     const auto root=fs::canonical(fs::temp_directory_path())/("studio-planet-wp-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     const auto project=root/"fixture";fs::create_directories(project/"maps");
-    std::ofstream(project/"game.json")<<R"({"module":"game","rules":"rules.json","maps":[{"file":"maps/scene.json"}]})";
+    std::ofstream(project/"game.json",std::ios::binary|std::ios::trunc)<<R"({"module":"game","rules":"rules.json","maps":[{"file":"maps/scene.json"}]})";
     std::ofstream(project/"rules.json")<<R"({"types":{"tree":{"health":{"max":100}}}})";
     std::ofstream(project/"maps/scene.json")<<R"({"players":[{"name":"Blue","team":1},{"name":"Red","team":2}],
         "world":{"start":"terra","bodies":[{"id":"terra","kind":"planet","radius":64,"faceSize":8},
@@ -817,7 +817,7 @@ void caveGraphCaptureWorkflow() {
     using namespace aiverse;namespace fs=std::filesystem;
     const auto root=fs::temp_directory_path()/("studio-cave-capture-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     const auto project=root/"fixture";fs::create_directories(project/"maps");
-    std::ofstream(project/"game.json")<<R"({"module":"game","rules":"rules.json","maps":[{"file":"maps/a.json"},{"file":"maps/b.json"}]})";
+    std::ofstream(project/"game.json",std::ios::binary|std::ios::trunc)<<R"({"module":"game","rules":"rules.json","maps":[{"file":"maps/a.json"},{"file":"maps/b.json"}]})";
     std::ofstream(project/"rules.json")<<R"({"types":{"unit":{"health":{"max":100}}}})";
     editor::MapDoc map;map.reset(16,16);map.data.name="Same display name";
     map.data.extra.set("terraweaveCaverns",Json::parse(R"({"version":1,"generatorVersion":1,"sourceRevision":7,"settings":{"seed":2,"cellCm":4800,"tunnelRadiusCm":450,"chamberRadiusCm":1200,"tunnelChance":550,"chamberChance":180,"minYcm":-200000,"maxYcm":-300},"stamps":[{"id":7,"mode":"carve","xCm":10,"yCm":-1000,"zCm":20,"radiusCm":400}],"entrances":[]})"));
@@ -895,7 +895,7 @@ void authoredEntityWorkflow() {
    using namespace aiverse;namespace fs=std::filesystem;
    const auto root=fs::canonical(fs::temp_directory_path())/("studio-authored-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
    const auto project=root/"fixture";fs::create_directories(project/"maps");
-   std::ofstream(project/"game.json")<<R"({"module":"game","rules":"rules.json","maps":[{"file":"maps/scene.json"}]})";
+   std::ofstream(project/"game.json",std::ios::binary|std::ios::trunc)<<R"({"module":"game","rules":"rules.json","maps":[{"file":"maps/scene.json"}]})";
    std::ofstream(project/"rules.json")<<R"({"types":{"tree":{"health":{"max":100}}}})";
    editor::MapDoc map;map.reset(16,16);editor::DocEntity e;e.id="first";e.type="tree";e.x=2;e.z=3;
    e.extra=Json::parse(R"({"components":{"Transform":{"y":4,"yaw":0,"scale":1},"StaticModel":{"asset":"content/tree.gltf"}}})");map.data.entities.push_back(e);e.id="second";map.data.entities.push_back(e);
@@ -1349,11 +1349,17 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(call("studio.op",request.dump().c_str()).has("error"));
        AIVERSE_TEST_CHECK(owner.project.manifest.dump()==original);
        input.set("value",value);request.set("params",input);
-       std::ofstream(project/"game.json")<<bytes<<"\n";
-       AIVERSE_TEST_CHECK(call("studio.op",request.dump().c_str()).has("error")); // external file edit
-       AIVERSE_TEST_CHECK(owner.project.manifest.dump()==original);
-       AIVERSE_TEST_CHECK(editor::readProjectFileBytes(project/"game.json")==bytes+"\n");
-       std::ofstream(project/"game.json")<<bytes;
+       // Conflict detection preserves exact bytes, including either newline convention.
+       // Binary fixture output prevents the Windows CRT from translating LF into CRLF.
+       for(const std::string newline : {"\n", "\r\n"}) {
+           const auto externalBytes=bytes+newline;
+           std::ofstream(project/"game.json",std::ios::binary|std::ios::trunc)<<externalBytes;
+           AIVERSE_TEST_CHECK(editor::readProjectFileBytes(project/"game.json")==externalBytes);
+           AIVERSE_TEST_CHECK(call("studio.op",request.dump().c_str()).has("error"));
+           AIVERSE_TEST_CHECK(owner.project.manifest.dump()==original);
+           AIVERSE_TEST_CHECK(editor::readProjectFileBytes(project/"game.json")==externalBytes);
+       }
+       std::ofstream(project/"game.json",std::ios::binary|std::ios::trunc)<<bytes;
        input.erase("value");input.set("valueJson",Json::string("{"));request.set("params",input);
        AIVERSE_TEST_CHECK(call("studio.op",request.dump().c_str()).has("error"));
        value.set("seed",Json::number(int64_t(9007199254740993LL)));
@@ -1635,7 +1641,7 @@ void entityWorkflow() {
     const auto root=fs::canonical(fs::temp_directory_path())/("studio-entities-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     const auto project=root/"templates"/"fixture";
     fs::create_directories(project/"maps");
-    std::ofstream(project/"game.json") << R"({"name":"Studio fixture","module":"game","rules":"rules.json","maps":[{"file":"maps/scene.json"}]})";
+    std::ofstream(project/"game.json",std::ios::binary|std::ios::trunc) << R"({"name":"Studio fixture","module":"game","rules":"rules.json","maps":[{"file":"maps/scene.json"}]})";
     std::ofstream(project/"rules.json") << R"({"types":{"unit":{"health":{"max":100}}}})";
     editor::MapDoc map;
     map.reset(16,16);
