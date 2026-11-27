@@ -71,7 +71,7 @@ export function FogPanel(ctx: Ctx & { playing: boolean; openGame: () => void }) 
   };
   if (!path) return <div className="tool__empty">Open a project to edit its fog of war.</div>;
   const mode = fog.mode === 'off' ? 'none' : (fog.mode ?? 'full');
-  const grid = fog.grid && typeof fog.grid === 'object' ? fog.grid : null;
+  const grid = fog.grid && typeof fog.grid === 'object' ? fog.grid : fog.grid === true ? { show: 'fog', alpha: .12 } : null;
   const gridShow = !grid || Number(grid.alpha ?? .12) <= 0 ? 'none' : grid.show === 'always' ? 'all' : (grid.show ?? 'fog');
   const num = (k: string, d: number) => typeof fog[k] === 'number' ? fog[k] : d;
   return <div className="ptp">
@@ -98,9 +98,9 @@ export function FogPanel(ctx: Ctx & { playing: boolean; openGame: () => void }) 
       <Slider label="Layer height" value={num('height', 1.3)} min={0} max={4} onCommit={v => void set('height', +v.toFixed(2))}/>
       <h4>Cell grid</h4>
       <Segmented value={gridShow} options={[['none', 'None'], ['fog', 'In fog'], ['all', 'Everywhere']]}
-        onChange={v => void set('grid', { ...(grid ?? {}), show: v, alpha: v === 'none' ? 0 : (Number(grid?.alpha) > 0 ? grid!.alpha : .15) })}/>
+        onChange={v => void set('grid', { ...(grid ?? {}), show: v, alpha: grid && Number(grid.alpha ?? .12) > 0 ? (grid.alpha ?? .12) : .15 })}/>
       {gridShow !== 'none' && <>
-        <Slider label="Line brightness" value={Number(grid?.alpha ?? .15)} min={0} max={1} onCommit={v => void set('grid', { ...grid, alpha: +v.toFixed(2) })}/>
+        <Slider label="Line brightness" value={Number(grid?.alpha ?? .12)} min={0} max={1} onCommit={v => void set('grid', { ...grid, alpha: +v.toFixed(2) })}/>
         <label className="ptp__row"><span>Line color</span><input type="color" value={rgbHex(grid?.color, '#ffffff')} onChange={e => void set('grid', { ...grid, color: hexRgb(e.target.value) })}/></label>
       </>}
       <div className="ptp__actions">
