@@ -1,0 +1,30 @@
+{
+  "source_demo": "04fde3c45a008b55dab7469d4923dca916ca136b",
+  "runtime_binary_source": "99f71adcf8873f2743903ff40c53184d630c3a7d",
+  "backend": "Metal",
+  "frames_per_scene": 120,
+  "size": [
+    1280,
+    720
+  ],
+  "exit_codes": [
+    0,
+    0,
+    0
+  ],
+  "pipeline_failures": [
+    0,
+    0,
+    0
+  ],
+  "observed": [
+    "Left model effect casts a shadow; right model effect does not; both visible",
+    "Alpha, source-alpha-weighted additive and unweighted additive shown left to right; weighted and unweighted differ at same alpha",
+    "Display-space particle glow on right visibly brighter than linear glow on left over same terrain"
+  ],
+  "limits": [
+    "Static examples and qualitative captures, not independent numerical blend tests (those retained separately)",
+    "Client binary predates Studio-only edits; relevant runtime source unchanged",
+    "Web acceptance and publication pending"
+  ]
+}
