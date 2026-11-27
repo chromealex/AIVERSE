@@ -4,7 +4,7 @@
 #include "engine/render/Renderer3D.h"
 #include "engine/render/Model.h"
 #include "engine/render/RenderDeviceLifetime.h"
-#if defined(_WIN32)
+#if defined(AIVERSE_WITH_VULKAN)
 #include "engine/gfx/vulkan/Vulkan.h"
 #endif
 #include <algorithm>
@@ -20,7 +20,7 @@ public:
     StudioPanelRenderTarget() {
 #if defined(__APPLE__)
         device_=gfx::createMetalDevice(nullptr);
-#elif defined(_WIN32)
+#elif defined(AIVERSE_WITH_VULKAN)
         gfx::VulkanWindow offscreen;
         std::string error;
         device_=gfx::createVulkanDevice(offscreen,&error);

@@ -27,5 +27,11 @@ int aiverseMain(int argc,char** argv){
         }
         if(changed<100||nonflat<100)throw std::runtime_error("missing geometry or camera response: changed="+std::to_string(changed)+", nonflat="+std::to_string(nonflat));
         std::cout<<"Building panel native GPU orbit PASS, changed pixels="<<changed<<"\n";return 0;
-    }catch(const std::exception& e){std::cerr<<e.what()<<"\n";return 1;}
+    }catch(const std::exception& e){
+        std::cerr<<e.what()<<"\n";
+        const std::string reason=e.what();
+        if(reason=="Panel offscreen Vulkan device: Vulkan: loader not found" ||
+           reason=="Panel offscreen Vulkan device: Vulkan: no GPU with graphics and present support")return 77;
+        return 1;
+    }
 }
