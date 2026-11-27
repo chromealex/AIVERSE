@@ -1752,3 +1752,7 @@ b9296de84a641e61fbd420084a561f45d0b4b22d extends tests/editor/scene_entity_adapt
 ### Simultaneous tile and camera slope fields
 
 0502abaa728df521005aa3e7430ce719f1ef9776 updates apps/studio-native/StudioScene.cpp and captures/mac-scene-dual-slope.png. Previously selecting a terrain tile suppressed the enabled camera-target slope field. Now both controls draw independently, coalescing equal centers. Initial compile failed due to a stray closure; corrected native Studio build passed. A detached Scene with two sloped OBJ tiles exercised off, selected, camera and combined modes at radius 8 m and spacing 2 m. In the combined screenshot 98 tile-only pixels and 163 camera-only pixels matched their respective independent captures exactly while differing from baseline by >40. Evidence: stats-mac-cy0dka5e/{off,selected,camera,both}.png. Next reconcile remaining TerraWeave controls with the editor parity matrix.
+
+### Scene debug parity evidence audit
+
+f7df1420e05ef5291ea8598e5ed480d601f2b6e5 updates docs/studio-html5-parity.md. Verified successful exits and SHA-256 matches for the stored native Mac slope, crown wind, erosion highlighting and Cyrillic caption logs; inspected their frame comparisons and validated each new evidence link. No new renderer run in this documentation stage. These mode-specific checks do not establish whole-editor parity or Windows acceptance. Next return to the remaining window migration inventory.
