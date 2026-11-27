@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeftRight, FolderOpen, RefreshCw } from 'lucide-react';
 import { invoke } from '../bridge';
 import type { StudioGpuStats, StudioGpuTexture, StudioProjectState, StudioSnapshot, StudioStats } from '../types';
@@ -315,13 +315,51 @@ export function FrameCapturePanel({ snapshot }: Ctx) {
   </div>;
 }
 
-function TextureSubresource({ texture }: { texture: StudioGpuTexture }) {
+function TexturePixels({ project, texture, mip, layer }: { project: string; texture: StudioGpuTexture; mip: number; layer: number }) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const active = useRef(false);
+  const [pending, setPending] = useState(false), [ready, setReady] = useState(false), [error, setError] = useState('');
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
+  const readPixels = async () => {
+    setPending(true); setReady(false); setError('');
+    const request = { project, texture: texture.id, mip, layer, ticket: Date.now() + '-' + Math.random() };
+    try {
+      await invoke('studio.textureReadback', request);
+      const deadline = Date.now() + 15000;
+      while (active.current && Date.now() < deadline) {
+        await new Promise(resolve => window.setTimeout(resolve, 120));
+        if (!active.current) return;
+        const { pixels, width, height } = await invoke('studio.textureReadback', { ...request, poll: true });
+        if (!active.current || !pixels || !width || !height) continue;
+        const element = canvas.current;
+        const ctx = element?.getContext('2d');
+        if (!element || !ctx) throw new Error('Pixel preview unavailable');
+        element.width = width; element.height = height;
+        const image = ctx.createImageData(width, height);
+        pixels.forEach((pixel, i) => image.data.set([pixel >> 16 & 255, pixel >> 8 & 255, pixel & 255, 255], i * 4));
+        ctx.putImageData(image, 0, 0); setReady(true); return;
+      }
+      if (active.current) throw new Error('Timed out waiting for the GPU');
+    } catch (e) { if (active.current) setError(message(e)); }
+    finally { if (active.current) setPending(false); }
+  };
+  return <div className="texture-resource__pixels">
+    <button type="button" className="au-button au-button--sm" disabled={pending} onClick={() => void readPixels()}>{pending ? 'Reading pixels…' : 'Read GPU pixels'}</button>
+    {error && <p role="alert">{error}</p>}
+    <canvas ref={canvas} hidden={!ready} aria-label="GPU pixel preview"/>
+  </div>;
+}
+
+function TextureSubresource({ texture, project }: { texture: StudioGpuTexture; project: string }) {
   const [mip, setMip] = useState(0), [layer, setLayer] = useState(0);
   const extent = (side: number) => Math.max(1, Math.floor(side / 2 ** mip));
   const volume = texture.dimension === '3D';
   const cube = texture.dimension?.startsWith('Cube');
   const slices = volume ? extent(texture.depth) : Math.max(1, texture.layers);
   const sliceLabel = volume ? 'Depth slice' : cube ? 'Cube face' : 'Array layer';
+  const canRead = texture.samples === 1 && texture.dimension !== '1D' &&
+    ['RGBA8', 'RGBA8_sRGB', 'RGBA16F'].includes(texture.format) &&
+    extent(texture.width) * extent(texture.height) * (texture.format === 'RGBA16F' ? 8 : 4) <= 16 * 1024 * 1024;
   const face = ['+X', '−X', '+Y', '−Y', '+Z', '−Z'][layer % 6];
   return <section className="texture-resource__detail" aria-label="Texture subresource">
     <h4>Texture #{texture.id} · {texture.dimension} · {texture.format}</h4>
@@ -339,6 +377,8 @@ function TextureSubresource({ texture }: { texture: StudioGpuTexture }) {
       </label>}
     </div>
     <p className="ptp__meta">{extent(texture.width)} × {extent(texture.height)} pixels · {texture.samples}× sampling</p>
+    {canRead ? <TexturePixels key={mip + '/' + layer} project={project} texture={texture} mip={mip} layer={layer}/> :
+      <p className="ptp__hint">Readback requires a single-sample RGBA8 or RGBA16F subresource up to 16 MiB.</p>}
   </section>;
 }
 
@@ -372,7 +412,7 @@ export function TextureResourcesPanel({ snapshot }: Ctx) {
     </div>
     {error && <div className="tool__error" role="alert">{error}</div>}
     <div className="ptp__scroll">
-      {selected && <TextureSubresource key={[selected.id, selected.dimension, selected.width, selected.height, selected.depth, selected.layers, selected.mips, selected.format].join('/')} texture={selected}/>}
+      {selected && <TextureSubresource project={path} key={[selected.id, selected.dimension, selected.width, selected.height, selected.depth, selected.layers, selected.mips, selected.format].join('/')} texture={selected}/>}
       <table className="ptp__table ptp__audit">
         <thead><tr><th>ID</th><th>Dimension</th><th>Size</th><th>Format</th><th>Mips</th><th>Kind</th><th>Estimate</th></tr></thead>
         <tbody>{rows.map(t => <tr key={t.id}>

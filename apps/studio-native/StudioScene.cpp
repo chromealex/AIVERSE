@@ -1,3 +1,4 @@
+#include "engine/render/TexturePreviewGrid.h"
 #include "apps/editor/core/NatureFieldArrows.h"
 #include "apps/editor/core/RiverFlowGizmos.h"
 #include "apps/editor/core/TerrainSlopeArrows.h"
@@ -2484,6 +2485,69 @@ void StudioScene::drawSelectionBox(const Camera& view,int width,int height) {
 bool StudioScene::projectPoint(float3 world,float width,float height,float2& out) const {
     return viewCamera().worldToScreen(world,width,height,out);
 }
+void StudioScene::beginDeviceFrame(int width, int height) {
+    device_->beginFrame(width, height);
+    if (pendingTextureRead_) {
+        auto submit = std::move(pendingTextureRead_);
+        pendingTextureRead_ = {};
+        submit();
+    }
+}
+
+Json StudioScene::textureReadback(const Json& params) {
+    const std::string ticket = params.getStr("ticket");
+    if (ticket.empty() || ticket.size() > 100) throw std::runtime_error("Invalid texture readback ticket");
+    if (params.getBool("poll")) {
+        if (ticket != textureReadTicket_ || !textureReadResult_.valid())
+            throw std::runtime_error("Texture readback was replaced");
+        if (textureReadResult_.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+            return textureReadResult_.get();
+        return Json::object();
+    }
+    if (textureReadResult_.valid() && textureReadResult_.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+        throw std::runtime_error("A texture readback is already pending");
+    const auto id = params.getInt("texture", -1), mip = params.getInt("mip", -1), layer = params.getInt("layer", -1);
+    const auto resources = device_->textureResources();
+    const auto it = std::find_if(resources.begin(), resources.end(), [&](const auto& t){ return t.handle.id == id && id > 0; });
+    if (it == resources.end()) throw std::runtime_error("Texture was released");
+    const auto& t = *it;
+    if (mip < 0 || mip >= t.mipLevels || mip >= 31 || layer < 0 ||
+        layer >= (t.dimension == gfx::TextureDimension::Texture3D ? std::max(1,t.depth >> mip) : t.arrayLayers))
+        throw std::runtime_error("Texture subresource changed");
+    const auto hdr = t.format == gfx::PixelFormat::RGBA16F;
+    if (t.sampleCount != 1 || t.dimension == gfx::TextureDimension::Texture1D ||
+        (!hdr && t.format != gfx::PixelFormat::RGBA8 && t.format != gfx::PixelFormat::RGBA8_sRGB))
+        throw std::runtime_error("Unsupported texture readback format or sampling");
+    if (uint64_t(std::max(1,t.width >> mip)) * std::max(1,t.height >> mip) > (16u << 20) / (hdr ? 8u : 4u))
+        throw std::runtime_error("Selected mip exceeds the 16 MiB readback limit");
+    auto completion = std::make_shared<std::promise<Json>>();
+    auto future = completion->get_future().share();
+    gfx::TextureReadbackDesc desc;
+    desc.mipLevel = int(mip);
+    desc.arrayLayer = int(layer);
+    auto decode = [completion](gfx::TextureReadbackResult image){
+        try {
+            const auto grid = render::texturePreviewGrid(image);
+            if (!grid.error.empty()) throw std::runtime_error(grid.error);
+            Json result = Json::object(), pixels = Json::array();
+            for (const auto& rgb : grid.colors)
+                pixels.push(Json::number(int64_t((rgb[0] << 16) | (rgb[1] << 8) | rgb[2])));
+            result.set("width",Json::number(int64_t(grid.columns)));
+            result.set("height",Json::number(int64_t(grid.rows)));
+            result.set("pixels",std::move(pixels));
+            completion->set_value(std::move(result));
+        } catch (...) { completion->set_exception(std::current_exception()); }
+    };
+    pendingTextureRead_ = [this, handle=t.handle, desc, completion, decode=std::move(decode)]{
+        if (!device_->readTextureAsync(handle, desc, decode))
+            completion->set_exception(std::make_exception_ptr(std::runtime_error("GPU backend could not schedule texture readback")));
+    };
+    lastFrameSignature_ = 0;
+    textureReadTicket_ = ticket;
+    textureReadResult_ = std::move(future);
+    return Json::object();
+}
+
 Json StudioScene::textureResources() const {
     static const char* formats[]={"RGBA8","R8","Depth","RGBA32F","ETC2_RGB8","ETC2_RGBA8","BC1","BC3","BC7","ASTC_4x4","ASTC_6x6",
         "RGBA8_sRGB","RGBA16F","BC4","BC5","EAC_R11","RG8","R16F","RG16F","R32F","RG32F","BC6H_UFloat","BC6H_SFloat",
@@ -3403,7 +3467,7 @@ void StudioScene::drawSourceModel(int width,int height){
     const float radius=std::max(heightHint,model.view.selectionRadius(model.type));
     camera.target={0,heightHint*.45f,0};camera.distance=radius*2.65f*std::max(1.f,float(height)/width);
     camera.minDistance=.05f;camera.yaw=model.yaw;camera.pitch=model.pitch;
-    device_->beginFrame(width,height);StudioFrameScope frame{*device_};
+    beginDeviceFrame(width,height);StudioFrameScope frame{*device_};
     renderer_.beginScene(camera,width,height);
     renderer_.lighting.skyColor={.8f,.85f,.9f};renderer_.lighting.fogDensity=0;
     model.view.drawPreview(renderer_,model.type,uint8_t(model.owner),model.time,0.f);
@@ -3428,7 +3492,7 @@ Json StudioScene::gpuEmitterCommand(const std::string& project,const Json& param
 }
 void StudioScene::drawGpuEmitter(int width,int height){
     if(!gpuEmitter_||width<2||height<2)return;
-    device_->beginFrame(width,height);StudioFrameScope frame{*device_};
+    beginDeviceFrame(width,height);StudioFrameScope frame{*device_};
     gpuEmitter_->draw(renderer_,width,height);
 }
 Json StudioScene::effectFileCommand(const std::string& project,const Json& params){
@@ -3469,7 +3533,7 @@ Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,con
     view.display.settings=state.preview.settings;
     view.display.settings.enabled=state.showNature && state.preview.settings.enabled;
     auto& particles=view.particles_;
-    device_->beginFrame(width,height);StudioFrameScope frame{*device_};
+    beginDeviceFrame(width,height);StudioFrameScope frame{*device_};
     renderer_.beginScene(camera,width,height);
     renderer_.lighting.skyColor={.7f,.8f,.95f};renderer_.lighting.fogDensity=0;
     if(terrain_.vb.valid() && terrain_.ib.valid())renderer_.drawMesh(terrain_,mat4{},{1,1,1,1},kDrawNoCastShadow);
@@ -3545,13 +3609,13 @@ Json StudioScene::drawNature(int width,int height,StudioNaturePreview& state,con
 }
 void StudioScene::drawEffectFile(int width,int height){
     if(!effectFile_ || width<2 || height<2)return;
-    device_->beginFrame(width,height);
+    beginDeviceFrame(width,height);
     StudioFrameScope frame{*device_};
     effectFile_->draw(renderer_,width,height);
 }
 void StudioScene::drawAttachments(int width,int height){
     if(!attachmentPreview_||!attachmentPreview_->ready()||width<2||height<2)return;
-    device_->beginFrame(width,height);StudioFrameScope frame{*device_};
+    beginDeviceFrame(width,height);StudioFrameScope frame{*device_};
     attachmentPreview_->draw(width,height);
 }
 
@@ -3581,7 +3645,7 @@ void StudioScene::drawAnimationPose(int width,int height,const std::shared_ptr<c
         const auto size=source->boundsMax-source->boundsMin;
         camera.distance=std::max({size.x,size.y,size.z,.3f})*2.1f*std::max(1.f,float(height)/width);
     }
-    device_->beginFrame(width,height);
+    beginDeviceFrame(width,height);
     StudioFrameScope frame{*device_};
     renderer_.beginScene(camera,width,height);
     renderer_.lighting.skyColor={.8f,.85f,.9f};
@@ -3606,7 +3670,7 @@ void StudioScene::frameSpectraDock(int framebufferWidth,int framebufferHeight) {
     if(antialiasing_.pendingTargetRetirements())antialiasing_.collectRetiredTargets();
     if(renderer_.pendingProgramRetirements())renderer_.collectRetiredPrograms();
     if(renderer_.pendingTargetRetirements())renderer_.collectRetiredTargets();
-    device_->beginFrame(framebufferWidth,framebufferHeight);
+    beginDeviceFrame(framebufferWidth,framebufferHeight);
     StudioFrameScope scope{*device_};
     const auto view=viewCamera();
     const float aspect=float(framebufferWidth)/float(framebufferHeight);
@@ -3695,7 +3759,7 @@ void StudioScene::renderMapOutput(const StudioSceneDocument& document,int width,
 }
 
 void StudioScene::beginMapOutput(int width,int height) {
-    if(!captureOutput_){device_->beginFrame(width,height);return;}
+    if(!captureOutput_){beginDeviceFrame(width,height);return;}
     if(width!=captureWidth_ || height!=captureHeight_ || !captureColor_.valid() || !captureDepth_.valid()){
         if((captureColor_.valid() || captureDepth_.valid()) && !device_->waitForResourceIdle())
             throw std::runtime_error("Scene export target is still in use");
@@ -3757,7 +3821,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     // orbit/zoom/pan operate on camera_ and never mutate the project.
     if(buildingPreview_ && buildingPreviewGpuReady_){
         lastFrameSignature_=0; // redraw while interactive camera is active
-        device_->beginFrame(framebufferWidth,framebufferHeight);
+        beginDeviceFrame(framebufferWidth,framebufferHeight);
         StudioFrameScope scope{*device_};
         renderer_.beginScene(viewCamera(),framebufferWidth,framebufferHeight);
         renderer_.clearDynamicGiOverlay();
@@ -3828,7 +3892,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                 camera_.distance=v=="face"?.85f:v=="torso"?2.f:4.2f;
                 camera_.pitch=v=="face"?.05f:.15f;camera_.yaw=0;camera_.ortho=false;tween_.active=false;
             }
-            device_->beginFrame(framebufferWidth,framebufferHeight);
+            beginDeviceFrame(framebufferWidth,framebufferHeight);
             renderer_.beginScene(camera_,framebufferWidth,framebufferHeight);
             renderer_.clearDynamicGiOverlay(); // map GI must not leak into the isolated facial preview
             const auto* model=facialGpu_.model();
@@ -4023,7 +4087,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             tween_.active=false;
             cameraInitialized_=true;
         }
-        device_->beginFrame(framebufferWidth,framebufferHeight);
+        beginDeviceFrame(framebufferWidth,framebufferHeight);
         StudioFrameScope scope{*device_};
         if(graphParticles_&&graphPreviewError_.empty()){
             const auto now=std::chrono::steady_clock::now();

@@ -3,6 +3,7 @@
 // macOS-only native preview: AIVERSE gfx::Device + Renderer3D over a CAMetalLayer.
 // No ImGui, no CPU texture readback, no dependency on UI component hierarchy.
 #pragma once
+#include <future>
 #include "apps/editor/core/RouteOps.h"
 #include "apps/studio-native/StudioMapAreaBounds.h"
 #include "apps/studio-native/StudioNatureLayers.h"
@@ -463,6 +464,7 @@ public:
     // Scene brush ring under the cursor (radius in world units); hidden when visible=false.
     // Texture Resources / Frame Capture panels: live GPU textures (format-based size estimate) and draw calls.
     Json textureResources() const;
+    Json textureReadback(const Json& params);
     void setPostPreview(const std::string& project,const Json& game,const Json& map,render::PrismaQuality quality,bool visible);
     Json prismaFrameReports(const std::string& project, const std::string& map) const;
     Json lensViewPose() const;
@@ -537,6 +539,10 @@ public:
         cameraInitialized_=true;
     }
 private:
+    void beginDeviceFrame(int width, int height);
+    std::function<void()> pendingTextureRead_;
+    std::string textureReadTicket_;
+    std::shared_future<Json> textureReadResult_;
     std::unique_ptr<gfx::Device> device_;
     std::unique_ptr<render::RenderDeviceLifetime> deviceLifetime_;
     std::unique_ptr<editor::TextureGraphGpuPreview> textureGraph_;

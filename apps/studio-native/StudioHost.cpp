@@ -5351,6 +5351,13 @@ void StudioHost::handleMessage(const std::string& json) {
                 mouse_={};
             }
             reply.set("result",onScene([&]{return preview_->cavernsPreview(params);}));
+        } else if (method == "studio.textureReadback" && req["id"].isNumber()) {
+            const auto& request = req["params"];
+            if (!preview_ || !placement_.visible || request.getStr("project") != session_->workspace().project.dir)
+                throw std::runtime_error("Scene textures are unavailable for this project");
+            reply = Json::object();
+            reply.set("id",req["id"]);
+            reply.set("result",onScene([&]{ return preview_->textureReadback(request); }));
         } else if (method == "studio.gpuStats" && req["id"].isNumber()) {
             // Frame Capture / Texture Resources: Scene frame history (CPU frame time, draw calls) and live GPU textures.
             reply = Json::object();

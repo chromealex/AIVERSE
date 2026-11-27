@@ -2,6 +2,7 @@
 // No editor gameplay logic or ECS state. GPU footprint is an approximation,
 // not a GPU driver memory measurement or streaming residency query.
 #include "../Editor.h"
+#include "engine/render/TexturePreviewGrid.h"
 
 #include <algorithm>
 #include <array>
@@ -72,68 +73,17 @@ struct TextureReadPreview {
     std::vector<ImU32> cells; // 32x32 max; never hold the full GPU readback
 };
 
-// Read the exact linear 16-bit float texel, including negatives. Tonemap
-// positive HDR values only for an approximate on-screen diagnostic.
-float diagnosticHalf(const uint8_t* p) {
-    const uint16_t bits = uint16_t(p[0]) | (uint16_t(p[1]) << 8);
-    const int sign = bits & 0x8000u ? -1 : 1;
-    const int exponent = (bits >> 10) & 31;
-    const int mantissa = bits & 1023;
-    if (exponent == 31) return 0.f; // malformed/non-finite content, preview only
-    if (exponent == 0) return float(sign) * std::ldexp(float(mantissa), -24);
-    return float(sign) * std::ldexp(1.f + float(mantissa)/1024.f, exponent - 15);
-}
-uint8_t diagnosticByte(float linear) {
-    // Approximate Reinhard exposure then linear->sRGB presentation.
-    const float v = std::max(0.f, linear);
-    const float mapped = v / (1.f + v);
-    const float display = mapped <= .0031308f ? mapped * 12.92f :
-        1.055f * std::pow(mapped, 1.f/2.4f) - .055f;
-    return uint8_t(std::clamp(int(display * 255.f + .5f),0,255));
-}
-void decodeReadPreview(TextureReadPreview& state, gfx::TextureReadbackResult image) {
+void decodeReadPreview(TextureReadPreview& state, const gfx::TextureReadbackResult& image) {
+    const auto decoded = render::texturePreviewGrid(image);
     state.pending = false;
     state.cells.clear();
-    state.cellsX = state.cellsY = state.width = state.height = 0;
-    if (!image.success()) {
-        state.status = "GPU readback failed or resource was released.";
-        return;
-    }
-    const int bpp = image.format == gfx::PixelFormat::RGBA16F ? 8 : 4;
-    if (image.format != gfx::PixelFormat::RGBA16F &&
-        image.format != gfx::PixelFormat::RGBA8 &&
-        image.format != gfx::PixelFormat::RGBA8_sRGB) {
-        state.status = "Readback returned an unsupported preview format.";
-        return;
-    }
-    const size_t expected = size_t(image.width) * size_t(image.height) * size_t(bpp);
-    if (image.width <= 0 || image.height <= 0 ||
-        image.pixels.size() != expected) {
-        state.status = "Readback pixel count does not match the texture dimensions.";
-        return;
-    }
-    state.width = image.width;
-    state.height = image.height;
-    state.cellsX = std::min(32,image.width);
-    state.cellsY = std::min(32,image.height);
-    state.cells.reserve(size_t(state.cellsX)*size_t(state.cellsY));
-    for (int y=0;y<state.cellsY;++y) {
-        for (int x=0;x<state.cellsX;++x) {
-            const int sx = int((int64_t(x)*image.width)/state.cellsX);
-            const int sy = int((int64_t(y)*image.height)/state.cellsY);
-            const uint8_t* sample = image.pixels.data() +
-                (size_t(sy)*size_t(image.width)+size_t(sx))*size_t(bpp);
-            uint8_t rgb[3]{};
-            if (bpp == 8) {
-                for (int c=0;c<3;++c)
-                    rgb[c] = diagnosticByte(diagnosticHalf(sample+c*2));
-            } else {
-                for (int c=0;c<3;++c) rgb[c]=sample[c];
-            }
-            state.cells.push_back(IM_COL32(rgb[0],rgb[1],rgb[2],255));
-        }
-    }
-    state.status = "Captured a small CPU preview of the selected GPU subresource.";
+    state.width = decoded.width;
+    state.height = decoded.height;
+    state.cellsX = decoded.columns;
+    state.cellsY = decoded.rows;
+    for (const auto& rgb : decoded.colors)
+        state.cells.push_back(IM_COL32(rgb[0], rgb[1], rgb[2], 255));
+    state.status = decoded.error.empty() ? "Captured a small CPU preview of the selected GPU subresource." : decoded.error;
 }
 bool matchesTextureFilter(const gfx::TextureResourceInfo& r, const char* value) {
     if (!value || !*value) return true;
@@ -268,7 +218,7 @@ public:
                     [weak,revision](gfx::TextureReadbackResult result) {
                         if (auto state = weak.lock()) {
                             if (state->revision == revision)
-                                decodeReadPreview(*state,std::move(result));
+                                decodeReadPreview(*state,result);
                         }
                     })) {
                     state->pending = false;
