@@ -467,7 +467,7 @@ public:
     // Scene brush ring under the cursor (radius in world units); hidden when visible=false.
     // Texture Resources / Frame Capture panels: live GPU textures (format-based size estimate) and draw calls.
     Json textureResources() const;
-    Json textureReadback(const Json& params);
+    Json textureReadback(const Json& params, std::string (*encodeRgb)(const void*, int, int));
     void setPostPreview(const std::string& project,const Json& game,const Json& map,render::PrismaQuality quality,bool visible);
     Json prismaFrameReports(const std::string& project, const std::string& map) const;
     Json lensViewPose() const;

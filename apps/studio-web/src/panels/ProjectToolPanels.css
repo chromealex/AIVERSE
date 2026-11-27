@@ -135,4 +135,6 @@ tr.diff__added td:first-child{color:#8ee6a0}tr.diff__removed td:first-child{colo
 
 .texture-resource__detail{padding:10px;border:1px solid var(--au-line);border-radius:var(--au-radius-md);margin-bottom:10px}.texture-resource__controls{display:flex;flex-wrap:wrap;gap:12px}.texture-resource__controls label{flex:1 1 140px}.texture-resource__controls input{display:block;width:100%}.texture-resource__controls output{float:right}
 
+.texture-resource__full{max-height:65vh;overflow:auto;margin-block:8px}
+.texture-resource__full img{display:block;max-width:none;image-rendering:pixelated}
 .texture-resource__pixels canvas:not([hidden]){display:block;box-sizing:content-box;max-width:calc(100% - 2px);height:auto;image-rendering:pixelated;margin-top:8px;border:1px solid var(--au-line)}

@@ -17,6 +17,7 @@
 #include "engine/render/TextureCache.h"
 #include "apps/editor/AuthoringWater.h"
 #include "apps/studio-native/StudioScene.h"
+#include "apps/editor/core/BrandingOps.h"
 #include "apps/studio-native/StudioAttachmentPreview.h"
 #include "engine/view/game/GameView.h"
 #include "apps/studio-native/StudioGpuEmitterPlayback.h"
@@ -2494,7 +2495,7 @@ void StudioScene::beginDeviceFrame(int width, int height) {
     }
 }
 
-Json StudioScene::textureReadback(const Json& params) {
+Json StudioScene::textureReadback(const Json& params, std::string (*encodeRgb)(const void*, int, int)) {
     const std::string ticket = params.getStr("ticket");
     if (ticket.empty() || ticket.size() > 100) throw std::runtime_error("Invalid texture readback ticket");
     if (params.getBool("poll")) {
@@ -2524,11 +2525,19 @@ Json StudioScene::textureReadback(const Json& params) {
     gfx::TextureReadbackDesc desc;
     desc.mipLevel = int(mip);
     desc.arrayLayer = int(layer);
-    auto decode = [completion, preview2D = t.dimension == gfx::TextureDimension::Texture2D](gfx::TextureReadbackResult image){
+    auto decode = [completion, encodeRgb, fullResolution = params.getBool("fullResolution"), preview2D = t.dimension == gfx::TextureDimension::Texture2D](gfx::TextureReadbackResult image){
         try {
-            const auto grid = render::texturePreviewGrid(image, preview2D);
+            const auto grid = render::texturePreviewGrid(image, preview2D, fullResolution);
             if (!grid.error.empty()) throw std::runtime_error(grid.error);
             Json result = Json::object(), pixels = Json::array();
+            if (fullResolution) {
+                const auto png = encodeRgb(grid.colors.data(), grid.columns, grid.rows);
+                if (png.empty())
+                    throw std::runtime_error("Could not encode full-resolution texture");
+                result.set("url", Json::string("data:image/png;base64," + editor::base64Encode(png)));
+                completion->set_value(std::move(result));
+                return;
+            }
             for (const auto& rgb : grid.colors)
                 pixels.push(Json::number(int64_t((rgb[0] << 16) | (rgb[1] << 8) | rgb[2])));
             result.set("width",Json::number(int64_t(grid.columns)));

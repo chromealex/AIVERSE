@@ -320,21 +320,26 @@ function TexturePixels({ project, texture, mip, layer }: { project: string; text
   const active = useRef(false);
   const reading = useRef(false);
   const [live, setLive] = useState(texture.dimension === '2D');
+  const [fullImage, setFullImage] = useState('');
   const textureId = texture.id;
   const [pending, setPending] = useState(false), [ready, setReady] = useState(false), [error, setError] = useState('');
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
-  const readPixels = useCallback(async () => {
+  const readPixels = useCallback(async (fullResolution = false) => {
     if (reading.current || document.hidden) return;
     reading.current = true;
     setPending(true); setError('');
-    const request = { project, texture: textureId, mip, layer, ticket: Date.now() + '-' + Math.random() };
+    const request = { project, texture: textureId, mip, layer, fullResolution, ticket: Date.now() + '-' + Math.random() };
     try {
       await invoke('studio.textureReadback', request);
       const deadline = Date.now() + 15000;
       while (active.current && Date.now() < deadline) {
         await new Promise(resolve => window.setTimeout(resolve, 120));
         if (!active.current) return;
-        const { pixels, width, height } = await invoke('studio.textureReadback', { ...request, poll: true });
+        const { pixels, width, height, url } = await invoke('studio.textureReadback', { ...request, poll: true });
+        if (active.current && fullResolution && url) {
+          setFullImage(url);
+          return;
+        }
         if (!active.current || !pixels || !width || !height) continue;
         const element = canvas.current;
         const ctx = element?.getContext('2d');
@@ -352,10 +357,11 @@ function TexturePixels({ project, texture, mip, layer }: { project: string; text
     if (!live) return;
     void readPixels();
     const timer = window.setInterval(readPixels, 1000);
-    document.addEventListener('visibilitychange', readPixels);
+    const onVisibility = () => void readPixels();
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', readPixels);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [live, readPixels]);
   const mipWidth = Math.max(1, Math.floor(texture.width / 2 ** mip));
@@ -363,6 +369,9 @@ function TexturePixels({ project, texture, mip, layer }: { project: string; text
   return <div className="texture-resource__pixels">
     {texture.dimension === '2D' && <label><input type="checkbox" checked={live} onChange={event => setLive(event.target.checked)}/> Live preview</label>}
     <button type="button" className="au-button au-button--sm" disabled={pending} onClick={() => void readPixels()}>{pending ? 'Reading pixels…' : 'Read GPU pixels'}</button>
+    <button type="button" className="au-button au-button--sm" disabled={pending}
+      onClick={() => fullImage ? setFullImage('') : void readPixels(true)}>{fullImage ? 'Close full size' : 'View full size'}</button>
+    {fullImage && <div className="texture-resource__full"><img src={fullImage} alt="Full-resolution GPU texture"/></div>}
     {error && <p role="alert">{error}</p>}
     <canvas ref={canvas} hidden={!ready} aria-label="GPU pixel preview"
       style={{ aspectRatio: mipWidth + " / " + mipHeight, width: Math.max(1, 160 * Math.min(1, mipWidth / mipHeight)) }}/>

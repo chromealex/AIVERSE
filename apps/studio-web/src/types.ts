@@ -738,7 +738,7 @@ export interface StudioParams {
   'studio.hubCreate': { template: string; name: string };
   'studio.stats': Record<string,never>;
   'studio.cavernsPreview': { expectedProject:string; expectedMap:string; enabled?:boolean; isolate?:boolean; paging?:boolean; budgets?:StudioCavernsBudgets; globeBody?:string };
-  'studio.textureReadback': { project: string; ticket: string; texture: number; mip: number; layer: number; poll?: boolean };
+  'studio.textureReadback': { project: string; ticket: string; texture: number; mip: number; layer: number; poll?: boolean; fullResolution?: boolean };
   'studio.gpuStats': { capture?: boolean; textures?: boolean; prisma?: boolean; project?: string };
   'studio.previewPlayChanges': {expectedProject:string;positions:boolean;amounts:boolean;removeDead:boolean};
   'studio.keepPlayChanges': {expectedProject:string;token:string};
@@ -1029,7 +1029,7 @@ export interface StudioResult {
   'studio.splineEdit': { kind: string; handles: Array<{ id: string; x: number; z: number }>; segments: number[][] };
   'studio.stats': StudioStats;
   'studio.cavernsPreview': StudioCavernsPreview;
-  'studio.textureReadback': { width?: number; height?: number; pixels?: number[] };
+  'studio.textureReadback': { width?: number; height?: number; pixels?: number[]; url?: string };
   'studio.gpuStats': StudioGpuStats;
   'studio.extensions': StudioExtensions;
   'studio.extensionAction': { command: Record<string, unknown> | null };

@@ -5434,7 +5434,11 @@ void StudioHost::handleMessage(const std::string& json) {
                 throw std::runtime_error("Scene textures are unavailable for this project");
             reply = Json::object();
             reply.set("id",req["id"]);
-            reply.set("result",onScene([&]{ return preview_->textureReadback(request); }));
+            reply.set("result",onScene([&]{ return preview_->textureReadback(request, [](const void* rgb, int w, int h) {
+                std::string png;
+                if (!stbi_write_png_to_func(appendBytes, &png, w, h, 3, rgb, w * 3)) png.clear();
+                return png;
+            }); }));
         } else if (method == "studio.gpuStats" && req["id"].isNumber()) {
             // Frame Capture / Texture Resources: Scene frame history (CPU frame time, draw calls) and live GPU textures.
             reply = Json::object();
