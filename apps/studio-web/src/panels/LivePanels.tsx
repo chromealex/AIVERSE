@@ -146,7 +146,7 @@ export function LiveInspector({project,selection}:{project?:string;selection?:Li
       <span>{selection.refs.length} selected</span>
       <select aria-label="Inspect selected entity" value={ref}
         onChange={event => setInspected({epoch:selection.epoch,ref:event.target.value})}>
-        {selection.refs.map(id => <option value={id} key={id}>Entity {id}</option>)}
+        {selection.refs.map(id => <option value={id} key={id}>{selection.names?.[id] ?? 'Entity '+id}</option>)}
       </select>
     </label>}
     {error ? <p className="live__error" role="alert">{error}</p>

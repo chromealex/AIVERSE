@@ -731,7 +731,15 @@ Json StudioGameSurface::state(bool includeScriptErrors) const {
     if(!selected.empty()){
         out.set("selectedLiveRef",Json::string(selected.front()));
         Json refs=Json::array();
-        for(const auto& ref:selected)refs.push(Json::string(ref));
+        Json names=Json::object();
+        for(const auto& ref:selected){
+            refs.push(Json::string(ref));
+            if(selected.size()>1){
+                const auto name=editor::runtimeEntityName(sim->world(),editor::worldEntity(std::stoull(ref)));
+                if(!name.empty())names.set(ref,Json::string(name));
+            }
+        }
+        if(names.size())out.set("selectedLiveNames",std::move(names));
         out.set("selectedLiveRefs",std::move(refs));
     }
     if (includeScriptErrors) out.set("scriptErrors", scriptLog(true));
