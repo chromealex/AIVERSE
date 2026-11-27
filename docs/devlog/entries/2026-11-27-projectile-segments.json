@@ -1,0 +1,51 @@
+{
+  "id": "2026-11-27-projectile-segments",
+  "date": "2026-11-27",
+  "system": "render",
+  "title": "Снаряд и след используют одну позицию",
+  "titleEn": "Projectile and trail share one position",
+  "summary": "Модель, след и свет получают общий образец позиции. Рикошет и разделение продолжаются от точки контакта или ветвления.",
+  "summaryEn": "Model, trail and light consume one position sample. Ricochet and split continue from contact or branch positions.",
+  "body": [
+    "В демо четыре сцены: прямая траектория, дуга, рикошет и разделение. Орудие стреляет автоматически; параметры map=0…3 выбирают сцену.",
+    "При завершении полёта след получает конечную точку, в том числе если снаряд появился и исчез между кадрами."
+  ],
+  "bodyEn": [
+    "The demo has four scenes: straight, arc, ricochet and split. The launcher fires automatically; map=0…3 selects the scene.",
+    "At retirement the trail receives the final endpoint, including projectiles born and removed between rendered frames."
+  ],
+  "status": "in-progress",
+  "verified": "Четыре сцены проверены на Metal и загружены в WebGL. Сохранены настоящие кадры полёта и браузерные кадры рикошета и разделения.",
+  "verifiedEn": "Four scenes checked on Metal and loaded in WebGL. Real flight frames and browser ricochet/split captures are retained.",
+  "limits": "Кадры не доказывают совпадение на каждом шаге. Итоговая проверка и интеграция продолжаются; Windows и Vulkan не проверены.",
+  "limitsEn": "Static frames do not prove every-frame alignment. Final verification and integration continue; Windows and Vulkan are untested.",
+  "branch": "codex/issue223-minimap-atlas-20261126",
+  "commit": "4d6f08f19",
+  "media": [
+    {
+      "src": "docs/evidence/issues-projectile-segments-web-20261127/ricochet.png",
+      "caption": "WebGL: продолжение после рикошета.",
+      "captionEn": "WebGL: continuation after ricochet."
+    },
+    {
+      "src": "docs/evidence/issues-projectile-segments-web-20261127/split.png",
+      "caption": "WebGL: разделение снаряда со следами.",
+      "captionEn": "WebGL: split projectiles with trails."
+    }
+  ],
+  "links": [
+    {
+      "title": "Play · Web",
+      "href": "https://chromealex.github.io/AIVERSE/demos/projectile-segments/?map=0"
+    },
+    {
+      "title": "Source",
+      "href": "demos/projectile-segments/README.md"
+    },
+    {
+      "title": "Shared presentation API",
+      "href": "docs/view.md"
+    }
+  ],
+  "author": null
+}
