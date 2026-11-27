@@ -105,6 +105,7 @@ struct WorldRow {
     int region = -1;
     std::bitset<kMaxWorldComponents> comps;   // indices into worldComponents()
     std::string label;        // game label (WorldConfig::labelKey) or ""
+    std::string runtimeName;   // component-provided name when there is no authored label
     std::string category;     // category name (tags / kind)
     std::map<std::string, std::string> data;   // top-level scalar script data (game.data) as text, for grouping / search
     // (only when read with WorldReadOptions::scriptData)

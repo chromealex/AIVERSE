@@ -13,6 +13,7 @@
 #include "apps/studio-native/StudioGameDevice.h"
 #include "apps/studio-native/StudioDeviceMask.h"
 #include "apps/studio-native/StudioRuntimeInspect.h"
+#include "engine/actor/ActorComponents.h"
 #include "apps/studio-native/StudioMoveJournal.h"
 #include "apps/studio-native/StudioAgentHistoryPolicy.h"
 #include "apps/studio-native/StudioAssetCatalog.h"
@@ -2406,6 +2407,21 @@ void entityWorkflow() {
             live.world().destroy(editor::worldEntity(std::stoull(ref)));
             AIVERSE_TEST_CHECK(inspector.selectedRef(&live,"run-1").empty());
             AIVERSE_TEST_CHECK(inspector.entities(nullptr,"run-2",0,100,"")["rows"].size()==0);
+            auto verifyRuntimeRow = [&](auto component, const char* name, const char* category) {
+                auto entity = live.world().create();
+                live.world().add<decltype(component)>(entity, component);
+                studio::StudioRuntimeInspect::GroupQuery filter;
+                filter.keys = {"category"};
+                filter.path = {category};
+                const auto result = inspector.entities(&live,"run-1",0,100,name,filter);
+                AIVERSE_TEST_CHECK(result.getInt("total")==1);
+                AIVERSE_TEST_CHECK(result["rows"][0].getStr("name")==name);
+                AIVERSE_TEST_CHECK(result["rows"][0].getStr("ref")==std::to_string(editor::worldRef(entity)));
+            };
+            verifyRuntimeRow(actor::CharacterId{7}, "Actor #7", "Runtime Actors");
+            verifyRuntimeRow(actor::Projectile{103}, "Projectile #103", "Projectiles");
+            verifyRuntimeRow(actor::Loot{214}, "Loot #214", "Loot");
+            verifyRuntimeRow(actor::Vehicle{325}, "Vehicle #325", "Vehicles");
         }
         const auto plan=studio::studioGameLaunch(session.workspace(),true);
         AIVERSE_TEST_CHECK(plan.map && *plan.map==0);

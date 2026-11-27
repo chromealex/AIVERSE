@@ -1,5 +1,6 @@
 // World tree: generic reading of the RTS module's ECS for the editor (see WorldInspect.h).
 #include "WorldInspect.h"
+#include "engine/actor/ActorComponents.h"
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -524,6 +525,20 @@ void fillRow(Simulation& sim, GameCore& mod, const WorldConfig& cfg, const GameS
             for (size_t ti = 0; ti < R.tagNames.size() && ti < 64 && !has; ++ti) has = R.tagNames[ti] == tag && (ut->tags >> ti & 1);
             if (has) { category = tag.c_str(); break; }
         }
+    r.runtimeName.clear();
+    if (const auto* character = w.tryGetConst<actor::CharacterId>(e)) {
+        category = "Runtime Actors";
+        r.runtimeName = "Actor #" + std::to_string(character->slot);
+    } else if (const auto* projectile = w.tryGetConst<actor::Projectile>(e)) {
+        category = "Projectiles";
+        r.runtimeName = "Projectile #" + std::to_string(projectile->id);
+    } else if (const auto* loot = w.tryGetConst<actor::Loot>(e)) {
+        category = "Loot";
+        r.runtimeName = "Loot #" + std::to_string(loot->id);
+    } else if (const auto* vehicle = w.tryGetConst<actor::Vehicle>(e)) {
+        category = "Vehicles";
+        r.runtimeName = "Vehicle #" + std::to_string(vehicle->id);
+    }
     r.category = category;
     r.label.clear();
     r.data.clear();
@@ -745,6 +760,7 @@ std::string worldRowName(const WorldModel& m, const Rules& R, const MapData* doc
             doc->entities[size_t(r.doc)].extra.getStr("displayName", "");
         if (!displayName.empty()) return displayName;
     }
+    if (!r.runtimeName.empty()) return r.runtimeName;
     std::string n = r.type >= 0 && size_t(r.type) < R.types.size() ? R.types[size_t(r.type)].name
                   : r.kind == WorldKind::Projectile ? "Снаряд" : r.kind == WorldKind::Effect ? "Эффект" : "Объект";
     if (doc && r.doc >= 0 && size_t(r.doc) < doc->entities.size() && !doc->entities[size_t(r.doc)].id.empty()) n += "  #" + doc->entities[size_t(r.doc)].id;
@@ -767,7 +783,7 @@ bool worldRowMatches(const WorldModel& m, const Rules& R, const MapData* doc, co
         if (v.empty()) continue;
         const std::string typeId = r.type >= 0 && size_t(r.type) < R.types.size() ? R.types[size_t(r.type)].id : "";
         const std::string mapId = doc && r.doc >= 0 && size_t(r.doc) < doc->entities.size() ? doc->entities[size_t(r.doc)].id : "";
-        auto typeOk = [&] { return has(typeId, v) || has(worldGroupValue(m, R, r, "type"), v) || has(r.label, v) || has(r.category, v); };
+        auto typeOk = [&] { return has(typeId, v) || has(worldGroupValue(m, R, r, "type"), v) || has(r.label, v) || has(r.runtimeName, v) || has(r.category, v); };
         auto ownerOk = [&] { return has(ownerName(m, r.owner), v) || v == std::to_string(r.owner); };
         auto compOk = [&] {
             bool any = false;
@@ -779,7 +795,7 @@ bool worldRowMatches(const WorldModel& m, const Rules& R, const MapData* doc, co
             for (auto& [k, val] : r.data) if (has(k, v) || has(val, v)) return true;
             return false;
         };
-        auto idOk = [&] { return v == std::to_string(r.e.index) || has(mapId, v); };
+        auto idOk = [&] { return v == std::to_string(r.e.index) || has(mapId, v) || r.runtimeName.ends_with(" #" + v); };
         bool ok;
         if (prefix == "t") ok = typeOk();
         else if (prefix == "p") ok = ownerOk();
