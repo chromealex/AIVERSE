@@ -722,7 +722,7 @@ export interface StudioParams {
   'studio.hubCreate': { template: string; name: string };
   'studio.stats': Record<string,never>;
   'studio.cavernsPreview': { expectedProject:string; expectedMap:string; enabled?:boolean; isolate?:boolean; paging?:boolean; budgets?:StudioCavernsBudgets; globeBody?:string };
-  'studio.gpuStats': { textures?: boolean; prisma?: boolean; project?: string };
+  'studio.gpuStats': { capture?: boolean; textures?: boolean; prisma?: boolean; project?: string };
   'studio.previewPlayChanges': {expectedProject:string;positions:boolean;amounts:boolean;removeDead:boolean};
   'studio.keepPlayChanges': {expectedProject:string;token:string};
   'studio.extensions': Record<string,never>;

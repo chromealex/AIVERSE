@@ -198,6 +198,8 @@ export function FrameCapturePanel({ snapshot }: Ctx) {
   const path = snapshot?.project.path ?? '';
   const [live, setLive] = useState<StudioGpuStats | null>(null);
   const [selected, setSelected] = useState(0);
+  const [clearedThrough, setClearedThrough] = useState(0);
+  const [capturing, setCapturing] = useState(false);
   const [copyStatus, setCopyStatus] = useState('');
   const [frozen, setFrozen] = useState<StudioGpuStats | null>(null);
   const [error, setError] = useState('');
@@ -207,21 +209,30 @@ export function FrameCapturePanel({ snapshot }: Ctx) {
     const read = async () => {
       try {
         const next = await invoke('studio.gpuStats', {});
-        if (active) { setLive(next); setError(next.error ?? ''); }
+        if (active) { setLive({ ...next, history: next.history.slice(Math.max(0, clearedThrough - next.frames + next.history.length)) }); setError(next.error ?? ''); }
       } catch (e) { if (active) setError(message(e)); }
       if (active) timer = window.setTimeout(read, 500);
     };
     void read();
     return () => { active = false; window.clearTimeout(timer); };
-  }, [path, frozen]);
+  }, [path, frozen, clearedThrough]);
   if (!path) return <div className="tool__empty">Open a project to capture Scene frames.</div>;
   const data = frozen ?? live;
   const ms = (data?.history ?? []).map(h => h[0]), draws = (data?.history ?? []).map(h => h[1]);
   const sum = frameSummary(ms);
   return <div className="ptp">
     <div className="ptp__edhead">
-      <button type="button" className={'au-button au-button--sm' + (frozen ? '' : ' au-button--primary')} disabled={!frozen && !sum.count} onClick={() => {
-        setFrozen(frozen ? null : live); setSelected(Math.max(0, sum.count - 1)); setCopyStatus('');
+      <button type="button" className={'au-button au-button--sm' + (frozen ? '' : ' au-button--primary')} disabled={capturing || (!frozen && !sum.count)} onClick={async () => {
+        setCopyStatus('');
+        if (frozen) { setFrozen(null); return; }
+        setCapturing(true);
+        try {
+          const full = await invoke('studio.gpuStats', { capture: true, project: path });
+          const history = full.history.slice(Math.max(0, clearedThrough - full.frames + full.history.length));
+          setSelected(Math.max(0, history.length - 1));
+          setFrozen({ ...full, history }); setError(full.error ?? '');
+        } catch (e) { setError(message(e)); }
+        finally { setCapturing(false); }
       }}>
         {frozen ? 'Resume live' : 'Capture'}</button>
       {frozen && <>
@@ -230,6 +241,7 @@ export function FrameCapturePanel({ snapshot }: Ctx) {
           setCopyStatus(await copyText(['frame,cpu_ms,draw_calls', ...rows, ''].join('\n')) ? 'CSV copied' : 'Clipboard unavailable');
         }}>Copy CSV</button>
         <button type="button" className="au-button au-button--sm" disabled={!sum.count} onClick={() => {
+          setClearedThrough(frozen.frames); setLive(null);
           setFrozen({ ...frozen, history: [], drawCalls: undefined }); setSelected(0); setCopyStatus('');
         }}>Clear</button>
         <span role="status">{copyStatus}</span>

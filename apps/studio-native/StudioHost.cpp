@@ -698,6 +698,9 @@ void StudioHost::openProject(const std::string& path, int64_t requestId) {
                 platform_.log("AIVERSE open project failed: " + *error);
                 sendLoading("error", *error, 0, 0);
             } else {
+                frameHistory_.clear();
+                lastSceneFrame_ = 0;
+                sceneFrameMs_ = 0;
                 platform_.rememberLastProject(path);
                 // Scene models stream in next; the tick reports their progress.
                 sendLoading("scene", "Preparing scene", 0, 0);
@@ -1920,7 +1923,7 @@ void StudioHost::publishSceneFrame(const FrameOutputs& out) {
             const double ms = (now - lastSceneFrame_) * 1000.0;
             sceneFrameMs_ = sceneFrameMs_ <= 0 ? ms : sceneFrameMs_ * 0.95 + ms * 0.05;
             frameHistory_.emplace_back(float(ms), out.drawCalls);
-            if (frameHistory_.size() > 240) frameHistory_.pop_front();
+            if (frameHistory_.size() > 6000) frameHistory_.pop_front();
         }
         lastSceneFrame_ = now;
         session_->setSceneFrameStats(sceneFrameMs_, ++sceneFrameCount_);
@@ -5347,7 +5350,12 @@ void StudioHost::handleMessage(const std::string& json) {
             reply = Json::object();
             reply.set("id", req["id"]);
             Json result = Json::object(), history = Json::array();
-            for (const auto& f : frameHistory_) {
+            const bool capture = req["params"].getBool("capture");
+            if (capture && req["params"].getStr("project") != session_->workspace().project.dir)
+                throw std::runtime_error("Frame Capture project changed");
+            const size_t count = capture ? frameHistory_.size() : std::min<size_t>(240, frameHistory_.size());
+            for (size_t i = frameHistory_.size() - count; i < frameHistory_.size(); ++i) {
+                const auto& f = frameHistory_[i];
                 Json o = Json::array();
                 o.push(Json::number(double(f.first), 2));
                 o.push(Json::number(int64_t(f.second)));
