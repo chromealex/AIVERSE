@@ -1,0 +1,10 @@
+{
+  "sha": "435d0fae518289bbc059be8f794890fd0b14ed87",
+  "argv": [
+    "bash",
+    "../model-parent.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-model-parent-asset.log.txt",
+  "sha256": "b370a6a39d7adc016694327534376e19e8836a1137bb8d95fab13a22b8674baa"
+}
