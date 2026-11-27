@@ -30,6 +30,12 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
   const [type, setType] = useState('');
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const [drop, setDrop] = useState<{ id: string; placement: 'before' | 'after' } | null>(null);
+  const [rename, setRename] = useState<{id: string; epoch: unknown; value: string} | null>(null);
+  const renameTarget = snapshot?.inspector;
+  const startRename = (id: string) => {
+    if (renameTarget?.id === id && renameTarget.nameEditable)
+      setRename({ id, epoch: snapshot?.graphDocument?.epoch, value: renameTarget.name });
+  };
   const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const project = snapshot?.project.path;
@@ -143,6 +149,11 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     if ((event.metaKey || event.ctrlKey) && key === 'f') { event.preventDefault(); searchRef.current?.focus(); return; }
     if (busy) return;
     const focused = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('[data-occurrence]')?.dataset.occurrence : undefined;
+    if (event.key === 'F2' && event.target instanceof HTMLElement) {
+      const id = event.target.closest<HTMLElement>('[data-id]')?.dataset.id ?? selectedId;
+      if (id && id === selectedId) { event.preventDefault(); startRename(id); }
+      return;
+    }
     const index = focused ? occurrenceKeys.indexOf(focused) : visible.findIndex(({node}) => node.id === selectedId);
     if ((event.metaKey || event.ctrlKey) && key === 'a') { event.preventDefault(); void selectIds([...new Set(visible.map(r => r.node.id))]); return; }
     if ((event.key === 'Enter' || event.key === ' ') && event.target instanceof HTMLElement && event.target.matches('[role=option]')) {
@@ -181,6 +192,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
 
   const menuItems = (id: string): StudioMenuItem[] => [
     { id: 'focus', label: 'Focus in Scene', shortcut: 'F', icon: <Focus size={13}/>, onSelect: () => void focus(id) },
+    { id: 'rename', label: 'Rename', shortcut: 'F2', disabled: busy || renameTarget?.id !== id || !renameTarget.nameEditable, onSelect: () => startRename(id) },
     { id: 'duplicate', label: 'Duplicate', shortcut: '⌘D', icon: <Copy size={13}/>, disabled: !editable(id) || busy, onSelect: () => duplicate(id) },
     { id: 'delete', label: 'Delete', shortcut: '⌫', icon: <Trash2 size={13}/>, danger: true, disabled: !editable(id) || busy, onSelect: () => remove(id) },
     { id: 'hide', label: rows.find(r => r.node.id === id)?.node.visible === false ? 'Show in Scene' : 'Hide in Scene', icon: <EyeOff size={13}/>, separator: true,
@@ -267,7 +279,21 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
             aria-label={(collapsed.has(node.id)?'Expand ':'Collapse ')+node.name}
             onClick={event=>{event.stopPropagation();toggleCollapsed(node.id);}}>{collapsed.has(node.id)?<ChevronRight size={13}/>:<ChevronDown size={13}/>}</button>}
           <Icon size={12} className="hier__icon"/>
-          <span className="hier__name" title={node.name}>{node.name}</span>
+          {rename?.id === node.id && renameTarget?.id === node.id && rename.epoch === snapshot?.graphDocument?.epoch ?
+            <input className="au-input hier__name" aria-label="Rename object" autoFocus value={rename.value}
+              onFocus={event => event.currentTarget.select()} onClick={event => event.stopPropagation()}
+              onChange={event => setRename({ ...rename, value: event.target.value })}
+              onBlur={() => setRename(null)} onKeyDown={event => {
+                event.stopPropagation();
+                if (event.key === 'Escape') setRename(null);
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  const value = rename.value.trim();
+                  setRename(null);
+                  if (value && value !== renameTarget.name) void mutate(() => invoke('studio.setProperty',
+                    { entityId: node.id, componentId: 'Entity', key: 'name', value }));
+                }
+              }}/> : <span className="hier__name" title={node.name}>{node.name}</span>}
           {node.kind && node.kind !== node.name && <span className="hier__kind">{node.kind}</span>}
           <button type="button" className={'hier__flag' + (hidden ? ' is-on' : '')} aria-label={hidden ? 'Show in Scene' : 'Hide in Scene'}
             title={hidden ? 'Hidden in Scene' : 'Hide in Scene'} disabled={busy}
