@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Eye, Layers, RefreshCw, Save, Search, ShieldAlert } from 'lucide-react';
 import { invoke, nativeConnected, onNativeEvent } from '../bridge';
 import AssetReferencePicker from '../components/AssetReferencePicker';
@@ -15,6 +15,7 @@ import SpectraDockViewport from './SpectraDockViewport';
 const EMPTY:MaterialLibrary={library:{}};
 export default function MaterialsPanel({documentEpoch,projectPath,previewMaterial,textureOnly=false,openTextureGraph}:{documentEpoch?:string;projectPath:string;previewMaterial?:string|null;textureOnly?:boolean;openTextureGraph?:()=>void}){
  const [library,setLibrary]=useState<MaterialLibrary>(EMPTY);
+ const requestedFile=useRef<{project:string;path:string}|null>(null);
  const [name,setName]=useState('');
  const [query,setQuery]=useState('');
  const [newName,setNewName]=useState('');
@@ -116,22 +117,25 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
  useEffect(()=>{
   if(textureOnly || !projectPath)return;
   const key='studio.materialToOpen:'+projectPath;
-  const open=()=>{
-   const path=localStorage.getItem(key);
+  const open=(path:string|null)=>{
+   if(!path)return;
+   requestedFile.current={project:projectPath,path};
    const match=Object.entries(library.files??{}).find(([,file])=>file===path);
    if(match){
-    localStorage.removeItem(key);
+    requestedFile.current=null;
+    if(localStorage.getItem(key)===path)localStorage.removeItem(key);
     setQuery(value=>match[0].toLowerCase().includes(value.toLowerCase())?value:'');
     setMaterialMode('properties');
     switchTo(match[0]);
    }
   };
-  const onStorage=(event:StorageEvent)=>{if(event.key===key && event.newValue)open();};
-  open();
-  window.addEventListener('studio:open-material',open);
+  const onStorage=(event:StorageEvent)=>{if(event.key===key)open(event.newValue);};
+  const onOpen=()=>open(localStorage.getItem(key));
+  open(localStorage.getItem(key) ?? (requestedFile.current?.project===projectPath?requestedFile.current.path:null));
+  window.addEventListener('studio:open-material',onOpen);
   window.addEventListener('storage',onStorage);
   return ()=>{
-   window.removeEventListener('studio:open-material',open);
+   window.removeEventListener('studio:open-material',onOpen);
    window.removeEventListener('storage',onStorage);
   };
  },[library,projectPath,changes,textureOnly,name]);
