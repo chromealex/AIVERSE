@@ -413,6 +413,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     {id:'reload',label:'Reload',icon:<RefreshCw size={13}/>,onSelect:reload},
   ];
   const openMaterial=(path:string)=>{
+    setSelected(path);
     localStorage.setItem('studio.materialToOpen:'+projectPath,'content/'+path);
     window.dispatchEvent(new CustomEvent('studio:show-panel',{detail:'materials'}));
     window.dispatchEvent(new Event('studio:open-material'));
@@ -577,6 +578,11 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
                   className={'studio-assets-item'+(selected===asset.path?' active':'')}
                   data-kind={kind} aria-selected={selected===asset.path}
                   onDoubleClick={()=>{if(asset.path.endsWith('.material.json'))openMaterial(asset.path);}}
+                  onKeyDown={event=>{
+                    if(event.key==='Enter' && !event.repeat && asset.path.endsWith('.material.json')){
+                      event.preventDefault();event.stopPropagation();openMaterial(asset.path);
+                    }
+                  }}
                   title={'content/'+asset.path} onClick={()=>setSelected(asset.path)}
                   onContextMenu={event=>openMenu(event,asset.path,false)}>
                   <span className="studio-assets-icon">{mode==='grid' && (kind==='model'||kind==='image')
