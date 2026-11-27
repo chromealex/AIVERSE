@@ -34,9 +34,13 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Review found missing command-triggered reset. Add shared GameAudio reset and mixer-output regression for ordered variants, cycle, switching, explicit reset and timeout; execution pending final build.",
-      "evidence": []
+      "status": "pass",
+      "note": "Shared GameAudio sequential/cycle/window path and command reset exercised by three mixer regressions (119 checks) and actual native client PCM. Seven repeated clicks, Stop, and entity switch produced measured 440/440/660/880/440/440/660/440/440Hz output. Browser proof remains visual/input only.",
+      "evidence": [
+        "engine/audio/GameAudio.cpp",
+        "docs/evidence/issues-audio-mixer-20261127.json",
+        "docs/evidence/issues-selection-voices-native-20261127/result.json"
+      ]
     },
     "architecture": {
       "status": "pass",
@@ -50,7 +54,7 @@
     },
     "native_api": {
       "status": "pass",
-      "note": "Existing onSelectionClick, resetSelectionClicks and onCommand form the native host API; the sequential path uses AudioEngine PlayParams.variant. New mixer regression is authored but awaits rebuilt execution.",
+      "note": "Existing onSelectionClick, resetSelectionClicks and onCommand use AudioEngine PlayParams.variant. Actual mixer tests exercise order, cycle, entity switch, command reset, explicit reset and positive timeout.",
       "evidence": [
         "engine/audio/GameAudio.h",
         "engine/audio/GameAudio.cpp",
@@ -65,24 +69,39 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Built server registry audit passed. Actual game_file_read/write round trip on isolated project checked exact expectedText write, stale-original and invalid-JSON rejection, unchanged bytes after rejection and exact reopen/readback.",
+      "evidence": [
+        "docs/evidence/issues-audio-mcp-registry-20261127.json",
+        "docs/evidence/issues-studio-project-data-20261127/mcp-roundtrip.json"
+      ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Confirmed gap: game_file_write is not allowlisted in native Studio and no general project-data editor exists. Add shared Project Data panel over existing owner operations, with expected project/text fences; actual UI acceptance pending.",
-      "evidence": []
+      "status": "pass",
+      "note": "Native WKWebView Project Data panel loads existing audio.json through shared Workspace operations. Actual UI saved count3 to4 and reread it in a new process; rejected malformed JSON retained draft. Dedicated rules/game/map owners remain separate. UI does not validate audio semantics and file saves are outside Undo.",
+      "evidence": [
+        "docs/evidence/issues-studio-project-data-20261127/ui-result.json",
+        "docs/evidence/issues-studio-project-data-20261127/saved.png",
+        "docs/evidence/issues-studio-project-data-20261127/reopened.png"
+      ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Generic project text inspection/editing exposes authored audio settings without a competing audio-only store. Loaded text, dirty controls, error and discard behavior verified in native UI; JSON syntax validation is not audio semantic validation.",
+      "evidence": [
+        "apps/studio-web/src/panels/generated/ProjectDataPanel.tsx",
+        "docs/evidence/issues-studio-project-data-20261127/invalid.png",
+        "docs/evidence/issues-studio-project-data-20261127/ui-result.json"
+      ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Authored JSON persists exactly through MCP reopen and native process restart; failed writes preserve saved bytes. Local click sequence is transient presentation state, intentionally not persisted in simulation saves or copied between entities.",
+      "evidence": [
+        "docs/evidence/issues-studio-project-data-20261127/audio-after.json",
+        "docs/evidence/issues-studio-project-data-20261127/mcp-roundtrip.json",
+        "docs/evidence/issues-studio-project-data-20261127/reopened.png"
+      ]
     },
     "graphs": {
       "status": "not_applicable",
@@ -93,13 +112,19 @@
     },
     "performance": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Source review: sequential click counting is constant-space and does not append to the legacy deque; legacy random history capped at authored count2..64. Real CPU/allocation measurement and budget evidence remain pending; successful playback is not performance acceptance.",
+      "evidence": [
+        "engine/audio/GameAudio.cpp",
+        "engine/audio/GameAudio.h"
+      ]
     },
     "platforms": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Mac x86_64 null-device callback capture and WebGL scene/input smoke verified. Browser audio output, physical speakers and other native platforms remain unverified; no blanket platform pass.",
+      "evidence": [
+        "docs/evidence/issues-selection-voices-native-20261127/result.json",
+        "docs/evidence/issues-selection-voices-web-20261127/result.json"
+      ]
     },
     "dependencies": {
       "status": "pass",
@@ -117,14 +142,23 @@
       ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Ordinary selection-voices project contains generated PCM tones and a repeatable click/order/switch scenario. Native capture and WebGL scene/input smoke completed; browser audible ordering not measured.",
+      "evidence": [
+        "demos/selection-voices/README.md",
+        "demos/selection-voices/audio.json",
+        "docs/evidence/issues-selection-voices-web-20261127/result.json",
+        "docs/evidence/issues-selection-voices-native-20261127/result.json"
+      ]
     },
     "tests": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Three focused audio regressions passed119checks; Studio session regression and MCP registry/mutations passed. Fresh final merged-tree full quick gate remains pending after recent owner/UI/docs edits.",
+      "evidence": [
+        "docs/evidence/issues-audio-mixer-20261127.json",
+        "docs/evidence/issues-studio-project-data-20261127/result.json",
+        "docs/evidence/issues-audio-mcp-registry-20261127.json"
+      ]
     },
     "handoff": {
       "status": "not_run",
@@ -142,8 +176,12 @@
     },
     "publishing": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Real native and Web captures retained; exact Web payload pinned and bilingual devlog prepared. Site check76entries0errors; main integration and actual publication pending.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-27-selection-voices.json",
+        "site/manifest.json",
+        "docs/evidence/issues-selection-voices-web-20261127/result.json"
+      ]
     }
   },
   "integrations": {
@@ -154,8 +192,12 @@
       "game_file_read",
       "game_file_write"
     ],
-    "studio_panels": [],
-    "studio_methods": []
+    "studio_panels": [
+      "project_data"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ]
   },
   "test_reports": []
 }
