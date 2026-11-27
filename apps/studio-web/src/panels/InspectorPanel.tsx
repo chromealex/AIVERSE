@@ -226,7 +226,13 @@ export default function InspectorPanel({ inspector: primary, selected, busy, ins
   useEffect(() => {
     try { window.localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapsed)); } catch { /* storage optional */ }
   }, [collapsed]);
+  const cancelNameOnBlur = useRef(false);
   const commitName = () => {
+    if (cancelNameOnBlur.current) {
+      cancelNameOnBlur.current = false;
+      setName(inspector?.name ?? '');
+      return;
+    }
     if (inspector?.nameEditable && name.trim() && name !== inspector.name)
       void changeProperty('name', name.trim(), 'Entity');
     else setName(inspector?.name ?? '');
@@ -266,7 +272,7 @@ export default function InspectorPanel({ inspector: primary, selected, busy, ins
           title={inspector.nameEditable ? 'Rename' : 'This entity is named by its type'}
           onChange={event => setName(event.target.value)} onBlur={commitName}
           onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur();
-            if (event.key === 'Escape') { setName(inspector.name); event.currentTarget.blur(); } }}/>
+            if (event.key === 'Escape') { cancelNameOnBlur.current = true; event.currentTarget.blur(); } }}/>
         {lock}
       </div>
       <div className="insp__meta"><span>{inspector.kind}</span><code title="Document entity ID">{inspector.id}</code></div>
