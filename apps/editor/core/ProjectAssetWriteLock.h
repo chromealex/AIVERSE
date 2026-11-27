@@ -49,7 +49,10 @@ class ProjectAssetWriteLock {
     static void release(Handle fd) noexcept {::close(fd);}
 #endif
     struct Lease{size_t depth;Handle handle;};
-    inline static thread_local std::map<Path,Lease> held_;
+    static std::map<Path,Lease>& threadLeases() {
+        static thread_local std::map<Path,Lease> leases;
+        return leases;
+    }
     Path lock_;
 public:
     explicit ProjectAssetWriteLock(const Path& project) {
@@ -61,17 +64,19 @@ public:
         // Stage 74 directory uses the same name: do not bypass a legacy owner.
         lock_=cache/"asset-writer.lock";
         if(fs::is_symlink(lock_)||fs::is_directory(lock_))throw std::runtime_error("Legacy or unsafe asset lock; inspect offline");
-        if(auto it=held_.find(lock_);it!=held_.end()){++it->second.depth;return;}
+        auto& leases=threadLeases();
+        if(auto it=leases.find(lock_);it!=leases.end()){++it->second.depth;return;}
         const auto handle=acquire(lock_);
-        try{held_.emplace(lock_,Lease{1,handle});}
+        try{leases.emplace(lock_,Lease{1,handle});}
         catch(...){release(handle);throw;}
     }
     ProjectAssetWriteLock(const ProjectAssetWriteLock&)=delete;
     ProjectAssetWriteLock& operator=(const ProjectAssetWriteLock&)=delete;
     ~ProjectAssetWriteLock(){
-        auto it=held_.find(lock_);
-        if(it==held_.end()||--it->second.depth)return;
-        const auto handle=it->second.handle;held_.erase(it);release(handle);
+        auto& leases=threadLeases();
+        auto it=leases.find(lock_);
+        if(it==leases.end()||--it->second.depth)return;
+        const auto handle=it->second.handle;leases.erase(it);release(handle);
     }
 };
 } // namespace aiverse::editor
