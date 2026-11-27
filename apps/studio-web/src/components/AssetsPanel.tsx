@@ -244,17 +244,18 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
   useEffect(()=>{
     if(!projectPath)return;
     const key='studio.assetToReveal:'+projectPath;
-    const reveal=(event?:Event)=>{
-      const request=(event as CustomEvent<{project?:string;path?:unknown}> | undefined)?.detail;
-      if(request?.project && request.project!==projectPath)return;
-      const path=request?.path ?? localStorage.getItem(key);
+    const selectPath=(path:unknown)=>{
       if(typeof path!=='string'||!safeAssetPath(path))return;
       if(localStorage.getItem(key)===path)localStorage.removeItem(key);
       const cut=path.lastIndexOf('/');
       setProjectFiles(false);clearAssetFilters();setFolder(cut>0?path.slice(0,cut):'');setSelected(path);
     };
-    const onStorage=(event:StorageEvent)=>{if(event.key===key && event.newValue)reveal();};
-    reveal();
+    const reveal=(event:Event)=>{
+      const request=(event as CustomEvent<{project?:string;path?:unknown}>).detail;
+      if(!request?.project || request.project===projectPath)selectPath(request?.path ?? localStorage.getItem(key));
+    };
+    const onStorage=(event:StorageEvent)=>{if(event.key===key)selectPath(event.newValue);};
+    selectPath(localStorage.getItem(key));
     window.addEventListener('studio:reveal-asset',reveal);
     window.addEventListener('storage',onStorage);
     return ()=>{
