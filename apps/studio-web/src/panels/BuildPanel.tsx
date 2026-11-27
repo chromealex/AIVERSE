@@ -333,7 +333,7 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
           phase === 'idle' ? <Hammer size={16}/> : phase === 'missing-toolchain' ? <CircleAlert size={16}/> : <XCircle size={16}/>}
         <b>{phase === 'running' ? (installingTools ? 'Installing tools' : run.estimate ? 'Estimating size' : 'Building ' + (run.target || target)) :
             phase === 'ok' ? (installingTools ? 'Tool installation complete' : run.estimate ? 'Estimate ready' : 'Build succeeded') :
-            phase === 'failed' ? (installingTools ? 'Tool installation failed' : 'Build failed') : phase === 'missing-toolchain' ? 'Missing tools' : 'Ready'}</b>
+            phase === 'failed' ? (installingTools ? 'Tool installation failed' : run.estimate ? 'Size estimate failed' : 'Build failed') : phase === 'missing-toolchain' ? 'Missing tools' : 'Ready'}</b>
         {steps.length > 0 && <span className="build__step">{steps[steps.length - 1]}</span>}
         {phase === 'running' && elapsed > 0 && <span className="build__time">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, '0')}</span>}
         {phase !== 'running' && phase !== 'idle' && <span className="build__time">exit {state.exitCode}</span>}
@@ -367,6 +367,8 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
               void invoke('studio.openProjectStudio',{project:projectPath}).catch(err=>setError(message(err)));
             }}>Open project Studio</StudioButton>}
           <StudioButton disabled={startingNative || state.running} onClick={async () => {
+            requestedEstimates.current.add(target);
+            setPendingEstimate(null);
             setStartingNative(true); setError('');
             try {
               await invoke('studio.buildNativeProject', {project:projectPath});
