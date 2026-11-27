@@ -18,6 +18,8 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
   const [info, setInfo] = useState<StudioBuildInfo | null>(null);
   const [target, setTarget] = useState(() => window.localStorage.getItem('aiverse.studio.build.target') || 'macos');
   const [config, setConfig] = useState<'Release' | 'Debug'>('Release');
+  const [compressionDraft, setCompressionDraft] = useState<number | null>(null);
+  useEffect(() => setCompressionDraft(null), [projectPath, info?.compression]);
   const [savingAtlas, setSavingAtlas] = useState(false);
   const [audio, setAudio] = useState('auto');
   const [installMissing, setInstallMissing] = useState(false);
@@ -99,6 +101,8 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
     finally { await refreshInfo();setSavingAtlas(false); }
   };
   const atlasDisabled = state.running || savingAtlas || info?.project !== projectPath;
+  const compression = compressionDraft ?? info?.compression ?? 0;
+  const compressionLabel = compression ? String(compression) : 'Auto (' + (config === 'Debug' ? 3 : 19) + ')';
   const atlas = estimate?.atlas;
   const pages = info?.atlasPages;
   const inheritedPage = typeof pages === 'number' ? pages : pages?.default ?? (['web','android'].includes(target) ? 2048 : 4096);
@@ -122,6 +126,16 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
           <option value="Release">Release</option><option value="Debug">Debug</option>
         </StudioSelect>
       </StudioField>
+      <StudioField label={'Pack compression · ' + compressionLabel} htmlFor="build-compression">
+        <input id="build-compression" type="range" min={0} max={22} step={1} value={compression}
+          aria-valuetext={compressionLabel} disabled={atlasDisabled}
+          onChange={e => setCompressionDraft(Number(e.currentTarget.value))}/>
+      </StudioField>
+      {compressionDraft != null && compression !== (info?.compression ?? 0) &&
+        <StudioButton disabled={atlasDisabled} onClick={() => void saveAtlas(() =>
+          invoke('studio.buildCompression',{project:projectPath,original:info?.compression ?? 0,level:compression}))}>
+          Apply compression
+        </StudioButton>}
       <StudioCheckbox label="Pack texture atlases" checked={info?.atlasEnabled ?? true} disabled={atlasDisabled}
         onChange={e => {
           const enabled = e.currentTarget.checked;

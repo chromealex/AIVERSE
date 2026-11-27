@@ -2459,6 +2459,22 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
     const Json& manifest = ws_.project.manifest;
     const Json& pages = manifest["atlas"]["maxPage"];
     const bool atlasEnabled = manifest["atlas"].getBool("enable",true);
+    const auto compression = manifest["packaging"].getInt("level",0);
+    if (method == "studio.buildCompression") {
+        if (ws_.building() || params.getStr("project")!=ws_.project.dir ||
+            !params["original"].isNumber() || params["original"].toDouble()!=compression)
+            throw std::runtime_error("Build settings changed. Review the current compression level.");
+        const auto& level=params["level"];
+        const auto value=level.toDouble();
+        if (!level.isNumber() || value!=std::floor(value) || value<0 || value>22)
+            throw std::runtime_error("Choose a compression level from 1 to 22, or 0 for automatic.");
+        if (value!=compression) {
+            Json patch=Json::object();patch.set("path",str("packaging.level"));patch.set("value",level);
+            const auto saved=ws_.call("set_manifest",patch);
+            if (saved.has("error")) throw std::runtime_error(saved.getStr("error"));
+        }
+        return snapshot();
+    }
     if (method == "studio.buildAtlasEnabled") {
         if (params.getStr("project") != ws_.project.dir || ws_.building() ||
             params["original"].type()!=Json::Type::Bool || params.getBool("original")!=atlasEnabled)
@@ -2501,6 +2517,7 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
             targets.push(std::move(v));
         }
         out.set("project", str(ws_.project.dir));
+        out.set("compression",num(int64_t(compression)));
         out.set("atlasEnabled", Json::fromBool(atlasEnabled));
         out.set("atlasPages", pages);
         out.set("targets", targets);
@@ -5103,7 +5120,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             reply.set("result",sceneBrushJson());
         } else if (method == "studio.agentInfo" || method == "studio.agentStart" || method == "studio.agentStop" || method == "studio.agentReset") {
             reply.set("result", agentRequest(method, params));
-        } else if (method == "studio.buildInfo" || method == "studio.buildAtlasFixSizes" || method == "studio.buildAtlasPage" || method == "studio.buildAtlasEnabled" || method == "studio.buildToolchain" || method == "studio.buildStart" ||
+        } else if (method == "studio.buildInfo" || method == "studio.buildCompression" || method == "studio.buildAtlasFixSizes" || method == "studio.buildAtlasPage" || method == "studio.buildAtlasEnabled" || method == "studio.buildToolchain" || method == "studio.buildStart" ||
                    method == "studio.buildLog" || method == "studio.buildEstimate") {
             reply.set("result", buildRequest(method, params));
         } else if(method=="studio.worldProcessAreaBatchResize"){
