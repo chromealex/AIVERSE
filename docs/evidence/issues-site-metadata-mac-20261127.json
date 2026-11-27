@@ -1,0 +1,16 @@
+{
+  "sha": "5cc6e7424a7ad6e873091549f18dbc5a8aee55ff",
+  "argv": [
+    "env",
+    "TMPDIR=/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/tmp",
+    "bash",
+    "./run-tests.sh",
+    "--quick",
+    "--no-build",
+    "--build-dir",
+    "/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/issues-site-metadata-mac-20261127.log.txt",
+  "sha256": "0bca027aa6b7c55f6db81a1ed45dcabc3ddcd70b3fda19056be2e36f8a9b1c9d"
+}
