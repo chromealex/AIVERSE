@@ -1832,3 +1832,7 @@ c583dd34bf384bba401a3e35b4392ac9d0e135b6 adds apps/studio-web/src/panels/InputTr
 ### HTML Input keyboard capture and conflict policies
 
 de4004e7ad79045d2ef1984cfb388ee964359c00 adds InputKeyCapture.tsx and updates ProjectToolPanels.tsx. Production web build passed. Detached Mac WKWebView synthetic keyboard events verified Escape cancel, rejection, swapping and allowing duplicate keys in one context. Save persisted the duplicate to the temporary project's input/actions.json, independently parsed after exit. Evidence in stats-mac-ke1djl13/live.log and docs/handoff/studio-html5/captures/mac-input-key-capture.png. Hardware input and cross-context conflict diagnostics still require acceptance.
+
+### Input context conflict diagnostics
+
+f885b73f39fe73e2108115949b92405b160dbc19 adds studio.inputConflicts in StudioSession.cpp and a draft report in ProjectToolPanels.tsx with bridge types and mock handling. EnhancedInputCore.h returns ordered bounded rows with an exact total; tests/libraries/enhanced_input_tests.cpp passed via clang++ -std=c++20 -I. Source web build passed. In detached WKWebView, priority 5 preceded priority 0, consuming the key shadowed the later binding, shared controls were reported when consumption was disabled, and disabling the context cleared the result. No input/actions.json was created. See stats-mac-dfs0ng17/live.log and captures/mac-input-context-conflicts.png. The first Mac UI check used the pre-optimization binary. Final integrated native rebuild and RPC limit check remain pending.
