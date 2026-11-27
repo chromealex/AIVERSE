@@ -10,8 +10,9 @@ import './BuildPanel.css';
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 const MAX_LOG = 400_000; // characters kept in the panel (the full log is in the log file)
 
-function PackageInventory({files,rules,scopeLabel,disabled,saveLevel}: {
+function PackageInventory({files,rules,scopeLabel,disabled,saveLevel,setExcluded}: {
   files:NonNullable<StudioBuildEstimate['files']>;rules:NonNullable<StudioBuildInfo['rules']>;
+  setExcluded:(path:string,original:string,exclude:boolean)=>void;
   scopeLabel:string;disabled:boolean;saveLevel:(path:string,original:string,level:number|null)=>void;
 }) {
   const byPath = new Map(rules.map(entry=>[entry.rule.match,entry]));
@@ -26,14 +27,18 @@ function PackageInventory({files,rules,scopeLabel,disabled,saveLevel}: {
     <StudioField label="Filter by path" htmlFor="build-file-filter">
       <StudioInput id="build-file-filter" type="search" value={query} onChange={e=>{setQuery(e.target.value);setPage(0);}}/>
     </StudioField>
-    {filtered.length ? <table aria-label="Packaged files"><thead><tr><th>Path</th><th>Original</th><th>Packed</th><th>Codec</th><th>Compression · {scopeLabel}</th></tr></thead>
+    {filtered.length ? <table aria-label="Packaged files"><thead><tr><th>Path</th><th>Original</th><th>Packed</th><th>Codec</th><th>Compression · {scopeLabel}</th><th>Exclude</th></tr></thead>
       <tbody>{filtered.slice(current*pageSize,(current+1)*pageSize).map(file=><tr key={file.path}><td>{file.path}</td>
         <td>{formatBytes(file.rawBytes)}</td><td>{formatBytes(file.storedBytes)}</td><td>{file.codec}</td><td>
           <StudioSelect aria-label={'Compression for '+file.path} disabled={disabled || /[*?]/.test(file.path)}
             value={byPath.get(file.path)?.rule.level ?? ''} onChange={e=>saveLevel(file.path,byPath.get(file.path)?.original ?? '',e.target.value==='' ? null : Number(e.target.value))}>
             <option value="">Default</option><option value={0}>Store</option>
             {Array.from({length:22},(_,i)=><option key={i} value={i+1}>zstd {i+1}</option>)}
-          </StudioSelect></td></tr>)}</tbody>
+          </StudioSelect></td><td>
+          <input type="checkbox" aria-label={'Exclude '+file.path} checked={!!byPath.get(file.path)?.rule.exclude}
+            disabled={disabled || /[*?]/.test(file.path) || file.path==='game.json' || file.path.startsWith('engine/') || file.path.startsWith('_atlas/')}
+            onChange={e=>setExcluded(file.path,byPath.get(file.path)?.original ?? '',e.currentTarget.checked)}/>
+        </td></tr>)}</tbody>
     </table> : <p>No matching files.</p>}
     {last>0 && <nav aria-label="Packaged file pages">
       <StudioButton disabled={!current} onClick={()=>setPage(current-1)}>Previous</StudioButton>
@@ -155,6 +160,8 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
     finally { await refreshInfo();setSavingAtlas(false); }
   };
   const atlasDisabled = state.running || savingAtlas || info?.project !== projectPath;
+  const setExcluded = (path:string,original:string,exclude:boolean) =>
+    void saveAtlas(()=>invoke('studio.buildFileExclusion',{project:projectPath,target,scope:ruleScope,path,original,exclude}));
   const compression = compressionDraft ?? info?.compression ?? 0;
   const compressionLabel = compression ? String(compression) : 'Auto (' + (config === 'Debug' ? 3 : 19) + ')';
   const atlas = estimate?.atlas;
@@ -289,13 +296,16 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
             <tbody>{rules.map(({rule,original},index)=><tr key={index}><td>{rule.match}</td><td>{[
               rule.exclude && 'Excluded',rule.level==null ? '' : rule.level===0 ? 'Store' : 'zstd '+rule.level,
               rule.maxSize && rule.maxSize+' px',rule.scale && (100*rule.scale)+'%',
-            ].filter(Boolean).join(' · ')}</td><td><StudioButton disabled={atlasDisabled} aria-label={'Remove rule for '+rule.match}
+            ].filter(Boolean).join(' · ')}</td><td>
+              {rule.exclude && !/[*?]/.test(rule.match) && <StudioButton disabled={atlasDisabled}
+                onClick={()=>setExcluded(rule.match,original,false)}>Include file</StudioButton>}
+              <StudioButton disabled={atlasDisabled} aria-label={'Remove rule for '+rule.match}
               onClick={()=>void saveAtlas(()=>invoke('studio.buildRemoveFileRule',{project:projectPath,target,scope:ruleScope,index,original}))}>Remove</StudioButton></td></tr>)}</tbody>
           </table> : <p>No rules for this scope.</p>}
         </details>
         {estimate?.files && <PackageInventory key={JSON.stringify([projectPath,target])} files={estimate.files}
           rules={rules} scopeLabel={ruleScope==='project' ? 'all platforms' : selected?.name ?? target} disabled={atlasDisabled}
-          saveLevel={(path,original,level)=>void saveAtlas(()=>invoke('studio.buildFileCompression',{project:projectPath,target,scope:ruleScope,path,original,level}))}/>}
+          setExcluded={setExcluded} saveLevel={(path,original,level)=>void saveAtlas(()=>invoke('studio.buildFileCompression',{project:projectPath,target,scope:ruleScope,path,original,level}))}/>}
         {estimate?.split && <section className="build__card" aria-label="Downloadable content">
           <h3>Downloadable content</h3>
           <div className="build__size"><b>{formatBytes(estimate.split.baseBytes)}</b><span>installed with the app</span></div>

@@ -2460,18 +2460,22 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
     const Json& pages = manifest["atlas"]["maxPage"];
     const bool atlasEnabled = manifest["atlas"].getBool("enable",true);
     const auto compression = manifest["packaging"].getInt("level",0);
-    if (method == "studio.buildRemoveFileRule" || method == "studio.buildFileCompression") {
+    if (method == "studio.buildRemoveFileRule" || method == "studio.buildFileExclusion" || method == "studio.buildFileCompression") {
         const auto scope = params.getStr("scope"), target = params.getStr("target");
         if (!knownBuildTarget(target) || (scope!="project" && scope!="target") ||
             params.getStr("project")!=ws_.project.dir || ws_.building()) throw std::runtime_error("Build settings unavailable");
         const auto& rules = scope=="project" ? manifest["packaging"]["files"] : manifest["packaging"]["targets"][target]["files"];
         Json next = Json::array();
-        if (method=="studio.buildFileCompression") {
+        if (method!="studio.buildRemoveFileRule") {
             const auto path = params.getStr("path");
             const auto& level = params["level"];
-            if (path.empty() || path.find_first_of("*?")!=std::string::npos || !params.has("level") ||
+            if (path.empty() || path.find_first_of("*?")!=std::string::npos) throw std::runtime_error("Expected an exact file path");
+            if (method=="studio.buildFileCompression" && (!params.has("level") ||
                 (!level.isNull() && (!level.isNumber() || level.toDouble()!=std::floor(level.toDouble()) ||
-                    level.toDouble()<0 || level.toDouble()>22))) throw std::runtime_error("Invalid file compression rule");
+                    level.toDouble()<0 || level.toDouble()>22)))) throw std::runtime_error("Invalid file compression rule");
+            if (method=="studio.buildFileExclusion" && (params["exclude"].type()!=Json::Type::Bool ||
+                (params.getBool("exclude") && (path=="game.json" || path.rfind("engine/",0)==0 || path.rfind("_atlas/",0)==0))))
+                throw std::runtime_error("Invalid file exclusion");
             if (!rules.isNull() && !rules.isArray()) throw std::runtime_error("Invalid file rule list");
             size_t index = rules.size();
             for (size_t i=0;i<rules.size();++i) if (rules[i].getStr("match")==path) index=i;
@@ -2480,7 +2484,11 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
                 throw std::runtime_error("The file rule changed. Review the current rules.");
             Json updated = exists ? rules[index] : Json::object();
             updated.set("match",str(path));
-            if (level.isNull()) updated.erase("level"); else updated.set("level",level);
+            if (method=="studio.buildFileExclusion") {
+                if (params.getBool("exclude")) updated.set("exclude",Json::fromBool(true));
+                else updated.erase("exclude");
+            } else if (level.isNull()) updated.erase("level");
+            else updated.set("level",level);
             for (size_t i=0;i<rules.size();++i) {
                 if (i!=index) next.push(rules[i]);
                 else if (updated.size()>1) next.push(updated);
@@ -5223,7 +5231,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             reply.set("result",sceneBrushJson());
         } else if (method == "studio.agentInfo" || method == "studio.agentStart" || method == "studio.agentStop" || method == "studio.agentReset") {
             reply.set("result", agentRequest(method, params));
-        } else if (method == "studio.buildInfo" || method == "studio.buildFileCompression" || method == "studio.buildRemoveFileRule" || method == "studio.buildSplitLimit" || method == "studio.buildSplitMode" || method == "studio.buildCompression" || method == "studio.buildAtlasFixSizes" || method == "studio.buildAtlasPage" || method == "studio.buildAtlasEnabled" || method == "studio.buildToolchain" || method == "studio.buildStart" ||
+        } else if (method == "studio.buildInfo" || method == "studio.buildFileExclusion" || method == "studio.buildFileCompression" || method == "studio.buildRemoveFileRule" || method == "studio.buildSplitLimit" || method == "studio.buildSplitMode" || method == "studio.buildCompression" || method == "studio.buildAtlasFixSizes" || method == "studio.buildAtlasPage" || method == "studio.buildAtlasEnabled" || method == "studio.buildToolchain" || method == "studio.buildStart" ||
                    method == "studio.buildLog" || method == "studio.buildEstimate") {
             reply.set("result", buildRequest(method, params));
         } else if(method=="studio.worldProcessAreaBatchResize"){
