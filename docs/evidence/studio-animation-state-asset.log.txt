@@ -1,0 +1,2 @@
+2026-11-27 04:56:22.169 AiverseStudioHTML5[27964:87097195] [studio-web] JS: CROSS main VERIFIED native animation state save
+Saved self-transition and preserved original conditions, nodes and parameters
