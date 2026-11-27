@@ -13,13 +13,18 @@ inline Json authoredWaterDocument(const MapDoc& map) {
 inline void editAuthoredWaterFlow(MapDoc& map,const Json& input) {
     const auto candidate=world::editNereidFlow(authoredWaterDocument(map),input);
     auto entities=map.data.entities;
-    for(const auto& j:candidate["entities"].items()) {
-        const int index=map.findEntity(j.getStr("id"));if(index<0)throw JsonError("Water entity disappeared");
-        entities[size_t(index)].extra.set("components",j["components"]);
+    // authoredWaterDocument projects only water entities, preserving map order.
+    // Map entity IDs are optional and need not distinguish these records.
+    size_t waterIndex=0;
+    const auto& edited=candidate["entities"];
+    for(auto& entity:entities) {
+        if(!entity.extra["components"].has("NereidWater"))continue;
+        if(waterIndex>=edited.size())throw JsonError("Water entity disappeared");
+        entity.extra.set("components",edited[waterIndex++]["components"]);
     }
+    if(waterIndex!=edited.size())throw JsonError("Water entity count changed");
     auto extra=map.data.extra;
     if(candidate.has("nereidWater"))extra.set("nereidWater",candidate["nereidWater"]);
-    if(entities.size()!=map.data.entities.size())throw JsonError("Water entity count changed");
     map.beginEdit();map.data.entities=std::move(entities);map.data.extra=std::move(extra);map.touched();
 }
 } // namespace aiverse::editor
