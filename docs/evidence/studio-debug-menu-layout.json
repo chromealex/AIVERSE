@@ -1,0 +1,10 @@
+{
+  "sha": "3e55a92528ba9eaa51fa0af79ae7823cbde47f30",
+  "argv": [
+    "bash",
+    "../debug-menu.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-debug-menu-layout.log.txt",
+  "sha256": "b3ba1f0e6358550b6941c6ec374b547a38193513a8af4fed7979e04c76a331de"
+}
