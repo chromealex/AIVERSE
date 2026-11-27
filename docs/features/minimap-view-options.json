@@ -90,7 +90,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "note": "Native logical-image and projection checks passed. Preparing actual client captures for loose and atlas-packed minimap, authored crop, hidden types and rectangle camera frame; pending.",
       "evidence": []
     },
     "handoff": {

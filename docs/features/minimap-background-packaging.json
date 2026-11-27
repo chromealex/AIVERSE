@@ -95,7 +95,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Implementation changed to shared logical image loading; previous packaging evidence does not verify this revision.",
+      "note": "Native logical-image and projection checks passed. Preparing actual client captures for loose and atlas-packed minimap, authored crop, hidden types and rectangle camera frame; pending.",
       "evidence": []
     },
     "handoff": {

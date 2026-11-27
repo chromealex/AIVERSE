@@ -44,5 +44,15 @@
       ],
       "yaw": 0
     }
+  },
+  "minimapBackground": "ui/minimap-probe.png",
+  "minimap": {
+    "bounds": [
+      4,
+      2,
+      20,
+      14
+    ],
+    "cameraFrame": "rectangle"
   }
 }
