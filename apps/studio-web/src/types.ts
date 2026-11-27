@@ -224,7 +224,7 @@ export interface StudioPlayerSample {
   tick: number;
   players: { slot: number; name: string; units: number; structures: number; resources: Record<string, number> }[];
 }
-export interface StudioGameState { playerHistory?: { epoch: string; tickRate?: number; resourceNames?: Record<string,string>; samples: StudioPlayerSample[] }; geometrySource?:"Scene"; geometry?:StaticGeometryReport|null; roleLabel?:string; simulationSpeed?:number; selectedLiveRef?:string; selectedLiveRefs?:string[]; scriptErrors?: StudioScriptMessage[]; device:StudioGameDevice; epoch?:string;canReviewPlayChanges?:boolean;runtimeDebugEdited?:boolean; paused: boolean; canControl: boolean; canStep: boolean; active: boolean; loading: boolean; progress: number; inMatch: boolean; tick: number; error: string }
+export interface StudioGameState { playerHistory?: { epoch: string; tickRate?: number; units?: number; projectiles?: number; resourceNames?: Record<string,string>; samples: StudioPlayerSample[] }; geometrySource?:"Scene"; geometry?:StaticGeometryReport|null; roleLabel?:string; simulationSpeed?:number; selectedLiveRef?:string; selectedLiveRefs?:string[]; scriptErrors?: StudioScriptMessage[]; device:StudioGameDevice; epoch?:string;canReviewPlayChanges?:boolean;runtimeDebugEdited?:boolean; paused: boolean; canControl: boolean; canStep: boolean; active: boolean; loading: boolean; progress: number; inMatch: boolean; tick: number; error: string }
 export interface RuntimeAnimationRow {
   entityId:string;entity:number;climbing:boolean;attached:boolean;stanceFeet:number;steppingFeet:number;
   footError:number;penetration:number;bodyPosition:number[];surfaceNormal:number[];error:string;

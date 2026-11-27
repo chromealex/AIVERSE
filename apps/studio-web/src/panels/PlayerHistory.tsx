@@ -36,6 +36,7 @@ function PlayerTrends({ player, samples, names, initiallyOpen }: {
 
 export default function PlayerHistory({ project }: { project: string }) {
   const [samples, setSamples] = useState<StudioPlayerSample[]>([]);
+  const [match, setMatch] = useState<{tick: number; seconds: number; units?: number; projectiles?: number} | null>(null);
   const [names, setNames] = useState<Record<string,string>>({});
   const [error, setError] = useState('');
   useEffect(() => {
@@ -45,6 +46,9 @@ export default function PlayerHistory({ project }: { project: string }) {
         const state = await invoke('studio.gameState', { statisticsProject: project, afterTick, epoch });
         if (!active) return;
         const history = state.playerHistory;
+        setMatch(state.inMatch && history?.tickRate ? {
+          tick: state.tick, seconds: state.tick / history.tickRate, units: history.units, projectiles: history.projectiles,
+        } : null);
         if (!state.inMatch || !history) {
           afterTick = -1; epoch = ''; setSamples(previous => previous.length ? [] : previous);
         } else {
@@ -69,7 +73,13 @@ export default function PlayerHistory({ project }: { project: string }) {
   const latest = samples[samples.length - 1];
   return <section aria-label="Player history"><h4>Player history</h4>
     {error && <p role="alert">{error}</p>}
-    {!latest && !error && <p className="ptp__hint">Start a local match to track armies, structures and resources.</p>}
+    {match && <div className="stats__cards">
+      <div><b>{match.tick}</b><span>simulation tick</span></div>
+      <div><b>{match.seconds.toFixed(1)} s</b><span>game time</span></div>
+      {match.units !== undefined && <div><b>{match.units}</b><span>unit entities</span></div>}
+      {match.projectiles !== undefined && <div><b>{match.projectiles}</b><span>projectiles</span></div>}
+    </div>}
+    {!latest && !match && !error && <p className="ptp__hint">Start a local match to track armies, structures and resources.</p>}
     {latest?.players.map((player, index) => <PlayerTrends key={player.slot} player={player}
       samples={samples} names={names} initiallyOpen={index < 2}/>)}
   </section>;
