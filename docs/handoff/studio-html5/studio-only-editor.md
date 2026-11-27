@@ -1656,3 +1656,7 @@ d36ac0faed88182b8f29271a8271dbef4cdbec52 updates docs/studio-html5-parity.md and
 ### Frame Capture simulation step time
 
 2e03eb171871e0e4e7196b445971bdba603d541c adds a scoped timing sink in engine/sim/SimulationStepTiming.h and Simulation.cpp around completed steps, active only during the hosted Game frame. StudioHost accumulates the measured milliseconds between completed Scene frames; types.ts and InsightPanels.tsx expose the selected value and simulation_ms CSV column. Mac native and web builds passed. Real match verified a 0.1430 ms sample against its CSV row and zero step time on all 39 subsequent paused frames. Evidence: stats-mac-0z5wxi7z/live.log and docs/handoff/studio-html5/captures/mac-frame-simulation-timing.png. Next compare the legacy CPU/simulation/draw plots and capture controls.
+
+### Synchronized Frame Capture plots
+
+14dfdd06ce9395b0af02f72204268c369eabf015 updates InsightPanels.tsx and ProjectToolPanels.css. Packaged macOS Studio rendered 95 captured samples on each of three plots. The live-match fixture verified the selected frame's y coordinate against CPU time, simulation time and draw count from the CSV and checked all three cursor positions after scrubbing. Web and native builds passed. Capture: docs/handoff/studio-html5/captures/mac-frame-capture-plots.png. Next verify explicit capture start and pause semantics against the old recording controls.
