@@ -95,7 +95,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "note": "Native option/API checks passed; adding actual client demo with alternate animated/static portrait models and distinct backgrounds. Capture acceptance pending.",
       "evidence": []
     },
     "handoff": {

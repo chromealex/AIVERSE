@@ -32,5 +32,17 @@
         "row": 2
       }
     }
+  },
+  "ui": {
+    "portrait": {
+      "enabled": true,
+      "background": [
+        0.1,
+        0.15,
+        0.2,
+        1
+      ],
+      "yaw": 0
+    }
   }
 }
