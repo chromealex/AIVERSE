@@ -9,7 +9,8 @@
     "engine/game/TopDown.cpp",
     "engine/mechanics/AttackTiming.h",
     "tests/libraries/systems_engine_tests.cpp",
-    "tests/tests.cpp"
+    "tests/tests.cpp",
+    "skills/gameplay/aiverse-weapon-policies/SKILL.md"
   ],
   "traits": {
     "runtime": true,
@@ -19,54 +20,88 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Three current focused regressions45checks0fail cover time remainder,200-tick authored period, multiple subtick releases, overlapping rest, cancellation/reacquisition and restore checksum. Shared precise pre-movement stage advances once; combat consumes remaining budget and discards idle credit.",
+      "evidence": [
+        "docs/evidence/issues-attack-phases-current-20261127.json",
+        "engine/game/GameCore.cpp",
+        "engine/game/Combat.cpp"
+      ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Shared AttackTiming/WeaponCadence policies use Fixed math and existing ECS Combat state. GameCore is an adapter; no parallel cooldown owner or genre-specific solver. Existing TopDown free-fire skips an active timed slot to avoid bypassing its owner.",
+      "evidence": [
+        "engine/mechanics/AttackTiming.h",
+        "engine/mechanics/WeaponCadence.h",
+        "engine/game/Components.h",
+        "engine/game/TopDown.cpp"
+      ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Public consumeAttackPhase returns unused time; consumeAttackRest consumes concurrent cooldown/recovery exactly once. Existing always-on library consumer and actual simulation regressions exercise the same header.",
+      "evidence": [
+        "engine/mechanics/AttackTiming.h",
+        "tests/libraries/systems_engine_tests.cpp",
+        "docs/evidence/issues-attack-phases-current-20261127.json"
+      ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Existing weapon-policies recipe now documents shared Fixed phase/remainder API, release cap, single state owner, scope of adapter wiring and required regression cases.",
+      "evidence": [
+        "skills/gameplay/aiverse-weapon-policies/SKILL.md"
+      ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "Timing correction adds no authoring field or operation. Existing preciseCooldown/windup/backswing rules data remain owned by the established rules editors; no additional authoring surface is introduced. This does not claim new editor acceptance.",
+      "evidence": [
+        "docs/game-format.md",
+        "engine/mechanics/AttackTiming.h"
+      ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "Timing correction adds no authoring field or operation. Existing preciseCooldown/windup/backswing rules data remain owned by the established rules editors; no additional authoring surface is introduced. This does not claim new editor acceptance.",
+      "evidence": [
+        "docs/game-format.md",
+        "engine/mechanics/AttackTiming.h"
+      ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "Timing correction adds no authoring field or operation. Existing preciseCooldown/windup/backswing rules data remain owned by the established rules editors; no additional authoring surface is introduced. This does not claim new editor acceptance.",
+      "evidence": [
+        "docs/game-format.md",
+        "engine/mechanics/AttackTiming.h"
+      ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Existing ATP1 save stores phase,target,remaining and rejects invalid state; existing cooldown stays authoritative. Actual regression saves after200ticks, advances30, restores, advances30 and matches checksum. No format change introduced.",
+      "evidence": [
+        "engine/game/Save.cpp",
+        "docs/evidence/issues-attack-phases-current-20261127.json",
+        "tests/tests.cpp"
+      ]
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "Correction to native phase arithmetic consumes existing scalar rules; no authored graph or graph evaluator is added.",
+      "evidence": [
+        "engine/mechanics/AttackTiming.h"
+      ]
     },
     "performance": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Source bounds four weapon slots and32releases/slot/tick; helpers use scalar stack state. Runtime CPU/memory budget measurement remains pending.",
+      "evidence": [
+        "engine/mechanics/AttackTiming.h",
+        "engine/mechanics/WeaponCadence.h",
+        "engine/game/Combat.cpp"
+      ]
     },
     "platforms": {
       "status": "not_run",
@@ -74,25 +109,34 @@
       "evidence": []
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Reuses Fixed,ECS,WeaponCadence and existing combat/save owners with no new libraries or scheduling subsystem.",
+      "evidence": [
+        "engine/mechanics/AttackTiming.h",
+        "engine/game/GameCore.cpp"
+      ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Actual makeSimJson Simulation runs without rendering and validates combat event cadence and restore checksum. No UI/device dependency.",
+      "evidence": [
+        "docs/evidence/issues-attack-phases-current-20261127.json",
+        "tests/tests.cpp"
+      ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Executable simulation fixtures demonstrate0.3windup/0.02cooldown over200ticks and0.005windup/0.01recovery with multiple releases; native library example consumes shared phase helper.",
+      "evidence": [
+        "tests/tests.cpp",
+        "tests/libraries/systems_engine_tests.cpp"
+      ]
     },
     "tests": {
       "status": "not_run",
-      "note": "Focused native tests passed: fractional helper 7 checks; 200-tick period/save checksum 5 checks; multiple sub-tick releases, overlapping recovery/cooldown and range cancellation/reacquisition 33 checks at source 7e69a4ef2. Full integrated quick gate pending.",
+      "note": "Current focused run passed three tests45checks; final merged-tree full quick gate remains pending. Subsequent skill documentation edit requires refreshed final provenance.",
       "evidence": [
-        "docs/agent-handoffs/issues-20261127-verification.md"
+        "docs/evidence/issues-attack-phases-current-20261127.json"
       ]
     },
     "handoff": {
@@ -101,18 +145,26 @@
       "evidence": []
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Game-format describes Fixed remainder, concurrent rest,32release cap, legacy/charge scope, existing events and ATP1 persistence.",
+      "evidence": [
+        "docs/game-format.md",
+        "skills/gameplay/aiverse-weapon-policies/SKILL.md"
+      ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "Internal simulation timing correction with no new visible surface; executable regression and updated rules/API documentation are the deliverables. No rendering screenshot can establish fractional cadence.",
+      "evidence": [
+        "docs/game-format.md",
+        "tests/tests.cpp"
+      ]
     }
   },
   "integrations": {
-    "skills": [],
+    "skills": [
+      "aiverse-weapon-policies"
+    ],
     "mcp_tools": [],
     "studio_panels": [],
     "studio_methods": []
