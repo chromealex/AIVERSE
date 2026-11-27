@@ -21,6 +21,7 @@ const volumeFields:Record<string,Record<string,unknown>>={
 };
 interface Props {
   graph:SpectraGraphV2;
+  nodeIdPrefix:string;
   disabled?:boolean;
   onEdit:(next:SpectraGraphV2)=>void;
   onError:(error:string)=>void;
@@ -36,7 +37,7 @@ const nativeFxEdit=async(params:Record<string,unknown>):Promise<SpectraGraphV2>=
 /** Graph canvas is layout/authoring only. Real emitter preview stays in
  * native RHI, never in this browser component.
  */
-export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}:Props) {
+export default function SpectraGraphCanvas({graph,nodeIdPrefix,disabled=false,onEdit,onError}:Props) {
   const [catalog,setCatalog]=useState<CatalogNode[]>([]);
   const [nodeType,setNodeType]=useState('DataInterface');
   const [volumePreset,setVolumePreset]=useState('fire');
@@ -168,7 +169,7 @@ export default function SpectraGraphCanvas({graph,disabled=false,onEdit,onError}
             return <Fragment key={node.id}><div
               className={'spectra-canvas__node '+(node.id===selectedNode?'is-selected':'')}
               style={{left:pos.x,top:pos.y}}
-              role="button" tabIndex={0} aria-pressed={node.id===selectedNode}
+              id={nodeIdPrefix+node.id} role="button" tabIndex={0} aria-pressed={node.id===selectedNode}
               aria-label={node.type+' node '+node.id}
               onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSelectedNode(node.id);}}}
               onClick={()=>setSelectedNode(node.id)}

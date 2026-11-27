@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useId, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, FilePlus2, GitBranch, GripVertical, Lock, LockOpen, RefreshCw, Save, Trash2 } from 'lucide-react';
 import { invoke, onNativeEvent } from '../bridge';
 import { StudioAlert, StudioBadge, StudioButton, StudioCheckbox, StudioEmptyState, StudioField, StudioInput, StudioPanel, StudioSection, StudioSelect } from '../ui';
@@ -39,6 +39,7 @@ interface Props {
  * Never mutates files directly, and never pretends to render a GPU preview.
  */
 export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) {
+  const nodeIdPrefix=useId();
   const nativeOp = useCallback(async(op:string,params:Record<string,unknown>={}):Promise<NativeResponse> => {
     const response = await invoke('studio.op',{op,params,expectedProject:projectPath});
     const result=asRecord(response.result);
@@ -339,7 +340,7 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
             {diagnostics(validation)} {validation.emitters!==undefined&&' · '+String(validation.emitters)+' emitter(s)'}
           </StudioAlert>}
           <StudioSection title="Graph Nodes & Links">
-            <SpectraGraphCanvas graph={graph} disabled={busy}
+            <SpectraGraphCanvas nodeIdPrefix={nodeIdPrefix} graph={graph} disabled={busy}
               onError={setError}
               onEdit={editGraph}/>
           </StudioSection>
@@ -443,11 +444,15 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
           <StudioSection title="DataInterface nodes">
             <div className="spectra-di__items">
               {graph.nodes.filter(n=>n.type==='DataInterface').map(n=><div key={n.id} className="spectra-di__node">
-                <span>{n.id} → {String(n.properties?.name??'')}</span>
-                <StudioButton variant="danger" size="sm" onClick={()=>apply(dropNode(graph,n.id))}><Trash2 size={13}/></StudioButton>
+                <StudioButton variant="ghost" size="sm" aria-label={'Show '+n.id+' in graph'}
+                  onClick={()=>{
+                    const node=document.getElementById(nodeIdPrefix+n.id);
+                    node?.click();node?.focus();node?.scrollIntoView({block:'center',inline:'center'});
+                  }}>{n.id} → {String(n.properties?.name??'')}</StudioButton>
+                <StudioButton variant="danger" size="sm" disabled={busy} aria-label={'Remove '+n.id} onClick={()=>apply(dropNode(graph,n.id))}><Trash2 size={13}/></StudioButton>
               </div>)}
             </div>
-            <p className="spectra-di__hint">Connect a node to ParticleProgramModule using the graph editing operations. Full visual wiring and GPU playback preview are not yet integrated into Studio.</p>
+            {graph.nodes.every(n=>n.type!=='DataInterface')&&<p className="spectra-di__hint">No DataInterface nodes in this graph.</p>}
           </StudioSection>
         </>}
       </main>
