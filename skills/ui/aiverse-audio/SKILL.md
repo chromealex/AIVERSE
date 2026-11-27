@@ -28,3 +28,12 @@ Use the existing game_file_read/write operations, then read the saved JSON
 back. Verify repeated selection of the same entity, switching/clearing
 selection, and an issued order. Record audio through the null-device capture
 workflow above; inspecting JSON alone does not prove the audible sequence.
+
+## Studio authoring
+
+Open **Project Data** from the command palette, enter `audio.json`, and Load.
+Edit the existing file, Save, and check the reloaded value. Invalid JSON or an
+externally changed original is rejected and leaves the draft available. Discard
+draft before loading another file. Saves use the shared game_file_read/write
+owner and are immediate, outside Map and Project Undo; restart the game to
+apply audio settings. This generic panel does not validate audio semantics.
