@@ -286,3 +286,7 @@ Issue #216 hosted quit is now confirmed, but native Windows exit is not inferred
 Remaining: touch/typing suppression, passive aura, portrait/minimap, projectile
 visual acceptance and Windows #206; then final merged-tree gate, manifests,
 publication and squash/push. No issue has been closed or main advanced yet.
+
+## Expanded client input acceptance
+
+Source 1a86c5069 extends the actual GameClient fixture: focused RmlUi text input suppresses F6, blur restores it; Stop followed by touch Move button and world tap must start movement; armed tower passive aura must be a disabled button with tooltip. Demo rule adds shared authored aura. Compile/runtime NOT RUN yet. Next cached client_controls_frame rebuild and capture run.
