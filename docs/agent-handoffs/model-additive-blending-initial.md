@@ -16,3 +16,7 @@ Next: inspect serialization/cooked material enum validation, shader output alpha
 Found extra additive MDX/MDL layers were dropped by the original first-layer conversion. Now additional Additive/AddAlpha layers become material passes sharing the same primitive indices/vertices/palette. HD texture channel layers retain their existing mapping. Team-glow uses its authored filter, and an additive main layer over team colour retains its blending. Added synthetic MDL regression for extra AddAlpha with 0.5 alpha and shared geometry. git diff --check passed; no build/tests run.
 
 Native compile and GPU acceptance remain pending. Next start final verification only after confirming main synchronization and reviewing all required test targets. Current model mode and FX space changes are not accepted merely from source inspection.
+
+## Authoring completion stage
+
+Current runtime Metal evidence passes, but material_set and native Studio validation still reject additive values. Complete both through render::parseMaterialBlend and expose the two modes in the existing Studio material select. Add native and frontend regressions. Full Mac gate passed at d88e86901 with Studio disabled; Studio itself remains to build and verify.

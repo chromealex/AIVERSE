@@ -3586,6 +3586,8 @@
           "status": "in-progress",
           "title": "Аддитивные материалы моделей",
           "titleEn": "Additive model materials",
+          "text": "Рендер проверен на Metal; завершается редактирование режимов через MCP и Studio.",
+          "textEn": "Rendering verified on Metal; completing mode authoring through MCP and Studio.",
           "target": null
         },
         {

@@ -19109,3 +19109,16 @@ TEST(models_mdl_preserves_additive_layers) {
     }
     CHECK(found);
 }
+
+#ifdef AIVERSE_TESTS_EDITOR_CORE
+#include "apps/editor/core/MaterialOps.h"
+TEST(materials_additive_authoring_validation) {
+    for (const char* mode : {"opaque", "mask", "blend", "alpha", "additive", "additive-unweighted"}) {
+        Json material = Json::object();
+        material.set("alpha", Json::string(mode));
+        CHECK(editor::checkMaterial(material).empty());
+    }
+    CHECK(!editor::checkMaterial(Json::parse(R"({"alpha":"unsupported"})")).empty());
+    CHECK(!editor::checkMaterial(Json::parse(R"({"alpha":1})")).empty());
+}
+#endif

@@ -4,7 +4,12 @@
   "owner": "rendering",
   "changed_paths": [
     "CMakeLists.txt",
+    "apps/editor/core/MaterialOps.cpp",
+    "apps/studio-native/StudioMaterialValidation.h",
     "apps/studio-native/StudioScene.cpp",
+    "apps/studio-native/tests/StudioMaterialValidationTests.cpp",
+    "apps/studio-web/src/panels/materialSchema.ts",
+    "apps/studio-web/tests/materialSchema.test.mjs",
     "docs/models.md",
     "engine/fx/AnimatedModelEffectView.h",
     "engine/fx/FxEffect.cpp",
@@ -59,12 +64,12 @@
     },
     "mcp": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "note": "Real material_set rejected additive alpha; align editor and native Studio validators with the shared parser, then rerun mutation/persistence checks.",
       "evidence": []
     },
     "studio": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "note": "Prepared UI options passed isolated frontend tests/build; actual source integration and native Studio acceptance pending.",
       "evidence": []
     },
     "inspector": {
