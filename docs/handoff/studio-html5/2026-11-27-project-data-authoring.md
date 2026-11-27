@@ -1,0 +1,8 @@
+# Shared project-data authoring
+
+Source stage: b48478ba68dca6f57b5361da468844eab2ad39b6
+Branch: codex/issue223-minimap-atlas-20261126
+
+Confirmed Studio gap for issue220: existing game_file_write operation was not exposed. Generated Project Data panel reuses the shared UI kit and Workspace read/write owner for existing project text files, without audio-specific paths. Native saves require expectedProject and exact expectedText; dedicated game/rules/map edits remain rejected. Shared DataOps rejects symlink traversal. Panel keeps dirty drafts on errors, refuses file switching until discard/save, ignores stale async results, and describes absence of Map/Project Undo. No browser filesystem writes or new bridge method.
+
+Files: DataOps.cpp, StudioTools.h, StudioSession.cpp, StudioSessionTests.cpp, nestedDock.ts, windowGroups.ts, StudioPanelRenderer.tsx and generated ProjectDataPanel.tsx/.css. Manifest covers source. TypeScript passed in existing KINGSTON staging tree (63859exit0); partial compliance11/0 and diff check passed. First test:web failed2/41 dock tests because the new on-demand panel was absent from the test registry. Correcting that registry; tests/build/native screenshot acceptance still pending. No native rebuild started yet. Web audio demo build87181 exited0 separately (18.8MB); browser audio verification not performed. Next run corrected web tests/build, build native changed targets and execute boundary tests, real WKWebView save/reload including stale/invalid rejection, then final gate.
