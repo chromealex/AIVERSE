@@ -1,0 +1,33 @@
+{
+  "cases": [
+    [
+      "selection256",
+      "/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/fixtures/selection-boundary",
+      0
+    ],
+    [
+      "projectile-0",
+      "/private/tmp/aiverse-issue223/demos/projectile-segments",
+      0
+    ],
+    [
+      "projectile-1",
+      "/private/tmp/aiverse-issue223/demos/projectile-segments",
+      1
+    ],
+    [
+      "projectile-2",
+      "/private/tmp/aiverse-issue223/demos/projectile-segments",
+      2
+    ],
+    [
+      "projectile-3",
+      "/private/tmp/aiverse-issue223/demos/projectile-segments",
+      3
+    ]
+  ],
+  "frames": 480,
+  "cpu_budget_ms": 16.67,
+  "sampled_gpu_budget_ms": 16.67,
+  "rss_budget_bytes": 536870912
+}

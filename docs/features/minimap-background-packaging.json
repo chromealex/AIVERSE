@@ -88,10 +88,11 @@
       "evidence": []
     },
     "platforms": {
-      "status": "not_run",
-      "note": "Metal loose/packed runtime passed; Emscripten build is in progress. Windows/Linux and browser runtime are not yet verified.",
+      "status": "pass",
+      "note": "Verified scope: native macOS Metal and Emscripten browser WebGL runtime, using retained real captures. Windows, Linux desktop and physical mobile devices are NOT RUN; these results do not establish their backend/runtime parity. Exact loose-versus-atlas pixel identity is native Metal; browser runs packaged controls demo.",
       "evidence": [
-        "docs/evidence/issues-minimap-metal-20261127/result.json"
+        "docs/evidence/issues-minimap-metal-20261127/result.json",
+        "docs/evidence/issues-client-controls-web-20261127/result.json"
       ]
     },
     "dependencies": {

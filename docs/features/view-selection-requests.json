@@ -86,10 +86,10 @@
       "evidence": []
     },
     "performance": {
-      "status": "not_run",
-      "note": "Stress run of 257-scene entities and repeated 256-handle requests completed: 88 active view frames, max1667 VM instructions vs5M budget,0disabled,276463616-byte whole-process max RSS. VM counters exclude native work; isolated native latency/allocation budget not measured.",
+      "status": "pass",
+      "note": "Scoped native Debug/Rosetta workload:256-handle selection every update, separate selected animated portrait, and four projectile scenes. Post-warmup CPU120-frame means<=16.04ms, sampled GPU frames<16.67ms,RSS<512MiB. First selection warmup block17.96ms is retained. Allocation review records bounded vectors/pools and fixed-size presentation; no p95/zero-allocation/mobile claim.",
       "evidence": [
-        "docs/evidence/issues-selection-boundary-20261127/result.json"
+        "docs/evidence/issues-client-performance-20261127/result.json"
       ]
     },
     "platforms": {

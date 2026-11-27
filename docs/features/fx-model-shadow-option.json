@@ -124,9 +124,12 @@
       ]
     },
     "platforms": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Verified scope: native macOS Metal and Emscripten browser WebGL runtime, using retained real captures. Windows, Linux desktop and physical mobile devices are NOT RUN; these results do not establish their backend/runtime parity.",
+      "evidence": [
+        "docs/evidence/issues-material-effects-metal-20261127/result.json",
+        "docs/evidence/issues-material-effects-web-20261127/result.json"
+      ]
     },
     "dependencies": {
       "status": "pass",

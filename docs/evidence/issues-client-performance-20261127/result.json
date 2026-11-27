@@ -1,0 +1,139 @@
+{
+  "sha": "7ea8e82de33931bde2692335341cb075998e7557",
+  "binary_source": "99f71adcf8873f2743903ff40c53184d630c3a7d",
+  "host": "macOS Metal Debug x86_64 Rosetta",
+  "workload": "480 frames per case,1280x720,fixed capture dt1/60.257 scouts and256-handle selection each view update; separate single-selected animated scout portrait; four projectile-segments scenes.",
+  "budgets": {
+    "cpu_post_warmup_block_mean_ms": 16.67,
+    "gpu_sample_ms": 16.67,
+    "peak_process_rss_bytes": 536870912
+  },
+  "allocation_review": [
+    "ProjectilePresentation stores fixed-size values and performs constant work with no heap allocation. Existing particle/ribbon pools remain bounded by quality tiers; 300trail CPU regression retained separately.",
+    "view.select bounds requests to256handles. Per-call vector allocation and bounded quadratic dedup are intentional; repeated worst-size requests included in whole-frame cost.",
+    "Minimap image load occurs during build; frame updates reuse raster storage. Per-type visibility is one boolean check per visible object.",
+    "Portrait keeps model provider/preview resources; changing subject can allocate/load a model. Stable subject render reuses the existing owner; no zero-allocation claim for full UI."
+  ],
+  "limits": [
+    "First CPU block excluded as warmup; first block for256selection17.96ms exceeds16.67ms and is reported, not hidden.",
+    "CPU means are not p95/frame maxima. GPU values sample the last completed command buffer at120-frame intervals.",
+    "Includes full engine scene/UI costs; cannot attribute differences solely to changed functions. No release-mode, mobile, Windows or Vulkan performance claim.",
+    "Single portrait uses separate isolated copy and selection-on-frame script; prior actual visual evidence verifies appearance semantics."
+  ],
+  "runs": [
+    {
+      "log": "portrait-single.log.txt",
+      "cpu_120_frame_means_ms": [
+        6.84,
+        4.96,
+        5.02
+      ],
+      "gpu_last_completed_frame_samples_ms": [
+        0.272,
+        0.426,
+        0.256,
+        0.348
+      ],
+      "rss_bytes": 280907776,
+      "pipeline_failures": [
+        0
+      ],
+      "exit_code": 0
+    },
+    {
+      "log": "projectile-0.log.txt",
+      "cpu_120_frame_means_ms": [
+        5.9,
+        4.29,
+        4.26
+      ],
+      "gpu_last_completed_frame_samples_ms": [
+        0.236,
+        0.191,
+        0.167,
+        0.156
+      ],
+      "rss_bytes": 275521536,
+      "pipeline_failures": [
+        0
+      ],
+      "exit_code": 0
+    },
+    {
+      "log": "projectile-1.log.txt",
+      "cpu_120_frame_means_ms": [
+        5.95,
+        4.21,
+        4.32
+      ],
+      "gpu_last_completed_frame_samples_ms": [
+        0.166,
+        0.178,
+        0.233,
+        0.16
+      ],
+      "rss_bytes": 268025856,
+      "pipeline_failures": [
+        0
+      ],
+      "exit_code": 0
+    },
+    {
+      "log": "projectile-2.log.txt",
+      "cpu_120_frame_means_ms": [
+        5.87,
+        4.29,
+        4.3
+      ],
+      "gpu_last_completed_frame_samples_ms": [
+        0.575,
+        0.183,
+        0.228,
+        0.168
+      ],
+      "rss_bytes": 279441408,
+      "pipeline_failures": [
+        0
+      ],
+      "exit_code": 0
+    },
+    {
+      "log": "projectile-3.log.txt",
+      "cpu_120_frame_means_ms": [
+        5.93,
+        4.48,
+        4.46
+      ],
+      "gpu_last_completed_frame_samples_ms": [
+        0.276,
+        0.294,
+        0.177,
+        0.261
+      ],
+      "rss_bytes": 261771264,
+      "pipeline_failures": [
+        0
+      ],
+      "exit_code": 0
+    },
+    {
+      "log": "selection256.log.txt",
+      "cpu_120_frame_means_ms": [
+        17.96,
+        16.04,
+        16.04
+      ],
+      "gpu_last_completed_frame_samples_ms": [
+        0.718,
+        0.714,
+        0.714,
+        0.76
+      ],
+      "rss_bytes": 276955136,
+      "pipeline_failures": [
+        0
+      ],
+      "exit_code": 0
+    }
+  ]
+}

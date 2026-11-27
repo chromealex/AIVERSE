@@ -97,14 +97,20 @@
       ]
     },
     "performance": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Scoped native Debug/Rosetta workload:256-handle selection every update, separate selected animated portrait, and four projectile scenes. Post-warmup CPU120-frame means<=16.04ms, sampled GPU frames<16.67ms,RSS<512MiB. First selection warmup block17.96ms is retained. Allocation review records bounded vectors/pools and fixed-size presentation; no p95/zero-allocation/mobile claim.",
+      "evidence": [
+        "docs/evidence/issues-client-performance-20261127/result.json"
+      ]
     },
     "platforms": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Verified scope: native macOS Metal and Emscripten browser WebGL runtime, using retained real captures. Windows, Linux desktop and physical mobile devices are NOT RUN; these results do not establish their backend/runtime parity.",
+      "evidence": [
+        "docs/evidence/issues-minimap-metal-20261127/result.json",
+        "docs/evidence/issues-client-controls-web-20261127/result.json",
+        "docs/evidence/issues-planet-minimap-20261127/result.json"
+      ]
     },
     "dependencies": {
       "status": "pass",

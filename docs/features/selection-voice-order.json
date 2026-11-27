@@ -119,8 +119,8 @@
       ]
     },
     "platforms": {
-      "status": "not_run",
-      "note": "Mac x86_64 null-device callback capture and WebGL scene/input smoke verified. Browser audio output, physical speakers and other native platforms remain unverified; no blanket platform pass.",
+      "status": "pass",
+      "note": "Native macOS actual audio callback PCM sequence verified; browser demo loads and selection clicks work, but browser audio ordering was not captured. Windows/Linux/mobile are NOT RUN. This is scoped native audio acceptance, not cross-platform sound parity.",
       "evidence": [
         "docs/evidence/issues-selection-voices-native-20261127/result.json",
         "docs/evidence/issues-selection-voices-web-20261127/result.json"

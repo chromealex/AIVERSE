@@ -104,9 +104,12 @@
       ]
     },
     "platforms": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Native macOS CPU fixed-point simulation regressions passed for fractional attack phases and save/restore. No backend-specific timing implementation; Windows/Linux/mobile runtime tests NOT RUN and are not implied by this result.",
+      "evidence": [
+        "docs/evidence/issues-attack-phases-current-20261127.json",
+        "engine/mechanics/AttackTiming.h"
+      ]
     },
     "dependencies": {
       "status": "pass",
