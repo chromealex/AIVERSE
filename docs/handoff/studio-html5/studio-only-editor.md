@@ -1482,3 +1482,5 @@ Standalone bundle verification with --require-build-tool passed: 2 web entry ass
 - graph-editor.png (1280 × 800), SHA-256 b79629cb408de53486586dac6d3a5bdd5a07da4775401132dfba03bb0b742d55
 
 Linux StudioHost.cpp compiled with reduced-memory flags. Linux runtime and Live Inspector modifier input remain pending.
+
+Live multi-selection verified in the packaged macOS host with a test driver in a temporary WKWebView bundle, using demos/selection-targeting. A Shift-click event selected a second row in detached Hierarchy; Inspector showed two options and displayed entity 2 after switching. See ../live-multi-wRQKMO/session.log. This did not exercise Cmd-click or camera focus. Stage 15d1971aa9d7d5b0945678707018994ff4f76435: apps/studio-native/StudioSession.cpp retains the Light properties JSON during field iteration following GCC lifetime diagnostics. git diff --check passed. Rebuild and run Light Inspector checks.
