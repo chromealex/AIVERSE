@@ -1,0 +1,37 @@
+{
+  "source_sha": "4d6f08f19eeba81d52c1d69d7ea81db54cc8fea1",
+  "checkout_sha": "4973556a9943deda8b466336c602bf8baf939e89",
+  "binary": "KINGSTON task cache/aiversemcp",
+  "transport": "stdio JSON-RPC, --no-editor --port 0 --engine /private/tmp/aiverse-issue223",
+  "process_result": "23981 exit 0",
+  "cases": [
+    "open isolated controls project",
+    "material_set and material_get: additive",
+    "material_set and material_get: additive-unweighted",
+    "restart MCP and reopen project; both modes retained",
+    "reject unsupported mode; materials.json remains byte-identical"
+  ],
+  "persisted_materials": {
+    "issue219_0": {
+      "alpha": "additive",
+      "color": [
+        1,
+        0.5,
+        0.25,
+        0.5
+      ]
+    },
+    "issue219_1": {
+      "alpha": "additive-unweighted",
+      "color": [
+        1,
+        0.5,
+        0.25,
+        0.5
+      ]
+    }
+  },
+  "limits": [
+    "MCP authoring and persistence only; not native Studio UI or final integrated gate."
+  ]
+}

@@ -64,8 +64,10 @@
     },
     "mcp": {
       "status": "not_run",
-      "note": "Real material_set rejected additive alpha; align editor and native Studio validators with the shared parser, then rerun mutation/persistence checks.",
-      "evidence": []
+      "note": "Rebuilt real MCP now accepts both additive modes; save/get/restart/reopen passed, unsupported alpha rejected without modifying materials.json. Registration audit and final provenance gate pending.",
+      "evidence": [
+        "docs/evidence/issues-mcp-authoring-20261127/material-after.json"
+      ]
     },
     "studio": {
       "status": "not_run",
@@ -135,7 +137,10 @@
   },
   "integrations": {
     "skills": [],
-    "mcp_tools": [],
+    "mcp_tools": [
+      "material_set",
+      "material_get"
+    ],
     "studio_panels": [],
     "studio_methods": []
   },
