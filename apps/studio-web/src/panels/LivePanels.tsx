@@ -87,8 +87,8 @@ export function LiveHierarchy({project,groupings,selection,onSelected}:{project?
           <button type="button" role="option" title={row.name + ' · ref:' + row.ref}
           aria-selected={selection?.epoch === page.epoch && !!selection && (selection.refs?.includes(row.ref) ?? selection.ref===row.ref)}
           className={'live-hier__row' + (selection?.epoch === page.epoch && !!selection && (selection.refs?.includes(row.ref) ?? selection.ref===row.ref) ? ' is-selected' : '')}
-          onClick={() => {
-            if(project) void invoke('studio.gameSelectEntity',{expectedProject:project,epoch:page.epoch,ref:row.ref})
+          onClick={event => {
+            if(project) void invoke('studio.gameSelectEntity',{expectedProject:project,epoch:page.epoch,ref:row.ref,focus:event.detail===2})
               .then(onSelected).catch(e=>setError(String(e)));
           }}>
           <span className={'live-hier__owner live-hier__owner--' + Math.min(row.owner, 4)}/>

@@ -187,13 +187,7 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
                 if(game_ && game_->active() && gameState().getBool("inMatch")){
                     const auto epoch=input.getStr("epoch",std::to_string(game_->runtimeEpoch()));
                     const auto count=game_->selectEntities(docs,input["refs"],epoch);
-                    if(input.getBool("focus") && count && preview_ && !projectLoading_){
-                        const auto position=game_->selectedEntityPosition();
-                        if(position)onScene([&]{
-                            const auto camera=preview_->cameraState();
-                            preview_->tweenCamera(*position,18.f,camera.yaw,camera.pitch);
-                        });
-                    }
+                    if(input.getBool("focus") && count) focusLiveSelection();
                     Json result=Json::object();
                     result.set("selected",Json::number(int64_t(count)));
                     return result;
@@ -1990,6 +1984,15 @@ void StudioHost::pan(double dx, double dy) { if (preview_ && finite({dx, dy})) o
 void StudioHost::moveCamera(double right, double up, double forward) {
     if (preview_ && finite({right, up, forward})) onScene([&] { preview_->move(float(right), float(up), float(forward)); });
 }
+void StudioHost::focusLiveSelection() {
+    if (!game_ || !preview_ || projectLoading_) return;
+    const auto position = game_->selectedEntityPosition();
+    if (position) onScene([&] {
+        const auto camera = preview_->cameraState();
+        preview_->tweenCamera(*position, 18.f, camera.yaw, camera.pitch);
+    });
+}
+
 void StudioHost::focusSelection() {
     if (projectLoading_ || !preview_) return;
     onScene([&] { preview_->focusSelected(session_->workspace().map, session_->workspace().map.data.worldSpace, session_->selectedObjectId()); });
@@ -4219,6 +4222,7 @@ Json StudioHost::localPlayOperation(const std::string& method, const Json& param
         if(method=="studio.gameSelectEntity"){
             if(!game_ || !params.has("expectedProject"))throw std::runtime_error("Select an entity in an open game");
             game_->selectEntity(params.getStr("epoch"),params.getStr("ref"));
+            if (params.getBool("focus")) focusLiveSelection();
             return gameState();
         }
         if (method == "studio.gameEntities") {

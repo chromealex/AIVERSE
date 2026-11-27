@@ -135,6 +135,7 @@ public:
     void pan(double dx, double dy);
     void moveCamera(double right, double up, double forward);
     void focusSelection();
+    void focusLiveSelection();
     void resetView();
     void frameAll();
     void setPivotSnap(bool on);
