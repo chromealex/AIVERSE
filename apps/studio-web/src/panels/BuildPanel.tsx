@@ -209,6 +209,17 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
               <li key={i}><span title={f.path}>{f.path ?? f.file}</span><small>{formatBytes(f.storedBytes)}</small></li>)}</ul>
           </> : <p className="build__note">Run <b>Estimate size</b> to pack the content and see what is heavy.</p>}
         </section>
+        {estimate?.split && <section className="build__card" aria-label="Downloadable content">
+          <h3>Downloadable content</h3>
+          <div className="build__size"><b>{formatBytes(estimate.split.baseBytes)}</b><span>installed with the app</span></div>
+          <p>{formatBytes(estimate.split.totalBytes)} including all downloads</p>
+          {estimate.split.chunks.length > 0 ? <details className="build__files">
+            <summary>Download packages ({estimate.split.chunks.length})</summary>
+            <table aria-label="Download packages"><thead><tr><th>Package</th><th>Files</th><th>Size</th></tr></thead>
+              <tbody>{estimate.split.chunks.map(chunk => <tr key={chunk.file}><td>{chunk.file}</td><td>{chunk.files}</td><td>{formatBytes(chunk.bytes)}</td></tr>)}</tbody>
+            </table>
+          </details> : <p className="build__note">All content fits in the base package.</p>}
+        </section>}
         {!!estimate?.fileRules?.length && <details className="build__card build__files">
           <summary>Applied file rules ({estimate.fileRules.length})</summary>
           <table aria-label="Applied file rules">

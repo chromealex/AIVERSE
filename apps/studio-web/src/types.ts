@@ -1087,7 +1087,7 @@ export interface StudioToolchain { target: string; host: string; hostSupported: 
 export interface StudioBuildLog { run:number; from: number; next: number; text: string; size: number; running: boolean; label: string; exitCode: number; runs: number; logFile: string }
 export interface StudioBuildEstimate { fixRun?: number; fixToken?: string; target: string; pack: Record<string, unknown>; atlas?: { enabled?: boolean; atlased?: number; pages?: number; occupancyPercent?: number; bytesSaved?: number;
     gpuBytesBefore?: number; gpuBytesAfter?: number; textureBindsBefore?: number; textureBindsAfter?: number;
-    excluded?: { path: string; reason: string; fixMaxSize?: number }[] } | null; split?: Record<string, unknown>;
+    excluded?: { path: string; reason: string; fixMaxSize?: number }[] } | null; split?: { baseBytes: number; totalBytes: number; chunkSize: number; chunks: { file: string; bytes: number; files: number }[] };
   fileRules?: Array<{path: string; what: string; before?: number; after?: number}>;
   heaviest: Array<{ path?: string; file?: string; bytes?: number; storedBytes?: number }> }
 
