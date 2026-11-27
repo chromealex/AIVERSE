@@ -270,6 +270,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     if(unusedOnly&&unused)return catalog.files.filter(f=>unused.has(f.path)&&(!search||f.path.toLowerCase().includes(search.toLowerCase())));
     return visibleAssetFiles(catalog.files,folder,search);
   },[catalog.files,folder,search,unusedOnly,unused]);
+  const filtering=Boolean(search.trim()) || unusedOnly;
   const crumbs=useMemo(()=>assetBreadcrumbs(folder),[folder]);
   // Asset identities survive renames/moves; a pinned Import Settings panel
   // must follow GUID, never a stale path or a new external selection.
@@ -471,7 +472,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
         title="New folder in content" aria-label="Create content folder"><FolderPlus size={16}/></button>
       <button type="button" className="studio-assets-tool-action"
         disabled={!native||!projectPath||busy} onClick={()=>void externalImport()}
-        title="Import files or folders" aria-label="Import into content"><Upload size={16}/></button>
+        title="Import into the current folder" aria-label="Import into content"><Upload size={16}/></button>
       <button type="button" className="studio-assets-tool-action" disabled={!native||!projectPath||busy}
         onClick={()=>setTrashOpen(true)} title="Recover deleted assets and previous versions" aria-label="Open asset Trash"><Trash2 size={16}/></button>
       <div className="studio-assets-views" role="group" aria-label="Asset layout">
@@ -555,9 +556,13 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
           shownFiles.length===0&&shownFolders.length===0?
             <div className="studio-assets-empty">
               <Folder size={26}/>
-              <strong>{projectPath?(search||folder?'No matching assets':'content/ is empty'):'Open a project'}</strong>
-              <p>{projectPath?'Import assets or drag files here from the Finder.':
-                'Assets appear here when an AIVERSE project is open.'}</p>
+              <strong>{!projectPath?'Open a project':filtering?'No matching assets':folder?'This folder is empty':'content/ is empty'}</strong>
+              {!projectPath ? <p>Assets appear here when an AIVERSE project is open.</p>
+                : filtering ? <button type="button" className="studio-assets-empty-action"
+                    onClick={()=>{setSearch('');setUnusedOnly(false);}}>Clear filters</button>
+                : native ? <button type="button" className="studio-assets-empty-action" disabled={busy||!!plan}
+                    onClick={()=>void externalImport()}>Import assets…</button>
+                : <p>Open a project in Studio to import assets.</p>}
             </div>:
             <div className={'studio-assets-items studio-assets-items--'+mode} role="list">
               {shownFolders.map(entry=>

@@ -65,6 +65,8 @@
 .studio-assets-items--list .studio-assets-meta{flex:none}
 .studio-assets-empty,.studio-assets-state{display:flex;flex-direction:column;align-items:center;
   justify-content:center;gap:8px;min-height:155px;color:var(--au-text-muted);text-align:center;padding:20px}
+.studio-assets-empty-action{color:var(--au-accent);background:transparent;border:0;cursor:pointer;padding:4px 8px;font:inherit}
+.studio-assets-empty-action:hover{text-decoration:underline}
 .studio-assets-empty svg{color:var(--au-accent)}
 .studio-assets-empty strong{color:var(--au-text);font-size:var(--au-font-lg)}
 .studio-assets-empty p{margin:0;max-width:360px;font-size:var(--au-font-sm)}
