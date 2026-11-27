@@ -1688,3 +1688,7 @@ f303286b0f932b8e1abe66262b4e749fbc050513 shares TexturePreviewGrid.h with the le
 ### Metal layered texture preview colors
 
 7227d886ae29f0a9fe4799ac0366a8867e1eff75 extends tests/render/metal_texture_gpu.mm. Built the existing hardware acceptance source against the current native Studio Metal backend object on KINGSTON. Full binary exited zero on Metal Apple M3 Ultra. Nine actual subresources across a two-layer 2D array, cube and two-cube array matched their authored pixel colors in TexturePreviewGrid (base first/last slice 4x4, last slice at mip 1 2x2). Log: texture-preview-metal-test.log on KINGSTON. The test exercises the backend and shared Studio decoder, independently of WKWebView selection. Next check end-to-end selection with an allocated layered resource visible in the Studio device inventory.
+
+### Detached Metal cube-array pixel acceptance
+
+d00ff868f128e489bbba0ab10d9e8b11fb28097c adds docs/handoff/studio-html5/captures/mac-texture-metal-cube-array.png. A disposable StudioScene object seeded a physical two-cube Metal texture on the live Scene device. The production detached HTML panel selected face 0 and face 11 at mip 0, then face 11 at mip 1. All 36 canvas pixels matched authored RGBA values. The KINGSTON run stats-mac-h_is3sqs/live.log recorded the successful comparison. Production code was unchanged. Next audit the remaining Texture Resources interactions against the legacy window and verify the other backends.
