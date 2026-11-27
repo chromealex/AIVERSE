@@ -53,17 +53,20 @@
     "tests/tests.cpp"
   ],
   "traits": {
-    "editable": true,
+    "editable": false,
     "simulation": true,
     "visible": true,
     "runtime": true
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Shared presentation and terminal path implemented. Native four-scene captures and Web scene smoke retained. Final current Studio-enabled gate remains pending after previous KINGSTON I/O failure; no full readiness claim.",
+      "status": "pass",
+      "note": "Shared single-sample model/trail/light presentation, explicit simulation branch origin and terminal path verified by native regressions and four real Metal scenes. Browser smoke retained with documented static-capture limits; final integrated gate is tracked separately.",
       "evidence": [
-        "docs/evidence/issues-projectile-segments-20261127/result.json",
+        "engine/view/ProjectilePresentation.h",
+        "docs/evidence/issues-projectile-state-current-20261127.json",
+        "docs/evidence/issues-projectile-terminal-current-20261127/result.json",
+        "docs/evidence/issues-projectile-metal-20261127/custom-result.json",
         "docs/evidence/issues-projectile-segments-web-20261127/result.json"
       ]
     },
@@ -95,29 +98,54 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "Reviewed scope is an internal runtime correction: segment provenance is produced by simulation, and one shared visual sample replaces consumer-specific offsets. No new author-editable parameter or operation is introduced. Existing projectile rules and FX configuration remain unchanged; adding a UI/MCP switch for branch origin would expose derived authority state.",
+      "evidence": [
+        "engine/view/ProjectilePresentation.h",
+        "engine/sim/ProjectileData.h",
+        "engine/game/ProjectilePrograms.cpp",
+        "engine/game/ProjectileEvents.h"
+      ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "Reviewed scope is an internal runtime correction: segment provenance is produced by simulation, and one shared visual sample replaces consumer-specific offsets. No new author-editable parameter or operation is introduced. Existing projectile rules and FX configuration remain unchanged; adding a UI/MCP switch for branch origin would expose derived authority state.",
+      "evidence": [
+        "engine/view/ProjectilePresentation.h",
+        "engine/sim/ProjectileData.h",
+        "engine/game/ProjectilePrograms.cpp",
+        "engine/game/ProjectileEvents.h"
+      ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "Reviewed scope is an internal runtime correction: segment provenance is produced by simulation, and one shared visual sample replaces consumer-specific offsets. No new author-editable parameter or operation is introduced. Existing projectile rules and FX configuration remain unchanged; adding a UI/MCP switch for branch origin would expose derived authority state.",
+      "evidence": [
+        "engine/view/ProjectilePresentation.h",
+        "engine/sim/ProjectileData.h",
+        "engine/game/ProjectilePrograms.cpp",
+        "engine/game/ProjectileEvents.h"
+      ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Native regressions verify midflight save/restore checksum, ballistic and planetary paths, real legacy v4 save, v12 Unknown fallback, v13 Ricochet provenance and corrupt-origin rejection. Actor durable codec uses versioned provenance with Unknown fallback; final all-host gate remains tracked by tests.",
+      "evidence": [
+        "docs/evidence/issues-projectile-state-current-20261127.json",
+        "tests/tests_projectiles.inc",
+        "tests/tests.cpp",
+        "engine/actor/ActorDurableProjectile.h",
+        "engine/actor/ActorDurableComponents.h"
+      ]
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "Shared segment sampling and terminal delivery consume authoritative flight events independently of authored effect graphs. This correction adds no graph property/node; existing FX graphs continue receiving the same owner-sampled position through GameFx.",
+      "evidence": [
+        "engine/view/ProjectilePresentation.h",
+        "engine/fx/GameFx.cpp",
+        "apps/client/ClientFx.cpp"
+      ]
     },
     "performance": {
       "status": "not_run",
@@ -140,9 +168,12 @@
       ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Actual native CPU tests run projectile simulation, branch provenance, archive restore/hash and GameFx terminal retirement with a null graphics device. 634 projectile/finish checks plus6 never-rendered-entity terminal checks passed. Presentation floats do not feed simulation.",
+      "evidence": [
+        "docs/evidence/issues-projectile-state-current-20261127.json",
+        "docs/evidence/issues-projectile-terminal-current-20261127/result.json"
+      ]
     },
     "examples": {
       "status": "pass",

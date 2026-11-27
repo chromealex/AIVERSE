@@ -61,9 +61,13 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Actual rules_set/get authoring verified per-type portrait background; current shared game_info/set_manifest acceptance covers project default background, exact-byte Undo/Redo, conflicts and reopen. Built registry audit confirms all three declared tools. No custom portrait authoring owner.",
+      "evidence": [
+        "docs/evidence/issues-mcp-authoring-20261127/result.json",
+        "docs/evidence/issues-project-settings-mcp-20261127/result.json",
+        "docs/evidence/issues-authoring-mcp-registry-20261127.json"
+      ]
     },
     "studio": {
       "status": "pass",

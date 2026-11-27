@@ -1,0 +1,29 @@
+[ OK ] fx_projectile_homing_arc_collide
+[ OK ] projectile_program_parser_rejects_invalid_data
+[ OK ] projectile_program_swept_flythrough_order_and_wall
+[ OK ] projectile_program_split_preserves_prefix_and_inherits_history
+[ OK ] projectile_program_ricochet_replacement_and_suffix_once
+[ OK ] projectile_program_ricochet_tie_break_and_no_target_fallback
+[ OK ] projectile_program_timed_split_budget_range_and_lifetime
+[ OK ] projectile_program_weapon_and_filters
+[ OK ] projectile_program_restore_midflight_and_hash
+[ OK ] projectile_program_endpoint_overlap_and_source_death
+[ OK ] projectile_program_incompatible_delivery_and_changed_config_save
+[ OK ] projectile_program_loads_real_v4_projectile_save
+[ OK ] projectile_program_ricochet_overlapping_targets
+[ OK ] projectile_program_fitted_weapon_arc_policy
+[ OK ] projectile_program_fitted_weapon_arc_tracks_target_and_restores
+[ OK ] projectile_program_ballistic_arc_and_restore
+[ OK ] projectile_program_planet_seam_chains_and_save
+    low: 600 particles (budget 600), 0.310 ms / frame for 300 trails
+    medium: 2500 particles (budget 2500), 0.673 ms / frame for 300 trails
+    high: 5685 particles (budget 12000), 1.294 ms / frame for 300 trails
+[ OK ] fx_many_projectile_ribbons_stay_in_budget
+[ OK ] projectile_presentation_segment_origin_and_shared_sample
+[ OK ] projectile_origin_versioned_archive
+[ OK ] projectile_shared_branch_provenance
+
+630 checks, 0 failed
+[ OK ] fx_finish_consumes_last_motion_once
+
+4 checks, 0 failed
