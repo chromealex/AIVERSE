@@ -316,3 +316,22 @@ Windows #206, manifests/publishing and final integrated gate before squash/push.
 ## Portrait real-client acceptance data
 
 Source 5b72690ba enables HUD portraits in shared controls demo: orange animated Idle diamond / owner background for scout, green static diamond / authored RGBA background for tower, distinct from both world models. Uses existing binary at 530764e8e; data-only stage needs no C++ rebuild. Capture NOT RUN. Next run full client scenario, inspect portraits across source switch, then missing/empty-source fallback using isolated project copies on KINGSTON.
+
+## Portrait real-client acceptance passed
+
+Source 5b72690ba / tested tree 9737d664f, existing binary source 530764e8e:
+three actual Metal client runs passed (handles 76523, 94321, 41436 all exit 0).
+Logs portrait-controls-run.log, portrait-fallback-run.log,
+portrait-defaults-run.log under the same KINGSTON cache. 0 pipeline failures
+in all runs. Missing-file case reports the expected absent asset once and
+renders the world model. Empty source resets inherited model. Seven captures
+inspected and retained in docs/evidence/issues-portrait-metal-20261127, along
+with exact variant manifests/rules and result.json.
+Fixed-yaw animated portrait changed 2096 pixels between scout/move samples.
+Sampled backgrounds RGBA8: owner 51/115/242/255, authored .3/.07/.12 =>
+77/18/31/255, inherited .1/.15/.2 => 26/38/51/255. Separate models visibly
+differ from world geometry; source selection swaps and shutdown complete.
+Existing fallback tower framing reaches the top image edge; this stage does
+not claim to change automatic world-model framing. No cross-platform claim.
+Next: minimap packed/standalone and crop/hide/frame runtime acceptance,
+projectile visual checks, Windows #206, final gate/manifests/publishing/integration.

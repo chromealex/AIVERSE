@@ -95,8 +95,10 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Native option/API checks passed; adding actual client demo with alternate animated/static portrait models and distinct backgrounds. Capture acceptance pending.",
-      "evidence": []
+      "note": "Actual hosted client Metal runs passed with separate animated/static portraits, source switching, owner/authored/inherited backgrounds, missing-source fallback and empty-source reset. Seven captures inspected; fixed-yaw animation changed 2096 portrait pixels. Final integrated quick gate pending.",
+      "evidence": [
+        "docs/evidence/issues-portrait-metal-20261127/result.json"
+      ]
     },
     "handoff": {
       "status": "not_run",
