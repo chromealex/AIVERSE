@@ -1796,3 +1796,7 @@ db0e120d6af74b572a412313b038031cbdb762c9 updates SpectraNativePreview.tsx and Sp
 ### SpectraFX narrow dock capture
 
 ba54858b8ae8fce4297bea809535f4a06d4c5c33 updates SpectraNativePreview.tsx and adds captures/mac-spectra-narrow-capture.png. A real WKWebView panel constrained to 250 CSS pixels reproduced the missing surface after scrolling to Load or Capture. Compact grid variants alone failed. Restored the original narrow layout and revealed the dedicated drawable before dispatch. Production build passed. stats-mac-d9s1jmem/live.log records a single 206px track and decoded 512x447 JPEG after scrolling separately to both buttons. Remaining work includes other graph controls and the window parity matrix.
+
+### Narrow SpectraFX comparison controls
+
+5ff9cc3a70d786508206db54cea322fcbe9d79d7 puts drawable reveal inside the common capture handler in SpectraNativePreview.tsx. Production web build passed. In the detached WKWebView constrained to 250 CSS pixels, the test scrolled separately to Capture A and Capture B, verified both decoded native frame images, then verified a 512x447 decoded difference heatmap. See stats-mac-j6cp13y8/live.log and captures/mac-spectra-narrow-ab.png. Continue the remaining window parity matrix.
