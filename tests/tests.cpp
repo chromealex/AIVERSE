@@ -19007,7 +19007,7 @@ TEST(precise_windup_subtick_recovery_and_cancellation) {
     sim->step();
     CHECK(c.attackTiming[0].phase==WeaponAttackPhase::Windup);
     CHECK(count(*sim,shooter,game::kEvAttackReleased)==0);
-    auto& position=sim->world().get<game::Transform>(target).pos;
+    auto& position=sim->world().get<Transform>(target).pos;
     const auto original=position;position.x=Fixed::fromInt(10);
     sim->step();
     CHECK(c.attackTiming[0].phase==WeaponAttackPhase::Idle);
