@@ -650,6 +650,7 @@ Json inspectEntity(Simulation& sim, GameCore& mod, Entity e, const Json& rulesJs
     if (moduleSchemas.size() > 0) r.set("componentSchemas", moduleSchemas);
     if (auto* u = w.tryGet<Unit>(e); u && size_t(u->type) < R.types.size()) {
         const UnitType& t = R.types[u->type];
+        r.set("typeName", Json::string(t.name));
         // effective values (techs, levels, buffs, statuses) next to the type's base
         struct S { const char* id; Stat s; Fixed base; };
         const S stats[] = {{"maxHp", Stat::MaxHp, t.maxHp}, {"armor", Stat::Armor, t.armor}, {"speed", Stat::Speed, t.speed}, {"sight", Stat::Sight, t.sight},

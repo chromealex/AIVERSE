@@ -161,7 +161,7 @@ export type StudioHierarchyPaths = Record<string,(string|string[])[]>;
 export interface StudioRuntimeRow {ref:string; name:string; kind:string; owner:number; parent:string; depth?:number; children?:number; health:number; components:string[];ownership?:StudioRuntimeOwnership}
 export interface StudioRuntimePage {active:boolean; epoch:string; tick:number; rows:StudioRuntimeRow[]; total:number; groups?:{name:string; count:number}[]; groupCount?:number}
 export interface StudioRuntimeEditField {id:'hp'|'energy';title:string;raw:string;value:number;min:number;max:number}
-export interface StudioRuntimeEntity {runtimeName?:string;ref:string; epoch:string; tick:number; components:Record<string,unknown>; stats?:Record<string,unknown>;ownership?:StudioRuntimeOwnership;componentSchemas?:Record<string,unknown>;runtimeEditAvailable?:boolean;runtimeFields?:StudioRuntimeEditField[];runtimeDebugEdited?:boolean}
+export interface StudioRuntimeEntity {runtimeName?:string;typeName?:string;ref:string; epoch:string; tick:number; components:Record<string,unknown>; stats?:Record<string,unknown>;ownership?:StudioRuntimeOwnership;componentSchemas?:Record<string,unknown>;runtimeEditAvailable?:boolean;runtimeFields?:StudioRuntimeEditField[];runtimeDebugEdited?:boolean}
 export interface StudioGameDeviceChrome { corner:number; cutout?:{x:number;y:number;width:number;height:number;radius:number}; insets:{left:number;top:number;right:number;bottom:number} }
 export interface StudioGameDevice { id:string; landscape:boolean; safeArea:boolean; width:number; height:number; touch:boolean; chrome?:StudioGameDeviceChrome }
 export interface StudioGameDeviceOption { id:string; name:string; group:string; width:number; height:number; scale:number }

@@ -140,6 +140,7 @@ export function LiveInspector({project,selection}:{project?:string;selection?:Li
     void poll(); const t = window.setInterval(() => void poll(), 500);
     return () => { live = false; window.clearInterval(t); };
   }, [epoch, ref, project]);
+  const name = detail?.runtimeName || detail?.typeName;
   if (!selection) return <div className="live__empty">{error || 'Select a live entity in the Hierarchy.'}</div>;
   return <div className="live-inspector">
     {selection.refs && selection.refs.length > 1 && <label className="live-inspector__selection">
@@ -151,7 +152,7 @@ export function LiveInspector({project,selection}:{project?:string;selection?:Li
     </label>}
     {error ? <p className="live__error" role="alert">{error}</p>
       : !detail || detail.ref!==ref || detail.epoch!==epoch ? <div className="live__empty">Reading entity…</div>
-      : <EntityDetails detail={detail} title={detail.runtimeName ?? 'Entity '+detail.ref} subtitle={(detail.runtimeName ? 'Entity '+detail.ref+' · ' : '')+'tick '+detail.tick}/>}
+      : <EntityDetails detail={detail} title={name || 'Entity '+detail.ref} subtitle={(name ? 'Entity '+detail.ref+' · ' : '')+'tick '+detail.tick}/>}
   </div>;
 }
 
