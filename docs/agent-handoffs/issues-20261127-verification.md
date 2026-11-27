@@ -241,3 +241,7 @@ consumer-specific runtime test switches or claiming static captures prove input.
 Additional attack timing acceptance still needs multiple releases per tick and
 target cancellation; the existing authored-period test covers 200 ticks plus
 save/reload checksum, and the pure helper test covers fractional recovery.
+
+## Additional attack timing simulation acceptance
+
+Source 913d83753 adds tests/tests.cpp scenario precise_windup_subtick_recovery_and_cancellation: multiple releases per tick, overlapping recovery/cooldown over 20 ticks, out-of-range cancellation and fresh windup after reacquisition. Manifest updated before test implementation. git diff --check passed. Compile/runtime not run yet; next use the cached aiverse_tests target and run the new filter.
