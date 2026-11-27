@@ -17,7 +17,8 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
   const path = snapshot?.project.path ?? '';
   const [models, setModels] = useState<string[]>([]);
   const [model, setModel] = useState('');
-  const [doc, setDoc] = useState<AnimDoc | null>(null);
+  const [loaded, setLoaded] = useState<{model:string; document:AnimDoc} | null>(null);
+  const doc = loaded?.model === model ? loaded.document : null;
   const [clip, setClip] = useState('');
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -30,11 +31,12 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
     void op('modeling_list').then(r => { const m: string[] = r.models ?? []; setModels(m); setModel(x => x || m[0] || ''); }).catch(e => setError(message(e)));
   }, [path]);
   useEffect(() => {
-    if (!model) { setDoc(null); return; }
+    setLoaded(null); setPlaying(false); setClip(''); setTime(0); setError('');
+    if (!model) return;
     let live=true;
     void op('animation_get', { name: model }).then(r => {
       if(!live)return;
-      const d = r.document as AnimDoc; setDoc(d); setClip(d.clips?.[0]?.id ?? ''); setTime(0); setError('');
+      const d = r.document as AnimDoc; setLoaded({model,document:d}); setClip(d.clips?.[0]?.id ?? ''); setTime(0); setError('');
     }).catch(e => {if(live)setError(message(e));});
     return ()=>{live=false;};
   }, [model]);
@@ -48,7 +50,7 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
   const duration = current ? clipDuration(current) : 0;
   useEffect(() => {
     setPose([]);
-    if (!model || !clip) return;
+    if (!doc || !clip) return;
     let active = true, sampling = false;
     let pending: number | undefined;
     requestPose.current = async target => {
@@ -68,8 +70,8 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
       sampling = false;
     };
     return () => { active = false; requestPose.current = null; };
-  }, [model, clip]);
-  useEffect(() => { requestPose.current?.(time); }, [model, clip, time]);
+  }, [model, clip, doc]);
+  useEffect(() => { requestPose.current?.(time); }, [model, clip, time, doc]);
   useEffect(() => {
     if (!playing || duration <= 0) return;
     let last = performance.now(), raf = 0;
