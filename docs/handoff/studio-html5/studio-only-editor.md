@@ -1692,3 +1692,7 @@ f303286b0f932b8e1abe66262b4e749fbc050513 shares TexturePreviewGrid.h with the le
 ### Detached Metal cube-array pixel acceptance
 
 d00ff868f128e489bbba0ab10d9e8b11fb28097c adds docs/handoff/studio-html5/captures/mac-texture-metal-cube-array.png. A disposable StudioScene object seeded a physical two-cube Metal texture on the live Scene device. The production detached HTML panel selected face 0 and face 11 at mip 0, then face 11 at mip 1. All 36 canvas pixels matched authored RGBA values. The KINGSTON run stats-mac-h_is3sqs/live.log recorded the successful comparison. Production code was unchanged. Next audit the remaining Texture Resources interactions against the legacy window and verify the other backends.
+
+### Texture inventory summary and sampling context
+
+1cee385f493a7641f5920eb4a2969c0dee058a65 updates apps/studio-web/src/panels/InsightPanels.tsx and docs/studio-html5-parity.md. Restored render-target and multisample counts over the full inventory independently of the filtered table. Readback now reports the diagnostic sample resolution limit and HDR tone mapping. Web production build and git diff --check passed. No new runtime capture in this stage. Direct continuous 2D preview and automatic inventory refresh still require migration.
