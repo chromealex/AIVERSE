@@ -196,7 +196,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
       case 'fx_library': return <SpectraLibraryPanel key={snapshot?.project.path ?? ''} projectPath={snapshot?.project.path ?? ''} showPanel={ctx.showPanel}/>;
       case 'fx_graph': return <SpectraDataInterfacesPanel key={snapshot?.project.path} projectPath={snapshot?.project.path ?? ''}
         onSaved={()=>void invoke('studio.snapshot',{}).then(ctx.commitSnapshot).catch(()=>{})}/>;
-      case 'fog': return <FogPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
+      case 'fog': return <FogPanel playing={!!ctx.playing} openGame={()=>ctx.showPanel('game')} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'scripts': return <ScriptsPanel key={snapshot?.project.path} location={ctx.scriptLocation} consumeLocation={ctx.consumeScriptLocation} playing={!!ctx.playing} snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'input': return <InputPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'stats': return <StatsPanel snapshot={snapshot}/>;

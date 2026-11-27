@@ -36,7 +36,8 @@ function Segmented<T extends string>({ value, options, onChange }: { value: T; o
     <button key={id} type="button" role="radio" aria-checked={value === id} className={value === id ? 'is-on' : ''} onClick={() => onChange(id)}>{label}</button>)}</div>;
 }
 
-export function FogPanel(ctx: Ctx) {
+export function FogPanel(ctx: Ctx & { playing: boolean; openGame: () => void }) {
+  const [starting, setStarting] = useState(false);
   const [fog, setFog] = useState<Record<string, any>>({});
   const [error, setError] = useState('');
   const path = ctx.snapshot?.project.path ?? '';
@@ -49,6 +50,15 @@ export function FogPanel(ctx: Ctx) {
   const set = async (key: string, value: unknown) => {
     try { await op('rules_merge', { path: 'fogOfWar', value: { [key]: value } }); await read(); refreshSnapshot(ctx); }
     catch (e) { setError(message(e)); }
+  };
+  const previewInGame = async () => {
+    setStarting(true);
+    try {
+      const game = await invoke('studio.gameState', {});
+      if (!game.active && !game.loading) await invoke('studio.gameStart', { entry: 'map' });
+      ctx.openGame();
+    } catch (e) { setError(message(e)); }
+    finally { setStarting(false); }
   };
   if (!path) return <div className="tool__empty">Open a project to edit its fog of war.</div>;
   const mode = fog.mode === 'off' ? 'none' : (fog.mode ?? 'full');
@@ -87,7 +97,10 @@ export function FogPanel(ctx: Ctx) {
       <div className="ptp__actions">
         <button type="button" className="au-button au-button--sm" onClick={() => void op('rules_delete', { path: 'fogOfWar' }).then(read).then(() => refreshSnapshot(ctx)).catch(e => setError(message(e)))}>
           <RotateCcw size={13}/>Reset to defaults</button>
-        <span className="ptp__hint">rules.json → fogOfWar · Play the game to see it</span>
+        <button type="button" className="au-button au-button--sm" disabled={starting}
+          onClick={ctx.playing ? ctx.openGame : () => void previewInGame()}>
+          <Play size={13}/>{ctx.playing ? 'Show game' : 'Play map'}</button>
+        <span className="ptp__hint">rules.json → fogOfWar</span>
       </div>
     </div>
   </div>;
