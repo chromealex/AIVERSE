@@ -131,3 +131,19 @@ and shut down through the resource provider before destroying the device.
 For data-driven HUD portraits use `rules_set` at `types.<id>.view.portrait` or
 `set_manifest` ui.portrait defaults, and inspect the saved data before capturing
 the selected subject. See docs/game-format.md and docs/view.md.
+
+## Local selection from view scripts
+
+Use `view.select({entityHandle, ...})` to replace the local selection or
+`view.select_add(entityHandle)` to append. These are presentation requests,
+not simulation commands. The client filters dead, hidden or unselectable
+entities and clears command-card paging. Keep requests at most 256 handles;
+pass generation-safe handles returned by `game.units`, not guessed IDs.
+
+Author the file under `scripts/view/` with `script_write` and register it in
+`viewScripts` through `rules_set`. Read it back with `script_read`; in Studio
+use the existing Scripts panel. Trigger selection from the relevant view
+event after the replacement entity exists. `demos/client-command-controls`
+shows F7 selecting an armed tower; verify the selected portrait/command card
+in the actual client. `view.selection()` queries the current local handles.
+See `docs/ui-scripting.md`; this does not persist selection in game saves.

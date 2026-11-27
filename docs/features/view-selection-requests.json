@@ -6,7 +6,8 @@
     "apps/client/GameClient.cpp",
     "engine/view/game/GameViewScript.cpp",
     "engine/view/game/GameViewScript.h",
-    "tests/tests.cpp"
+    "tests/tests.cpp",
+    "skills/gameplay/aiverse-view/SKILL.md"
   ],
   "traits": {
     "editable": true,
@@ -16,24 +17,38 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Real native and browser clients accept F7 view.select request and display tower selection/portrait/commands. Script regression verifies de-duplication and single-consumption requests.",
+      "evidence": [
+        "docs/evidence/issues-client-controls-web-20261127/result.json",
+        "docs/evidence/issues-client-controls-metal-20261127/result.json",
+        "tests/tests.cpp"
+      ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Requests are local presentation state; client filters through visibleSelectionUnit and clears command-card paging. No authoritative simulation write or networking protocol added.",
+      "evidence": [
+        "engine/view/game/GameViewScript.cpp",
+        "apps/client/GameClient.cpp"
+      ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "ViewScripts::takeSelectionRequest transfers the queued handles once; native regression checks exact entity and that a second consume returns false.",
+      "evidence": [
+        "engine/view/game/GameViewScript.h",
+        "tests/tests.cpp"
+      ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Existing aiverse-view recipe documents author/readback/Studio workflow, bounded generation-safe local requests and the browser/native-verified F7 demo. Catalog check validated 303 skills.",
+      "evidence": [
+        "skills/gameplay/aiverse-view/SKILL.md",
+        "demos/client-command-controls/scripts/view/controls.lua",
+        "docs/evidence/issues-client-controls-web-20261127/result.json"
+      ]
     },
     "mcp": {
       "status": "not_run",
@@ -51,13 +66,13 @@
       "evidence": []
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "Current selection and pending requests are transient local UI state. This change introduces no persisted selection or new data format. Lua source is saved through existing script authoring.",
       "evidence": []
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "Local selection requests are Lua presentation commands; no authorable graph or graph evaluation contract is added.",
       "evidence": []
     },
     "performance": {
@@ -66,24 +81,33 @@
       "evidence": []
     },
     "platforms": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Native macOS/Metal and Emscripten7.0.1 browser client exercised the F7 selection request. Windows/Linux/mobile are unverified; no platform-specific selection implementation introduced.",
+      "evidence": [
+        "docs/evidence/issues-client-controls-web-20261127/result.json",
+        "docs/evidence/issues-client-controls-metal-20261127/result.json"
+      ]
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Uses existing view VM, generation-safe Entity handles and client visibility selection policy; no new dependency.",
+      "evidence": [
+        "engine/view/game/GameViewScript.cpp",
+        "apps/client/GameClient.cpp"
+      ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "status": "not_applicable",
+      "note": "Selection affects local presentation only and is not a headless simulation capability. Native script regression uses an isolated simulation as read-only input.",
       "evidence": []
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Controls demo F7 uses view.select on the tower, verified in the actual native client and browser.",
+      "evidence": [
+        "demos/client-command-controls/scripts/view/controls.lua",
+        "docs/evidence/issues-client-controls-web-20261127/result.json"
+      ]
     },
     "tests": {
       "status": "not_run",
@@ -96,9 +120,11 @@
       "evidence": []
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "UI scripting reference documents replace/add selection, handle limit, filtering and local-only behavior.",
+      "evidence": [
+        "docs/ui-scripting.md"
+      ]
     },
     "publishing": {
       "status": "not_run",
@@ -111,7 +137,9 @@
     }
   },
   "integrations": {
-    "skills": [],
+    "skills": [
+      "aiverse-view"
+    ],
     "mcp_tools": [],
     "studio_panels": [],
     "studio_methods": []
