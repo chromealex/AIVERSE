@@ -118,6 +118,7 @@ export interface StudioMapRegions {
   regions:Array<{letter:string;name:string;cells:number}>; coverage:string[]; stride:number; width:number; height:number;
 }
 export interface StudioMapProperties {
+  blockKeys?:string[]; blockText?:string;
   roadIndex?:{index:number;name:string}[];
   scenarioIndex?:{kind:"wave"|"trigger";index:number;name:string}[];
   scenarioRecords?:Record<string,unknown>[];
@@ -129,7 +130,7 @@ export interface StudioMapProperties {
   entities:number; players:number; roadsOnly:boolean; victory:Record<string,unknown>|null;
   issues?:{error:boolean;text:string;entityId?:string}[];
 }
-export interface StudioMapChanges {scenarioRecord?:{group:"waves"|"triggers";index:number} & ({value:Record<string,unknown>} | {remove:true});name?:string;size?:[number,number];roadsOnly?:boolean;victory?:Record<string,unknown>|null}
+export interface StudioMapChanges {extraBlock?:{key:string} & ({text:string} | {remove:true});scenarioRecord?:{group:"waves"|"triggers";index:number} & ({value:Record<string,unknown>} | {remove:true});name?:string;size?:[number,number];roadsOnly?:boolean;victory?:Record<string,unknown>|null}
 export interface StudioSnapshot {
   graphDocument?: StudioGraphDocumentScope;
   project: { name: string; path: string; dirty: boolean; actorSession?:boolean; historyVersion?: string; assetHistoryVersion?: string };
@@ -586,7 +587,7 @@ export interface StudioParams {
   'studio.newMap': {width: number; height: number; name: string};
   'studio.openMap': {file: string};
   'studio.saveAs': Record<string, never>;
-  'studio.mapProperties': {scope:StudioGraphDocumentScope;includeBodies?:boolean;scenarioIndex?:boolean;roadIndex?:boolean;scenarioGroup?:"waves"|"triggers";validate?:boolean};
+  'studio.mapProperties': {scope:StudioGraphDocumentScope;includeBodies?:boolean;listBlocks?:boolean;blockKey?:string;scenarioIndex?:boolean;roadIndex?:boolean;scenarioGroup?:"waves"|"triggers";validate?:boolean};
   'studio.playerStartPick': {token:string;armed:boolean};
   'studio.roadPick': {token:string;armed:boolean;scope?:StudioGraphDocumentScope};
   'studio.areaPick': {token:string;armed:boolean};

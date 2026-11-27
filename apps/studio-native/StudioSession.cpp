@@ -797,9 +797,27 @@ Json StudioSession::mapProperties(const Json& params,bool write) {
     auto& data=doc.data;
     if(ws_.project.dir.empty() || !sameDocumentScope(params["scope"],graphDocumentScope()))
         throw std::runtime_error("Map changed. Reload its properties.");
+    const auto extraBlock=[&](const std::string& key){
+        return !data.worldSpace && !key.empty() && key.front()!='$' && key!="areas" && key!="waves" &&
+               key!="triggers" && key!="victory" && data.extra.has(key);
+    };
     if(write){
         const auto& patch=params["changes"];
         if(!patch.isObject())throw std::runtime_error("Expected map property changes");
+        if(patch.has("extraBlock")){
+            const auto& block=patch["extraBlock"];
+            const auto key=block.getStr("key");
+            const bool remove=block.getBool("remove");
+            if(patch.size()!=1 || !extraBlock(key) || (remove ? block.has("text") : !block["text"].isString()))
+                throw std::runtime_error("Invalid map block change");
+            const auto value=remove?Json{}:Json::parse(block.getStr("text"));
+            if(remove || data.extra[key]!=value){
+                doc.beginEdit();
+                if(remove)data.extra.erase(key);
+                else data.extra.set(key,value);
+            }
+            return snapshot();
+        }
         if(patch.has("scenarioRecord")){
             const auto& record=patch["scenarioRecord"];
             const auto group=record.getStr("group");
@@ -858,6 +876,16 @@ Json StudioSession::mapProperties(const Json& params,bool write) {
         out.set("worldSpace",std::move(world));
     }
     out.set("maxSize",num(game::kMaxMapSize));out.set("entities",num(data.entities.size()));out.set("players",num(data.players.size()));
+    if(params.getBool("listBlocks")){
+        Json keys=Json::array();
+        for(const auto& [key,value]:data.extra.members())if(extraBlock(key))keys.push(str(key));
+        out.set("blockKeys",std::move(keys));
+    }
+    if(params.has("blockKey")){
+        const auto key=params.getStr("blockKey");
+        if(!extraBlock(key))throw std::runtime_error("Map block no longer exists");
+        out.set("blockText",str(data.extra[key].dump(2)));
+    }
     if(params.getBool("roadIndex")){
         Json roads=Json::array();
         auto label=[&](int i){

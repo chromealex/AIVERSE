@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Map as MapIcon } from 'lucide-react';
 import { MapScenarioRecords } from './MapScenarioRecords';
+import { MapExtraBlocks } from './MapExtraBlocks';
 import { MapAreas } from './MapAreas';
 import { MapPlayers } from './MapPlayers';
 import { invoke } from '../bridge';
@@ -30,7 +31,7 @@ export function MapInspector({scope,onApply,onSelect,busy,view,inspectorRecord}:
   useEffect(()=>{
     let live=true;
     setError('');
-    invoke('studio.mapProperties',{scope,includeBodies:true}).then(result=>{if(live)setData(result);})
+    invoke('studio.mapProperties',{scope,includeBodies:true,listBlocks:true}).then(result=>{if(live)setData(result);})
       .catch(e=>{if(live)setError(String(e));});
     return ()=>{live=false;};
   },[scope.projectPath,scope.mapPath,scope.epoch,scope.revision,reload]);
@@ -67,7 +68,7 @@ export function MapInspector({scope,onApply,onSelect,busy,view,inspectorRecord}:
   };
   const validate=async()=>{
     setPending(true);setError('');
-    try{setData(await invoke('studio.mapProperties',{scope,validate:true,includeBodies:true}));}
+    try{setData(await invoke('studio.mapProperties',{scope,validate:true,includeBodies:true,listBlocks:true}));}
     catch(e){setError(String(e));}
     finally{setPending(false);}
   };
@@ -83,6 +84,7 @@ export function MapInspector({scope,onApply,onSelect,busy,view,inspectorRecord}:
         <dl>{Object.entries(body.metadata).map(([key,value])=><div key={key}><dt>{key}</dt>
           <dd>{typeof value==='string' ? value : JSON.stringify(value)}</dd></div>)}</dl>
       </details>)}</section>}
+    {!data.worldSpace && <MapExtraBlocks keys={data.blockKeys??[]} scope={scope} busy={busy||pending||dirty} onApply={onApply}/>}
     {!data.worldSpace && <MapScenarioRecords requested={inspectorRecord?.kind==="wave" || inspectorRecord?.kind==="trigger" ? inspectorRecord : undefined} scope={scope} busy={busy||pending||dirty} onApply={onApply}/>}
     <fieldset disabled={busy||pending}>
       <label>{data.worldSpace?"Scene name":"Map name"}<StudioInput value={fields.name} required onChange={e=>edit({name:e.target.value})}/></label>
