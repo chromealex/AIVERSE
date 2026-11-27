@@ -1676,3 +1676,7 @@ bb3166cea3761275282b6fee5a6b9850b6ad49b5 exposes native dimension in StudioScene
 ### Texture subresource selection
 
 b8db645e64ac85f08d6d1aa39e9bc27363696456 updates InsightPanels.tsx and ProjectToolPanels.css. The detached panel selects a resource by handle, shows mip extents, sampling and layer/depth-slice/cube-face controls when applicable. Built web and Mac Studio. Verified on a real 1x1 2D texture with one mip and layer (stats-mac-1c3pkqqe/live.log). This fixture did not contain a mip chain. Capture docs/handoff/studio-html5/captures/mac-texture-subresource.png. Next exercise multi-level arrays/cubes and add GPU readback for the selected subresource.
+
+### Mip changes preserve subresource selection
+
+fad9f7ccae7eaa6f14785626d831c99c54a07328 updates InsightPanels.tsx. Built web and Mac Studio. Tested the actual detached panel with injected GPU inventory descriptors for a 32x32 two-cube array and a depth-eight volume. Face 11 stayed selected across mip change (cube 1, -Z, 8x8 at mip 2); volume slice 7 clamped to 1 and the control disappeared at single-slice depth. Capture docs/handoff/studio-html5/captures/mac-texture-cube-array-fixture.png. This test did not allocate textures or read GPU pixels. Next implement and exercise device-owned readback.
