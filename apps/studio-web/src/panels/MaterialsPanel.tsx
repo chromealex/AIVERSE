@@ -97,7 +97,8 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
   setBusy(true);setError('');setMessage('');
   try {
    const response=await invoke('studio.materialPatch',{name,patch:editablePatch(draft)});
-   setLibrary(response);setDraft({});setPending(null);
+   setLibrary(response);setDraft({});
+   if(pending!==null){setName(pending);setPending(null);}
    setMessage('Material file saved.');
   } catch(e){setError(e instanceof Error?e.message:String(e));}
   finally{setBusy(false);}
@@ -113,7 +114,12 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
   const open=()=>{
    const path=localStorage.getItem(key);
    const match=Object.entries(library.files??{}).find(([,file])=>file===path);
-   if(match){localStorage.removeItem(key);switchTo(match[0]);}
+   if(match){
+    localStorage.removeItem(key);
+    setQuery(value=>match[0].toLowerCase().includes(value.toLowerCase())?value:'');
+    setMaterialMode('properties');
+    switchTo(match[0]);
+   }
   };
   const onStorage=(event:StorageEvent)=>{if(event.key===key && event.newValue)open();};
   open();
@@ -272,10 +278,9 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
    <button className="materials-preview" disabled={!connected||!projectPath||!name||changes>0||busy||previewing}
      title="Show the saved PBR factors on a GPU-rendered sphere"
      onClick={()=>void preview()}><Eye size={14}/> {previewMaterial===name?'Hide preview':'Preview material'}</button>
-   {pending!==null&&<button className="materials-discard" onClick={discard}>Discard &amp; switch</button>}
-   <button className="materials-discard" onClick={discard} disabled={changes===0}>Discard</button>
+   <button className="materials-discard" onClick={discard} disabled={busy||changes===0}>{pending===null?'Discard':'Discard & switch'}</button>
    <button className="materials-apply" disabled={busy||loading||changes===0||!connected||!projectPath||!names.includes(name)}
-    onClick={()=>void apply()}><Save size={14}/> Apply &amp; save</button>
+    onClick={()=>void apply()}><Save size={14}/> {pending===null?'Apply & save':'Save & switch'}</button>
   </footer>
  </section>;
 }
