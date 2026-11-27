@@ -60,3 +60,8 @@ GameViewDraw now evaluates ProjectilePresentation once and uses the sample for m
 
 Commit: 4f630610a5d00fab75df592cee51ab1d93aa8b7d
 Shared State now records Unknown/Emission/Split/Ricochet; common branch operations set child origin and leave timed-split parent origin intact. Heuristic removed from Components.h. Save v13 adds origin; v12 and older read Unknown, preserving historical checksum layout. GameCore and ActorHost select v13 when provenance exists; actor portable codec v2 registers a v1 migration. Added versioned archive and invalid-enum scenarios. Tests/build NOT RUN per final-batch instruction; diff check passed. Needs full simulation save/checksum and durable migration regression, legacy fixture validation, explicit view enum propagation, final contact event/sample publication and both-host visual integration. No issue closed.
+
+## Shared enum propagation checkpoint
+
+Commit: f15f1432b86d12297738e8218df52cbc5f4f2cda
+FlightOrigin now lives in shared ProjectileData and passes directly through SceneObject to ProjectilePresentation. Removed the boolean continuation bridge and Components helper. Added shared branch tests for timed-split parent provenance and ricochet child provenance. Tests/build NOT RUN; diff check passed. Investigation of terminal path: ParticleSystem::move only changes Instance::pos; stop sets stopped before emitInstance, suppressing the final per-meter emission. Thus merely moving before stop cannot satisfy short-flight trail acceptance. Next implement a generic effect finish-at-position operation that consumes the final movement before retirement, then deliver terminal simulation samples to it. Remaining both-host visual/light wiring and persistence regression remain required.
