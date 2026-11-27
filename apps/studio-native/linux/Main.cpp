@@ -1,4 +1,5 @@
 #include "StudioWebAssets.h"
+#include "engine/platform/EngineDir.h"
 #include "apps/editor/core/Net.h"
 #include "StudioWebBridge.h"
 #include "StudioScenePointer.h"
@@ -48,7 +49,7 @@ int aiverseMain(int argc,char** argv) {
     using namespace aiverse::studio;
     gdk_set_allowed_backends("x11");
     if (!gtk_init_check(&argc,&argv)) { std::cerr << "Studio requires an X11 display\n"; return 1; }
-    std::string project=loadStudioLastProject(), root=AIVERSE_STUDIO_SOURCE_DIR;
+    std::string project=loadStudioLastProject(), root=aiverse::platform::resolveEngineDir(AIVERSE_STUDIO_SOURCE_DIR,argv[0]);
     int listenPort=0;
     for (int i=1;i<argc;++i) {
         const std::string option=argv[i];
