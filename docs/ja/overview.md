@@ -222,11 +222,18 @@ aiversebuild --project ~/AiverseGames/dune2 --target macos
 
 - プロジェクトと一緒に作られます（ハブの「新しいプロジェクト」、MCP `create_project`）。これがない古いプロジェクトは、エディターで初めて開いた
   ときに作られます。`templates/*/` のテンプレートには既にあります（新しいプロジェクトにはコピーされず、新しいプロジェクトは自分のものを持ちます）。
-- エディターがプロジェクトのパスを受け付けるところでは、`.aiverse` とフォルダのどちらも使えます：`aiverse_editor "My Strategy.aiverse"`、
+- エディターがプロジェクトのパスを受け付けるところでは、`.aiverse` とフォルダのどちらも使えます：`AiverseStudio.exe --project "My Strategy.aiverse"`、
   `--project`、ハブの「開く…」（`.aiverse` とプロジェクトフォルダを表示）、最近使ったもの、MCP `open_game`、
   `aiversebuild --project x.aiverse`。`.aiverse` はビルドに含まれません。
 - AIVERSE への改名前に作られたプロジェクトは `<名前>.rtsproj` をそのまま使います。どこでも同じように開け、その場で
   上書きされ、名前は変わりません。フォルダーに両方ある場合は `.aiverse` が優先されます。
+- **HTML5 Studio**
+  - macOS (Finder / Terminal): `open -a AiverseStudioHTML5 "My Game.aiverse"`.
+  - Windows (PowerShell): `.\AiverseStudio.exe --project "My Game.aiverse"`.
+
+<details>
+<summary>旧 ImGui エディターのファイル関連付け</summary>
+
 - **ダブルクリック。** 起動時、関連付けがない場合や別のエディターインスタンスに関連付けられている場合、エディターは `.aiverse` を自分に
   関連付けます（ユーザー単位、管理者権限不要）。あなたが選んだ別のプログラムは上書きしません。手動では「プロジェクト → エディターを .aiverse の
   既定アプリにする」。状態はハブの左下に表示されます。無効にするには `AIVERSE_FILE_ASSOC=off`。
@@ -239,6 +246,8 @@ aiversebuild --project ~/AiverseGames/dune2 --target macos
   - **Linux：** 型 `application/x-aiverse-project`（`~/.local/share/mime/packages/aiverse-project.xml`）、
     `~/.local/share/applications/aiverse-editor.desktop`（`Exec=<エディター> %f`）、アイコンは `~/.local/share/icons/hicolor`、既定アプリは
     `~/.config/mimeapps.list`。`update-mime-database`、`update-desktop-database`、`xdg-mime` がインストールされていれば呼び出します。
+
+</details>
 
 ## ゲームを作る（ウィザード）
 

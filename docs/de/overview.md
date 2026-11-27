@@ -229,11 +229,17 @@ Projekt und speichert Editor-Informationen:
 - Sie wird mit dem Projekt erzeugt (Hub „Neues Projekt“, MCP `create_project`); ein älteres Projekt ohne sie bekommt eine
   beim ersten Öffnen im Editor. Vorlagen in `templates/*/` haben bereits eine (sie wird nicht in ein neues Projekt kopiert:
   das bekommt seine eigene).
-- Überall, wo der Editor einen Projektpfad annimmt, funktionieren `.aiverse` und Ordner: `aiverse_editor "My
-  Strategy.aiverse"`, `--project`, „Öffnen…“ im Hub (zeigt `.aiverse` und Projektordner), zuletzt verwendete Projekte, MCP
+- Überall, wo der Editor einen Projektpfad annimmt, funktionieren `.aiverse` und Ordner: `AiverseStudio.exe --project "My Strategy.aiverse"`, `--project`, „Öffnen…“ im Hub (zeigt `.aiverse` und Projektordner), zuletzt verwendete Projekte, MCP
   `open_game`, `aiversebuild --project x.aiverse`. `.aiverse` kommt nicht in den Build.
 - Projekte von vor der Umbenennung in AIVERSE behalten ihre `<Name>.rtsproj`: Sie öffnet sich überall genauso, wird an
   Ort und Stelle überschrieben und nie umbenannt; liegen beide im Ordner, gilt `.aiverse`.
+- **HTML5 Studio**
+  - macOS (Finder / Terminal): `open -a AiverseStudioHTML5 "My Game.aiverse"`.
+  - Windows (PowerShell): `.\AiverseStudio.exe --project "My Game.aiverse"`.
+
+<details>
+<summary>Dateizuordnungen des alten ImGui-Editors</summary>
+
 - **Doppelklick.** Beim Start verknüpft der Editor `.aiverse` mit sich selbst (pro Nutzer, ohne Administratorrechte), wenn es
   keine Verknüpfung gibt oder sie auf eine andere Editor-Instanz zeigt; ein von Ihnen gewähltes anderes Programm überschreibt
   er nicht. Manuell: „Projekt → Editor als Standard-App für .aiverse festlegen“; der Status steht unten links im Hub.
@@ -250,6 +256,8 @@ Projekt und speichert Editor-Informationen:
     `~/.local/share/applications/aiverse-editor.desktop` (`Exec=<Editor> %f`), Icons in `~/.local/share/icons/hicolor`,
     Standard-App in `~/.config/mimeapps.list`; `update-mime-database`, `update-desktop-database`, `xdg-mime` werden
     aufgerufen, falls installiert.
+
+</details>
 
 ## Spiel erstellen (Assistent)
 

@@ -250,18 +250,23 @@ python3 tools/importers/ta/import.py --source "~/Games/TotalA" --out ~/AiverseGa
 - Создаётся вместе с проектом (хаб «Новый проект», MCP `create_project`); у старого проекта без
   него — при первом открытии в редакторе. У шаблонов в `templates/*/` он уже есть (и в новый проект
   не копируется: тот получает свой).
-- Везде, где редактор принимает путь проекта, подходит и `.aiverse`, и папка: `aiverse_editor "Моя
-  стратегия.aiverse"`, `--project`, «Открыть…» в хабе (показывает `.aiverse` и папки проектов),
+- Везде, где редактор принимает путь проекта, подходит и `.aiverse`, и папка: `AiverseStudio.exe --project "Моя стратегия.aiverse"`, `--project`, «Открыть…» в хабе (показывает `.aiverse` и папки проектов),
   недавние, MCP `open_game`, `aiversebuild --project x.aiverse`. В сборку `.aiverse` не попадает.
 - Проекты, созданные до переименования в AIVERSE, сохраняют свой `<Название>.rtsproj`: он открывается везде так же,
   перезаписывается на месте и не переименовывается; если в папке есть оба файла, главный — `.aiverse`.
+- **HTML5 Studio**
+  - **HTML Studio на macOS:** в Finder выберите AiverseStudioHTML5.app через «Открыть в приложении»
+    для файлов `.aiverse` и `.rtsproj`. Из терминала можно вызвать `open -a AiverseStudioHTML5 x.aiverse`.
+    Если Studio уже открыта, другой проект запускается в отдельном экземпляре. Текущий проект и его правки остаются доступны.
+  - Windows (PowerShell): `.\AiverseStudio.exe --project "My Game.aiverse"`.
+
+<details>
+<summary>Файловые ассоциации старого редактора ImGui</summary>
+
 - **Двойной клик.** Редактор при запуске сам связывает `.aiverse` с собой (для пользователя, без прав
   администратора), если связи нет или она ведёт к другому экземпляру редактора; выбранную вами другую
   программу не перебивает. Вручную: «Проект → Сделать редактор программой по умолчанию для .aiverse»;
   состояние — внизу слева в хабе. Отключить: `AIVERSE_FILE_ASSOC=off`.
-  - **HTML Studio на macOS:** в Finder выберите AiverseStudioHTML5.app через «Открыть в приложении»
-    для файлов `.aiverse` и `.rtsproj`. Из терминала можно вызвать `open -a AiverseStudioHTML5 x.aiverse`.
-    Если Studio уже открыта, другой проект запускается в отдельном экземпляре. Текущий проект и его правки остаются доступны.
   - **Windows:** `HKCU\Software\Classes\.aiverse` (+ `.rtsproj`) → `AIVERSE.Project` (иконка
     `%USERPROFILE%\.aiverse\icons\rtsproj.ico`, команда `"<aiverse_editor.exe>" "%1"`). Если в
     Windows для `.aiverse` уже выбрана другая программа, хаб подскажет «Открыть с помощью → Всегда».
@@ -269,6 +274,8 @@ python3 tools/importers/ta/import.py --source "~/Games/TotalA" --out ~/AiverseGa
     `~/.local/share/applications/aiverse-editor.desktop` (`Exec=<редактор> %f`), иконки в
     `~/.local/share/icons/hicolor`, программа по умолчанию в `~/.config/mimeapps.list`;
     `update-mime-database`, `update-desktop-database`, `xdg-mime` вызываются, если установлены.
+
+</details>
 
 ## Сделать игру (мастер)
 

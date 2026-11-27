@@ -232,10 +232,17 @@ proyecto y guarda datos del editor:
   por primera vez en el editor. Las plantillas de `templates/*/` ya tienen uno (no se copia a un proyecto nuevo: este recibe
   el suyo).
 - En todas partes donde el editor acepta una ruta de proyecto valen tanto `.aiverse` como la carpeta:
-  `aiverse_editor "My Strategy.aiverse"`, `--project`, «Abrir…» en el centro (muestra `.aiverse` y carpetas de proyectos),
+  `AiverseStudio.exe --project "My Strategy.aiverse"`, `--project`, «Abrir…» en el centro (muestra `.aiverse` y carpetas de proyectos),
   recientes, MCP `open_game`, `aiversebuild --project x.aiverse`. `.aiverse` no entra en el build.
 - Los proyectos creados antes del cambio de nombre a AIVERSE conservan su `<Nombre>.rtsproj`: se abre igual en todas partes,
   se reescribe en su sitio y nunca se renombra; si la carpeta tiene ambos, manda `.aiverse`.
+- **HTML5 Studio**
+  - macOS (Finder / Terminal): `open -a AiverseStudioHTML5 "My Game.aiverse"`.
+  - Windows (PowerShell): `.\AiverseStudio.exe --project "My Game.aiverse"`.
+
+<details>
+<summary>Asociaciones de archivos del editor ImGui anterior</summary>
+
 - **Doble clic.** Al arrancar, el editor asocia `.aiverse` consigo mismo (por usuario, sin permisos de administrador) si no
   hay asociación o si apunta a otra instancia del editor; no sustituye otro programa que hayas elegido. A mano: «Proyecto →
   Hacer del editor la aplicación predeterminada para .aiverse»; el estado aparece abajo a la izquierda en el centro.
@@ -252,6 +259,8 @@ proyecto y guarda datos del editor:
     `~/.local/share/applications/aiverse-editor.desktop` (`Exec=<editor> %f`), iconos en `~/.local/share/icons/hicolor`,
     aplicación predeterminada en `~/.config/mimeapps.list`; se llaman `update-mime-database`, `update-desktop-database` y
     `xdg-mime` si están instalados.
+
+</details>
 
 ## Crear un juego (asistente)
 
