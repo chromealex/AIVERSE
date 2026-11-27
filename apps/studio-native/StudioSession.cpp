@@ -811,7 +811,20 @@ Json StudioSession::mapProperties(const Json& params,bool write) {
             if(patch.size()!=1 || !extraBlock(key) || (remove ? block.has("text") : !block["text"].isString()))
                 throw std::runtime_error("Invalid map block change");
             const auto value=remove?Json{}:Json::parse(block.getStr("text"));
-            if(remove || data.extra[key]!=value){
+            const auto& source=data.extra[key];
+            if(block.has("index")){
+                const auto& index=block["index"];
+                if(!source.isArray() || !index.isNumber() || index.toDouble()!=index.integer() ||
+                   index.integer()<0 || size_t(index.integer())>=source.size())
+                    throw std::runtime_error("Invalid map block entry");
+                const size_t i=size_t(index.integer());
+                if(remove || source[i]!=value){
+                    doc.beginEdit();
+                    auto& array=data.extra.member(key);
+                    if(remove)array.eraseAt(i);
+                    else array.at(i)=value;
+                }
+            } else if(remove || source!=value){
                 doc.beginEdit();
                 if(remove)data.extra.erase(key);
                 else data.extra.set(key,value);
@@ -884,7 +897,18 @@ Json StudioSession::mapProperties(const Json& params,bool write) {
     if(params.has("blockKey")){
         const auto key=params.getStr("blockKey");
         if(!extraBlock(key))throw std::runtime_error("Map block no longer exists");
-        out.set("blockText",str(data.extra[key].dump(2)));
+        const auto& value=data.extra[key];
+        if(value.isArray() && value.size()<=200 && value[0].isObject()){
+            Json names=Json::array();
+            for(size_t i=0;i<value.size();++i)
+                names.push(str(value[i].getStr("id",value[i].getStr("name",key+"["+std::to_string(i)+"]"))));
+            out.set("blockEntries",std::move(names));
+        }
+        const int index=params.getInt("blockIndex",-1);
+        if(index>=0 && size_t(index)<out["blockEntries"].size()){
+            out.set("blockIndex",num(index));
+            out.set("blockText",str(value[size_t(index)].dump(2)));
+        } else out.set("blockText",str(value.dump(2)));
     }
     if(params.getBool("roadIndex")){
         Json roads=Json::array();
