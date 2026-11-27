@@ -49,16 +49,22 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     return () => { active = false; };
   }, [connected, project]);
   const [playersOpen, setPlayersOpen] = useState(false);
-  const [roster, setRoster] = useState<{revision: string; epoch: string; names: string[]}>();
+  const [areasOpen, setAreasOpen] = useState(false);
+  const [records, setRecords] = useState<{revision: string; epoch: string; names: string[]; areas: string[]}>();
   const scope = snapshot?.graphDocument;
   useEffect(() => {
-    if (!playersOpen || !scope || snapshot?.scene.worldSpace) return;
+    if ((!playersOpen && !areasOpen) || !scope || snapshot?.scene.worldSpace) return;
     let current = true;
     void invoke('studio.mapProperties', {scope}).then(data => {
-      if (current) setRoster({ revision: data.scope.revision, epoch: data.scope.epoch, names: data.roster.map(p => p.name) });
+      if (current) setRecords({ revision: data.scope.revision, epoch: data.scope.epoch, names: data.roster.map(p => p.name), areas: Object.keys(data.areas).sort() });
     }).catch(e => { if (current) setError(String(e)); });
     return () => { current = false; };
-  }, [playersOpen, scope?.projectPath, scope?.mapPath, scope?.epoch, scope?.revision, snapshot?.scene.worldSpace]);
+  }, [playersOpen, areasOpen, scope?.projectPath, scope?.mapPath, scope?.epoch, scope?.revision, snapshot?.scene.worldSpace]);
+  const currentRecords = scope && records?.revision === scope.revision && records.epoch === scope.epoch ? records : undefined;
+  const selectRecord = (params: {kind:'player';index:number} | {kind:'area';key:string}) => {
+    if (scope && currentRecords) void invoke('studio.op', { op:'editor_select', expectedProject:scope.projectPath,
+      expectedDocumentEpoch:scope.epoch, expectedDocumentRevision:scope.revision, params }).catch(e => setError(String(e)));
+  };
   const mapEntities = !!catalog?.mapEntities;
   const canCreate = mapEntities && (catalog?.types.length ?? 0) > 0;
   const selectedId = snapshot?.selectedId ?? null;
@@ -320,12 +326,17 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     {scope && !snapshot?.scene.worldSpace && <details className="hier__players" open={playersOpen}
       onToggle={event => setPlayersOpen(event.currentTarget.open)}>
       <summary>Map players</summary>
-      {playersOpen && roster?.revision === scope.revision && roster.epoch === scope.epoch &&
-        roster.names.map((name, i) => <StudioButton key={i} size="sm" disabled={busy}
-          onClick={() => void invoke('studio.op', {op:'editor_select', expectedProject:scope.projectPath, expectedDocumentEpoch:scope.epoch, expectedDocumentRevision:scope.revision,
-            params:{kind:'player',index:i+1}}).catch(e => setError(String(e)))}>
+      {playersOpen && currentRecords?.names.map((name, i) => <StudioButton key={i} size="sm" disabled={busy}
+          onClick={() => selectRecord({kind:'player',index:i+1})}>
           {i+1} · {name}
         </StudioButton>)}
+    </details>}
+    {scope && !snapshot?.scene.worldSpace && <details className="hier__players" open={areasOpen}
+      onToggle={event => setAreasOpen(event.currentTarget.open)}>
+      <summary>Map areas</summary>
+      {areasOpen && currentRecords && (currentRecords.areas.length ? currentRecords.areas.map(key =>
+        <StudioButton key={key} size="sm" disabled={busy} onClick={() => selectRecord({kind:'area',key})}>{key}</StudioButton>)
+        : <span>No named areas</span>)}
     </details>}
     <div className="hier__footer">{search ? `${matches.length} / ${allRows.length}` : allRows.length} objects{preview.length>0 && ` · ${preview.length} preview`}{selectedSet.size > 1 ? ` · ${selectedSet.size} selected` : ''}</div>
     {menu && <StudioContextMenu x={menu.x} y={menu.y} label="Entity actions"
