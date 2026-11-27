@@ -25,7 +25,7 @@ in vec4 v_color;
 out vec4 o_color;
 void main(){
     vec2 uv=gl_FragCoord.xy/outputSize.xy;
-    if(gl_FragCoord.z>texture(tex1,uv).r+0.0015)discard;
+    if(gl_FragCoord.z>texture(tex1,uv).r+0.000001)discard;
     o_color=texture(tex0,v_uv)*v_color;
 }
 )";
@@ -42,7 +42,7 @@ vertex VOut vs_main(VIn in [[stage_in]],constant U0& u [[buffer(1)]]) {
 fragment float4 fs_main(VOut in [[stage_in]],constant U0& u [[buffer(1)]],
     texture2d<float> tex0 [[texture(0)]],sampler s0 [[sampler(0)]],
     depth2d<float> tex1 [[texture(1)]],sampler s1 [[sampler(1)]]) {
-    if(in.pos.z>tex1.sample(s1,in.pos.xy/u.outputSize.xy)+0.0015)discard_fragment();
+    if(in.pos.z>tex1.sample(s1,in.pos.xy/u.outputSize.xy)+0.000001)discard_fragment();
     return tex0.sample(s0,in.uv)*in.color;
 }
 )";
