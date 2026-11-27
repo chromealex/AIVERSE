@@ -86,9 +86,9 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
   const editable = (id: string | null | undefined) => mapEntities && !!id?.startsWith('entity:');
   const allRows=useMemo(()=>[...rows,...preview.map(node=>({node,depth:0}))],[rows,preview]);
   const filter = useMemo(() => parseHierarchyFilter(search), [search]);
-  const matches = useMemo(() => allRows.filter(({node}) => matchesHierarchy(node, filter, selectedSet)), [allRows, filter, selectedSet]);
+  const matches = useMemo(() => allRows.filter(({node}) => matchesHierarchy(node, filter, selectedSet, currentRecords?.names)), [allRows, filter, selectedSet, currentRecords]);
   const players = (currentRecords?.names ?? []).map((name, i) => ({name, index:i+1}))
-    .filter(({name, index}) => matchesHierarchy({id:`player:${index}`, name, kind:'player', owner:index}, filter, selectedSet));
+    .filter(({name, index}) => matchesHierarchy({id:`player:${index}`, name, kind:'player', owner:index}, filter, selectedSet, currentRecords?.names));
   const areas = (currentRecords?.areas ?? []).filter(name =>
     matchesHierarchy({id:`area:${name}`, name, kind:'area'}, filter, selectedSet));
 
@@ -241,7 +241,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     <div className="hier__toolbar">
       <label className="hier__search">
         <Search size={12} aria-hidden="true"/>
-        <input ref={searchRef} type="search" placeholder="Search hierarchy…" title="Search by name, t:type, owner:1 or is:hidden" aria-label="Search scene objects"
+        <input ref={searchRef} type="search" placeholder="Search hierarchy…" title="Search by name, #map-id, t:type, p:player, owner:1 or is:hidden" aria-label="Search scene objects"
           value={search} onChange={event => setSearch(event.target.value)}
           onKeyDown={event => { if (event.key === 'Escape' && search) { event.stopPropagation(); setSearch(''); } }}/>
         {search && <button type="button" aria-label="Clear search" onClick={() => setSearch('')}><X size={11}/></button>}

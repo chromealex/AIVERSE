@@ -69,3 +69,13 @@ test('nesting uses document identity and promotes filtered orphans', async () =>
   assert.deepEqual(show(rows,['a']),[['a',0,1],['d',0,0]]);
   assert.deepEqual(show(rows.slice(1)),[['b',0,1],['c',1,0],['d',0,0]]);
 });
+
+test('authored map ID and player filters work together independently of the displayed entity name', () => {
+  const node = e('entity:@WestGate','Tower','Building',{owner:2});
+  for (const query of ['#west p:watch','id:gate p:2','westgate owner:2']) {
+    assert.ok(matchesHierarchy(node,parseHierarchyFilter(query),new Set(),['Patrol','Night Watch']));
+  }
+  assert.ok(!matchesHierarchy(node,parseHierarchyFilter('#tower')));
+  assert.ok(!matchesHierarchy(node,parseHierarchyFilter('p:1')));
+  assert.ok(!matchesHierarchy(e('preview:12','WestGate','Tower'),parseHierarchyFilter('#west')));
+});

@@ -1,20 +1,32 @@
 /** Hierarchy search: free text plus Unity-like filters t:<kind> owner:<n> is:hidden|locked|selected. */
 import type { StudioEntity, StudioHierarchyPaths } from './types.ts';
 
-export interface HierarchyFilter { text: string[]; kinds: string[]; owners: number[]; is: string[] }
+export interface HierarchyFilter { text: string[]; kinds: string[]; owners: number[]; playerTerms?: string[]; ids?: string[]; is: string[] }
 export function parseHierarchyFilter(query: string): HierarchyFilter {
   const out: HierarchyFilter = { text: [], kinds: [], owners: [], is: [] };
   for (const token of query.trim().toLowerCase().split(/\s+/).filter(Boolean)) {
-    const m = /^(t|type|owner|is):(.*)$/.exec(token);
+    if (token.startsWith('#') && token.length > 1) { (out.ids ??= []).push(token.slice(1)); continue; }
+    const m = /^(t|type|owner|p|id|is):(.*)$/.exec(token);
     if (!m || !m[2]) { out.text.push(token); continue; }
     if (m[1] === 't' || m[1] === 'type') out.kinds.push(m[2]);
+    else if (m[1] === 'p') (out.playerTerms ??= []).push(m[2]);
+    else if (m[1] === 'id') (out.ids ??= []).push(m[2]);
     else if (m[1] === 'owner') { const n = Number(m[2]); if (Number.isInteger(n)) out.owners.push(n); else out.text.push(token); }
     else out.is.push(m[2]);
   }
   return out;
 }
-export function matchesHierarchy(node: StudioEntity, filter: HierarchyFilter, selected: ReadonlySet<string> = new Set()): boolean {
-  const name = (node.name + ' ' + node.kind).toLowerCase();
+export function matchesHierarchy(node: StudioEntity, filter: HierarchyFilter, selected: ReadonlySet<string> = new Set(), playerNames: readonly string[] = []): boolean {
+  const labelPrefix = node.kind + ' #';
+  const mapId = (node.id.startsWith('entity:@') ? node.id.slice(8)
+    : node.id.startsWith('entity:') && node.name.startsWith(labelPrefix) ? node.name.slice(labelPrefix.length) : '').toLowerCase();
+  const name = (node.name + ' ' + node.kind + ' ' + mapId).toLowerCase();
+  if (filter.ids && !filter.ids.every(id => mapId.includes(id))) return false;
+  if (filter.playerTerms) {
+    if (node.owner === undefined) return false;
+    const ownerName = node.owner === 0 ? 'neutral' : node.owner === -1 ? 'hostile' : playerNames[node.owner - 1] ?? '';
+    if (!filter.playerTerms.every(term => term === String(node.owner) || ownerName.toLowerCase().includes(term))) return false;
+  }
   if (!filter.text.every(t => name.includes(t))) return false;
   if (filter.kinds.length && !filter.kinds.some(k => node.kind.toLowerCase().includes(k))) return false;
   if (filter.owners.length && !filter.owners.includes(node.owner ?? Number.NaN)) return false;
