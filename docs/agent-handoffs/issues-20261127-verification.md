@@ -143,3 +143,15 @@ Report: `test-reports/20261127-094721-16998`, runner log
 `fix-planet-compatibility.log`; all paths relative to the same KINGSTON build.
 No live process remains from these checks. This does not replace the pending
 full integrated quick gate or additive GPU acceptance.
+
+## Additive GPU acceptance fixture
+
+Source 6aa64a577d602e95a95b4cb49e42a392195cb09d adds `tests/render/additive_blend_frame.cpp`, registered
+as `additive_blend_frame` on macOS, built by ALL. Ten real Metal pixel cases:
+weighted/unweighted/alpha model blending and cache return to weighted;
+linear/display particles; display occlusion, shader graph, fog and output resize.
+Expected blend arithmetic is computed independently from the render implementation.
+Optional AIVERSE_ADDITIVE_CAPTURE writes PNGs; the test runs without requiring
+that environment (no opt-in skip). Registration sets background mode.
+Native compile and runtime NOT RUN yet. Next: build only the new target in the
+existing KINGSTON cache, run it with captures, inspect failures and pixels.
