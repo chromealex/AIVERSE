@@ -91,7 +91,12 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
 }) {
   const projectPath = snapshot?.project.path ?? '';
   const [info, setInfo] = useState<StudioBuildInfo | null>(null);
-  const [target, setTarget] = useState(() => window.localStorage.getItem('aiverse.studio.build.target') || 'macos');
+  const [target, setTarget] = useState(() => {
+    const saved = window.localStorage.getItem('aiverse.studio.build.target');
+    if (saved) return saved;
+    if (/^Win/i.test(navigator.platform)) return 'windows';
+    return window.__aiverseLinux || /Linux/i.test(navigator.platform) ? 'linux' : 'macos';
+  });
   const [config, setConfig] = useState<'Release' | 'Debug'>('Release');
   const [compressionDraft, setCompressionDraft] = useState<number | null>(null);
   useEffect(() => setCompressionDraft(null), [projectPath, info?.compression]);
