@@ -52,18 +52,18 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
   const [areasOpen, setAreasOpen] = useState(false);
   const [surfacesOpen,setSurfacesOpen] = useState(false);
   const planetary = snapshot?.scene.mapProperties && snapshot.scene.mapRegions === false && !snapshot.scene.worldSpace;
-  const [records, setRecords] = useState<{revision: string; epoch: string; names: string[]; areas: string[]; surfaces: {id:string;size:number}[]}>();
+  const [records, setRecords] = useState<{revision: string; epoch: string; names: string[]; areas: string[]; bodies: {id:string;faceSize:number;metadata:Record<string,unknown>}[]}>();
   const searching = search.trim().length > 0;
   const needRecords = playersOpen || areasOpen || (planetary && surfacesOpen) || searching;
   const scope = snapshot?.graphDocument;
   useEffect(() => {
     if (!needRecords || !scope || snapshot?.scene.worldSpace) return;
     let current = true;
-    void invoke('studio.mapProperties', {scope}).then(data => {
-      if (current) setRecords({ revision: data.scope.revision, epoch: data.scope.epoch, names: data.roster.map(p => p.name), areas: Object.keys(data.areas).sort(), surfaces:data.surfaces });
+    void invoke('studio.mapProperties', {scope,includeBodies:!!planetary}).then(data => {
+      if (current) setRecords({ revision: data.scope.revision, epoch: data.scope.epoch, names: data.roster.map(p => p.name), areas: Object.keys(data.areas).sort(), bodies:data.bodies ?? [] });
     }).catch(e => { if (current) setError(String(e)); });
     return () => { current = false; };
-  }, [needRecords, scope?.projectPath, scope?.mapPath, scope?.epoch, scope?.revision, snapshot?.scene.worldSpace]);
+  }, [needRecords, planetary, scope?.projectPath, scope?.mapPath, scope?.epoch, scope?.revision, snapshot?.scene.worldSpace]);
   const currentRecords = scope && records?.revision === scope.revision && records.epoch === scope.epoch ? records : undefined;
   const [regionsOpen,setRegionsOpen] = useState(false);
   const [regionList,setRegionList] = useState<{epoch:string;revision:string;items:{letter:string;name:string;cells:number}[]}>();
@@ -77,7 +77,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     return ()=>{current=false;};
   },[needRegions,scope?.projectPath,scope?.mapPath,scope?.epoch,scope?.revision]);
   const currentRegions = scope && regionList?.epoch===scope.epoch && regionList.revision===scope.revision ? regionList.items : undefined;
-  const selectRecord = (params: {kind:'player';index:number} | {kind:'area'|'region';key:string}) => {
+  const selectRecord = (params: {kind:'player';index:number} | {kind:'area'|'region'|'body';key:string}) => {
     if (scope && (params.kind==='region' ? currentRegions : currentRecords)) void invoke('studio.op', { op:'editor_select', expectedProject:scope.projectPath,
       expectedDocumentEpoch:scope.epoch, expectedDocumentRevision:scope.revision, params }).catch(e => setError(String(e)));
   };
@@ -97,8 +97,8 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
   const regions = (currentRegions ?? []).filter(({letter,name}) =>
     matchesHierarchy({id:`region:${letter}`,name:letter+' '+name,kind:'region'},filter,selectedSet));
 
-  const surfaces = (currentRecords?.surfaces ?? []).filter(({id}) =>
-    matchesHierarchy({id,name:id,kind:'planet surface'},filter,selectedSet));
+  const bodies = (currentRecords?.bodies ?? []).filter(({id,faceSize,metadata}) =>
+    matchesHierarchy({id,name:id,kind:[metadata.kind,'body',faceSize ? 'planet surface' : ''].join(' ')},filter,selectedSet));
   const showSurface = (body:string) => {
     if(scope && currentRecords) void invoke('studio.planetSceneBody',{body,mapPath:scope.mapPath,expectedRevision:scope.revision})
       .catch(e=>setError(String(e)));
@@ -283,7 +283,7 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
       onMouseLeave={() => hover('')}
       onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDrop(null); }}>
       {!project && <p className="hier__empty">Open a project to see its scene objects.</p>}
-      {project && matches.length === 0 && (!searching || (!players.length && !areas.length && !regions.length && !surfaces.length)) && <p className="hier__empty">{search ? 'No matching objects.' : 'The scene is empty.'}</p>}
+      {project && matches.length === 0 && (!searching || (!players.length && !areas.length && !regions.length && !bodies.length)) && <p className="hier__empty">{search ? 'No matching objects.' : 'The scene is empty.'}</p>}
       {display.map(row => {
         if ('members' in row) {
           const documentMembers=row.members.filter(id=>!id.startsWith('preview:'));
@@ -373,14 +373,18 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
           {letter}{name && ' · '+name} ({cells})
         </StudioButton>) : <span>No named or painted regions</span>)}
     </details>}
-    {planetary && (!searching || surfaces.length > 0) && <details className="hier__players" open={searching || surfacesOpen}
+    {planetary && (!searching || bodies.length > 0) && <details className="hier__players" open={searching || surfacesOpen}
       onToggle={event=>{if(!searching)setSurfacesOpen(event.currentTarget.open);}}>
-      <summary>Planet surfaces</summary>
+      <summary>Celestial bodies</summary>
       {(surfacesOpen || searching) && currentRecords && <>
         {!searching && <StudioButton size="sm" disabled={busy} onClick={()=>showSurface('')}>Follow entity selection</StudioButton>}
-        {surfaces.map(({id,size})=><StudioButton key={id} size="sm" disabled={busy} title={'Show '+id+' in Scene'} onClick={()=>showSurface(id)}>
-          {id} · {size} × {size} per face
-        </StudioButton>)}
+        {bodies.map(({id,faceSize})=><div key={id}>
+          <StudioButton size="sm" disabled={busy} onClick={()=>selectRecord({kind:'body',key:id})}>
+            {id} · {faceSize ? faceSize+' × '+faceSize+' per face' : 'No surface'}
+          </StudioButton>
+          {faceSize>0 && <StudioIconButton aria-label={'Show '+id+' in Scene'} title={'Show '+id+' in Scene'} disabled={busy}
+            icon={<Focus size={13}/>} onClick={()=>showSurface(id)}/>}
+        </div>)}
       </>}
     </details>}
     <div className="hier__footer">{search ? `${matches.length} / ${allRows.length}` : allRows.length} objects{preview.length>0 && ` · ${preview.length} preview`}{selectedSet.size > 1 ? ` · ${selectedSet.size} selected` : ''}</div>

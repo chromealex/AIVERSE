@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Map as MapIcon } from 'lucide-react';
 import { MapAreas } from './MapAreas';
 import { MapPlayers } from './MapPlayers';
@@ -33,6 +33,14 @@ export function MapInspector({scope,onApply,onSelect,busy,view,inspectorRecord}:
       .catch(e=>{if(live)setError(String(e));});
     return ()=>{live=false;};
   },[scope.projectPath,scope.mapPath,scope.epoch,scope.revision,reload]);
+  const requestedBody = useRef<HTMLDetailsElement>(null);
+  useEffect(()=>{
+    const item=requestedBody.current;
+    if(item && inspectorRecord?.kind==="body"){
+      item.open=true;
+      item.scrollIntoView({block:"nearest"});
+    }
+  },[inspectorRecord,data,view]);
   if(!data)return <div className="insp-map" role="status">{error||'Reading map…'}
     {error && <StudioButton onClick={()=>setReload(v=>v+1)}>Reload</StudioButton>}</div>;
   const base=draft?.base??data, fields=draft?.fields??form(data);
@@ -70,7 +78,7 @@ export function MapInspector({scope,onApply,onSelect,busy,view,inspectorRecord}:
         ? `${data.worldSpace.colliders} colliders · ${data.worldSpace.spawns} spawn points`
         : `${data.entities} objects · ${data.players} players`}</small></div></header>
     {!!data.bodies?.length && <section className="insp-map__bodies" aria-label="Celestial bodies"><h3>Celestial bodies</h3>
-      {data.bodies.map(body=><details key={body.id}><summary>{body.id} · {body.faceSize ? body.faceSize+' × '+body.faceSize+' per face' : 'No surface'}</summary>
+      {data.bodies.map(body=><details key={body.id} ref={inspectorRecord?.kind==="body" && inspectorRecord.key===body.id ? requestedBody : undefined}><summary>{body.id} · {body.faceSize ? body.faceSize+' × '+body.faceSize+' per face' : 'No surface'}</summary>
         <dl>{Object.entries(body.metadata).map(([key,value])=><div key={key}><dt>{key}</dt>
           <dd>{typeof value==='string' ? value : JSON.stringify(value)}</dd></div>)}</dl>
       </details>)}</section>}
