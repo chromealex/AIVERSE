@@ -358,11 +358,14 @@ function TexturePixels({ project, texture, mip, layer }: { project: string; text
       document.removeEventListener('visibilitychange', readPixels);
     };
   }, [live, readPixels]);
+  const mipWidth = Math.max(1, Math.floor(texture.width / 2 ** mip));
+  const mipHeight = Math.max(1, Math.floor(texture.height / 2 ** mip));
   return <div className="texture-resource__pixels">
     {texture.dimension === '2D' && <label><input type="checkbox" checked={live} onChange={event => setLive(event.target.checked)}/> Live preview</label>}
     <button type="button" className="au-button au-button--sm" disabled={pending} onClick={() => void readPixels()}>{pending ? 'Reading pixels…' : 'Read GPU pixels'}</button>
     {error && <p role="alert">{error}</p>}
-    <canvas ref={canvas} hidden={!ready} aria-label="GPU pixel preview"/>
+    <canvas ref={canvas} hidden={!ready} aria-label="GPU pixel preview"
+      style={{ aspectRatio: mipWidth + " / " + mipHeight, width: Math.max(1, 160 * Math.min(1, mipWidth / mipHeight)) }}/>
     {ready && <p className="ptp__hint">Sampled preview up to 32 × 32 pixels.{texture.format === 'RGBA16F' && ' HDR colors use approximate tone mapping.'}</p>}
   </div>;
 }
