@@ -375,3 +375,7 @@ No issues closed, no merge/push performed. Next: final cached all-target build,
 quick gate and current-client captures, then truthful manifests and integration.
 
 Evidence stage commit: 5feafd955e908fa7cd2f56b5fd5427ebe98901b2.
+
+## Final feature coverage audit
+
+Stage cab370dd2a1f7b8a8b60e0bc1e4d88d1058d9717 adds 12 previously uncovered paths to six owning manifests, including client acceptance data, portrait models, atlas images, Save.cpp correction and render API compile probe. `python3.12 tools/agents/audit_compliance.py --base origin/main --allow-partial`: initially failed with 12 uncovered paths, then passed: 11 manifests, 0 errors. This is structural coverage, not readiness. No runtime source changed. All-target build handle 6249 still running from f3569b289. Current main remains fde390cac79d98fe7a643043984fb11d7c966b14 and is an ancestor. PR225 remains draft/open/mergeable. Windows Studio workflow is disabled_manually; latest five runs cancelled. Issue206 has no current native Windows proof and must stay open. Next poll existing build, run full quick gate with recorded provenance, then complete integration evidence.
