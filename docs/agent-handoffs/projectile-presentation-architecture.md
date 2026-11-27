@@ -50,3 +50,8 @@ legacy presentation calculations and the heuristic before claiming #222/#224 fix
 
 Commit: 1179f9f86d9c0d3f62aeb20a76d397beb0e7e371
 Added engine/view/ProjectilePresentation.h with explicit segment origin, absolute-time convergence, straight endpoint fitting and terminal contact sample retention. Regression scenarios added in tests/tests.cpp. NOT RUN: final combined build deferred by user instruction. Not yet wired to hosts; no claim that #222/#224 are fixed. Next: add versioned shared simulation provenance, adapt both hosts, route all visual consumers to one sample, remove the old launch calculations. ActorDurableComponents currently registers projectile codec version 1; its compatibility must be handled explicitly.
+
+## Adapter integration checkpoint
+
+Commit: 2fcd633f52d4e13e442dbf3290d3a0b83a8342c6
+GameViewDraw now evaluates ProjectilePresentation once and uses the sample for mesh/model placement. GameFx consumes the point callback or authoritative position, with no independent exponential convergence. Static diff check passed. Build/runtime tests NOT RUN (deferred final batch). Important remaining limitations: continuation is still a temporary boolean bridge based on the old heuristic; explicit shared simulation provenance and versioned persistence remain to implement. Terminal sample publication, light consumption and actor visual wiring remain pending. Generic fallback now follows the 3D simulation path instead of retaining muzzle height permanently; verify visual compatibility in final capture. No issue is complete yet.
