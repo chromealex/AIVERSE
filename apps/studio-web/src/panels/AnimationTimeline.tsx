@@ -96,7 +96,18 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
             <span className="ptp__meta">{time.toFixed(2)} / {duration.toFixed(2)} s · {current.channels.length} channels · {keys.length} keys</span>
           </div>
           <div className="anim__track">
-            <input type="range" min={0} max={Math.max(duration, 0.01)} step={0.01} value={time} onChange={e => { setPlaying(false); setTime(Number(e.target.value)); }}/>
+            <input type="range" aria-label="Clip time" aria-valuetext={time.toFixed(2)+' seconds'}
+              title="Clip time · Shift + arrow to jump between keys" min={0} max={Math.max(duration, 0.01)}
+              step={0.01} value={time}
+              onKeyDown={event => {
+                if (!event.shiftKey || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
+                event.preventDefault();
+                const next = event.key === 'ArrowRight'
+                  ? keys.find(key => key > time)
+                  : keys.slice().reverse().find(key => key < time);
+                if (next !== undefined) { setPlaying(false); setTime(next); }
+              }}
+              onChange={e => { setPlaying(false); setTime(Number(e.target.value)); }}/>
             <div className="anim__keys">{keys.map((k, i) => <i key={i} style={{ left: (duration ? k / duration : 0) * 100 + '%' }} onClick={() => { setPlaying(false); setTime(k); }}/>)}</div>
           </div>
           <div className="anim__channels">{current.channels.slice(0, 40).map((c, i) => <div key={i} className="anim__channel">
