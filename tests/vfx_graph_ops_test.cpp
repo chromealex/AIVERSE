@@ -684,6 +684,25 @@ int main() {
     Json name = Json::object();
     name.set("name", Json::string("spark"));
     auto got = call("fx_graph_get", name);
+    {
+        Json upgrade=name;
+        upgrade.set("action",Json::string("upgrade"));
+        upgrade.set("text",Json::string(got["graph"].dump()));
+        const auto sidecar=root/"fx"/"graphs"/"spark.layout.json";
+        Json positions=Json::object();
+        positions.set(got["graph"]["nodes"][size_t(0)].getStr("id"),Json::parse("[32,78]"));
+        Json layout=Json::parse(R"({"version":1,"pan":[-50,7]})");
+        layout.set("nodes",positions);
+        std::ofstream(sidecar)<<layout.dump();
+        const auto upgraded=call("fx_graph_edit",upgrade);
+        requireGraphTest(upgraded["graph"]["nodes"][size_t(0)]["position"]==Json::parse("[-18,85]"),
+            "legacy layout was lost during upgrade");
+        requireGraphTest(call("fx_graph_get",name)["graph"]==got["graph"],"upgrade modified published source");
+        std::ofstream(sidecar)<<"{";
+        requireGraphTest(call("fx_graph_edit",upgrade)["graph"].getInt("version")==2,"corrupt sidecar blocked upgrade");
+        fs::remove(sidecar);
+    }
+
     requireGraphTest(got["graph"].isObject() && got["validation"].getBool("ok"), "graph_get failed");
     requireGraphTest(got["validation"].has("metalGpuEligible") &&
             !got["validation"].getBool("metalGpuEligible"),

@@ -1,3 +1,7 @@
+## SpectraFX legacy layout
+
+Published v1 graph upgrades should preserve the legacy canvas arrangement through draft save and reopen.
+
 ## Stage 18 — native FX snapshot capture (2026-11-23; QA deferred)
 
 The independent SpectraFX Graph GPU preview has a one-shot **Capture

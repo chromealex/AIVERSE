@@ -67,8 +67,10 @@ export default function SpectraGraphCanvas({graph,nodeIdPrefix,disabled=false,on
   useEffect(()=>{setVolumeProperty('');setVolumeValue('');},[selectedNode]);
   const dest=nodes.find(n=>n.id===to);
   const ports=catalog.find(x=>x.type===dest?.type)?.ports??[];
-  const width=Math.max(1200,...nodes.map((n,i)=>nodePoint(n,i).x+240));
-  const height=Math.max(540,...nodes.map((n,i)=>nodePoint(n,i).y+100));
+  const originX=-Math.min(0,...graph.nodes.map((n,i)=>nodePoint(n,i).x));
+  const originY=-Math.min(0,...graph.nodes.map((n,i)=>nodePoint(n,i).y));
+  const width=originX+Math.max(1200,...nodes.map((n,i)=>nodePoint(n,i).x+240));
+  const height=originY+Math.max(540,...nodes.map((n,i)=>nodePoint(n,i).y+100));
 
   useEffect(()=>{
     let active=true;
@@ -114,8 +116,8 @@ export default function SpectraGraphCanvas({graph,nodeIdPrefix,disabled=false,on
     if(e.currentTarget.hasPointerCapture(e.pointerId))
       e.currentTarget.releasePointerCapture(e.pointerId);
     if(e.type==='pointerup'&&d.base===graph&&(e.clientX!==d.clientX||e.clientY!==d.clientY)){
-      const edited=moveGraphNode(graph,d.id,{x:Math.max(0,d.x+(e.clientX-d.clientX)/zoom),
-        y:Math.max(0,d.y+(e.clientY-d.clientY)/zoom)});
+      const edited=moveGraphNode(graph,d.id,{x:Math.max(-originX,d.x+(e.clientX-d.clientX)/zoom),
+        y:Math.max(-originY,d.y+(e.clientY-d.clientY)/zoom)});
       if(!edited.error)onEdit(edited.graph);
     }
     setMove(null);
@@ -156,7 +158,7 @@ export default function SpectraGraphCanvas({graph,nodeIdPrefix,disabled=false,on
     <div className="spectra-canvas__viewport graph-surface" role="region" aria-label="SpectraFX graph topology and node arrangement">
       <div className="spectra-canvas__extent" style={{width:width*zoom,height:height*zoom}}>
         <div className="spectra-canvas__world" style={{width,height,transform:`scale(${zoom})`}}>
-          <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} className="spectra-canvas__edges" aria-hidden="true">
+          <svg viewBox={`${-originX} ${-originY} ${width} ${height}`} width={width} height={height} className="spectra-canvas__edges" aria-hidden="true">
             {edges.map(edge=><path key={edge.id} d={edge.path} fill="none"
               className="graph-wire" data-kind={edge.toPort?'value':'execution'}
               data-emphasis={chosen?(edge.from===chosen.id||edge.to===chosen.id?'active':'quiet'):undefined}/>)}
@@ -168,7 +170,7 @@ export default function SpectraGraphCanvas({graph,nodeIdPrefix,disabled=false,on
               node.type!=='Spawn'&&info?.outputKind!=='value');
             return <Fragment key={node.id}><div
               className={'spectra-canvas__node '+(node.id===selectedNode?'is-selected':'')}
-              style={{left:pos.x,top:pos.y}}
+              style={{left:originX+pos.x,top:originY+pos.y}}
               id={nodeIdPrefix+node.id} role="button" tabIndex={0} aria-pressed={node.id===selectedNode}
               aria-label={node.type+' node '+node.id}
               onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSelectedNode(node.id);}}}
@@ -182,8 +184,8 @@ export default function SpectraGraphCanvas({graph,nodeIdPrefix,disabled=false,on
               onPointerMove={e=>{
                 if(!drag.current||drag.current.base!==graph||drag.current.pointerId!==e.pointerId||drag.current.id!==node.id)return;
                 const d=drag.current;
-                const point={x:Math.max(0,d.x+(e.clientX-d.clientX)/zoom),
-                             y:Math.max(0,d.y+(e.clientY-d.clientY)/zoom)};
+                const point={x:Math.max(-originX,d.x+(e.clientX-d.clientX)/zoom),
+                             y:Math.max(-originY,d.y+(e.clientY-d.clientY)/zoom)};
                 const edited=moveGraphNode(graph,node.id,point);
                 if(!edited.error)setMove({base:graph,next:edited.graph});
               }}
@@ -195,7 +197,7 @@ export default function SpectraGraphCanvas({graph,nodeIdPrefix,disabled=false,on
               <button type="button" className="spectra-canvas__socket" data-side="in"
                 data-kind={pending?.value?'value':'execution'} data-target={target||undefined}
                 aria-label={'Input of '+node.id} title={pending?'Connect '+pending.id+' to '+node.id:'Input of '+node.id}
-                style={{left:pos.x,top:pos.y+26}} disabled={!target||disabled||working}
+                style={{left:originX+pos.x,top:originY+pos.y+26}} disabled={!target||disabled||working}
                 onClick={e=>{
                   if(!pending||!info)return;
                   if(!pending.value){finishWire(node.id);return;}
@@ -205,7 +207,7 @@ export default function SpectraGraphCanvas({graph,nodeIdPrefix,disabled=false,on
               {info&&info.outputKind!=='none'&&<button type="button" className="spectra-canvas__socket" data-side="out"
                 data-kind={info.outputKind} aria-pressed={pending?.id===node.id}
                 aria-label={'Output of '+node.id} title={'Connect '+info.outputKind+' output of '+node.id}
-                style={{left:pos.x+170,top:pos.y+26}} disabled={disabled||working}
+                style={{left:originX+pos.x+170,top:originY+pos.y+26}} disabled={disabled||working}
                 onClick={()=>{setFieldMenu(null);setWire(pending?.id===node.id?null:{id:node.id,value:info.outputKind==='value',graph});}}/>}
             </Fragment>;
           })}

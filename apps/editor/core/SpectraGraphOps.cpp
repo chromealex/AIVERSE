@@ -70,6 +70,32 @@ std::string readFile(const fs::path& path) {
     if (result.size() > size_t(maxBytes)) throw std::runtime_error("SpectraFX graph file exceeds 1 MiB");
     return result;
 }
+bool layoutPoint(const Json& point) {
+    return point.isArray() && point.size()==2 && std::all_of(point.items().begin(),point.items().end(),
+        [](const Json& value){return value.isNumber() && std::abs(value.toDouble())<=100000;});
+}
+
+void importLegacyLayout(Json& graph,const fs::path& path) {
+    std::error_code ec;
+    if(!fs::is_regular_file(fs::symlink_status(path,ec)) || fs::file_size(path,ec)>1024*1024 || ec) return;
+    Json layout;
+    try {layout=Json::parse(readFile(path));}
+    catch(const std::exception&) {return;}
+    if(layout.getInt("version")!=1 || !layout["nodes"].isObject() || !graph["nodes"].isArray()) return;
+    const auto& pan=layout["pan"];
+    const bool hasPan=layoutPoint(pan);
+    Json nodes=graph["nodes"];
+    for(auto& node:nodes.itemsMut()) {
+        const auto& xy=layout["nodes"][node.getStr("id")];
+        if(!layoutPoint(xy) || node.has("position")) continue;
+        Json position=Json::array();
+        for(size_t axis=0;axis<2;++axis)
+            position.push(Json::number(xy[axis].toDouble()+(hasPan?pan[axis].toDouble():0),3));
+        node.set("position",std::move(position));
+    }
+    graph.set("nodes",std::move(nodes));
+}
+
 void writeFile(const fs::path& path, const std::string& text) {
     if (text.size() > 1024 * 1024) throw std::runtime_error("SpectraFX graph file exceeds 1 MiB");
     std::error_code ec;
@@ -1037,7 +1063,15 @@ void registerSpectraGraphOps(Workspace& ws) {
         else if(action=="newVolume"||action=="addVolume")ok=spectra::volume::appendPreset(graph,p.getStr("preset","fire"),error);
         else if(action=="upgrade") {
             if(graph.getInt("version")!=1)ok=false;
-            else graph.set("version",Json::number(int64_t(2)));
+            else {
+                if(p.has("name") && !p.getBool("draft")) {
+                    const auto name=requireGraphName(p);
+                    if(graph.dump()!=Json::parse(readFile(graphFile(ws,name))).dump())
+                        throw std::runtime_error("Published graph changed. Reopen it before upgrading.");
+                    importLegacyLayout(graph,graphDir(ws)/(name+".layout.json"));
+                }
+                graph.set("version",Json::number(int64_t(2)));
+            }
         } else if(action=="add")
             ok=spectra::authoring::addNode(graph,p.getStr("type"),added,error);
         else if(action=="connect") {

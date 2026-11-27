@@ -148,7 +148,7 @@ export default function SpectraDataInterfacesPanel({projectPath,onSaved}:Props) 
     if(!legacy||busy)return;
     setBusy(true);setError('');
     try{
-      const result=await nativeOp('fx_graph_edit',{action:'upgrade',text:legacy});
+      const result=await nativeOp('fx_graph_edit',{action:'upgrade',text:legacy,...(selected&&!selected.draft?{name:selected.name}:{})});
       const next=graphV2(result.graph);
       if(!next||result.ok===false)throw new Error(String(result.error??'Could not upgrade this graph.'));
       setGraph(history.current.push(next));setSelectedName('');setValidation(asRecord(result.validation));
