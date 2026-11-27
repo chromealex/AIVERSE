@@ -21,6 +21,7 @@
     "engine/game/GameCore.cpp",
     "engine/game/HostSystems.h",
     "engine/game/Planets.cpp",
+    "engine/game/ProjectileEvents.h",
     "engine/game/ProjectilePrograms.cpp",
     "engine/sim/ProjectileData.h",
     "engine/sim/ProjectileProgram.h",

@@ -313,7 +313,23 @@ void GameFx::updateViewAnchors(const std::vector<ViewEffect>& effects) {
 
 void GameFx::handle(Simulation& sim, const SimEvent& ev) {
     if (ev.presentation == SimEvent::Presentation::MotionFinished) {
-        const auto it = trails_.find(ev.a.packed());
+        auto it = trails_.find(ev.a.packed());
+        if (it == trails_.end() && ev.motion) {
+            auto* mod = dynamic_cast<GameCore*>(&sim.module());
+            if (!mod || (viewer_ != 0 && ev.player != viewer_ &&
+                (!mod->isVisible(sim, viewer_, ev.pos) || !mod->isVisible(sim, viewer_, ev.motion->start)))) return;
+            const int type = ev.subjectType < types_.size() ? int(ev.subjectType) : -1;
+            const Binding* binding = &trailFor(type, int(ev.value));
+            if (!binding->valid() || binding->clear) return;
+            float3 start = toF(ev.motion->start), up{0,1,0};
+            if (place_) { if (!place_(start, -1e9f, start, up)) return; }
+            else if (ev.motion->sourceAnchored && attackOrigin_) {
+                float3 muzzle, direction;
+                if (attackOrigin_(ev.b, muzzle, direction) && render::length(muzzle-start) <= 8) start=muzzle;
+            }
+            trails_[ev.a.packed()] = {ps_->play(binding->effect,start,up,binding->scale),frame_,false,{}};
+            it = trails_.find(ev.a.packed());
+        }
         if (it == trails_.end()) return;
         float3 point = toF(ev.pos), up;
         if (it->second.clear) ps_->kill(it->second.h);

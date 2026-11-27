@@ -18900,3 +18900,23 @@ TEST(fx_finish_consumes_last_motion_once) {
     ps.kill(h);
     ps.finish(h,{99,0,0}); // stale handle is safe
 }
+
+TEST(fx_motion_finished_without_rendered_entity) {
+    auto sim=makeSimJson(R"({"types":{"unit":{}}})",flatMap(12,12,""));
+    fx::ParticleSystem ps; ps.setQuality(fx::FxQuality::High); CHECK(ps.init(nullptr));
+    CHECK(ps.define("terminal-trail",fxParse(R"({"emitters":[{"perMeter":10,"loop":true,"life":1,"speed":0}]})"))>=0);
+    game::GameFx bridge;
+    CHECK(bridge.init(ps,mod(*sim).rules(),Json::parse(R"({"events":{"trail":"terminal-trail"}})")));
+    sim->addSystem("test.motion.finished",[](Simulation& s){
+        auto event=SimEvent::motionFinished(Entity{9000,1},{1_fx,Fixed{},Fixed{}});
+        event.motion=std::make_shared<const MotionPathPresentation>(MotionPathPresentation{{},false});
+        s.emit(event);
+    });
+    bridge.attach(*sim,0); sim->step();
+    bridge.update(*sim,nullptr); ps.update(.01f);
+    std::vector<fx::FxParticleInfo> particles; ps.snapshot(particles);
+    CHECK(particles.size()==10);
+    CHECK(std::any_of(particles.begin(),particles.end(),[](const auto& p){return aiverse::render::length(p.pos-aiverse::render::float3{1,0,0})<1e-5f;}));
+    bridge.update(*sim,nullptr);ps.update(.01f);ps.snapshot(particles);
+    CHECK(particles.size()==10);
+}

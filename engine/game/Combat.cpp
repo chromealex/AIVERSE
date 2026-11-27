@@ -1,3 +1,4 @@
+#include "ProjectileEvents.h"
 // Combat: target acquisition, weapons (height advantage, misses, squads), projectiles, damage,
 // abilities (autocast, auras, buffs, stuns, summons, blink), hero experience, death (bounty, score,
 // wrecks, depleted extractors).
@@ -483,7 +484,7 @@ void GameCore::sysProjectiles(Simulation& sim) {
             [&](Entity target) {
                 dealDamage(sim, target, pr.damage, pr.damageType, pr.source, pr.owner, pwd);
             });
-        sim.emit(SimEvent::motionFinished(p, tr.pos, pr.owner));
+        sim.emit(projectileFinishedEvent(p, pr, tr.pos));
         w.destroyLater(p);
     });
     sysProjectilePrograms(sim, programs);

@@ -33,6 +33,7 @@ struct MatchMessage {
 };
 
 struct ChainJumpPresentation { Vec3 origin; int16_t payload = -1; };
+struct MotionPathPresentation { Vec3 start; bool sourceAnchored = false; };
 struct SimEvent {
     uint16_t type = 0;      // module-defined
     uint8_t player = 0;
@@ -48,6 +49,7 @@ struct SimEvent {
     // Engine presentation lifecycle, independent of module-defined numeric events.
     enum class Presentation : uint8_t { None, MotionFinished };
     Presentation presentation = Presentation::None;
+    std::shared_ptr<const MotionPathPresentation> motion{};
     static SimEvent motionFinished(Entity subject, Vec3 endpoint, uint8_t owner = 0) {
         SimEvent event;
         event.presentation = Presentation::MotionFinished;
