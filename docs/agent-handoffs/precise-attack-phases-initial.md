@@ -17,3 +17,8 @@ Added consumeAttackPhase (remaining + unused fixed time) and consumeAttackRest (
 
 Commit: c5e83c5673545d7222937a486415ef67d1141d8c
 Targeted precise uncharged phases now consume one local time budget through concurrent rest, windup, accepted release and next rest. Separate pre-movement cooldown decrement skips targeted phased slots; free-fire/no-target cadence retains previous advancement. Charge and preciseCooldown:false retain old path. Added authored-period regression over 200 ticks. Tests/build NOT RUN; diff check passed. Needs target-switch/free-fire transition audit (target changes between movement and weapons), cancellation/backswing/speed/save tests and updates to legacy timing fixtures now opting into precise timing by default. No readiness claim.
+
+## Single clock across target changes
+
+Commit: e8b555bd414db34903d8f4270da1a4e3e1cb18a5
+Moved precise phased rest consumption to weapon.cadence before movement for every slot, independent of target. Negative cooldown carries unspent tick time to Combat, which consumes it once; no new persisted clock. Free-fire cannot bypass an active phase. Existing whole-tick timing fixture now explicitly opts out of precision; authored-period scenario includes save/reload replay checksum. Tests/build NOT RUN; diff check passed. Remaining verification: release budget, target-switch/cancel/charge/backswing/speed runtime cases and all integration gates.
