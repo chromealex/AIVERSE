@@ -28,6 +28,7 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
  const [loading,setLoading]=useState(true);
  const [busy,setBusy]=useState(false);
  const [previewing,setPreviewing]=useState(false);
+ const [previewError,setPreviewError]=useState('');
  const [error,setError]=useState('');
  const [message,setMessage]=useState('');
  const [nonce,setNonce]=useState(0);
@@ -41,7 +42,11 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
 
  useEffect(()=>{
   let revision=0;
-  const unsubscribe=onNativeEvent(event=>{
+  const unsubscribe=onNativeEvent((event,payload)=>{
+   if(event==='material.previewError'&&payload&&typeof payload==='object'&&'message' in payload){
+    setPreviewError(String(payload.message));return;
+   }
+   if(event==='material.preview'||event==='workspace.changed')setPreviewError('');
    if(event==='workspace.changed'){reload();return;}
    if(event!=='assets.changed'||!connected||!projectPath)return;
    const request=++revision;
@@ -135,7 +140,7 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
   setPreviewing(true);setError('');
   try{
     await invoke('studio.materialPreview',{name:previewMaterial===name?'':name});
-    setMessage(previewMaterial===name?'Material preview cleared.':'Showing saved PBR factors.');
+    setMessage(previewMaterial===name?'Material preview cleared.':'Material preview enabled.');
   }catch(e){setError(e instanceof Error?e.message:String(e));}
   finally{setPreviewing(false);}
  };
@@ -205,6 +210,7 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
   {connected&&!projectPath&&<p className="materials-notice">Open a project to view the material library.</p>}
   {error&&<p role="alert" className="materials-error">{error}</p>}
   {message&&<p role="status" className="materials-notice">{message}</p>}
+  {name&&previewMaterial===name&&previewError&&<p role="alert" className="materials-error">{previewError}</p>}
   {name&&previewMaterial===name&&<SpectraDockViewport id="material" label="Material GPU preview"/>}
   {library.publicationInspectionError&&<p role="alert" className="materials-error">Publication inspection: {library.publicationInspectionError}</p>}
   {!!library.pendingPublications?.length&&<details className="materials-warning">
@@ -276,7 +282,7 @@ export default function MaterialsPanel({documentEpoch,projectPath,previewMateria
   <footer className="materials-footer">
    <span>{changes>0 ? changes+' pending PBR edits' : 'No pending edits'}</span>
    <button className="materials-preview" disabled={!connected||!projectPath||!name||changes>0||busy||previewing}
-     title="Show the saved PBR factors on a GPU-rendered sphere"
+     title="Preview the saved material on a GPU-rendered sphere"
      onClick={()=>void preview()}><Eye size={14}/> {previewMaterial===name?'Hide preview':'Preview material'}</button>
    <button className="materials-discard" onClick={discard} disabled={busy||changes===0}>{pending===null?'Discard':'Discard & switch'}</button>
    <button className="materials-apply" disabled={busy||loading||changes===0||!connected||!projectPath||!names.includes(name)}

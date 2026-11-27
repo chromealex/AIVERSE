@@ -1280,16 +1280,16 @@ void StudioHost::tickAssetPreview(StudioSurface surface) {
                     shader?session_->previewGraphFactors():session_->previewMaterialFactors(),
                     shader?session_->previewGraphRevision():session_->previewMaterialRevision(),
                     float(ws.project.rules.levelHeight.toDouble()),ws.project.dir);
-                if(shader)error=asset.renderer->shaderPreviewError();
+                error=asset.renderer->shaderPreviewError();
             });
         });
     }catch(const std::exception& e){
         error=e.what();platform_.log("Studio asset preview: "+error);
         surfaceDetached(surface);
     }
-    if(shader&&asset.error!=error){
+    if(asset.error!=error){
         asset.error=error;
-        sendEvent("shader.previewError",error);
+        sendEvent(shader?"shader.previewError":"material.previewError",error);
     }
 }
 void StudioHost::ensureScene() {
@@ -5284,7 +5284,10 @@ void StudioHost::afterSessionReply(const Json& req, const Json& reply) {
     }
     if(method=="studio.materialCreate"||method=="studio.materialsToFiles"||method=="studio.materialPatch"||
        (method=="studio.op"&&req["params"].getStr("op")=="shader_graph_apply"))sendEvent("assets.changed","");
-    if (method == "studio.materialPreview") sendEvent("material.preview", req["params"].getStr("name"));
+    if (method == "studio.materialPreview") {
+        materialSurface_.error.clear();
+        sendEvent("material.preview", req["params"].getStr("name"));
+    }
     if(method=="studio.assetMetaPatch"||method=="studio.assetHistoryStep"||method=="studio.assetTransferCommit"||method=="studio.assetDelete"||method=="studio.assetFolderCreate"||method=="studio.assetTrashApply"||method=="studio.assetHistoryResetApply"||method=="studio.agentBatchApply"||(method=="studio.agentHistoryStep"&&req["params"].getStr("scope")=="assets"))sendEvent("assets.changed", "");
     if (documentChangingMethods().count(method) || (method=="studio.projectRule" && req["params"].has("value")) || (method == "studio.op" && reply["result"].getBool("changed")))
         sendEvent("document.changed", "");
