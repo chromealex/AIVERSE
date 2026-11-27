@@ -1704,3 +1704,7 @@ d00ff868f128e489bbba0ab10d9e8b11fb28097c adds docs/handoff/studio-html5/captures
 ### Live 2D diagnostic preview in the HTML inspector
 
 cd5056a300a6a0bfd7be469afe235ec71f438696 updates InsightPanels.tsx, docs/studio-html5-parity.md and captures/mac-texture-live-preview.png. Selecting a supported 2D subresource starts one-second sampled reads, keeps the previous image on screen during refresh, and supports pausing with manual reads. Web build and npm run test:web passed. Detached Studio WKWebView on Mac presented three physical Metal readbacks automatically, stopped painting after pause, rendered one manual read and resumed automatic painting. Evidence: stats-mac-w440x79m/live.log. Remaining parity: larger native 2D preview with format coverage beyond the 32x32 diagnostic and validation on other backends.
+
+### Texture preview presentation respects mip dimensions
+
+6231bfc185938bf5a4d87e87f01dd5924824ab41 updates InsightPanels.tsx and ProjectToolPanels.css; capture mac-texture-preview-aspect.png. HTML uses the selected mip proportions to display the sampled canvas. Production web build passed. Detached Mac Studio rendered a real 898x452 RGBA16F target at 160x80.53125 CSS pixels (stats-mac-zfqjp98y/live.log). Next increase actual preview detail and extend native format coverage.
