@@ -155,3 +155,16 @@ Optional AIVERSE_ADDITIVE_CAPTURE writes PNGs; the test runs without requiring
 that environment (no opt-in skip). Registration sets background mode.
 Native compile and runtime NOT RUN yet. Next: build only the new target in the
 existing KINGSTON cache, run it with captures, inspect failures and pixels.
+
+## Additive GPU first run — depth defect
+
+Fixture source 6aa64a577 compiled successfully. Runner report
+`test-reports/20261127-095120-19190` failed at display occlusion. Weighted,
+unweighted, alpha, weighted-cache-return, linear particles and display brightness
+matched independent expectations. Occluded particle got 0.50049 vs expected 0.25.
+No pipeline compilation failures. Captures are in `captures/additive`.
+The normalized-depth tolerance 0.0015 hides a world-depth separation of 1
+under the common orthographic range (1200 units). Correction 5ae943c0bcd3b9141f3220864d122edd90c522aa
+reduces the GLSL/MSL comparison tolerance to 0.000001 for numerical precision.
+This is shared display geometry behavior, no consumer exception.
+Corrected GPU result NOT RUN yet; remaining graph/fog/resize cases not reached.
