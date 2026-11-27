@@ -12,7 +12,7 @@ Rml::Element* element(const char* selector) {
     auto* context=Rml::GetContext("main");if(!context)return nullptr;
     for(int i=0;i<context->GetNumDocuments();++i)
         if(context->GetDocument(i)->IsVisible())
-            if(auto* e=context->GetDocument(i)->QuerySelector(selector);e&&e->IsVisible())return e;
+            if(auto* e=context->GetDocument(i)->QuerySelector(selector);e&&e->IsVisible(true))return e;
     return nullptr;
 }
 Rml::Element* button(const char* text) {
@@ -20,7 +20,7 @@ Rml::Element* button(const char* text) {
     for(int i=0;i<context->GetNumDocuments();++i){
         if(!context->GetDocument(i)->IsVisible())continue;
         Rml::ElementList buttons;context->GetDocument(i)->QuerySelectorAll(buttons,"button");
-        for(auto* e:buttons)if(e->IsVisible()&&e->GetInnerRML().find(text)!=std::string::npos)return e;
+        for(auto* e:buttons)if(e->IsVisible(true)&&e->GetInnerRML().find(text)!=std::string::npos)return e;
     }return nullptr;
 }
 }
