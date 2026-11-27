@@ -48,17 +48,29 @@ export default function MaterialGraphPanel({documentEpoch,name,material,draft,pr
  };
  const view=materialGraph(name,material,draft);
  const textureNode=view.nodes.find(node=>node.id===selected && node.id.startsWith('shaderTexture:'));
- const assetPath=textureNode?.label.startsWith('content/') ? textureNode.label.slice('content/'.length) : '';
  const fields=materialFields(material,draft).filter(f=>selected==='material'||selected==='factors'?f.type!=='asset':selected==='texture:'+f.key);
+ const reference=textureNode?.label ?? fields.find(f=>f.type==='asset')?.value;
+ const [revealError,setRevealError]=useState('');
+ useEffect(()=>setRevealError(''),[selected,name,reference]);
+ const revealTexture=async(value:string)=>{
+  const token=epoch.current;
+  try{
+   const path=/^[0-9a-f]{16,64}$/i.test(value)
+    ? (await invoke('studio.assetByGuid',{guid:value})).path : value;
+   if(epoch.current!==token)return;
+   const relative=safeAssetPath(path.replace(/^content\//,''));
+   if(!relative)throw new Error('Texture file is unavailable.');
+   setRevealError('');revealProjectAsset(projectPath,relative);
+   window.dispatchEvent(new CustomEvent('studio:show-panel',{detail:'assets'}));
+  }catch(e){if(epoch.current===token)setRevealError(e instanceof Error?e.message:String(e));}
+ };
  return <div className="material-graph-modes">
   <div hidden={mode!=='dependencies'} className="material-dependency-view"><StudioSection title="Material dependencies">
   <div className="material-dependency-canvas">
    <GraphCanvas view={view} selected={selected} label="Material dependency graph" enhancedNavigation readOnly onSelect={setSelected} onMove={()=>{}}/>
   </div>
-  {assetPath && safeAssetPath(assetPath) && <StudioButton size="sm" onClick={()=>{
-   revealProjectAsset(projectPath,assetPath);
-   window.dispatchEvent(new CustomEvent('studio:show-panel',{detail:'assets'}));
-  }}>Show texture in Assets</StudioButton>}
+  {typeof reference==='string' && reference && <StudioButton size="sm" onClick={()=>void revealTexture(reference)}>Show texture in Assets</StudioButton>}
+  {revealError&&<StudioAlert tone="danger">{revealError}</StudioAlert>}
   {fields.map(f=><PropertyField key={f.key} property={f} disabled={disabled||busy} onChange={v=>onEdit(f.key,v)}/>)}
   <small>Dependency view of the material draft; edit channels using the existing asset picker. Shader evaluation remains in Shader Graph.</small>
   </StudioSection></div>
