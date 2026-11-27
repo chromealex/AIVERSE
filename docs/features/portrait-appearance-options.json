@@ -28,24 +28,37 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Alternate source and background connected through ModelPreview/ModelAssetProvider/View. Source review only: tests, native capture, editing and final gate pending.",
-      "evidence": []
+      "status": "pass",
+      "note": "Metal captures exercised alternate animated/static portrait models, owner/RGBA backgrounds, inherited defaults, empty-source reset and missing-file fallback. Animated portrait changed2096pixels; retained metrics validate configured clear colors.",
+      "evidence": [
+        "docs/evidence/issues-portrait-metal-20261127/result.json"
+      ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "PortraitOptions resolves generic authored/default settings with caller-supplied subject color. Shared ModelPreview/ModelAssetProvider owns load, pose and lifetime; GamePortrait supplies selected-subject data. No portrait-specific alternate asset loader/animator.",
+      "evidence": [
+        "engine/view/PortraitOptions.h",
+        "engine/view/ModelPreview.h",
+        "engine/view/game/GamePortrait.cpp"
+      ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Shared ModelPreview and PortraitOptions form native preview API; public-header consumer and actual native client cover source switching/background/fallback.",
+      "evidence": [
+        "engine/view/ModelPreview.h",
+        "engine/view/PortraitOptions.h",
+        "tests/view/portrait_appearance_api.cpp",
+        "docs/evidence/issues-portrait-metal-20261127/result.json"
+      ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Existing aiverse-view recipe identifies shared owners, content-reader and resource shutdown contract, plus rules_set/set_manifest authoring.",
+      "evidence": [
+        "skills/gameplay/aiverse-view/SKILL.md"
+      ]
     },
     "mcp": {
       "status": "not_run",
@@ -68,9 +81,12 @@
       "evidence": []
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "Portrait source/background are scalar appearance settings. Existing animation sampling is reused, with no new user-authored graph workflow.",
+      "evidence": [
+        "engine/view/PortraitOptions.h",
+        "engine/view/ModelPreview.h"
+      ]
     },
     "performance": {
       "status": "not_run",
@@ -83,19 +99,28 @@
       "evidence": []
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Existing native model/animation/provider infrastructure reused, no second model loader or new package.",
+      "evidence": [
+        "engine/view/ModelPreview.h",
+        "engine/view/game/GamePortrait.cpp"
+      ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "Presentation-only selected-subject preview; no server-side portrait or simulation state.",
+      "evidence": [
+        "engine/view/game/GamePortrait.h"
+      ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Controls demo includes authored static and animated glTF portraits; actual Metal and Web controls captures show selected subjects.",
+      "evidence": [
+        "demos/client-command-controls/rules.json",
+        "docs/evidence/issues-portrait-metal-20261127/result.json",
+        "docs/evidence/issues-client-controls-web-20261127/result.json"
+      ]
     },
     "tests": {
       "status": "not_run",
@@ -110,9 +135,12 @@
       "evidence": []
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Reference documents model/default/empty reset/fallback/background semantics and generic native preview ownership.",
+      "evidence": [
+        "docs/game-format.md",
+        "docs/view.md"
+      ]
     },
     "publishing": {
       "status": "not_run",

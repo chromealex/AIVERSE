@@ -30,24 +30,38 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Controls implemented; real client acceptance passed. Capture review found inline descriptions clipped in fixed command-card cells; fixing shared card-slot tooltip presentation for every action.",
-      "evidence": []
+      "status": "pass",
+      "note": "Real native client fixture verified shortcut label/select, M and mouse/touch Move, text-focus suppression, armed immobile Attack/Stop, passive tooltip and hosted Quit dispatch. Browser controls scene exercised F6/M/F7. Tooltip clipping correction is included in retained native touch/aura captures; mobile OS exit is not established.",
+      "evidence": [
+        "docs/evidence/issues-client-controls-metal-20261127/result.json",
+        "docs/evidence/issues-client-controls-web-20261127/result.json"
+      ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Existing GameClient action/card-key path handles shortcut and standard Move mode; standard commands go through existing command dispatch. Passive buttons carry description and stay disabled. Quit delegates to platform requestQuit. No simulation authority or alternative input system added.",
+      "evidence": [
+        "apps/client/ClientUi.cpp",
+        "apps/client/GameClient.cpp",
+        "engine/assets/ui/hud.rml"
+      ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Existing GameClient and InputFlow action routing expose shared host controls; platform requestQuit remains application termination owner. Native fixture exercises the actual client/RmlUi path.",
+      "evidence": [
+        "apps/client/GameClient.h",
+        "engine/platform/Platform.h",
+        "tests/render/client_controls_frame.cpp",
+        "docs/evidence/issues-client-controls-metal-20261127/result.json"
+      ]
     },
     "skill": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Existing controls recipe documents selectionShortcut.hotkey, command-card overrides, text focus, immobile subjects/passives and platform Quit boundary.",
+      "evidence": [
+        "skills/ui/aiverse-controls/SKILL.md"
+      ]
     },
     "mcp": {
       "status": "not_run",
@@ -70,9 +84,11 @@
       "evidence": []
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "This adds ordinary command-card/input configuration and callbacks, not a user-authored graph or graph evaluator.",
+      "evidence": [
+        "apps/client/ClientUi.cpp"
+      ]
     },
     "performance": {
       "status": "not_run",
@@ -85,20 +101,27 @@
       "evidence": []
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Reuses RmlUi, existing InputFlow key bindings and platform termination API; no new package or solver.",
+      "evidence": [
+        "apps/client/ClientUi.cpp",
+        "engine/platform/EnhancedInputPresets.h"
+      ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "Local HUD actions emit existing commands; server command semantics are unchanged. There is no server HUD or menu to render.",
+      "evidence": [
+        "apps/client/ClientUi.cpp"
+      ]
     },
     "examples": {
-      "status": "not_run",
-      "note": "Added runnable demos/client-command-controls, exercised by the Metal fixture.",
+      "status": "pass",
+      "note": "Tracked controls demo exercised in native Metal and real WebGL browser: selection shortcut, Move, tower card, passive ability, explicit Sell cell and Quit menu.",
       "evidence": [
-        "demos/client-command-controls/README.md"
+        "demos/client-command-controls/README.md",
+        "docs/evidence/issues-client-controls-metal-20261127/result.json",
+        "docs/evidence/issues-client-controls-web-20261127/result.json"
       ]
     },
     "tests": {
@@ -114,9 +137,13 @@
       "evidence": []
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Controls recipe, demo instructions and game-format reference describe authored hotkeys and standard card behavior.",
+      "evidence": [
+        "skills/ui/aiverse-controls/SKILL.md",
+        "docs/game-format.md",
+        "demos/client-command-controls/README.md"
+      ]
     },
     "publishing": {
       "status": "not_run",
@@ -129,7 +156,9 @@
     }
   },
   "integrations": {
-    "skills": [],
+    "skills": [
+      "aiverse-controls"
+    ],
     "mcp_tools": [],
     "studio_panels": [],
     "studio_methods": []

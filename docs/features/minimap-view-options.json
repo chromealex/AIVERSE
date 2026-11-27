@@ -22,18 +22,28 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Capture found cropped minimap texture stretched by full-grid HUD dimensions. Use actual texture width/height for shared panel aspect; correction awaiting runtime check.",
-      "evidence": []
+      "note": "Flat-map capture acceptance passed: corrected texture aspect, coordinate crop, hidden tower/visible scout and complete rectangular camera footprint. Planet marker hiding still lacks its own visual acceptance.",
+      "evidence": [
+        "docs/evidence/issues-minimap-metal-20261127/result.json"
+      ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Shared MapProjection handles normalized rectangle, clipping and frame geometry. Existing flat/planet minimap consumers apply authored visibility. Atlas access remains the shared image owner, not a packer special case.",
+      "evidence": [
+        "engine/view/MapProjection.h",
+        "apps/client/Minimap.cpp",
+        "apps/client/MinimapPlanet.cpp"
+      ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "MapProjection exposes checked set/clipTo/uv/point and rectangularFrame without gameplay types; native regression and flat capture use this shared transform.",
+      "evidence": [
+        "engine/view/MapProjection.h",
+        "tests/tests.cpp",
+        "docs/evidence/issues-minimap-metal-20261127/result.json"
+      ]
     },
     "skill": {
       "status": "not_run",
@@ -61,9 +71,11 @@
       "evidence": []
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "These are view configuration and projection utilities, with no authored graph/evaluator.",
+      "evidence": [
+        "engine/view/MapProjection.h"
+      ]
     },
     "performance": {
       "status": "not_run",
@@ -76,14 +88,19 @@
       "evidence": []
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Reuses existing minimap consumers and shared view geometry; no competing minimap renderer or atlas packer exception.",
+      "evidence": [
+        "apps/client/Minimap.cpp",
+        "engine/view/MapProjection.h"
+      ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "HUD visibility/crop have no authoritative simulation mutation or server minimap output.",
+      "evidence": [
+        "apps/client/Minimap.cpp"
+      ]
     },
     "examples": {
       "status": "not_run",
@@ -103,9 +120,11 @@
       "evidence": []
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Game-format documents view.minimap visibility, flat crop and camera-frame options.",
+      "evidence": [
+        "docs/game-format.md"
+      ]
     },
     "publishing": {
       "status": "not_run",
