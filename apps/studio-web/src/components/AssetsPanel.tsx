@@ -168,10 +168,21 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     }catch(e){if(request===referenceRequest.current)setMentions({...snapshot,graphError:String(e)});}
     finally{if(request===referenceRequest.current)setReferenceLoading(false);}
   };
+  const usageRequest=useRef(0);
+  const clearAssetFilters=useCallback(()=>{
+    ++usageRequest.current;
+    setSearch('');
+    setUnusedOnly(false);
+    setUnused(null);
+  },[]);
   const toggleUnused=async()=>{
+    const request=++usageRequest.current;
     if(unusedOnly){setUnusedOnly(false);return;}
-    try{const r=await invoke('studio.assetUsage',{});setUnused(new Set(r.unused??[]));setUnusedOnly(true);}
-    catch(e){setError(String(e instanceof Error?e.message:e))}
+    try{
+      const result=await invoke('studio.assetUsage',{});
+      if(request!==usageRequest.current)return;
+      setUnused(new Set(result.unused??[]));setUnusedOnly(true);
+    }catch(e){if(request===usageRequest.current)setError(String(e instanceof Error?e.message:e));}
   };
   const [mode,setMode]=useState<'grid'|'list'>('grid');
   const [menu,setMenu]=useState<{x:number;y:number;path:string;directory:boolean;background?:boolean}|null>(null);
@@ -228,7 +239,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     window.addEventListener('studio:assets-changed',reload);
     return ()=>window.removeEventListener('studio:assets-changed',reload);
   },[reload]);
-  useEffect(()=>{setProjectFiles(false);setFolder('');setSelected(null);setPinnedAssetGuid(null);setSearch('');setPlan(null);setRenameTarget(null);setDeleteTarget(null);setTrashOpen(false);setMentions(null);setReferenceLoading(false);++referenceRequest.current;},[projectPath]);
+  useEffect(()=>{setProjectFiles(false);setFolder('');setSelected(null);setPinnedAssetGuid(null);clearAssetFilters();setPlan(null);setRenameTarget(null);setDeleteTarget(null);setTrashOpen(false);setMentions(null);setReferenceLoading(false);++referenceRequest.current;},[projectPath,clearAssetFilters]);
   // Command palette (# assets) reveals a file: open its folder and select it.
   useEffect(()=>{
     if(!projectPath)return;
@@ -240,7 +251,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       if(typeof path!=='string'||!safeAssetPath(path))return;
       if(localStorage.getItem(key)===path)localStorage.removeItem(key);
       const cut=path.lastIndexOf('/');
-      setProjectFiles(false);setSearch('');setFolder(cut>0?path.slice(0,cut):'');setSelected(path);
+      setProjectFiles(false);clearAssetFilters();setFolder(cut>0?path.slice(0,cut):'');setSelected(path);
     };
     const onStorage=(event:StorageEvent)=>{if(event.key===key && event.newValue)reveal();};
     reveal();
@@ -250,7 +261,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
       window.removeEventListener('studio:reveal-asset',reveal);
       window.removeEventListener('storage',onStorage);
     };
-  },[projectPath]);
+  },[projectPath,clearAssetFilters]);
   useEffect(()=>{
     let cancelled=false;
     setLoading(true);setError('');
@@ -559,7 +570,7 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
               <strong>{!projectPath?'Open a project':filtering?'No matching assets':folder?'This folder is empty':'content/ is empty'}</strong>
               {!projectPath ? <p>Assets appear here when an AIVERSE project is open.</p>
                 : filtering ? <button type="button" className="studio-assets-empty-action"
-                    onClick={()=>{setSearch('');setUnusedOnly(false);}}>Clear filters</button>
+                    onClick={clearAssetFilters}>Clear filters</button>
                 : native ? <button type="button" className="studio-assets-empty-action" disabled={busy||!!plan}
                     onClick={()=>void externalImport()}>Import assets…</button>
                 : <p>Open a project in Studio to import assets.</p>}
