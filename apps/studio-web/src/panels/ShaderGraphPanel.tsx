@@ -143,9 +143,9 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
  const ports=Object.fromEntries((draft?.nodes??[]).map(n=>[n.id,{inputs:operations.find(o=>o.id===n.op&&o.domains.includes(draft?.domain??'material'))?.inputs??0,output:true}]));
  const template=shaderTintTemplate(draft?.domain??'material',operations);
  const insertTemplate=()=>{if(!draft||busy||!template)return;const result=pasteShaderNodes(draft,template,operations);if(result.graph===draft){setError('Template exceeds graph bounds.');return;}editDraft(result.graph);setSelection(result.ids);};
- const wire=(input:PortRef)=>{
-  if(!draft||busy||!pendingOutput)return;
-  const next=connectShaderInput(draft,operations,pendingOutput.node,input.node,Number(input.port));
+ const wire=(output:PortRef,input:PortRef)=>{
+  if(!draft||busy)return;
+  const next=connectShaderInput(draft,operations,output.node,input.node,Number(input.port));
   if(next===draft){setError('Connection unchanged or invalid (check ports and cycles).');return;}
   editDraft(next);setPendingOutput(null);setError('');
  };
@@ -296,7 +296,8 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
       <GraphCanvas view={view} selected={selectedNode} label={'Editable node layout for '+selected}
        disabled={!draft||busy} onSelect={setSelectedNode} selection={selectedIds} onSelection={setSelection}
        onMoveGroup={positions=>{if(draft)editDraft(moveShaderNodes(draft,positions))}} pendingOutput={pendingOutput}
-       onOutput={port=>setPendingOutput(old=>samePort(old,port)?null:port)} onInput={wire}
+       onOutput={port=>setPendingOutput(old=>samePort(old,port)?null:port)} onInput={input=>{if(pendingOutput)wire(pendingOutput,input)}}
+       onConnect={wire} enhancedNavigation
        onCancel={()=>setPendingOutput(null)} commands={[
         {id:'copy',label:'Copy',shortcut:'mod+c',disabled:!selectedIds.length,run:copyNodes},
         {id:'paste',label:'Paste',shortcut:'mod+v',disabled:!clipboard,run:pasteNodes},
