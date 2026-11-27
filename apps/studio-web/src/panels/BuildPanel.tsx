@@ -360,6 +360,8 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
               <span>{id}</span><small>{missing ? 'Missing in this Studio' : 'Loaded in this Studio'}</small>
             </div>;
           })}
+          {info.nativeModules.built && !info.nativeModules.ready && info.nativeModules.why &&
+            <StudioAlert tone="warning" title="Project Studio needs rebuilding">{info.nativeModules.why}</StudioAlert>}
           {info.nativeModules.ready && <StudioButton disabled={info.dirty || startingNative || state.running}
             title={info.nativeModules.launch} onClick={() => {
               void invoke('studio.openProjectStudio',{project:projectPath}).catch(err=>setError(message(err)));

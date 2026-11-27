@@ -1098,7 +1098,7 @@ export interface StudioBuildFileRule { original:string;rule:{match:string;exclud
 export interface StudioBuildTarget { rules?:StudioBuildFileRule[]; id: string; name: string; built: boolean; baseSize?: string|number|null; chunkSize?: string|number|null; split?: boolean | null }
 export interface StudioBuildInfo {
   gameWindow?:Record<string,unknown>|null; windowRevision?:string;
-  nativeModules?: { required: string[]; missing: string[]; ready: boolean; launch: string };
+  nativeModules?: { required: string[]; missing: string[]; built: boolean; ready: boolean; why?: string; launch: string };
   rules?:StudioBuildFileRule[];
   project?: string; baseSize?: string|number|null; chunkSize?: string|number|null; splitDefault?: boolean; compression?: number; atlasEnabled?: boolean; atlasPages?: number | Record<string, number> | null;
   targets: StudioBuildTarget[]; toolFound: boolean; outDir: string; running: boolean; label: string; exitCode: number; runs: number;
