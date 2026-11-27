@@ -3,6 +3,15 @@
   "id": "selection-voice-order",
   "owner": "gameplay",
   "changed_paths": [
+    "apps/editor/core/DataOps.cpp",
+    "apps/studio-native/StudioSession.cpp",
+    "apps/studio-native/StudioTools.h",
+    "apps/studio-native/tests/StudioSessionTests.cpp",
+    "apps/studio-web/src/nestedDock.ts",
+    "apps/studio-web/src/panels/StudioPanelRenderer.tsx",
+    "apps/studio-web/src/panels/generated/ProjectDataPanel.css",
+    "apps/studio-web/src/panels/generated/ProjectDataPanel.tsx",
+    "apps/studio-web/src/windowGroups.ts",
     "demos/selection-voices/README.md",
     "demos/selection-voices/audio.json",
     "demos/selection-voices/audio/first.wav",
@@ -61,7 +70,7 @@
     },
     "studio": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "note": "Confirmed gap: game_file_write is not allowlisted in native Studio and no general project-data editor exists. Add shared Project Data panel over existing owner operations, with expected project/text fences; actual UI acceptance pending.",
       "evidence": []
     },
     "inspector": {

@@ -21,3 +21,7 @@ Source changes committed; readiness is pending. Tests/build: NOT RUN for this re
 Review found GameAudio::onCommand did not reset repeated clicks, despite issue220 requiring it. The client routes commands through that owner. Correct the shared API and add frequency-distinct PCM variants to verify actual mixer sequence, not only played() count. Test execution remains pending the final combined build.
 
 Audible example planned at demos/selection-voices: two selectable entities, normal440Hz and sequential660/880Hz PCM files, count3/cycle/window0. Repeated explicit clicks, Stop/Move, switching and clearing selection exercise the existing client/GameAudio path. Synthetic tones distinguish sequence entries without copyrighted voice assets.
+
+## Shared Studio project-data authoring gap
+
+Source inspection confirms StudioTools exposes game_file_read only in Snapshot Diff; game_file_write is unavailable. Add a general Project Data panel using existing Workspace text-file operations (no audio-specific path or backend). Restrict Studio saves to an explicitly loaded existing file with expectedProject and exact expectedText. Keep dedicated manifest/rules/map owners and validate JSON natively. No map/project-history undo claim. Native boundary and actual WKWebView save/reload tests required.

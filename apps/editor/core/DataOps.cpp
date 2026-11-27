@@ -28,7 +28,13 @@ fs::path gamePath(const Workspace& ws, const std::string& rel) {
     if (rel.empty()) throw std::runtime_error("'path' is required (relative to the game folder)");
     fs::path p = fs::path(rel).lexically_normal();
     if (p.is_absolute() || p.empty() || *p.begin() == "..") throw std::runtime_error("path must stay inside the game folder: " + rel);
-    return fs::path(ws.project.dir) / p;
+    fs::path checked=ws.project.dir;
+    for(const auto& part:p) {
+        checked/=part;
+        if(fs::is_symlink(fs::symlink_status(checked)))
+            throw std::runtime_error("project text paths cannot traverse symlinks");
+    }
+    return checked;
 }
 
 bool textFile(const fs::path& p) {
@@ -66,7 +72,7 @@ void registerDataOps(Workspace& ws) {
         "Create or replace a text data file of the open game (lang/*.json, audio.json, tilesets/*.json, fx/*.json, "
         "ui/*.rml|rcss, campaign texts). JSON files are checked before saving. rules.json, game.json and maps have "
         "their own ops (rules_set, set_manifest, map_*), which validate against the engine.",
-        Json::parse(R"({"properties": {"path": {"type": "string"}, "text": {"type": "string"}, "json": {}},
+        Json::parse(R"({"properties": {"path": {"type": "string"}, "text": {"type": "string"}, "expectedText": {"type": "string"}, "json": {}},
             "required": ["path"]})"),
         [&ws](const Json& p) {
             const std::string rel = p.getStr("path");
@@ -93,6 +99,11 @@ void registerDataOps(Workspace& ws) {
             if (f.extension() == ".json") {
                 try { (void)Json::parse(text); }
                 catch (const std::exception& e) { throw std::runtime_error(std::string("invalid JSON, not saved: ") + e.what()); }
+            }
+            if(p.has("expectedText")) {
+                if(!p["expectedText"].isString() || !fs::is_regular_file(f) || fs::file_size(f)>kMaxText ||
+                   readAll(f)!=p.getStr("expectedText"))
+                    throw std::runtime_error("file changed since loading; reload before saving");
             }
             std::error_code ec;
             fs::create_directories(f.parent_path(), ec);

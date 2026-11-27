@@ -1319,6 +1319,29 @@ void authoredEntityWorkflow() {
        AIVERSE_TEST_CHECK(!refs.has("error") && refs["result"]["mentions"].size()>=1);
        AIVERSE_TEST_CHECK(call("studio.assetUsage",R"({"path":"../x"})").has("error"));
    }
+   // Shared project data editing uses the Workspace owner and rejects stale drafts.
+   {
+       std::ofstream(project/"audio.json") << "{}\n";
+       AIVERSE_TEST_CHECK(call("studio.ops",R"({"panel":"project_data"})")["result"]["ops"].size()==2);
+       Json input=Json::object();input.set("path",Json::string("audio.json"));
+       input.set("text",Json::string("{\"types\":{}}\n"));input.set("expectedText",Json::string("{}\n"));
+       Json request=Json::object();request.set("op",Json::string("game_file_write"));request.set("params",input);
+       AIVERSE_TEST_CHECK(call("studio.op",request.dump().c_str()).has("error"));
+       request.set("expectedProject",Json::string(project.string()));
+       AIVERSE_TEST_CHECK(!call("studio.op",request.dump().c_str()).has("error"));
+       AIVERSE_TEST_CHECK(call("studio.op",R"({"op":"game_file_read","params":{"path":"audio.json"}})")["result"]["result"].getStr("text")=="{\"types\":{}}\n");
+       AIVERSE_TEST_CHECK(call("studio.op",request.dump().c_str()).has("error")); // old before-image
+       input.set("expectedText",Json::string("{\"types\":{}}\n"));input.set("text",Json::string("{"));
+       request.set("params",input);
+       AIVERSE_TEST_CHECK(call("studio.op",request.dump().c_str()).has("error")); // invalid JSON preserves bytes
+       AIVERSE_TEST_CHECK(Json::parseFile((project/"audio.json").string()).has("types"));
+       input.set("path",Json::string("../outside.json"));request.set("params",input);
+       AIVERSE_TEST_CHECK(call("studio.op",request.dump().c_str()).has("error"));
+       input.set("path",Json::string("rules.json"));request.set("params",input);
+       AIVERSE_TEST_CHECK(call("studio.op",request.dump().c_str()).has("error"));
+       std::error_code linkError;fs::create_symlink(project/"audio.json",project/"audio-link.json",linkError);
+       if(!linkError) AIVERSE_TEST_CHECK(call("studio.op",R"({"op":"game_file_read","params":{"path":"audio-link.json"}})").has("error"));
+   }
    // Tool panels: op lists carry schemas, only allowlisted ops run, edits count as History steps.
    {
        const auto ops=call("studio.ops",R"({"panel":"terrain"})");

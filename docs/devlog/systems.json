@@ -3797,8 +3797,8 @@
           "title": "Последовательные реплики при повторном выборе",
           "titleEn": "Sequential repeated-selection voices",
           "target": null,
-          "text": "Проверяется реальный аудиовыход и сброс очереди при выдаче приказа.",
-          "textEn": "Verifying actual mixer output and sequence reset on issued commands."
+          "text": "Порядок и сброс подтверждены записью нативного клиента. Завершается общий редактор данных проекта в Studio и web-демо.",
+          "textEn": "Order and reset verified in captured native audio. Completing shared Studio project-data editing and the web demo."
         },
         {
           "id": "precise-attack-phases",
