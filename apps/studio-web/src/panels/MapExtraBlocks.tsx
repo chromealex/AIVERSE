@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { invoke } from '../bridge';
 import type { StudioGraphDocumentScope, StudioSnapshot } from '../types';
 import { StudioButton, StudioSelect } from '../ui';
 
-export function MapExtraBlocks({keys,scope,busy,onApply}:{keys:string[];scope:StudioGraphDocumentScope;busy:boolean;onApply:(s:StudioSnapshot)=>void}){
+export function MapExtraBlocks({keys,scope,busy,onApply,requested}:{requested?:{key:string;index?:number};keys:string[];scope:StudioGraphDocumentScope;busy:boolean;onApply:(s:StudioSnapshot)=>void}){
   const [open,setOpen]=useState(false);
   const [selection,setSelection]=useState('');
   const [index,setIndex]=useState<number>();
@@ -11,6 +11,14 @@ export function MapExtraBlocks({keys,scope,busy,onApply}:{keys:string[];scope:St
   const [draft,setDraft]=useState<typeof loaded>();
   const [pending,setPending]=useState(false);
   const [error,setError]=useState('');
+  const section=useRef<HTMLDetailsElement>(null);
+  const lastRequest=useRef<typeof requested>(undefined);
+  useEffect(()=>{
+    if(!requested || lastRequest.current===requested || draft || !keys.includes(requested.key))return;
+    lastRequest.current=requested;
+    setSelection(requested.key);setIndex(requested.index);
+    if(section.current){section.current.open=true;section.current.scrollIntoView({block:'nearest'});}
+  },[requested,keys,draft]);
   const key=draft?.key ?? (keys.includes(selection)?selection:keys[0]);
   useEffect(()=>{
     if(!key || !open)return;
@@ -35,7 +43,7 @@ export function MapExtraBlocks({keys,scope,busy,onApply}:{keys:string[];scope:St
     }catch(e){setError(String(e));}finally{setPending(false);}
   }
   if(!keys.length && !draft)return null;
-  return <details onToggle={e=>setOpen(e.currentTarget.open)}><summary>Additional map blocks</summary>
+  return <details ref={section} onToggle={e=>setOpen(e.currentTarget.open)}><summary>Additional map blocks</summary>
     <fieldset disabled={busy||pending}>
       <label>Block<StudioSelect disabled={!!draft} value={key} onChange={e=>{setSelection(e.target.value);setIndex(undefined);}}>
         {keys.map(k=><option key={k}>{k}</option>)}</StudioSelect></label>

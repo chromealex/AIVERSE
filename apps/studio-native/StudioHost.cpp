@@ -1,3 +1,4 @@
+#include "StudioMapBlocks.h"
 #include "StudioHierarchyGroups.h"
 #include "StudioOverlayPlan.h"
 #include "engine/game/Tiles.h"
@@ -174,7 +175,7 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
         return session_->queryEditWorld(params,false);
     },true});
     session_->workspace().registerOp({"editor_select","Select map entities by docs with optional focus, inspect a project rule by key, the map, a named area, a region letter, a zero-based entity or a one-based player, or clear selection.",
-        Json::parse(R"({"properties":{"docs":{"type":"array","items":{"type":"integer","minimum":0}},"refs":{"type":"array","items":{"type":["integer","string"]}},"epoch":{"type":"string"},"focus":{"type":"boolean"},"kind":{"type":"string","enum":["entity","player","area","region","body","wave","trigger","road","type","resource","tech","faction","map","none"]},"key":{"type":"string"},"index":{"type":"integer","minimum":0}}})"),[this](const Json& input){
+        Json::parse(R"({"properties":{"docs":{"type":"array","items":{"type":"integer","minimum":0}},"refs":{"type":"array","items":{"type":["integer","string"]}},"epoch":{"type":"string"},"focus":{"type":"boolean"},"kind":{"type":"string","enum":["entity","player","area","region","body","wave","trigger","road","block","type","resource","tech","faction","map","none"]},"key":{"type":"string"},"index":{"type":"integer","minimum":0}}})"),[this](const Json& input){
             const auto kind=input.getStr("kind");
             const auto& map=session_->workspace().map;
             Json selection=Json::object();
@@ -250,6 +251,12 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
                 if (!(index>=0 && index<map.data.entities.size() && std::floor(index)==index))
                     throw std::runtime_error("Unknown map entity index");
                 selection.set("id",Json::string(studioDocumentId(map,editor::DocumentEntityRef::mapEntity(size_t(index)))));
+            } else if(kind=="block"){
+                const auto key=input.getStr("key");
+                if(!inspectableMapBlock(map.data,key))throw std::runtime_error("Unknown map block");
+                const auto& index=input["index"];
+                if(input.has("index") && (!index.isNumber() || index.toDouble()!=index.integer() || index.integer()<0 ||
+                    size_t(index.integer())>=mapBlockEntryCount(map.data.extra[key])))throw std::runtime_error("Unknown map block entry");
             } else if (kind=="road") {
                 const auto& index=input["index"];
                 if(!index.isNumber() || index.toDouble()!=index.integer() || index.integer()<0 ||

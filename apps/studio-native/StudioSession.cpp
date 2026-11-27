@@ -1,3 +1,4 @@
+#include "StudioMapBlocks.h"
 #include "engine/platform/EnhancedInputPresets.h"
 #include "StudioHierarchyGroups.h"
 #include "apps/editor/core/BuildFixes.h"
@@ -797,10 +798,6 @@ Json StudioSession::mapProperties(const Json& params,bool write) {
     auto& data=doc.data;
     if(ws_.project.dir.empty() || !sameDocumentScope(params["scope"],graphDocumentScope()))
         throw std::runtime_error("Map changed. Reload its properties.");
-    const auto extraBlock=[&](const std::string& key){
-        return !data.worldSpace && !key.empty() && key.front()!='$' && key!="areas" && key!="waves" &&
-               key!="triggers" && key!="victory" && data.extra.has(key);
-    };
     if(write){
         const auto& patch=params["changes"];
         if(!patch.isObject())throw std::runtime_error("Expected map property changes");
@@ -808,7 +805,7 @@ Json StudioSession::mapProperties(const Json& params,bool write) {
             const auto& block=patch["extraBlock"];
             const auto key=block.getStr("key");
             const bool remove=block.getBool("remove");
-            if(patch.size()!=1 || !extraBlock(key) || (remove ? block.has("text") : !block["text"].isString()))
+            if(patch.size()!=1 || !inspectableMapBlock(data,key) || (remove ? block.has("text") : !block["text"].isString()))
                 throw std::runtime_error("Invalid map block change");
             const auto value=remove?Json{}:Json::parse(block.getStr("text"));
             const auto& source=data.extra[key];
@@ -889,21 +886,25 @@ Json StudioSession::mapProperties(const Json& params,bool write) {
         out.set("worldSpace",std::move(world));
     }
     out.set("maxSize",num(game::kMaxMapSize));out.set("entities",num(data.entities.size()));out.set("players",num(data.players.size()));
+    if(params.getBool("blockIndexList")){
+        Json blocks=Json::array();
+        for(const auto& [key,value]:data.extra.members())if(inspectableMapBlock(data,key)){
+            Json block=Json::object();
+            block.set("key",str(key));block.set("entries",mapBlockEntryNames(key,value));
+            blocks.push(std::move(block));
+        }
+        out.set("blockIndexList",std::move(blocks));
+    }
     if(params.getBool("listBlocks")){
         Json keys=Json::array();
-        for(const auto& [key,value]:data.extra.members())if(extraBlock(key))keys.push(str(key));
+        for(const auto& [key,value]:data.extra.members())if(inspectableMapBlock(data,key))keys.push(str(key));
         out.set("blockKeys",std::move(keys));
     }
     if(params.has("blockKey")){
         const auto key=params.getStr("blockKey");
-        if(!extraBlock(key))throw std::runtime_error("Map block no longer exists");
+        if(!inspectableMapBlock(data,key))throw std::runtime_error("Map block no longer exists");
         const auto& value=data.extra[key];
-        if(value.isArray() && value.size()<=200 && value[0].isObject()){
-            Json names=Json::array();
-            for(size_t i=0;i<value.size();++i)
-                names.push(str(value[i].getStr("id",value[i].getStr("name",key+"["+std::to_string(i)+"]"))));
-            out.set("blockEntries",std::move(names));
-        }
+        out.set("blockEntries",mapBlockEntryNames(key,value));
         const int index=params.getInt("blockIndex",-1);
         if(index>=0 && size_t(index)<out["blockEntries"].size()){
             out.set("blockIndex",num(index));

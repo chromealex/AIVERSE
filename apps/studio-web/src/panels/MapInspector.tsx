@@ -84,7 +84,7 @@ export function MapInspector({scope,onApply,onSelect,busy,view,inspectorRecord}:
         <dl>{Object.entries(body.metadata).map(([key,value])=><div key={key}><dt>{key}</dt>
           <dd>{typeof value==='string' ? value : JSON.stringify(value)}</dd></div>)}</dl>
       </details>)}</section>}
-    {!data.worldSpace && <MapExtraBlocks keys={data.blockKeys??[]} scope={scope} busy={busy||pending||dirty} onApply={onApply}/>}
+    {!data.worldSpace && <MapExtraBlocks requested={inspectorRecord?.kind==="block"?inspectorRecord:undefined} keys={data.blockKeys??[]} scope={scope} busy={busy||pending||dirty} onApply={onApply}/>}
     {!data.worldSpace && <MapScenarioRecords requested={inspectorRecord?.kind==="wave" || inspectorRecord?.kind==="trigger" ? inspectorRecord : undefined} scope={scope} busy={busy||pending||dirty} onApply={onApply}/>}
     <fieldset disabled={busy||pending}>
       <label>{data.worldSpace?"Scene name":"Map name"}<StudioInput value={fields.name} required onChange={e=>edit({name:e.target.value})}/></label>

@@ -282,6 +282,7 @@ export default function App() {
         const slot=field(payload,'index');
         const kind=field(payload,'kind'),key=field(payload,'key');
         if((kind==='area' || kind==='region' || kind==='body') && typeof key==='string')setInspectorRecord({kind,key});
+        else if(kind==='block' && typeof key==='string')setInspectorRecord({kind,key,index:typeof slot==='number'?slot:undefined});
         else if((kind==='wave'||kind==='trigger') && typeof slot==='number')setInspectorRecord({kind,index:slot});
         else if(kind==='player' && typeof slot==='number')setInspectorRecord({kind,slot});
         else setInspectorRecord(null);

@@ -243,7 +243,7 @@ export default function InspectorPanel({ inspector: primary, selected, busy, ins
     aria-pressed={inspectorPinned} disabled={!selected && !inspectorPinned} onClick={toggleInspectorPin}
     icon={inspectorPinned ? <Lock size={12}/> : <LockOpen size={12}/>}/>;
   const [mapView,setMapView]=useState<"object"|"map"|"players"|"areas"|"regions">("object");
-  useEffect(()=>setMapView(!selected && inspectorRecord ? ({area:"areas",region:"regions",player:"players",body:"map",wave:"map",trigger:"map"} as const)[inspectorRecord.kind] : "object"),
+  useEffect(()=>setMapView(!selected && inspectorRecord ? ({area:"areas",region:"regions",player:"players",body:"map",block:"map",wave:"map",trigger:"map"} as const)[inspectorRecord.kind] : "object"),
     [selected?.id,snapshot?.graphDocument?.epoch,inspectorRecord]);
   useEffect(()=>onNativeEvent((event,payload)=>{
     if(event==='inspector.selection')setMapView(payload && typeof payload==='object' && 'kind' in payload &&
