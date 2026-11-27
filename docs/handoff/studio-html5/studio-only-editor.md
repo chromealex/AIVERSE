@@ -1660,3 +1660,7 @@ d36ac0faed88182b8f29271a8271dbef4cdbec52 updates docs/studio-html5-parity.md and
 ### Synchronized Frame Capture plots
 
 14dfdd06ce9395b0af02f72204268c369eabf015 updates InsightPanels.tsx and ProjectToolPanels.css. Packaged macOS Studio rendered 95 captured samples on each of three plots. The live-match fixture verified the selected frame's y coordinate against CPU time, simulation time and draw count from the CSV and checked all three cursor positions after scrubbing. Web and native builds passed. Capture: docs/handoff/studio-html5/captures/mac-frame-capture-plots.png. Next verify explicit capture start and pause semantics against the old recording controls.
+
+### Explicit Frame Capture recording intervals
+
+f36c755b97cb50f9b9b6a14420e21ae40ee63ba4 updates InsightPanels.tsx. Packaged macOS Studio recorded 44 Scene frames after Start recording and 54 more after Resume recording. CSV first interval stayed fixed while paused; 51 intervening Scene frames were absent from the concatenated recording, and original frame IDs remained intact. Clear reset the paused recording. Web/native builds passed. Capture docs/handoff/studio-html5/captures/mac-frame-recording.png. Next verify clearing an active recording and scoped panel state.
