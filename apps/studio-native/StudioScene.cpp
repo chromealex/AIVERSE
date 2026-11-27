@@ -4587,7 +4587,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                 outline(x,z,x+w,z+h,rgba(255,255,255));
             }
         }
-        if(regionBorderLetter_ && !fpsProject && !planetaryChart){
+        if((regionBorderLetter_ || natureLayers_.regionBorders) && !fpsProject && !planetaryChart){
             if(regionBordersDirty_)regionBorders_.measure(map,levelHeight,showTerrain);
             const auto bounds=regionBorders_.visible(map,view,framebufferWidth,framebufferHeight);
             if(regionBordersDirty_ || bounds!=regionBorders_.bounds){
@@ -5912,7 +5912,7 @@ uint64_t StudioScene::frameSignature(int width,int height,const editor::MapDoc& 
     value(wind_.revision);value(wind_.enabled);value(wind_.speed);value(wind_.directionDeg);
     value(wind_.gust);value(wind_.scale);value(wind_.debug);
     value(areaBounds_.has_value());if(areaBounds_)for(int coord:*areaBounds_)value(coord);
-    value(regionBorderLetter_);value(brushVisible_);vec(brushCenter_);value(brushRadius_);
+    value(natureLayers_.regionBorders);value(regionBorderLetter_);value(brushVisible_);vec(brushCenter_);value(brushRadius_);
     value(overlayShapes_.size());
     for(const auto& shape:overlayShapes_){value(shape.kind);vec(shape.a);vec(shape.b);value(shape.radius);
         value(shape.thickness);value(shape.r);value(shape.g);value(shape.bl);}
