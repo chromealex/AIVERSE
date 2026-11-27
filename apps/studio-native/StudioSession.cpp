@@ -5352,7 +5352,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
                     const auto nextCenter=transformed.center;
                     if(newHalf<50||newHalf>evolve::kAreaMaxHalfExtentCm)
                         throw std::runtime_error("EVOLVE group size outside bounds");
-                    const auto origin=std::llround(double(x?candidate.x:candidate.z)*100.);
+                    const std::int64_t origin=std::llround(double(x?candidate.x:candidate.z)*100.);
                     area.set(halfKey,Json::number(newHalf));
                     area.set(offsetKey,Json::number(nextCenter-origin));
                 }
