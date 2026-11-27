@@ -347,6 +347,7 @@ function TexturePixels({ project, texture, mip, layer }: { project: string; text
     <button type="button" className="au-button au-button--sm" disabled={pending} onClick={() => void readPixels()}>{pending ? 'Reading pixels…' : 'Read GPU pixels'}</button>
     {error && <p role="alert">{error}</p>}
     <canvas ref={canvas} hidden={!ready} aria-label="GPU pixel preview"/>
+    {ready && <p className="ptp__hint">Sampled preview up to 32 × 32 pixels.{texture.format === 'RGBA16F' && ' HDR colors use approximate tone mapping.'}</p>}
   </div>;
 }
 
@@ -403,7 +404,7 @@ export function TextureResourcesPanel({ snapshot }: Ctx) {
   return <div className="ptp">
     <div className="ptp__edhead">
       <button type="button" className="au-button au-button--sm" onClick={read}><RefreshCw size={13}/>Refresh</button>
-      <span className="ptp__meta">{gpu ? `${gpu.textures.length} textures · ${formatBytes(gpu.totalBytes)} estimated` : ''}</span>
+      <span className="ptp__meta">{gpu ? `${gpu.textures.length} textures · ${gpu.textures.filter(t => t.renderTarget).length} targets · ${gpu.textures.filter(t => t.samples > 1).length} multisampled · ${formatBytes(gpu.totalBytes)} estimated` : ''}</span>
     </div>
     <div className="ptp__edhead texture-resources__filters">
       <label><input type="checkbox" checked={targetsOnly} onChange={e => setTargetsOnly(e.target.checked)}/> Render targets only</label>
