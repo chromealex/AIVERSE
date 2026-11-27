@@ -88,6 +88,13 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
  };
  const portColor=(type:string)=>typedPorts?({scalar:'#e4b35b',float:'#e4b35b',color:'#78c9a0',rgb:'#78c9a0',rgba:'#78c9a0',normal:'#a5a1ff',packed:'#d995ce',vec3:'#a5a1ff',vector:'#a5a1ff'} as Record<string,string>)[type.toLowerCase()]??'var(--au-accent)':'var(--au-accent)';
  const curve=(x1:number,y1:number,x2:number,y2:number)=>`M ${x1} ${y1} C ${x1+55} ${y1}, ${x2-55} ${y2}, ${x2} ${y2}`;
+ const navigateMinimap=(event:PointerEvent<SVGSVGElement>)=>{
+  const el=scroll.current, matrix=event.currentTarget.getScreenCTM();
+  if(!el||!matrix)return;
+  const point=new DOMPoint(event.clientX,event.clientY).matrixTransform(matrix.inverse());
+  el.scrollLeft=point.x*zoom-el.clientWidth/2;
+  el.scrollTop=point.y*zoom-el.clientHeight/2;
+ };
  return <div className="au-graph-workspace" onContextMenu={e=>{if(!disabled&&(commands?.length||onAddMenu)){e.preventDefault();setMenu(v=>!v)}}} onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))space.current=false;}} onKeyUp={e=>{if(e.code==='Space')space.current=false;}} onKeyDown={e=>{if(e.key==='Escape'){
    if(wireDrag.current){wireDrag.current=null;suppressClick.current=true;e.stopPropagation();}
    setMenu(false);onCancel?.();return;
@@ -193,5 +200,10 @@ export default function GraphCanvas({view,heat,highlighted,selected,label,disabl
    </g>})}
    {rect&&<rect x={rect.x} y={rect.y} width={rect.width} height={rect.height} fill="var(--au-accent)" fillOpacity="0.12" stroke="var(--au-accent)" strokeDasharray="4 3" pointerEvents="none"/>}
   </svg>
- </div>{enhancedNavigation&&<svg className="au-graph-minimap" viewBox={`0 0 ${maxWidth} ${maxHeight}`} role="img" aria-label="Graph minimap" onPointerDown={e=>{const el=scroll.current,ctm=e.currentTarget.getScreenCTM();if(!el||!ctm)return;const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(ctm.inverse());el.scrollLeft=p.x*zoom-el.clientWidth/2;el.scrollTop=p.y*zoom-el.clientHeight/2;}}>{geometry.nodes.map(n=><rect key={n.id} x={n.x} y={n.y} width={nodeWidth} height={n.height} rx="4" fill={ids.includes(n.id)?'var(--au-accent)':'var(--au-text-muted)'}/>)}<rect x={viewport.x} y={viewport.y} width={Math.min(maxWidth,viewport.w)} height={Math.min(maxHeight,viewport.h)} fill="none" stroke="var(--au-accent)" strokeWidth={Math.max(2,maxWidth/120)}/></svg>}</div>;
+ </div>{enhancedNavigation&&<svg className="au-graph-minimap" viewBox={`0 0 ${maxWidth} ${maxHeight}`} role="img" aria-label="Graph minimap"
+  onPointerDown={event=>{
+   if(!event.isPrimary||event.button!==0)return;
+   event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);navigateMinimap(event);
+  }}
+  onPointerMove={event=>{if(event.currentTarget.hasPointerCapture(event.pointerId))navigateMinimap(event);}}>{geometry.nodes.map(n=><rect key={n.id} x={n.x} y={n.y} width={nodeWidth} height={n.height} rx="4" fill={ids.includes(n.id)?'var(--au-accent)':'var(--au-text-muted)'}/>)}<rect x={viewport.x} y={viewport.y} width={Math.min(maxWidth,viewport.w)} height={Math.min(maxHeight,viewport.h)} fill="none" stroke="var(--au-accent)" strokeWidth={Math.max(2,maxWidth/120)}/></svg>}</div>;
 }
