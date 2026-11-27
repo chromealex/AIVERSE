@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '../bridge';
 import type { StudioBuildLog } from '../types';
 
@@ -32,8 +32,9 @@ export function useBuildTranscript(project:string,limit?:number) {
     void poll();
     return ()=>{live=false;window.clearTimeout(timer);};
   },[project,limit,revision]);
-  return {state,error,reload:(label:string)=>{
+  const reload=useCallback((label:string)=>{
     setState(previous=>({...empty,runs:previous.runs,running:true,label}));
     setRevision(v=>v+1);
-  }};
+  },[]);
+  return {state,error,reload};
 }

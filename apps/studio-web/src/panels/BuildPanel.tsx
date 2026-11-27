@@ -97,6 +97,10 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
   useEffect(() => setCompressionDraft(null), [projectPath, info?.compression]);
   const [ruleScope,setRuleScope] = useState<'project'|'target'>('project');
   const [savingAtlas, setSavingAtlas] = useState(false);
+  const [autoEstimate,setAutoEstimate] = useState(true);
+  const [pendingEstimate,setPendingEstimate] = useState<{project:string}|null>(null);
+  const queueEstimate = () => { if (autoEstimate) setPendingEstimate({project:projectPath}); };
+  useEffect(()=>setPendingEstimate(null),[projectPath]);
   const [audio, setAudio] = useState('auto');
   const [installMissing, setInstallMissing] = useState(false);
   const [toolchain, setToolchain] = useState<StudioToolchain | null>(null);
@@ -145,7 +149,8 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
   }, [state.running]);
   useEffect(() => { if (follow.current && logBox.current) logBox.current.scrollTop = logBox.current.scrollHeight; }, [log]);
 
-  const start = async (kind: 'build' | 'estimate', withInstall = installMissing) => {
+  const start = useCallback(async (kind: 'build' | 'estimate', withInstall = installMissing) => {
+    setPendingEstimate(null);
     setError('');
     try {
       follow.current = true;
@@ -153,7 +158,13 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
       setStartedAt(Date.now()); setNow(Date.now());
       reloadTranscript(kind === 'estimate' ? 'estimate' : 'build-'+target);
     } catch (e) { setError(message(e)); }
-  };
+  },[target,config,audio,installMissing,reloadTranscript]);
+  useEffect(()=>{
+    if (!autoEstimate || pendingEstimate?.project!==projectPath || !info?.toolFound ||
+        info.project!==projectPath || info.dirty || state.running || savingAtlas) return;
+    const timer=window.setTimeout(()=>void start('estimate',false),800);
+    return ()=>window.clearTimeout(timer);
+  },[autoEstimate,pendingEstimate,projectPath,info?.project,info?.toolFound,info?.dirty,state.running,savingAtlas,start]);
   const save = async () => {
     try { commitSnapshot(await invoke('studio.save', {})); await refreshInfo(); }
     catch (e) { setError(message(e)); }
@@ -173,7 +184,7 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
   const pack = estimate?.pack as { packBytes?: number; rawBytes?: number; entries?: number; duplicates?: number } | undefined;
   const saveAtlas = async (action: () => Promise<StudioSnapshot>) => {
     setSavingAtlas(true);setError('');
-    try { commitSnapshot(await action()); }
+    try { commitSnapshot(await action()); queueEstimate(); }
     catch (err) { setError(message(err)); }
     finally { await refreshInfo();setSavingAtlas(false); }
   };
@@ -197,11 +208,11 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
       <div className="build__label">Platform</div>
       <div role="listbox" aria-label="Build platform" className="build__targets">
         {(info?.targets ?? []).map(t => <button key={t.id} type="button" role="option" aria-selected={t.id === target}
-          className={'build__target' + (t.id === target ? ' is-active' : '')} onClick={() => setTarget(t.id)} disabled={state.running}>
+          className={'build__target' + (t.id === target ? ' is-active' : '')} onClick={() => { if (t.id!==target) { setTarget(t.id);queueEstimate(); } }} disabled={state.running}>
           <span>{t.name}</span>{t.built && <StudioBadge tone="success">built</StudioBadge>}</button>)}
       </div>
       <StudioField label="Configuration" htmlFor="build-config">
-        <StudioSelect id="build-config" value={config} disabled={state.running} onChange={e => setConfig(e.target.value as 'Release' | 'Debug')}>
+        <StudioSelect id="build-config" value={config} disabled={state.running} onChange={e => { setConfig(e.target.value as 'Release' | 'Debug');queueEstimate(); }}>
           <option value="Release">Release</option><option value="Debug">Debug</option>
         </StudioSelect>
       </StudioField>
@@ -247,11 +258,13 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
           inherited={String(info?.[field] ?? (field === 'chunkSize' ? '8 MB' : 'unlimited'))} disabled={atlasDisabled}
           save={bytes=>void saveAtlas(()=>invoke('studio.buildSplitLimit',{project:projectPath,target,field,original:selected[field] ?? null,bytes}))}/>)}
       <StudioField label="Audio profile" htmlFor="build-audio">
-        <StudioSelect id="build-audio" value={audio} disabled={state.running} onChange={e => setAudio(e.target.value)}>
+        <StudioSelect id="build-audio" value={audio} disabled={state.running} onChange={e => { setAudio(e.target.value);queueEstimate(); }}>
           <option value="auto">Platform default</option><option value="desktop">Desktop</option>
           <option value="mobile">Mobile</option><option value="web">Web</option><option value="off">Off</option>
         </StudioSelect>
       </StudioField>
+      <StudioCheckbox label="Estimate size after changes" checked={autoEstimate}
+        onChange={e=>{setAutoEstimate(e.currentTarget.checked);setPendingEstimate(null);}}/>
       <StudioCheckbox label="Install missing tools first" checked={installMissing} disabled={state.running}
         onChange={e => setInstallMissing(e.target.checked)}/>
       <div className="build__actions">
