@@ -1,0 +1,10 @@
+{
+  "sha": "de17aacca5de3b9e6e960ddc48ffba8dcdffda6c",
+  "argv": [
+    "bash",
+    "../mac-export-cached.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-universal-macos-game-export.log.txt",
+  "sha256": "aaad623a424357ed8bda0dc1a88718ef410937f83e2b7f7df8f1e8aa16275495"
+}
