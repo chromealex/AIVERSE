@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { Check, ChevronDown, X } from 'lucide-react';
 import type { StudioGameDeviceOption } from '../types';
 import { StudioButton, StudioDialog, StudioField, StudioInput } from '../ui';
@@ -14,6 +14,7 @@ export default function GameDevicePicker({ devices, selected, disabled, onSelect
   onSelect: (id: string) => void;
 }) {
   const triggerId = useId();
+  const results = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const current = devices.find(device => device.id === selected);
@@ -36,8 +37,24 @@ export default function GameDevicePicker({ devices, selected, disabled, onSelect
       <div className="game-device-card">
         <header><h2>Choose a device</h2><StudioButton aria-label="Close device chooser" onClick={() => setOpen(false)}><X size={16}/></StudioButton></header>
         <StudioInput autoFocus type="search" aria-label="Search devices" placeholder="Search devices or families"
-          value={query} onChange={event => setQuery(event.target.value)}/>
-        <div className="game-device-results">
+          value={query} onChange={event => setQuery(event.target.value)}
+          onKeyDown={event => {
+            if (event.key !== 'ArrowDown' && event.key !== 'Enter') return;
+            const first = results.current?.querySelector<HTMLButtonElement>('button:enabled');
+            if (!first || event.nativeEvent.isComposing) return;
+            event.preventDefault();
+            if (event.key === 'Enter') first.click();
+            else first.focus();
+          }}/>
+        <div className="game-device-results" ref={results} onKeyDown={event => {
+          if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+          if (!(event.target instanceof HTMLButtonElement)) return;
+          const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:enabled'));
+          const index = buttons.indexOf(event.target);
+          if (index < 0) return;
+          event.preventDefault();
+          buttons[index + (event.key === 'ArrowDown' ? 1 : -1)]?.focus();
+        }}>
           {Array.from(groups, ([label, options]) => <section key={label} aria-label={label}>
             <h3>{label}</h3>
             {options.map(device => <button type="button" className="game-device-row" key={device.id}
