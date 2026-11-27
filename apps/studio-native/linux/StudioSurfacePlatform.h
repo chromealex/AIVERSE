@@ -2,6 +2,7 @@
 #include "../StudioHost.h"
 #include "../StudioNetworkPlay.h"
 #include "StudioChildProcess.h"
+#include "StudioFileManager.h"
 #include "StudioViewportOverlay.h"
 #include "StudioFileDialog.h"
 #include "StudioUserPaths.h"
@@ -77,6 +78,10 @@ public:
 
     void openProjectStudio(const std::filesystem::path& executable, const std::string& project) override {
         launchStudioChild(executable, {"--project", project});
+    }
+
+    void revealInFileManager(const std::filesystem::path& path, bool openFolder) override {
+        revealStudioFile(path, openFolder);
     }
 
     void chooseProject(std::function<void(std::string)> done) override {
