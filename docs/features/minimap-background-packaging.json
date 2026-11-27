@@ -7,8 +7,6 @@
     "docs/agent-handoffs/minimap-background-packaging-initial.md",
     "docs/agents/feature-policy.json",
     "docs/devlog/systems.json",
-    "docs/evidence/minimap-background-packaging-20261126.json",
-    "docs/evidence/minimap-background-packaging-20261126.log.txt",
     "docs/features/minimap-background-packaging.json",
     "docs/game-format.md",
     "engine/atlas/AtlasFormat.cpp",
@@ -16,9 +14,7 @@
     "engine/atlas/TextureLibrary.cpp",
     "engine/render/TextureCache.cpp",
     "engine/render/TextureCache.h",
-    "tests/tests.cpp",
-    "tools/atlas/AtlasBuild.cpp",
-    "tools/atlas/AtlasBuild.h"
+    "tests/tests.cpp"
   ],
   "traits": {
     "editable": false,
@@ -38,8 +34,8 @@
       "evidence": []
     },
     "native_api": {
-      "status": "not_applicable",
-      "note": "This packaging correction uses the existing atlas path and adds no new authoring or runtime surface.",
+      "status": "not_run",
+      "note": "Shared ImageSource::loadImage and render::loadContentImage require current runtime verification.",
       "evidence": []
     },
     "skill": {
@@ -73,16 +69,14 @@
       "evidence": []
     },
     "performance": {
-      "status": "not_applicable",
-      "note": "Offline pack scan only; image collection already scans all pack JSON and the new set lookup is per image.",
+      "status": "not_run",
+      "note": "Atlas reconstruction performance has not been measured for the revised implementation.",
       "evidence": []
     },
     "platforms": {
       "status": "not_run",
-      "note": "Mac pack regression passed; Windows, Linux and packaged client runtime not tested.",
-      "evidence": [
-        "docs/evidence/minimap-background-packaging-20261126.json"
-      ]
+      "note": "Current shared image loader has not yet passed platform verification. Historical packer-exception evidence does not apply.",
+      "evidence": []
     },
     "dependencies": {
       "status": "not_run",

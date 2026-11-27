@@ -116,7 +116,7 @@
   },
   "integrations": {
     "skills": [
-      "skills/gameplay/aiverse-view/SKILL.md"
+      "aiverse-view"
     ],
     "mcp_tools": [
       "rules_set",
