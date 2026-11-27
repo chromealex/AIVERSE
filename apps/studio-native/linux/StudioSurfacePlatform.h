@@ -4,6 +4,7 @@
 #include "StudioChildProcess.h"
 #include "StudioFileManager.h"
 #include "StudioWindowCapture.h"
+#include "StudioBackgroundQueue.h"
 #include "StudioViewportOverlay.h"
 #include "StudioFileDialog.h"
 #include "StudioUserPaths.h"
@@ -89,6 +90,13 @@ public:
         captureStudioGtkWindow(parentWindow(), std::move(done));
     }
 
+    double now() override { return double(g_get_monotonic_time()) / G_USEC_PER_SEC; }
+    void log(const std::string& message) override { g_message("%s", message.c_str()); }
+    void runInBackground(std::function<void()> work, std::function<void()> thenOnMain) override {
+        background_.submit(std::move(work), std::move(thenOnMain));
+    }
+    void stopBackgroundWork() { background_.stop(); }
+
     void chooseProject(std::function<void(std::string)> done) override {
         chooseFolder("Open Project", {}, std::move(done));
     }
@@ -109,6 +117,7 @@ protected:
     }
 private:
     GtkWindow* parentWindow() const { return GTK_WINDOW(gtk_widget_get_toplevel(widget(StudioSurface::Scene))); }
+    StudioBackgroundQueue background_;
     struct Surface { GtkWidget* widget = nullptr; gfx::VulkanWindow window; };
     std::array<Surface, static_cast<size_t>(StudioSurface::Count)> surfaces_{};
     void destroySurfaces() {
