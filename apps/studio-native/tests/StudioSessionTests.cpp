@@ -2417,6 +2417,7 @@ void entityWorkflow() {
                 AIVERSE_TEST_CHECK(result.getInt("total")==1);
                 AIVERSE_TEST_CHECK(result["rows"][0].getStr("name")==name);
                 AIVERSE_TEST_CHECK(result["rows"][0].getStr("ref")==std::to_string(editor::worldRef(entity)));
+                return entity;
             };
             verifyRuntimeRow(actor::CharacterId{7}, "Actor #7", "Runtime Actors");
             const auto otherActor = live.world().create();
@@ -2427,9 +2428,22 @@ void entityWorkflow() {
                 AIVERSE_TEST_CHECK(row.getStr("name") == "Actor #" + index);
             const auto byIndex = inspector.entities(&live,"run-1",0,100,"id:" + index);
             AIVERSE_TEST_CHECK(!rowFor(byIndex,std::to_string(editor::worldRef(otherActor))).isNull());
-            verifyRuntimeRow(actor::Projectile{103}, "Projectile #103", "Projectiles");
+            const auto projectile = verifyRuntimeRow(actor::Projectile{103}, "Projectile #103", "Projectiles");
             verifyRuntimeRow(actor::Loot{214}, "Loot #214", "Loot");
             verifyRuntimeRow(actor::Vehicle{325}, "Vehicle #325", "Vehicles");
+            const auto projectileRef = std::to_string(editor::worldRef(projectile));
+            const auto actorRef = std::to_string(editor::worldRef(otherActor));
+            inspector.selectMany(&live,"run-1","run-1",{projectileRef,actorRef});
+            live.world().destroy(projectile);
+            const auto replacement = verifyRuntimeRow(actor::Projectile{104}, "Projectile #104", "Projectiles");
+            AIVERSE_TEST_CHECK(replacement.index==projectile.index && editor::worldRef(replacement)!=editor::worldRef(projectile));
+            AIVERSE_TEST_CHECK(inspector.selectedRefs(&live,"run-1")==std::vector<std::string>{actorRef});
+            const auto expired = inspector.entities(&live,"run-1",0,100,"ref:"+projectileRef);
+            AIVERSE_TEST_CHECK(expired.getInt("total")==0);
+            bool staleRefRejected = false;
+            try { inspector.inspect(&live,"run-1","run-1",projectileRef); }
+            catch (const std::runtime_error&) { staleRefRejected = true; }
+            AIVERSE_TEST_CHECK(staleRefRejected);
         }
         const auto plan=studio::studioGameLaunch(session.workspace(),true);
         AIVERSE_TEST_CHECK(plan.map && *plan.map==0);
