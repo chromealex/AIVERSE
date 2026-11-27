@@ -647,6 +647,7 @@ Json StudioGameSurface::playerHistory(int64_t afterTick, const std::string& epoc
     out.set("epoch",Json::string(std::to_string(runtimeEpoch_)));
     const auto* sim = liveSimulation();
     if (sim && canControl() && playerSampleEpoch_ == runtimeEpoch_) {
+        if (!actor_) out.set("assetResidency", host_->assetResidencyReport());
         const auto pool = render::geometryPoolStats(*device_);
         Json geometry = Json::object();
         geometry.set("allocatedBytes", Json::number(int64_t(pool.allocatedBytes)));

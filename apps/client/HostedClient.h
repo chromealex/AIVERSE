@@ -64,6 +64,7 @@ public:
     bool capturing() const { return captured_; }
     Simulation* simulation();
     const game::ViewScripts* viewScripts() const;
+    Json assetResidencyReport() const;
     Json staticGeometryReport() const;
     Json prismaFrameReports() const;
     void setPostQuality(render::PrismaQuality quality);

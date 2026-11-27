@@ -337,6 +337,24 @@ bool HostedClient::updateCavernsVisual(const Json& authored) {
     return client_->updateCavernsVisual(authored);
 }
 
+Json HostedClient::assetResidencyReport() const {
+    if (!currentEpochValid() || !inMatch()) return Json{};
+    const auto stats = client_->assetResidencyStats();
+    Json report = Json::object();
+    report.set("loadedTypes", Json::number(int64_t(stats.loadedTypes)));
+    report.set("cachedModels", Json::number(int64_t(stats.cachedModels)));
+    report.set("gpuTextures", Json::number(int64_t(stats.gpuTextures)));
+    report.set("decodedCpuBytes", Json::number(int64_t(stats.decodedCpuBytes)));
+    report.set("residentModelKnownBytes", Json::number(int64_t(stats.residentModelKnownBytes)));
+    report.set("retiredModels", Json::number(int64_t(stats.retiredModels)));
+    report.set("retirementBatches", Json::number(int64_t(stats.retirementBatches)));
+    report.set("retirementPeak", Json::number(int64_t(stats.retirementPeak)));
+    report.set("estimatedRetiredGpuBytes", Json::number(int64_t(stats.estimatedRetiredGpuBytes)));
+    report.set("unresolvedFailedFences", Json::number(int64_t(stats.unresolvedFailedFences)));
+    report.set("publicationBackpressured", Json::fromBool(stats.publicationBackpressured));
+    return report;
+}
+
 Json HostedClient::staticGeometryReport() const {
     if (!currentEpochValid() || !inMatch()) return Json{};
     const auto& scene = client_->staticGeometry();

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '../bridge';
-import type { StudioGameState, StudioPlayerSample } from '../types';
+import type { StudioAssetResidency, StudioGameState, StudioPlayerSample } from '../types';
 
 function Trend({ label, values, ticks }: { label: string; values: number[]; ticks: number[] }) {
   const min = Math.min(0, ...values), max = Math.max(1, ...values);
@@ -36,7 +36,7 @@ function PlayerTrends({ player, samples, names, initiallyOpen }: {
 
 export default function PlayerHistory({ project }: { project: string }) {
   const [samples, setSamples] = useState<StudioPlayerSample[]>([]);
-  const [match, setMatch] = useState<{tick: number; seconds: number; units?: number; projectiles?: number; pool?: NonNullable<StudioGameState['playerHistory']>['geometryPool']} | null>(null);
+  const [match, setMatch] = useState<{tick: number; seconds: number; units?: number; projectiles?: number; residency?: StudioAssetResidency | null; pool?: NonNullable<StudioGameState['playerHistory']>['geometryPool']} | null>(null);
   const [names, setNames] = useState<Record<string,string>>({});
   const [error, setError] = useState('');
   useEffect(() => {
@@ -47,7 +47,7 @@ export default function PlayerHistory({ project }: { project: string }) {
         if (!active) return;
         const history = state.playerHistory;
         setMatch(state.inMatch && history?.tickRate ? {
-          tick: state.tick, seconds: state.tick / history.tickRate, units: history.units, projectiles: history.projectiles, pool: history.geometryPool,
+          tick: state.tick, seconds: state.tick / history.tickRate, units: history.units, projectiles: history.projectiles, pool: history.geometryPool, residency: history.assetResidency,
         } : null);
         if (!state.inMatch || !history) {
           afterTick = -1; epoch = ''; setSamples(previous => previous.length ? [] : previous);
@@ -87,6 +87,22 @@ export default function PlayerHistory({ project }: { project: string }) {
         <div><b>{match.pool.pages}</b><span>pages</span></div>
         <div><b>{match.pool.models}</b><span>pooled models</span></div>
       </div>
+    </section>}
+    {match?.residency && <section aria-label="Game model assets">
+      <h4>Game model assets</h4>
+      <div className="stats__cards">
+        <div><b>{match.residency.loadedTypes}</b><span>loaded types</span></div>
+        <div><b>{match.residency.cachedModels}</b><span>cached models</span></div>
+        <div><b>{match.residency.gpuTextures}</b><span>model textures</span></div>
+        <div><b>{(match.residency.decodedCpuBytes / 1048576).toFixed(2)} MiB</b><span>decoded image cache</span></div>
+        <div><b>{(match.residency.residentModelKnownBytes / 1048576).toFixed(2)} MiB</b><span>resident model memory</span></div>
+        <div><b>{match.residency.retiredModels}</b><span>models awaiting release</span></div>
+        <div><b>{match.residency.retirementBatches}</b><span>pending batches</span></div>
+        <div><b>{match.residency.retirementPeak}</b><span>peak queue depth</span></div>
+        <div><b>{(match.residency.estimatedRetiredGpuBytes / 1048576).toFixed(2)} MiB</b><span>estimated memory awaiting release</span></div>
+        <div><b>{match.residency.unresolvedFailedFences}</b><span>unresolved fences</span></div>
+      </div>
+      {match.residency.publicationBackpressured && <p role="status">New model uploads are waiting for GPU releases.</p>}
     </section>}
     {!latest && !match && !error && <p className="ptp__hint">Start a local match to track armies, structures and resources.</p>}
     {latest?.players.map((player, index) => <PlayerTrends key={player.slot} player={player}
