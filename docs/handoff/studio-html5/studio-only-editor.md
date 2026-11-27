@@ -1450,3 +1450,7 @@ Material reveal filter 5fd7cf3eb: apps/studio-web/src/components/AssetsPanel.tsx
 Linux Studio MCP launch cc894b5fd: apps/studio-native/{CMakeLists.txt,linux/Main.cpp}, tests/modeling/mcp_preview.py. Linux accepts the shared validated --listen port, uses StudioSession authenticated listener and sibling aiversemcp; build stages that executable. Linux GCC 13.5 syntax-checked main. Modeling smoke correctly stopped at missing Studio executable during build (87%); no runtime result yet. Rerun cmake --build after current make invocation to regenerate helper dependency, then run modeling smoke under Xvfb with a writable user project.
 
 Desktop shortcut labels bd48fff0c: apps/studio-web/src/{App.tsx,keyboard.ts,components/WorkspaceTabs.tsx}. Verified Linux Ctrl+K, Windows Ctrl+Shift+S and macOS Shift-Command-S formatter outputs. TypeScript/Vite production build passed. Full Linux build running; follow-up session 62387 waits for container studio-linux-html5-build-1006, then builds latest CMake target and runs modeling MCP under Xvfb in studio-linux-modeling-1027. Check studio-link-check.log and modeling-check.log before claiming runtime acceptance.
+
+## Linux Studio preview resources
+
+Stage 32e0c27056d88043292b36b70b1a4b690b2dba3d. apps/studio-native/CMakeLists.txt now stages the PHYSIS flipbooks, caption font and licenses. apps/studio-native/tests/standalone_bundle.py recognizes the Linux host. git diff --check passed. Next run the package test against the linked host and capture the modeling previews.
