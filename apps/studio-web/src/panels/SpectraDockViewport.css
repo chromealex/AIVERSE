@@ -31,3 +31,17 @@
   .graph-workbench>.asset-native-surface {width:100%;height:120px;}
 }
 .character-viewport{position:relative;overflow:hidden;touch-action:none;flex:none}
+
+.spectra-native__stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(90px, 24%);
+  align-items: center;
+  gap: var(--au-space-2);
+}
+.spectra-native__stage > .spectra-native__toolbar {
+  flex-direction: column;
+  align-items: stretch;
+}
+@container (max-width: 260px) {
+  .spectra-native__stage { grid-template-columns: minmax(0, 1fr); }
+}
