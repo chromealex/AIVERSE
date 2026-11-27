@@ -1652,3 +1652,7 @@ d36ac0faed88182b8f29271a8271dbef4cdbec52 updates docs/studio-html5-parity.md and
 ### Full Scene frame ring
 
 7ed1320de47683340f15ff39aedebbe153f8e62c updates StudioHost.cpp, types.ts and InsightPanels.tsx. Web and Mac builds and 303 web tests passed. Real Scene rendered beyond 6000 frames in packaged macOS Studio. Live responses remained bounded at 240, explicit capture retained exactly 6000, scrub and CSV first row agreed, and a new capture after Clear and Resume started after the old last frame. Screenshot docs/handoff/studio-html5/captures/mac-frame-capture-6000.png; stats-mac-clydvvi_/live.log on KINGSTON. Timing of the simulation owner remains to port.
+
+### Frame Capture simulation step time
+
+2e03eb171871e0e4e7196b445971bdba603d541c adds a scoped timing sink in engine/sim/SimulationStepTiming.h and Simulation.cpp around completed steps, active only during the hosted Game frame. StudioHost accumulates the measured milliseconds between completed Scene frames; types.ts and InsightPanels.tsx expose the selected value and simulation_ms CSV column. Mac native and web builds passed. Real match verified a 0.1430 ms sample against its CSV row and zero step time on all 39 subsequent paused frames. Evidence: stats-mac-0z5wxi7z/live.log and docs/handoff/studio-html5/captures/mac-frame-simulation-timing.png. Next compare the legacy CPU/simulation/draw plots and capture controls.
