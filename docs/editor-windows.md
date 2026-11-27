@@ -1,4 +1,14 @@
-# Adding a window to the editor
+# AIVERSE editor windows
+
+For new HTML Studio panels, follow the [Studio UI implementation guide](studio-ui-agent-guide.md) and the [shared design system](studio-design-system.md).
+
+## Game preview in HTML Studio
+
+1. Open the Game tab. To keep Scene visible alongside it, choose **Open in New Window** from the Game dock menu.
+2. Choose a device in the Game panel. Use the **Landscape** or **Portrait** button to rotate it and **Safe area** to toggle the inset preview. The dimensions are logical screen points.
+3. Choose **Project menu** to start from the project's menus. Click the viewport to give it input focus. The title bar contains the playback controls.
+
+## Legacy ImGui window reference
 
 The editor (`apps/editor`) is a set of dockable Dear ImGui windows (docking branch). Every window
 is a small class; the editor creates one instance of each registered class, lists it in the top
