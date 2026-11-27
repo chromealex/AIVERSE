@@ -206,6 +206,23 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
     const key = shortcutKey(event);
     if ((event.metaKey || event.ctrlKey) && key === 'f') { event.preventDefault(); searchRef.current?.focus(); return; }
     if (busy) return;
+    const focusedRow = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('[data-hierarchy-key]') : null;
+    if (focusedRow && !event.shiftKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+      event.preventDefault();
+      const rows = Array.from(listRef.current?.querySelectorAll<HTMLElement>('[data-hierarchy-key]') ?? []);
+      const next = rows[rows.indexOf(focusedRow) + (event.key === 'ArrowDown' ? 1 : -1)];
+      if (next?.dataset.id) {
+        anchor.current = next.dataset.occurrence ?? next.dataset.id;
+        next.focus();
+        void select(next.dataset.id, 'replace');
+      } else {
+        next?.querySelector('button')?.focus();
+      }
+      return;
+    }
+    // A group heading has keyboard focus independently of the selected entity.
+    if (focusedRow && !focusedRow.dataset.id &&
+        (['F2','Delete','Backspace'].includes(event.key) || key === 'd' || key === 'f')) return;
     const focused = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('[data-occurrence]')?.dataset.occurrence : undefined;
     if (event.key === 'F2' && event.target instanceof HTMLElement) {
       const id = event.target.closest<HTMLElement>('[data-id]')?.dataset.id ?? selectedId;
