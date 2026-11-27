@@ -70,3 +70,8 @@ FlightOrigin now lives in shared ProjectileData and passes directly through Scen
 
 Commit: d07a68ccb6c8221fdae6716f216fc91d43ac7c0b
 ParticleSystem::finish queues a terminal movement for the next update and then stops emission. Distance emitters place the final sample at the endpoint within existing limits. Duplicate finish and late move calls cannot overwrite it. Added particle snapshot regression and native API documentation. Tests/build NOT RUN; diff check passed. Next wire terminal projectile events into finish, including short flights, planets and both projectile hosts; no issue complete yet.
+
+## Terminal motion signal checkpoint
+
+Commit: f90c48d2ea0feff14c4362e16862167fdd83df06
+SimEvent now has a typed presentation MotionFinished tag independent of module numeric event IDs. Standard and ability projectiles, GameCore programmed shots and Actor programmed shots publish endpoint+entity before removal. GameFx finishes existing trails at the endpoint (or respects clear/failed placement), removing the handle before retireMissing can stop it. Tests/build NOT RUN; diff check passed. Remaining: a flight born and retired between render frames has no trail handle and needs launch/terminal event pairing; light and actor rendering consumers still need integration. Validate typed presentation events against script/audio collectors and terminal position transforms, plus save migration tests, before readiness.
