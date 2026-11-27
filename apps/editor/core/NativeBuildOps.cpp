@@ -1,4 +1,5 @@
 #include "NativeBuildOps.h"
+#include "engine/platform/EngineDir.h"
 
 #include <chrono>
 #include <cstdlib>
@@ -72,7 +73,14 @@ NativeBuildPlan nativePlanFor(const Workspace& ws, const NativeTools& tools) {
     std::error_code ec;
     dropForeignCMakeCache(bd, ws.engineDir);   // configured from an old engine folder: cmake would refuse it
     const bool cache = fs::exists(fs::path(bd) / "CMakeCache.txt", ec);
-    return planNativeBuild(ws.engineDir, ws.project.dir, nativeHost(), tools.cmake, tools.ninja, cache, nativeBuildJobs());
+    auto plan = planNativeBuild(ws.engineDir, ws.project.dir, nativeHost(), tools.cmake, tools.ninja, cache, nativeBuildJobs());
+    if (plan.host == "macos" || plan.host == "windows") {
+        const auto bin = platform::hostExecutablePath(nullptr).parent_path();
+        const auto bundled = plan.host == "macos" ? bin.parent_path() / "Resources/studio-web" : bin / "studio-web";
+        if (!isProjectBuildExe(bin.string()) && fs::is_regular_file(bundled / "index.html", ec))
+            plan.configureArgs.push_back("-DAIVERSE_STUDIO_WEB_DIST=" + bundled.string());
+    }
+    return plan;
 }
 
 std::string startNativeBuild(Workspace& ws, const NativeBuildPlan& plan) {

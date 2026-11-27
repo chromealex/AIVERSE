@@ -88,7 +88,7 @@ void Editor::restartIntoNativeBuild() {
     // aiversebuild / aiversemcp stay those of this (regular) build; AiverseGame comes from the project build (its modules)
     std::string tools;
     if (fs::path bt(opt_.buildTool); bt.is_absolute() && fs::exists(bt, ec)) tools = bt.parent_path().string();
-    const std::string arg = ws_.project.file.empty() ? ws_.project.dir : ws_.project.file;
+    const std::string arg = nativeHost() == "linux" && !ws_.project.file.empty() ? ws_.project.file : ws_.project.dir;
     const std::string cmd = nativeRestartCommand(nativeHost(), n.existing.launch, arg, tools);
     // free the MCP port so the new editor takes the default one and agents reconnect to it
     server_.close();

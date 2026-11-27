@@ -26,10 +26,11 @@ else()
     target_sources(aiverse_studio PRIVATE $<TARGET_OBJECTS:aiverse_runtime>)
     target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
     set_source_files_properties(mac/Main.mm mac/StudioAssetSchemeHandler.mm ../editor/EditorSpeech_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+    set(AIVERSE_STUDIO_BUNDLE_ID "com.aiverse.studio.html5" CACHE STRING "Studio application bundle identifier")
     set_target_properties(aiverse_studio PROPERTIES
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/mac/StudioInfo.plist.in"
         OUTPUT_NAME AiverseStudioHTML5
-        MACOSX_BUNDLE_GUI_IDENTIFIER com.aiverse.studio.html5)
+        MACOSX_BUNDLE_GUI_IDENTIFIER "${AIVERSE_STUDIO_BUNDLE_ID}")
     if(EXISTS "${AIVERSE_STUDIO_WEB_DIST}/index.html")
         # Run even when only frontend assets changed. CMake 3.22 uses CMP0112
         # NEW, so TARGET_BUNDLE_CONTENT_DIR does not introduce a reverse dependency.
