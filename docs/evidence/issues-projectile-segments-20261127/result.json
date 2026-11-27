@@ -1,0 +1,23 @@
+{
+  "backend": "Metal",
+  "runtime_source": "4d6f08f19",
+  "scenes": [
+    "straight",
+    "arc",
+    "ricochet",
+    "split"
+  ],
+  "frames": [
+    120,
+    120,
+    210,
+    210
+  ],
+  "observed": "Imported green projectile model and trail endpoint inspected in all four captures. Split and ricochet continue from branch/contact positions.",
+  "pipeline_failures": 0,
+  "limits": [
+    "Static captures do not prove every frame.",
+    "Browser build and acceptance pending.",
+    "Final full gate failed during KINGSTON I/O loss; not release-ready."
+  ]
+}

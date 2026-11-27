@@ -15,3 +15,7 @@ Branch: `codex/issue223-minimap-atlas-20261126`
 Paths: `apps/client/ClientFx.cpp`, `apps/editor/Editor.cpp`, `engine/fx/GameFx.cpp`, `engine/game/Components.h`, `engine/view/game/GameView.cpp`, `engine/view/game/GameView.h`, `engine/view/game/GameViewDraw.cpp`
 
 Source changes committed; readiness is pending. Tests/build: NOT RUN for this revision, per request to build the complete batch once at the end. `git diff --check` passed before commit. No save-format migration introduced. Existing atlas-only ImageSource::load semantics preserved; new loadImage handles both storage forms. Remaining work: review and verify controls, Lua selection, voice sequencing, FX and projectile paths; add missing runtime/Studio/publication evidence. Issues #211–213, #219, #221 remain unimplemented; #206 requires Windows crash verification. Do not merge or close issues from this checkpoint. Next: finish remaining issue implementations, refresh main, run the final merged-tree Mac gate and feature readiness checks.
+
+## Four-scene acceptance example
+
+Prepare demos/projectile-segments using ordinary weapon data for straight, arc, ricochet and timed split. Native captures completed in the shared task build; preserve the four inspected flight frames and logs. Browser build is running; do not claim browser readiness yet. Shared owner documentation is in docs/view.md and docs/ecs-mechanic-composition.md. Remaining delivery: browser acceptance, manifest reconciliation, current full gate and main publication.

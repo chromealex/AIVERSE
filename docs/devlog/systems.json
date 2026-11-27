@@ -3577,9 +3577,11 @@
         {
           "id": "projectile-trail-alignment",
           "status": "in-progress",
-          "title": "projectile-trail-alignment",
-          "titleEn": "projectile-trail-alignment",
-          "target": null
+          "title": "Единое представление снарядов и следов",
+          "titleEn": "Shared projectile and trail presentation",
+          "target": null,
+          "text": "Общий образец позиции для модели, следа и света. Четыре сцены проверены на Metal; браузерная проверка и интеграция продолжаются.",
+          "textEn": "One position sample for model, trail and light. Four scenes checked on Metal; browser acceptance and integration remain in progress."
         },
         {
           "id": "model-additive-blending",
