@@ -1,0 +1,10 @@
+{
+  "sha": "898d90f8e60644843e3935fe4678fd0113b6ae02",
+  "argv": [
+    "bash",
+    "../build-compression.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-build-compression-level.log.txt",
+  "sha256": "6294dbcadee4909fe74620877db7972a882446c2897041ff0db340df3aa3eb2a"
+}
