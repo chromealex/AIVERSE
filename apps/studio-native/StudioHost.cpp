@@ -4072,6 +4072,42 @@ Json StudioHost::viewportInput(const Json& input) {
         result.set("highlight",Json::number(int64_t(erosionHighlightDocument_ && *erosionHighlightDocument_==document?erosionHighlight_:-2)));
         return result;
     }
+    if(kind=="focusGroup"){
+        const auto& map=session_->workspace().map;
+        const auto& ids=input["ids"];
+        if(projectLoading_ || !sameDocumentScope(input["scope"],session_->graphDocumentScope()) || map.data.planet() ||
+           !ids.isArray() || !ids.size())throw std::runtime_error("Choose a current group on a planar map");
+        std::set<std::string> documentIds;
+        Json refs=Json::array();
+        for(const auto& value:ids.items()){
+            const auto id=value.str();
+            if(id.starts_with("preview:"))refs.push(Json::string(id.substr(8)));
+            else documentIds.insert(id);
+        }
+        bool positioned=false;
+        float x0=0,z0=0,x1=0,z1=0;
+        auto include=[&](float x,float z){
+            if(!positioned){x0=x1=x;z0=z1=z;positioned=true;}
+            else{x0=std::min(x0,x);x1=std::max(x1,x);z0=std::min(z0,z);z1=std::max(z1,z);}
+        };
+        for(const auto& node:editor::enumerateDocumentSceneNodes(map)){
+            if(!documentIds.erase(studioDocumentId(map,node.ref)))continue;
+            editor::DocumentTransform t;
+            if(editor::readDocumentTransform(map,node.ref,t))include(float(t.x),float(t.z));
+            if(documentIds.empty())break;
+        }
+        if(!documentIds.empty())throw std::runtime_error("Group membership changed");
+        if(refs.size()){
+            const auto rows=session_->resolvePreviewRefs(refs);
+            for(const auto& row:rows.items())if(row.has("x") && row.has("z"))include(float(row["x"].toDouble()),float(row["z"].toDouble()));
+        }
+        if(!positioned)throw std::runtime_error("This group has no positioned objects");
+        const float distance=std::clamp(std::max(x1-x0,z1-z0)*1.2f+14.f,14.f,200.f);
+        ensureScene();
+        onScene([&]{preview_->requestSceneFocus({(x0+x1)*.5f,0.f,(z0+z1)*.5f},distance);});
+        sendEventPayload("ui.showPanel",Json::parse(R"({"panel":"scene"})"));
+        return Json::object();
+    }
     if(kind=="focusRoad"){
         if(projectLoading_ || !sameDocumentScope(input["scope"],session_->graphDocumentScope()))
             throw std::runtime_error("Select the road again before showing it in Scene");

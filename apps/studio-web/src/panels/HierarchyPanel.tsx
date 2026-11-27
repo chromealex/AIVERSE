@@ -307,6 +307,9 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
               onClick={event => {anchor.current = visible.find(r=>r.node.id===documentMembers.at(-1) && r.occurrence?.startsWith(row.key.slice(0,-1)+','))?.occurrence ?? null; void selectIds(documentMembers, event.metaKey || event.ctrlKey ? 'add' : 'replace');}}>
               <span>{row.label}</span><small>{row.members.length}</small>
             </button>
+            {scope && snapshot?.scene.mapRegions && <StudioIconButton icon={<Focus size={13}/>} disabled={busy}
+              aria-label={'Show '+row.label+' group in Scene'} title="Show group in Scene"
+              onClick={()=>void invoke('studio.viewportInput',{kind:'focusGroup',ids:row.members,scope}).catch(e=>setError(String(e)))}/>}
           </div>;
         }
         const {node, depth} = row;
