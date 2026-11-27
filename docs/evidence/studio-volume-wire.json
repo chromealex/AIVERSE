@@ -1,0 +1,10 @@
+{
+  "sha": "2ab9691db4dc972f4090283e6b8305adbcc38214",
+  "argv": [
+    "node",
+    "../volume-wire.cjs"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-volume-wire.log.txt",
+  "sha256": "73263250fdba63f70eeef021020e111b9b6a9111aad55bb4102eac909bf10b33"
+}
