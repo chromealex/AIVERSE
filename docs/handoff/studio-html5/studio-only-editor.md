@@ -1612,3 +1612,7 @@ Stage f4bfc187840af26ed4fb91b37fea8cf114621a5e updates examples/native/world_pro
 ### Mac player Statistics lifecycle
 
 5f9a59bf4611cfadfb434205138124873873f27d records the player history capture in docs/handoff/studio-html5/captures/mac-player-history.png and updates docs/studio-html5-parity.md. The current Mac aiverse_studio target built successfully. The first fixture invocation rejected the Linux-only --engine argument; using the Mac --project entry point and the engine working directory succeeded. The real Watchtower Orders match displayed multiple samples and Казна at 12.5. Paused ECS counts matched at tick 75. Pause, restart, and stop assertions passed. Evidence on KINGSTON: stats-mac-k239yihn/live.log. Next continue the remaining scenario inventory before retiring the legacy editor.
+
+### Game geometry pool in Statistics
+
+b1ef64a5d2d9abcb9e8f74c18bc66272fde69fb9 reads the game device pool in StudioGameSurface.cpp; types.ts and PlayerHistory.tsx expose occupied and allocated MiB, page and model counts. npm run build and the Mac aiverse_studio target passed. An initial fixture waited for an already closed Scene. Replayed using its saved layout, checked four displayed values against the live native response, then verified pause/restart/stop. Watchtower Orders returned zero for all four counters. Capture: docs/handoff/studio-html5/captures/mac-game-geometry-pool.png. Next verify populated shared pages with pool-eligible models and port further memory diagnostics.
