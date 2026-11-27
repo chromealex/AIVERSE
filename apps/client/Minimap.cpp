@@ -169,7 +169,12 @@ void Minimap::update(gfx::Device& dev, const GameState& gs, const Rules& rules, 
             for (int s = 0; s <= steps; ++s) {
                 const float t = float(s) / float(steps);
                 const int x = int(std::floor((a.x - bounds_.left + (b.x - a.x) * t) * scaleX)), y = int(std::floor((a.z - bounds_.top + (b.z - a.z) * t) * scaleZ));
-                if (x >= 0 && y >= 0 && x < w_ && y < h_) pixels_[size_t(y) * size_t(w_) + size_t(x)] = rgba(255, 255, 255);
+                // The HUD can downsample this raster (desktop 190dp, touch
+                // 150dp). A one-texel edge can disappear under nearest sampling.
+                // Cover two texels for every camera footprint, not just rectangles.
+                for (int dy=0;dy<2;++dy) for (int dx=0;dx<2;++dx)
+                    if (x+dx >= 0 && y+dy >= 0 && x+dx < w_ && y+dy < h_)
+                        pixels_[size_t(y+dy) * size_t(w_) + size_t(x+dx)] = rgba(255, 255, 255);
             }
         }
     }

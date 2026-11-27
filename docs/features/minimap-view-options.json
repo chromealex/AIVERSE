@@ -90,7 +90,7 @@
     },
     "tests": {
       "status": "not_run",
-      "note": "Native logical-image and projection checks passed. Preparing actual client captures for loose and atlas-packed minimap, authored crop, hidden types and rectangle camera frame; pending.",
+      "note": "Loose and atlas-only runtime minimap pixels matched. Visual acceptance exposed disappearing one-texel camera edge after HUD downsampling; shared footprint stroke correction pending capture.",
       "evidence": []
     },
     "handoff": {
