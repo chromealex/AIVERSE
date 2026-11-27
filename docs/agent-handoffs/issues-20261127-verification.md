@@ -82,3 +82,26 @@ Handle 50170 is still active; do not restart without checking it. Report directo
 `/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-092323-99352`.
 Runner log: `issues-final-8ea1b7a06-tests.log` in the build directory.
 The quick gate has not completed; no full-test-pass claim yet.
+
+## Opt-in Metal material captures
+
+On the unchanged compiled source (2cd2d9ee6; current docs tree 5b9c8b96b),
+ran `aiverse_material_technique_frame /private/tmp/aiverse-issue223/demos/material-techniques`
+with `AIVERSE_BACKGROUND=1` and `AIVERSE_MATERIAL_TECHNIQUE_CAPTURE` set to
+`/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/captures/material-techniques`.
+Exit 0; near/far/inspection each had 7716 selected-material pixels; 0 pipeline failures.
+Ran `aiverse_model_triplanar_frame` with `AIVERSE_BACKGROUND=1` and
+`AIVERSE_TRIPLANAR_CAPTURE` set to the sibling `captures/triplanar` directory.
+Exit 0; OBJ, CSG and all three cut surfaces passed warm/cool/normal/repeat pixel checks;
+0 pipeline failures. Logs: `material-technique-capture.log`, `triplanar-capture.log`
+in the same build directory. Inspected all six PNGs: expected red/blue/green
+material selection and projected checker pattern/normal/repeat variants visible.
+These two CTest entries skip by default without their capture environment; direct
+execution supplies real GPU evidence, but does not validate the new additive
+blend modes in #219/#221. Those require separate coverage.
+
+Full quick gate handle 50170 remains live with only aiverse_tests pending.
+550 entries completed: 548 passed, 2 opt-in skips. Live profile of PID 596
+advanced from LENS initialization to AI determinism, so this is an active test,
+not evidence of a hang. Platform profile: macOS 15.6, x86-64 translated (Rosetta).
+Profiles: `aiverse-tests-live-sample.txt`, `aiverse-tests-live-sample-2.txt`.
