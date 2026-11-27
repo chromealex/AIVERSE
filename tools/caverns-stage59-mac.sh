@@ -16,7 +16,7 @@ git -C "$root" status --short | tee "$build/working-tree.txt"
 printf '%s\n' "$sha" > "$build/provenance.txt"
 cmake -S "$root" -B "$build" -DCMAKE_BUILD_TYPE=Debug \
     -DAIVERSE_ENABLE_PHYSICS=ON -DAIVERSE_BUILD_TESTS=ON \
-    -DAIVERSE_BUILD_EDITOR=ON -DAIVERSE_BUILD_STUDIO_HTML5=OFF \
+    -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_STUDIO_HTML5=OFF \
     -DAIVERSE_FETCH_TEMPLATES=OFF -DAIVERSE_BUILD_CAVERNS_PLANET_DEMO=ON \
     -DAIVERSE_CAVERNS_PLANET_DEMO_SMOKE=ON 2>&1 | tee "$build/configure.log"
 ctest --test-dir "$build" -N > "$build/inventory.txt"
