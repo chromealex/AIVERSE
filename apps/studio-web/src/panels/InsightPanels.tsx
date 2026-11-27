@@ -237,8 +237,8 @@ export function FrameCapturePanel({ snapshot }: Ctx) {
         {frozen ? 'Resume live' : 'Capture'}</button>
       {frozen && <>
         <button type="button" className="au-button au-button--sm" disabled={!sum.count} onClick={async () => {
-          const rows = frozen.history.map(([cpu, calls], i) => [frozen.frames - sum.count + i + 1, cpu.toFixed(4), calls].join(','));
-          setCopyStatus(await copyText(['frame,cpu_ms,draw_calls', ...rows, ''].join('\n')) ? 'CSV copied' : 'Clipboard unavailable');
+          const rows = frozen.history.map(([cpu, calls, sim], i) => [frozen.frames - sum.count + i + 1, cpu.toFixed(4), calls, sim?.toFixed(4) ?? ''].join(','));
+          setCopyStatus(await copyText(['frame,cpu_ms,draw_calls,simulation_ms', ...rows, ''].join('\n')) ? 'CSV copied' : 'Clipboard unavailable');
         }}>Copy CSV</button>
         <button type="button" className="au-button au-button--sm" disabled={!sum.count} onClick={() => {
           setClearedThrough(frozen.frames); setLive(null);
@@ -258,7 +258,7 @@ export function FrameCapturePanel({ snapshot }: Ctx) {
         <div><b>{draws.length ? Math.max(...draws) : '—'}</b><span>draw calls (max)</span></div>
       </div>
       {frozen && sum.count > 0 && <label className="frame-capture__scrub">
-        <span>Frame {frozen.frames - sum.count + selected + 1} · {ms[selected].toFixed(2)} ms · {draws[selected]} draw calls</span>
+        <span>Frame {frozen.frames - sum.count + selected + 1} · {ms[selected].toFixed(2)} ms · {draws[selected]} draw calls{frozen.history[selected][2] !== undefined && ` · Simulation ${frozen.history[selected][2].toFixed(4)} ms`}</span>
         <input type="range" aria-label="Captured frame" min={0} max={sum.count - 1} value={selected}
           onChange={event => setSelected(Number(event.target.value))}/>
       </label>}

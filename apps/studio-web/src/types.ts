@@ -279,7 +279,7 @@ export interface PrismaViewReport {
   reactiveWithoutObjectVelocity:boolean; motionBlurReactiveEdgesEnabled:boolean;
   effects:{type:string;requested:boolean;pipelinePrepared:boolean;encoded:boolean;degraded:boolean;reason:string}[];
 }
-export interface StudioGpuStats { prisma?:Record<string,PrismaViewReport[]>; history: Array<[number, number]>; frames: number; drawCalls?: number; error?: string; gpu?: { textures: StudioGpuTexture[]; totalBytes: number } }
+export interface StudioGpuStats { prisma?:Record<string,PrismaViewReport[]>; history: Array<[number, number, number?]>; frames: number; drawCalls?: number; error?: string; gpu?: { textures: StudioGpuTexture[]; totalBytes: number } }
 export interface StudioExtensionWidget { kind: string; id?: string; label?: string; value?: string | number | boolean; min?: number; max?: number; step?: number; children?: StudioExtensionWidget[] }
 export interface StudioExtensions { path: string; exists: boolean; error?: string; widgets?: StudioExtensionWidget[]; gizmos?: unknown[] }
 export interface StudioAttachmentItem { model: string; socket: string; enabled?: boolean; id?: string; animated?: boolean; animationGraph?: string; local?: number[]; childWorld?: number[] }

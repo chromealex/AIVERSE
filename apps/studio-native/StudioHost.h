@@ -387,7 +387,9 @@ private:
     std::shared_ptr<bool> alive_ = std::make_shared<bool>(true); // background completions after shutdown
     double nextGizmoPoll_ = 0, nextAgentPoll_ = 0, lastSceneFrame_ = 0, sceneFrameMs_ = 0;
     uint64_t sceneFrameCount_ = 0;
-    std::deque<std::pair<float, uint32_t>> frameHistory_;
+    struct SceneFrameSample { float cpuMs; uint32_t draws; double simulationMs; };
+    std::deque<SceneFrameSample> frameHistory_;
+    double simulationMsSinceSceneFrame_ = 0;
     std::vector<StudioScene::OverlayShape> extShapes_;
     uint64_t buildingGraphOverlayScene_=0;
     uint32_t buildingGraphOverlayLayers_=1;

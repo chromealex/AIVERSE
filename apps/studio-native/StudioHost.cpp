@@ -17,6 +17,7 @@
 #include "engine/game/Script.h"
 #include "apps/editor/core/StudioPlayTools.h"
 #include "apps/studio-native/StudioHost.h"
+#include "engine/sim/SimulationStepTiming.h"
 #include "StudioLightBakeFiles.h"
 #include "apps/editor/core/AnimationPreviewSession.h"
 #include "apps/studio-native/StudioSpectraPackageImport.h"
@@ -699,6 +700,7 @@ void StudioHost::openProject(const std::string& path, int64_t requestId) {
                 sendLoading("error", *error, 0, 0);
             } else {
                 frameHistory_.clear();
+                simulationMsSinceSceneFrame_ = 0;
                 lastSceneFrame_ = 0;
                 sceneFrameMs_ = 0;
                 platform_.rememberLastProject(path);
@@ -835,8 +837,11 @@ void StudioHost::tickGame() {
     invalidate();
     if (!gamePlacement_.visible || !platform_.surfaceDrawable(StudioSurface::Game)) { game_->suspend(); return; }
     if (gamePostOverride_) game_->setPostQuality(postQuality_);
-    game_->frame(gamePlacement_.pixelsW, gamePlacement_.pixelsH, float(gamePlacement_.width), float(gamePlacement_.height),
-                 dt, platform_.gameFocused());
+    {
+        SimulationStepTiming timing(simulationMsSinceSceneFrame_);
+        game_->frame(gamePlacement_.pixelsW, gamePlacement_.pixelsH, float(gamePlacement_.width), float(gamePlacement_.height),
+                     dt, platform_.gameFocused());
+    }
     invalidate();
     if(wpLiveOptions_.live && now-wpLiveRefresh_>=.25){
         wpLiveRefresh_=now;
@@ -1922,9 +1927,10 @@ void StudioHost::publishSceneFrame(const FrameOutputs& out) {
         if (lastSceneFrame_ > 0) {
             const double ms = (now - lastSceneFrame_) * 1000.0;
             sceneFrameMs_ = sceneFrameMs_ <= 0 ? ms : sceneFrameMs_ * 0.95 + ms * 0.05;
-            frameHistory_.emplace_back(float(ms), out.drawCalls);
+            frameHistory_.push_back({float(ms), out.drawCalls, simulationMsSinceSceneFrame_});
             if (frameHistory_.size() > 6000) frameHistory_.pop_front();
         }
+        simulationMsSinceSceneFrame_ = 0;
         lastSceneFrame_ = now;
         session_->setSceneFrameStats(sceneFrameMs_, ++sceneFrameCount_);
     }
@@ -5357,8 +5363,9 @@ void StudioHost::handleMessage(const std::string& json) {
             for (size_t i = frameHistory_.size() - count; i < frameHistory_.size(); ++i) {
                 const auto& f = frameHistory_[i];
                 Json o = Json::array();
-                o.push(Json::number(double(f.first), 2));
-                o.push(Json::number(int64_t(f.second)));
+                o.push(Json::number(double(f.cpuMs), 2));
+                o.push(Json::number(int64_t(f.draws)));
+                if (capture) o.push(Json::number(f.simulationMs, 4));
                 history.push(std::move(o));
             }
             if (req["params"].getBool("prisma")) {
