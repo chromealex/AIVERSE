@@ -1396,3 +1396,5 @@ Linux WebKit bundle adapter f946d3a263c3af3c95daf6b3869932808468adfc supplies th
 ## Scene debug world processes — 2a73c696e
 
 SceneToolbar.tsx now mounts the shared EcologyLayerPicker from panels/SceneBrushBar.tsx under World processes. The toolbar requests controls only; the brush tools retain their diagnostic charts. Both paths use studio.evolveLayer. npm run typecheck, npm run test:scene and npm run test:bridge passed in apps/studio-web. Next: exercise the menu against a live planet scene and capture it.
+
+Linux HTML window transport 9aefff1fa: apps/studio-native/linux/StudioWebBridge.h and tests/StudioLinuxWebAssets.cpp exercise a per-view WebKitGTK message channel. apps/studio-web/{index.html,src/bridge.ts,tests/bridge.test.mjs} select the injected channel for startup diagnostics and RPC. TypeScript passed; 11/11 bridge tests passed with host doubles. Native GTK test and full Linux shell integration remain pending.
