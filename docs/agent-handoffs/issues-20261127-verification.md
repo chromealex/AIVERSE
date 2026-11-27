@@ -465,3 +465,9 @@ NOT RUN after this source change. No build started, respecting the combined fina
 ## Audible selection acceptance fixture
 
 Stage a566e7ae3f944daf34d28b0ef83a47565fb4931b: demos/selection-voices adds two same-type scouts and ordinary audio.json with normal440Hz plus ordered660/880Hz files, count3/cycletrue/window0. Generated PCM sine tones with short fades; no third-party assets. README describes click cadence, long delay, command, switch and clear cases plus native null-device capture. Manifest covers all8fixturepaths. Partial compliance11manifests0errors and diff check passed. Runtime acceptance NOT RUN. Next rebuild changed audio/tests in the existing KINGSTON cache, execute mixer regression and native capture, finish authoring/publishing evidence before final gate.
+
+## Audio ownership reconciliation and combined build
+
+Stage 83f300d42a152e19f058c13475acd3b390f8104d updates selection-voice-order architecture/API/skill/dependency/docs records after actual source review, explains graph/server nonapplicability, and aligns English documentation with the command-reset requirement already documented in Russian. Actual runtime/Studio/persistence/performance/publication remain pending. Manifest shape1/0, catalog303valid, diff check passed.
+
+Combined incremental all-target native build96536 started from8cccc49a7 in the existing KINGSTON cache; currently live, do not restart. Log issues-audio-final-build.log. Source fix e4fe0e797 and PCM regression are included. Only metadata/docs changed after build start. Next poll96536, then run audio_repeated_selection_mixer_order_and_resets and existing related tests, capture actual client audio with demos/selection-voices, finish remaining acceptance and fresh full gate.
