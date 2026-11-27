@@ -38,6 +38,12 @@ export default function VolumeCsgEditor({geometry,disabled,onEdit}:{geometry:Gra
   id:String(n.id)+'/'+key,from:String(n[key]),output:'field',to:String(n.id),input:key
  })));
  function replace(id:string,next:GraphObject) {onEdit({...geometry,fields:fields.map(n=>n.id===id?next:n)});}
+ function connect(source:PortRef,to:PortRef) {
+  if(disabled)return;
+  const from=fields.findIndex(n=>n.id===source.node),at=fields.findIndex(n=>n.id===to.node);
+  if(from<0||from>=at){setError('Choose an earlier field as the input.');return;}
+  replace(to.node,{...fields[at],[to.port]:source.node});setPending(null);setError('');
+ }
  function append() {
   let i=1;
   const unique=(prefix:string)=>{while(fields.some(n=>n.id===prefix+i))i++;return prefix+i++;};
@@ -55,9 +61,7 @@ export default function VolumeCsgEditor({geometry,disabled,onEdit}:{geometry:Gra
  return <StudioSection title="Volume CSG">
   <GraphCanvas view={{nodes,links}} label="Volume field tree" selected={selected} disabled={disabled} pendingOutput={pending}
    onOutput={setPending} onCancel={()=>setPending(null)} onSelect={select}
-   onInput={to=>{if(!pending)return;const from=fields.findIndex(n=>n.id===pending.node),at=fields.findIndex(n=>n.id===to.node);
-    if(from<0||from>=at){setError('Choose an earlier field as the input.');return;}
-    replace(to.node,{...fields[at],[to.port]:pending.node});setPending(null);setError('');}}
+   onInput={to=>{if(pending)connect(pending,to)}} onConnect={connect} enhancedNavigation
    onMove={(id,x,y)=>{const row=fields.find(n=>n.id===id);if(row)replace(id,{...row,position:[x,y]});}}/>
   <div className="au-row"><StudioSelect aria-label="New field operation" value={operation} onChange={e=>setOperation(e.target.value)}>
    {operations.map(o=><option key={o}>{o}</option>)}</StudioSelect>

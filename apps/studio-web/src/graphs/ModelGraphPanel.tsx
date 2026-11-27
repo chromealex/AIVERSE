@@ -66,16 +66,16 @@ export default function ModelGraphPanel({documentEpoch,projectPath,openAttachmen
    setName(request.name);reset(r.document,r.revision);setMode('pose');
   });
  },[route?.request,projectPath,initializedEpoch,busy,dirty,name]);
- const connect=(to:PortRef)=>{
-  if(!draft||!pending||busy)return;
+ const connect=(source:PortRef,to:PortRef)=>{
+  if(!draft||busy)return;
   if(mode==='model'){
-   const next=connectModelParent(draft,pending,to);
+   const next=connectModelParent(draft,source,to);
    if(next===draft){setError('Invalid parent or cyclic hierarchy');return;}edit(next);
   }else if(mode==='geometry'){
-   const next=connectGeometryOperand(draft,pending,to);
+   const next=connectGeometryOperand(draft,source,to);
    if(next===draft){setError('Geometry operands must reference preceding mesh nodes');return;}edit(next);
   }else if(graph){
-   const next=mode==='pose'?connectAnimationPose(graph,pending,to):addAnimationTransition(graph,pending,to);
+   const next=mode==='pose'?connectAnimationPose(graph,source,to):addAnimationTransition(graph,source,to);
    if(next===graph){setError('Invalid pose dependency or state transition');return;}edit({...draft,graph:next});
   }
   setPending(null);setError('');
@@ -127,7 +127,7 @@ export default function ModelGraphPanel({documentEpoch,projectPath,openAttachmen
   <StudioAlert>Part hierarchy edits parent transforms. Geometry view edits native CSG operands and modifier order; operands use local geometry, not node transforms. Layout is local. Native validation governs saves.</StudioAlert>
   {draft&&(mode==='model'||mode==='geometry'||graph)?<>
    <GraphCanvas view={{...view,nodes:view.nodes.map(n=>({...n,...positions[mode+':'+n.id]}))}} selected={active} selection={selection} onSelection={setSelection}
-    label="Model graph" disabled={busy} pendingOutput={pending} onOutput={setPending} onInput={connect} onCancel={()=>setPending(null)}
+    label="Model graph" disabled={busy} pendingOutput={pending} onOutput={setPending} onInput={to=>{if(pending)connect(pending,to)}} onConnect={connect} enhancedNavigation onCancel={()=>setPending(null)}
     onSelect={id=>setSelection(id?[id]:[])} onMove={(id,x,y)=>move([{id,x,y}])} onMoveGroup={move}/>
    <GraphDiagnosticsPanel view={view} policy={{cycles:mode==='states'?'allow':'reject'}}/>
    {name&&(mode==='model'||mode==='geometry')&&<StrataAnalysisPanel projectPath={projectPath} suggestedModel={'models/'+name+'.glb'} disabled={busy}/>}
