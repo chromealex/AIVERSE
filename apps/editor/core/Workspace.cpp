@@ -952,6 +952,7 @@ void Workspace::registerCoreOps() {
         Json r = Json::object();
         r.set("dir", str(project.dir));
         r.set("manifest", project.manifest);
+        r.set("originalManifest", str(project.manifest.dump()));
         Json s = Json::object();
         s.set("resources", Json::number(int64_t(project.rules.resources.size())));
         s.set("types", Json::number(int64_t(project.rules.types.size())));
@@ -961,11 +962,19 @@ void Workspace::registerCoreOps() {
         if (!project.rulesError.empty()) r.set("rulesError", str(project.rulesError));
         return r;
     });
-    add("set_manifest", "Set a value in game.json (name, version, orientation, window, icon, maps, input, ...). Saved immediately. window = desktop window: {mode: windowed|fixed|maximized|fullscreen, width, height, minWidth, minHeight, keepAspect, allowFullscreen, macos|windows|linux: overrides}.",
-        R"({"properties": {"path": {"type": "string"}, "value": {}}, "required": ["path", "value"]})", [this, needProject](const Json& p) {
+    add("set_manifest", "Set a value in game.json (name, version, orientation, window, icon, maps, input, ...). Saved immediately. An empty path replaces the object root. valueJson accepts raw JSON without browser numeric conversion; expectedManifest guards against changes since game_info.originalManifest. window = desktop window: {mode: windowed|fixed|maximized|fullscreen, width, height, minWidth, minHeight, keepAspect, allowFullscreen, macos|windows|linux: overrides}.",
+        R"({"properties": {"path": {"type": "string"}, "value": {}, "valueJson": {"type": "string"}, "expectedManifest": {"type": "string"}}, "required": ["path"], "oneOf": [{"required": ["value"]}, {"required": ["valueJson"]}]})", [this, needProject](const Json& p) {
             needProject();
+            if(p.has("expectedManifest") && (!p["expectedManifest"].isString() || p.getStr("expectedManifest")!=project.manifest.dump()))
+                throw std::runtime_error("Project settings changed; reload before saving");
+            if(!p["path"].isString() || p.has("value")==p.has("valueJson") ||
+               (p.has("valueJson") && !p["valueJson"].isString()))
+                throw std::runtime_error("Manifest path and exactly one value or valueJson are required");
+            const Json value=p.has("valueJson")?Json::parse(p.getStr("valueJson")):p["value"];
+            if(ps(p,"path").empty() && !value.isObject())
+                throw std::runtime_error("Project settings must be a JSON object");
             Json backup=project.manifest;
-            *jsonPath(project.manifest, ps(p, "path"), true) = p["value"];
+            *jsonPath(project.manifest, ps(p, "path"), true) = value;
             std::string err;
             if (!project.saveManifest(&err,"Manifest: "+ps(p,"path"))) {project.manifest=std::move(backup);throw std::runtime_error(err);}
             Json r = ok();

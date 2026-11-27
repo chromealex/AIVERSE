@@ -59,6 +59,7 @@ inline const std::vector<StudioToolGroup>& studioToolGroups() {
         {"model_anim", {"model_info", "animation_editor", "animation_edit"}},
         {"snapshot_diff", {"game_file_read"}},
         {"project_data", {"game_file_read", "game_file_write"}},
+        {"project", {"game_info", "set_manifest"}},
         {"world_persistence", {"world_save_list", "world_save_status", "world_save_page", "world_save_backups",
             "world_save_create", "world_save_checkpoint", "world_save_retention_preview", "world_save_retention_apply", "world_save_fork",
             "world_job_start", "world_job_status", "world_job_cancel", "world_job_release",

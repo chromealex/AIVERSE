@@ -24,7 +24,9 @@
     "apps/editor/core/Workspace.cpp",
     "apps/studio-native/StudioTools.h",
     "apps/studio-native/StudioSession.cpp",
-    "apps/studio-web/src/panels/generated/ProjectPanel.tsx"
+    "apps/studio-web/src/panels/generated/ProjectPanel.tsx",
+    "apps/studio-web/src/panels/ProjectSettingsEditor.tsx",
+    "apps/studio-native/tests/StudioSessionTests.cpp"
   ],
   "traits": {
     "editable": true,
@@ -74,7 +76,7 @@
     },
     "studio": {
       "status": "not_run",
-      "note": "Planned shared Project settings section using game_info and set_manifest, with expected-project and original-manifest fences. Existing Project history owner remains authoritative. Implementation and native UI acceptance pending; no feature-specific fields or file-write bypass.",
+      "note": "Implemented shared Project settings editor through game_info/set_manifest, exact original-manifest and project fences, raw JSON native parsing, draft retention and existing Project history. TypeScript/native tests and live UI acceptance pending; no feature-specific schema bypass.",
       "evidence": [
         "apps/studio-native/StudioTools.h"
       ]
@@ -165,9 +167,16 @@
     "skills": [
       "aiverse-controls"
     ],
-    "mcp_tools": [],
-    "studio_panels": [],
-    "studio_methods": []
+    "mcp_tools": [
+      "game_info",
+      "set_manifest"
+    ],
+    "studio_panels": [
+      "project"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ]
   },
   "test_reports": []
 }
