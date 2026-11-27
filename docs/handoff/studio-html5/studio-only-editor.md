@@ -1864,3 +1864,7 @@ b293126c0468e1c079046203ae72d7e833a078e5 adds captures/mac-map-player-rename.png
 ### Select map player in Hierarchy and edit in detached Inspector
 
 dae6dd7e9ae8fac970ac3101eccf4473c3191256 updates HierarchyPanel.tsx, HierarchyPanel.css and StudioTools.h and adds captures/mac-hierarchy-player-inspector.png. The first Mac run exposed the Studio tools allowlist rejecting editor_select. After enabling the existing read-only operation and adding document revision and epoch preconditions, the native app rebuilt. From a detached Hierarchy selecting Watch opened slot 2 in a separate Inspector. Applying Western Watch and saving persisted both expected names in maps/courtyard.json. Evidence: stats-mac-xahcfmn9/live.log. Web production build, native aiverse_studio build and six hierarchy filter tests passed. Continue remaining legacy record entry points and overall migration checks.
+
+### Named area records from detached Hierarchy
+
+f6a74e3fb15f2d20f68f4685bd45071336fff672 updates HierarchyPanel.tsx and adds captures/mac-hierarchy-area-inspector.png. Production web build passed. Detached Hierarchy selected West Gate out of two named areas; detached Inspector showed that key and its 5,6,7,8 bounds. After focusing the current input following panel initialization, the name was changed to Outer Gate and persisted in maps/courtyard.json with East Gate retained. The initial automation typed before panel initialization completed; the passing run is stats-mac-bp_hbsz3/live.log. Continue remaining legacy record workflows.
