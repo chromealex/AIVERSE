@@ -797,7 +797,7 @@ private:
     StudioRegionBorders regionBorders_;
     char regionBorderLetter_=0;
     bool regionBordersDirty_=true;
-    std::vector<StudioMapCell> rampTiles_;
+    std::vector<StudioMapCell> rampTiles_,resourceTiles_;
     std::shared_ptr<const world::NaturePresentationFrame> natureFrame_;
     StudioNatureLayers natureLayers_;
     const editor::TerrainTileSurface* groundTiles(const editor::MapDoc& map,std::optional<editor::TerrainTileSurface>& dragSurface);

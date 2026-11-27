@@ -4171,9 +4171,13 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         terrainWasShown_=showTerrain;terrainCavernsAuthored_=caveAuthored;
         regionBordersDirty_=true;
         rampTiles_.clear();
+        resourceTiles_.clear();
         if(!map.worldSpace && !planetaryChart && map.w>0 && map.cells.size()==size_t(map.w)*map.h){
-            for(size_t i=0;i<map.cells.size();++i)
+            const bool hasFields=map.fieldRes.size()==map.cells.size() && map.fieldAmt.size()==map.cells.size();
+            for(size_t i=0;i<map.cells.size();++i){
+                if(hasFields && map.fieldRes[i]>=0 && map.fieldAmt[i]>0)resourceTiles_.push_back({int(i%map.w),int(i/map.w)});
                 if(map.cells[i]=='/')rampTiles_.push_back({int(i%map.w),int(i/map.w)});
+            }
         }
         terrainRevision_=doc.revision;
         planetTerrainDoc_=planetaryChart?&doc:nullptr;
@@ -4571,17 +4575,24 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
             renderer_.line({at.x,at.y-extent,at.z},{at.x,at.y+extent,at.z},color);
             renderer_.line({at.x,at.y,at.z-extent},{at.x,at.y,at.z+extent},color);
         }
-        if(natureLayers_.rampTiles && !fpsProject && !planetaryChart){
-            const auto point=[&](float x,float z){
-                return float3{x,(showTerrain?terrainPreviewHeight(map,x,z,levelHeight,baseTerrainView_):0.f)+.07f,z};
+        if((natureLayers_.rampTiles || natureLayers_.resourceFields) && !fpsProject && !planetaryChart){
+            const auto point=[&](float x,float z,float lift){
+                return float3{x,(showTerrain?terrainPreviewHeight(map,x,z,levelHeight,baseTerrainView_):0.f)+lift,z};
             };
-            for(const auto& [x,z]:rampTiles_){
-                const auto a=point(x+.2f,z+.2f), b=point(x+.8f,z+.2f);
-                const auto c=point(x+.8f,z+.8f), d=point(x+.2f,z+.8f);
-                const auto color=rgba(255,255,255,110);
+            const auto tile=[&](int x,int z,float inset,float lift,uint32_t color){
+                const auto a=point(x+inset,z+inset,lift), b=point(x+1-inset,z+inset,lift);
+                const auto c=point(x+1-inset,z+1-inset,lift), d=point(x+inset,z+1-inset,lift);
                 renderer_.triangle(a,d,c,color);
                 renderer_.triangle(a,c,b,color);
+            };
+            if(natureLayers_.resourceFields)for(const auto& [x,z]:resourceTiles_){
+                const auto i=map.idx(x,z);
+                const auto alpha=uint8_t(60+18*map.fieldAmt[i]);
+                const uint32_t palette[]={rgba(240,170,40,alpha),rgba(80,220,255,alpha),rgba(230,90,220,alpha)};
+                tile(x,z,.08f,.05f,palette[map.fieldRes[i]%3]);
             }
+            if(natureLayers_.rampTiles)for(const auto& [x,z]:rampTiles_)
+                tile(x,z,.2f,.07f,rgba(255,255,255,110));
         }
         if((areaBounds_ || natureLayers_.triggerAreas) && !fpsProject && !planetaryChart){
             const auto point=[&](int x,int z){return float3{float(x),showTerrain?terrainPreviewCorner(map,x,z,levelHeight)+.08f:.08f,float(z)};};
@@ -5929,7 +5940,7 @@ uint64_t StudioScene::frameSignature(int width,int height,const editor::MapDoc& 
     value(wind_.revision);value(wind_.enabled);value(wind_.speed);value(wind_.directionDeg);
     value(wind_.gust);value(wind_.scale);value(wind_.debug);
     value(areaBounds_.has_value());if(areaBounds_)for(int coord:*areaBounds_)value(coord);
-    value(natureLayers_.rampTiles);value(natureLayers_.regionBorders);value(regionBorderLetter_);value(brushVisible_);vec(brushCenter_);value(brushRadius_);
+    value(natureLayers_.resourceFields);value(natureLayers_.rampTiles);value(natureLayers_.regionBorders);value(regionBorderLetter_);value(brushVisible_);vec(brushCenter_);value(brushRadius_);
     value(overlayShapes_.size());
     for(const auto& shape:overlayShapes_){value(shape.kind);vec(shape.a);vec(shape.b);value(shape.radius);
         value(shape.thickness);value(shape.r);value(shape.g);value(shape.bl);}
