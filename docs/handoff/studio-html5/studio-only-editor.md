@@ -1844,3 +1844,7 @@ f885b73f39fe73e2108115949b92405b160dbc19 adds studio.inputConflicts in StudioSes
 ### Complete Input trigger chain persistence
 
 de00861f91bae4579a1f2b698f798661877812fb updates docs/studio-html5-parity.md and adds captures/mac-input-trigger-chain.png. A detached Mac Input window authored all ten trigger kinds on one action. The independently parsed input/actions.json matched their exact order, all five time values and both referenced action names. Evidence in stats-mac-er4xhbzh/live.log. This verifies editor persistence. Continue integrated conflict verification and remaining runtime and window acceptance.
+
+### Integrated native bounded conflict report
+
+b6e6f3b57a5f7151137574117e17a61a938c8eb9 adds docs/handoff/studio-html5/captures/mac-input-bounded-conflicts.png. The completed native rebuild is recorded in studio-input-conflicts-refresh.log on KINGSTON. The detached WKWebView queried 30 mappings over the native bridge and independently created 30 mappings via panel controls. Both checks verified 435 total conflicts with 256 returned/displayed rows. The visible table indicated truncation, and input/actions.json remained absent. Evidence: stats-mac-k2snfe2u/live.log. Continue remaining window acceptance and the integrated Mac quick gate.
