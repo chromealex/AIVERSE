@@ -228,6 +228,7 @@ private:
     std::vector<AgentShot> agentShots_;
     SceneBrush brush_;
     std::string splineEdit_;
+    StudioLuaPanel contextMenus_;
     StudioLuaPanel lua_;   // Extensions panel (editor/extensions.lua)
     StudioLuaContext luaContext() const;
     Json sceneBrushJson() const;

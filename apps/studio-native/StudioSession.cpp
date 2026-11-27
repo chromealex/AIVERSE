@@ -5188,6 +5188,15 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             out.set("dirty",Json::fromBool(ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty));
             out.set("sceneFrameMs",Json::number(sceneFrameMs_,2));out.set("sceneFrames",num(int64_t(sceneFrames_)));
             reply.set("result",std::move(out));
+        } else if (method == "studio.contextMenu" || method == "studio.contextAction") {
+            if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
+            const auto window = params.getStr("window"), element = params.getStr("element"), id = params.getStr("id");
+            const bool action = method == "studio.contextAction";
+            if (window.empty() || window.size() > 128 || element.size() > 4096 ||
+                (action && (id.empty() || id.size() > 128))) throw std::runtime_error("Invalid Lua menu context");
+            Json result = Json::object();
+            result.set(action ? "command" : "items", contextMenus_.contextMenu(ws_.project.dir, luaContext(), window, element, action ? &id : nullptr));
+            reply.set("result", std::move(result));
         } else if (method == "studio.extensions" || method == "studio.extensionAction" || method == "studio.extensionCreate") {
             // Extensions panel: the project's declarative Lua editor API (StudioLuaPanel.h).
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");

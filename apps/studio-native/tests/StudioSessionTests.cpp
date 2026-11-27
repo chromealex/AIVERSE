@@ -1988,6 +1988,20 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"Fixture co
        AIVERSE_TEST_CHECK(call("studio.extensionAction",R"({"id":"radius","value":25})")["result"]["command"].getStr("command")=="status");
        AIVERSE_TEST_CHECK(session.extensionGizmos()[0]["radius"].toDouble()==25);
    }
+   // Popup scripts have their own Lua state and receive the same target for list and action.
+   {
+       const auto project = std::filesystem::path(session.workspace().project.dir);
+       const auto script = project / "editor" / "context_menus.lua";
+       AIVERSE_TEST_CHECK(call("studio.contextMenu", R"({"window":"lua.widget"})")["result"]["items"].size()==0);
+       std::ofstream(script) << "local opened=0\n"
+           "function context_menu(ctx) opened=opened+1 return {{label=ctx.window,children={{id='inspect',label=ctx.element}}}} end\n"
+           "function on_context_action(ctx,id) return {command='status',text=ctx.element..id..opened} end";
+       const auto menu = call("studio.contextMenu", R"({"window":"lua.widget","element":"radius"})");
+       AIVERSE_TEST_CHECK(menu["result"]["items"][0]["children"][0].getStr("label")=="radius");
+       const auto action = call("studio.contextAction", R"({"window":"lua.widget","element":"radius","id":"inspect"})");
+       AIVERSE_TEST_CHECK(action["result"]["command"].getStr("text")=="radiusinspect1");
+       AIVERSE_TEST_CHECK(session.extensionGizmos()[0]["radius"].toDouble()==25);
+   }
    // Attachments layout: invalid entries are refused, a valid one round-trips through the codec.
    {
        AIVERSE_TEST_CHECK(!call("studio.attachmentsGet")["result"].getBool("exists"));

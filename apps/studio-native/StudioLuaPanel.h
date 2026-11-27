@@ -64,6 +64,23 @@ public:
         lua_pop(L_, 1);
         return out;
     }
+    Json contextMenu(const std::string& projectDir, const StudioLuaContext& ctx,
+                     const std::string& window, const std::string& element, const std::string* actionId) {
+        load(projectDir, "context_menus.lua");
+        if (!error_.empty()) throw std::runtime_error(error_);
+        const Json empty = actionId ? Json() : Json::array();
+        if (!L_) return empty;
+        lua_getglobal(L_, actionId ? "on_context_action" : "context_menu");
+        if (!lua_isfunction(L_, -1)) { lua_pop(L_, 1); return empty; }
+        pushCtx(ctx);
+        lua_pushlstring(L_, window.data(), window.size()); lua_setfield(L_, -2, "window");
+        lua_pushlstring(L_, element.data(), element.size()); lua_setfield(L_, -2, "element");
+        if (actionId) lua_pushlstring(L_, actionId->data(), actionId->size());
+        if (!invoke(actionId ? 2 : 1, 1)) throw std::runtime_error(error_);
+        Json result = toJson(-1, 0);
+        lua_pop(L_, 1);
+        return actionId || result.isArray() ? result : empty;
+    }
     // scene_gizmos(ctx): up to 256 shapes {kind: line|circle|point|label, x,y,z, x2,y2,z2, radius, r,g,b, thickness, text}.
     Json gizmos(const std::string& projectDir, const StudioLuaContext& ctx) {
         load(projectDir);
@@ -130,9 +147,9 @@ private:
         lua_pop(L_, 1);
         return false;
     }
-    void load(const std::string& projectDir) {
+    void load(const std::string& projectDir, const char* file = "extensions.lua") {
         namespace fs = std::filesystem;
-        const fs::path script = fs::path(projectDir) / "editor" / "extensions.lua";
+        const fs::path script = fs::path(projectDir) / "editor" / file;
         std::error_code ec;
         const auto stamp = fs::last_write_time(script, ec);
         const bool missing = bool(ec);
@@ -152,7 +169,7 @@ private:
                                  {LUA_MATHLIBNAME, luaopen_math}, {LUA_UTF8LIBNAME, luaopen_utf8}};
         for (const auto& lib : libs) { luaL_requiref(L_, lib.name, lib.func, 1); lua_pop(L_, 1); }
         for (const char* global : {"dofile", "loadfile", "load", "collectgarbage", "require"}) { lua_pushnil(L_); lua_setglobal(L_, global); }
-        if (luaL_loadbufferx(L_, src.data(), src.size(), "editor/extensions.lua", "t") != LUA_OK) {
+        if (luaL_loadbufferx(L_, src.data(), src.size(), file, "t") != LUA_OK) {
             error_ = lua_tostring(L_, -1); lua_close(L_); L_ = nullptr; return;
         }
         if (!invoke(0, 0)) { lua_close(L_); L_ = nullptr; }
