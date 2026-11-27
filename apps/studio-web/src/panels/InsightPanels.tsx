@@ -273,12 +273,19 @@ export function FrameCapturePanel({ snapshot }: Ctx) {
           const rows = frozen.history.map(([cpu, calls, sim], i) => [frameId(frozen, i), cpu.toFixed(4), calls, sim?.toFixed(4) ?? ''].join(','));
           setCopyStatus(await copyText(['frame,cpu_ms,draw_calls,simulation_ms', ...rows, ''].join('\n')) ? 'CSV copied' : 'Clipboard unavailable');
         }}>Copy CSV</button>
-        <button type="button" className="au-button au-button--sm" disabled={!sum.count} onClick={() => {
-          setClearedThrough(frozen.frames); setLive(null);
-          setFrozen({ ...frozen, history: [], frameIds: [], drawCalls: undefined }); setSelected(0); setCopyStatus('');
-        }}>Clear</button>
         <span role="status">{copyStatus}</span>
       </>}
+      {(recording || frozen) && <button type="button" className="au-button au-button--sm" disabled={capturing || (!recording && !sum.count)} onClick={async () => {
+        setCapturing(true);
+        try {
+          const boundary = frozen?.frames ?? (await invoke('studio.gpuStats', {})).frames;
+          setClearedThrough(boundary); setLive(null); setSelected(0); setCopyStatus('');
+          if (recording) setRecording({ after: boundary, previous: null });
+          if (frozen) setFrozen({ ...frozen, history: [], frameIds: [], drawCalls: undefined });
+          setError('');
+        } catch (e) { setError(message(e)); }
+        finally { setCapturing(false); }
+      }}>Clear</button>}
       <span className="ptp__meta">{recording ? 'Recording' : frozen ? 'Captured' : 'Live'} · {recording ? Math.min(6000, (recording.previous?.history.length ?? 0) + Math.max(0, (live?.frames ?? recording.after) - recording.after)) : sum.count} frames · draw calls {data?.drawCalls ?? '—'}</span>
     </div>
     {error && <div className="tool__error" role="alert">{error}</div>}
