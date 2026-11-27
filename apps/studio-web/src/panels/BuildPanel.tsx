@@ -10,8 +10,22 @@ import './BuildPanel.css';
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 const MAX_LOG = 400_000; // characters kept in the panel (the full log is in the log file)
 
-function PackageInventory({files,rules,scopeLabel,disabled,saveLevel,setExcluded}: {
+function TextureSizeSelect({path,rule,disabled,onChange}: {
+  path:string;rule?:{maxSize?:number;scale?:number};disabled:boolean;onChange:(size:number|null)=>void;
+}) {
+  const current=rule?.maxSize ?? rule?.scale;
+  const sizes=[0.25,0.5,256,512,1024,2048];
+  if (current!=null && !sizes.includes(current)) sizes.push(current);
+  return <StudioSelect aria-label={'Texture size for '+path} disabled={disabled} value={current ?? ''}
+    onChange={e=>onChange(e.currentTarget.value==='' ? null : Number(e.currentTarget.value))}>
+    <option value="">Default</option>
+    {sizes.map(size=><option key={size} value={size}>{size<1 ? (100*size)+'%' : size+' px'}</option>)}
+  </StudioSelect>;
+}
+
+function PackageInventory({files,rules,scopeLabel,disabled,saveLevel,setExcluded,saveSize}: {
   files:NonNullable<StudioBuildEstimate['files']>;rules:NonNullable<StudioBuildInfo['rules']>;
+  saveSize:(path:string,original:string,size:number|null)=>void;
   setExcluded:(path:string,original:string,exclude:boolean)=>void;
   scopeLabel:string;disabled:boolean;saveLevel:(path:string,original:string,level:number|null)=>void;
 }) {
@@ -27,7 +41,7 @@ function PackageInventory({files,rules,scopeLabel,disabled,saveLevel,setExcluded
     <StudioField label="Filter by path" htmlFor="build-file-filter">
       <StudioInput id="build-file-filter" type="search" value={query} onChange={e=>{setQuery(e.target.value);setPage(0);}}/>
     </StudioField>
-    {filtered.length ? <table aria-label="Packaged files"><thead><tr><th>Path</th><th>Original</th><th>Packed</th><th>Codec</th><th>Compression · {scopeLabel}</th><th>Exclude</th></tr></thead>
+    {filtered.length ? <table aria-label="Packaged files"><thead><tr><th>Path</th><th>Original</th><th>Packed</th><th>Codec</th><th>Compression · {scopeLabel}</th><th>Texture size</th><th>Exclude</th></tr></thead>
       <tbody>{filtered.slice(current*pageSize,(current+1)*pageSize).map(file=><tr key={file.path}><td>{file.path}</td>
         <td>{formatBytes(file.rawBytes)}</td><td>{formatBytes(file.storedBytes)}</td><td>{file.codec}</td><td>
           <StudioSelect aria-label={'Compression for '+file.path} disabled={disabled || /[*?]/.test(file.path)}
@@ -35,6 +49,10 @@ function PackageInventory({files,rules,scopeLabel,disabled,saveLevel,setExcluded
             <option value="">Default</option><option value={0}>Store</option>
             {Array.from({length:22},(_,i)=><option key={i} value={i+1}>zstd {i+1}</option>)}
           </StudioSelect></td><td>
+          {/\.(png|jpe?g|tga|bmp)$/i.test(file.path) && !file.path.startsWith('_atlas/') &&
+            <TextureSizeSelect path={file.path} rule={byPath.get(file.path)?.rule} disabled={disabled || /[*?]/.test(file.path)}
+              onChange={size=>saveSize(file.path,byPath.get(file.path)?.original ?? '',size)}/>}
+        </td><td>
           <input type="checkbox" aria-label={'Exclude '+file.path} checked={!!byPath.get(file.path)?.rule.exclude}
             disabled={disabled || /[*?]/.test(file.path) || file.path==='game.json' || file.path.startsWith('engine/') || file.path.startsWith('_atlas/')}
             onChange={e=>setExcluded(file.path,byPath.get(file.path)?.original ?? '',e.currentTarget.checked)}/>
@@ -305,6 +323,7 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
         </details>
         {estimate?.files && <PackageInventory key={JSON.stringify([projectPath,target])} files={estimate.files}
           rules={rules} scopeLabel={ruleScope==='project' ? 'all platforms' : selected?.name ?? target} disabled={atlasDisabled}
+          saveSize={(path,original,size)=>void saveAtlas(()=>invoke('studio.buildFileTextureSize',{project:projectPath,target,scope:ruleScope,path,original,size}))}
           setExcluded={setExcluded} saveLevel={(path,original,level)=>void saveAtlas(()=>invoke('studio.buildFileCompression',{project:projectPath,target,scope:ruleScope,path,original,level}))}/>}
         {estimate?.split && <section className="build__card" aria-label="Downloadable content">
           <h3>Downloadable content</h3>

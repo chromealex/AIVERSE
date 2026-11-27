@@ -2460,7 +2460,7 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
     const Json& pages = manifest["atlas"]["maxPage"];
     const bool atlasEnabled = manifest["atlas"].getBool("enable",true);
     const auto compression = manifest["packaging"].getInt("level",0);
-    if (method == "studio.buildRemoveFileRule" || method == "studio.buildFileExclusion" || method == "studio.buildFileCompression") {
+    if (method == "studio.buildRemoveFileRule" || method == "studio.buildFileTextureSize" || method == "studio.buildFileExclusion" || method == "studio.buildFileCompression") {
         const auto scope = params.getStr("scope"), target = params.getStr("target");
         if (!knownBuildTarget(target) || (scope!="project" && scope!="target") ||
             params.getStr("project")!=ws_.project.dir || ws_.building()) throw std::runtime_error("Build settings unavailable");
@@ -2484,7 +2484,20 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
                 throw std::runtime_error("The file rule changed. Review the current rules.");
             Json updated = exists ? rules[index] : Json::object();
             updated.set("match",str(path));
-            if (method=="studio.buildFileExclusion") {
+            if (method=="studio.buildFileTextureSize") {
+                auto ext=fs::path(path).extension().string();
+                std::transform(ext.begin(),ext.end(),ext.begin(),[](unsigned char c){return char(std::tolower(c));});
+                if (path.rfind("_atlas/",0)==0 || (ext!=".png" && ext!=".jpg" && ext!=".jpeg" && ext!=".tga" && ext!=".bmp"))
+                    throw std::runtime_error("Choose a source image");
+                const auto& size=params["size"];
+                if (!params.has("size") || (!size.isNull() && (!size.isNumber() ||
+                    (size.toDouble()!=0.25 && size.toDouble()!=0.5 && size.toDouble()!=256 &&
+                     size.toDouble()!=512 && size.toDouble()!=1024 && size.toDouble()!=2048))))
+                    throw std::runtime_error("Invalid texture size");
+                updated.erase("maxSize");
+                updated.erase("scale");
+                if (!size.isNull()) updated.set(size.toDouble()<1 ? "scale" : "maxSize",size);
+            } else if (method=="studio.buildFileExclusion") {
                 if (params.getBool("exclude")) updated.set("exclude",Json::fromBool(true));
                 else updated.erase("exclude");
             } else if (level.isNull()) updated.erase("level");
@@ -5231,7 +5244,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             reply.set("result",sceneBrushJson());
         } else if (method == "studio.agentInfo" || method == "studio.agentStart" || method == "studio.agentStop" || method == "studio.agentReset") {
             reply.set("result", agentRequest(method, params));
-        } else if (method == "studio.buildInfo" || method == "studio.buildFileExclusion" || method == "studio.buildFileCompression" || method == "studio.buildRemoveFileRule" || method == "studio.buildSplitLimit" || method == "studio.buildSplitMode" || method == "studio.buildCompression" || method == "studio.buildAtlasFixSizes" || method == "studio.buildAtlasPage" || method == "studio.buildAtlasEnabled" || method == "studio.buildToolchain" || method == "studio.buildStart" ||
+        } else if (method == "studio.buildInfo" || method == "studio.buildFileTextureSize" || method == "studio.buildFileExclusion" || method == "studio.buildFileCompression" || method == "studio.buildRemoveFileRule" || method == "studio.buildSplitLimit" || method == "studio.buildSplitMode" || method == "studio.buildCompression" || method == "studio.buildAtlasFixSizes" || method == "studio.buildAtlasPage" || method == "studio.buildAtlasEnabled" || method == "studio.buildToolchain" || method == "studio.buildStart" ||
                    method == "studio.buildLog" || method == "studio.buildEstimate") {
             reply.set("result", buildRequest(method, params));
         } else if(method=="studio.worldProcessAreaBatchResize"){
