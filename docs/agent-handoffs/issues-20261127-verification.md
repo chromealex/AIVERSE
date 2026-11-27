@@ -471,3 +471,7 @@ Stage a566e7ae3f944daf34d28b0ef83a47565fb4931b: demos/selection-voices adds two 
 Stage 83f300d42a152e19f058c13475acd3b390f8104d updates selection-voice-order architecture/API/skill/dependency/docs records after actual source review, explains graph/server nonapplicability, and aligns English documentation with the command-reset requirement already documented in Russian. Actual runtime/Studio/persistence/performance/publication remain pending. Manifest shape1/0, catalog303valid, diff check passed.
 
 Combined incremental all-target native build96536 started from8cccc49a7 in the existing KINGSTON cache; currently live, do not restart. Log issues-audio-final-build.log. Source fix e4fe0e797 and PCM regression are included. Only metadata/docs changed after build start. Next poll96536, then run audio_repeated_selection_mixer_order_and_resets and existing related tests, capture actual client audio with demos/selection-voices, finish remaining acceptance and fresh full gate.
+
+## Mixer test compile correction
+
+Build96536 terminal exit2: tests/tests.cpp3471 attempted assignment through const Json::operator[]. Product audio/client/Studio targets linked; test binary failed compilation. Stage 0ed8dddaa8b777277b05cdacd1587c3199085433 replaces that test-only mutation with member/set and Json::number(int64_t(1)), the actual repository editing API. Diff check passed; corrected test not yet run. Resume the same cache, no clean rebuild. Failure log remains KINGSTON issues-audio-final-build.log.
