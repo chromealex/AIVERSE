@@ -6,6 +6,7 @@ interface NativeReply { id?: number; result?: unknown; error?: string; event?: s
 type NativeHandler = { postMessage: (message: NativeRequest) => void };
 declare global {
   interface Window {
+    __aiverseLinux?: NativeHandler;
     webkit?: { messageHandlers?: { aiverse?: NativeHandler } };
     __aiverseReceive?: (message: NativeReply) => void;
   }
@@ -40,16 +41,17 @@ window.__aiverseReceive = (message: NativeReply) => {
   else call.resolve(message.result);
 };
 
-export const nativeConnected = (): boolean => !!window.webkit?.messageHandlers?.aiverse;
+const nativeHandler = () => window.__aiverseLinux ?? window.webkit?.messageHandlers?.aiverse;
+export const nativeConnected = (): boolean => !!nativeHandler();
 /** Native window chrome actions (no reply): drag the window from the title bar, zoom on double-click. */
 export function nativeWindowAction(action: 'studio.windowDrag' | 'studio.windowZoom' | 'studio.windowMinimize' | 'studio.windowClose'): void {
-  const native = window.webkit?.messageHandlers?.aiverse;
+  const native = nativeHandler();
   try { native?.postMessage({ id: 0, method: action, params: {} }); }
   catch { /* not in the native host */ }
 }
 /** Start an edge resize. The button must still be down; the host runs the system size loop. */
 export function nativeWindowResize(edge: 'left' | 'right' | 'top' | 'bottom' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'): void {
-  const native = window.webkit?.messageHandlers?.aiverse;
+  const native = nativeHandler();
   try { native?.postMessage({ id: 0, method: 'studio.windowResize', params: { edge } }); }
   catch { /* not in the native host */ }
 }
@@ -64,7 +66,7 @@ export function onNativeEvent(listener: (event: string, payload: unknown) => voi
   return () => listeners.delete(listener);
 }
 export async function invoke<M extends StudioMethod>(method: M, params: StudioParams[M]): Promise<StudioResult[M]> {
-  const native = window.webkit?.messageHandlers?.aiverse;
+  const native = nativeHandler();
   if (!native) return mockInvoke(method, params);
   return new Promise<StudioResult[M]>((resolve, reject) => {
     const id = nextId++;

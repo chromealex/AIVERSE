@@ -56,6 +56,18 @@ test('two WebViews with pending requests resolve only their own broadcast reply'
   assert.equal((await snapshot).mode,'edit');
 });
 
+test('Linux window routes requests and replies through its injected transport', async () => {
+  const b = bridge();
+  const sent = [];
+  b.window.__aiverseLinux = { postMessage: request => sent.push(request) };
+  const pending = b.invoke('studio.snapshot', {});
+  assert.equal(b.sent.length, 0);
+  assert.equal(sent[0].method, 'studio.snapshot');
+  b.window.__aiverseReceive({ id: sent[0].id, result: { mode: 'edit' } });
+  assert.equal((await pending).mode, 'edit');
+  assert.equal(b.timers.size, 0);
+});
+
 test('native replies clear ordinary call timers', async () => {
   const b = bridge();
   const result = b.invoke('studio.snapshot', {});

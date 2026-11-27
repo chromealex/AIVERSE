@@ -1,4 +1,5 @@
 #include "../linux/StudioWebAssets.h"
+#include "../linux/StudioWebBridge.h"
 #include <iostream>
 
 int main(int argc, char** argv) {
@@ -7,6 +8,14 @@ int main(int argc, char** argv) {
     auto* window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     auto* view = WEBKIT_WEB_VIEW(webkit_web_view_new());
     aiverse::studio::registerStudioWebAssets(webkit_web_view_get_context(view),argv[1]);
+    bool roundTrip = false;
+    aiverse::studio::StudioWebBridge bridge(view,[&](const std::string& request) {
+        if (request == R"({"id":0,"method":"probe","params":{}})") {
+            roundTrip = true;
+            bridge.evaluate("window.webkit.messageHandlers.mounted.postMessage(true)");
+        }
+    });
+    if (!bridge.registered()) return 1;
     gtk_container_add(GTK_CONTAINER(window),GTK_WIDGET(view));
     gtk_widget_show_all(window);
     bool mounted = false;
@@ -20,9 +29,10 @@ int main(int argc, char** argv) {
     g_signal_connect(view,"load-changed",G_CALLBACK(+[](WebKitWebView* web,WebKitLoadEvent event,gpointer){
         if (event != WEBKIT_LOAD_FINISHED) return;
         const char* check = R"JS((function check() {
-            const root = document.getElementById('root');
-            if (root?.childElementCount && !document.getElementById('studio-boot') && document.styleSheets.length) {
-                window.webkit.messageHandlers.mounted.postMessage(true);
+            const root = document.querySelector('#root .studio.compact-shell');
+            const css = Array.from(document.styleSheets).some(s => s.href?.startsWith('aiverse-studio://shell/assets/') && s.cssRules.length);
+            if (root && css) {
+                window.__aiverseLinux.postMessage({id:0, method:"probe", params:{}});
             } else { setTimeout(check, 100); }
         })())JS";
         webkit_web_view_evaluate_javascript(web,check,-1,nullptr,nullptr,nullptr,nullptr,nullptr);
@@ -32,5 +42,5 @@ int main(int argc, char** argv) {
     gtk_main();
     gtk_widget_destroy(window);
     if (!mounted) std::cerr << "Studio did not mount from its bundled HTML, modules and styles\n";
-    return mounted ? 0 : 1;
+    return mounted && roundTrip ? 0 : 1;
 }
