@@ -65,21 +65,32 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Metal pixel fixture passes all 16 cases, including mesh, trail, ribbon and textured graph paths. Depth tolerance defect fixed. Broader host/platform delivery acceptance remains pending.",
+      "status": "pass",
+      "note": "Metal pixel tests cover model alpha/weighted/unweighted and display-particle sprite/mesh/trail/ribbon/graph, depth, fog and resize. Actual Metal/WebGL three-scene demo confirms host integration. Final integrated test gate tracked separately.",
       "evidence": [
-        "docs/evidence/issues-additive-metal-20261127/result.json"
+        "docs/evidence/issues-additive-metal-20261127/result.json",
+        "docs/evidence/issues-material-effects-metal-20261127/result.json",
+        "docs/evidence/issues-material-effects-web-20261127/result.json"
       ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "ParticleSystem records already-uploaded geometry, Renderer3D invokes a generic display callback after existing PRISMA resolve with original depth. Consumers call renderScene; no genre-specific compositor or alternate tone mapping owner.",
+      "evidence": [
+        "engine/fx/FxRender.cpp",
+        "engine/render/Renderer3D.cpp",
+        "engine/fx/ParticleSystem.h"
+      ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Public FxBlendSpace, renderScene and renderDisplay use existing ParticleSystem/Renderer3D lifetime and view. Real native fixture covers display geometry/depth/fog/resize; upload is reused through resolve.",
+      "evidence": [
+        "engine/fx/FxEffect.h",
+        "engine/fx/ParticleSystem.h",
+        "tests/render/additive_blend_frame.cpp",
+        "docs/evidence/issues-additive-metal-20261127/result.json"
+      ]
     },
     "skill": {
       "status": "pass",
@@ -89,9 +100,12 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Actual domain fx_set/get persisted authored fields, refused invalid alpha/display combination and retained original after reopen. Registry audit confirms declared tools. Material library modes separately exercised through alpha, not FX blend.",
+      "evidence": [
+        "docs/evidence/issues-authoring-mcp-registry-20261127.json",
+        "docs/evidence/issues-fx-authoring-20261127/result.json"
+      ]
     },
     "studio": {
       "status": "pass",
@@ -142,14 +156,21 @@
       "evidence": []
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Uses existing gfx blend state, Renderer3D, model/particle owners and PRISMA resolve. No package or competing rendering pipeline added.",
+      "evidence": [
+        "engine/render/MaterialBlend.h",
+        "engine/fx/FxRender.cpp",
+        "engine/render/Renderer3D.cpp"
+      ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "Presentation blend state only; no server simulation or authoritative gameplay state is introduced. Parsing remains ordinary data code.",
+      "evidence": [
+        "engine/render/MaterialBlend.h",
+        "engine/fx/FxEffect.h"
+      ]
     },
     "examples": {
       "status": "pass",
@@ -171,9 +192,12 @@
       "evidence": []
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Reference and existing owner skill describe field names, alpha/depth/color-space semantics, real example and verification limits.",
+      "evidence": [
+        "docs/particles.md",
+        "skills/visuals/aiverse-spectrafx/SKILL.md"
+      ]
     },
     "publishing": {
       "status": "not_run",

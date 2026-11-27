@@ -68,9 +68,12 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Actual domain fx_set/get persisted authored fields, refused invalid alpha/display combination and retained original after reopen. Registry audit confirms declared tools. Material library modes separately exercised through alpha, not FX blend.",
+      "evidence": [
+        "docs/evidence/issues-authoring-mcp-registry-20261127.json",
+        "docs/evidence/issues-fx-authoring-20261127/result.json"
+      ]
     },
     "studio": {
       "status": "pass",
@@ -103,9 +106,13 @@
       ]
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "Flag belongs to AnimatedModelEffect and maps to existing model draw flags. Existing particle graph output compiles emitters rather than AnimatedModelEffect; no applicable model-shadow graph is introduced.",
+      "evidence": [
+        "engine/fx/FxEffect.h",
+        "engine/fx/AnimatedModelEffectView.h",
+        "engine/fx/VfxGraph.h"
+      ]
     },
     "performance": {
       "status": "not_run",

@@ -60,21 +60,32 @@
   },
   "checks": {
     "implementation": {
-      "status": "not_run",
-      "note": "Metal pixel fixture passes all 16 cases, including mesh, trail, ribbon and textured graph paths. Depth tolerance defect fixed. Broader host/platform delivery acceptance remains pending.",
+      "status": "pass",
+      "note": "Metal pixel tests cover model alpha/weighted/unweighted and display-particle sprite/mesh/trail/ribbon/graph, depth, fog and resize. Actual Metal/WebGL three-scene demo confirms host integration. Final integrated test gate tracked separately.",
       "evidence": [
-        "docs/evidence/issues-additive-metal-20261127/result.json"
+        "docs/evidence/issues-additive-metal-20261127/result.json",
+        "docs/evidence/issues-material-effects-metal-20261127/result.json",
+        "docs/evidence/issues-material-effects-web-20261127/result.json"
       ]
     },
     "architecture": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Shared AlphaMode/parseMaterialBlend maps material and FX authoring to gfx::BlendMode. Model rendering/import/export consume the same state; FX view adapter sets existing model material state.",
+      "evidence": [
+        "engine/render/MaterialBlend.h",
+        "engine/fx/AnimatedModelEffectView.h",
+        "engine/render/Renderer3DModels.cpp"
+      ]
     },
     "native_api": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Public AlphaMode, parseMaterialBlend and materialBlendMode expose weighted/unweighted state; ModelMaterialTrack.blend shares parser. Native pixel fixture invokes actual rendering and distinguishes both arithmetic modes.",
+      "evidence": [
+        "engine/render/MaterialBlend.h",
+        "engine/fx/FxEffect.h",
+        "tests/render/additive_blend_frame.cpp",
+        "docs/evidence/issues-additive-metal-20261127/result.json"
+      ]
     },
     "skill": {
       "status": "pass",
@@ -84,10 +95,12 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Rebuilt real MCP now accepts both additive modes; save/get/restart/reopen passed, unsupported alpha rejected without modifying materials.json. Registration audit and final provenance gate pending.",
+      "status": "pass",
+      "note": "Actual domain fx_set/get persisted authored fields, refused invalid alpha/display combination and retained original after reopen. Registry audit confirms declared tools. Material library modes separately exercised through alpha, not FX blend.",
       "evidence": [
-        "docs/evidence/issues-mcp-authoring-20261127/material-after.json"
+        "docs/evidence/issues-authoring-mcp-registry-20261127.json",
+        "docs/evidence/issues-fx-authoring-20261127/result.json",
+        "docs/evidence/issues-material-mcp-current-20261127/result.json"
       ]
     },
     "studio": {
@@ -124,9 +137,12 @@
       ]
     },
     "graphs": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "This feature changes fixed-function model material blend state, not a shader expression or particle graph node. Existing shared material owner is used; creating a second graph for blend enums would duplicate ownership. Particle graph blend-space acceptance is tracked by particle-display-blending.",
+      "evidence": [
+        "engine/render/MaterialBlend.h",
+        "engine/fx/VfxGraph.h"
+      ]
     },
     "performance": {
       "status": "not_run",
@@ -139,14 +155,21 @@
       "evidence": []
     },
     "dependencies": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Uses existing gfx blend state, Renderer3D, model/particle owners and PRISMA resolve. No package or competing rendering pipeline added.",
+      "evidence": [
+        "engine/render/MaterialBlend.h",
+        "engine/fx/FxRender.cpp",
+        "engine/render/Renderer3D.cpp"
+      ]
     },
     "headless": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "not_applicable",
+      "note": "Presentation blend state only; no server simulation or authoritative gameplay state is introduced. Parsing remains ordinary data code.",
+      "evidence": [
+        "engine/render/MaterialBlend.h",
+        "engine/fx/FxEffect.h"
+      ]
     },
     "examples": {
       "status": "pass",
@@ -168,9 +191,12 @@
       "evidence": []
     },
     "documentation": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Reference and existing owner skill describe field names, alpha/depth/color-space semantics, real example and verification limits.",
+      "evidence": [
+        "docs/models.md",
+        "skills/visuals/aiverse-look/SKILL.md"
+      ]
     },
     "publishing": {
       "status": "not_run",
