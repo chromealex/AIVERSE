@@ -4357,9 +4357,11 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     if(pendingSceneFocus_) {
         auto [target,distance]=*pendingSceneFocus_;
         pendingSceneFocus_.reset();
+        if(focusBounds_)focusBoundsUntil_=now+std::chrono::milliseconds(1600);
         if(!fpsProject)target.y+=terrainPreviewHeight(doc.data,target.x,target.z,levelHeight,baseTerrainView_);
         startTween(target,distance,camera_.yaw,camera_.pitch);
     }
+    if(focusBounds_ && now>=focusBoundsUntil_)focusBounds_.reset();
     stepTween();
     const auto view=viewCamera();
     spectraSources_.synchronize(*device_,doc,projectRoot,hidden_,levelHeight,showTerrain,&nereid_.scene());
@@ -4369,7 +4371,7 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
         constexpr int kSettleFrames=30;
         const uint64_t signature=frameSignature(framebufferWidth,framebufferHeight,doc,fpsProject,selectedId);
         // Pending Assets thumbnails render inside a drawn frame (one per frame).
-        const bool animated=continuousRedraw_ || tween_.active || modelsPending_ || cavernsPreview_.needsFrame() || sparseTerrain || !thumbJobs_.empty() ||
+        const bool animated=continuousRedraw_ || focusBounds_.has_value() || tween_.active || modelsPending_ || cavernsPreview_.needsFrame() || sparseTerrain || !thumbJobs_.empty() ||
             lightingRevision_!=doc.revision || nereid_.configuredSurfaces()>0 || mapWater_.configuredSurfaces()>0 ||
             (wind_.enabled && riggedInstances_>0) || day.clouds>0 || lodDiagnostics_ ||
             (lightingRuntime_.indirect && !lightingRuntime_.indirect->converged) ||
@@ -4856,6 +4858,19 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                         }
                     }
                 });
+        }
+        if(focusBounds_ && !planetaryChart){
+            const auto [x0,z0,x1,z1]=*focusBounds_;
+            const float remaining=std::clamp(std::chrono::duration<float>(focusBoundsUntil_-now).count()/1.6f,0.f,1.f);
+            const auto point=[&](float x,float z){
+                const float ground=showTerrain?terrainPreviewHeight(map,x,z,levelHeight,baseTerrainView_):0.f;
+                return float3{x,ground+.35f+(1.f-remaining)*.4f,z};
+            };
+            const auto a=point(x0,z0),b=point(x1,z0),c=point(x1,z1),d=point(x0,z1);
+            const auto fill=rgba(120,220,255,uint8_t(70*remaining));
+            const auto edge=rgba(120,220,255,uint8_t(40+150*remaining));
+            renderer_.triangle(a,d,c,fill);renderer_.triangle(a,c,b,fill);
+            renderer_.line(a,b,edge);renderer_.line(b,c,edge);renderer_.line(c,d,edge);renderer_.line(d,a,edge);
         }
         if(worldAxes_&&!planetaryChart){
             renderer_.line({0,0,0},{4,0,0},rgba(234,96,96));

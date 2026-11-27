@@ -4104,7 +4104,7 @@ Json StudioHost::viewportInput(const Json& input) {
         if(!positioned)throw std::runtime_error("This group has no positioned objects");
         const float distance=std::clamp(std::max(x1-x0,z1-z0)*1.2f+14.f,14.f,200.f);
         ensureScene();
-        onScene([&]{preview_->requestSceneFocus({(x0+x1)*.5f,0.f,(z0+z1)*.5f},distance);});
+        onScene([&]{preview_->requestSceneFocus({(x0+x1)*.5f,0.f,(z0+z1)*.5f},distance,std::array<float,4>{x0-.5f,z0-.5f,x1+.5f,z1+.5f});});
         sendEventPayload("ui.showPanel",Json::parse(R"({"panel":"scene"})"));
         return Json::object();
     }
