@@ -53,19 +53,34 @@
       "evidence": []
     },
     "studio": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Actual native Effects Set/Get saved castShadow false, additive model material and display-space additive emitter, with zero warnings. Invalid alpha+display was rejected; fresh MCP process read identical JSON after reopen and disk bytes were unchanged. Existing JSON operation panel, not graph canvas/preview or Undo acceptance.",
+      "evidence": [
+        "docs/evidence/issues-fx-authoring-20261127/result.json",
+        "docs/evidence/issues-fx-authoring-20261127/effect-after.json",
+        "docs/evidence/issues-fx-authoring-20261127/saved.png",
+        "docs/evidence/issues-fx-authoring-20261127/rejected.png"
+      ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Actual native Effects Set/Get saved castShadow false, additive model material and display-space additive emitter, with zero warnings. Invalid alpha+display was rejected; fresh MCP process read identical JSON after reopen and disk bytes were unchanged. Existing JSON operation panel, not graph canvas/preview or Undo acceptance.",
+      "evidence": [
+        "docs/evidence/issues-fx-authoring-20261127/result.json",
+        "docs/evidence/issues-fx-authoring-20261127/effect-after.json",
+        "docs/evidence/issues-fx-authoring-20261127/saved.png",
+        "docs/evidence/issues-fx-authoring-20261127/rejected.png"
+      ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Actual native Effects Set/Get saved castShadow false, additive model material and display-space additive emitter, with zero warnings. Invalid alpha+display was rejected; fresh MCP process read identical JSON after reopen and disk bytes were unchanged. Existing JSON operation panel, not graph canvas/preview or Undo acceptance.",
+      "evidence": [
+        "docs/evidence/issues-fx-authoring-20261127/result.json",
+        "docs/evidence/issues-fx-authoring-20261127/effect-after.json",
+        "docs/evidence/issues-fx-authoring-20261127/saved.png",
+        "docs/evidence/issues-fx-authoring-20261127/rejected.png"
+      ]
     },
     "graphs": {
       "status": "not_run",
@@ -126,9 +141,16 @@
   },
   "integrations": {
     "skills": [],
-    "mcp_tools": [],
-    "studio_panels": [],
-    "studio_methods": []
+    "mcp_tools": [
+      "fx_get",
+      "fx_set"
+    ],
+    "studio_panels": [
+      "effects"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ]
   },
   "test_reports": []
 }

@@ -71,23 +71,37 @@
       ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Native Studio built and real Materials UI saved/reloaded both additive modes; screenshots and disk inspection retained. Direct library edits retain existing explicit MapDoc-undo limitation.",
+      "status": "pass",
+      "note": "Native Studio built and real Materials UI saved/reloaded both additive modes; screenshots and disk inspection retained. Direct library edits retain existing explicit MapDoc-undo limitation. Also verified FX model material authoring through Effects Set/Get. No new preview/undo claim.",
       "evidence": [
-        "docs/evidence/issues-studio-materials-20261127/result.json"
+        "docs/evidence/issues-studio-materials-20261127/result.json",
+        "docs/evidence/issues-fx-authoring-20261127/result.json",
+        "docs/evidence/issues-fx-authoring-20261127/effect-after.json",
+        "docs/evidence/issues-fx-authoring-20261127/saved.png",
+        "docs/evidence/issues-fx-authoring-20261127/rejected.png"
       ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Existing Materials property selector offers both additive modes and preserves selected values after save/reload in native Studio.",
+      "status": "pass",
+      "note": "Existing Materials property selector offers both additive modes and preserves selected values after save/reload in native Studio. Also verified FX model material authoring through Effects Set/Get. No new preview/undo claim.",
       "evidence": [
-        "docs/evidence/issues-studio-materials-20261127/result.json"
+        "docs/evidence/issues-studio-materials-20261127/result.json",
+        "docs/evidence/issues-fx-authoring-20261127/result.json",
+        "docs/evidence/issues-fx-authoring-20261127/effect-after.json",
+        "docs/evidence/issues-fx-authoring-20261127/saved.png",
+        "docs/evidence/issues-fx-authoring-20261127/rejected.png"
       ]
     },
     "persistence": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Actual native Effects Set/Get saved castShadow false, additive model material and display-space additive emitter, with zero warnings. Invalid alpha+display was rejected; fresh MCP process read identical JSON after reopen and disk bytes were unchanged. Existing JSON operation panel, not graph canvas/preview or Undo acceptance. Shared material library save/reopen evidence is retained separately.",
+      "evidence": [
+        "docs/evidence/issues-fx-authoring-20261127/result.json",
+        "docs/evidence/issues-fx-authoring-20261127/effect-after.json",
+        "docs/evidence/issues-fx-authoring-20261127/saved.png",
+        "docs/evidence/issues-fx-authoring-20261127/rejected.png",
+        "docs/evidence/issues-mcp-authoring-20261127/material-after.json"
+      ]
     },
     "graphs": {
       "status": "not_run",
@@ -144,14 +158,18 @@
     "skills": [],
     "mcp_tools": [
       "material_set",
-      "material_get"
+      "material_get",
+      "fx_get",
+      "fx_set"
     ],
     "studio_panels": [
-      "materials"
+      "materials",
+      "effects"
     ],
     "studio_methods": [
       "studio.materials",
-      "studio.materialPatch"
+      "studio.materialPatch",
+      "studio.op"
     ]
   },
   "test_reports": []
