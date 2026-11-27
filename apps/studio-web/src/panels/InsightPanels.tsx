@@ -3,6 +3,7 @@ import { ArrowLeftRight, RefreshCw } from 'lucide-react';
 import { invoke } from '../bridge';
 import type { StudioGpuStats, StudioProjectState, StudioSnapshot, StudioStats } from '../types';
 import { formatBytes, frameSummary, jsonDiff, previewValue, type JsonChange } from './jsonDiff';
+import { copyText } from '../clipboard';
 import PlayerHistory from './PlayerHistory';
 import './ToolPanel.css';
 import './ProjectToolPanels.css';
@@ -51,6 +52,8 @@ export function SnapshotDiffPanel({ snapshot }: Ctx) {
   const path = snapshot?.project.path ?? '';
   const [maps, setMaps] = useState<string[]>([]);
   const [a, setA] = useState(''), [b, setB] = useState('');
+  const [notice, setNotice] = useState('');
+  const [truncated, setTruncated] = useState(false);
   const [changes, setChanges] = useState<JsonChange[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -60,25 +63,37 @@ export function SnapshotDiffPanel({ snapshot }: Ctx) {
     void invoke('studio.project', {}).then((p: StudioProjectState) => {
       const files = p.maps.map(m => m.file);
       setMaps(files); setA(x => x || files[0] || ''); setB(x => x || files[1] || files[0] || '');
-    }).catch(() => {});
+    }).catch(e => setError(message(e)));
   }, [path]);
   const read = async (file: string) => {
     const r = (await invoke('studio.op', { op: 'game_file_read', params: { path: file } })).result as { text?: string };
     try { return JSON.parse(r.text ?? ''); } catch { throw new Error(file + ' is not JSON'); }
   };
   const compare = async () => {
-    setBusy(true); setChanges(null);
-    try { setChanges(jsonDiff(await read(a.trim()), await read(b.trim()))); setError(''); }
+    setBusy(true); setChanges(null); setNotice(''); setError('');
+    try {
+      const [first, second] = await Promise.all([read(a.trim()), read(b.trim())]);
+      const rows = jsonDiff(first, second, 1e-6, 2001);
+      setTruncated(rows.length > 2000);
+      setChanges(rows.slice(0, 2000));
+    }
     catch (e) { setError(message(e)); }
     finally { setBusy(false); }
   };
+  const copyReport = async () => {
+    if (!changes?.length) return;
+    const lines = changes.map(c => [c.path.replaceAll('\t', '\\t').replaceAll('\n', '\\n').replaceAll('\r', '\\r'), JSON.stringify(c.before), JSON.stringify(c.after)].join('\t'));
+    if (truncated) lines.push('[truncated]');
+    setNotice(await copyText(['path\tfirst\tsecond', ...lines, ''].join('\n')) ? 'Report copied' : 'Clipboard unavailable');
+  };
+  const resetResult = () => { setChanges(null); setNotice(''); setError(''); };
   const shown = useMemo(() => (changes ?? []).filter(c => !filter || c.path.toLowerCase().includes(filter.toLowerCase())), [changes, filter]);
   if (!path) return <div className="tool__empty">Open a project to compare its snapshots.</div>;
   return <div className="ptp">
     <div className="ptp__edhead diff__head">
-      <input className="au-input" list="diff-maps" value={a} onChange={e => setA(e.target.value)} placeholder="maps/a.json"/>
-      <button type="button" className="au-button au-button--icon au-button--ghost au-button--sm" title="Swap" onClick={() => { setA(b); setB(a); }}><ArrowLeftRight size={13}/></button>
-      <input className="au-input" list="diff-maps" value={b} onChange={e => setB(e.target.value)} placeholder="maps/b.json"/>
+      <input className="au-input" list="diff-maps" aria-label="First snapshot" disabled={busy} value={a} onChange={e => { setA(e.target.value); resetResult(); }} placeholder="maps/a.json"/>
+      <button type="button" className="au-button au-button--icon au-button--ghost au-button--sm" title="Swap" disabled={busy} onClick={() => { setA(b); setB(a); resetResult(); }}><ArrowLeftRight size={13}/></button>
+      <input className="au-input" list="diff-maps" aria-label="Second snapshot" disabled={busy} value={b} onChange={e => { setB(e.target.value); resetResult(); }} placeholder="maps/b.json"/>
       <datalist id="diff-maps">{maps.map(m => <option key={m} value={m}/>)}</datalist>
       <button type="button" className="au-button au-button--sm au-button--primary" disabled={busy || !a || !b} onClick={() => void compare()}>
         {busy ? <StudioLoader size={16}/> : <RefreshCw size={13}/>}Compare</button>
@@ -86,14 +101,16 @@ export function SnapshotDiffPanel({ snapshot }: Ctx) {
     {error && <div className="tool__error" role="alert">{error}</div>}
     <div className="ptp__scroll">
       {changes && <div className="diff__summary">
-        <span>{changes.length >= 2000 ? '2000+' : changes.length} differences</span>
+        <span>{truncated ? '2000+' : changes.length} differences</span>
         <span className="diff__added">+{changes.filter(c => c.kind === 'added').length}</span>
         <span className="diff__removed">−{changes.filter(c => c.kind === 'removed').length}</span>
         <span className="diff__changed">~{changes.filter(c => c.kind === 'changed').length}</span>
+        <button type="button" className="au-button au-button--sm" disabled={!changes.length} onClick={() => void copyReport()}>Copy report</button>
+        <span role="status">{notice}</span>
         <input className="au-input" placeholder="Filter paths" value={filter} onChange={e => setFilter(e.target.value)}/>
       </div>}
       {changes && !changes.length && <p className="ptp__ok">The files are the same.</p>}
-      {!!shown.length && <table className="ptp__table ptp__audit"><tbody>{shown.slice(0, 500).map((c, i) =>
+      {!!shown.length && <table className="ptp__table ptp__audit"><thead><tr><th>Path</th><th>First</th><th>Second</th></tr></thead><tbody>{shown.slice(0, 500).map((c, i) =>
         <tr key={i} className={'diff__' + c.kind}><td>{c.kind === 'added' ? '+' : c.kind === 'removed' ? '−' : '~'} {c.path}</td>
           <td>{previewValue(c.before)}</td><td>{previewValue(c.after)}</td></tr>)}</tbody></table>}
       {!changes && <p className="ptp__hint">Compares two JSON files of the project path by path (numbers within 1e-6 count as equal). Read-only.</p>}

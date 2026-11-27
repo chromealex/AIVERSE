@@ -23,10 +23,10 @@ export function jsonDiff(a: unknown, b: unknown, epsilon = 1e-6, limit = 2000): 
     if (isObj(x) && isObj(y)) {
       for (const k of Object.keys(x)) {
         const p = path ? `${path}.${k}` : k;
-        if (!(k in y)) out.push({ path: p, kind: 'removed', before: x[k] }); else walk(x[k], y[k], p);
+        if (!Object.prototype.hasOwnProperty.call(y, k)) out.push({ path: p, kind: 'removed', before: x[k] }); else walk(x[k], y[k], p);
         if (out.length >= limit) return;
       }
-      for (const k of Object.keys(y)) if (!(k in x)) { out.push({ path: path ? `${path}.${k}` : k, kind: 'added', after: y[k] }); if (out.length >= limit) return; }
+      for (const k of Object.keys(y)) if (!Object.prototype.hasOwnProperty.call(x, k)) { out.push({ path: path ? `${path}.${k}` : k, kind: 'added', after: y[k] }); if (out.length >= limit) return; }
       return;
     }
     if (JSON.stringify(x) !== JSON.stringify(y)) out.push({ path: path || '(root)', kind: 'changed', before: x, after: y });
