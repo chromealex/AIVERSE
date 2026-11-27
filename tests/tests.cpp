@@ -3468,7 +3468,7 @@ TEST(audio_repeated_selection_mixer_order_and_resets) {
     click(scouts[0],440); click(scouts[0],660);
     sound.resetSelectionClicks(); // client clearing/group selection uses this API
     click(scouts[0],440);
-    bank["types"]["scout"]["repeatSelect"]["window"] = 1;
+    bank.member("types").member("scout").member("repeatSelect").set("window", Json::number(int64_t(1)));
     CHECK(sound.init(*a,mod(*sim).rules(),bank));
     click(scouts[0],440); click(scouts[0],440); click(scouts[0],660);
     sound.update(*sim,1.1);
