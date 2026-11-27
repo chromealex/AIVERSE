@@ -529,12 +529,14 @@ export default function AssetsPanel({projectPath}:{projectPath:string}){
     {creatingMaterial&&<form className="studio-assets-create-folder studio-assets-material-form" onSubmit={event=>{
       event.preventDefault();void createMaterial();
     }}>
-      <Library size={13}/><span>New material in content/materials</span>
+      <header><Library size={13}/>New material in content/materials</header>
+      <div className="studio-assets-material-fields"><label>Name
       <input autoFocus aria-label="New material name" value={materialName}
-        onChange={event=>setMaterialName(event.target.value)} placeholder="Material name"/>
-      <MaterialRecipeFields recipe={materialRecipe} busy={busy}/>
+        onChange={event=>setMaterialName(event.target.value)} placeholder="Material name"/></label>
+      <MaterialRecipeFields recipe={materialRecipe} busy={busy}/></div>
+      <footer>
       <button type="submit" disabled={!materialName.trim()||busy||!materialRecipe.valid}>Create</button>
-      <button type="button" onClick={()=>setCreatingMaterial(false)}>Cancel</button>
+      <button type="button" onClick={()=>setCreatingMaterial(false)}>Cancel</button></footer>
     </form>}
     {message&&<div className="studio-assets-status" role="status">{message}</div>}
     {error&&<div className="studio-assets-status studio-assets-error" role="alert">{error}</div>}

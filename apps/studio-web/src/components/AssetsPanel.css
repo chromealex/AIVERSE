@@ -263,5 +263,9 @@
 button.project-directory-entry:hover{background:var(--au-hover);cursor:pointer}
 .project-directory footer{display:flex;align-items:center;gap:8px;padding:5px 8px;border-top:1px solid var(--au-line);color:var(--au-text-muted);flex-wrap:wrap;overflow-wrap:anywhere}
 
-.studio-assets-material-form{flex-wrap:wrap}
-.studio-assets-material-form label{display:inline-flex;align-items:center;gap:5px}
+.studio-assets-material-form{display:grid;align-items:start;gap:8px;max-height:60%;overflow:auto;padding:8px 12px}
+.studio-assets-material-form header,.studio-assets-material-form footer{display:flex;align-items:center;gap:6px}
+.studio-assets-material-form footer{justify-content:flex-end}
+.studio-assets-material-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:8px}
+.studio-assets-material-fields>label,.studio-assets-material-fields>.property-row{display:grid;grid-template-columns:minmax(0,1fr);gap:4px;align-content:start;min-width:0}
+.studio-assets-material-fields input,.studio-assets-material-fields select{box-sizing:border-box;width:100%;min-width:0;max-width:none}
