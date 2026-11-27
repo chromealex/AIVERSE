@@ -146,7 +146,7 @@ bool builtinMesh(const std::string& name, FxMesh& out);
 using namespace detail;
 
 struct ParticleSystem::Impl {
-    struct Batch { uint32_t texId; FxBlend blend; gfx::TextureHandle tex; std::string graphKey; std::string error; gfx::ShaderHandle shader; gfx::PipelineHandle graphPipe[2]; std::vector<FxTexture> graphTextures; FxBlendSpace blendSpace=FxBlendSpace::Linear; };
+    struct Batch { uint32_t texId; FxBlend blend; gfx::TextureHandle tex; std::string graphKey; std::string error; gfx::ShaderHandle shader; gfx::PipelineHandle graphPipe[2]; std::vector<FxTexture> graphTextures; FxBlendSpace blendSpace=FxBlendSpace::Linear; gfx::ShaderHandle displayShader; gfx::PipelineHandle displayPipe[2]; };
     struct MeshRT {
         std::vector<float3> pos, nrm;
         std::vector<float2> uv;

@@ -28,7 +28,7 @@
 #include "SpectraFxView.h"
 #include "SpectraSceneCollision.h"
 
-namespace aiverse::render { class GpuResourceRetirement; }
+namespace aiverse::render { class GpuResourceRetirement; class Renderer3D; }
 namespace aiverse::fx {
 
 struct QualityLimits {
@@ -211,6 +211,7 @@ public:
     }
     void update(float dt);
     void render(const FxFog& fog,bool deferDisplay=false);
+    void renderScene(render::Renderer3D& renderer,const FxFog& fog);
     // Reuses the most recent render() upload. Host supplies a display-referred
     // output pass and original depth, via Renderer3D::addDisplayDraw.
     uint32_t renderDisplay(gfx::Device&,gfx::TextureHandle sceneDepth,int width,int height);

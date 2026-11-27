@@ -3,16 +3,23 @@
   "id": "particle-display-blending",
   "owner": "rendering",
   "changed_paths": [
+    "apps/client/ClientFx.cpp",
+    "apps/client/ClientFx.h",
+    "apps/client/GameClient.cpp",
+    "apps/editor/Editor.cpp",
+    "apps/editor/windows/SpectraFxGpuAssetsWindow.cpp",
+    "engine/fx/FxDisplayShaders.h",
     "engine/fx/FxEffect.cpp",
     "engine/fx/FxEffect.h",
-    "engine/render/Renderer3D.cpp",
-    "engine/render/Renderer3D.h",
-    "tests/tests.cpp",
     "engine/fx/FxInternal.h",
-    "engine/fx/FxDisplayShaders.h",
     "engine/fx/FxRender.cpp",
     "engine/fx/ParticleSystem.cpp",
-    "engine/fx/ParticleSystem.h"
+    "engine/fx/ParticleSystem.h",
+    "engine/fx/SpectraFxSceneHost.h",
+    "engine/fx/SpectraGraphRuntime.cpp",
+    "engine/render/Renderer3D.cpp",
+    "engine/render/Renderer3D.h",
+    "tests/tests.cpp"
   ],
   "traits": {
     "editable": true,
@@ -23,7 +30,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Batch key and deferred geometry replay added, with GLSL/MSL depth-aware display shaders. Hosts and shader graph support still pending; no build or GPU verification.",
+      "note": "Client/LENS/editor native paths connected, shader graph display variants added, GPU graph admission explicitly selects CPU. Graph pool/volume adapters and runtime verification remain pending.",
       "evidence": []
     },
     "architecture": {

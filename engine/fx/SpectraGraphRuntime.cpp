@@ -65,6 +65,8 @@ GraphGpuEligibility inspectGraphGpuEligibility(
         return reject("GPU v1 supports only one-shot bursts of 1..64 particles");
     if(!e.life.constant()||!e.speed.constant()||!e.size.constant()||!e.drag.constant())
         return reject("GPU v1 cannot execute random ranges or curves");
+    if(e.blendSpace==fx::FxBlendSpace::Display)
+        return reject("display-space blending uses the CPU presentation path");
     if(e.texture!="builtin:soft"||e.blend!=fx::FxBlend::Additive||
        e.align!=fx::FxAlign::Camera||e.shape!=fx::FxShape::Point)
         return reject("GPU v1 supports only additive soft camera-facing point sprites");

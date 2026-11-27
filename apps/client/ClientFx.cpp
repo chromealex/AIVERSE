@@ -815,9 +815,10 @@ void ClientFx::addPreparedLights(render::LightSystem& lights) const {
         lights.add(planet_ ? space_.transformPoint(l.pos) : l.pos, l.radius, l.color, l.intensity);
 }
 
-void ClientFx::render(const render::Lighting& lighting) {
+void ClientFx::render(const render::Lighting& lighting,render::Renderer3D* renderer) {
     ps_.setLightDir(lighting.sunDir);   // shading of mesh particles
-    ps_.render({lighting.fogColor, lighting.fogDensity});
+    if(renderer)ps_.renderScene(*renderer,{lighting.fogColor,lighting.fogDensity});
+    else ps_.render({lighting.fogColor,lighting.fogDensity});
     graphVolumes_.drawParticles({lighting.fogColor,lighting.fogDensity});
     graphVolumetricParticles_.drawInline({lighting.fogColor,lighting.fogDensity});
     if(graphPoolOpen_) {
@@ -829,12 +830,13 @@ void ClientFx::render(const render::Lighting& lighting) {
 void ClientFx::renderPrepared(const render::Camera3D& camera,
                               const render::mat4& viewProj,
                               int width,int height,
-                              const render::Lighting& lighting) {
+                              const render::Lighting& lighting,render::Renderer3D* renderer) {
     // Particles have already advanced exactly once in update(). This path
     // redoes camera-dependent culling/billboards and GPU draw submission only.
     ps_.setView(camera,viewProj,width,height);
     ps_.setLightDir(lighting.sunDir);
-    ps_.render({lighting.fogColor,lighting.fogDensity});
+    if(renderer)ps_.renderScene(*renderer,{lighting.fogColor,lighting.fogDensity});
+    else ps_.render({lighting.fogColor,lighting.fogDensity});
 }
 
 } // namespace aiverse::client

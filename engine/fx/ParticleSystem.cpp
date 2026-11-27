@@ -1,3 +1,4 @@
+#include "FxDisplayShaders.h"
 #include "ParticleSystem.h"
 #include "SpectraStaticSphereCollision.h"
 #include "../gfx/GpuTier.h"
@@ -189,21 +190,57 @@ uint16_t ParticleSystem::Impl::batchFor(const FxTexture& t, FxBlend blend, const
                 std::string muv=uv;size_t at=0;while((at=muv.find("vec2",at))!=std::string::npos){muv.replace(at,4,"float2");at+=6;}
                 mm+="#define SG_TEXTURE"+idx+"(uv) tex"+slot+".sample(s"+slot+","+muv+")\n";
             }
-            const std::string fs="precision highp float; layout(std140) uniform U0 {mat4 u_viewProj; vec4 u_fog; vec4 u_camPos; vec4 u_params;}; uniform sampler2D tex0; in mediump vec2 v_uv; in lowp vec4 v_col; in vec4 v_graph; in vec3 v_world; in vec4 v_clip; out vec4 o_color;\n"+declarations+gm+
+            std::string fs="precision highp float; layout(std140) uniform U0 {mat4 u_viewProj; vec4 u_fog; vec4 u_camPos; vec4 u_params;}; uniform sampler2D tex0; in mediump vec2 v_uv; in lowp vec4 v_col; in vec4 v_graph; in vec3 v_world; in vec4 v_clip; out vec4 o_color;\n"+declarations+gm+
                 "#define SG_SAMPLE(uv) texture(tex0,uv)\nvoid main(){vec2 sg_uv=v_uv,sg_screen=v_clip.xy/max(abs(v_clip.w),0.00001)*0.5+0.5;vec3 sg_world=v_world,sg_view=u_camPos.xyz-v_world;vec4 sg_color=v_col,sg_particle=v_graph;float sg_time=u_params.w;vec4 sg_input=texture(tex0,v_uv)*v_col;\n"+program.glsl+"vec4 c="+program.outputs.at("color")+";o_color="+(blend==FxBlend::Multiply?"vec4(mix(vec3(1.0),c.rgb,c.a),c.a)":"c")+";}";
-            replace(msl,"sampler s0 [[sampler(0)]])", "sampler s0 [[sampler(0)]],constant U0& u [[buffer(1)]]"+args+")");
+            replace(msl,"sampler s0 [[sampler(0)]])", "sampler s0 [[sampler(0)]]"+args+")");
             const std::string code="\n#define SG_SAMPLE(uv) float4(tex0.sample(s0,uv))\n"+mm+"float2 sg_uv=in.uv,sg_screen=in.clip.xy/max(abs(in.clip.w),0.00001)*0.5+0.5;float3 sg_world=in.world,sg_view=u.camPos.xyz-in.world;float4 sg_color=float4(in.col),sg_particle=in.graph;float sg_time=u.params.w;float4 sg_input=float4(tex0.sample(s0,in.uv)*in.col);\n"+program.msl+"float4 c="+program.outputs.at("color")+";return half4("+(blend==FxBlend::Multiply?"float4(mix(float3(1.0),c.rgb,c.a),c.a)":"c")+");";
-            replace(msl,"    return tex0.sample(s0, in.uv) * in.col;",code);
-            gfx::ShaderDesc sd;sd.glslVertex=vs.c_str();sd.glslFragment=fs.c_str();sd.msl=msl.c_str();sd.textureSlots=1+int(program.textures.size());sd.uniformSlots=1;
-            batch.shader=dev->createShader(sd);
-            if (!batch.shader.valid()) throw std::runtime_error(dev->lastError());
-            for(int mesh=0;mesh<2;++mesh) {
-                gfx::PipelineDesc pd; pd.shader=batch.shader;
-                pd.attrs[0]={0,gfx::VertexFormat::Float3,0}; pd.attrs[1]={1,gfx::VertexFormat::Float2,12}; pd.attrs[2]={2,gfx::VertexFormat::UByte4N,20};
-                pd.attrs[3]={3,gfx::VertexFormat::Float4,24}; pd.attrCount=4; pd.stride=sizeof(Vertex); pd.indexType=mesh?gfx::IndexType::None:gfx::IndexType::UInt16;
-                pd.cull=gfx::CullMode::None; pd.blend=gfxBlend(int(blend)); pd.depthWrite=blend==FxBlend::Opaque;
-                batch.graphPipe[mesh]=dev->createPipeline(pd);
-                if(!batch.graphPipe[mesh].valid()) throw std::runtime_error(dev->lastError());
+            const auto fragment=msl.find("fragment half4 fs_main");
+            const auto body=msl.find('{',fragment);
+            if(body==std::string::npos)throw std::runtime_error("particle fragment template not found");
+            msl.erase(body+1);msl+=code+"\n}";
+            const auto normalVs=vs,normalFs=fs,normalMsl=msl;
+            if(space==FxBlendSpace::Display) {
+                vs=display_shaders::kVS;fs=display_shaders::kFS;msl=display_shaders::kMSL;
+                const auto depthSlot=std::to_string(program.textures.size()+1);
+                replace(vs,"out vec2 v_uv;","layout(location=3) in vec4 a_graph; out vec4 v_graph; out vec3 v_world; out vec4 v_clip;\nout vec2 v_uv;");
+                replace(vs,"v_uv=a_uv;","v_graph=a_graph;v_world=a_pos;v_clip=gl_Position;v_uv=a_uv;");
+                replace(fs,"uniform sampler2D tex1;","uniform sampler2D tex"+depthSlot+";\n"+declarations+gm);
+                replace(fs,"texture(tex1,uv)","texture(tex"+depthSlot+",uv)");
+                replace(fs,"in vec2 v_uv;","in vec4 v_graph; in vec3 v_world; in vec4 v_clip;\nin vec2 v_uv;");
+                replace(fs,"    o_color=texture(tex0,v_uv)*v_color;",
+                    "vec2 sg_uv=v_uv,sg_screen=v_clip.xy/max(abs(v_clip.w),0.00001)*0.5+0.5;vec3 sg_world=v_world,sg_view=cameraFog.xyz-v_world;vec4 sg_color=v_color,sg_particle=v_graph;float sg_time=outputSize.z;vec4 sg_input=texture(tex0,v_uv)*v_color;\n"+program.glsl+"o_color="+program.outputs.at("color")+";");
+                fs="#define SG_SAMPLE(uv) texture(tex0,uv)\n"+fs;
+                replace(msl,"float4 color [[attribute(2)]];","float4 color [[attribute(2)]];float4 graph [[attribute(3)]];");
+                replace(msl,"float4 color;};","float4 color;float4 graph;float3 world;float4 clip;};");
+                replace(msl,"VOut o;o.pos=","VOut o;o.graph=in.graph;o.world=in.pos;o.clip=u.viewProj*float4(in.pos,1);o.pos=");
+                replace(msl,"depth2d<float> tex1 [[texture(1)]],sampler s1 [[sampler(1)]]",
+                    "depth2d<float> depthTex [[texture("+depthSlot+")]],sampler depthSampler [[sampler("+depthSlot+")]]"+args);
+                replace(msl,"tex1.sample(s1,","depthTex.sample(depthSampler,");
+                replace(msl,"    return tex0.sample(s0,in.uv)*in.color;",
+                    "float2 sg_uv=in.uv,sg_screen=in.clip.xy/max(abs(in.clip.w),0.00001)*0.5+0.5;float3 sg_world=in.world,sg_view=u.cameraFog.xyz-in.world;float4 sg_color=in.color,sg_particle=in.graph;float sg_time=u.outputSize.z;float4 sg_input=tex0.sample(s0,in.uv)*in.color;\n"+program.msl+"return "+program.outputs.at("color")+";");
+                msl="#define SG_SAMPLE(uv) tex0.sample(s0,uv)\n"+mm+msl;
+            }
+            for(int pass=0;pass<(space==FxBlendSpace::Display?2:1);++pass) {
+                const bool display=pass==1;
+                gfx::ShaderDesc sd;
+                sd.glslVertex=display?vs.c_str():normalVs.c_str();
+                sd.glslFragment=display?fs.c_str():normalFs.c_str();
+                sd.msl=display?msl.c_str():normalMsl.c_str();
+                sd.textureSlots=1+int(program.textures.size())+(display?1:0);sd.uniformSlots=1;
+                auto& shader=display?batch.displayShader:batch.shader;
+                shader=dev->createShader(sd);
+                if(!shader.valid())throw std::runtime_error(dev->lastError());
+                for(int mesh=0;mesh<2;++mesh) {
+                    gfx::PipelineDesc pd;pd.shader=shader;
+                    pd.attrs[0]={0,gfx::VertexFormat::Float3,0};pd.attrs[1]={1,gfx::VertexFormat::Float2,12};
+                    pd.attrs[2]={2,gfx::VertexFormat::UByte4N,20};pd.attrs[3]={3,gfx::VertexFormat::Float4,24};
+                    pd.attrCount=4;pd.stride=sizeof(Vertex);pd.indexType=mesh?gfx::IndexType::None:gfx::IndexType::UInt16;
+                    pd.cull=gfx::CullMode::None;pd.blend=gfxBlend(int(blend));pd.depthWrite=blend==FxBlend::Opaque;
+                    if(display){pd.depthTest=false;pd.depthWrite=false;}
+                    auto& pipe=display?batch.displayPipe[mesh]:batch.graphPipe[mesh];
+                    pipe=dev->createPipeline(pd);
+                    if(!pipe.valid())throw std::runtime_error(dev->lastError());
+                }
             }
         } catch(const std::exception& ex) { batch.error=ex.what(); std::fprintf(stderr,"particle shader graph: %s\n",ex.what()); }
     }
@@ -806,6 +843,8 @@ void ParticleSystem::shutdown() {
         for (auto& batch : I.batches) {
             for (auto& p : batch.graphPipe) releasePipeline(p);
             releaseShader(batch.shader);
+            for(auto& p:batch.displayPipe)releasePipeline(p);
+            releaseShader(batch.displayShader);
         }
         for (auto& p : I.pipe) releasePipeline(p);
         for (auto& p : I.meshPipe) releasePipeline(p);

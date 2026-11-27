@@ -5,6 +5,7 @@
 #include "FxInternal.h"
 #include "FxReactiveShaders.h"
 #include "FxDisplayShaders.h"
+#include "engine/render/Renderer3D.h"
 
 namespace aiverse::fx {
 
@@ -25,6 +26,13 @@ uint32_t packFor(FxBlend b, float4 c) {   // premultiplied textures want a premu
 struct Frame { float u0, v0, u1, v1; int sprite = -1; };
 
 } // namespace
+
+void ParticleSystem::renderScene(render::Renderer3D& renderer,const FxFog& fog) {
+    const bool defer=renderer.addDisplayDraw([this](gfx::Device& device,gfx::TextureHandle depth,int w,int h) {
+        renderDisplay(device,depth,w,h);
+    });
+    render(fog,defer);
+}
 
 void ParticleSystem::render(const FxFog& fog,bool deferDisplay) {
     auto& I = *impl_;
@@ -617,15 +625,17 @@ uint32_t ParticleSystem::renderDisplay(gfx::Device& device,gfx::TextureHandle de
     struct Uniforms {float viewProj[16];float cameraFog[4];float outputSize[4];} u{};
     std::memcpy(u.viewProj,I.viewProj.m,sizeof u.viewProj);
     u.cameraFog[0]=I.eye.x;u.cameraFog[1]=I.eye.y;u.cameraFog[2]=I.eye.z;u.cameraFog[3]=I.displayFog.density;
-    u.outputSize[0]=float(width);u.outputSize[1]=float(height);
+    u.outputSize[0]=float(width);u.outputSize[1]=float(height);u.outputSize[2]=I.clock;
     device.setViewport({0,0,width,height});device.setVertexBuffer(I.vb);device.setIndexBuffer(I.ib);
     uint32_t draws=0;
     for(const auto& run:I.displayRuns) {
         const auto& batch=I.batches[run.batch];
-        const auto pipe=prepare(run.mesh);
+        const auto pipe=batch.graphKey.empty()?prepare(run.mesh):batch.displayPipe[run.mesh?1:0];
         if(!pipe.valid())continue;
         device.setPipeline(pipe);device.setUniforms(0,&u,sizeof u);
-        device.setTexture(0,batch.tex.valid()?batch.tex:I.atlas);device.setTexture(1,depth);
+        device.setTexture(0,batch.tex.valid()?batch.tex:I.atlas);
+        for(size_t t=0;t<batch.graphTextures.size();++t)device.setTexture(int(t)+1,batch.graphTextures[t].tex);
+        device.setTexture(int(batch.graphTextures.size())+1,depth);
         if(run.mesh){device.draw(run.count,run.first);++draws;}
         else for(uint32_t q=0;q<run.count/4;q+=kQuadsPerDraw) {
             const auto n=std::min(kQuadsPerDraw,run.count/4-q);

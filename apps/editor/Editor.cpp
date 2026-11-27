@@ -2251,7 +2251,7 @@ void Editor::renderScene(Viewport& vp, const Camera& cam, bool editOverlays) {
     const auto afterRender = std::chrono::steady_clock::now();
     r3d_.setSceneSelectionOutline(false);
     if (!ws_.map.data.worldSpace && !r3d_.studioDebugMode()) {
-        gameFx_.render({r3d_.lighting.fogColor, r3d_.lighting.fogDensity});
+        gameFx_.renderScene(r3d_,{r3d_.lighting.fogColor,r3d_.lighting.fogDensity});
         // Scene-view particle reactive coverage; per-scene callback is
         // consumed synchronously by resolvePrisma and never persists.
         if (gameFx_.hasReactiveGeometry())
@@ -2376,7 +2376,7 @@ void Editor::renderGame(Viewport& vp, const Camera& cam, uint64_t prismaViewId) 
     r3d_.render(pass, &prisma_);
     if (postActiveForGame && prismaViewId == 1ULL) prismaSceneRendered_ = true;
     if (postActiveForGame && prismaViewId == 2ULL) prismaGameRendered_ = true;
-    gameFx_.render({r3d_.lighting.fogColor, r3d_.lighting.fogDensity});
+    gameFx_.renderScene(r3d_,{r3d_.lighting.fogColor,r3d_.lighting.fogDensity});
     if (gameFx_.hasReactiveGeometry())
         r3d_.addMotionReactiveDraw([this](gfx::Device& gpu,
                 gfx::TextureHandle sceneDepth, int width, int height) {
