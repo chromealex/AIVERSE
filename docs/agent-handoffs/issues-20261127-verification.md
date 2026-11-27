@@ -63,3 +63,22 @@ codex-issue223-minimap-atlas-quick/test-reports/20261127-085438-71582/summary.tx
 This establishes only native API compilation, not visual or runtime acceptance.
 The full incremental build remains live under handle 75542; log
 `issues-final-2cd2d9ee6-build.log` in the same build directory.
+
+## Complete cached build, full quick gate in progress
+
+Build handle 75542 finished with exit 0: all targets, including AiverseGame,
+AiverseEditor and aiverse_tests, compiled and linked. Log:
+`/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/issues-final-2cd2d9ee6-build.log`.
+Source is 2cd2d9ee6 plus documentation-only commits through 8ea1b7a06.
+Warnings are not zero: unchanged ModelShaders.h reports an overlength string;
+the preceding build log also has a new Batch initializer warning in ParticleSystem.cpp
+that still needs correction. No runtime or visual acceptance follows from compilation.
+
+CTest inventory verified 551 registered tests with no missing executables.
+`./run-tests.sh --quick --no-build --build-dir
+/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick` started
+on tree 8ea1b7a06 after test binaries were built, while the editor finished.
+Handle 50170 is still active; do not restart without checking it. Report directory:
+`/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-092323-99352`.
+Runner log: `issues-final-8ea1b7a06-tests.log` in the build directory.
+The quick gate has not completed; no full-test-pass claim yet.
