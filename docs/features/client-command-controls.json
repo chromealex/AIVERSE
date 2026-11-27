@@ -152,10 +152,10 @@
     },
     "tests": {
       "status": "pass",
-      "note": "Full Mac quick gate on clean59bb8e481b8b306abedeb8d4e9326b7ed4656864:592 CTests,587passed,5explicit GPU skips,0failures,1087.73s. Changed Studio session target rebuilt first; other native binaries are source-equivalent retained artifacts. Binary document fixtures explicitly cover LF and CRLF conflicts. Windows initial main test failed due text-mode fixture translation; corrected Windows run46026855838 remains in progress, not a PASS. Second Windows run46026855838 passed the manifest byte checks but failed at audio.json expectedText because another text-mode fixture remained. All fixture writers now use a shared binary-output helper; verification of this latest correction and new-main integration is pending.",
+      "note": "Full combined-tree Mac quick gate on clean ac687b5f2026e5a14cb770c2a98a087224bf8f5b (main3354ced78 plus general binary fixture correction): configure/build PASS;592 CTests,587passed,5explicit GPU skips,0failures,1144.61s. studio_session PASS15.39s. Existing main renderer warnings retained in build log (overlength shader string and unused completedSubmission); no claim of warning-free build. Two earlier Windows runs exposed text-mode fixture errors; latest all-fixture correction has NOT RUN on Windows pending a third manual-run authorization.",
       "evidence": [
-        "docs/evidence/issue206-mac-quick-fixed-20261127.json",
-        "docs/evidence/issue206-mac-quick-fixed-20261127.log.txt",
+        "docs/evidence/issue206-integrated-mac-quick-20261127.json",
+        "docs/evidence/issue206-integrated-mac-quick-20261127.log.txt",
         "docs/agent-handoffs/issue206-windows-session.md"
       ]
     },
@@ -202,6 +202,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/issue206-mac-quick-fixed-20261127.json"
+    "docs/evidence/issue206-integrated-mac-quick-20261127.json"
   ]
 }
