@@ -1,0 +1,11 @@
+{
+  "sha": "1a5758dfd67a187a0c875952480d4a9c38210358",
+  "argv": [
+    "bash",
+    "-c",
+    "cmake --build /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick --target aiverse_studio_session_tests --parallel 4 && bash ./run-tests.sh --quick --no-build --filter \"^studio_session$\" --build-dir /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/issue206-mac-session-fixed-20261127.log.txt",
+  "sha256": "804c91d5abb01fc96d144b6c10b98cb35324cc4a394b17f0c6d3200dcc9dd71a"
+}

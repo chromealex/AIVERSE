@@ -1,0 +1,62 @@
+[  5%] Built target aiverse_ufbx
+[  5%] Built target aiverse_meshoptimizer_lod
+[  5%] Built target aiverse_zstd
+[  5%] Built target aiverse_engine
+[  5%] Built target aiverse_native_registry
+[ 10%] Built target aiverse_lua
+[ 10%] Built target aiverse_pack
+[ 10%] Built target aiverse_xatlas
+[ 15%] Built target aiverse_vivid
+[ 15%] Built target aiverse_atlas
+[ 15%] Built target aiverse_cables
+[ 15%] Built target aiverse_strata_builder
+[ 15%] Built target aiverse_vehicles
+[ 21%] Built target aiverse_net
+[ 21%] Built target aiverse_roads
+[ 26%] Built target aiverse_models
+[ 26%] Built target aiverse_world
+[ 26%] Built target aiverse_shader_graph
+[ 26%] Built target aiverse_content_reader
+[ 26%] Built target aiverse_splash
+[ 26%] Built target aiverse_strata_model_adapter
+[ 31%] Built target aiverse_fx
+[ 31%] Built target aiverse_net_server
+[ 36%] Built target aiverse_fps
+[ 36%] Built target aiverse_postfx_data
+[ 36%] Built target aiverse_branding
+[ 36%] Built target aiverse_bake
+[ 42%] Built target aiverse_vivid_human
+[ 42%] Built target aiverse_voxelgame
+[ 47%] Built target aiverse_battle_load
+[ 52%] Built target aiverse_modeling
+[ 78%] Built target aiverse_game
+[ 84%] Built target aiverse_authority
+[ 84%] Built target aiverse_game_fx
+[ 84%] Built target aiverse_terrain_detail
+[ 84%] Built target aiverse_i18n
+[ 84%] Built target aiverse_overlay_data
+[100%] Built target aiverse_editor_core
+[100%] Building CXX object apps/studio-native/CMakeFiles/aiverse_studio_session_tests.dir/tests/StudioSessionTests.cpp.o
+[100%] Linking CXX executable aiverse_studio_session_tests
+[100%] Built target aiverse_studio_session_tests
+AIVERSE tests | commit=1a5758dfd | build=/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick | report=/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-152424-81577
+
+========== ctest ==========
+Command: ctest --test-dir /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick --config Debug --no-tests=error --output-on-failure --parallel 2 --output-junit /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-152424-81577/ctest.xml -R \^studio_session\$
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick
+Test project /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick
+    Start 590: studio_session
+1/1 Test #590: studio_session ...................   Passed   18.41 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Label Time Summary:
+EDITOR    =  18.41 sec*proc (1 test)
+
+Total Test time (real) =  18.53 sec
+PASS ctest
+
+========== SUMMARY ==========
+Passed stages: 1 | Failed stages: 0
+Logs: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-152424-81577
+PASS: all selected test stages
