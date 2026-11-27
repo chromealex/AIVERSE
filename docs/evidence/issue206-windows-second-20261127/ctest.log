@@ -1,0 +1,19 @@
+Internal ctest changing into directory: D:/a/AIVERSE/AIVERSE/build/issue206
+Test project D:/a/AIVERSE/AIVERSE/build/issue206
+    Start 539: studio_session
+1/1 Test #539: studio_session ...................Exit code 0xc0000409
+***Exception:   2.02 sec
+AIVERSE test check failed: !call("studio.op",request.dump().c_str()).has("error") (D:\a\AIVERSE\AIVERSE\apps\studio-native\tests\StudioSessionTests.cpp:1382)
+
+
+0% tests passed, 1 tests failed out of 1
+
+Label Time Summary:
+EDITOR    =   2.02 sec*proc (1 test)
+
+Total Test time (real) =   2.20 sec
+
+The following tests FAILED:
+	539 - studio_session (Exit code 0xc0000409
+)            EDITOR
+Errors while running CTest
