@@ -16,8 +16,8 @@ import argparse, io, os, re, shutil, stat, subprocess, sys, tarfile, zipfile
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 BINARIES = {
-    "windows": ["aiverse_editor.exe", "aiversemcp.exe", "aiversebuild.exe", "aiverse_headless.exe", "AiverseGame.exe", "assetpipe.exe", "aiverse_modeling.exe", "aiverse_lod_simplify.exe", "aiverse_fps_server.exe"],
-    "macos": ["AiverseEditor.app", "AiverseGame.app", "aiversemcp", "aiversebuild", "aiverse_headless", "assetpipe", "aiverse_modeling", "aiverse_lod_simplify", "aiverse_fps_server"],
+    "windows": ["AiverseStudio.exe", "aiversemcp.exe", "aiversebuild.exe", "aiverse_headless.exe", "AiverseGame.exe", "assetpipe.exe", "aiverse_modeling.exe", "aiverse_lod_simplify.exe", "aiverse_fps_server.exe"],
+    "macos": ["AiverseStudioHTML5.app", "AiverseGame.app", "aiversemcp", "aiversebuild", "aiverse_headless", "assetpipe", "aiverse_modeling", "aiverse_lod_simplify", "aiverse_fps_server"],
     "linux": ["aiverse_editor", "aiversemcp", "aiversebuild", "aiverse_headless", "AiverseGame", "assetpipe", "aiverse_modeling", "aiverse_lod_simplify", "aiverse_fps_server"],
 }
 # source paths left out of packages: benchmark screenshots are not needed to run the engine and
@@ -25,8 +25,15 @@ BINARIES = {
 EXCLUDE = ("docs/benchmarks/", "docs/devlog/media/",
            # source photos the bake scripts turn into engine/assets/materials; nothing reads them at run time
            "tools/terrain/pbr_sources/", "tools/vegetation/pbr_sources/")
-# a package needs one of these; Linux may be tools only (aiversemcp + aiverse_headless, no editor: CI hosts, MCP clients)
-REQUIRED = {"windows": ["aiverse_editor.exe"], "macos": ["AiverseEditor.app"], "linux": ["aiverse_editor", "aiversemcp"]}
+STUDIO_ASSETS = ("engine/fonts/ui.ttf", "engine/fonts/LICENSE-ui.txt",
+                 "engine/fx/physis/flame_16x4.png", "engine/fx/physis/smoke_8x8.png",
+                 "engine/fx/physis/LICENSE-fx.txt", "studio-web/index.html")
+
+
+def require_files(directory, paths):
+    for path in paths:
+        if not os.path.isfile(os.path.join(directory, path)):
+            sys.exit(f"incomplete Studio build: missing {os.path.join(directory, path)}")
 
 
 def git(*args):
@@ -66,17 +73,18 @@ def main():
     if git("status", "--porcelain", "--untracked-files=no"):
         print("warning: uncommitted changes are not in the source snapshot (git archive HEAD)", file=sys.stderr)
     binaries = list(BINARIES[a.platform])
-    required = REQUIRED[a.platform]
     studio_bundle = "AiverseStudioHTML5.app"
-    studio_dir = a.bin
+    studio_files = {}
     if a.platform == "macos":
         for directory in (a.bin, os.path.join(a.bin, "apps", "studio-native")):
             if os.path.isdir(os.path.join(directory, studio_bundle)):
-                studio_dir = directory
-                binaries[binaries.index("AiverseEditor.app")] = studio_bundle
-                required = []
+                contents = os.path.join(directory, studio_bundle, "Contents")
+                require_files(contents, ("Info.plist", "MacOS/AiverseStudioHTML5", "MacOS/aiversemcp"))
+                require_files(os.path.join(contents, "Resources"), STUDIO_ASSETS)
+                studio_files[studio_bundle] = directory
                 break
-    studio_files = {studio_bundle: studio_dir}
+        else:
+            sys.exit(f"missing {studio_bundle} in {a.bin}")
     if a.platform == "windows":
         nested = os.path.join(a.bin, "apps", "studio-native")
         candidates = [a.bin, os.path.join(nested, "Release"), nested]
@@ -85,25 +93,22 @@ def main():
         for directory in candidates:
             if not os.path.isfile(os.path.join(directory, "AiverseStudio.exe")):
                 continue
-            for path in ("WebView2Loader.dll", "studio-web/index.html", "aiversemcp.exe",
-                         "engine/fonts/ui.ttf", "engine/fonts/LICENSE-ui.txt", "engine/fx/physis/flame_16x4.png",
-                         "engine/fx/physis/smoke_8x8.png", "engine/fx/physis/LICENSE-fx.txt"):
-                if not os.path.isfile(os.path.join(directory, path)):
-                    sys.exit(f"incomplete Windows Studio build: missing {os.path.join(directory, path)}")
-            binaries.remove("aiverse_editor.exe")
-            resources = ["AiverseStudio.exe", "WebView2Loader.dll", "studio-web", "engine/fonts", "engine/fx/physis"]
+            require_files(directory, ("WebView2Loader.dll", "aiversemcp.exe") + STUDIO_ASSETS)
+            resources = ["WebView2Loader.dll", "studio-web", "engine/fonts", "engine/fx/physis"]
             binaries.extend(resources)
-            studio_files.update(dict.fromkeys(resources + ["aiversemcp.exe"], directory))
+            studio_files.update(dict.fromkeys(resources + ["AiverseStudio.exe", "aiversemcp.exe"], directory))
             if os.path.isfile(os.path.join(directory, "aiversebuild.exe")):
                 studio_files["aiversebuild.exe"] = directory
             if directory == os.path.join(nested, "Release"):
                 for binary in binaries:
                     if binary not in studio_files and os.path.isfile(os.path.join(a.bin, "Release", binary)):
                         studio_files[binary] = os.path.join(a.bin, "Release")
-            required = []
             break
-    if required and not any(os.path.exists(os.path.join(a.bin, r)) for r in required):
-        sys.exit(f"no {' / '.join(REQUIRED[a.platform])} in {a.bin}")
+        else:
+            sys.exit(f"missing AiverseStudio.exe in {a.bin}")
+    if a.platform == "linux" and not any(os.path.isfile(os.path.join(a.bin, name))
+                                         for name in ("aiverse_editor", "aiversemcp")):
+        sys.exit(f"no aiverse_editor / aiversemcp in {a.bin}")
     ver, commit, date = version()
     name = f"AIVERSE-{ver}-{commit}-{a.platform}.zip"
     os.makedirs(os.path.join(a.out, ".temp"), exist_ok=True)
