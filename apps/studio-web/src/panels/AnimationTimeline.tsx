@@ -200,6 +200,16 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
               aria-label={c.node + '.' + (c.path ?? 'rotation') + ' key ' + (k + 1) + ' at ' + t + ' s'}
               aria-pressed={selection?.channel === i && selection.key === k}
               style={{ left: (duration ? t / duration : 0) * 100 + '%' }}
+              title="Left or right arrow to select an adjacent key in this channel"
+              onKeyDown={event => {
+                if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+                event.preventDefault();
+                const adjacent = event.key === 'ArrowLeft' ? event.currentTarget.previousElementSibling : event.currentTarget.nextElementSibling;
+                if (adjacent instanceof HTMLButtonElement) {
+                  adjacent.focus();
+                  adjacent.click();
+                }
+              }}
               onClick={() => { setPlaying(false); setTime(t); setSelection({channel:i, key:k}); }}/>)}</div>
           </div>)}</div>
           {channel && selection && <output className="ptp__meta">{channel.node}.{channel.path ?? 'rotation'} · Key {selection.key + 1} · {channel.times?.[selection.key]} s · {selectedValue?.join(', ') ?? '—'}</output>}
