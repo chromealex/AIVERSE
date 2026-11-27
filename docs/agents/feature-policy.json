@@ -1,6 +1,8 @@
 {
   "schema": 1,
   "features": {
+    "impostor-mask-authoring": {"requires": [], "roadmap": {"system": "strata", "id": "impostor-mask-authoring"}, "api_paths": ["engine/render/ImpostorMaskBounds.h", "tools/modeling/SurfaceProxy.h"]},
+    "terraweave-impostor-contour": {"requires": ["impostor-mask-authoring"], "roadmap": {"system": "terraweave", "id": "terraweave-impostor-contour"}, "api_paths": ["engine/render/TerraWeaveImpostorAtlas.h", "engine/render/TerraWeaveForestAdapter.h"]},
     "native-sky-skill": {"requires": [], "roadmap": {"system": "prisma", "id": "native-sky-skill"}, "api_paths": []},
     "site-devlog-roadmap": {"requires": [], "roadmap": {"system": "build", "id": "site-devlog-roadmap"}, "api_paths": []},
     "encounter-phase-determinism": {"requires": [], "roadmap": {"system": "gameplay", "id": "encounter-phase-determinism"}, "api_paths": []},

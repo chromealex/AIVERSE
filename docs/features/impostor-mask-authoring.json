@@ -110,10 +110,12 @@
       ]
     },
     "platforms": {
-      "status": "not_run",
-      "note": "Mac x86_64 tested; Windows and Linux were not verified on this branch.",
+      "status": "pass",
+      "note": "Windows Server 2022 x64 and Ubuntu 24.04 x64 passed all three native Release tests. Mac x86_64 also exercised the Metal forest path. GPU timings are Mac-only.",
       "evidence": [
-        "docs/evidence/impostor-mask-authoring-mac.json"
+        "docs/evidence/impostor-pr227-windows.json",
+        "docs/evidence/impostor-pr227-ubuntu.json",
+        "docs/evidence/impostor-mask-authoring-final.json"
       ]
     },
     "dependencies": {
@@ -161,11 +163,12 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Studio capture prepared; external site publication pending integration.",
+      "status": "pass",
+      "note": "Editor tool uses the documented Studio screenshot exception. The bilingual site compiled and the generated Studio pages contain the entry and matching capture. Public deployment follows integration into main.",
       "evidence": [
-        "docs/agent-handoffs/media/impostor-mask-studio.png",
-        "docs/devlog/entries/2026-11-27-impostor-mask-authoring.json"
+        "docs/agent-handoffs/impostor-pr227-desktop.md",
+        "docs/devlog/entries/2026-11-27-impostor-mask-authoring.json",
+        "docs/agent-handoffs/media/impostor-mask-studio.png"
       ]
     }
   },
@@ -185,6 +188,8 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/impostor-mask-authoring-final.json"
+    "docs/evidence/impostor-mask-authoring-final.json",
+    "docs/evidence/impostor-pr227-windows.json",
+    "docs/evidence/impostor-pr227-ubuntu.json"
   ]
 }

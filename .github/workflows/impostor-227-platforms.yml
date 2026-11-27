@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 59fb6f69e5262f977ea4d95384369b8c24ba7776
+          ref: b9394a98c60de794303b05ac0ba3dc2d2b977759
       - if: runner.os == 'Linux'
         run: sudo apt-get update -q && sudo apt-get install -y -q libx11-dev libegl-dev libgles-dev ninja-build
       - run: cmake -S . -B qa -DAIVERSE_BUILD_TESTS=ON -DAIVERSE_BUILD_TOOLS=ON -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_CLIENT=OFF -DAIVERSE_ASSIMP=OFF -DAIVERSE_FETCH_TEMPLATES=OFF -DCMAKE_BUILD_TYPE=Release
