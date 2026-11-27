@@ -590,3 +590,11 @@ Mac gate32364 aggregate aiverse_tests now terminal PASS1098.09sec,590/592; clien
 
 
 Follow-up in same stage: gate32364 terminal, raw unified summary PASS;592total587passed5skipped0failed1118.41sec. evidence.py exited2 because checkout changed, refusing fresh-SHA report. Raw XML/log/summary retained under issues-combined-native-historical-20261127 with explicit old-binary limitation; not usable as final ready evidence. First Web86410 terminalexit3 before compilation: sourced EMSDK environment was not visible to builder detection. Retried with explicit EMSDK/AIVERSE_TOOLCHAINS_DIR and same existing cache, no install/internal fallback. Native targeted build24851 now live after gate completion; log issues-project-settings-native-build.log. Poll same handles, no restart.
+
+## Material example Metal acceptance and settings build completion
+
+Evidence stage3e72b37a41dbdb8dd2ef170914623ef2344c5755. Actual native client93280 exit0 across all3maps,120frames each,1280x720, high shadows. Captures inspected: only left model casts shadow; alpha/weighted/unweighted are visibly distinct with same alpha; display-space glow brighter on right than linear glow on left over same terrain. All logs pipelineFailures0. Retained docs/evidence/issues-material-effects-metal-20261127. Native binary99f71adcf with unchanged render runtime; demo04fde3c45. Qualitative example evidence, independent blend arithmetic is in earlier pixel tests.
+
+Native targeted build24851 terminalexit0, Studio/MCP/session tests compiled. Web17690 still live at Emscripten link96%, no restart. Old own Studio13604 had been redirected by aggregate MCP tests to a temporary LENS test fixture; UI quit attempt did not terminate it. Verified exactpid31245 from ownfixture launch, sentSIGTERM; handle terminal143. Do not claim graceful shutdown. Closed before new focused regression/UI instance to avoid attached-agent interference.
+
+Focused unified studio_session test launched atclean3e72b37a4 with evidence id issues-project-settings-native-20261127; poll its returned handle. Only this handoff is changed after start. Pending async user question asks whether one manual Windows run is permitted for206 despite earlier Pages-only instruction; no response yet, no workflow change. Next native test result, new Studio UI acceptance, Web demo inspection/pinning and final complete gate/main integration.
