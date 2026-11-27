@@ -1,3 +1,7 @@
+## Game window settings
+
+Verify shared desktop settings, platform overrides, validation, preview and persistence in Build.
+
 ## SpectraFX legacy layout
 
 Exercise full-graph source edits, invalid input, undo and draft persistence.

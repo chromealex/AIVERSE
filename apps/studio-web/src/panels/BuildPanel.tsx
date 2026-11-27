@@ -5,6 +5,7 @@ import type { StudioBuildEstimate, StudioBuildInfo, StudioSnapshot, StudioToolch
 import { StudioAlert, StudioBadge, StudioButton, StudioCheckbox, StudioField, StudioInput, StudioSelect, StudioLoader } from '../ui';
 import { buildErrors, buildPhase, buildSteps, formatBytes, missingToolchain, nativeBuildProgress, runTarget } from './buildLogic';
 import { useBuildTranscript } from './useBuildTranscript';
+import BuildGameWindow from './BuildGameWindow';
 import './BuildPanel.css';
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
@@ -359,6 +360,8 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
             finally { setStartingNative(false); }
           }}>Build Studio with project modules</StudioButton>
         </section>}
+        {info?.project===projectPath&&<BuildGameWindow info={info} project={projectPath} target={target} disabled={state.running}
+          failed={setError} saved={async next=>{commitSnapshot(next);await refreshInfo();}}/>}
         <section className="build__card" aria-label="Toolchain">
           <h3>Toolchain · {selected?.name ?? target}{checking && <StudioLoader size={15}/>}</h3>
           {toolchain && !toolchain.hostSupported && <p className="build__note">{toolchain.hostNote || 'Not buildable on this computer'}</p>}

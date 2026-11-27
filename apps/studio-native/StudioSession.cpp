@@ -9,6 +9,7 @@
 #include "apps/editor/AuthoringWater.h"
 #include "StudioHumanCharacterBuild.h"
 #include "StudioSession.h"
+#include "engine/platform/WindowSettings.h"
 #include "engine/actor/ActorModule.h"
 #include "StudioPlanetForestDocument.h"
 #include "libraries/include/aiverselib/world/WorldProcessesAuthoring.h"
@@ -2581,6 +2582,46 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
         }
         return snapshot();
     }
+    if (method == "studio.buildGameWindow") {
+        const Json& original=manifest["window"];
+        const auto scope=params.getStr("scope");
+        if (ws_.building() || params.getStr("project")!=ws_.project.dir ||
+            params.getStr("revision")!=original.dump() ||
+            (scope!="desktop" && scope!="macos" && scope!="windows" && scope!="linux"))
+            throw std::runtime_error("Game window settings changed or unavailable. Reload the Build window.");
+        Json next=original.isObject()?original:Json::object();
+        if (params.getBool("reset")) {
+            if (scope=="desktop") throw std::runtime_error("Choose a platform override to reset.");
+            next.erase(scope);
+        } else {
+            const Json& changes=params["changes"];
+            if (!changes.isObject()) throw std::runtime_error("Expected window settings.");
+            Json block=scope=="desktop"?next:next[scope];
+            if (!block.isObject()) block=Json::object();
+            for (const auto& [key,value]:changes.members()) {
+                if (key=="width" || key=="height" || key=="minWidth" || key=="minHeight") {
+                    const int minimum=key=="width"?320:key=="height"?240:0;
+                    const double number=value.toDouble();
+                    if (!value.isNumber() || std::floor(number)!=number || number<minimum || number>16384)
+                        throw std::runtime_error("Invalid window dimension: "+key);
+                } else if (key=="mode") {
+                    if (!value.isString()) throw std::runtime_error("Expected a window mode.");
+                } else if (key=="allowFullscreen" || key=="resizable" || key=="keepAspect") {
+                    if (value.type()!=Json::Type::Bool) throw std::runtime_error("Expected a boolean window setting.");
+                } else throw std::runtime_error("Unknown window setting: "+key);
+                block.set(key,value);
+            }
+            if (scope=="desktop") next=std::move(block); else next.set(scope,std::move(block));
+        }
+        const auto problems=platform::windowSettingsProblems(next);
+        if (!problems.empty()) throw std::runtime_error(problems.front());
+        if (next!=original) {
+            Json patch=Json::object();patch.set("path",str("window"));patch.set("value",next);
+            const Json result=ws_.call("set_manifest",patch);
+            if (result.has("error")) throw std::runtime_error(result.getStr("error"));
+        }
+        return snapshot();
+    }
     if (method == "studio.buildAtlasEnabled") {
         if (params.getStr("project") != ws_.project.dir || ws_.building() ||
             params["original"].type()!=Json::Type::Bool || params.getBool("original")!=atlasEnabled)
@@ -2622,6 +2663,8 @@ Json StudioSession::buildRequest(const std::string& method, const Json& params) 
     }
     if (method == "studio.buildInfo") {
         Json out = Json::object(), targets = Json::array();
+        out.set("gameWindow",manifest["window"]);
+        out.set("windowRevision",str(manifest["window"].dump()));
         auto fileRules = [](const Json& rules) {
             Json rows = Json::array();
             for (const auto& rule : rules.items()) {
@@ -5255,7 +5298,7 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             reply.set("result",sceneBrushJson());
         } else if (method == "studio.agentInfo" || method == "studio.agentStart" || method == "studio.agentStop" || method == "studio.agentReset") {
             reply.set("result", agentRequest(method, params));
-        } else if (method == "studio.buildNativeProject" || method == "studio.buildInfo" || method == "studio.buildFileTextureSize" || method == "studio.buildFileExclusion" || method == "studio.buildFileCompression" || method == "studio.buildRemoveFileRule" || method == "studio.buildSplitLimit" || method == "studio.buildSplitMode" || method == "studio.buildCompression" || method == "studio.buildAtlasFixSizes" || method == "studio.buildAtlasPage" || method == "studio.buildAtlasEnabled" || method == "studio.buildToolchain" || method == "studio.buildStart" ||
+        } else if (method == "studio.buildGameWindow" || method == "studio.buildNativeProject" || method == "studio.buildInfo" || method == "studio.buildFileTextureSize" || method == "studio.buildFileExclusion" || method == "studio.buildFileCompression" || method == "studio.buildRemoveFileRule" || method == "studio.buildSplitLimit" || method == "studio.buildSplitMode" || method == "studio.buildCompression" || method == "studio.buildAtlasFixSizes" || method == "studio.buildAtlasPage" || method == "studio.buildAtlasEnabled" || method == "studio.buildToolchain" || method == "studio.buildStart" ||
                    method == "studio.buildLog" || method == "studio.buildEstimate") {
             reply.set("result", buildRequest(method, params));
         } else if(method=="studio.worldProcessAreaBatchResize"){
