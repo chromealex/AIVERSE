@@ -10,7 +10,7 @@
 .graph-library>p{padding:12px;font-size:11px;color:#7f97b7}
 .graph-search{display:flex;gap:6px;align-items:center;margin:9px 7px;padding:7px;border:1px solid #3c506a;border-radius:5px}
 .graph-search input{width:100%;min-width:0;border:0;background:none;color:#e5f2ff;outline:none;font-size:11px}
-.graph-inspector{overflow-y:auto;display:flex;flex:1;flex-direction:column;min-width:0;min-height:0}
+.graph-inspector{container-type:size;overflow-y:auto;display:flex;flex:1;flex-direction:column;min-width:0;min-height:0}
 .graph-empty{padding:22px;text-align:center;color:#7890ab;font-size:12px}
 .graph-summary{display:flex;gap:12px;align-items:center;padding:10px 13px;border-bottom:1px solid #344054;font-size:11px;color:#9bb4d3;flex-wrap:wrap}
 .graph-summary strong{color:#ebf5ff;font-size:13px}
@@ -57,4 +57,4 @@
 .graph-heading>button:not(.icon-button),.graph-asset-form button{background:#223e59;border:1px solid #496588;color:#d4e6ff;padding:4px 8px;border-radius:4px;font:inherit}
 
 .graph-inspector>*{flex-shrink:0}
-.graph-inspector>.au-graph-workspace{flex:1 0 260px;min-height:260px}
+.graph-inspector>.au-graph-workspace{flex:1 0 clamp(260px,68cqh,720px);min-height:260px}
