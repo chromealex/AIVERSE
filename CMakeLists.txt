@@ -5532,10 +5532,10 @@ endif()
 # Desktop HTML5 Studio host.
 # ---------------------------------------------------------------------------
 if(AIVERSE_BUILD_STUDIO_HTML5)
-    if((APPLE AND NOT IOS) OR WIN32)
+    if((APPLE AND NOT IOS) OR WIN32 OR AIVERSE_PLATFORM STREQUAL "linux")
         add_subdirectory(apps/studio-native)
     else()
-        message(WARNING "AIVERSE Studio HTML5 requires macOS or Windows")
+        message(WARNING "AIVERSE Studio HTML5 requires macOS, Windows or Linux")
     endif()
 endif()
 

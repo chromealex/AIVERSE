@@ -18,6 +18,25 @@ set(STUDIO_NATURE_TEXTURES
 if(WIN32)
     list(APPEND AIVERSE_STUDIO_SOURCES ../editor/EditorSpeech.cpp)
     include(win/StudioWindows.cmake)
+elseif(AIVERSE_PLATFORM STREQUAL "linux")
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(GTK_STUDIO REQUIRED IMPORTED_TARGET webkit2gtk-4.1>=2.40)
+    find_package(SQLite3 REQUIRED)
+    if(NOT TARGET aiverse_gfx_vulkan)
+        message(FATAL_ERROR "Linux Studio requires AIVERSE_VULKAN=ON")
+    endif()
+    add_executable(aiverse_studio linux/Main.cpp ../editor/EditorSpeech.cpp ${AIVERSE_STUDIO_SOURCES})
+    target_include_directories(aiverse_studio PRIVATE "${PROJECT_SOURCE_DIR}")
+    target_compile_definitions(aiverse_studio PRIVATE AIVERSE_STUDIO_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+    target_link_libraries(aiverse_studio PRIVATE PkgConfig::GTK_STUDIO aiverse_hosted_client SQLite::SQLite3
+        aiverse_lua aiverse_editor_core aiverse_runtime aiverse_fx aiverse_game_view aiverse_gfx_vulkan
+        AIVERSE::vivid_human AIVERSE::libraries)
+    target_sources(aiverse_studio PRIVATE $<TARGET_OBJECTS:aiverse_runtime>)
+    set_target_properties(aiverse_studio PROPERTIES OUTPUT_NAME AiverseStudio)
+    add_custom_target(aiverse_studio_web_assets
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${AIVERSE_STUDIO_WEB_DIST}" "$<TARGET_FILE_DIR:aiverse_studio>/studio-web"
+        VERBATIM)
+    add_dependencies(aiverse_studio aiverse_studio_web_assets)
 else()
     find_package(SQLite3 REQUIRED)
     add_executable(aiverse_studio MACOSX_BUNDLE mac/Main.mm mac/StudioAssetSchemeHandler.mm ../editor/EditorSpeech_mac.mm ${AIVERSE_STUDIO_SOURCES})
