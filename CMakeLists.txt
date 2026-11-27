@@ -1617,14 +1617,14 @@ function(aiverse_package_app target)
             add_custom_command(TARGET ${target} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E make_directory "${res_dir}/content"
                 COMMAND ${CMAKE_COMMAND} -E copy "${AIVERSE_CONTENT_PACK}" "${res_dir}/content/content.rpak"
-                COMMENT "Bundling content pack")
+                COMMENT "Bundling content pack" VERBATIM)
         elseif(AIVERSE_CLIENT_BUNDLE_CONTENT)
             add_custom_command(TARGET ${target} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E make_directory "${res_dir}"
                 COMMAND ${CMAKE_COMMAND} -E copy_directory "${AIVERSE_CONTENT_DIR}" "${res_dir}/content"
                 COMMAND ${CMAKE_COMMAND} -E rm -rf "${res_dir}/content/Builds" "${res_dir}/content/logs" ${_aiverse_rm_bundle}   # project outputs, project file
                 COMMAND ${CMAKE_COMMAND} -E copy_directory "${AIVERSE_ENGINE_ASSETS}" "${res_dir}/content/engine"
-                COMMENT "Bundling content")
+                COMMENT "Bundling content" VERBATIM)
         endif()
         if(AIVERSE_PRECOMPILE_METAL AND AIVERSE_PLATFORM STREQUAL "macos" AND target STREQUAL "aiverse_client")
             if(AIVERSE_CONTENT_PACK)
