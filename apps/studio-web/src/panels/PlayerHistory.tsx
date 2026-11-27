@@ -14,8 +14,8 @@ function Trend({ label, values, ticks }: { label: string; values: number[]; tick
   </div>;
 }
 
-function PlayerTrends({ player, samples, initiallyOpen }: {
-  player: StudioPlayerSample['players'][number]; samples: StudioPlayerSample[]; initiallyOpen: boolean;
+function PlayerTrends({ player, samples, names, initiallyOpen }: {
+  player: StudioPlayerSample['players'][number]; samples: StudioPlayerSample[]; names: Record<string,string>; initiallyOpen: boolean;
 }) {
   const [open, setOpen] = useState(initiallyOpen);
   const entries = open ? samples.flatMap(sample => {
@@ -28,7 +28,7 @@ function PlayerTrends({ player, samples, initiallyOpen }: {
     {open && <>
       <Trend label="Army" values={entries.map(entry => entry.row.units)} ticks={ticks}/>
       <Trend label="Structures" values={entries.map(entry => entry.row.structures)} ticks={ticks}/>
-      {Object.keys(player.resources).map(resource => <Trend key={resource} label={resource} ticks={ticks}
+      {Object.keys(player.resources).map(resource => <Trend key={resource} label={names[resource] || resource} ticks={ticks}
         values={entries.map(entry => entry.row.resources[resource] ?? 0)}/>)}
     </>}
   </details>;
@@ -36,6 +36,7 @@ function PlayerTrends({ player, samples, initiallyOpen }: {
 
 export default function PlayerHistory({ project }: { project: string }) {
   const [samples, setSamples] = useState<StudioPlayerSample[]>([]);
+  const [names, setNames] = useState<Record<string,string>>({});
   const [error, setError] = useState('');
   useEffect(() => {
     let active = true, timer = 0, epoch = '', afterTick = -1;
@@ -49,6 +50,7 @@ export default function PlayerHistory({ project }: { project: string }) {
         } else {
           const reset = epoch !== history.epoch;
           epoch = history.epoch;
+          if (history.resourceNames || reset) setNames(history.resourceNames ?? {});
           if (reset || history.samples.length) {
             const batch = history.samples;
             afterTick = batch.length ? batch[batch.length - 1].tick : -1;
@@ -69,6 +71,6 @@ export default function PlayerHistory({ project }: { project: string }) {
     {error && <p role="alert">{error}</p>}
     {!latest && !error && <p className="ptp__hint">Start a local match to track armies, structures and resources.</p>}
     {latest?.players.map((player, index) => <PlayerTrends key={player.slot} player={player}
-      samples={samples} initiallyOpen={index < 2}/>)}
+      samples={samples} names={names} initiallyOpen={index < 2}/>)}
   </section>;
 }

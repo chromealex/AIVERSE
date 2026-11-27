@@ -648,6 +648,14 @@ Json StudioGameSurface::playerHistory(int64_t afterTick, const std::string& epoc
     if (sim && canControl() && playerSampleEpoch_ == runtimeEpoch_) {
         out.set("tickRate",Json::number(int64_t(sim->tickRate())));
         if (epoch != std::to_string(runtimeEpoch_)) afterTick = -1;
+        if (afterTick < 0) {
+            if (const auto* module = dynamic_cast<const game::GameCore*>(&sim->module())) {
+                Json labels = Json::object();
+                for (const auto& resource : module->rules().resources)
+                    labels.set(resource.id, Json::string(resource.name));
+                out.set("resourceNames",std::move(labels));
+            }
+        }
         for (const auto& sample : playerSamples_) {
             if (int64_t(sample.tick) <= afterTick) continue;
             Json row = Json::object();
