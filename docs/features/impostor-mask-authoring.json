@@ -12,7 +12,10 @@
     "docs/agent-handoffs/media/impostor-mask-studio.png",
     "docs/agent-handoffs/terraweave-impostor-contour-metal.md",
     "docs/agent-handoffs/terraweave-palm-bounds-metal.md",
+    "docs/devlog/entries/2026-11-27-impostor-mask-authoring.json",
     "docs/devlog/systems.json",
+    "docs/evidence/impostor-mask-authoring-final.json",
+    "docs/evidence/impostor-mask-authoring-final.log.txt",
     "docs/evidence/impostor-mask-authoring-mac.json",
     "docs/evidence/impostor-mask-authoring-mac.log.txt",
     "docs/features/impostor-mask-authoring.json",
@@ -73,7 +76,7 @@
     },
     "studio": {
       "status": "pass",
-      "note": "WebKit exercised three fit modes, two views and save.",
+      "note": "Production Studio bundle built. WebKit tested the real panel against MCP; StudioSession verified the native dispatch and matching GLB publication.",
       "evidence": [
         "docs/agent-handoffs/media/impostor-mask-studio.png",
         "docs/agent-handoffs/impostor-mask-authoring-mac.md"
@@ -139,7 +142,7 @@
       "status": "pass",
       "note": "Four focused CTests on the implementation commit.",
       "evidence": [
-        "docs/evidence/impostor-mask-authoring-mac.json"
+        "docs/evidence/impostor-mask-authoring-final.json"
       ]
     },
     "handoff": {
@@ -161,7 +164,8 @@
       "status": "not_run",
       "note": "Studio capture prepared; external site publication pending integration.",
       "evidence": [
-        "docs/agent-handoffs/media/impostor-mask-studio.png"
+        "docs/agent-handoffs/media/impostor-mask-studio.png",
+        "docs/devlog/entries/2026-11-27-impostor-mask-authoring.json"
       ]
     }
   },
@@ -181,6 +185,6 @@
     ]
   },
   "test_reports": [
-    "docs/evidence/impostor-mask-authoring-mac.json"
+    "docs/evidence/impostor-mask-authoring-final.json"
   ]
 }
