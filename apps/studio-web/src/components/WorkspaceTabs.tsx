@@ -4,7 +4,7 @@ import { WORKSPACES, WORKSPACE_INFO, type StudioWorkspace } from '../workspaces'
 import { fitWorkspaceTabs, workspaceTabBudget } from '../workspaceTabs';
 import { StudioContextMenu, type StudioMenuItem } from '../ui';
 
-const windowsHost = typeof navigator !== 'undefined' && /Win/i.test(navigator.platform + navigator.userAgent);
+import { menuShortcut } from '../keyboard';
 
 /** Workspace switcher in the title bar. Tabs that do not fit move into a menu instead of being clipped. */
 export default function WorkspaceTabs({ value, onChange }: { value: StudioWorkspace; onChange: (id: StudioWorkspace) => void }) {
@@ -39,7 +39,7 @@ export default function WorkspaceTabs({ value, onChange }: { value: StudioWorksp
   const items: StudioMenuItem[] = hidden.map(id => ({
     id,
     label: WORKSPACE_INFO[id].title,
-    shortcut: (windowsHost ? 'Ctrl+' : '⌘') + WORKSPACE_INFO[id].key,
+    shortcut: menuShortcut(WORKSPACE_INFO[id].key),
     checked: id === value,
     onSelect: () => onChange(id),
   }));
@@ -53,7 +53,7 @@ export default function WorkspaceTabs({ value, onChange }: { value: StudioWorksp
       </div>
       {shown.map(id => <button key={id} type="button" role="tab" aria-selected={value === id}
         className={'workspace-tabs__tab' + (value === id ? ' is-active' : '')}
-        title={WORKSPACE_INFO[id].purpose + ' (⌘' + WORKSPACE_INFO[id].key + ')'}
+        title={WORKSPACE_INFO[id].purpose + ' (' + menuShortcut(WORKSPACE_INFO[id].key) + ')'}
         onClick={() => onChange(id)}>{WORKSPACE_INFO[id].title}</button>)}
       {hidden.length > 0 && <button ref={more} type="button"
         className={'workspace-tabs__tab workspace-tabs__more' + (activeHidden ? ' is-active' : '')}

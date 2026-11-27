@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { revealProjectAsset } from './assetNavigation';
-import { shortcutKey } from './keyboard';
+import { menuShortcut, shortcutKey } from './keyboard';
 import { ChevronDown, Search, Settings2 } from 'lucide-react';
 import { invoke, nativeConnected, nativeWindowAction, nativeWindowResize, onNativeEvent } from './bridge';
 import {
@@ -38,7 +38,7 @@ import './components/FloatingShell.css';
 
 /** Menu shortcut glyph. Windows shows Ctrl; macOS keeps the command mark. */
 const windowsHost = typeof navigator !== 'undefined' && /Win/i.test(navigator.platform + navigator.userAgent);
-const menuShortcut = (key: string) => (windowsHost ? 'Ctrl+' : '⌘') + key;
+
 
 /** Set when this WebView is a floating window (`?window=…&panels=…`), null in the main window. */
 const FLOAT = floatingParams();
@@ -547,18 +547,18 @@ export default function App() {
   const menus: StudioMenu[] = [
     { id: 'file', label: 'File', items: () => [
       { id: 'hub', label: 'Project Hub…', disabled: !connected || busy, onSelect: () => setHubOpen(true) },
-      { id: 'open', label: 'Open Project…', shortcut: '⌘O', disabled: !connected || busy, onSelect: () => void openProject() },
+      { id: 'open', label: 'Open Project…', shortcut: menuShortcut('O'), disabled: !connected || busy, onSelect: () => void openProject() },
       { id: 'maps', label: 'New / Open Map…', separator: true, disabled: !project, onSelect: () => showPanel('project') },
-      { id: 'save', label: 'Save', shortcut: '⌘S', disabled: !project || busy || !snapshot?.project.dirty,
+      { id: 'save', label: 'Save', shortcut: menuShortcut('S'), disabled: !project || busy || !snapshot?.project.dirty,
         onSelect: () => void historyAction('studio.save') },
-      { id: 'saveas', label: 'Save As…', shortcut: '⇧⌘S', disabled: !project || busy,
+      { id: 'saveas', label: 'Save As…', shortcut: menuShortcut('S', true), disabled: !project || busy,
         onSelect: () => { setBusy(true); void invoke('studio.saveAs', {}).then(next => { if (next && 'project' in next) setSnapshot(next); })
           .catch(e => setError(e instanceof Error ? e.message : String(e))).finally(() => setBusy(false)); } },
     ] },
     { id: 'edit', label: 'Edit', items: () => [
-      { id: 'undo', label: 'Undo', shortcut: '⌘Z', disabled: busy || !snapshot?.history.canUndo, onSelect: () => void historyAction('studio.undo') },
-      { id: 'redo', label: 'Redo', shortcut: '⇧⌘Z', disabled: busy || !snapshot?.history.canRedo, onSelect: () => void historyAction('studio.redo') },
-      { id: 'dup', label: selection.length > 1 ? 'Duplicate ' + selection.length + ' Objects' : 'Duplicate', shortcut: '⌘D', separator: true, disabled: busy || !selection.length,
+      { id: 'undo', label: 'Undo', shortcut: menuShortcut('Z'), disabled: busy || !snapshot?.history.canUndo, onSelect: () => void historyAction('studio.undo') },
+      { id: 'redo', label: 'Redo', shortcut: menuShortcut('Z', true), disabled: busy || !snapshot?.history.canRedo, onSelect: () => void historyAction('studio.redo') },
+      { id: 'dup', label: selection.length > 1 ? 'Duplicate ' + selection.length + ' Objects' : 'Duplicate', shortcut: menuShortcut('D'), separator: true, disabled: busy || !selection.length,
         onSelect: () => entityAction('studio.entityDuplicate') },
       { id: 'del', label: selection.length > 1 ? 'Delete ' + selection.length + ' Objects' : 'Delete', shortcut: '⌫', disabled: busy || !selection.length,
         onSelect: () => entityAction('studio.entityDelete') },
@@ -617,7 +617,7 @@ export default function App() {
     out.push({ id: 'cmd:refresh', kind: 'command', title: 'Refresh from engine', hint: 'Re-read the native document', run: () => void refresh() });
     out.push({ id: 'cmd:console', kind: 'command', title: 'Show Console', run: () => showPanel('console') });
     for (const id of WORKSPACES) out.push({ id: 'ws:' + id, kind: 'workspace', title: WORKSPACE_INFO[id].title + ' workspace',
-      hint: WORKSPACE_INFO[id].purpose, shortcut: '⌘' + WORKSPACE_INFO[id].key, run: () => switchWorkspace(id) });
+      hint: WORKSPACE_INFO[id].purpose, shortcut: menuShortcut(WORKSPACE_INFO[id].key), run: () => switchWorkspace(id) });
     for (const panel of STUDIO_PANELS) out.push({ id: 'panel:' + panel, kind: 'window', title: STUDIO_PANEL_TITLES[panel],
       hint: floatOwner(floating, panel) ? 'Floating window · focus' : panelStack(dock, panel) ? 'Open · focus' : 'Open in ' + WORKSPACE_INFO[workspace].title, run: () => showPanel(panel) });
     if (connected) for (const stack of dockStacks(dock)) if (stack.active) {
@@ -672,8 +672,8 @@ export default function App() {
       <div className="titlebar__side titlebar__side--right">
       <div className="header-drag-space"/>
       <WorkspaceTabs value={workspace} onChange={switchWorkspace}/>
-      <button type="button" className="command-search-button" onClick={() => setPalette('')} aria-label="Search or run a command (⌘K)">
-        <Search size={13}/><span>Search or run…</span><kbd>⌘K</kbd>
+      <button type="button" className="command-search-button" onClick={() => setPalette('')} aria-label={'Search or run a command (' + menuShortcut('K') + ')'}>
+        <Search size={13}/><span>Search or run…</span><kbd>{menuShortcut('K')}</kbd>
       </button>
       <SceneLoadingStrip state={loading}/>
       <div className="title-actions">
