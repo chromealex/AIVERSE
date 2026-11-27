@@ -800,6 +800,21 @@ Json StudioSession::mapProperties(const Json& params,bool write) {
     if(write){
         const auto& patch=params["changes"];
         if(!patch.isObject())throw std::runtime_error("Expected map property changes");
+        if(patch.has("scenarioRecord")){
+            const auto& record=patch["scenarioRecord"];
+            const auto group=record.getStr("group");
+            const auto& index=record["index"];
+            if(data.worldSpace || patch.size()!=1 || (group!="waves" && group!="triggers") ||
+               !index.isNumber() || index.toDouble()!=index.integer() || index.integer()<0 ||
+               !data.extra[group].isArray() || size_t(index.integer())>=data.extra[group].size() || !record["value"].isObject())
+                throw std::runtime_error("Invalid map scenario record");
+            auto& current=data.extra.member(group).at(size_t(index.integer()));
+            if(current!=record["value"]){
+                doc.beginEdit();
+                data.extra.member(group).at(size_t(index.integer()))=record["value"];
+            }
+            return snapshot();
+        }
         for(const auto& [key,value]:patch.members()){
             if(key=="name" && value.isString() && !value.str().empty())continue;
             if(data.worldSpace)throw std::runtime_error("Unsupported world-space scene property: "+key);
@@ -838,6 +853,11 @@ Json StudioSession::mapProperties(const Json& params,bool write) {
         out.set("worldSpace",std::move(world));
     }
     out.set("maxSize",num(game::kMaxMapSize));out.set("entities",num(data.entities.size()));out.set("players",num(data.players.size()));
+    if(params.has("scenarioGroup")){
+        const auto group=params.getStr("scenarioGroup");
+        if(group!="waves" && group!="triggers")throw std::runtime_error("Unknown map scenario group");
+        out.set("scenarioRecords",data.extra[group].isArray()?data.extra[group]:Json::array());
+    }
     out.set("areas",data.extra["areas"].isObject()?data.extra["areas"]:Json::object());
     out.set("roadsOnly",Json::fromBool(data.roadsOnly));out.set("victory",data.extra["victory"]);
     Json roster=Json::array(),factions=Json::array(),resources=Json::array();
