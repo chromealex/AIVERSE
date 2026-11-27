@@ -328,7 +328,11 @@ function TextureSubresource({ texture }: { texture: StudioGpuTexture }) {
     <div className="texture-resource__controls">
       <label>Mip level <output>{mip}</output>
         <input type="range" min={0} max={Math.max(0, texture.mips - 1)} value={mip} disabled={texture.mips <= 1}
-          aria-label="Mip level" onChange={e => { setMip(Number(e.target.value)); setLayer(0); }}/>
+          aria-label="Mip level" onChange={e => {
+            const nextMip = Number(e.target.value);
+            setMip(nextMip);
+            if (volume) setLayer(current => Math.min(current, Math.max(1, Math.floor(texture.depth / 2 ** nextMip)) - 1));
+          }}/>
       </label>
       {slices > 1 && <label>{sliceLabel} <output>{cube ? Math.floor(layer / 6) + ' · ' + face : layer}</output>
         <input type="range" min={0} max={slices - 1} value={layer} aria-label={sliceLabel} onChange={e => setLayer(Number(e.target.value))}/>
