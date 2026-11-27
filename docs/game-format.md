@@ -3109,3 +3109,14 @@ Terrain, fog, markers, overlays and pointer actions use the same cropped area.
 `cameraFrame` is `"frustum"` by default; `"rectangle"` draws the axis-aligned
 bounding rectangle of the camera footprint. These planar settings do not change
 the planetary globe projection.
+
+
+### Portrait background
+
+`ui.portrait.background` in game.json supplies the default portrait clear colour;
+`types.<id>.view.portrait.background` overrides it for one type. Use RGB or RGBA
+components in `[0,1]`, or `"player"` to use the selected subject owner's colour.
+Malformed values retain the inherited background. With neither setting, the
+existing grey-blue background remains. The same background applies to static
+and animated world-model portrait paths. `yaw`, `zoom` and `focusHeight` follow
+the same per-type-over-project precedence.

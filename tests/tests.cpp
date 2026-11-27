@@ -18989,3 +18989,19 @@ TEST(map_projection_crop_roundtrip_and_frame) {
     const auto rectangle=view::MapProjection::rectangularFrame(quad);
     CHECK(rectangle[0].x==8&&rectangle[1].x==24&&rectangle[2].z==40);
 }
+
+#include "engine/view/PortraitOptions.h"
+TEST(portrait_options_inheritance_and_background) {
+    using namespace aiverse;
+    const auto defaults=Json::parse(R"({"model":"models/portrait.glb","zoom":2,"background":[0.1,0.2,0.3]})");
+    const render::float4 player{.8f,.1f,.2f,1};
+    auto look=view::PortraitOptions::resolve(Json::parse(R"({"background":"player","focusHeight":0.7})"),defaults,player);
+    CHECK(look.model=="models/portrait.glb" && look.zoom==2);
+    CHECK(look.background.x==player.x && look.background.y==player.y);
+    CHECK(std::abs(look.focusHeight-.7f)<1e-6f);
+    look=view::PortraitOptions::resolve(Json::parse(R"({"model":"","zoom":99,"background":[1,"bad",0]})"),defaults,player);
+    CHECK(look.model.empty() && look.zoom==8);
+    CHECK(std::abs(look.background.x-.1f)<1e-6f && look.background.w==1);
+    look=view::PortraitOptions::resolve(Json::parse(R"({"background":[0,0,0,0.5]})"),Json{},player);
+    CHECK(look.background.w==.5f);
+}

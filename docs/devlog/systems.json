@@ -3793,6 +3793,13 @@
           "title": "Область и отображение миникарты",
           "titleEn": "Minimap bounds and display",
           "target": null
+        },
+        {
+          "id": "portrait-appearance-options",
+          "status": "in-progress",
+          "title": "Модель и фон портрета",
+          "titleEn": "Portrait model and background",
+          "target": null
         }
       ]
     }

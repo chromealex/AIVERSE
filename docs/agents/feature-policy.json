@@ -437,6 +437,16 @@
       "api_paths": [
         "engine/view/MapProjection.h"
       ]
+    },
+    "portrait-appearance-options": {
+      "requires": [],
+      "roadmap": {
+        "system": "gameplay",
+        "id": "portrait-appearance-options"
+      },
+      "api_paths": [
+        "engine/view/PortraitOptions.h"
+      ]
     }
   },
   "claims": []

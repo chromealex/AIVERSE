@@ -1,3 +1,4 @@
+#include "engine/view/PortraitOptions.h"
 // Client UI: the "game" data model behind engine/assets/ui/{menu,hud,lobby}.rml.
 // Everything here reads the simulation and turns clicks into Commands; layout and looks are in
 // the documents, so games restyle or rearrange the HUD with their own ui/ files.
@@ -334,10 +335,8 @@ void GameClient::renderSelectionPortrait() {
     const auto owner = world.get<Owner>(portraitSubject_).player;
     const auto& options = rules_.types[type].view["portrait"];
     const auto& defaults = manifest_["ui"]["portrait"];
-    auto option = [&](const char* name, double fallback) {
-        return float(options[name].toDouble(defaults[name].toDouble(fallback)));
-    };
-    selectionPortrait_.render(view_,type,owner,time_,option("yaw",-1),option("zoom",1),option("focusHeight",.45));
+    const auto look=::aiverse::view::PortraitOptions::resolve(options,defaults,GameView::playerColor(owner));
+    selectionPortrait_.render(view_,type,owner,time_,look.yaw,look.zoom,look.focusHeight,look.background);
     portraitBlank_ = false;
 }
 
