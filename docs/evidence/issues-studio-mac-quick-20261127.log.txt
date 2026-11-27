@@ -1,0 +1,1740 @@
+AIVERSE tests | commit=d1871901b | build=/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick | report=/Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494
+
+========== ctest ==========
+Command: ctest --test-dir /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick --config Debug --no-tests=error --output-on-failure --parallel 6 --output-junit /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.xml
+Internal ctest changing into directory: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick
+Test project /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick
+        Start 121: aiverse_tests
+        Start 118: aiverse_net_tests
+        Start 293: skill_library_isolation
+        Start 120: aiverse_remote_tests
+        Start 552: voxel_game
+        Start  26: aiverse_deferred_loading_tests
+  1/592 Test  #26: aiverse_deferred_loading_tests ..................   Passed   37.55 sec
+        Start 171: meta_native_link
+  2/592 Test #120: aiverse_remote_tests ............................   Passed   68.52 sec
+        Start 546: fps
+  3/592 Test #552: voxel_game ......................................   Passed   69.03 sec
+        Start 164: ta_importer
+  4/592 Test #118: aiverse_net_tests ...............................   Passed   74.65 sec
+        Start 340: spectrafx_cpu_gpu_parity
+  5/592 Test #171: meta_native_link ................................   Passed   58.70 sec
+        Start 251: library_production_survival_example
+  6/592 Test #340: spectrafx_cpu_gpu_parity ........................   Passed   23.24 sec
+        Start 368: physis_parallel
+  7/592 Test #164: ta_importer .....................................   Passed   31.85 sec
+        Start 402: terraweave_model
+  8/592 Test #546: fps .............................................   Passed   32.96 sec
+        Start 553: voxel_server
+  9/592 Test #251: library_production_survival_example .............   Passed   18.42 sec
+        Start 304: hdr_texture
+ 10/592 Test #553: voxel_server ....................................   Passed   14.07 sec
+        Start 238: library_building_style
+ 11/592 Test #402: terraweave_model ................................   Passed   15.11 sec
+        Start 253: library_voxel
+ 12/592 Test #368: physis_parallel .................................   Passed   18.97 sec
+        Start 267: modeling_volume_csg
+ 13/592 Test #253: library_voxel ...................................   Passed   10.15 sec
+        Start 372: physis_firestorm
+ 14/592 Test #238: library_building_style ..........................   Passed   11.69 sec
+        Start 401: wind_rig
+ 15/592 Test #304: hdr_texture .....................................   Passed   13.39 sec
+        Start 155: native_project_build
+ 16/592 Test #267: modeling_volume_csg .............................   Passed   11.43 sec
+        Start 408: terraweave_forest_scene
+ 17/592 Test #293: skill_library_isolation .........................   Passed  132.74 sec
+        Start  25: aiverse_replica_tests
+ 18/592 Test #401: wind_rig ........................................   Passed    7.85 sec
+        Start 475: warcraft3_importer_python
+ 19/592 Test #372: physis_firestorm ................................   Passed    9.10 sec
+        Start 159: project_importer
+ 20/592 Test #408: terraweave_forest_scene .........................   Passed    7.67 sec
+        Start 254: voxel_headless
+ 21/592 Test  #25: aiverse_replica_tests ...........................   Passed    7.48 sec
+        Start 167: aiverse_hosted_view_tests
+ 22/592 Test #254: voxel_headless ..................................   Passed    6.42 sec
+        Start 229: library_genre
+ 23/592 Test #475: warcraft3_importer_python .......................   Passed    7.35 sec
+        Start 148: editor_agent_link
+ 24/592 Test #159: project_importer ................................   Passed    8.34 sec
+        Start 266: modeling_authoring
+ 25/592 Test #155: native_project_build ............................   Passed   15.80 sec
+        Start 236: building_native_world_replica
+ 26/592 Test #167: aiverse_hosted_view_tests .......................   Passed    6.71 sec
+        Start 337: spectrafx_metal_allocator
+ 27/592 Test #229: library_genre ...................................   Passed    5.77 sec
+        Start 237: building_native_world_lockstep
+ 28/592 Test #148: editor_agent_link ...............................   Passed    5.75 sec
+        Start 350: vfx_graph_ops
+ 29/592 Test #266: modeling_authoring ..............................   Passed    5.52 sec
+        Start 551: world_async
+ 30/592 Test #236: building_native_world_replica ...................   Passed    6.14 sec
+        Start 341: terraweave_metal_forest
+ 31/592 Test #237: building_native_world_lockstep ..................   Passed    4.95 sec
+        Start 268: surface_proxy
+ 32/592 Test #337: spectrafx_metal_allocator .......................   Passed    8.09 sec
+        Start 381: physis_nature_preview
+ 33/592 Test #350: vfx_graph_ops ...................................   Passed    7.58 sec
+        Start 147: editor_scene_rotation
+ 34/592 Test #551: world_async .....................................   Passed    7.68 sec
+        Start 156: selection_targeting_mcp
+ 35/592 Test #341: terraweave_metal_forest .........................   Passed    8.00 sec
+        Start 369: physis_streaming
+ 36/592 Test #268: surface_proxy ...................................   Passed    6.10 sec
+        Start 146: editor_oriented_collider
+ 37/592 Test #381: physis_nature_preview ...........................   Passed    4.86 sec
+        Start 143: editor_scene_adapter
+ 38/592 Test #147: editor_scene_rotation ...........................   Passed    4.52 sec
+        Start 505: terraweave_caverns_editor_test
+ 39/592 Test #369: physis_streaming ................................   Passed    4.24 sec
+        Start 426: strata_editor
+ 40/592 Test #146: editor_oriented_collider ........................   Passed    4.84 sec
+        Start 382: physis_mcp
+ 41/592 Test #143: editor_scene_adapter ............................   Passed    4.35 sec
+        Start 343: lens_sprite_gpu_faults
+ 42/592 Test #382: physis_mcp ......................................   Passed    0.80 sec
+        Start 393: terraweave_sparse_editor
+ 43/592 Test #505: terraweave_caverns_editor_test ..................   Passed    4.78 sec
+        Start 380: physis_authoring
+ 44/592 Test #156: selection_targeting_mcp .........................   Passed    8.48 sec
+        Start 419: lens_ops
+ 45/592 Test #343: lens_sprite_gpu_faults ..........................   Passed    4.26 sec
+        Start 391: physis_field_authoring
+ 46/592 Test #426: strata_editor ...................................   Passed    7.33 sec
+        Start 411: terraweave_editor
+ 47/592 Test #393: terraweave_sparse_editor ........................   Passed    4.79 sec
+        Start 174: aiverse_gameplay_tools
+ 48/592 Test #380: physis_authoring ................................   Passed    5.10 sec
+        Start 234: library_building_surface_patterns
+ 49/592 Test #419: lens_ops ........................................   Passed    5.74 sec
+        Start 226: library_aiverse_bots
+ 50/592 Test #391: physis_field_authoring ..........................   Passed    5.09 sec
+        Start  19: ecs_guarded_parallel_test
+ 51/592 Test #234: library_building_surface_patterns ...............   Passed    4.01 sec
+        Start 119: aiverse_battle_tests
+ 52/592 Test #411: terraweave_editor ...............................   Passed    4.79 sec
+        Start 249: library_vehicles_sports_example
+ 53/592 Test #226: library_aiverse_bots ............................   Passed    4.33 sec
+        Start 467: actor_navigation_stream_gate_test
+ 54/592 Test #174: aiverse_gameplay_tools ..........................   Passed    7.22 sec
+        Start 206: rts_authored_pose_test
+ 55/592 Test  #19: ecs_guarded_parallel_test .......................   Passed    3.79 sec
+        Start 227: library_fps_bots
+ 56/592 Test #249: library_vehicles_sports_example .................   Passed    3.29 sec
+        Start 371: physis_tornado
+ 57/592 Test #119: aiverse_battle_tests ............................   Passed    3.68 sec
+        Start 216: terraweave_caverns_planet_authority
+ 58/592 Test #467: actor_navigation_stream_gate_test ...............   Passed    3.34 sec
+        Start 336: spectrafx_metal_scene
+ 59/592 Test #227: library_fps_bots ................................   Passed    3.31 sec
+        Start 215: world_processes_gamecore_native_test
+ 60/592 Test #206: rts_authored_pose_test ..........................   Passed    4.68 sec
+        Start 117: render_cpu_textured_model
+ 61/592 Test #371: physis_tornado ..................................   Passed    4.15 sec
+        Start 157: terraweave_meadow_mcp
+ 62/592 Test #216: terraweave_caverns_planet_authority .............   Passed    4.22 sec
+        Start 548: fps_transport
+ 63/592 Test #336: spectrafx_metal_scene ...........................   Passed    3.38 sec
+        Start 161: world_importer
+ 64/592 Test #157: terraweave_meadow_mcp ...........................   Passed    0.84 sec
+        Start 524: aiverse_protoc
+ 65/592 Test #117: render_cpu_textured_model .......................   Passed    1.12 sec
+        Start 181: ecs_real_genre_replay_test
+ 66/592 Test #161: world_importer ..................................   Passed    0.74 sec
+        Start 248: library_vehicles_sports
+ 67/592 Test #215: world_processes_gamecore_native_test ............   Passed    3.72 sec
+        Start 421: native_simulation_checks_mcp
+ 68/592 Test #548: fps_transport ...................................   Passed    2.82 sec
+        Start 205: ecs_native_rts_integration_test
+ 69/592 Test #181: ecs_real_genre_replay_test ......................   Passed    2.66 sec
+        Start   5: ecs_scene_hierarchy_test
+ 70/592 Test #248: library_vehicles_sports .........................   Passed    2.35 sec
+        Start 228: library_navmesh
+ 71/592 Test #421: native_simulation_checks_mcp ....................   Passed    1.24 sec
+        Start 423: simulation_budget_mcp
+ 72/592 Test #524: aiverse_protoc ..................................   Passed    3.11 sec
+        Start 466: region_gamecore_integration_test
+ 73/592 Test #423: simulation_budget_mcp ...........................   Passed    0.60 sec
+        Start 470: actor_region_position_test
+ 74/592 Test #205: ecs_native_rts_integration_test .................   Passed    2.28 sec
+        Start 472: actor_region_admission_test
+ 75/592 Test   #5: ecs_scene_hierarchy_test ........................   Passed    2.24 sec
+        Start 471: actor_region_lifecycle_test
+ 76/592 Test #228: library_navmesh .................................   Passed    2.29 sec
+        Start 465: runtime_vitals_test
+ 77/592 Test #466: region_gamecore_integration_test ................   Passed    2.49 sec
+        Start 223: aiverse_systems_engine_tests
+ 78/592 Test #470: actor_region_position_test ......................   Passed    2.29 sec
+        Start 469: actor_vehicle_region_group_test
+ 79/592 Test #472: actor_region_admission_test .....................   Passed    2.26 sec
+        Start 246: library_cards_turns
+ 80/592 Test #471: actor_region_lifecycle_test .....................   Passed    2.25 sec
+        Start 422: order_upgrade_mcp
+ 81/592 Test #465: runtime_vitals_test .............................   Passed    2.50 sec
+        Start 320: virtual_texture_feedback_shaders
+ 82/592 Test #320: virtual_texture_feedback_shaders ................   Passed    1.42 sec
+        Start 165: unity_materials
+ 83/592 Test #223: aiverse_systems_engine_tests ....................   Passed    3.77 sec
+        Start 409: terraweave_streaming
+ 84/592 Test #422: order_upgrade_mcp ...............................   Passed    2.28 sec
+        Start 412: vfx_graph_runtime
+ 85/592 Test #469: actor_vehicle_region_group_test .................   Passed    3.65 sec
+        Start  33: animation_graphs
+ 86/592 Test #165: unity_materials .................................   Passed    0.64 sec
+        Start 323: virtual_texture_feedback_msl
+ 87/592 Test #246: library_cards_turns .............................   Passed    3.52 sec
+        Start 528: vivid_human_appearance
+ 88/592 Test #412: vfx_graph_runtime ...............................   Passed    1.74 sec
+        Start 506: terraweave_caverns_mesh_test
+ 89/592 Test #409: terraweave_streaming ............................   Passed    2.06 sec
+        Start 139: camera_client_adapter
+ 90/592 Test  #33: animation_graphs ................................   Passed    3.24 sec
+        Start 403: terraweave_grass_meadow
+ 91/592 Test #528: vivid_human_appearance ..........................   Passed    2.48 sec
+        Start 296: material_batches_unit
+ 92/592 Test #323: virtual_texture_feedback_msl ....................   Passed    3.55 sec
+        Start 547: authority_world_persistence
+ 93/592 Test #139: camera_client_adapter ...........................   Passed    2.21 sec
+        Start 294: uiwindows_audio_importer
+ 94/592 Test #403: terraweave_grass_meadow .........................   Passed    1.64 sec
+        Start 218: ecs_cross_genre_locomotion_test
+ 95/592 Test #296: material_batches_unit ...........................   Passed    2.05 sec
+        Start 324: virtual_texture_sampling_msl
+ 96/592 Test #218: ecs_cross_genre_locomotion_test .................   Passed    0.52 sec
+        Start 151: unity_vfx_importer
+ 97/592 Test #506: terraweave_caverns_mesh_test ....................   Passed    3.91 sec
+        Start 523: aiverse_grpc_tests
+ 98/592 Test #547: authority_world_persistence .....................   Passed    2.64 sec
+        Start 539: vivid_metal_sculpt_id
+ 99/592 Test #523: aiverse_grpc_tests ..............................   Passed    1.20 sec
+        Start 152: unity_anim_importer
+100/592 Test #294: uiwindows_audio_importer ........................   Passed    2.91 sec
+        Start  87: motionweave_core
+101/592 Test #539: vivid_metal_sculpt_id ...........................   Passed    1.23 sec
+        Start 397: terraweave_stage70_sustained
+102/592 Test #151: unity_vfx_importer ..............................   Passed    2.16 sec
+        Start 398: terraweave_native_micro_compile
+103/592 Test #152: unity_anim_importer .............................   Passed    1.13 sec
+        Start 338: spectrafx_metal_volumetric_scene
+104/592 Test  #87: motionweave_core ................................   Passed    0.97 sec
+        Start 333: spectrafx_metal_rhi
+105/592 Test #324: virtual_texture_sampling_msl ....................   Passed    2.82 sec
+        Start 162: aiverse_pkg
+106/592 Test #397: terraweave_stage70_sustained ....................   Passed    0.99 sec
+        Start 417: terraweave_rocks
+107/592 Test #398: terraweave_native_micro_compile .................   Passed    1.10 sec
+        Start 460: vivid_human_wardrobe
+108/592 Test #333: spectrafx_metal_rhi .............................   Passed    0.97 sec
+        Start 285: skill_catalog
+109/592 Test #417: terraweave_rocks ................................   Passed    0.98 sec
+        Start 287: skill_audit
+110/592 Test #285: skill_catalog ...................................   Passed    0.63 sec
+        Start 288: genre_free_engine
+111/592 Test #460: vivid_human_wardrobe ............................   Passed    1.02 sec
+        Start 244: library_genre_puzzles
+112/592 Test #338: spectrafx_metal_volumetric_scene ................   Passed    1.87 sec
+        Start  30: model_batching_policy
+113/592 Test #162: aiverse_pkg .....................................   Passed    1.83 sec
+        Start 214: world_processes_linked_test
+114/592 Test #287: skill_audit .....................................   Passed    0.93 sec
+        Start 373: physis_nature_cues
+115/592 Test #244: library_genre_puzzles ...........................   Passed    0.77 sec
+        Start 420: lens_mcp_stdio
+116/592 Test  #30: model_batching_policy ...........................   Passed    0.79 sec
+        Start 104: view_scene_packets
+117/592 Test #288: genre_free_engine ...............................   Passed    1.03 sec
+        Start  58: animation_scene_game_host_api
+118/592 Test #214: world_processes_linked_test .....................   Passed    0.81 sec
+        Start 284: auto_lod_runtime
+119/592 Test #373: physis_nature_cues ..............................   Passed    0.75 sec
+        Start  86: motionweave_api
+120/592 Test #104: view_scene_packets ..............................   Passed    0.72 sec
+        Start 115: bake_tests
+121/592 Test  #58: animation_scene_game_host_api ...................   Passed    0.74 sec
+        Start 100: view_genre_independent
+122/592 Test #284: auto_lod_runtime ................................   Passed    0.77 sec
+        Start 201: ecs_nereid_ocean_lod_test
+123/592 Test #420: lens_mcp_stdio ..................................   Passed    1.28 sec
+        Start  89: motionweave_hybrid
+124/592 Test  #86: motionweave_api .................................   Passed    0.65 sec
+        Start  82: render_device_epoch
+125/592 Test #115: bake_tests ......................................   Passed    0.73 sec
+        Start  90: motionweave_cost_balancing
+126/592 Test #100: view_genre_independent ..........................   Passed    0.75 sec
+        Start  43: animation_facial_control_rig
+127/592 Test  #89: motionweave_hybrid ..............................   Passed    0.67 sec
+        Start  94: motionweave_parallel_rig
+128/592 Test  #82: render_device_epoch .............................   Passed    0.68 sec
+        Start  97: motionweave_source_bridge
+129/592 Test #201: ecs_nereid_ocean_lod_test .......................   Passed    0.96 sec
+        Start  47: animation_recovery
+130/592 Test  #90: motionweave_cost_balancing ......................   Passed    0.78 sec
+        Start 425: world_persistence_mcp_stdio
+131/592 Test  #43: animation_facial_control_rig ....................   Passed    0.80 sec
+        Start 278: strata_portable
+132/592 Test  #97: motionweave_source_bridge .......................   Passed    0.75 sec
+        Start  92: motionweave_graph_cost_cache
+133/592 Test  #94: motionweave_parallel_rig ........................   Passed    0.80 sec
+        Start  34: animation_ecs_presentation
+134/592 Test  #47: animation_recovery ..............................   Passed    0.86 sec
+        Start  95: motionweave_phase_seed
+135/592 Test #278: strata_portable .................................   Passed    0.65 sec
+        Start  37: animation_montage
+136/592 Test  #92: motionweave_graph_cost_cache ....................   Passed    0.70 sec
+        Start  76: view_appearance_authoring
+137/592 Test  #34: animation_ecs_presentation ......................   Passed    0.75 sec
+        Start  51: animation_hot_reload
+138/592 Test #425: world_persistence_mcp_stdio .....................   Passed    1.25 sec
+        Start 530: vivid_human_creator
+139/592 Test  #95: motionweave_phase_seed ..........................   Passed    0.62 sec
+        Start 154: aiverse_ui_viewport_tests
+140/592 Test  #37: animation_montage ...............................   Passed    0.58 sec
+        Start  49: animation_jobs
+141/592 Test  #76: view_appearance_authoring .......................   Passed    0.62 sec
+        Start  40: animation_physical_pose
+142/592 Test  #51: animation_hot_reload ............................   Passed    0.64 sec
+        Start  77: view_appearance_registry
+143/592 Test #530: vivid_human_creator .............................   Passed    0.65 sec
+        Start  79: view_appearance_prepared
+144/592 Test #154: aiverse_ui_viewport_tests .......................   Passed    0.65 sec
+        Start  78: view_appearance_choice
+145/592 Test  #49: animation_jobs ..................................   Passed    0.99 sec
+        Start 536: vivid_motionweave_bridge
+146/592 Test  #40: animation_physical_pose .........................   Passed    0.67 sec
+        Start 461: vivid_face_shape
+147/592 Test  #77: view_appearance_registry ........................   Passed    0.61 sec
+        Start 221: aiverse_runtime_library_tests
+148/592 Test  #79: view_appearance_prepared ........................   Passed    0.71 sec
+        Start 410: terraweave_horizon
+149/592 Test #221: aiverse_runtime_library_tests ...................   Passed    0.25 sec
+        Start  27: unity_anim_controller
+150/592 Test  #78: view_appearance_choice ..........................   Passed    1.06 sec
+        Start 427: vfx_metal_compaction_smoke
+151/592 Test #536: vivid_motionweave_bridge ........................   Passed    0.81 sec
+        Start 204: terraweave_review_fixes
+152/592 Test #461: vivid_face_shape ................................   Passed    0.83 sec
+        Start 101: view_camera_lod
+153/592 Test  #27: unity_anim_controller ...........................   Passed    0.66 sec
+        Start 276: strata_gpu_culling
+154/592 Test #427: vfx_metal_compaction_smoke ......................   Passed    0.62 sec
+        Start  50: animation_graph_notifies
+155/592 Test #410: terraweave_horizon ..............................   Passed    0.98 sec
+        Start  31: static_impostor_lod
+156/592 Test #276: strata_gpu_culling ..............................   Passed    0.60 sec
+        Start  96: motionweave_backend_phase_transfer
+157/592 Test #204: terraweave_review_fixes .........................   Passed    0.89 sec
+        Start 160: unity_ui_importer
+158/592 Test #101: view_camera_lod .................................   Passed    0.85 sec
+        Start 279: strata_debug_view
+159/592 Test  #31: static_impostor_lod .............................   Passed    0.57 sec
+        Start 213: world_processes_map_hydration_test
+160/592 Test  #50: animation_graph_notifies ........................   Passed    0.61 sec
+        Start 158: release_tools
+161/592 Test  #96: motionweave_backend_phase_transfer ..............   Passed    0.60 sec
+        Start  85: animation_montage_asset_loader
+162/592 Test #279: strata_debug_view ...............................   Passed    0.72 sec
+        Start 503: terraweave_caverns_shard_gpu_host_test
+163/592 Test #213: world_processes_map_hydration_test ..............   Passed    0.73 sec
+        Start 500: terraweave_caverns_mixed_shard_test
+164/592 Test  #85: animation_montage_asset_loader ..................   Passed    0.57 sec
+        Start 529: vivid_human_import
+165/592 Test #503: terraweave_caverns_shard_gpu_host_test ..........   Passed    0.75 sec
+        Start  65: render_model_parallel_jobs
+166/592 Test #529: vivid_human_import ..............................   Passed    0.58 sec
+        Start 525: vivid_human_rig
+167/592 Test #500: terraweave_caverns_mixed_shard_test .............   Passed    0.89 sec
+        Start 526: vivid_metahuman_adapter
+168/592 Test #158: release_tools ...................................   Passed    1.70 sec
+        Start  80: render_model_image_transaction
+169/592 Test  #65: render_model_parallel_jobs ......................   Passed    0.60 sec
+        Start 203: ecs_nereid_review_fixes_test
+170/592 Test #525: vivid_human_rig .................................   Passed    0.59 sec
+        Start  71: render_persistent_model_pool
+171/592 Test #526: vivid_metahuman_adapter .........................   Passed    0.65 sec
+        Start  61: render_async_model_cpu_queue
+172/592 Test  #80: render_model_image_transaction ..................   Passed    0.66 sec
+        Start 540: vivid_human_retirement
+173/592 Test  #71: render_persistent_model_pool ....................   Passed    0.61 sec
+        Start 502: terraweave_caverns_resident_test
+174/592 Test #203: ecs_nereid_review_fixes_test ....................   Passed    0.77 sec
+        Start 394: terraweave_sparse_authoring_lod
+175/592 Test #160: unity_ui_importer ...............................   Passed    3.05 sec
+        Start 459: lighting_model_geometry
+176/592 Test #540: vivid_human_retirement ..........................   Passed    0.65 sec
+        Start  57: model_asset_provider_api
+177/592 Test  #61: render_async_model_cpu_queue ....................   Passed    0.78 sec
+        Start  29: quake3_bsp
+178/592 Test #459: lighting_model_geometry .........................   Passed    0.54 sec
+        Start 272: strata_source_seams
+179/592 Test #502: terraweave_caverns_resident_test ................   Passed    0.74 sec
+        Start  74: render_scoped_resource_owner
+180/592 Test  #57: model_asset_provider_api ........................   Passed    0.54 sec
+        Start  53: animation_editor_visual_asset_watcher
+181/592 Test  #29: quake3_bsp ......................................   Passed    0.96 sec
+        Start  63: render_model_priority
+182/592 Test #394: terraweave_sparse_authoring_lod .................   Passed    1.23 sec
+        Start 196: ecs_nereid_legacy_raster_test
+183/592 Test #272: strata_source_seams .............................   Passed    0.60 sec
+        Start 497: terraweave_caverns_batch_geometry_test
+184/592 Test  #74: render_scoped_resource_owner ....................   Passed    0.95 sec
+        Start 498: terraweave_caverns_edit_presentation_test
+185/592 Test  #53: animation_editor_visual_asset_watcher ...........   Passed    1.08 sec
+        Start 197: ecs_nereid_native_pipeline_test
+186/592 Test  #63: render_model_priority ...........................   Passed    0.66 sec
+        Start 543: vivid_vertex_override
+187/592 Test #196: ecs_nereid_legacy_raster_test ...................   Passed    0.80 sec
+        Start 499: terraweave_caverns_geometry_scene_test
+188/592 Test #497: terraweave_caverns_batch_geometry_test ..........   Passed    1.06 sec
+        Start 192: ecs_nereid_sphere_water_test
+189/592 Test #498: terraweave_caverns_edit_presentation_test .......   Passed    0.71 sec
+        Start 230: library_policy_mechanics
+190/592 Test #197: ecs_nereid_native_pipeline_test .................   Passed    0.53 sec
+        Start 396: terraweave_micro_nutrient
+191/592 Test #543: vivid_vertex_override ...........................   Passed    0.65 sec
+        Start 550: world_streaming
+192/592 Test #499: terraweave_caverns_geometry_scene_test ..........   Passed    0.83 sec
+        Start 256: progression_headless
+193/592 Test #192: ecs_nereid_sphere_water_test ....................   Passed    0.52 sec
+        Start 292: tool_aiverse_progress
+194/592 Test #396: terraweave_micro_nutrient .......................   Passed    0.55 sec
+        Start 386: physis_admin_journal
+195/592 Test #230: library_policy_mechanics ........................   Passed    0.65 sec
+        Start 374: physis_tornado_cues
+196/592 Test #550: world_streaming .................................   Passed    0.69 sec
+        Start  14: ecs_static_scene_multidomain_test
+197/592 Test #386: physis_admin_journal ............................   Passed    1.40 sec
+        Start 462: region_entity_ledger_test
+198/592 Test #374: physis_tornado_cues .............................   Passed    1.45 sec
+        Start 231: library_encounters
+199/592 Test #256: progression_headless ............................   Passed    1.62 sec
+        Start 243: strategy_libraries
+200/592 Test  #14: ecs_static_scene_multidomain_test ...............   Passed    1.39 sec
+        Start 367: physis_nature_presentation
+201/592 Test #462: region_entity_ledger_test .......................   Passed    0.48 sec
+        Start 329: spectrafx_metal_gpu
+202/592 Test #231: library_encounters ..............................   Passed    0.48 sec
+        Start  22: ecs_simulation_bridge_test
+203/592 Test #243: strategy_libraries ..............................   Passed    0.50 sec
+        Start 538: vivid_metal_rhi
+204/592 Test #367: physis_nature_presentation ......................   Passed    0.56 sec
+        Start   7: ecs_scene_runtime_test
+205/592 Test #329: spectrafx_metal_gpu .............................   Passed    0.57 sec
+        Start 424: planet_forest_mcp_stdio
+206/592 Test #538: vivid_metal_rhi .................................   Passed    0.46 sec
+        Start 286: skill_routing
+207/592 Test  #22: ecs_simulation_bridge_test ......................   Passed    0.50 sec
+        Start 418: terraweave_landscape
+208/592 Test   #7: ecs_scene_runtime_test ..........................   Passed    1.46 sec
+        Start 180: ecs_scene_collision_bridge_test
+209/592 Test #418: terraweave_landscape ............................   Passed    1.58 sec
+        Start 245: library_genre_puzzles_example
+210/592 Test #286: skill_routing ...................................   Passed    1.73 sec
+        Start 233: library_building_features
+211/592 Test #180: ecs_scene_collision_bridge_test .................   Passed    0.58 sec
+        Start 195: ecs_nereid_query_index_test
+212/592 Test #245: library_genre_puzzles_example ...................   Passed    0.43 sec
+        Start 247: library_cards_turns_example
+213/592 Test #233: library_building_features .......................   Passed    0.41 sec
+        Start 389: physis_field_runtime
+214/592 Test #195: ecs_nereid_query_index_test .....................   Passed    0.42 sec
+        Start  13: ecs_static_scene_integration_test
+215/592 Test #424: planet_forest_mcp_stdio .........................   Passed    2.22 sec
+        Start 224: meta_liveops
+216/592 Test #247: library_cards_turns_example .....................   Passed    0.36 sec
+        Start 194: ecs_nereid_river_grade_test
+217/592 Test #389: physis_field_runtime ............................   Passed    0.37 sec
+        Start 184: ecs_cross_genre_weapon_pipeline_test
+218/592 Test #224: meta_liveops ....................................   Passed    0.41 sec
+        Start 209: ecs_fracture_structure_test
+219/592 Test  #13: ecs_static_scene_integration_test ...............   Passed    0.44 sec
+        Start 463: simulation_profile_test
+220/592 Test #292: tool_aiverse_progress ...........................   Passed    5.32 sec
+        Start 239: library_building_runtime
+221/592 Test #194: ecs_nereid_river_grade_test .....................   Passed    0.61 sec
+        Start 191: ecs_nereid_buoyancy_test
+222/592 Test #209: ecs_fracture_structure_test .....................   Passed    0.42 sec
+        Start 210: ecs_aether_gas_test
+223/592 Test #463: simulation_profile_test .........................   Passed    0.51 sec
+        Start 183: ecs_cross_genre_projectile_test
+224/592 Test #239: library_building_runtime ........................   Passed    0.51 sec
+        Start 464: region_cold_store_test
+225/592 Test #184: ecs_cross_genre_weapon_pipeline_test ............   Passed    0.81 sec
+        Start   1: ecs_experiments_test
+226/592 Test #210: ecs_aether_gas_test .............................   Passed    0.46 sec
+        Start   4: ecs_snapshot_delta_test
+227/592 Test #191: ecs_nereid_buoyancy_test ........................   Passed    0.48 sec
+        Start 178: region_ecs_bridge_test
+228/592 Test #464: region_cold_store_test ..........................   Passed    0.40 sec
+        Start 387: physis_remote_edit
+229/592 Test   #1: ecs_experiments_test ............................   Passed    0.38 sec
+        Start 217: ecs_cross_genre_timed_mechanics_test
+230/592 Test #183: ecs_cross_genre_projectile_test .................   Passed    0.60 sec
+        Start 186: ecs_cross_genre_impact_queue_test
+231/592 Test   #4: ecs_snapshot_delta_test .........................   Passed    0.31 sec
+        Start 208: ecs_echo_acoustics_test
+232/592 Test #387: physis_remote_edit ..............................   Passed    0.45 sec
+        Start 185: ecs_kinematic_projectile_test
+233/592 Test #186: ecs_cross_genre_impact_queue_test ...............   Passed    0.41 sec
+        Start  11: ecs_shared_static_components_test
+234/592 Test #178: region_ecs_bridge_test ..........................   Passed    0.67 sec
+        Start 189: ecs_hitscan_resolution_test
+235/592 Test #208: ecs_echo_acoustics_test .........................   Passed    0.41 sec
+        Start 193: ecs_nereid_geometry_test
+236/592 Test #217: ecs_cross_genre_timed_mechanics_test ............   Passed    0.73 sec
+        Start  24: ecs_cow_rollback_session_test
+237/592 Test  #11: ecs_shared_static_components_test ...............   Passed    0.36 sec
+        Start  12: ecs_prefab_static_catalog_test
+238/592 Test #193: ecs_nereid_geometry_test ........................   Passed    0.40 sec
+        Start  23: ecs_cross_genre_mechanics_test
+239/592 Test #185: ecs_kinematic_projectile_test ...................   Passed    0.56 sec
+        Start 370: physis_nature_runtime
+240/592 Test  #24: ecs_cow_rollback_session_test ...................   Passed    0.36 sec
+        Start 190: ecs_nereid_water_test
+241/592 Test #189: ecs_hitscan_resolution_test .....................   Passed    0.72 sec
+        Start 358: physis_nereid_contacts
+242/592 Test  #12: ecs_prefab_static_catalog_test ..................   Passed    0.40 sec
+        Start 182: ecs_projectile_composition_test
+243/592 Test  #23: ecs_cross_genre_mechanics_test ..................   Passed    0.40 sec
+        Start   6: ecs_scene_hierarchy_simulation_test
+244/592 Test #370: physis_nature_runtime ...........................   Passed    0.41 sec
+        Start  18: ecs_cow_parallel_test
+245/592 Test #190: ecs_nereid_water_test ...........................   Passed    0.40 sec
+        Start  20: ecs_guarded_failure_test
+246/592 Test #358: physis_nereid_contacts ..........................   Passed    0.37 sec
+        Start 207: ecs_native_persistence_test
+247/592 Test   #6: ecs_scene_hierarchy_simulation_test .............   Passed    0.36 sec
+        Start 379: physis_project_config
+248/592 Test  #18: ecs_cow_parallel_test ...........................   Passed    0.33 sec
+        Start  99: motionweave_genre_boundary
+249/592 Test #207: ecs_native_persistence_test .....................   Passed    0.46 sec
+        Start 219: ecs_cross_genre_inventory_test
+250/592 Test  #20: ecs_guarded_failure_test ........................   Passed    0.53 sec
+        Start 399: terraweave_arbor
+251/592 Test #182: ecs_projectile_composition_test .................   Passed    0.80 sec
+        Start 361: physis_nature_fall_host
+252/592 Test #379: physis_project_config ...........................   Passed    0.38 sec
+        Start 388: physis_live_edit
+253/592 Test  #99: motionweave_genre_boundary ......................   Passed    0.60 sec
+        Start   8: ecs_multiworld_test
+254/592 Test #399: terraweave_arbor ................................   Passed    0.36 sec
+        Start 357: physis_integration
+255/592 Test #361: physis_nature_fall_host .........................   Passed    0.39 sec
+        Start 428: vfx_shared_batch_world
+256/592 Test #219: ecs_cross_genre_inventory_test ..................   Passed    0.40 sec
+        Start 429: vfx_cue_scheduler
+257/592 Test #388: physis_live_edit ................................   Passed    0.39 sec
+        Start 360: physis_fracture_outbox
+258/592 Test   #8: ecs_multiworld_test .............................   Passed    0.34 sec
+        Start 297: rules_files
+259/592 Test #429: vfx_cue_scheduler ...............................   Passed    0.31 sec
+        Start 328: spectrafx_contract
+260/592 Test #428: vfx_shared_batch_world ..........................   Passed    0.33 sec
+        Start 359: physis_nature_stress
+261/592 Test #357: physis_integration ..............................   Passed    0.37 sec
+        Start 250: library_genre_production_survival
+262/592 Test #360: physis_fracture_outbox ..........................   Passed    0.54 sec
+        Start 330: spectrafx_metal_billboard
+263/592 Test #328: spectrafx_contract ..............................   Passed    0.34 sec
+        Start 395: terraweave
+264/592 Test #250: library_genre_production_survival ...............   Passed    0.33 sec
+        Start 537: vivid_metal_gpu
+265/592 Test #359: physis_nature_stress ............................   Passed    0.35 sec
+        Start 277: strata_render_routing
+266/592 Test #395: terraweave ......................................   Passed    0.21 sec
+        Start 199: ecs_nereid_renderer_contract_test
+267/592 Test #277: strata_render_routing ...........................   Passed    0.24 sec
+        Start 352: vfx_gpu_backend
+268/592 Test #537: vivid_metal_gpu .................................   Passed    0.32 sec
+        Start 177: meta_service
+269/592 Test #330: spectrafx_metal_billboard .......................   Passed    0.45 sec
+        Start 376: physis_spatial_index
+270/592 Test #352: vfx_gpu_backend .................................   Passed    0.28 sec
+        Start  70: view_portrait_appearance_api
+271/592 Test #177: meta_service ....................................   Passed    0.28 sec
+        Start 326: vfx_graph_compiler
+272/592 Test #376: physis_spatial_index ............................   Passed    0.29 sec
+        Start 303: texture_asset
+273/592 Test #199: ecs_nereid_renderer_contract_test ...............   Passed    0.47 sec
+        Start 541: vivid_cpu_actor
+274/592 Test #541: vivid_cpu_actor .................................   Passed    0.18 sec
+        Start 302: ktx2_transcode
+275/592 Test #326: vfx_graph_compiler ..............................   Passed    0.28 sec
+        Start 335: spectrafx_retirement
+276/592 Test  #70: view_portrait_appearance_api ....................   Passed    0.35 sec
+        Start 327: vfx_ecs_presentation
+277/592 Test #303: texture_asset ...................................   Passed    0.27 sec
+        Start 179: ecs_scene_collision_namespaces_test
+278/592 Test #302: ktx2_transcode ..................................   Passed    0.27 sec
+        Start 474: region_dirty_queue_test
+279/592 Test #327: vfx_ecs_presentation ............................   Passed    0.29 sec
+        Start 133: camera_lens_physics
+280/592 Test #335: spectrafx_retirement ............................   Passed    0.29 sec
+        Start 578: studio_material_validation
+281/592 Test #179: ecs_scene_collision_namespaces_test .............   Passed    0.40 sec
+        Start 169: library_noise
+282/592 Test #133: camera_lens_physics .............................   Passed    0.24 sec
+        Start 271: strata_model_adapter
+283/592 Test #474: region_dirty_queue_test .........................   Passed    0.29 sec
+        Start 306: dds_layers
+284/592 Test #578: studio_material_validation ......................   Passed    0.24 sec
+        Start 132: camera_scene_asset
+285/592 Test #297: rules_files .....................................   Passed    1.90 sec
+        Start 301: ktx2_layers
+286/592 Test #169: library_noise ...................................   Passed    0.35 sec
+        Start 170: aiverse_meta_tests
+287/592 Test #271: strata_model_adapter ............................   Passed    0.26 sec
+        Start 366: physis_presentation
+288/592 Test #132: camera_scene_asset ..............................   Passed    0.25 sec
+        Start 493: terraweave_caverns_edit_runtime_test
+289/592 Test #306: dds_layers ......................................   Passed    0.27 sec
+        Start 140: camera_model_snapshot
+290/592 Test #301: ktx2_layers .....................................   Passed    0.28 sec
+        Start 468: vehicle_region_group_test
+291/592 Test #140: camera_model_snapshot ...........................   Passed    0.19 sec
+        Start 339: spectrafx_entity_effects
+292/592 Test #366: physis_presentation .............................   Passed    0.22 sec
+        Start   2: ecs_wave_executor_test
+293/592 Test #170: aiverse_meta_tests ..............................   Passed    0.24 sec
+        Start  17: ecs_cow_exception_test
+294/592 Test #468: vehicle_region_group_test .......................   Passed    0.19 sec
+        Start 342: vfx_graph_assets
+295/592 Test   #2: ecs_wave_executor_test ..........................   Passed    0.18 sec
+        Start 269: strata_builder
+296/592 Test #493: terraweave_caverns_edit_runtime_test ............   Passed    0.42 sec
+        Start   9: ecs_scene_load_coordinator_test
+297/592 Test  #17: ecs_cow_exception_test ..........................   Passed    0.21 sec
+        Start 364: physis_storm
+298/592 Test #339: spectrafx_entity_effects ........................   Passed    0.23 sec
+        Start 362: physis_wind
+299/592 Test #342: vfx_graph_assets ................................   Passed    0.25 sec
+        Start 255: library_progression
+300/592 Test #364: physis_storm ....................................   Passed    0.18 sec
+        Start  83: animation_crowd_policy
+301/592 Test   #9: ecs_scene_load_coordinator_test .................   Passed    0.24 sec
+        Start 264: shader_graph
+302/592 Test #362: physis_wind .....................................   Passed    0.25 sec
+        Start 441: lighting_gi_gpu_residency_planner
+303/592 Test #269: strata_builder ..................................   Passed    0.32 sec
+        Start 531: vivid_human_dna
+304/592 Test  #83: animation_crowd_policy ..........................   Passed    0.16 sec
+        Start 383: physis_journal_posix_io
+305/592 Test #531: vivid_human_dna .................................   Passed    0.17 sec
+        Start 188: ecs_hitscan_selection_test
+306/592 Test #264: shader_graph ....................................   Passed    0.24 sec
+        Start 142: camera_sprite_vfx_prepared_api
+307/592 Test #255: library_progression .............................   Passed    0.43 sec
+        Start 242: library_royale
+308/592 Test #441: lighting_gi_gpu_residency_planner ...............   Passed    0.33 sec
+        Start 535: vivid_gpu_contract
+309/592 Test #142: camera_sprite_vfx_prepared_api ..................   Passed    0.14 sec
+        Start 514: terraweave_caverns_entrances_test
+310/592 Test #383: physis_journal_posix_io .........................   Passed    0.37 sec
+        Start 473: race_region_respawn_gate_test
+311/592 Test #535: vivid_gpu_contract ..............................   Passed    0.16 sec
+        Start 110: view_grid_geometry
+312/592 Test #242: library_royale ..................................   Passed    0.23 sec
+        Start 275: strata_gpu_scene
+313/592 Test #188: ecs_hitscan_selection_test ......................   Passed    0.37 sec
+        Start  10: ecs_scene_resource_pipeline_test
+314/592 Test #110: view_grid_geometry ..............................   Passed    0.14 sec
+        Start 496: terraweave_caverns_surface_cut_test
+315/592 Test #514: terraweave_caverns_entrances_test ...............   Passed    0.30 sec
+        Start 415: local_fog
+316/592 Test #473: race_region_respawn_gate_test ...................   Passed    0.23 sec
+        Start 527: vivid_human_lod
+317/592 Test #275: strata_gpu_scene ................................   Passed    0.22 sec
+        Start 211: world_processes_inspector_test
+318/592 Test  #10: ecs_scene_resource_pipeline_test ................   Passed    0.21 sec
+        Start 400: terraweave_flora
+319/592 Test #415: local_fog .......................................   Passed    0.15 sec
+        Start 113: view_rts_selection_presentation
+320/592 Test #527: vivid_human_lod .................................   Passed    0.17 sec
+        Start 126: camera_behavior
+321/592 Test #400: terraweave_flora ................................   Passed    0.15 sec
+        Start  38: animation_motion_warp
+322/592 Test #211: world_processes_inspector_test ..................   Passed    0.20 sec
+        Start 377: physis_editor_view
+323/592 Test #496: terraweave_caverns_surface_cut_test .............   Passed    0.32 sec
+        Start 282: strata_disk_pages
+324/592 Test #113: view_rts_selection_presentation .................   Passed    0.17 sec
+        Start 494: terraweave_caverns_editor_visual_preview_test
+325/592 Test #126: camera_behavior .................................   Passed    0.22 sec
+        Start 241: library_snapshot_delta
+326/592 Test  #38: animation_motion_warp ...........................   Passed    0.16 sec
+        Start 105: view_surface_composition
+327/592 Test #377: physis_editor_view ..............................   Passed    0.18 sec
+        Start 202: ecs_nereid_confluence_contract_test
+328/592 Test #282: strata_disk_pages ...............................   Passed    0.21 sec
+        Start  21: ecs_wave_replay_test
+329/592 Test #105: view_surface_composition ........................   Passed    0.15 sec
+        Start  88: motionweave_workers
+330/592 Test #494: terraweave_caverns_editor_visual_preview_test ...   Passed    0.38 sec
+        Start 313: virtual_texture_mip_pipeline
+331/592 Test  #21: ecs_wave_replay_test ............................   Passed    0.19 sec
+        Start 258: prisma_lens_water
+332/592 Test #241: library_snapshot_delta ..........................   Passed    0.29 sec
+        Start  15: ecs_static_scene_editor_contract_test
+333/592 Test  #88: motionweave_workers .............................   Passed    0.16 sec
+        Start 261: prisma_new_effects
+334/592 Test #202: ecs_nereid_confluence_contract_test .............   Passed    0.39 sec
+        Start 280: strata_index_residency
+335/592 Test #258: prisma_lens_water ...............................   Passed    0.18 sec
+        Start 108: view_frustum_culling
+336/592 Test  #15: ecs_static_scene_editor_contract_test ...........   Passed    0.19 sec
+        Start 149: editor_lua_inspector_sandbox
+337/592 Test #313: virtual_texture_mip_pipeline ....................   Passed    0.27 sec
+        Start 390: physis_field_assets
+338/592 Test #261: prisma_new_effects ..............................   Passed    0.29 sec
+        Start 259: prisma_volume
+339/592 Test #108: view_frustum_culling ............................   Passed    0.14 sec
+        Start 283: strata_streaming_coordinator
+340/592 Test #280: strata_index_residency ..........................   Passed    0.18 sec
+        Start 200: game_water_nereid_test
+341/592 Test #390: physis_field_assets .............................   Passed    0.19 sec
+        Start 172: aiverse_gameplay_tests
+342/592 Test #283: strata_streaming_coordinator ....................   Passed    0.18 sec
+        Start 375: physis_diagnostics
+343/592 Test #259: prisma_volume ...................................   Passed    0.20 sec
+        Start 544: vivid_morph_binding
+344/592 Test #149: editor_lua_inspector_sandbox ....................   Passed    0.36 sec
+        Start 198: ecs_nereid_surface_mesh_test
+345/592 Test #172: aiverse_gameplay_tests ..........................   Passed    0.18 sec
+        Start 365: physis_forces
+346/592 Test #544: vivid_morph_binding .............................   Passed    0.16 sec
+        Start 232: library_building_gen
+347/592 Test #200: game_water_nereid_test ..........................   Passed    0.35 sec
+        Start  46: animation_root_motion_bake
+348/592 Test #375: physis_diagnostics ..............................   Passed    0.19 sec
+        Start 407: terraweave_erosion_zones
+349/592 Test #198: ecs_nereid_surface_mesh_test ....................   Passed    0.21 sec
+        Start 260: prisma_compositor
+350/592 Test #365: physis_forces ...................................   Passed    0.19 sec
+        Start  67: render_resource_owner_lifetime
+351/592 Test #232: library_building_gen ............................   Passed    0.17 sec
+        Start   3: ecs_guarded_world_test
+352/592 Test  #46: animation_root_motion_bake ......................   Passed    0.17 sec
+        Start 356: physis_disasters
+353/592 Test #407: terraweave_erosion_zones ........................   Passed    0.20 sec
+        Start  42: animation_root_motor
+354/592 Test #260: prisma_compositor ...............................   Passed    0.21 sec
+        Start 281: strata_index_pages
+355/592 Test  #67: render_resource_owner_lifetime ..................   Passed    0.16 sec
+        Start 355: physis_environment
+356/592 Test   #3: ecs_guarded_world_test ..........................   Passed    0.18 sec
+        Start 353: physis_core
+357/592 Test #356: physis_disasters ................................   Passed    0.19 sec
+        Start 176: aiverse_app_meta_tests
+358/592 Test  #42: animation_root_motor ............................   Passed    0.18 sec
+        Start 416: nereid_flow_map
+359/592 Test #281: strata_index_pages ..............................   Passed    0.18 sec
+        Start 354: physis_climate
+360/592 Test #355: physis_environment ..............................   Passed    0.18 sec
+        Start  66: render_geometry_page_owners
+361/592 Test #353: physis_core .....................................   Passed    0.19 sec
+        Start  36: animation_generic_retarget
+362/592 Test #176: aiverse_app_meta_tests ..........................   Passed    0.18 sec
+        Start  64: render_model_owner_estimates
+363/592 Test #416: nereid_flow_map .................................   Passed    0.22 sec
+        Start 378: physis_scene_geometry
+364/592 Test  #66: render_geometry_page_owners .....................   Passed    0.16 sec
+        Start  73: view_appearance_packet
+365/592 Test #354: physis_climate ..................................   Passed    0.18 sec
+        Start  59: animation_scene_preview_assets
+366/592 Test  #36: animation_generic_retarget ......................   Passed    0.16 sec
+        Start  45: animation_ragdoll_asset
+367/592 Test  #64: render_model_owner_estimates ....................   Passed    0.17 sec
+        Start 495: terraweave_caverns_multinav_test
+368/592 Test  #73: view_appearance_packet ..........................   Passed    0.15 sec
+        Start 332: spectrafx_visual_review_parser
+369/592 Test #378: physis_scene_geometry ...........................   Passed    0.17 sec
+        Start 542: vivid_actor_retirement
+370/592 Test  #59: animation_scene_preview_assets ..................   Passed    0.16 sec
+        Start 212: world_processes_authoring_test
+371/592 Test  #45: animation_ragdoll_asset .........................   Passed    0.18 sec
+        Start 406: terraweave_preview
+372/592 Test #542: vivid_actor_retirement ..........................   Passed    0.17 sec
+        Start 414: physis_sky
+373/592 Test #212: world_processes_authoring_test ..................   Passed    0.17 sec
+        Start  41: animation_budget_policy
+374/592 Test #495: terraweave_caverns_multinav_test ................   Passed    0.32 sec
+        Start  48: animation_humanoid_profile
+375/592 Test #414: physis_sky ......................................   Passed    0.17 sec
+        Start  16: ecs_cow_snapshot_test
+376/592 Test  #41: animation_budget_policy .........................   Passed    0.15 sec
+        Start  44: animation_humanoid_retarget
+377/592 Test  #48: animation_humanoid_profile ......................   Passed    0.16 sec
+        Start  84: animation_cues
+378/592 Test #406: terraweave_preview ..............................   Passed    0.35 sec
+        Start  93: motionweave_worker_reuse
+379/592 Test  #16: ecs_cow_snapshot_test ...........................   Passed    0.16 sec
+        Start 511: terraweave_caverns_test
+380/592 Test  #44: animation_humanoid_retarget .....................   Passed    0.18 sec
+        Start  35: animation_playback
+381/592 Test  #84: animation_cues ..................................   Passed    0.16 sec
+        Start 273: strata_view
+382/592 Test  #93: motionweave_worker_reuse ........................   Passed    0.15 sec
+        Start  69: render_resource_owner_group
+383/592 Test  #35: animation_playback ..............................   Passed    0.16 sec
+        Start 153: splash_choice
+384/592 Test #511: terraweave_caverns_test .........................   Passed    0.24 sec
+        Start  52: animation_model_dependencies
+385/592 Test #273: strata_view .....................................   Passed    0.17 sec
+        Start  56: model_resource_owner_contract
+386/592 Test  #69: render_resource_owner_group .....................   Passed    0.17 sec
+        Start  91: motionweave_backend_selection
+387/592 Test #153: splash_choice ...................................   Passed    0.19 sec
+        Start 315: virtual_texture_file_streamer
+388/592 Test  #56: model_resource_owner_contract ...................   Passed    0.18 sec
+        Start 504: terraweave_caverns_stage6_test
+389/592 Test  #52: animation_model_dependencies ....................   Passed    0.19 sec
+        Start 545: fps_animation_actions
+390/592 Test  #91: motionweave_backend_selection ...................   Passed    0.25 sec
+        Start 240: library_gear
+391/592 Test #545: fps_animation_actions ...........................   Passed    0.15 sec
+        Start 187: ecs_integer_health_commit_test
+392/592 Test #315: virtual_texture_file_streamer ...................   Passed    0.25 sec
+        Start 106: view_layer_providers
+393/592 Test #240: library_gear ....................................   Passed    0.16 sec
+        Start 322: virtual_texture_sampling_vulkan_spirv
+394/592 Test #504: terraweave_caverns_stage6_test ..................   Passed    0.31 sec
+        Start  98: motionweave_action_edges
+395/592 Test #106: view_layer_providers ............................   Passed    0.15 sec
+        Start  62: render_model_estimate
+396/592 Test  #98: motionweave_action_edges ........................   Passed    0.15 sec
+        Start 549: world_operator_jobs
+397/592 Test #187: ecs_integer_health_commit_test ..................   Passed    0.32 sec
+        Start 404: terraweave_heightmap
+398/592 Test  #62: render_model_estimate ...........................   Passed    0.15 sec
+        Start 447: lighting_lumaweave_direct_reference
+399/592 Test #404: terraweave_heightmap ............................   Passed    0.15 sec
+        Start 413: physical_sky
+400/592 Test #447: lighting_lumaweave_direct_reference .............   Passed    0.22 sec
+        Start 103: view_layer_order
+401/592 Test #549: world_operator_jobs .............................   Passed    0.33 sec
+        Start 363: physis_gravity
+402/592 Test #413: physical_sky ....................................   Passed    0.19 sec
+        Start 405: terraweave_ops
+403/592 Test #103: view_layer_order ................................   Passed    0.16 sec
+        Start 144: editor_scene_picking
+404/592 Test #363: physis_gravity ..................................   Passed    0.16 sec
+        Start 220: ecs_fixed_regeneration_policy_test
+405/592 Test #405: terraweave_ops ..................................   Passed    0.16 sec
+        Start 111: view_triangle_facing
+406/592 Test #322: virtual_texture_sampling_vulkan_spirv ...........   Passed    0.80 sec
+        Start 145: editor_scene_gizmo
+407/592 Test #332: spectrafx_visual_review_parser ..................   Passed    2.03 sec
+        Start  32: strata_auto_select
+408/592 Test #111: view_triangle_facing ............................   Passed    0.14 sec
+        Start 270: strata_seams
+409/592 Test #144: editor_scene_picking ............................   Passed    0.34 sec
+        Start 501: terraweave_caverns_presentation_test
+410/592 Test  #32: strata_auto_select ..............................   Passed    0.15 sec
+        Start  39: animation_inertialization
+411/592 Test #270: strata_seams ....................................   Passed    0.23 sec
+        Start 112: view_geometry_bounds
+412/592 Test #220: ecs_fixed_regeneration_policy_test ..............   Passed    0.44 sec
+        Start 114: view_rts_preview_presentation
+413/592 Test  #39: animation_inertialization .......................   Passed    0.14 sec
+        Start 522: terraweave_caverns_snapshot_workers_test
+414/592 Test #112: view_geometry_bounds ............................   Passed    0.14 sec
+        Start 107: view_visibility_alias
+415/592 Test #114: view_rts_preview_presentation ...................   Passed    0.14 sec
+        Start 109: view_spherical_horizon
+416/592 Test #145: editor_scene_gizmo ..............................   Passed    0.53 sec
+        Start 331: spectrafx_metal_evidence_parser
+417/592 Test #107: view_visibility_alias ...........................   Passed    0.14 sec
+        Start 141: camera_terrain_prepared_api
+418/592 Test #522: terraweave_caverns_snapshot_workers_test ........   Passed    0.23 sec
+        Start 321: virtual_texture_sampling_glsl
+419/592 Test #109: view_spherical_horizon ..........................   Passed    0.15 sec
+        Start 438: lighting_gi_gpu_chunk_bvh_cache
+420/592 Test #501: terraweave_caverns_presentation_test ............   Passed    0.48 sec
+        Start 453: lighting_lighting_gpu_bridge
+421/592 Test #141: camera_terrain_prepared_api .....................   Passed    0.15 sec
+        Start 298: virtual_texture_pack
+422/592 Test #331: spectrafx_metal_evidence_parser .................   Passed    0.24 sec
+        Start 440: lighting_gi_gpu_paged_bvh
+423/592 Test #438: lighting_gi_gpu_chunk_bvh_cache .................   Passed    0.18 sec
+        Start 289: tool_bot_sweep
+424/592 Test #453: lighting_lighting_gpu_bridge ....................   Passed    0.19 sec
+        Start 123: camera_scheduler
+425/592 Test #321: virtual_texture_sampling_glsl ...................   Passed    0.29 sec
+        Start 455: lighting_lighting_gi_scrolling
+426/592 Test #440: lighting_gi_gpu_paged_bvh .......................   Passed    0.20 sec
+        Start 314: virtual_texture_disk_queue
+427/592 Test #298: virtual_texture_pack ............................   Passed    0.27 sec
+        Start 325: spectrafx_architecture
+428/592 Test #123: camera_scheduler ................................   Passed    0.18 sec
+        Start 454: lighting_lighting_gi_cascades
+429/592 Test #455: lighting_lighting_gi_scrolling ..................   Passed    0.20 sec
+        Start 451: lighting_gi_dynamic_probe_texture
+430/592 Test #289: tool_bot_sweep ..................................   Passed    0.27 sec
+        Start 116: render_cpu_device
+431/592 Test #314: virtual_texture_disk_queue ......................   Passed    0.19 sec
+        Start 122: ecs_camera
+432/592 Test #451: lighting_gi_dynamic_probe_texture ...............   Passed    0.17 sec
+        Start 512: terraweave_caverns_async_rebuild_test
+433/592 Test #116: render_cpu_device ...............................   Passed    0.16 sec
+        Start 290: tool_determinism_diff
+434/592 Test #454: lighting_lighting_gi_cascades ...................   Passed    0.19 sec
+        Start 130: camera_layout
+435/592 Test #325: spectrafx_architecture ..........................   Passed    0.28 sec
+        Start 125: camera_rig
+436/592 Test #122: ecs_camera ......................................   Passed    0.17 sec
+        Start 291: tool_screenshot_compare
+437/592 Test #130: camera_layout ...................................   Passed    0.17 sec
+        Start 520: terraweave_caverns_seam_gate_test
+438/592 Test #512: terraweave_caverns_async_rebuild_test ...........   Passed    0.19 sec
+        Start 235: library_building_structure_graph
+439/592 Test #125: camera_rig ......................................   Passed    0.17 sec
+        Start 175: aiverse_app_tests
+440/592 Test #290: tool_determinism_diff ...........................   Passed    0.26 sec
+        Start 127: camera_rail_path
+441/592 Test #520: terraweave_caverns_seam_gate_test ...............   Passed    0.16 sec
+        Start 513: terraweave_caverns_dirty_queue_test
+442/592 Test #175: aiverse_app_tests ...............................   Passed    0.19 sec
+        Start  54: resource_retirement_queue
+443/592 Test #235: library_building_structure_graph ................   Passed    0.21 sec
+        Start 437: lighting_gi_gpu_bvh_sparse_upload
+444/592 Test #127: camera_rail_path ................................   Passed    0.17 sec
+        Start 436: lighting_gi_gpu_bvh_validation
+445/592 Test #291: tool_screenshot_compare .........................   Passed    0.41 sec
+        Start 102: view_genre_boundary
+446/592 Test #513: terraweave_caverns_dirty_queue_test .............   Passed    0.17 sec
+        Start 452: lighting_lighting_cpu_gi_bridge
+447/592 Test  #54: resource_retirement_queue .......................   Passed    0.15 sec
+        Start 312: virtual_texture_streamer
+448/592 Test #437: lighting_gi_gpu_bvh_sparse_upload ...............   Passed    0.18 sec
+        Start 134: camera_capture_graph
+449/592 Test #436: lighting_gi_gpu_bvh_validation ..................   Passed    0.19 sec
+        Start 444: lighting_gi_geometry_scene
+450/592 Test #452: lighting_lighting_cpu_gi_bridge .................   Passed    0.17 sec
+        Start 319: gpu_icb_material_contract
+451/592 Test #312: virtual_texture_streamer ........................   Passed    0.17 sec
+        Start 124: camera_rt_pool
+452/592 Test #134: camera_capture_graph ............................   Passed    0.17 sec
+        Start 533: vivid_sparse_morph
+453/592 Test #444: lighting_gi_geometry_scene ......................   Passed    0.18 sec
+        Start 136: camera_png
+454/592 Test #319: gpu_icb_material_contract .......................   Passed    0.16 sec
+        Start  55: async_resource_retirement_queue
+455/592 Test #102: view_genre_boundary .............................   Passed    0.37 sec
+        Start 510: terraweave_caverns_streaming_test
+456/592 Test #124: camera_rt_pool ..................................   Passed    0.16 sec
+        Start 439: lighting_gi_gpu_chunk_bvh_lifetime
+457/592 Test #533: vivid_sparse_morph ..............................   Passed    0.16 sec
+        Start 534: vivid_shape_binding
+458/592 Test #136: camera_png ......................................   Passed    0.15 sec
+        Start 507: terraweave_caverns_swap_policy_test
+459/592 Test  #55: async_resource_retirement_queue .................   Passed    0.15 sec
+        Start 446: lighting_gi_terraweave_resident_bridge
+460/592 Test #510: terraweave_caverns_streaming_test ...............   Passed    0.16 sec
+        Start 392: gpu_timing_router
+461/592 Test #439: lighting_gi_gpu_chunk_bvh_lifetime ..............   Passed    0.17 sec
+        Start 433: lighting_lighting_gles_admission
+462/592 Test #534: vivid_shape_binding .............................   Passed    0.18 sec
+        Start 257: prisma_graph
+463/592 Test #507: terraweave_caverns_swap_policy_test .............   Passed    0.16 sec
+        Start 431: lighting_lumaweave_gpu_packet
+464/592 Test #446: lighting_gi_terraweave_resident_bridge ..........   Passed    0.16 sec
+        Start  81: render_gpu_program_retirement
+465/592 Test #392: gpu_timing_router ...............................   Passed    0.15 sec
+        Start 307: texture_streaming
+466/592 Test #433: lighting_lighting_gles_admission ................   Passed    0.16 sec
+        Start 448: lighting_gi_dynamic_probe_reference
+467/592 Test #257: prisma_graph ....................................   Passed    0.16 sec
+        Start  72: render_retirement_status_replay
+468/592 Test #431: lighting_lumaweave_gpu_packet ...................   Passed    0.17 sec
+        Start 168: aiverse_library_tests
+469/592 Test  #81: render_gpu_program_retirement ...................   Passed    0.16 sec
+        Start 445: lighting_gi_world_geometry_bridge
+470/592 Test #307: texture_streaming ...............................   Passed    0.16 sec
+        Start 311: virtual_texture_page_table
+471/592 Test #448: lighting_gi_dynamic_probe_reference .............   Passed    0.18 sec
+        Start 129: camera_temporal
+472/592 Test  #72: render_retirement_status_replay .................   Passed    0.16 sec
+        Start 309: texture_resident_streamer
+473/592 Test #168: aiverse_library_tests ...........................   Passed    0.16 sec
+        Start  75: render_retirement_diagnostic_ring
+474/592 Test #445: lighting_gi_world_geometry_bridge ...............   Passed    0.17 sec
+        Start  68: render_retirement_failed_token
+475/592 Test #311: virtual_texture_page_table ......................   Passed    0.18 sec
+        Start 430: lighting_lumaweave_clusters
+476/592 Test #129: camera_temporal .................................   Passed    0.14 sec
+        Start 480: texture_graph_dag_lowering
+477/592 Test #309: texture_resident_streamer .......................   Passed    0.17 sec
+        Start 509: terraweave_caverns_preview_pacer_test
+478/592 Test  #75: render_retirement_diagnostic_ring ...............   Passed    0.16 sec
+        Start 450: lighting_lighting_gi_cpu_sampling
+479/592 Test  #68: render_retirement_failed_token ..................   Passed    0.15 sec
+        Start 434: lighting_gi_chunked_geometry
+480/592 Test #430: lighting_lumaweave_clusters .....................   Passed    0.15 sec
+        Start 521: terraweave_caverns_shard_seam_test
+481/592 Test #480: texture_graph_dag_lowering ......................   Passed    0.18 sec
+        Start 137: camera_frustum
+482/592 Test #509: terraweave_caverns_preview_pacer_test ...........   Passed    0.15 sec
+        Start 173: aiverse_gameplay_generated
+483/592 Test #450: lighting_lighting_gi_cpu_sampling ...............   Passed    0.16 sec
+        Start 481: texture_graph_output_reuse
+484/592 Test #434: lighting_gi_chunked_geometry ....................   Passed    0.16 sec
+        Start 489: texture_graph_fusion
+485/592 Test #521: terraweave_caverns_shard_seam_test ..............   Passed    0.17 sec
+        Start 486: texture_graph_kernel_source
+486/592 Test #137: camera_frustum ..................................   Passed    0.15 sec
+        Start 532: vivid_face
+487/592 Test #481: texture_graph_output_reuse ......................   Passed    0.16 sec
+        Start 310: virtual_texture_pages
+488/592 Test #489: texture_graph_fusion ............................   Passed    0.16 sec
+        Start 385: physis_journal_crash_recovery
+489/592 Test #486: texture_graph_kernel_source .....................   Passed    0.16 sec
+        Start 515: terraweave_caverns_lod_policy_test
+490/592 Test #532: vivid_face ......................................   Passed    0.15 sec
+        Start 300: render_target_set
+491/592 Test #310: virtual_texture_pages ...........................   Passed    0.15 sec
+        Start 516: terraweave_caverns_lod_transition_test
+492/592 Test #173: aiverse_gameplay_generated ......................   Passed    0.35 sec
+        Start 351: vfx_spfx_diagnostics
+493/592 Test #385: physis_journal_crash_recovery ...................   Passed    0.15 sec
+        Start 318: virtual_texture_feedback_pass
+494/592 Test #515: terraweave_caverns_lod_policy_test ..............   Passed    0.15 sec
+        Start 384: physis_journal_locked_io
+495/592 Test #300: render_target_set ...............................   Passed    0.19 sec
+        Start 479: texture_graph_pass_schedule
+496/592 Test #351: vfx_spfx_diagnostics ............................   Passed    0.15 sec
+        Start 456: lighting_lighting_luma_mobile_fallback
+497/592 Test #516: terraweave_caverns_lod_transition_test ..........   Passed    0.16 sec
+        Start 482: texture_graph_image_pins
+498/592 Test #318: virtual_texture_feedback_pass ...................   Passed    0.16 sec
+        Start 476: texture_graph_pipeline_cache
+499/592 Test #384: physis_journal_locked_io ........................   Passed    0.17 sec
+        Start 128: camera_exr
+500/592 Test #479: texture_graph_pass_schedule .....................   Passed    0.16 sec
+        Start 487: texture_graph_materialized_dispatch
+501/592 Test #482: texture_graph_image_pins ........................   Passed    0.15 sec
+        Start 488: texture_graph_gpu_resource_cache
+502/592 Test #456: lighting_lighting_luma_mobile_fallback ..........   Passed    0.15 sec
+        Start 517: terraweave_caverns_lod_weld_test
+503/592 Test #476: texture_graph_pipeline_cache ....................   Passed    0.15 sec
+        Start 317: virtual_texture_feedback
+504/592 Test #128: camera_exr ......................................   Passed    0.16 sec
+        Start 458: lighting_lighting_terrain_gi_shader_contract
+505/592 Test #487: texture_graph_materialized_dispatch .............   Passed    0.15 sec
+        Start 478: texture_graph_liveness
+506/592 Test #488: texture_graph_gpu_resource_cache ................   Passed    0.15 sec
+        Start 265: cables_geometry
+507/592 Test #517: terraweave_caverns_lod_weld_test ................   Passed    0.16 sec
+        Start 483: texture_graph_group_profile
+508/592 Test #317: virtual_texture_feedback ........................   Passed    0.17 sec
+        Start 131: camera_capture_views
+509/592 Test #458: lighting_lighting_terrain_gi_shader_contract ....   Passed    0.15 sec
+        Start 135: camera_oblique
+510/592 Test #478: texture_graph_liveness ..........................   Passed    0.15 sec
+        Start 222: aiverse_systems_tests
+511/592 Test #265: cables_geometry .................................   Passed    0.15 sec
+        Start 485: texture_graph_request_queue
+512/592 Test #483: texture_graph_group_profile .....................   Passed    0.16 sec
+        Start 316: virtual_texture_prefetch
+513/592 Test #131: camera_capture_views ............................   Passed    0.15 sec
+        Start 299: texture_contract
+514/592 Test #135: camera_oblique ..................................   Passed    0.15 sec
+        Start 518: terraweave_caverns_publication_test
+515/592 Test #222: aiverse_systems_tests ...........................   Passed    0.16 sec
+        Start 490: texture_graph_gpu_texture_transfer
+516/592 Test #485: texture_graph_request_queue .....................   Passed    0.15 sec
+        Start 150: editor_build_tool
+517/592 Test #316: virtual_texture_prefetch ........................   Passed    0.16 sec
+        Start 263: alpha_coverage_mips
+518/592 Test #299: texture_contract ................................   Passed    0.15 sec
+        Start 274: strata_lod_benchmark
+519/592 Test #518: terraweave_caverns_publication_test .............   Passed    0.16 sec
+        Start  60: render_retirement_pressure
+520/592 Test #490: texture_graph_gpu_texture_transfer ..............   Passed    0.15 sec
+        Start 519: terraweave_caverns_raycast_test
+521/592 Test #150: editor_build_tool ...............................   Passed    0.15 sec
+        Start 138: camera_hdr_resolve
+522/592 Test #263: alpha_coverage_mips .............................   Passed    0.15 sec
+        Start 449: lighting_gi_cpu_trace_budget
+523/592 Test #274: strata_lod_benchmark ............................   Passed    0.16 sec
+        Start 442: lighting_gi_world_dirty_accumulator
+524/592 Test  #60: render_retirement_pressure ......................   Passed    0.15 sec
+        Start 295: native_registry_link
+525/592 Test #519: terraweave_caverns_raycast_test .................   Passed    0.15 sec
+        Start 491: texture_graph_gpu_texture_budget
+526/592 Test #138: camera_hdr_resolve ..............................   Passed    0.14 sec
+        Start 477: texture_graph_shared_scratch
+527/592 Test #449: lighting_gi_cpu_trace_budget ....................   Passed    0.15 sec
+        Start 457: lighting_lighting_model_gi_shader_contract
+528/592 Test #442: lighting_gi_world_dirty_accumulator .............   Passed    0.15 sec
+        Start 334: spectrafx_preview_policy
+529/592 Test #295: native_registry_link ............................   Passed    0.14 sec
+        Start  28: adaptive_shadow_resolution
+530/592 Test #491: texture_graph_gpu_texture_budget ................   Passed    0.14 sec
+        Start 225: meta_liveops_schema
+531/592 Test #477: texture_graph_shared_scratch ....................   Passed    0.15 sec
+        Start 443: lighting_model_vt_shader_injection
+532/592 Test #457: lighting_lighting_model_gi_shader_contract ......   Passed    0.15 sec
+        Start 252: genre_registry
+533/592 Test #334: spectrafx_preview_policy ........................   Passed    0.14 sec
+        Start 492: view_live_appearance_material_target
+534/592 Test  #28: adaptive_shadow_resolution ......................   Passed    0.15 sec
+        Start 484: vulkan_scope_timing
+535/592 Test #443: lighting_model_vt_shader_injection ..............   Passed    0.23 sec
+        Start 305: exr_texture
+536/592 Test #484: vulkan_scope_timing .............................   Passed    0.22 sec
+        Start 508: terraweave_caverns_owner_barrier_test
+537/592 Test #492: view_live_appearance_material_target ............   Passed    0.25 sec
+        Start 432: lighting_gi_lighting_composition
+538/592 Test #305: exr_texture .....................................   Passed    0.17 sec
+        Start 308: texture_mip_residency
+539/592 Test #508: terraweave_caverns_owner_barrier_test ...........   Passed    0.15 sec
+        Start 435: lighting_gi_gpu_bvh_validator
+540/592 Test #432: lighting_gi_lighting_composition ................   Passed    0.14 sec
+        Start 580: studio_material_schema
+541/592 Test #308: texture_mip_residency ...........................   Passed    0.17 sec
+        Start 163: branding_loader
+542/592 Test #435: lighting_gi_gpu_bvh_validator ...................   Passed    0.16 sec
+        Start 262: prisma_style_presets_fresh
+543/592 Test #252: genre_registry ..................................   Passed    0.61 sec
+        Start 345: material_technique_frame
+544/592 Test #580: studio_material_schema ..........................   Passed    0.20 sec
+        Start 346: model_triplanar_frame
+545/592 Test #163: branding_loader .................................   Passed    0.20 sec
+        Start 347: prisma_compositor_metal
+546/592 Test #262: prisma_style_presets_fresh ......................   Passed    0.20 sec
+        Start 348: quake3_bsp_frame
+547/592 Test #225: meta_liveops_schema .............................   Passed    1.04 sec
+        Start 349: lens_metal_frame
+548/592 Test #345: material_technique_frame ........................***Skipped   0.94 sec
+        Start 554: studio_image_codecs
+549/592 Test #346: model_triplanar_frame ...........................***Skipped   1.24 sec
+        Start 555: studio_building_topology
+550/592 Test #347: prisma_compositor_metal .........................***Skipped   1.72 sec
+        Start 556: studio_building_preview
+551/592 Test #554: studio_image_codecs .............................   Passed    1.15 sec
+        Start 557: studio_metal_lighting
+552/592 Test #348: quake3_bsp_frame ................................***Skipped   1.98 sec
+        Start 558: studio_spectrafx_preview
+553/592 Test #349: lens_metal_frame ................................***Skipped   4.78 sec
+        Start 559: studio_spectrafx_fire_smoke
+554/592 Test #556: studio_building_preview .........................   Passed    5.26 sec
+        Start 560: studio_render_lighting
+555/592 Test #555: studio_building_topology ........................   Passed    5.96 sec
+        Start 561: studio_human_appearance_session
+556/592 Test #558: studio_spectrafx_preview ........................   Passed    9.88 sec
+        Start 562: studio_human_creator
+557/592 Test #560: studio_render_lighting ..........................   Passed    5.02 sec
+        Start 563: studio_content_directory
+558/592 Test #563: studio_content_directory ........................   Passed    0.47 sec
+        Start 564: studio_asset_transfers
+559/592 Test #562: studio_human_creator ............................   Passed    1.02 sec
+        Start 565: studio_move_journal
+560/592 Test #557: studio_metal_lighting ...........................   Passed   11.60 sec
+        Start 566: studio_asset_catalog
+561/592 Test #561: studio_human_appearance_session .................   Passed    6.72 sec
+        Start 567: studio_fps_lighting_contract
+562/592 Test #567: studio_fps_lighting_contract ....................   Passed    0.44 sec
+        Start 568: studio_fps_lighting_document
+563/592 Test #559: studio_spectrafx_fire_smoke .....................   Passed   10.65 sec
+        Start 569: studio_light_preview_math
+564/592 Test #569: studio_light_preview_math .......................   Passed    0.38 sec
+        Start 570: studio_authored_lights
+565/592 Test #566: studio_asset_catalog ............................   Passed    2.48 sec
+        Start 571: studio_pbr_adapter
+566/592 Test #568: studio_fps_lighting_document ....................   Passed    4.12 sec
+        Start 572: studio_facial_preview_binding
+567/592 Test #572: studio_facial_preview_binding ...................   Passed    1.38 sec
+        Start 573: studio_facial_runtime
+568/592 Test #570: studio_authored_lights ..........................   Passed    4.55 sec
+        Start 574: studio_facial_gpu
+569/592 Test #573: studio_facial_runtime ...........................   Passed    1.19 sec
+        Start 575: studio_facial_rig_document
+570/592 Test #575: studio_facial_rig_document ......................   Passed    0.53 sec
+        Start 576: studio_shader_graph_draft
+571/592 Test #571: studio_pbr_adapter ..............................   Passed    5.58 sec
+        Start 577: studio_shader_graph_name
+572/592 Test #576: studio_shader_graph_draft .......................   Passed    0.48 sec
+        Start 579: studio_bridge
+573/592 Test #577: studio_shader_graph_name ........................   Passed    0.62 sec
+        Start 581: studio_lighting_validation
+574/592 Test #579: studio_bridge ...................................   Passed    0.20 sec
+        Start 582: studio_model_picking
+575/592 Test #581: studio_lighting_validation ......................   Passed    0.35 sec
+        Start 583: studio_visual_picking
+576/592 Test #582: studio_model_picking ............................   Passed    0.50 sec
+        Start 584: studio_document_visuals
+577/592 Test #583: studio_visual_picking ...........................   Passed    0.40 sec
+        Start 585: studio_scene_nodes
+578/592 Test #574: studio_facial_gpu ...............................   Passed    2.66 sec
+        Start 586: studio_terrain_geometry
+579/592 Test #584: studio_document_visuals .........................   Passed    4.14 sec
+        Start 587: studio_spectra_transfer
+580/592 Test #587: studio_spectra_transfer .........................   Passed    0.34 sec
+        Start 588: studio_viewport_layout
+581/592 Test #588: studio_viewport_layout ..........................   Passed    0.56 sec
+        Start 589: studio_render_thread
+582/592 Test #585: studio_scene_nodes ..............................   Passed    5.07 sec
+        Start 590: studio_session
+583/592 Test #589: studio_render_thread ............................   Passed    0.48 sec
+        Start 591: studio_owner_history
+584/592 Test #586: studio_terrain_geometry .........................   Passed    5.77 sec
+        Start 592: studio_mcp_registry
+585/592 Test #591: studio_owner_history ............................   Passed    1.16 sec
+586/592 Test #592: studio_mcp_registry .............................   Passed    1.73 sec
+587/592 Test #565: studio_move_journal .............................   Passed   19.60 sec
+588/592 Test #590: studio_session ..................................   Passed   27.89 sec
+589/592 Test #564: studio_asset_transfers ..........................   Passed   61.63 sec
+tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+590/592 Test #121: aiverse_tests ...................................tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+Bus errortee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+***Exception: 441.82 sec
+[ OK ] fixed_basic_arithmetic
+[ OK ] fixed_trig_turns
+[ OK ] fixed_parse_is_float_free
+[ OK ] fixed_sqrt
+[ OK ] fixed_large_multiply_portable_path
+[ OK ] random_is_reproducible
+[ OK ] ecs_create_destroy_and_generations
+[ OK ] ecs_deferred_destroy_during_iteration
+[ OK ] json_parse
+[ OK ] command_serialization_roundtrip
+[ OK ] aiverse_rules_load
+[ OK ] aiverse_pathfinding_avoids_water
+[ OK ] aiverse_train_and_gather
+[ OK ] aiverse_build_structure
+[ OK ] aiverse_invalid_commands_ignored
+[ OK ] aiverse_garrison_send_and_capture
+[ OK ] determinism_same_seed_same_result
+[ OK ] determinism_replay_reproduces_match
+[ OK ] replay_file_roundtrip
+[ OK ] client_match_save_and_replay_slots
+[ OK ] mech_field_harvest_and_regrow
+[ OK ] mech_power_deficit_slows_and_disables
+[ OK ] mech_progressive_cost_stalls_without_income
+[ OK ] mech_cliffs_need_ramps
+[ OK ] mech_sidebar_and_morph
+[ OK ] mech_hero_levels_and_stun
+[ OK ] mech_lane_autobuild_waves_score
+[ OK ] mech_lane_bots_deterministic
+[ OK ] mech_triggers
+[ OK ] mech_regions_claim
+[ OK ] mech_survive_waves
+[ OK ] json_edit_and_dump_roundtrip
+[ OK ] i18n_plural_rules
+[ OK ] i18n_tags_and_negotiation
+[ OK ] i18n_format_and_lookup
+[ OK ] i18n_check_finds_problems
+[ OK ] i18n_engine_tables_complete
+[ OK ] i18n_game_data_names
+[ OK ] i18n_localize_rules_changes_only_names
+[ OK ] pack_roundtrip_codecs_and_dedup
+[ OK ] pack_output_is_reproducible
+[ OK ] pack_rejects_corruption
+[ OK ] pack_paths_and_ignore_rules
+[ OK ] pack_sample_games_match_folder
+[ OK ] audio_synth_render
+[ OK ] audio_decode_wav
+audio: sound 'boom': file not found 'sfx/boom.ogg'
+audio: sound 'beep': unknown key 'volum'
+audio: unknown section 'sound' (volume, spatial, groups, sounds, music, events, types, weapons, abilities, build, scripted)
+[ OK ] audio_bank_errors_are_readable
+[ OK ] audio_voice_limits_and_cooldown
+[ OK ] audio_spatial_and_volumes
+audio: music 'broken': file not found 'm/none.ogg'
+[ OK ] audio_music_playlists
+[ OK ] audio_voice_handles
+[ OK ] audio_scripted_music_and_bus_switches
+[ OK ] audio_sample_games_banks_load_cleanly
+[ OK ] notice_events_run_once_per_tick_and_mirror_batch
+[ OK ] build_button_checks_only_immediate_cost
+[ OK ] audio_repeated_selection_uses_entity_and_time_window
+[ OK ] audio_repeated_selection_sequential_cycles_without_window
+[ OK ] build_button_missing_resource_audio
+[ OK ] audio_aiverse_mapping_warnings
+[ OK ] audio_aiverse_events_keep_sim_deterministic
+[ OK ] audio_decode_and_stream_ogg_vorbis
+[ OK ] pack_external_flag_and_merge
+[ OK ] unpacker_manifests_are_validated
+[ OK ] unpacker_plugins_import_synthetic_archives
+[ OK ] unpacker_hostile_plugin_is_contained
+[ OK ] unpacker_westwood_pak
+[ OK ] importer_dune2_rules_and_synthetic_scenario
+[ OK ] mech_surrender_ends_match_and_replays
+[ OK ] mech_dungeon_dig_and_claim
+[ OK ] mech_dungeon_rooms_portal_recruit
+[ OK ] mech_dungeon_needs_work_and_leaving
+[ OK ] mech_dungeon_hand_slap_possess
+[ OK ] campaign_guard_needs_awareness_before_targeting_and_capture
+[ OK ] campaign_fight_wounds_survive_retreat_and_save
+[ OK ] mech_territory_front_line_and_contested_cells
+[ OK ] mech_territory_autotrain_capture_victory
+[ OK ] mech_player_abilities_and_tech_levels
+[ OK ] mech_settlers_chain_carriers_roads
+[ OK ] mech_settlers_construction_materials_and_recruits
+[ OK ] mech_lanes_generated_and_followed
+    7 of 10 attackers hitting
+[ OK ] mech_melee_surround_big_target
+    corridor: arrived at tick 99
+[ OK ] mech_rvo_corridor_pass_through_idle_units
+[ OK ] sample_games_bot_matches_deterministic
+[ OK ] tiles2d_tileset_and_autotile
+[ OK ] tiles2d_terrain_applied_to_map_idempotent
+[ OK ] tiles2d_sample_games_deterministic
+[ OK ] atlas_maxrects_no_overlap_bounds_padding
+[ OK ] atlas_build_is_deterministic
+[ OK ] atlas_dedupe_trim_rotation_extract
+[ OK ] atlas_grouping_rules
+[ OK ] atlas_sprite_sheets_are_never_trimmed
+[ OK ] atlas_pack_integration_and_runtime_lookup
+[ OK ] models_quat_matches_matrices
+[ OK ] models_gltf_skin_and_clips
+[ OK ] models_gltf_readable_errors
+[ OK ] models_obj_and_mtl
+[ OK ] models_animator_crossfade_and_layers
+[ OK ] models_procedural_modifiers
+[ OK ] models_sample_assets_load
+[ OK ] i18n_ui_markup_keys
+[ OK ] i18n_saved_language_roundtrip
+[ OK ] i18n_placeholder_only_strings_are_not_untranslated
+[ OK ] i18n_ui_documents_translated
+texture: cannot load 'nope.png'
+[ OK ] atlas_texture_library_is_transparent
+[ OK ] terrain_surface_height_and_slope
+[ OK ] terrain_slope_passability_per_type
+[ OK ] terrain_line_of_sight_behind_ridge
+[ OK ] pack_sha256_vectors
+[ OK ] pack_split_layout_and_reading
+[ OK ] pack_split_budgets
+[ OK ] pack_chunk_manager_sources_cache_and_tampering
+[ OK ] audio_3d_distance_models_and_pose
+[ OK ] audio_air_absorption_dulls_far_sounds
+[ OK ] audio_reverb_grows_with_distance
+audio: sound 'x': unknown far sound 'nope'
+[ OK ] audio_far_variant_crossfade
+[ OK ] audio_speed_of_sound_delay
+[ OK ] audio_music_loop_points
+[ OK ] audio_music_layers_follow_intensity
+[ OK ] audio_music_transition_on_bar
+[ OK ] audio_stinger_sync_and_ducking
+[ OK ] audio_music_per_map
+[ OK ] audiopack_adpcm_roundtrip
+[ OK ] audiopack_vorbis_roundtrip
+[ OK ] audiopack_profiles_and_conversion
+[ OK ] audiopack_stage_game_folder
+[ OK ] fx_parse_validates_and_round_trips
+[ OK ] fx_quality_tiers_bound_particles
+[ OK ] fx_node_binding_selects_entity_and_falls_back_to_terrain
+[ OK ] main_camera_shake_distance_pause_and_expiry
+[ OK ] animated_model_effect_uses_existing_handle_lifecycle
+[ OK ] fx_chain_jump_retains_both_endpoints_after_tick_and_expires
+[ OK ] fx_budget_config_limits_particles_and_counts_skipped_events
+[ OK ] fx_attached_trail_follows_and_stops
+[ OK ] fx_offscreen_one_shots_are_not_spawned
+[ OK ] fx_sample_games_have_valid_effects
+[ OK ] fx_aiverse_events_keep_sim_deterministic
+[ OK ] fx_projectile_homing_arc_collide
+[ OK ] fx_delayed_area_channel_chain_cone_windup
+[ OK ] fx_statuses_dot_hot_mods_flags
+[ OK ] fx_silence_disarm_invisibility_lifesteal_onhit
+[ OK ] fx_knockback_summon_teleport_resource_burn_reveal
+[ OK ] fx_unit_ability_charges_levels_requires_smart
+[ OK ] bw_garrison_primitives
+[ OK ] bw_assault_defense_shield_plague_revenge
+[ OK ] bw_groups_on_lanes
+[ OK ] bw_hazards_portal_mines_souls_barrier
+[ OK ] bw_player_skills_loadout_levels_auto
+[ OK ] bw_skills_deterministic
+[ OK ] bw_more_primitives
+[ OK ] terrain_hpa_path_matches_astar
+[ OK ] terrain_incremental_clearance_matches_full
+[ OK ] terrain_heightfield_match_is_deterministic
+[ OK ] terrain_corners_file_roundtrip
+[ OK ] terrain_view_surface_levels_matches_classic
+[ OK ] terrain_view_surface_heightfield_matches_mesh_triangles
+[ OK ] terrain_view_grid_corner_from_levels
+[ OK ] etc_blocks_decode_per_spec
+[ OK ] bc_blocks_decode_per_spec
+[ OK ] ktx2_parse_and_decode_image
+[ OK ] ktx2_rejects_bad_files
+[ OK ] models_fbx_skinned_cube
+  (expected) units/broken.fbx: FBX parse error: Not an FBX file
+[ OK ] models_fbx_readable_errors
+[ OK ] models_two_bone_ik_reaches_target
+[ OK ] models_additive_and_blend_space
+[ OK ] models_morph_targets_and_weights
+[ OK ] models_baked_clips_match_the_pose
+[ OK ] fog_of_war_modes_and_look
+[ OK ] fog_line_of_sight_3d_blockers
+[ OK ] vision_fast_equals_reference_flat
+[ OK ] vision_fast_equals_reference_planet
+[ OK ] lighting_day_night_cycle
+[ OK ] lighting_presets
+[ OK ] lighting_lightning_deterministic
+[ OK ] lighting_type_and_map_data
+[ OK ] lighting_spot_lights
+[ OK ] lighting_reactive_patterns
+[ OK ] lighting_quality_governor
+[ OK ] plugin_json_keeps_numbers_and_unicode
+[ OK ] plugin_bridge_calls_replies_events
+[ OK ] store_and_ads_through_mock_plugins
+[ OK ] overlay_prepared_reload_matches_direct_init
+[ OK ] overlay_builtins_are_data
+[ OK ] overlay_override_and_merge_by_id
+[ OK ] overlay_validation_errors
+[ OK ] overlay_templates_are_valid
+[ OK ] overlay_conditions_on_sim_state
+[ OK ] fx_modules_parse_round_trip_and_errors
+[ OK ] fx_modules_simulate_bursts_limits_subs_collision_lights
+[ OK ] fx_unity_importer_output_is_valid
+[ OK ] fx_unity_modules_parse_and_round_trip
+[ OK ] fx_curves_prewarm_bursts_ring_buffer
+[ OK ] fx_shapes_donut_box_mesh_cone_arc
+[ OK ] fx_velocity_force_limit_fields_noise
+[ OK ] fx_collision_planes_tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+triggers_subemitters_inherit
+[ OK ] fx_ribbons_orphan_trails_and_meshes_simulate
+[ OK ] fx_mesh_particles_from_model_files
+[ OK ] fx_unity_importer_all_modules_play
+[ OK ] sphere_cells_and_dirs_round_trip
+[ OK ] sphere_neighbors_symmetric_and_adjacent
+[ OK ] sphere_corner_duplicates_and_seams
+[ OK ] sphere_great_circle_steps
+  noise hash b63f6f508d85105f
+[ OK ] gen_noise_deterministic
+[ OK ] gen_symmetry_images
+  classic/2 bca2c83d9c0791c8
+  continents/4 169af2ca325ff112
+  islands/2 954d027fe4f6f9f7
+  highlands/3 9e9e30de7fecd4e7
+  canyons/2 7fcf37e9490ffb17
+  lanes/2 6010e5d33a6a8fdb
+[ OK ] gen_golden_maps
+[ OK ] gen_fair_and_connected
+[ OK ] gen_match_hook_and_replay
+  caves d348fb3d9f4d2f55
+  metal 5e11afce218433b2
+[ OK ] gen_caves_and_heightfield
+  planet 88818babb637e26f
+[ OK ] gen_planet_seams
+[ OK ] planet_view_surface_seams_and_picking
+[ OK ] audio_groups_share_a_limit
+[ OK ] audio_group_takes_a_whole_bus
+[ OK ] audio_group_cooldown
+[ OK ] audio_steal_farthest
+[ OK ] audio_steal_oldest_quietest_none
+[ OK ] audio_group_respects_priority_and_far_pairs
+audio: group 'g': unknown key 'maxx' (max, cooldown, steal, bus)
+audio: group 'g': neither max nor cooldown: it limits nothing
+audio: sound 'x': unknown group 'nope'
+[ OK ] audio_group_errors
+[ OK ] splash_parse_and_timeline
+[ OK ] icons_resize_and_render
+[ OK ] icons_ico_icns_png_writers
+[ OK ] icons_generate_platform_sets
+[ OK ] sprite_shadow_data_keys
+[ OK ] sprite_shadow_tiers
+[ OK ] sprite_shadow_projected_decal_follows_ground
+[ OK ] sprite_shadow_caster_faces_camera_unless_sun_grazes
+[ OK ] mcp_install_patches_configs_as_text
+[ OK ] models_converted_sidecar_loads_for_the_source_path
+[ OK ] models_pack_step_ships_sidecars_not_sources
+[ OK ] models_vox_greedy_scene_team
+[ OK ] models_vxl_hva_sections
+[ OK ] models_voxel_broken_files
+[ OK ] models_mdx_skeleton_skin_clips_team
+[ OK ] models_mdl_matches_mdx
+  (expected) cut.mdx: chunk MODL: truncated or broken (needs 372 bytes at offset 24)
+[ OK ] models_mdx_mdl_malformed_input
+[ OK ] models_blp_decode
+[ OK ] models_find_clip_numbered_variants
+[ OK ] models_dae_skinned_two_bones
+[ OK ] models_gltf_resolves_authored_texture_frames
+[ OK ] models_dae_textured_zup_and_errors
+[ OK ] models_3ds_chunks_smoothing_keyframer
+[ OK ] models_ply_ascii_binary
+[ OK ] models_stl_ascii_binary
+[ OK ] models_dae_palette_split
+[ OK ] models_interchange_fuzz_never_crashes
+[ OK ] models_3do_pieces_palette_gaf
+[ OK ] models_3do_team_texture_and_fallbacks
+[ OK ] models_3do_malformed_input
+[ OK ] models_w3d_hierarchy_hlod_skin_anim
+[ OK ] models_w3d_external_hierarchy_and_anims
+[ OK ] models_w3d_malformed_input
+[ OK ] models_dds_formats
+[ OK ] planet_surface_offsets_and_hash_buckets
+[ OK ] planet_world_loads_and_paths_cross_seams
+[ OK ] planet_orbit_units_and_transit
+[ OK ] planet_matches_deterministic_and_replay
+[ OK ] planet_mapdoc_round_trip_and_validate
+[ OK ] orig_crush_infantry_and_spice_bloom
+[ OK ] orig_sandworm_eats_submerges_and_resurfaces
+[ OK ] orig_armor_models_bonus_and_shields
+[ OK ] orig_hero_skills_limit_free_first_and_revive
+[ OK ] orig_gatherer_limit_and_upkeep_per_resource
+[ OK ] orig_power_field_placement_and_switch_off
+[ OK ] orig_crews_snipers_and_empty_vehicles
+[ OK ] orig_infection_and_death_payload
+[ OK ] orig_garrison_upgrades_capture_level_keep_and_forges
+[ OK ] orig_faction_only_types
+[ OK ] sprite_shadow_lighting_sun_dir_and_softness
+[ OK ] materials_texture_patterns_tile_and_repeat
+  (op error) material 'x': metallic must be a number 0..1
+  (op error) material 'y': base 'nothing' is not in the library
+  (op error) material 'steel' is used by footman and others (force: true deletes it anyway)
+[ OK ] materials_library_ops_round_trip
+[ OK ] fid_concrete_slabs_and_weathering
+[ OK ] fid_ai_paves_before_building
+[ OK ] fid_traps_hidden_charges_rearm
+[ OK ] fid_inject_larvae_over_the_cap
+[ OK ] fid_group_teleport_chronosphere_and_recall
+  hpa seed 1: pairs=70 both=69 mismatch=0/0 broken=0 worse=0 ratio=1.002 hpa=40
+  hpa seed 2: pairs=64 both=62 mismatch=0/0 broken=0 worse=0 ratio=1.004 hpa=34
+  hpa seed 3: pairs=68 both=68 mismatch=0/0 broken=0 worse=0 ratio=1.003 hpa=30
+[ OK ] planet_hpa_matches_astar
+[ OK ] planet_hpa_incremental_equals_full_and_deterministic
+[ OK ] planet_hpa_threshold_and_slope_classes
+  flow flat 60 seed 1: pairs=143 compared=137 mismatch=0 worse=0 badWalk=0 ratio=1.000
+  flow flat 256 seed 1: pairs=57 compared=56 mismatch=0 worse=0 badWalk=0 ratio=1.057
+  flow flat 60 seed 2: pairs=118 compared=111 mismatch=0 worse=0 badWalk=0 ratio=1.000
+  flow flat 256 seed 2: pairs=50 compared=47 mismatch=0 worse=0 badWalk=0 ratio=1.058
+[ OK ] flow_field_flat_matches_astar
+  flow sphere seed 1 hpa 0: pairs=87 compared=87 mismatch=0 worse=0 badWalk=0 ratio=1.000
+  flow sphere seed 1 hpa 1: pairs=87 compared=87 mismatch=0 worse=0 badWalk=0 ratio=1.073
+  flow sphere seed 2 hpa 0: pairs=84 compared=84 mismatch=0 worse=0 badWalk=0 ratio=1.000
+  flow sphere seed 2 hpa 1: pairs=84 compared=84 mismatch=0 worse=0 badWalk=0 ratio=1.070
+[ OK ] flow_field_sphere_matches_astar
+[ OK ] flow_field_incremental_equals_rebuild
+  flow group: arrived 56 (fields) 24 (per-unit)
+[ OK ] flow_field_group_reaches_goal_deterministic
+[ OK ] flow_field_cache_lru_and_sharing
+  crowd 200: window 86 s, arrived 200, settled 199, 90% at 42 s
+  crowd 200: window 86 s, arrived 200, settled 199, 90% at 42 s
+  crowd 200: window 86 s, arrived 200, settled 199, 90% at 42 s
+[ OK ] crowd_flow_group_arrives_and_settles
+[ OK ] crowd_blocked_goal_nearest
+[ OK ] pack_file_copy_into_existing
+[ OK ] tools_json_access_log
+[ OK ] tools_trigger_fired_event
+[ OK ] mech_stances
+[ OK ] mech_retreat
+[ OK ] mech_transport_apc
+[ OK ] mech_transport_bunker
+[ OK ] mech_detection_and_cloak
+[ OK ] mech_veterancy
+[ OK ] mech_guard_follow_rally_route
+[ OK ] mech_armor_models
+[ OK ] mech_shields_upkeep_workers
+[ OK ] mech_formation
+[ OK ] mech_walls_gates_bridges
+[ OK ] mech_market_trade_tribute_diplomacy
+[ OK ] mech_items_cycles_hazards
+[ OK ] mech_ammo_merge_deck_tunnel_amphibious
+[ OK ] mech_save_states_all_games
+[ OK ] mech_campaign
+[ OK ] mech_tactics
+[ OK ] mech_society
+[ OK ] mech_ai_staffing
+[ OK ] mech_rounds
+[ OK ] rules_lint_recognizes_view_script_roots
+[ OK ] mech_designs
+[ OK ] mech_battle
+  flow fields: 400 units through a gap, 40 s of play 7068 ms (A*: 18192 ms), arrived 400 (A*: 304)
+[ OK ] mech_flow_fields
+[ OK ] mech_bench_army
+[ OK ] mech_logistics
+[ OK ] mech_gate_lock
+  turns: bots played 40 turns, 44 shots
+[ OK ] mech_turns
+  strategic: simulated battle 10 vs 4 spears, 10 survive
+[ OK ] mech_strategic
+[ OK ] mech_space_flight
+[ OK ] sc2_magic_box
+[ OK ] unit_type_selection_eligibility
+[ OK ] automatic_target_acquisition_order
+[ OK ] sc2_overkill_targeting
+[ OK ] sc2_warp_in
+[ OK ] sensors_radar_sonar_jammer_stealth
+[ OK ] sensors_radar_targeting_and_underwater_weapons
+[ OK ] fieldops_repair_reclaim_assist_patrol
+[ OK ] fieldops_self_destruct
+[ OK ] fieldops_stockpile_and_interceptor
+[ OK ] fieldops_ambient_income
+[ OK ] fieldops_attack_runs_and_repair_pads
+[ OK ] fieldops_bad_data_errors
+    built / trained: air_plant_arm air_plant_core ak bomber_arm bomber_core con_kbot_arm con_kbot_core con_vehicle_arm con_vehicle_core crasher energy_storage fighter_arm fighter_core flash geothermal hammer instigator jethro kbot_lab_arm kbot_lab_core llt metal_maker metal_storage mex peewee radar_tower raider rocko samson solar storm stumpy thud vehicle_plant_arm vehicle_plant_core wind 
+[ OK ] fieldops_metaltide_bots_use_the_mechanics
+[ OK ] postfx_parse_merge_and_cost
+[ OK ] postfx_neutral_lut_png
+[ OK ] toolchain_detection_fake_home
+  planet world 2p 5a4bc2a514b61323
+[ OK ] gen_planet_world_players
+[ OK ] match_chat_replays_player_text_to_simulation_script
+[ OK ] script_no_scripts_no_vm
+[ OK ] script_syntax_and_float_literals
+[ OK ] script_api_basics
+[ OK ] script_sandbox
+[ OK ] script_state_hashed_and_rollback
+[ OK ] script_data_hooks
+[ OK ] script_sample_deterministic
+[ OK ] script_embed_requires
+[ OK ] local_order_feedback_is_delivered_once_without_a_tick
+[ OK ] structure_upgrade_appearance_projects_only_active_production
+[ OK ] script_view_scripts
+[ OK ] script_std_sell_reftee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+und
+[ OK ] terrain_detail_synthesis_is_deterministic_and_keeps_corners
+[ OK ] terrain_detail_levels_bevels_cliffs_and_samples_like_the_mesh
+[ OK ] terrain_detail_codec_roundtrip
+[ OK ] lua_lab_prototypes
+[ OK ] script_g3_entity_data
+[ OK ] script_g3_state_lazy_flush
+[ OK ] ui_lua_sandbox
+[ OK ] ui_lua_meta_and_templates
+[ OK ] script_territory_brush_frontier_and_placement
+[ OK ] script_paint_layers_are_bounded_and_view_only
+[ OK ] script_attack_event_is_visual_only
+[ OK ] region_swipe_commands_and_cancellation
+[ OK ] region_dispatch_preview_nearest_percentage
+[ OK ] region_dispatch_preview_excludes_accepted
+[ OK ] region_shared_anchor_selects_local_owner
+[ OK ] script_hud_player_binding_and_invalid_option
+[ OK ] script_hud_targeted_action_binding
+[ OK ] script_hud_card_layout_and_cooldown
+[ OK ] editor_mcp_ports_are_unique_and_route_to_the_right_listener
+[ OK ] script_manual_layers_from_fixed_variables
+[ OK ] atlas_build_resize_fixes_preserve_rules_and_fit
+[ OK ] ui_spritesheet_build_protection
+[ OK ] view_script_targeting_context_is_local
+[ OK ] script_initial_vars_setup_validation_and_hash
+[ OK ] region_swipe_single_unit_command
+[ OK ] region_swipe_connected_ownership_domains
+[ OK ] region_swipe_air_island_order
+[ OK ] script_air_position_over_water
+[ OK ] region_swipe_arrows_start_at_gesture
+[ OK ] script_immutable_match_seed
+[ OK ] lua_count_hook_inline_countdown
+[ OK ] script_sorted_pairs_order
+[ OK ] script_ieee_bit_patterns
+[ OK ] script_grid_path
+[ OK ] script_grid_sample_segment
+[ OK ] entity_action_controls_preserve_source_and_cancel_invalid_drags
+[ OK ] script_view_effect_height_and_queue
+[ OK ] fx_orthographic_culling_uses_projection_scale
+[ OK ] entity_action_fractional_progress_binding
+[ OK ] world_counter_script_bindings
+[ OK ] region_swipe_scripted_groups_and_source_anchor
+[ OK ] region_preview_virtual_reserve_and_physical_ranking
+[ OK ] aiverse_scripted_ai_controller
+[ OK ] ai_map_player_presets
+[ OK ] resource_hud_labels_from_rules
+[ OK ] script_hud_resource_progress
+[ OK ] script_g4_unit_control
+[ OK ] script_g1_commands
+[ OK ] script_g1_view_send
+
+tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+    Start 166: client_controls_frame
+tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+Failed to change working directory to /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick : No such file or directory
+tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+591/592 Test #166: client_controls_frame ...........................***Not Run   0.00 sec
+tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+    Start 344: additive_blend_frame
+Failed to change working directory to /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick : No such file or directory
+tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+592/592 Test #344: additive_blend_frame ............................***Not Run   0.00 sec
+tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+
+99% tests passed, 3 tests failed out of 592
+tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+
+Label Time Summary:tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+
+AUDIO             =   2.20 sec*proc (2 tests)tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+
+Architecture      =   1.10 sec*proc (5 tests)tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+
+BSP               =   1.98 sec*proc (1 test)
+CPU               =  18.18 sec*proc (30 tests)
+Caverns           =  22.96 sec*proc (31 tests)tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+
+ECS               =  39.73 sec*proc (24 tests)
+EDITOR            = 242.54 sec*proc (49 tests)
+GPU               =  39.11 sec*proc (10 tests)
+IMPORT            =   7.35 sec*proc (1 test)
+LENS              =   9.05 sec*proc (2 tests)
+LIGHTING          =  11.60 sec*proc (1 test)
+Lighting          =   5.71 sec*proc (30 tests)
+MCP               =  14.89 sec*proc (8 tests)
+Material          =   2.18 sec*proc (3 tests)tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+
+Metal             =  16.53 sec*proc (8 tests)
+MetalGPU          =  46.57 sec*proc (8 tests)tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+
+NEREID            =   0.78 sec*proc (2 tests)
+NETWORK           =  21.19 sec*proc (7 tests)tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+
+PERSISTENCE       =  30.65 sec*proc (14 tests)
+PHYSIS            =  63.93 sec*proc (39 tests)tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+
+PRISMA            =   1.72 sec*proc (1 test)
+Prisma            =   0.49 sec*proc (2 tests)
+RENDER            =   7.85 sec*proc (1 test)
+RHI               =  48.54 sec*proc (10 tests)tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+
+Renderer3D        =  20.42 sec*proc (12 tests)
+SECURITY          =   0.68 sec*proc (3 tests)tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+
+SpectraFX         =  74.83 sec*proc (28 tests)tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+
+TERRAWEAVE        =  24.02 sec*proc (7 tests)
+TEXTURE_GRAPH     =   2.64 sec*proc (5 tests)tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+
+TOOLS             =  15.86 sec*proc (4 tests)
+TerraWeave        =  22.96 sec*proc (31 tests)tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+
+VFX               =   7.06 sec*proc (3 tests)
+Vehicles          =   8.61 sec*proc (5 tests)
+Volumetrics       =  12.52 sec*proc (2 tests)tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+
+WIND              =   7.85 sec*proc (1 test)
+World             =  23.04 sec*proc (15 tests)tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+
+WorldProcesses    =   2.22 sec*proc (1 test)
+tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+
+Total Test time (real) = 441.87 sec
+tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+
+The following tests did not run:
+tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+Cannot create directory /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/Testing/Temporary
+tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+Cannot create log file: LastTestsDisabled.log
+	345 - material_technique_frame (Skipped)
+	346 - model_triplanar_frame (Skipped)
+	347 - prisma_compositor_metal (Skipped)
+	348 - quake3_bsp_frame (Skipped)
+	349 - lens_metal_frame (Skipped)
+tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+
+The following tests FAILED:
+tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+Cannot create directory /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/Testing/Temporary
+Cannot create log file: LastTestsFailed.log
+tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+	121 - aiverse_tests (Bus error)
+tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+	166 - client_controls_frame (Not Run)
+tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+	344 - additive_blend_frame (Not Run)
+tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+CMake Error: Cannot open file for write: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.xml.tmp
+tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.log: Input/output error
+CMake Error: : System Error: No such file or directory
+Problem opening file: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/ctest.xml
+tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/summary.txt: No such file or directory
+FAIL ctest (exit 1)
+tee: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/test-reports/20261127-113804-91494/summary.txt: No such file or directory
+
+========== SUMMARY ==========
