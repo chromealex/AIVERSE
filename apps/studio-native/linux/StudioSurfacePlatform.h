@@ -17,7 +17,7 @@ namespace aiverse::studio {
 // StudioHost (and join its render thread) before destroying the overlay.
 class StudioSurfacePlatform : public StudioHostPlatform {
 public:
-    explicit StudioSurfacePlatform(GtkOverlay* overlay) {
+    explicit StudioSurfacePlatform(GtkOverlay* overlay) : mainOverlay_(overlay) {
         if (!gtk_widget_get_realized(GTK_WIDGET(overlay)))
             throw std::invalid_argument("Studio viewport overlay is not realized");
         try {
@@ -116,7 +116,8 @@ protected:
         return surfaces_.at(static_cast<size_t>(surface)).widget;
     }
 private:
-    GtkWindow* parentWindow() const { return GTK_WINDOW(gtk_widget_get_toplevel(widget(StudioSurface::Scene))); }
+    GtkOverlay* mainOverlay_;
+    GtkWindow* parentWindow() const { return GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(mainOverlay_))); }
     StudioBackgroundQueue background_;
     struct Surface { GtkWidget* widget = nullptr; gfx::VulkanWindow window; };
     std::array<Surface, static_cast<size_t>(StudioSurface::Count)> surfaces_{};

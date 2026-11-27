@@ -35,6 +35,21 @@ int main(int argc, char** argv) {
         std::cerr << "Expected independent X11 drawables for Scene and preview\n";
         return 1;
     }
+    auto* floating = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    auto* floatingHost = GTK_OVERLAY(gtk_overlay_new());
+    gtk_container_add(GTK_CONTAINER(floating),GTK_WIDGET(floatingHost));
+    gtk_container_add(GTK_CONTAINER(floatingHost),gtk_label_new("Preview"));
+    gtk_widget_show_all(floating);
+    for (auto* destination : {floatingHost, overlay}) {
+        aiverse::studio::moveStudioViewport(preview,destination);
+        aiverse::studio::placeStudioViewport(preview,{10,12,100,80,1,true});
+        gtk_container_check_resize(GTK_CONTAINER(gtk_widget_get_toplevel(GTK_WIDGET(destination))));
+        const auto target = aiverse::studio::studioVulkanWindow(preview);
+        if (!target || target->window != previewTarget->window || !gtk_widget_get_mapped(preview) ||
+            !gtk_widget_translate_coordinates(preview,GTK_WIDGET(destination),0,0,&x,&y) ||
+            x != 10 || y != 12 || aiverse::studio::studioViewportHost(scene) != overlay) return 1;
+    }
+    gtk_widget_destroy(floating);
     aiverse::studio::placeStudioViewport(preview,{});
     if (gtk_widget_get_visible(preview) || !gtk_widget_get_visible(scene)) return 1;
     gtk_widget_destroy(surfaceWindow);

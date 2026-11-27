@@ -15,7 +15,7 @@ namespace aiverse::studio {
 class GtkStudio final : public StudioSurfacePlatform {
 public:
     GtkStudio(GtkOverlay* overlay, GtkWindow* window, WebKitWebView* web, const std::string& root)
-        : StudioSurfacePlatform(overlay), window_(window),
+        : StudioSurfacePlatform(overlay), window_(window), mainOverlay_(overlay),
           bridge_(web,[this](std::string message){ host_.handleMessage(message); }), host_(*this,root,false),
           pointer_(widget(StudioSurface::Scene), host_),
           gamePointer_(widget(StudioSurface::Game), [this](const platform::Event& event){ host_.gameEvent(event); }) {
@@ -28,11 +28,21 @@ public:
         stopBackgroundWork();
         while (!floats_.empty()) {
             auto& panel = floats_.begin()->second;
+            releaseSurfaces(panel.overlay);
             g_signal_handlers_disconnect_by_data(panel.window,this);
             gtk_widget_destroy(GTK_WIDGET(panel.window));
             floats_.erase(floats_.begin());
         }
         host_.shutdown();
+    }
+    bool placeSurface(StudioSurface surface, const ViewportRect& rect, NativeViewportPlacement& out) override {
+        auto* destination = current_ ? current_->overlay : mainOverlay_;
+        auto* area = widget(surface);
+        if (studioViewportHost(area) != destination) {
+            if (!rect.visible) return false;
+            moveStudioViewport(area, destination);
+        }
+        return StudioSurfacePlatform::placeSurface(surface, rect, out);
     }
     void evaluateScript(const std::string& js, bool currentOnly) override {
         if (currentOnly && current_) { current_->bridge->evaluate(js); return; }
@@ -81,6 +91,7 @@ public:
 private:
     struct Floating {
         GtkWindow* window{};
+        GtkOverlay* overlay{};
         std::unique_ptr<StudioWebBridge> bridge;
     };
     std::map<std::string,Floating> floats_;
@@ -132,8 +143,10 @@ private:
             }
         }
         gtk_window_set_default_size(win,width,height);
-        gtk_container_add(GTK_CONTAINER(win),GTK_WIDGET(web));
-        floats_.emplace(key,Floating{win,std::move(bridge)});
+        auto* overlay=GTK_OVERLAY(gtk_overlay_new());
+        gtk_container_add(GTK_CONTAINER(overlay),GTK_WIDGET(web));
+        gtk_container_add(GTK_CONTAINER(win),GTK_WIDGET(overlay));
+        floats_.emplace(key,Floating{win,overlay,std::move(bridge)});
         g_signal_connect(win,"configure-event",G_CALLBACK(+[](GtkWidget* widget,GdkEventConfigure* event,gpointer data)->gboolean {
             auto& self=*static_cast<GtkStudio*>(data);
             for (const auto& entry : self.floats_) {
@@ -157,6 +170,7 @@ private:
             for (auto it=self.floats_.begin();it!=self.floats_.end();++it) {
                 if (GTK_WIDGET(it->second.window)!=widget) continue;
                 const auto key=it->first;
+                self.releaseSurfaces(it->second.overlay);
                 self.floats_.erase(it);
                 self.host_.sendEvent("window.floatClosed",key);
                 break;
@@ -166,7 +180,17 @@ private:
         webkit_web_view_load_uri(web,("aiverse-studio://shell/index.html?window="+key+"&panels="+panels).c_str());
         return true;
     }
+    void releaseSurfaces(GtkOverlay* overlay) {
+        for (size_t index = 0; index < static_cast<size_t>(StudioSurface::Count); ++index) {
+            auto surface = static_cast<StudioSurface>(index);
+            auto* area = widget(surface);
+            if (studioViewportHost(area) != overlay) continue;
+            host_.surfaceDetached(surface);
+            moveStudioViewport(area, mainOverlay_);
+        }
+    }
     GtkWindow* window_;
+    GtkOverlay* mainOverlay_;
     StudioWebBridge bridge_;
     StudioHost host_;
     StudioScenePointer pointer_;

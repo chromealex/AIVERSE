@@ -19,8 +19,8 @@ inline NativeViewportPlacement gtkViewportPlacement(GtkOverlay* overlay, const V
         (right-left)*scale, (top-bottom)*scale, true};
 }
 
-inline GtkWidget* addStudioViewport(GtkOverlay* overlay) {
-    auto* area = gtk_drawing_area_new();
+inline GtkWidget* addStudioViewportSlot(GtkOverlay* overlay) {
+    auto* area = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
     gtk_widget_set_no_show_all(area, TRUE);
     auto* rect = new ViewportRect;
     g_object_set_data_full(G_OBJECT(area), "studio-viewport-rect", rect,
@@ -40,11 +40,37 @@ inline GtkWidget* addStudioViewport(GtkOverlay* overlay) {
     return area;
 }
 
+inline GtkWidget* addStudioViewport(GtkOverlay* overlay) {
+    auto* slot = addStudioViewportSlot(overlay);
+    auto* area = gtk_drawing_area_new();
+    gtk_box_pack_start(GTK_BOX(slot), area, TRUE, TRUE, 0);
+    gtk_widget_show(area);
+    return area;
+}
+
+inline GtkOverlay* studioViewportHost(GtkWidget* area) {
+    return GTK_OVERLAY(gtk_widget_get_parent(gtk_widget_get_parent(area)));
+}
+
+inline void moveStudioViewport(GtkWidget* area, GtkOverlay* destination) {
+    auto* previous = gtk_widget_get_parent(area);
+    auto* slot = addStudioViewportSlot(destination);
+    gtk_widget_realize(slot);
+    // GTK3 reparents the realized child window, preserving the Vulkan XID.
+    G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+    gtk_widget_reparent(area, slot);
+    G_GNUC_END_IGNORE_DEPRECATIONS
+    gtk_container_child_set(GTK_CONTAINER(slot), area, "expand", TRUE, "fill", TRUE, nullptr);
+    gtk_widget_destroy(previous);
+}
+
 inline NativeViewportPlacement placeStudioViewport(GtkWidget* area, const ViewportRect& rect) {
-    auto* host = GTK_OVERLAY(gtk_widget_get_parent(area));
+    auto* slot = gtk_widget_get_parent(area);
+    auto* host = studioViewportHost(area);
     auto placement = gtkViewportPlacement(host, rect);
-    *static_cast<ViewportRect*>(g_object_get_data(G_OBJECT(area), "studio-viewport-rect")) = rect;
+    *static_cast<ViewportRect*>(g_object_get_data(G_OBJECT(slot), "studio-viewport-rect")) = rect;
     gtk_widget_set_visible(area, placement.visible);
+    gtk_widget_set_visible(slot, placement.visible);
     gtk_widget_queue_allocate(GTK_WIDGET(host));
     return placement;
 }
