@@ -27,21 +27,27 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
   const [pose, setPose] = useState<SampledNode[]>([]);
   const [view, setView] = useState<'front' | 'side'>('front');
   const [error, setError] = useState('');
+  const [conflict, setConflict] = useState(false);
+  const [reload, setReload] = useState(0);
+  const preferredClip = useRef('');
   const requestPose = useRef<((time: number) => void) | null>(null);
   useEffect(() => {
     if (!path) return;
     void op('modeling_list').then(r => { const m: string[] = r.models ?? []; setModels(m); setModel(x => x || m[0] || ''); }).catch(e => setError(message(e)));
   }, [path]);
   useEffect(() => {
+    const requestedClip = preferredClip.current;
+    preferredClip.current = '';
+    setConflict(false); setSelection(null);
     setLoaded(null); setPlaying(false); setClip(''); setTime(0); setError('');
     if (!model) return;
     let live=true;
     void op('animation_get', { name: model }).then(r => {
       if(!live)return;
-      const d = r.document as AnimDoc; setLoaded({model,revision:r.revision,document:d}); setClip(d.clips?.[0]?.id ?? ''); setTime(0); setError('');
+      const d = r.document as AnimDoc; setLoaded({model,revision:r.revision,document:d}); setClip(d.clips?.find(c => c.id === requestedClip)?.id ?? d.clips?.[0]?.id ?? ''); setTime(0); setError('');
     }).catch(e => {if(live)setError(message(e));});
     return ()=>{live=false;};
-  }, [model]);
+  }, [model, path, reload]);
   useEffect(()=>{
     const target=route.request;
     if(target?.tab==='clips'&&target.project===path){
@@ -125,7 +131,10 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
       if (result.error) throw new Error(result.error);
       setLoaded(previous => previous === loaded ? {model, revision:result.revision, document:result.document} : previous);
       setSelection({channel:selection.channel, key:next}); setTime(times[next]);
-    } catch (e) { setError(message(e)); } finally { setSaving(false); }
+    } catch (e) {
+      if (message(e).includes('revision conflict')) setConflict(true);
+      else setError(message(e));
+    } finally { setSaving(false); }
   }
   if (!path) return <div className="tool__empty">Open a project to preview its animations.</div>;
   return <div className="ptp anim">
@@ -133,6 +142,9 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
       <div className="tbrush__chips">{models.map(m => <button key={m} type="button" className={m === model ? 'is-on' : ''} onClick={() => setModel(m)}>{m}</button>)}</div>
       {!models.length && <span className="ptp__meta">No authoring models (modeling/*.model.json) — create one in Modeling.</span>}
     </div>
+    {conflict && <div className="tool__error" role="alert">The model changed since you opened it. Reload to discard your unsaved key edit and review the latest version.{' '}
+      <button type="button" className="au-button au-button--sm" onClick={() => { preferredClip.current = clip; setReload(n => n + 1); }}>Reload model</button>
+    </div>}
     {error && <div className="tool__error" role="alert">{error}</div>}
     {doc && <div className="anim__body">
       <div className="anim__preview">
@@ -182,7 +194,7 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
           {channel && selection && selectedValue && <form className="anim__edit"
             key={[model, clip, selection.channel, selection.key, loaded?.revision].join('/')}
             onSubmit={event => {event.preventDefault(); void writeKey('save', event.currentTarget);}}>
-            <fieldset disabled={saving}><legend>Edit selected key</legend>
+            <fieldset disabled={saving || conflict}><legend>Edit selected key</legend>
               <label>Time (s)<input type="number" name="time" required min="0" step="any" defaultValue={channel.times?.[selection.key]}/></label>
               {selectedValue.map((v,i) => <label key={i}>{['X','Y','Z','W'][i] ?? i+1}<input type="number" name={'v'+i} required step="any" defaultValue={v}/></label>)}
               <button className="au-button au-button--sm" type="submit">Save key</button>
