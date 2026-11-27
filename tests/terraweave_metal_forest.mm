@@ -146,12 +146,7 @@ uint32_t countCoverage(id<MTLDevice> metal, terra::ArborForestAdapter& forest,
     return cmd.status == MTLCommandBufferStatusCompleted ? *static_cast<uint32_t*>(count.contents) : 0;
 }
 
-bool compareContours(id<MTLDevice> metal, gfx::Device& device, render::Renderer3D& renderer,
-                     const terra::TreeProfile& profile, render::Camera camera) {
-    constexpr int modes = 3;
-    const int bands[modes] = {0,3,8};
-    const char* names[modes] = {"grove-cards","grove-three","grove-eight"};
-    terra::ArborForestAdapter forests[modes];
+std::vector<terra::FloraBatch> comparisonGrove(const terra::TreeProfile& profile) {
     std::vector<terra::FloraBatch> grove{{profile.speciesId,terra::TreeLOD::Impostor,{}}};
     for (int z=0; z<12; ++z) for (int x=0; x<24; ++x) {
         terra::FoliageInstance tree;
@@ -162,6 +157,18 @@ bool compareContours(id<MTLDevice> metal, gfx::Device& device, render::Renderer3
         tree.scalePermille = 900 + tree.key % 201;
         grove[0].instances.push_back(tree);
     }
+    return grove;
+}
+
+#include "terraweave_palm_comparison.inc"
+
+bool compareContours(id<MTLDevice> metal, gfx::Device& device, render::Renderer3D& renderer,
+                     const terra::TreeProfile& profile, render::Camera camera) {
+    constexpr int modes = 3;
+    const int bands[modes] = {0,3,8};
+    const char* names[modes] = {"grove-cards","grove-three","grove-eight"};
+    terra::ArborForestAdapter forests[modes];
+    auto grove = comparisonGrove(profile);
     auto target = makeTarget(device,1024,640);
     camera.distance = 110;
     camera.pitch = 0.3f;
@@ -404,6 +411,8 @@ int aiverseMain(int,char**) {
             std::fputs("FAIL [terraweave-metal-forest] GPU idle barrier failed\n",stderr);
             return 1;
         }
+        if (std::getenv("AIVERSE_COMPARE_PALM_BOUNDS"))
+            check(comparePalmBounds(metal,*device,renderer,profile,cameraA),"Metal palm orbit comparison");
         if (std::getenv("AIVERSE_COMPARE_FOREST_CONTOURS"))
             check(compareContours(metal,*device,renderer,profile,cameraA),"Metal grove contour comparison");
         forest.releaseModels(*device);

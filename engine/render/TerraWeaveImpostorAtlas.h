@@ -30,6 +30,7 @@ struct ArborImpostorAtlas {
     std::unique_ptr<render::Model> model;
     std::vector<std::vector<render::Material>> viewMaterials;
     uint32_t views = 0;
+    bool narrowTrunkHighCrown = false;
 };
 
 inline ArborImpostorAtlas makeArborImpostorAtlas(
@@ -217,6 +218,10 @@ inline void bakeArborImpostorFromModel(ArborImpostorAtlas& out,
     if (atlas.width != W * int(views) * 2 || atlas.height != H)
         throw std::invalid_argument("TerraWeave impostor atlas size");
 
+    // Union of opaque texel centres across baked views, in tile coordinates.
+    struct Bounds { int left, right, top, bottom; };
+    Bounds silhouette[2] = {{W,-1,H,-1},{W,-1,H,-1}};
+
     // Real extent of the near geometry (metres).
     float radius = 0.5f, top = 1.0f;
     for (const auto& node : nearModel.nodes) {
@@ -349,6 +354,13 @@ inline void bakeArborImpostorFromModel(ArborImpostorAtlas& out,
                         atlas.rgba[o + size_t(k)] = uint8_t(std::clamp(
                             std::pow(sum[k] / float(n), 1.f / 2.2f) * 255.f + 0.5f, 0.f, 255.f));
                     atlas.rgba[o + 3] = n * 2 >= SS * SS ? 255 : 0;
+                    if (atlas.rgba[o + 3]) {
+                        auto& box = silhouette[layer];
+                        box.left = std::min(box.left,x);
+                        box.right = std::max(box.right,x);
+                        box.top = std::min(box.top,y);
+                        box.bottom = std::max(box.bottom,y);
+                    }
                 }
             // Bleed colour into transparent texels (alpha stays 0) so mips and
             // bilinear filtering do not pull black halos into the silhouette.
@@ -381,6 +393,13 @@ inline void bakeArborImpostorFromModel(ArborImpostorAtlas& out,
             }
         }
     }
+    const auto& bark = silhouette[0];
+    const auto& crown = silhouette[1];
+    // Restrict automatic trimming to the tall, exposed-trunk shape profiled
+    // on Metal. Width/height fractions are compared in the atlas tile.
+    out.narrowTrunkHighCrown = bark.right >= bark.left && crown.right >= crown.left &&
+        4 * (bark.right-bark.left+1) <= W && 3 * (bark.bottom-bark.top+1) >= 2 * H &&
+        2 * (crown.right-crown.left+1) >= W && 2 * crown.bottom <= H;
     // Textured bake: the atlas already carries the albedo; keep the impostor
     // materials untinted, and copy the near foliage cutout threshold.
     for (auto& variant : out.viewMaterials)
@@ -391,8 +410,8 @@ inline void bakeArborImpostorFromModel(ArborImpostorAtlas& out,
 // Build once, after the final atlas bake and before upload. A shared envelope
 // over all azimuths keeps the same model and two material slots for instancing.
 inline void trimArborImpostorCards(ArborImpostorAtlas& atlas, int bands) {
-    if (!atlas.model || !atlas.views || (bands != 3 && bands != 8))
-        throw std::invalid_argument("expected a three- or eight-band tree atlas");
+    if (!atlas.model || !atlas.views || (bands != 1 && bands != 3 && bands != 8))
+        throw std::invalid_argument("expected one, three or eight tree atlas bands");
     auto& model = *atlas.model;
     const auto& image = model.images.at(0);
     const int width = image.width / int(2 * atlas.views);
@@ -406,12 +425,12 @@ inline void trimArborImpostorCards(ArborImpostorAtlas& atlas, int bands) {
     model.vertices.clear();
     model.indices.clear();
     for (int layer = 0; layer < 2; ++layer) {
-        struct Span { int left, right; };
+        struct Span { int left, right, top, bottom; };
         std::array<Span, 8> spans{};
         float covered = 0;
         for (int band = 0; band < bands; ++band) {
             auto& span = spans[band];
-            span = {width, -1};
+            span = {width, -1, height, -1};
             const int top = band * (height - 1) / bands;
             const int bottom = (band + 1) * (height - 1) / bands;
             for (int y = std::max(0, top - padding); y <= std::min(height-1, bottom + padding); ++y)
@@ -421,12 +440,16 @@ inline void trimArborImpostorCards(ArborImpostorAtlas& atlas, int bands) {
                         if (!image.rgba[4 * (start + x) + 3]) continue;
                         span.left = std::min(span.left, x);
                         span.right = std::max(span.right, x);
+                        span.top = std::min(span.top, y);
+                        span.bottom = std::max(span.bottom, y);
                     }
                 }
             if (span.right < 0) continue;
             span.left = std::max(0, span.left - padding);
             span.right = std::min(width - 1, span.right + padding);
-            covered += float(span.right - span.left) * (bottom - top);
+            span.top = bands == 1 ? std::max(0, span.top - padding) : top;
+            span.bottom = bands == 1 ? std::min(height-1, span.bottom + padding) : bottom;
+            covered += float(span.right - span.left) * (span.bottom - span.top);
         }
 
         auto& prim = model.meshes[0].primitives[layer];
@@ -454,8 +477,8 @@ inline void trimArborImpostorCards(ArborImpostorAtlas& atlas, int bands) {
                 const auto& span = spans[band];
                 if (span.right < 0) continue;
                 rectangle(float(span.left)/(width-1), float(span.right)/(width-1),
-                          float(band * (height-1) / bands)/(height-1),
-                          float((band+1) * (height-1) / bands)/(height-1));
+                          float(span.top)/(height-1),
+                          float(span.bottom)/(height-1));
             }
         }
         prim.vertexCount = uint32_t(model.vertices.size()) - prim.firstVertex;

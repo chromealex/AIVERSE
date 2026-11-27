@@ -428,7 +428,12 @@ int main() {
         legacyForest.addPrototype(oak, 17);
         assert(legacyForest.billboardPrototype(oak.speciesId)->images[0].rgba == legacyPixels);
     }
+    assert(!billboardRepeat.narrowTrunkHighCrown);
     assert(billboardRepeat.model->indices == billboard->indices);
+    for (size_t i=0; i<billboard->vertices.size(); ++i) {
+        assert(billboard->vertices[i].uv.x == billboardRepeat.model->vertices[i].uv.x);
+        assert(billboard->vertices[i].uv.y == billboardRepeat.model->vertices[i].uv.y);
+    }
     assert(billboardRepeat.viewMaterials.size() == 8);
     for (size_t i = 0; i < billboardRepeat.viewMaterials.size(); ++i) {
         const auto& layers = billboardRepeat.viewMaterials[i];
@@ -446,13 +451,14 @@ int main() {
                 assert(layers[layer].uvOffset.x >
                        billboardRepeat.viewMaterials[i - 1][layer].uvOffset.x);
     }
-    for (int bands : {3, 8}) {
+    for (int bands : {1, 3, 8}) {
         ArborForestAdapter contours;
         contours.setImpostorContourBands(bands);
         contours.addPrototype(oak,17);
         const auto* trimmed = contours.billboardPrototype(oak.speciesId);
         assert(trimmed && trimmed->images[0].rgba == image);
-        assert(trimmed->indices.size() > 12 && trimmed->indices.size() <= size_t(12 * bands));
+        if (bands == 1) assert(trimmed->indices.size() == 12 && trimmed->vertices.size() == 8);
+        else assert(trimmed->indices.size() > 12 && trimmed->indices.size() <= size_t(12 * bands));
         assert(trimmed->meshes[0].primitives.size() == 2);
         // Every nontransparent texel of every view must fall inside its
         // layer envelope, including the texels on either side of a band seam.
