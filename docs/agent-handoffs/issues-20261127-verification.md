@@ -206,3 +206,38 @@ Inspected all six added PNGs: mesh, mesh occlusion, ribbon, trail, textured grap
 and textured graph occlusion. Updated tracked evidence directory
 `docs/evidence/issues-additive-metal-20261127` with all 16 captures/result.json.
 No process remains live. Other host/UI and backend acceptance remains pending.
+
+## Acceptance audit refresh and focused native checks
+
+At branch tree 697733390, refreshed origin/main from GitHub: still
+fde390cac79d98fe7a643043984fb11d7c966b14. Re-read issue requirements
+#210, #212–215 and #217 directly from GitHub; all remain open.
+Executed existing rebuilt aiverse_tests binary from the KINGSTON cache
+(source correction b7ee98358; later changes only affect the separate GPU fixture
+and display shader) against eight filters. All exited 0:
+
+| Filter | Checks |
+|---|---:|
+| audio_repeated_selection | 39 |
+| view_selection_request | 4 |
+| projectile_presentation_segment | 7 |
+| projectile_origin_versioned | 9 |
+| attack_phase_fractional | 7 |
+| precise_windup_cooldown | 5 |
+| map_projection_crop | 11 |
+| portrait_options | 6 |
+
+Logs: /Volumes/KINGSTON/AIVERSE-builds/codex-issue223-minimap-atlas-quick/acceptance-<filter>.log.
+These 88 assertions validate shared/native behavior only. They do not prove
+client hotkey dispatch, touch targeting, command card layout, rendered portrait
+or packaged minimap acceptance. No issue closed and no integrated-gate pass.
+The process (unified-exec handle 89887) finished with exit 0.
+
+Client acceptance can reuse the existing aiverse_hosted_client library and
+GameClient::event/frame/autostart API for real UI input; platform::HostedView
+provides project/engine asset routing. Existing screenshot hooks support
+AIVERSE_SCREENSHOT/AIVERSE_EXIT_AFTER_FRAMES but do not inject input. Avoid adding
+consumer-specific runtime test switches or claiming static captures prove input.
+Additional attack timing acceptance still needs multiple releases per tick and
+target cancellation; the existing authored-period test covers 200 ticks plus
+save/reload checksum, and the pure helper test covers fractional recovery.
