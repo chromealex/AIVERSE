@@ -248,7 +248,8 @@ export default function SceneToolbar({ enabled, projectPath = '', documentScope 
 
        <fieldset><legend>World processes</legend><EcologyLayerPicker key={projectPath} showDiagnostics={false}/></fieldset>
        <fieldset><legend>NEREID</legend><label><input type="checkbox" checked={state.nereidFlow} onChange={e=>set({nereidFlow:e.target.checked})}/>River flow</label>
-       {state.nereidFlow&&<label><input type="checkbox" checked={state.nereidAllWater} onChange={e=>set({nereidAllWater:e.target.checked})}/>Show all rivers</label>}</fieldset>
+       <label><input type="checkbox" checked={state.nereidFlow && state.nereidAllWater}
+         onChange={e=>set({nereidAllWater:e.target.checked, nereidFlow:state.nereidFlow || e.target.checked})}/>Show all rivers</label></fieldset>
        {(state.natureWind||state.natureFire||state.terraSlope||state.terraSlopeAtTarget)&&<fieldset className="scene-toolbar__sampling"><legend>Field sampling</legend>
         {([['natureRadius','Radius',8,200],['natureSpacing','Spacing',2,32]] as const).map(([key,label,min,max])=>
          <label key={key}>{label}<output>{state[key]} m</output>
