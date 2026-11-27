@@ -1,0 +1,38 @@
+{
+  "source": "a23e90b4e",
+  "tested_tree": "ce7a7a1e3",
+  "backend": "Metal",
+  "platform": "macOS 15.6 x86_64/Rosetta",
+  "result": "pass",
+  "cases": [
+    "F6 shortcut key label and mobile selection",
+    "M activates Move target mode",
+    "mouse target starts mobile movement",
+    "F7 public view.select selects tower",
+    "armed tower Attack/Stop without Move",
+    "pause Quit dispatches hosted platform termination"
+  ],
+  "captures": [
+    {
+      "file": "move.png",
+      "scanline_sha256": "1f26a5105c600ae301844caeca0eeb0cb2b9f7610974e45f1e08d08ca2a12250",
+      "bytes": 1037188
+    },
+    {
+      "file": "pause.png",
+      "scanline_sha256": "500b4df211c9836d8984c7977a2db5c6f7a3cbed5fbaa28fc089de1d3f552d98",
+      "bytes": 619876
+    },
+    {
+      "file": "scout.png",
+      "scanline_sha256": "c1592e2ab551e9e5a56e1a635dad95fb029d7d245899b7229df0a5b3d6785178",
+      "bytes": 1034752
+    },
+    {
+      "file": "tower.png",
+      "scanline_sha256": "144590b2ba86ce71b1478c70d1f8b4b9c0882679bad66963cd143df174902fc7",
+      "bytes": 1010021
+    }
+  ],
+  "note": "PNG IDAT recompressed losslessly; decoded scanlines unchanged. Repeat focus visible in scout/move captures; no numeric focus assertion. Touch, text-focus suppression, passive aura, portrait and minimap-specific scenarios not covered by this fixture."
+}

@@ -270,3 +270,19 @@ Source 83c2a4e58f48322d47ee6714a720826c6a6d9f1f adds tests/render/client_control
 First real client run at source 83c2a4e58 reached pause Quit but failed its host-quit assertion; process exit was misleadingly zero because AppKit terminates after shutdown. Captures scout/move/tower/pause exist; pause inspected. Fixture query included hidden documents, allowing main-menu Quit to shadow visible pause Quit. Correction 184e9a868ef7d6b3d016ccb443a070a1c6836a64 skips hidden documents and explicitly exits 1 on failure during shutdown. No production bug claimed from this fixture failure. Focused initial build required CMake regeneration for newly added target, then passed. Next rebuild/run corrected fixture.
 
 Source a23e90b4ea239d92584af7794dc755f0843332b3 completes fixture visibility filtering: RmlUi Element::IsVisible defaults include_ancestors=false, while stock menu hides its parent panel with data-if rather than hiding the document. Query now passes true. Previous corrected fixture compiled (handle 94261 exit 0) but was not rerun before this inspection-driven correction. Next rebuild/run.
+
+## Real hosted client input verified
+
+Source a23e90b4e / tested tree ce7a7a1e3: cached target build and direct
+client_controls_frame run passed (handle 7178 exit 0), explicit PASS marker,
+0 Metal pipeline failures (73 pipelines). Logs client-controls-build4.log and
+client-controls-run2.log under the KINGSTON build. Four captures retained in
+docs/evidence/issues-client-controls-metal-20261127 with scope/result.json.
+First run scout/move/tower/pause were visually inspected; corrected run pause
+was re-inspected. F6/key label, M target mode, actual mouse movement,
+view.select tower with Attack/Stop and no Move, and pause Quit are verified.
+Repeat focus visible in scout-to-move framing; no numeric camera assertion.
+Issue #216 hosted quit is now confirmed, but native Windows exit is not inferred.
+Remaining: touch/typing suppression, passive aura, portrait/minimap, projectile
+visual acceptance and Windows #206; then final merged-tree gate, manifests,
+publication and squash/push. No issue has been closed or main advanced yet.

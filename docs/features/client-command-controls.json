@@ -87,13 +87,17 @@
     },
     "examples": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Added runnable demos/client-command-controls, exercised by the Metal fixture.",
+      "evidence": [
+        "demos/client-command-controls/README.md"
+      ]
     },
     "tests": {
       "status": "not_run",
-      "note": "Preparing actual hosted GameClient Metal acceptance with native input and RmlUi document inspection; no runtime claim yet.",
-      "evidence": []
+      "note": "Actual hosted GameClient Metal fixture passed shortcut key/mobile selection, Move targeting and mouse movement, public view.select armed structure card and pause Quit. Evidence records scope; touch/passive aura/text focus and final integrated quick gate remain pending.",
+      "evidence": [
+        "docs/evidence/issues-client-controls-metal-20261127/result.json"
+      ]
     },
     "handoff": {
       "status": "not_run",
