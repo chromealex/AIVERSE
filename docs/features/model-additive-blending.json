@@ -174,8 +174,12 @@
     },
     "publishing": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Bilingual devlog includes real WebGL captures and three-scene demo link; verified Web output pinned in site/manifest.json. Main integration and actual publication pending.",
+      "evidence": [
+        "docs/devlog/entries/2026-11-27-material-effects.json",
+        "docs/evidence/issues-material-effects-web-20261127/result.json",
+        "site/manifest.json"
+      ]
     }
   },
   "integrations": {
