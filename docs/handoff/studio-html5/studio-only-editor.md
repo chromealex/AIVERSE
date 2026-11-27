@@ -1636,3 +1636,7 @@ f71ec09d2f7d4c40a70e8066452b44d838034b6c updates InsightPanels.tsx, ProjectToolP
 ### Large Snapshot Diff reports
 
 07fb725d29b7d7944db233c4a0169ae5e1b5f3ae updates apps/studio-web/src/panels/InsightPanels.tsx. Built web and Mac Studio. Compared two maps with 2001 differing keys and visited all 20 retained pages, verified the boundary buttons and last row, filtered down to one row, exported the full retained TSV through the QA clipboard sink, checked its truncation marker and checked the empty filter result and reset. Screenshot docs/handoff/studio-html5/captures/mac-snapshot-diff-pages.png. OS file picker and cancellation remain to verify.
+
+### Snapshot Diff native file chooser
+
+Verified packaged Mac host at 0be4feee7. AppKit pointer events on the first snapshot file input opened an NSOpenPanel attached to the detached Snapshot Diff window. The driver's Cancel action fired the HTML input cancel event and preserved maps/courtyard.json in three independent runs. Evidence on KINGSTON: stats-mac-wau7nge7/live.log, stats-mac-hyv7xvfu/live.log and stats-mac-5x0ee62_/live.log. The automation could not select the fixture file in the subsequent native sheet within its timeout. Selection through the sheet remains unverified; the separate DOM File comparison and live project switch previously passed.
