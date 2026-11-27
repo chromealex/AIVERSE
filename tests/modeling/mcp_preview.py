@@ -51,6 +51,8 @@ def main():
             port = probe.getsockname()[1]
         env = dict(os.environ, AIVERSE_AUDIO='off', AIVERSE_LANG='ru', AIVERSE_ENGINE_DIR=str(root),
                    AIVERSE_AGENT_LINK_DIR=str(Path(tmp) / 'agent-link'))
+        if sys.platform == 'darwin':
+            env['CFFIXED_USER_HOME'] = tmp
         with (output / 'editor.log').open('w') as log:
             arguments = ['--project', str(project), '--listen', str(port)]
             if not studio:
