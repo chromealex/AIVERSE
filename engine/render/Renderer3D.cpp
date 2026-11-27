@@ -301,6 +301,7 @@ void Renderer3D::shutdown() {
     objectMotionReactiveSkinPipeline_ = {}; objectMotionReactiveSkinShader_ = {};
     objectMotionReactiveBakedPipeline_ = {}; objectMotionReactiveBakedShader_ = {};
     motionReactiveDraws_.clear();
+    displayDraws_.clear();
     shutdownModels();
     lights.shutdown();
     lights.setTargetRetirement(nullptr);
@@ -603,7 +604,8 @@ void Renderer3D::beginScene(const Camera& cam, int fbW, int fbH) {
     reflectionPlaneValid_ = false;
     reflectionPlaneY_ = 0.f;
     items_.clear(); meshSnapshots_.clear(); lines_.clear(); tris_.clear(); custom_.clear(); customOpaque_.clear(); customShadow_.clear(); customFeedback_.clear();
-    motionReactiveDraws_.clear(); // per-scene extensions register after beginScene
+    motionReactiveDraws_.clear();
+    displayDraws_.clear(); // per-scene extensions register after beginScene
     modelItems_.clear(); jointData_.clear(); morphData_.clear(); modelStats_ = {};
     strataPreviewStats_ = {}; // diagnostic preflight never persists across scenes
     maintainIndirectLayoutCaches(); // prune unused layouts even in empty scenes
@@ -633,6 +635,7 @@ void Renderer3D::discardSceneSubmission() noexcept {
     items_.clear(); meshSnapshots_.clear();lines_.clear();tris_.clear();
     custom_.clear();customOpaque_.clear();customShadow_.clear();customFeedback_.clear();
     motionReactiveDraws_.clear();
+    displayDraws_.clear();
     modelItems_.clear();jointData_.clear();morphData_.clear();
     materialStateIds_.clear();materialHashCandidates_.clear();
     materialRepresentatives_.clear();materialItemIds_.clear();
@@ -2173,9 +2176,12 @@ void Renderer3D::resolvePrisma() {
         objectMotionStats_.reactiveCallbacksDropped =
             static_cast<uint32_t>(motionReactiveDraws_.size());
         motionReactiveDraws_.clear();
+        displayDraws_.clear();
         return;
     }
     PostProcess* post = post_;
+    auto displayDraws=std::move(displayDraws_);displayDraws_.clear();
+    const auto displayDepth=resolvedDepthSource_;
     post_ = nullptr;
     dev_->endPass();
     auto depthConsumer=std::move(sceneDepthConsumer_);
@@ -2191,7 +2197,16 @@ void Renderer3D::resolvePrisma() {
                 cam_.ortho ? -200.0f : cam_.zNear,
                 cam_.ortho ? 1000.0f : cam_.zFar, cam_.ortho};
     post->resolve(*dev_, postOut_, f);
+    gfx::TextureInfo outputInfo{};
+    int outputW=f.width,outputH=f.height;
+    if(postOut_.colorTarget.valid() && dev_->textureInfo(postOut_.colorTarget,outputInfo)) {
+        outputW=outputInfo.width;outputH=outputInfo.height;
+    } else if(!postOut_.colorTarget.valid()) {
+        outputW=dev_->framebufferWidth();outputH=dev_->framebufferHeight();
+    }
+    for(auto& draw:displayDraws)draw(*dev_,displayDepth,outputW,outputH);
     motionReactiveDraws_.clear();
+    displayDraws_.clear();
     hdrFrame_ = false;
 }
 

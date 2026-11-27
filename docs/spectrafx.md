@@ -3658,3 +3658,15 @@ Changing the source revision recreates the field. `world` keeps the original pla
 ## GPU checkpoint restore portability (in progress)
 
 PR #190 tracks GCC compilation of the GPU-owned restore path and a Metal restore/readback check for all eight program parameters and all eight custom attributes in a live slot.
+
+
+### Display-space additive particles — implementation in progress (#221)
+
+The shared Renderer3D `addDisplayDraw` hook queues frame-local geometry draws
+after PRISMA resolve and before UI, exposing the original scene depth read-only.
+PRISMA remains the only tone-map/composition owner. SpectraFX will reuse its
+existing geometry and source textures for opted-in additive contributions; it
+will not introduce a second postprocessing pipeline. Emitter/trail `blendSpace`
+data currently distinguishes `linear` (default) and `display`; trail overrides
+inherit from their emitter. The particle draw path is not connected yet. This
+is an unfinished source stage, not a supported or visually verified feature.

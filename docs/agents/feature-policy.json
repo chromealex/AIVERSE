@@ -458,6 +458,17 @@
         "engine/render/Model.h",
         "engine/gfx/Gfx.h"
       ]
+    },
+    "particle-display-blending": {
+      "requires": [],
+      "roadmap": {
+        "system": "render",
+        "id": "particle-display-blending"
+      },
+      "api_paths": [
+        "engine/render/Renderer3D.h",
+        "engine/fx/FxEffect.h"
+      ]
     }
   },
   "claims": []

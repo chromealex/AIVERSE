@@ -3587,6 +3587,13 @@
           "title": "Аддитивные материалы моделей",
           "titleEn": "Additive model materials",
           "target": null
+        },
+        {
+          "id": "particle-display-blending",
+          "status": "in-progress",
+          "title": "Смешивание частиц в пространстве отображения",
+          "titleEn": "Display-space particle blending",
+          "target": null
         }
       ]
     },

@@ -1039,6 +1039,15 @@ public:
     void addMotionReactiveDraw(MotionReactiveDraw fn) {
         if (fn) motionReactiveDraws_.push_back(std::move(fn));
     }
+    // Frame-scoped display-referred draws after PRISMA resolve and before UI.
+    // Callback only submits to the open output pass, with original scene depth
+    // available read-only. Width/height describe OUTPUT pixels (depth UV is normalized).
+    // Returns false without an active postprocessor: the host must use its LDR path.
+    using DisplayDraw = MotionReactiveDraw;
+    bool addDisplayDraw(DisplayDraw fn) {
+        if(!post_ || !resolvedDepthSource_.valid() || !fn)return false;
+        displayDraws_.push_back(std::move(fn));return true;
+    }
     void resolvePostFx() { resolvePrisma(); } // legacy API
     // Extra renderers (sprites, tiles) that draw with their own pipelines inside the main pass: run
     // after opaque and translucent meshes, before overlays (fog of war stays on top).
@@ -2117,6 +2126,7 @@ private:
     uint64_t motionLastSubmittedFence_ = 0; // 0: unknown, never guess
     ObjectMotionStats objectMotionStats_{};
     std::vector<MotionReactiveDraw> motionReactiveDraws_;
+    std::vector<DisplayDraw> displayDraws_;
     gfx::ShaderHandle objectMotionShader_;
     gfx::PipelineHandle objectMotionPipeline_;
     gfx::ShaderHandle objectMotionInstancedShader_;

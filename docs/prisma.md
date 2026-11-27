@@ -4296,3 +4296,15 @@ A game or map can supply `postfx.compositor`. In Studio open Post effects → Fr
 Use the scene color as `scene`. To isolate objects, configure a LENS texture camera with a visibility mask, then add its target asset key to the consumer camera's reads. A compositor source such as `{"id":"selected","cameraInput":0}` reads that first declared dependency. The managed camera pipeline binds those textures per submission and camera. Standalone native hosts call `Prisma::setCompositorCameraInputs` during the frame before resolve. The full example is in `examples/prisma/camera-glow.json`.
 
 Declare 1–12 named targets and one producer per target. A target's optional divisor is 1, 2, 4 or 8. Declare one full-resolution output. A pass has an id, op, inputs and target. Supported operations are downsample, bright (amount is the threshold), blurX and blurY (amount is the radius multiplier), add (filtered first input multiplied by amount plus the second input), and shaderGraph (a nested postfx shader graph in graph, sampled primary input and optional asset textures). PRISMA compiles dependencies before drawing, and temporary targets with disjoint lifetimes share compatible storage. The graph executes after scene contributions and before screen-space lighting, metering and tonemapping. A missing camera source or shader preserves the incoming scene. `effectReport(viewId)->compositorPasses` reports encoded passes. Use `postfx_compositor_set` from MCP and `postfx_get` to read the stored document.
+
+
+### Display-space additive particles — implementation in progress (#221)
+
+The shared Renderer3D `addDisplayDraw` hook queues frame-local geometry draws
+after PRISMA resolve and before UI, exposing the original scene depth read-only.
+PRISMA remains the only tone-map/composition owner. SpectraFX will reuse its
+existing geometry and source textures for opted-in additive contributions; it
+will not introduce a second postprocessing pipeline. Emitter/trail `blendSpace`
+data currently distinguishes `linear` (default) and `display`; trail overrides
+inherit from their emitter. The particle draw path is not connected yet. This
+is an unfinished source stage, not a supported or visually verified feature.

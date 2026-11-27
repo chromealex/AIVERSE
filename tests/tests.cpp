@@ -19018,3 +19018,14 @@ TEST(model_material_additive_policy) {
     CHECK(mode==AlphaMode::AdditiveUnweighted);
     CHECK(!alphaBlended(AlphaMode::Mask) && !alphaBlended(AlphaMode::Opaque));
 }
+
+TEST(particle_blend_space_roundtrip_and_trail_override) {
+    auto effect=fxParse(R"({"emitters":[{"burst":1,"blendSpace":"display","trail":{"blendSpace":"linear"}}]})");
+    CHECK(effect.emitters[0].blendSpace==fx::FxBlendSpace::Display);
+    CHECK(effect.emitters[0].trail.blendSpace==fx::FxBlendSpace::Linear);
+    auto roundtrip=fxParse(fx::effectToJson(effect).dump().c_str());
+    CHECK(roundtrip.emitters[0].blendSpace==effect.emitters[0].blendSpace);
+    CHECK(roundtrip.emitters[0].trail==effect.emitters[0].trail);
+    effect=fxParse(R"({"emitters":[{"burst":1,"blendSpace":"display","trail":{}}]})");
+    CHECK(effect.emitters[0].trail.blendSpace==fx::FxBlendSpace::Display);
+}
