@@ -3,6 +3,7 @@ import { ArrowLeftRight, RefreshCw } from 'lucide-react';
 import { invoke } from '../bridge';
 import type { StudioGpuStats, StudioProjectState, StudioSnapshot, StudioStats } from '../types';
 import { formatBytes, frameSummary, jsonDiff, previewValue, type JsonChange } from './jsonDiff';
+import PlayerHistory from './PlayerHistory';
 import './ToolPanel.css';
 import './ProjectToolPanels.css';
 import { StudioLoader } from '../ui';
@@ -33,6 +34,7 @@ export function StatsPanel({ snapshot }: Ctx) {
         <div><b>{fps ? fps.toFixed(0) : '—'}</b><span>Scene fps{stats.sceneFrameMs ? ` · ${stats.sceneFrameMs.toFixed(1)} ms` : ''}</span></div>
       </div>
       <StatsFrameHistory key={path} project={path}/>
+      <PlayerHistory key={'players:' + path} project={path}/>
       <h4>By owner</h4>
       <table className="ptp__table"><tbody>{stats.owners.map(o =>
         <tr key={o.owner}><td>{o.name}</td><td className="ptp__meta">{o.owner}</td><td className="stats__num">{o.count}</td></tr>)}</tbody></table>

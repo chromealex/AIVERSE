@@ -137,6 +137,7 @@ void StudioGameSurface::frame(int w,int h,float pw,float ph,double dt,bool focus
         }
         if(!match&&matchObserved_)worldProcessDiagnostics_.reset();
         matchObserved_=match;
+        if (match) samplePlayers();
         if (host_->quitRequested()) stop();
         if (!host_->errorText().empty()) error_=host_->errorText();
     } catch (const std::exception& e) {
@@ -602,6 +603,63 @@ Json StudioGameSurface::scriptLog(bool errorsOnly) const {
     }
     return rows;
 }
+static Json playerCounts(Simulation& sim, const auto& rules, const game::GameState& state, bool history) {
+    std::array<int,256> units{},structures{};
+    sim.world().each<game::Unit,Owner>([&](Entity,game::Unit& unit,Owner& owner){
+        (rules.types[unit.type].structure?structures:units)[owner.player]++;
+    });
+    Json players=Json::array();
+    for (const auto& player:sim.players()) {
+        Json row=Json::object(),resources=Json::object();
+        if (history) row.set("slot",Json::number(int64_t(player.slot)));
+        row.set("name",Json::string(player.name));
+        row.set("alive",Json::fromBool(player.alive));
+        row.set("units",Json::number(int64_t(units[player.slot])));
+        row.set("structures",Json::number(int64_t(structures[player.slot])));
+        for (size_t i=0;i<rules.resources.size();++i)
+            resources.set(rules.resources[i].id,history ? Json::number(state.players[player.slot].stock[i].toDouble(),6) : Json::number(state.players[player.slot].stock[i].toInt()));
+        row.set("resources",std::move(resources));
+        players.push(std::move(row));
+    }
+    return players;
+}
+
+void StudioGameSurface::samplePlayers() {
+    if (playerSampleEpoch_ != runtimeEpoch_) {
+        playerSamples_.clear();
+        playerSampleEpoch_ = runtimeEpoch_;
+    }
+    auto* sim = liveSimulation();
+    if (!sim || !canControl()) return;
+    const uint64_t tick = sim->tick();
+    if (!playerSamples_.empty() && tick < playerSamples_.back().tick) playerSamples_.clear();
+    if (!playerSamples_.empty() && tick - playerSamples_.back().tick < sim->tickRate()) return;
+    const auto* module = dynamic_cast<const game::GameCore*>(&sim->module());
+    const auto* state = sim->world().resourceConst<game::GameState>();
+    if (!module || !state) return;
+    playerSamples_.push_back({tick, playerCounts(*sim,module->rules(),*state,true)});
+    if (playerSamples_.size() > 3600) playerSamples_.pop_front();
+}
+
+Json StudioGameSurface::playerHistory(int64_t afterTick, const std::string& epoch) const {
+    Json out = Json::object(), samples = Json::array();
+    out.set("epoch",Json::string(std::to_string(runtimeEpoch_)));
+    const auto* sim = liveSimulation();
+    if (sim && canControl() && playerSampleEpoch_ == runtimeEpoch_) {
+        out.set("tickRate",Json::number(int64_t(sim->tickRate())));
+        if (epoch != std::to_string(runtimeEpoch_)) afterTick = -1;
+        for (const auto& sample : playerSamples_) {
+            if (int64_t(sample.tick) <= afterTick) continue;
+            Json row = Json::object();
+            row.set("tick",Json::number(int64_t(sample.tick)));
+            row.set("players",sample.players);
+            samples.push(std::move(row));
+        }
+    }
+    out.set("samples",std::move(samples));
+    return out;
+}
+
 Json StudioGameSurface::playStatus() const {
     Json out=Json::object();
     auto* sim=liveSimulation();
@@ -620,23 +678,7 @@ Json StudioGameSurface::playStatus() const {
     const auto& rules=module->rules();
     const auto* state=sim->world().resourceConst<game::GameState>();
     if (!state) return out;
-    std::array<int,256> units{},structures{};
-    sim->world().each<game::Unit,Owner>([&](Entity,game::Unit& unit,Owner& owner){
-        (rules.types[unit.type].structure?structures:units)[owner.player]++;
-    });
-    Json players=Json::array();
-    for (const auto& player:sim->players()) {
-        Json row=Json::object(),resources=Json::object();
-        row.set("name",Json::string(player.name));
-        row.set("alive",Json::fromBool(player.alive));
-        row.set("units",Json::number(int64_t(units[player.slot])));
-        row.set("structures",Json::number(int64_t(structures[player.slot])));
-        for (size_t i=0;i<rules.resources.size();++i)
-            resources.set(rules.resources[i].id,Json::number(state->players[player.slot].stock[i].toInt()));
-        row.set("resources",std::move(resources));
-        players.push(std::move(row));
-    }
-    out.set("players",std::move(players));
+    out.set("players",playerCounts(*sim,rules,*state,false));
     if (auto* scripts=module->scripts()) {
         Json errors=Json::array();
         for (const auto& entry:scripts->log()) if (entry.error)

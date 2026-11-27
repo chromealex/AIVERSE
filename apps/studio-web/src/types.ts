@@ -220,7 +220,11 @@ export interface StaticGeometryReport {
   enabled:boolean; instances:number; autoStrataSources:number; autoLodSources:number;
   cookedSources:number; cookStaleSources:number; select:string[];
 }
-export interface StudioGameState { geometrySource?:"Scene"; geometry?:StaticGeometryReport|null; roleLabel?:string; simulationSpeed?:number; selectedLiveRef?:string; selectedLiveRefs?:string[]; scriptErrors?: StudioScriptMessage[]; device:StudioGameDevice; epoch?:string;canReviewPlayChanges?:boolean;runtimeDebugEdited?:boolean; paused: boolean; canControl: boolean; canStep: boolean; active: boolean; loading: boolean; progress: number; inMatch: boolean; tick: number; error: string }
+export interface StudioPlayerSample {
+  tick: number;
+  players: { slot: number; name: string; units: number; structures: number; resources: Record<string, number> }[];
+}
+export interface StudioGameState { playerHistory?: { epoch: string; tickRate?: number; samples: StudioPlayerSample[] }; geometrySource?:"Scene"; geometry?:StaticGeometryReport|null; roleLabel?:string; simulationSpeed?:number; selectedLiveRef?:string; selectedLiveRefs?:string[]; scriptErrors?: StudioScriptMessage[]; device:StudioGameDevice; epoch?:string;canReviewPlayChanges?:boolean;runtimeDebugEdited?:boolean; paused: boolean; canControl: boolean; canStep: boolean; active: boolean; loading: boolean; progress: number; inMatch: boolean; tick: number; error: string }
 export interface RuntimeAnimationRow {
   entityId:string;entity:number;climbing:boolean;attached:boolean;stanceFeet:number;steppingFeet:number;
   footError:number;penetration:number;bodyPosition:number[];surfaceNormal:number[];error:string;
@@ -540,7 +544,7 @@ export interface StudioParams {
   'studio.gameStop': Record<string,never>;
   'studio.scriptWatch': {restart?:boolean};
   'studio.gameScriptLog': Record<string,never>;
-  'studio.gameState': { scriptErrors?: boolean; geometryProject?: string };
+  'studio.gameState': { scriptErrors?: boolean; geometryProject?: string; statisticsProject?: string; afterTick?: number; epoch?: string };
   'studio.gameProfile': {expectedProject:string;action:'status'|'start'|'stop';steps?:number};
   'studio.gameRegions': {expectedProject:string};
   'studio.gameEntities': {offset:number;limit:number;query:string;expectedProject?:string;group?:number;path?:string[];collapsed?:string[]};

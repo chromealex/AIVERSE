@@ -1,4 +1,5 @@
 #pragma once
+#include <deque>
 #include "StudioPhysisFieldEdit.h"
 #include "apps/fps/HostedActorClient.h"
 #include "apps/client/HostedClient.h"
@@ -27,6 +28,7 @@ public:
     void event(const platform::Event& event);
     Json animationRuntimeStatus() const;
     Json playStatus() const;
+    Json playerHistory(int64_t afterTick, const std::string& epoch) const;
     Json scriptLog(bool errorsOnly) const;
     Json state(bool includeScriptErrors = false) const;
     std::function<Json(uint64_t)> buildingGraphReader();
@@ -65,6 +67,10 @@ private:
     std::unique_ptr<gfx::Device> device_;
     std::unique_ptr<render::RenderDeviceLifetime> lifetime_;
     StudioPhysisFieldEdit physisFields_;
+    struct PlayerSample { uint64_t tick; Json players; };
+    std::deque<PlayerSample> playerSamples_;
+    uint64_t playerSampleEpoch_ = 0;
+    void samplePlayers();
     Simulation* liveSimulation() const;
     bool paused() const;
     bool canControl() const;

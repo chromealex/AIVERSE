@@ -4951,6 +4951,11 @@ bool StudioHost::handleHostMethod(const Json& req) {
             }
         }
         auto state = gameState(method == "studio.gameState" && params.getBool("scriptErrors"));
+        if (method == "studio.gameState" && params.has("statisticsProject")) {
+            if (params.getStr("statisticsProject") != session_->workspace().project.dir)
+                throw std::runtime_error("Statistics project changed");
+            if (game_) state.set("playerHistory",game_->playerHistory(params.getInt("afterTick",-1),params.getStr("epoch")));
+        }
         if (method == "studio.gameState" && params.has("geometryProject")) {
             const auto& project = session_->workspace().project.dir;
             if (params.getStr("geometryProject") != project) throw std::runtime_error("Geometry project changed");
