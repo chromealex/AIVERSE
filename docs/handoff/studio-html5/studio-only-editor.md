@@ -1764,3 +1764,7 @@ ecc91722aa0dc84b83809ac3edc21b9696d2ef37 enables existing GraphCanvas enhanced n
 ### Keyboard graph overview
 
 b004f89bcd665079b550b896fb7cc8d2b57bab21 updates apps/studio-web/src/graphs/GraphCanvas.tsx. Home invokes Fit on the focused enhanced graph canvas. Zoom buttons expose action names and reset reports the current percentage. Web build and graph tests passed. Detached macOS Materials verified at 125% that a Home key event on a node retained zoom, Home on the focused SVG fitted the graph, and all node coordinates stayed unchanged. Evidence: stats-mac-ecm1nges/live.log and statistics.png. Continue the outstanding window workflow audit.
+
+### Fit graph to a small dock
+
+fc5d0076319dfaae6737c9e50c2d08b0cb9692d7 corrects GraphCanvas.tsx: Fit and Home can scale below the ordinary 25% manual bound and zooming out there no longer enlarges the graph. Production web build and graph tests passed. In a detached Mac Materials panel a test constrained the actual graph viewport to 110 CSS pixels, verified both SVG dimensions fit and zoom fell below 25%, then dispatched a zoom-out wheel event and rechecked containment. Returned the panel to its original width. Evidence: stats-mac-nrt7a93a/live.log. Continue outstanding window migration.
