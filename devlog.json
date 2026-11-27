@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-27T14:33:00+00:00",
+ "generated": "2026-11-27T15:31:27+00:00",
  "lang": "en",
  "repo": "https://github.com/chromealex/AIVERSE",
  "systems": [
@@ -263,6 +263,29 @@
     }
    ],
    "author": null
+  },
+  {
+   "id": "2026-11-27-impostor-mask-authoring",
+   "date": "2026-11-27",
+   "system": "studio",
+   "branch": "codex/forest-impostor-contour",
+   "commit": "a1765eee9",
+   "author": "rendering",
+   "title": "Fit impostor cards to the alpha mask",
+   "summary": "The Models panel previews each card boundary before exporting the proxy.",
+   "body": [
+    "Auto evaluates each chart and fits its card when the area falls by at least 20%. The new GLB stores the fitted geometry, UVs, textures and bake settings."
+   ],
+   "verified": "WebKit checks covered two views and three fit modes. The masked fixture used 81.5% less card area with four triangles. A native test reopened the GLB.",
+   "limits": "Editor tool for rigid assets, illustrated with a Studio panel capture. Area reduction is measured before rasterization.",
+   "status": "in-progress",
+   "links": [],
+   "media": [
+    {
+     "src": "media/docs/agent-handoffs/media/impostor-mask-studio.png",
+     "caption": "Fitted card boundary and original and selected areas"
+    }
+   ]
   },
   {
    "id": "2026-11-27-gameplay-client-controls",
