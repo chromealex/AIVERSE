@@ -153,8 +153,18 @@ struct GLTexture {
 struct GLTextureView { uint32_t parentId = 0; };
 struct GLSampler { GLuint native = 0; };
 struct GLFramebuffer { uint32_t color = 0, depth = 0; GLuint fbo = 0; };
-struct GLShader { GLuint program = 0; std::string vs, fs; int textures = 0, uniforms = 0; bool linear = false; };
-struct GLPipeline { PipelineDesc desc; GLuint program = 0; PipelineHandle hdr; ShaderHandle hdrShader; bool hdrFailed = false; };
+// Source: GLSL kept, nothing compiled yet (deferred build). Linking: compile + link submitted, status not
+// queried, so a driver with KHR_parallel_shader_compile works on it in the background.
+enum class GLShaderState : uint8_t { Source, Linking, Ready, Failed };
+struct GLShader {
+    GLuint program = 0, vsObj = 0, fsObj = 0;
+    std::string vs, fs, prelude, label;
+    int textures = 0, uniforms = 0;
+    bool linear = false;
+    GLShaderState state = GLShaderState::Source;
+};
+// The program is looked up through desc.shader when the pipeline is bound: with deferred builds it may not exist yet.
+struct GLPipeline { PipelineDesc desc; PipelineHandle hdr; ShaderHandle hdrShader; bool hdrFailed = false; };
 struct GLTextureRead {
     GLuint pbo = 0;
     GLsync fence = nullptr;
@@ -216,6 +226,7 @@ public:
         hdr_ = flavor == Backend::GL33 || has("EXT_color_buffer_float") || has("EXT_color_buffer_half_float");
         resolveBaseVertexDraws(flavor, has);
         anisotropy_ = has("texture_filter_anisotropic");
+        parallelCompile_ = has("parallel_shader_compile");
         if (anisotropy_) {
             GLfloat maxAniso = 1.0f;
             glGetFloatv(kGL_MAX_ANISOTROPY, &maxAniso);
@@ -1029,62 +1040,111 @@ public:
     // ---------- shaders ----------
     void setGlslPrelude(const std::string& defines) override { glslPrelude_ = defines; }
     std::string glslPrelude_;
-    GLuint compile(GLenum type, const char* body) {
+    // Deferred build (opt-in, see Device::setDeferredShaderBuild): createShader keeps the GLSL and returns a
+    // handle at once; the program is compiled and linked when a pipeline using it is first bound or warmed.
+    // WebGL / GLES link synchronously on the first status query, and a pipeline used only in HDR passes is
+    // drawn through its linear variant, so building eagerly paid for a base program that never draws.
+    void setDeferredShaderBuild(bool on) override { deferredBuild_ = on; }
+    bool deferredBuild_ = false;
+    bool parallelCompile_ = false;
+    GLuint compileStart(GLenum type, const std::string& prelude, const std::string& body) {
         std::string src = info_.backend == Backend::GL33 ? "#version 330 core\n" : "#version 300 es\nprecision highp float;\nprecision highp int;\n";
-        src += glslPrelude_;
+        src += prelude;
         src += body;
-        GLuint s = glCreateShader(type);
+        GLuint sh = glCreateShader(type);
         const char* p = src.c_str();
-        glShaderSource(s, 1, &p, nullptr);
-        glCompileShader(s);
-        GLint ok = 0;
-        glGetShaderiv(s, GL_COMPILE_STATUS, &ok);
-        if (!ok) {
-            char log[2048]; GLsizei n = 0;
-            glGetShaderInfoLog(s, sizeof log, &n, log);
-            error_ = std::string(type == GL_VERTEX_SHADER ? "vertex" : "fragment") + " shader: " + std::string(log, size_t(n));
-            glDeleteShader(s);
-            return 0;
-        }
-        return s;
+        glShaderSource(sh, 1, &p, nullptr);
+        glCompileShader(sh);
+        return sh;
     }
-    ShaderHandle createShader(const ShaderDesc& d) override {
-        if (!d.glslVertex || !d.glslFragment) { error_ = "shader has no GLSL source"; return {}; }
-        const std::string hdr = colorShaderPrefix(false, d.linearTarget);
-        GLuint vs = compile(GL_VERTEX_SHADER, (hdr + d.glslVertex).c_str());
-        if (!vs) return {};
-        GLuint fs = compile(GL_FRAGMENT_SHADER, (hdr + d.glslFragment).c_str());
-        if (!fs) { glDeleteShader(vs); return {}; }
-        GLuint p = glCreateProgram();
-        glAttachShader(p, vs); glAttachShader(p, fs);
-        glLinkProgram(p);
-        glDeleteShader(vs); glDeleteShader(fs);
+    void startBuild(GLShader& s) {
+        const std::string hdr = colorShaderPrefix(false, s.linear);
+        s.vsObj = compileStart(GL_VERTEX_SHADER, s.prelude, hdr + s.vs);
+        s.fsObj = compileStart(GL_FRAGMENT_SHADER, s.prelude, hdr + s.fs);
+        s.program = glCreateProgram();
+        glAttachShader(s.program, s.vsObj); glAttachShader(s.program, s.fsObj);
+        glLinkProgram(s.program);
+        s.state = GLShaderState::Linking;
+    }
+    static std::string shaderLog(GLuint sh) {
+        char log[2048]; GLsizei n = 0;
+        glGetShaderInfoLog(sh, sizeof log, &n, log);
+        return std::string(log, size_t(n));
+    }
+    void releaseShaderObjects(GLShader& s) {
+        // An attached shader is only flagged for deletion and goes with its program.
+        if (s.vsObj) { glDeleteShader(s.vsObj); s.vsObj = 0; }
+        if (s.fsObj) { glDeleteShader(s.fsObj); s.fsObj = 0; }
+    }
+    // Blocks until the program is linked (the first status query waits for the driver). Device thread only.
+    bool finishBuild(GLShader& s) {
+        if (s.state == GLShaderState::Ready) return true;
+        if (s.state == GLShaderState::Failed) return false;
+        if (s.state == GLShaderState::Source) startBuild(s);
         GLint ok = 0;
-        glGetProgramiv(p, GL_LINK_STATUS, &ok);
+        glGetProgramiv(s.program, GL_LINK_STATUS, &ok);
         if (!ok) {
-            char log[2048]; GLsizei n = 0;
-            glGetProgramInfoLog(p, sizeof log, &n, log);
-            error_ = "link: " + std::string(log, size_t(n));
-            glDeleteProgram(p);
-            return {};
+            GLint vsOk = 0, fsOk = 0;
+            glGetShaderiv(s.vsObj, GL_COMPILE_STATUS, &vsOk);
+            glGetShaderiv(s.fsObj, GL_COMPILE_STATUS, &fsOk);
+            if (!vsOk) error_ = "vertex shader: " + shaderLog(s.vsObj);
+            else if (!fsOk) error_ = "fragment shader: " + shaderLog(s.fsObj);
+            else {
+                char log[2048]; GLsizei n = 0;
+                glGetProgramInfoLog(s.program, sizeof log, &n, log);
+                error_ = "link: " + std::string(log, size_t(n));
+            }
+            releaseShaderObjects(s);
+            glDeleteProgram(s.program); s.program = 0;
+            s.state = GLShaderState::Failed;
+            return false;
         }
+        releaseShaderObjects(s);
+        const GLuint p = s.program;
         glUseProgram(p);
         gl_.program = p;
-        for (int i = 0; i < d.uniformSlots; ++i) {
+        for (int i = 0; i < s.uniforms; ++i) {
             std::string n = "U" + std::to_string(i);
             GLuint bi = glGetUniformBlockIndex(p, n.c_str());
             if (bi != GL_INVALID_INDEX) glUniformBlockBinding(p, bi, GLuint(i));
         }
-        for (int i = 0; i < d.textureSlots; ++i) {
+        for (int i = 0; i < s.textures; ++i) {
             std::string n = "tex" + std::to_string(i);
             GLint loc = glGetUniformLocation(p, n.c_str());
             if (loc >= 0) glUniform1i(loc, i);
         }
         currentProgram_ = p;
-        return {shaders_.add(GLShader{p, d.glslVertex, d.glslFragment, d.textureSlots, d.uniformSlots, d.linearTarget})};
+        s.state = GLShaderState::Ready;
+        return true;
+    }
+    // Program of a shader, built now if it was deferred; 0 when it does not build (logged once).
+    GLuint programFor(uint32_t shaderId) {
+        auto* s = shaders_.get(shaderId);
+        if (!s) return 0;
+        if (s->state == GLShaderState::Ready) return s->program;
+        if (s->state == GLShaderState::Failed) return 0;
+        if (!finishBuild(*s)) {
+            std::fprintf(stderr, "[gfx] shader '%s': %s\n", s->label.empty() ? "?" : s->label.c_str(), error_.c_str());
+            return 0;
+        }
+        return s->program;
+    }
+    ShaderHandle createShader(const ShaderDesc& d) override {
+        if (!d.glslVertex || !d.glslFragment) { error_ = "shader has no GLSL source"; return {}; }
+        GLShader s;
+        s.vs = d.glslVertex; s.fs = d.glslFragment; s.prelude = glslPrelude_;
+        if (d.label) s.label = d.label;
+        s.textures = d.textureSlots; s.uniforms = d.uniformSlots; s.linear = d.linearTarget;
+        if (!deferredBuild_ && !finishBuild(s)) return {};
+        return {shaders_.add(std::move(s))};
     }
     void destroyShader(ShaderHandle h) override {
-        if (auto* s = shaders_.get(h.id)) { glDeleteProgram(s->program); shaders_.remove(h.id); gl_.raster = false; }
+        if (auto* s = shaders_.get(h.id)) {
+            releaseShaderObjects(*s);
+            if (s->program) glDeleteProgram(s->program);
+            if (gl_.program == s->program) gl_.program = 0;
+            shaders_.remove(h.id); gl_.raster = false;
+        }
     }
 
     PipelineHandle createPipeline(const PipelineDesc& d) override {
@@ -1107,7 +1167,7 @@ public:
         }
         auto* s = shaders_.get(d.shader.id);
         if (!s) { error_ = "pipeline: invalid shader"; return {}; }
-        return {pipelines_.add(GLPipeline{d, s->program, {}, {}, false})};
+        return {pipelines_.add(GLPipeline{d, {}, {}, false})};
     }
     void destroyPipeline(PipelineHandle h) override {
         if (auto* p = pipelines_.get(h.id)) {
@@ -1131,7 +1191,11 @@ public:
         sd.glslVertex = vs.c_str(); sd.glslFragment = fs.c_str();
         sd.textureSlots = s->textures; sd.uniformSlots = s->uniforms;
         sd.linearTarget = true;
+        sd.label = s->label.empty() ? nullptr : s->label.c_str();
+        const std::string prelude = glslPrelude_;
+        glslPrelude_ = s->prelude; // the variant is built with the defines its base was made with
         const auto shader = createShader(sd);
+        glslPrelude_ = prelude;
         if (!shader.valid()) { std::fprintf(stderr, "[gfx] HDR shader: %s\n", error_.c_str()); return {}; }
         pd.shader = shader; pd.colorFormat = PixelFormat::RGBA16F;
         for (int i = 1; i < pd.colorAttachmentCount; ++i)
@@ -1141,6 +1205,30 @@ public:
         p = pipelines_.get(h.id); // pool may have reallocated
         p->hdr = variant; p->hdrShader = shader; p->hdrFailed = false;
         return variant;
+    }
+    // Builds what a draw into `format` will bind: the linear variant for RGBA16F targets, else the pipeline
+    // itself. In deferred mode with KHR_parallel_shader_compile it only starts the build and reports Pending
+    // until the driver is done, so loading screens can warm many programs without blocking on each one.
+    PipelineColorWarmStatus warmPipelineColorStatus(PipelineHandle h, PixelFormat format) override {
+        auto* p = pipelines_.get(h.id);
+        if (!p) { error_ = "warmup: invalid pipeline handle"; return PipelineColorWarmStatus::Failed; }
+        if (format == PixelFormat::RGBA16F && hdr_ && !p->desc.depthOnly && p->desc.colorFormat != PixelFormat::RGBA16F) {
+            const auto variant = hdrPipeline(h);
+            if (!variant.valid()) return PipelineColorWarmStatus::Failed;
+            p = pipelines_.get(variant.id);
+        }
+        auto* s = p ? shaders_.get(p->desc.shader.id) : nullptr;
+        if (!s) { error_ = "warmup: missing shader"; return PipelineColorWarmStatus::Failed; }
+        if (s->state == GLShaderState::Source) startBuild(*s);
+        if (s->state == GLShaderState::Linking && deferredBuild_ && parallelCompile_) {
+            GLint done = 0;
+            glGetProgramiv(s->program, GL_COMPLETION_STATUS_KHR, &done);
+            if (!done) return PipelineColorWarmStatus::Pending;
+        }
+        return finishBuild(*s) ? PipelineColorWarmStatus::Ready : PipelineColorWarmStatus::Failed;
+    }
+    bool warmPipelineColor(PipelineHandle h, PixelFormat format) override {
+        return warmPipelineColorStatus(h, format) != PipelineColorWarmStatus::Pending;
     }
 
     // ---------- frame ----------
@@ -1991,7 +2079,9 @@ public:
             }
         }
         const bool known = gl_.raster;
-        if (!known || gl_.program != p->program) { glUseProgram(p->program); gl_.program = p->program; }
+        const GLuint program = programFor(d.shader.id);
+        if (!program) { pipelineId_ = 0; return; }
+        if (!known || gl_.program != program) { glUseProgram(program); gl_.program = program; }
         const int cull = d.cull == CullMode::None ? 0 : d.cull == CullMode::Back ? 1 : 2;
         if (!known || gl_.cull != cull) {
             if (cull == 0) glDisable(GL_CULL_FACE);

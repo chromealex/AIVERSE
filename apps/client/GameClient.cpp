@@ -131,6 +131,11 @@ void GameClient::initStep(gfx::Device& dev, int step) {
             const char* e = std::getenv("AIVERSE_HW_SHADOW");
             if (!(e && *e == '0')) { dev.setGlslPrelude("#define AIVERSE_HW_SHADOW 1\n"); r3d_.setHardwareShadowCompare(true); }
         }
+        // GLES / WebGL: build each GL program when it is first drawn or warmed. Eager builds linked every
+        // pipeline twice at a battle start (base + HDR variant) and waited on each link. AIVERSE_EAGER_SHADERS=1
+        // restores eager builds (compile errors at creation).
+        if (dev.info().backend == gfx::Backend::GLES3 && std::getenv("AIVERSE_EAGER_SHADERS") == nullptr)
+            dev.setDeferredShaderBuild(true);
         if (!r3d_.init(dev)) error_ = "renderer: " + dev.lastError();
         view_.setAppearancePipelineValidator(
             [this](const render::Model& model,
