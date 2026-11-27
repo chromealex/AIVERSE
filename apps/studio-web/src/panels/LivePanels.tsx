@@ -121,25 +121,38 @@ function Value({ value, depth = 0 }: { value: unknown; depth?: number }) {
 }
 
 export function LiveInspector({project,selection}:{project?:string;selection?:LiveRef|null}) {
+  const [inspected, setInspected] = useState<{epoch:string;ref:string} | null>(null);
+  const epoch = selection?.epoch;
+  const ref = inspected && inspected.epoch === epoch && selection?.refs?.includes(inspected.ref)
+    ? inspected.ref : selection?.ref;
   const [detail, setDetail] = useState<StudioRuntimeEntity | null>(null);
   const [error, setError] = useState('');
   useEffect(() => {
     setDetail(null); setError('');
-    if (!selection) return;
+    if (!epoch || !ref) return;
     let live = true, busy = false;
     const poll = async () => {
       if(busy)return; busy=true;
-      try { const next = await invoke('studio.gameInspect', {...selection,expectedProject:project}); if (live) {setDetail(next);setError('');} }
+      try { const next = await invoke('studio.gameInspect', {epoch,ref,expectedProject:project}); if (live) {setDetail(next);setError('');} }
       catch (e) { if (live) { setError(e instanceof Error ? e.message : String(e)); setDetail(null); } }
       finally {busy=false;}
     };
     void poll(); const t = window.setInterval(() => void poll(), 500);
     return () => { live = false; window.clearInterval(t); };
-  }, [selection?.epoch, selection?.ref, project]);
+  }, [epoch, ref, project]);
   if (!selection) return <div className="live__empty">{error || 'Select a live entity in the Hierarchy.'}</div>;
-  if (error) return <p className="live__error" role="alert">{error}</p>;
-  if (!detail || detail.ref!==selection.ref || detail.epoch!==selection.epoch) return <div className="live__empty">Reading entity…</div>;
-  return <EntityDetails detail={detail} title={'Entity '+detail.ref} subtitle={'tick '+detail.tick}/>;
+  return <div className="live-inspector">
+    {selection.refs && selection.refs.length > 1 && <label className="live-inspector__selection">
+      <span>{selection.refs.length} selected</span>
+      <select aria-label="Inspect selected entity" value={ref}
+        onChange={event => setInspected({epoch:selection.epoch,ref:event.target.value})}>
+        {selection.refs.map(id => <option value={id} key={id}>Entity {id}</option>)}
+      </select>
+    </label>}
+    {error ? <p className="live__error" role="alert">{error}</p>
+      : !detail || detail.ref!==ref || detail.epoch!==epoch ? <div className="live__empty">Reading entity…</div>
+      : <EntityDetails detail={detail} title={'Entity '+detail.ref} subtitle={'tick '+detail.tick}/>}
+  </div>;
 }
 
 export function PreviewInspector({detail}:{detail:NonNullable<StudioSnapshot['previewInspector']>}) {
