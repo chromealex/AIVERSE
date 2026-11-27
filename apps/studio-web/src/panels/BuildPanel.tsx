@@ -348,8 +348,8 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
       </ol>}
       {errors.length > 0 && <StudioAlert tone="danger" title="Errors">{errors.map((e, i) => <div key={i}>{e}</div>)}</StudioAlert>}
       {missing && phase === 'missing-toolchain' && <StudioAlert tone="warning" title={'Missing for ' + missing.target + ': ' + missing.ids.join(', ')}>
-        <StudioButton size="sm" onClick={() => void start('build', true, missing.target)}>Install and build</StudioButton>
-        <StudioButton size="sm" onClick={() => void installTools(missing.target)}>Install only</StudioButton></StudioAlert>}
+        <div className="au-row"><StudioButton variant="primary" size="sm" onClick={() => void start('build', true, missing.target)}>Install and build</StudioButton>
+        <StudioButton size="sm" onClick={() => void installTools(missing.target)}>Install only</StudioButton></div></StudioAlert>}
       <div className="build__cards">
         {info?.project === projectPath && !!info.nativeModules?.required?.length && <section className="build__card" aria-label="Project C++ modules">
           <h3>Project C++ modules</h3>
@@ -382,7 +382,7 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
             {r.found ? <CheckCircle2 size={13}/> : r.required ? <XCircle size={13}/> : <CircleAlert size={13}/>}
             <span>{r.name}</span><small>{r.found ? (r.version || r.path || 'found') : (r.autoInstall ? 'installable' + (r.size ? ' · ' + r.size : '') : r.manual || r.install || 'install manually')}</small>
           </div>)}
-          {toolchain?.hostSupported && toolchain.requirements.some(r => !r.found && r.required && r.autoInstall) &&
+          {!(phase === 'missing-toolchain' && missing?.target === target) && toolchain?.hostSupported && toolchain.requirements.some(r => !r.found && r.required && r.autoInstall) &&
             <StudioButton disabled={state.running} onClick={() => void installTools(target)}>Install missing tools</StudioButton>}
           {toolchain?.ok && <p className="build__note">Everything needed is installed.</p>}
         </section>
