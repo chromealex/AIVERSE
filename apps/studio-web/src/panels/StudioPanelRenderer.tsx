@@ -73,7 +73,7 @@ import CatalogPanel from './generated/CatalogPanel';
 import FeatureReadinessPanel from './FeatureReadinessPanel';
 
 import ProjectDataPanel from './generated/ProjectDataPanel';
-export type InspectorRecord = {kind:"player";slot:number} | {kind:"area"|"region"|"body";key:string};
+export type InspectorRecord = {kind:"player";slot:number} | {kind:"wave"|"trigger";index:number} | {kind:"area"|"region"|"body";key:string};
 
 export interface StudioPanelContext {
   snapshot: StudioSnapshot | null;

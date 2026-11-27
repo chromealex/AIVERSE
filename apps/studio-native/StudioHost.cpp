@@ -174,7 +174,7 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
         return session_->queryEditWorld(params,false);
     },true});
     session_->workspace().registerOp({"editor_select","Select map entities by docs with optional focus, inspect a project rule by key, the map, a named area, a region letter, a zero-based entity or a one-based player, or clear selection.",
-        Json::parse(R"({"properties":{"docs":{"type":"array","items":{"type":"integer","minimum":0}},"refs":{"type":"array","items":{"type":["integer","string"]}},"epoch":{"type":"string"},"focus":{"type":"boolean"},"kind":{"type":"string","enum":["entity","player","area","region","body","type","resource","tech","faction","map","none"]},"key":{"type":"string"},"index":{"type":"integer","minimum":0}}})"),[this](const Json& input){
+        Json::parse(R"({"properties":{"docs":{"type":"array","items":{"type":"integer","minimum":0}},"refs":{"type":"array","items":{"type":["integer","string"]}},"epoch":{"type":"string"},"focus":{"type":"boolean"},"kind":{"type":"string","enum":["entity","player","area","region","body","wave","trigger","type","resource","tech","faction","map","none"]},"key":{"type":"string"},"index":{"type":"integer","minimum":0}}})"),[this](const Json& input){
             const auto kind=input.getStr("kind");
             const auto& map=session_->workspace().map;
             Json selection=Json::object();
@@ -250,6 +250,11 @@ StudioHost::StudioHost(StudioHostPlatform& platform, const std::string& engineRo
                 if (!(index>=0 && index<map.data.entities.size() && std::floor(index)==index))
                     throw std::runtime_error("Unknown map entity index");
                 selection.set("id",Json::string(studioDocumentId(map,editor::DocumentEntityRef::mapEntity(size_t(index)))));
+            } else if (kind=="wave" || kind=="trigger") {
+                const auto& rows=map.data.extra[kind=="wave"?"waves":"triggers"];
+                const auto& index=input["index"];
+                if(map.data.worldSpace || !rows.isArray() || !index.isNumber() || index.toDouble()!=index.integer() ||
+                   index.integer()<0 || size_t(index.integer())>=rows.size())throw std::runtime_error("Unknown map scenario record");
             } else if (kind=="body") {
                 if (!map.data.planet() || input.getStr("key").empty() || map.data.findBody(input.getStr("key"))<0)
                     throw std::runtime_error("Unknown celestial body");

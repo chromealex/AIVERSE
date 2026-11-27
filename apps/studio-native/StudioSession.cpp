@@ -858,6 +858,22 @@ Json StudioSession::mapProperties(const Json& params,bool write) {
         out.set("worldSpace",std::move(world));
     }
     out.set("maxSize",num(game::kMaxMapSize));out.set("entities",num(data.entities.size()));out.set("players",num(data.players.size()));
+    if(params.getBool("scenarioIndex")){
+        Json records=Json::array();
+        for(const auto* group:{"waves","triggers"}){
+            const bool wave=std::string(group)=="waves";
+            const auto& rows=data.extra[group];
+            for(size_t i=0;i<rows.items().size();++i){
+                Json item=Json::object();
+                item.set("kind",str(wave?"wave":"trigger"));
+                item.set("index",num(int64_t(i)));
+                item.set("name",str(wave?"Wave "+std::to_string(i+1)+(rows[i]["time"].isNumber()?" · "+rows[i]["time"].dump(-1)+" s":""):
+                    rows[i].getStr("id","Trigger "+std::to_string(i+1))));
+                records.push(std::move(item));
+            }
+        }
+        out.set("scenarioIndex",std::move(records));
+    }
     if(params.has("scenarioGroup")){
         const auto group=params.getStr("scenarioGroup");
         if(group!="waves" && group!="triggers")throw std::runtime_error("Unknown map scenario group");

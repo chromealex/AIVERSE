@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { invoke } from '../bridge';
 import { StudioButton, StudioSelect } from '../ui';
 import type { StudioGraphDocumentScope, StudioSnapshot } from '../types';
 
 type Group = 'waves' | 'triggers';
 type Entry = Record<string,unknown>;
-export function MapScenarioRecords({scope,busy,onApply}:{scope:StudioGraphDocumentScope;busy:boolean;onApply:(s:StudioSnapshot)=>void}){
+export function MapScenarioRecords({scope,busy,onApply,requested}:{requested?:{kind:'wave'|'trigger';index:number};scope:StudioGraphDocumentScope;busy:boolean;onApply:(s:StudioSnapshot)=>void}){
   const [open,setOpen]=useState(false);
   const [group,setGroup]=useState<Group>('waves');
   const [entries,setEntries]=useState<{revision:string;group:Group;rows:Entry[]}>();
@@ -13,6 +13,15 @@ export function MapScenarioRecords({scope,busy,onApply}:{scope:StudioGraphDocume
   const [draft,setDraft]=useState<{revision:string;text:string}>();
   const [pending,setPending]=useState(false);
   const [error,setError]=useState('');
+  const section=useRef<HTMLDetailsElement>(null);
+  const lastRequest=useRef<typeof requested>(undefined);
+  useEffect(()=>{
+    if(!requested || draft || lastRequest.current===requested)return;
+    lastRequest.current=requested;
+    setGroup(requested.kind==='wave'?'waves':'triggers');
+    setIndex(requested.index);
+    if(section.current){section.current.open=true;section.current.scrollIntoView({block:'nearest'});}
+  },[requested,draft]);
   useEffect(()=>{
     if(!open)return;
     let current=true;
@@ -46,7 +55,7 @@ export function MapScenarioRecords({scope,busy,onApply}:{scope:StudioGraphDocume
       setDraft(undefined);onApply(snapshot);
     }catch(e){setError(String(e));}finally{setPending(false);}
   }
-  return <details onToggle={e=>setOpen(e.currentTarget.open)}><summary>Waves and triggers</summary>
+  return <details ref={section} onToggle={e=>setOpen(e.currentTarget.open)}><summary>Waves and triggers</summary>
     <fieldset disabled={busy||pending}>
       <label>Record type<StudioSelect value={group} disabled={!!draft} onChange={e=>{setGroup(e.target.value as Group);setIndex(0);}}>
         <option value="waves">Waves</option><option value="triggers">Triggers</option></StudioSelect></label>
