@@ -48,8 +48,12 @@ export default function ExtensionsPanel({ snapshot, commitSnapshot, showPanel }:
         const v = Number(values[id] ?? w.value ?? 0);
         return <label key={key} className="ptp__row"><span>{label}</span>
           <input type={w.kind === 'slider' ? 'range' : 'number'} min={w.min ?? 0} max={w.max ?? 1} step={w.step ?? (w.kind === 'slider' ? ((w.max ?? 1) - (w.min ?? 0)) / 100 : 0.1)}
-            value={v} onChange={e => setValues(s => ({ ...s, [id]: Number(e.target.value) }))}
-            onPointerUp={() => void run(id, v)} onBlur={() => w.kind === 'number' && void run(id, v)}/>
+            value={v} onChange={e => {
+              const value = e.currentTarget.valueAsNumber;
+              if (!Number.isFinite(value)) return;
+              setValues(s => ({ ...s, [id]: value }));
+              void run(id, value);
+            }}/>
           <output>{Math.round(v * 100) / 100}</output></label>;
       }
       case 'text': {
