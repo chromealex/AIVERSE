@@ -4348,6 +4348,12 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
     nereid_.updateUnderwater(post_,underwaterFrameTime_>0?float(opticalNow-underwaterFrameTime_):1.f/60.f);
     underwaterFrameTime_=opticalNow;
     renderThumbnail(); // at most one Assets thumbnail, offscreen, before the scene pass
+    struct RestoreModelDebug {
+        render::Renderer3D& renderer;
+        int previous;
+        ~RestoreModelDebug(){ renderer.setStudioDebugMode(previous); }
+    } restoreModelDebug{renderer_,renderer_.studioDebugMode()};
+    renderer_.setStudioDebugMode(cleanMapOutput() ? 0 : natureLayers_.modelDebugMode);
     if(bakedScene)renderer_.setBakedLighting(&sceneBake_->gpu);
     renderer_.beginScene(view, framebufferWidth, framebufferHeight);
     renderer_.setSceneSelectionOutline(!cleanMapOutput()); // editor-only depth-tested silhouette
@@ -5887,7 +5893,7 @@ uint64_t StudioScene::frameSignature(int width,int height,const editor::MapDoc& 
     vec(camera_.target);value(camera_.distance);value(camera_.pitch);value(camera_.yaw);value(camera_.fovY);
     value(camera_.ortho);value(autoIso_);value(tween_.active);
     ids(selection_);ids(hidden_);text(hover_);
-    value(natureLayers_.strataColor);value(natureLayers_.strataBounds);value(natureLayers_.strataWire);value(natureLayers_.strataFill);value(natureLayers_.strataRoutes);value(erosionHighlight_);value(natureLayers_.erosionZones);value(natureLayers_.terraTreeWind);value(natureLayers_.terraSlope);value(natureLayers_.terraSlopeAtTarget);value(natureLayers_.nereidFlow);value(natureLayers_.nereidAllWater);value(tool_);value(localSpace_);value(gizmosVisible_);value(natureLayers_.radius);value(natureLayers_.spacing);value(natureLayers_.physisWind);value(natureLayers_.physisFire);value(natureFrame_.get());value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
+    value(natureLayers_.modelDebugMode);value(natureLayers_.strataColor);value(natureLayers_.strataBounds);value(natureLayers_.strataWire);value(natureLayers_.strataFill);value(natureLayers_.strataRoutes);value(erosionHighlight_);value(natureLayers_.erosionZones);value(natureLayers_.terraTreeWind);value(natureLayers_.terraSlope);value(natureLayers_.terraSlopeAtTarget);value(natureLayers_.nereidFlow);value(natureLayers_.nereidAllWater);value(tool_);value(localSpace_);value(gizmosVisible_);value(natureLayers_.radius);value(natureLayers_.spacing);value(natureLayers_.physisWind);value(natureLayers_.physisFire);value(natureFrame_.get());value(worldAxes_);value(objectBounds_);value(selectionBoxVisible_);value(snapEnabled_);value(pivotSnap_);value(orientationGizmo_);
     value(drag_.axis);value(drag_.tool);text(drag_.id);vec(drag_.moveOffset);value(drag_.value);
     value(drag_.accumulated);value(drag_.lastAngle);value(drag_.snapping);
     value(marquee_.on);value(marquee_.x0);value(marquee_.y0);value(marquee_.x1);value(marquee_.y1);

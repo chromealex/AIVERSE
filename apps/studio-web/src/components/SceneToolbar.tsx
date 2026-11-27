@@ -8,9 +8,9 @@ import type { WindDebugView, StudioGraphDocumentScope } from '../types';
 import './SceneToolbar.css';
 
 export type SceneTool = 'view' | 'move' | 'rotate' | 'scale';
-export interface SceneToolState { tool: SceneTool; local: boolean; snap: boolean; snapMove: number; snapRotate: number; snapScale: number; gizmos: boolean; strataColor:number; strataBounds:boolean; strataWire:boolean; strataFill:boolean; strataRoutes:boolean; natureRadius:number; natureSpacing:number; erosionZones:boolean; terraTreeWind:boolean; terraSlope:boolean; terraSlopeAtTarget:boolean; nereidFlow:boolean; nereidAllWater:boolean; natureWind:boolean; natureFire:boolean; worldAxes:boolean; objectBounds:boolean; selectionBox:boolean; surface: boolean }
+export interface SceneToolState { tool: SceneTool; local: boolean; snap: boolean; snapMove: number; snapRotate: number; snapScale: number; gizmos: boolean; modelDebugMode:number; strataColor:number; strataBounds:boolean; strataWire:boolean; strataFill:boolean; strataRoutes:boolean; natureRadius:number; natureSpacing:number; erosionZones:boolean; terraTreeWind:boolean; terraSlope:boolean; terraSlopeAtTarget:boolean; nereidFlow:boolean; nereidAllWater:boolean; natureWind:boolean; natureFire:boolean; worldAxes:boolean; objectBounds:boolean; selectionBox:boolean; surface: boolean }
 const KEY = 'aiverse.studio.sceneTools';
-const DEFAULTS: SceneToolState = { tool: 'move', local: false, snap: false, snapMove: 1, snapRotate: 15, snapScale: 0.1, gizmos: true, strataColor:0, strataBounds:false, strataWire:false, strataFill:false, strataRoutes:false, natureRadius:48, natureSpacing:6, erosionZones:true, terraTreeWind:true, terraSlope:true, terraSlopeAtTarget:false, nereidFlow:true, nereidAllWater:false, natureWind:false, natureFire:false, worldAxes:false, objectBounds:false, selectionBox:true, surface: false };
+const DEFAULTS: SceneToolState = { tool: 'move', local: false, snap: false, snapMove: 1, snapRotate: 15, snapScale: 0.1, gizmos: true, modelDebugMode:0, strataColor:0, strataBounds:false, strataWire:false, strataFill:false, strataRoutes:false, natureRadius:48, natureSpacing:6, erosionZones:true, terraTreeWind:true, terraSlope:true, terraSlopeAtTarget:false, nereidFlow:true, nereidAllWater:false, natureWind:false, natureFire:false, worldAxes:false, objectBounds:false, selectionBox:true, surface: false };
 const TOOLS: Array<{ id: SceneTool; key: string; label: string; icon: typeof Hand }> = [
   { id: 'view', key: 'Q', label: 'Hand — drag to pan', icon: Hand },
   { id: 'move', key: 'W', label: 'Move', icon: Move3d },
@@ -18,6 +18,8 @@ const TOOLS: Array<{ id: SceneTool; key: string; label: string; icon: typeof Han
   { id: 'scale', key: 'R', label: 'Scale', icon: Expand },
 ];
 export const SCENE_TOOL_KEYS: Record<string, SceneTool> = { q: 'view', w: 'move', e: 'rotate', r: 'scale' };
+const MODEL_VIEWS = ['Shaded','Draw calls','Normals','UV','Depth','Albedo','Roughness','Metallic','Emissive','World position'];
+const isModelView = (value:unknown):value is number => typeof value==='number' && Number.isInteger(value) && value>=0 && value<MODEL_VIEWS.length;
 const MOVE_STEPS = [0.25, 0.5, 1, 2, 5];
 const ROTATE_STEPS = [5, 15, 45, 90];
 
@@ -26,7 +28,7 @@ export function readSceneTools(): SceneToolState {
     const v = JSON.parse(window.localStorage.getItem(KEY) ?? '{}') as Partial<SceneToolState>;
     const tool = TOOLS.some(t => t.id === v.tool) ? v.tool as SceneTool : DEFAULTS.tool;
     const num = (x: unknown, d: number) => typeof x === 'number' && Number.isFinite(x) && x > 0 ? x : d;
-    return { tool, local: v.local === true, snap: v.snap === true, gizmos: v.gizmos !== false, strataColor:[0,1,2,3].includes(v.strataColor??-1)?v.strataColor!:0, strataBounds:v.strataBounds===true, strataWire:v.strataWire===true, strataFill:v.strataFill===true, strataRoutes:v.strataRoutes===true, natureRadius:Math.min(200,Math.max(8,num(v.natureRadius,48))), natureSpacing:Math.min(32,Math.max(2,num(v.natureSpacing,6))), erosionZones:v.erosionZones!==false, terraTreeWind:v.terraTreeWind!==false, terraSlope:v.terraSlope!==false, terraSlopeAtTarget:v.terraSlopeAtTarget===true, nereidFlow:v.nereidFlow!==false, nereidAllWater:v.nereidAllWater===true, natureWind:v.natureWind===true, natureFire:v.natureFire===true, worldAxes:v.worldAxes===true, objectBounds:v.objectBounds===true, selectionBox:v.selectionBox!==false, surface: v.surface === true,
+    return { tool, local: v.local === true, snap: v.snap === true, gizmos: v.gizmos !== false, modelDebugMode:isModelView(v.modelDebugMode)?v.modelDebugMode:0, strataColor:[0,1,2,3].includes(v.strataColor??-1)?v.strataColor!:0, strataBounds:v.strataBounds===true, strataWire:v.strataWire===true, strataFill:v.strataFill===true, strataRoutes:v.strataRoutes===true, natureRadius:Math.min(200,Math.max(8,num(v.natureRadius,48))), natureSpacing:Math.min(32,Math.max(2,num(v.natureSpacing,6))), erosionZones:v.erosionZones!==false, terraTreeWind:v.terraTreeWind!==false, terraSlope:v.terraSlope!==false, terraSlopeAtTarget:v.terraSlopeAtTarget===true, nereidFlow:v.nereidFlow!==false, nereidAllWater:v.nereidAllWater===true, natureWind:v.natureWind===true, natureFire:v.natureFire===true, worldAxes:v.worldAxes===true, objectBounds:v.objectBounds===true, selectionBox:v.selectionBox!==false, surface: v.surface === true,
       snapMove: num(v.snapMove, 1), snapRotate: num(v.snapRotate, 15), snapScale: num(v.snapScale, 0.1) };
   } catch { return DEFAULTS; }
 }
@@ -116,6 +118,8 @@ export default function SceneToolbar({ enabled, projectPath = '', documentScope 
           const value=(payload as Record<string,unknown>)[key];
           if(typeof value==='boolean')patch[key]=value;
         }
+        const mode=(payload as Record<string,unknown>).modelDebugMode;
+        if(isModelView(mode))patch.modelDebugMode=mode;
         const color=(payload as Record<string,unknown>).strataColor;
         if(typeof color==='number' && [0,1,2,3].includes(color))patch.strataColor=color;
         for(const key of ['natureRadius','natureSpacing'] as const){
@@ -171,6 +175,10 @@ export default function SceneToolbar({ enabled, projectPath = '', documentScope 
       <button type="button" className="scene-toolbar__toggle" aria-label="Scene overlays" title="Scene overlays"
         disabled={!enabled} aria-expanded={layersOpen} onClick={()=>{setMarksOpen(false);setLayersOpen(v=>!v);}}><Layers size={13}/> Debug</button>
       {layersOpen&&<div className="scene-toolbar__marks-menu scene-toolbar__layers" data-native-overlay role="group" aria-label="Scene overlays">
+       <fieldset><legend>Models</legend><label>Render view
+         <StudioSelect value={state.modelDebugMode} onChange={e=>set({modelDebugMode:Number(e.target.value)})}>
+           {MODEL_VIEWS.map((name,value)=><option key={name} value={value}>{name}</option>)}
+         </StudioSelect></label></fieldset>
        {([
          ['Scene',[['worldAxes','World axes'],['objectBounds','Object bounds'],['selectionBox','Selection box']]],
          ['STRATA',[['strataBounds','Cluster bounds'],['strataWire','Cluster wireframe'],['strataFill','Cluster fill'],['strataRoutes','Instance routes']]],
