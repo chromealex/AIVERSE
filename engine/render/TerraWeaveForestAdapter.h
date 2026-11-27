@@ -98,6 +98,12 @@ public:
     // Far impostor atlas: rasterized from the near tree mesh and textures
     // (default) or the legacy skeleton disk/line silhouette. Before addPrototype.
     void setImpostorFromNearModel(bool on) {impostorFromNearModel_=on;}
+    // Applies to subsequently added prototypes. Experimental, until profiled on target GPUs.
+    void setImpostorContourBands(int bands) {
+        if (bands != 0 && bands != 3 && bands != 8)
+            throw std::invalid_argument("expected 0, 3 or 8 tree impostor bands");
+        impostorContourBands_ = bands;
+    }
     bool impostorFromNearModel() const {return impostorFromNearModel_;}
 
     void addPrototype(const TreeProfile& profile, uint64_t meshSeed,
@@ -151,6 +157,7 @@ public:
         auto impostor = makeArborImpostorAtlas(profile, meshSeed, impostorSettings);
         if(impostorFromNearModel_)
             bakeArborImpostorFromModel(impostor,*model,impostorSettings);
+        if (impostorContourBands_) trimArborImpostorCards(impostor, impostorContourBands_);
         models_.emplace(profile.speciesId, std::move(model));
         billboardMaterials_.emplace(profile.speciesId, std::move(impostor.viewMaterials));
         billboards_.emplace(profile.speciesId, std::move(impostor.model));
@@ -681,6 +688,7 @@ private:
     std::map<uint32_t,uint64_t> prototypeSeeds_;
     PrototypeDecorator decorator_;
     bool impostorFromNearModel_=true;
+    int impostorContourBands_ = 0;
     ArborTreeGeometry treeGeometry_=ArborTreeGeometry::Auto;
     TreeLodSettings treeLod_;
     bool hierarchicalWind_=false;

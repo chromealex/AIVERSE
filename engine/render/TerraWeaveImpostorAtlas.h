@@ -13,6 +13,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <array>
 #include <utility>
 #include <vector>
 
@@ -385,6 +386,82 @@ inline void bakeArborImpostorFromModel(ArborImpostorAtlas& out,
     for (auto& variant : out.viewMaterials)
         for (auto& m : variant) { m.baseColor = {1, 1, 1, 1}; m.alphaCutoff = 0.5f; }
     for (auto& m : out.model->materials) { m.baseColor = {1, 1, 1, 1}; m.alphaCutoff = 0.5f; }
+}
+
+// Build once, after the final atlas bake and before upload. A shared envelope
+// over all azimuths keeps the same model and two material slots for instancing.
+inline void trimArborImpostorCards(ArborImpostorAtlas& atlas, int bands) {
+    if (!atlas.model || !atlas.views || (bands != 3 && bands != 8))
+        throw std::invalid_argument("expected a three- or eight-band tree atlas");
+    auto& model = *atlas.model;
+    const auto& image = model.images.at(0);
+    const int width = image.width / int(2 * atlas.views);
+    const int height = image.height;
+    constexpr int padding = 2;
+    if (model.vertices.size() != 8 || model.indices.size() != 12 ||
+        image.rgba.size() != size_t(image.width) * height * 4)
+        throw std::logic_error("expected baked CPU impostor cards");
+
+    const auto corners = model.vertices;
+    model.vertices.clear();
+    model.indices.clear();
+    for (int layer = 0; layer < 2; ++layer) {
+        struct Span { int left, right; };
+        std::array<Span, 8> spans{};
+        float covered = 0;
+        for (int band = 0; band < bands; ++band) {
+            auto& span = spans[band];
+            span = {width, -1};
+            const int top = band * (height - 1) / bands;
+            const int bottom = (band + 1) * (height - 1) / bands;
+            for (int y = std::max(0, top - padding); y <= std::min(height-1, bottom + padding); ++y)
+                for (uint32_t view = 0; view < atlas.views; ++view) {
+                    const size_t start = size_t(y) * image.width + (layer * atlas.views + view) * width;
+                    for (int x = 0; x < width; ++x) {
+                        if (!image.rgba[4 * (start + x) + 3]) continue;
+                        span.left = std::min(span.left, x);
+                        span.right = std::max(span.right, x);
+                    }
+                }
+            if (span.right < 0) continue;
+            span.left = std::max(0, span.left - padding);
+            span.right = std::min(width - 1, span.right + padding);
+            covered += float(span.right - span.left) * (bottom - top);
+        }
+
+        auto& prim = model.meshes[0].primitives[layer];
+        prim.firstVertex = uint32_t(model.vertices.size());
+        prim.firstIndex = uint32_t(model.indices.size());
+        const auto& base = corners[4 * layer];
+        const auto rectangle = [&](float left, float right, float top, float bottom) {
+            const uint32_t first = uint32_t(model.vertices.size());
+            for (auto uv : {render::float2{left,bottom}, {right,bottom}, {right,top}, {left,top}}) {
+                auto vertex = base;
+                vertex.uv = uv;
+                vertex.pos.x += uv.x * (corners[4 * layer + 1].pos.x - base.pos.x);
+                vertex.pos.y += (1 - uv.y) * (corners[4 * layer + 3].pos.y - base.pos.y);
+                if (layer == 1)
+                    vertex.color = 0x00ffffffu | (uint32_t(std::lround(255 * (1 - uv.y))) << 24);
+                model.vertices.push_back(vertex);
+            }
+            for (uint32_t offset : {0u,1u,2u,0u,2u,3u}) model.indices.push_back(first + offset);
+        };
+        // Dense cards have little to gain; keep empty layers valid as well.
+        if (covered == 0 || covered >= 0.8f * (width - 1) * (height - 1)) {
+            rectangle(0, 1, 0, 1);
+        } else {
+            for (int band = 0; band < bands; ++band) {
+                const auto& span = spans[band];
+                if (span.right < 0) continue;
+                rectangle(float(span.left)/(width-1), float(span.right)/(width-1),
+                          float(band * (height-1) / bands)/(height-1),
+                          float((band+1) * (height-1) / bands)/(height-1));
+            }
+        }
+        prim.vertexCount = uint32_t(model.vertices.size()) - prim.firstVertex;
+        prim.indexCount = uint32_t(model.indices.size()) - prim.firstIndex;
+    }
+    model.finalize();
 }
 
 // Nearest captured azimuth relative to the *tree's local yaw*.
