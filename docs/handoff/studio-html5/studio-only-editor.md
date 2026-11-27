@@ -1696,3 +1696,7 @@ d00ff868f128e489bbba0ab10d9e8b11fb28097c adds docs/handoff/studio-html5/captures
 ### Texture inventory summary and sampling context
 
 1cee385f493a7641f5920eb4a2969c0dee058a65 updates apps/studio-web/src/panels/InsightPanels.tsx and docs/studio-html5-parity.md. Restored render-target and multisample counts over the full inventory independently of the filtered table. Readback now reports the diagnostic sample resolution limit and HDR tone mapping. Web production build and git diff --check passed. No new runtime capture in this stage. Direct continuous 2D preview and automatic inventory refresh still require migration.
+
+### Automatic texture inventory refresh
+
+63d0a8435f0f95af446938812dfe78e002db09d1 updates apps/studio-web/src/panels/InsightPanels.tsx and adds docs/handoff/studio-html5/captures/mac-texture-auto-refresh.png. Refreshes every two seconds while the document is visible and on return, with one pending request per mounted project. Detached WKWebView test replaced a selected cube with a multisampled target in a synthetic inventory; without Refresh, the obsolete row and inspector disappeared and the new row and totals appeared. stats-mac-utye4a07/live.log recorded success. Production build and npm run test:web passed. Next port continuous 2D preview.
