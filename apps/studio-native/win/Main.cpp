@@ -7,6 +7,7 @@
 #include "apps/studio-native/StudioNetworkPlay.h"
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/editor/core/BuildTool.h"
+#include "apps/editor/core/ProjectFile.h"
 #include "engine/platform/EngineDir.h"
 #include "engine/gfx/vulkan/Vulkan.h"
 #ifndef NOMINMAX
@@ -1436,9 +1437,18 @@ int aiverseMain(int argc, char** argv) {
             if (!listenPort) { LocalFree(wargv); return 2; }
         }
         else if (arg == L"--project" && i + 1 < wargc) project = narrow(wargv[++i]);
+        else if (project.empty() && aiverse::editor::isProjectFilePath(narrow(wargv[i]))) {
+            std::string error;
+            project = aiverse::editor::resolveProjectDir(narrow(wargv[i]), &error);
+            if (project.empty()) {
+                LocalFree(wargv);
+                MessageBoxW(nullptr, widen(error).c_str(), L"AIVERSE Studio", MB_OK | MB_ICONERROR);
+                return 2;
+            }
+        }
         else {
             LocalFree(wargv);
-            MessageBoxW(nullptr, L"Usage: AiverseStudio.exe [--dev] [--listen PORT] [--project <folder>]", L"AIVERSE Studio", MB_OK);
+            MessageBoxW(nullptr, L"Usage: AiverseStudio.exe [--dev] [--listen PORT] [--project <folder> | <project file>]", L"AIVERSE Studio", MB_OK);
             return 2;
         }
     }

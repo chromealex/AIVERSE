@@ -1,6 +1,7 @@
 #include "StudioWebAssets.h"
 #include "engine/platform/EngineDir.h"
 #include "apps/editor/core/BuildTool.h"
+#include "apps/editor/core/ProjectFile.h"
 #include "apps/editor/core/Net.h"
 #include "StudioWebBridge.h"
 #include "StudioScenePointer.h"
@@ -205,7 +206,7 @@ int aiverseMain(int argc,char** argv) {
     using namespace aiverse::studio;
     gdk_set_allowed_backends("x11");
     if (!gtk_init_check(&argc,&argv)) { std::cerr << "Studio requires an X11 display\n"; return 1; }
-    std::string project=loadStudioLastProject(), root=aiverse::platform::resolveEngineDir(AIVERSE_STUDIO_SOURCE_DIR,argv[0]);
+    std::string project, root=aiverse::platform::resolveEngineDir(AIVERSE_STUDIO_SOURCE_DIR,argv[0]);
     int listenPort=0;
     for (int i=1;i<argc;++i) {
         const std::string option=argv[i];
@@ -215,8 +216,14 @@ int aiverseMain(int argc,char** argv) {
             if (!listenPort) { std::cerr << "Invalid Studio listener port\n"; return 2; }
         }
         else if (i+1<argc && option=="--engine") root=argv[++i];
+        else if (project.empty() && aiverse::editor::isProjectFilePath(option)) {
+            std::string error;
+            project=aiverse::editor::resolveProjectDir(option,&error);
+            if (project.empty()) { std::cerr << error << '\n'; return 2; }
+        }
         else { std::cerr << "Unexpected Studio argument: " << option << '\n'; return 2; }
     }
+    if (project.empty()) project=loadStudioLastProject();
     auto* window=GTK_WINDOW(gtk_window_new(GTK_WINDOW_TOPLEVEL));
     gtk_window_set_title(window,"AIVERSE Studio");
     gtk_window_set_default_size(window,1280,800);
