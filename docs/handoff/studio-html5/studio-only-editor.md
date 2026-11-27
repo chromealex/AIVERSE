@@ -1828,3 +1828,7 @@ c583dd34bf384bba401a3e35b4392ac9d0e135b6 adds apps/studio-web/src/panels/InputTr
 ### HTML Input FPS and RTS reference presets
 
 2a6c1c0a0e02b3088a7a51f03983cbf57cce0fd4 exposes the existing engine presets via StudioSession.cpp and types.ts to ProjectToolPanels.tsx. The production web build and incremental native aiverse_studio target passed. Detached rebuilt Mac Input showed FPS LookStick without writing a file, replaced it with RTS AttackMove, saved RTS, and reverted another unsaved FPS change to the saved RTS actions. Parsed input/actions.json to verify the AttackMove mapping. Evidence: stats-mac-l08ellb5/live.log and docs/handoff/studio-html5/captures/mac-input-defaults.png. Next migrate keyboard capture and binding conflict policies.
+
+### HTML Input keyboard capture and conflict policies
+
+de4004e7ad79045d2ef1984cfb388ee964359c00 adds InputKeyCapture.tsx and updates ProjectToolPanels.tsx. Production web build passed. Detached Mac WKWebView synthetic keyboard events verified Escape cancel, rejection, swapping and allowing duplicate keys in one context. Save persisted the duplicate to the temporary project's input/actions.json, independently parsed after exit. Evidence in stats-mac-ke1djl13/live.log and docs/handoff/studio-html5/captures/mac-input-key-capture.png. Hardware input and cross-context conflict diagnostics still require acceptance.
