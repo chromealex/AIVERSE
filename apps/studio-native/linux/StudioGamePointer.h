@@ -1,5 +1,6 @@
 #pragma once
-#include "engine/platform/Platform.h"
+#include "engine/platform/linux/LinuxKey.h"
+#include <set>
 #include <gtk/gtk.h>
 #include <functional>
 #include <utility>
@@ -10,7 +11,7 @@ public:
     StudioGamePointer(GtkWidget* area, std::function<void(const platform::Event&)> send)
         : area_(area), send_(std::move(send)) {
         gtk_widget_add_events(area_, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | GDK_POINTER_MOTION_MASK |
-            GDK_FOCUS_CHANGE_MASK | GDK_LEAVE_NOTIFY_MASK | GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK);
+            GDK_KEY_PRESS_MASK | GDK_KEY_RELEASE_MASK | GDK_FOCUS_CHANGE_MASK | GDK_LEAVE_NOTIFY_MASK | GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK);
         connection_ = g_signal_connect(area_, "event", G_CALLBACK(+[](GtkWidget*, GdkEvent* event, gpointer data)->gboolean {
             return static_cast<StudioGamePointer*>(data)->handle(event);
         }), this);
@@ -29,6 +30,26 @@ private:
         if (state & GDK_MOD1_MASK) event.mods |= kModAlt;
         if (state & GDK_SUPER_MASK) event.mods |= kModSuper;
         switch (input->type) {
+        case GDK_KEY_PRESS:
+        case GDK_KEY_RELEASE: {
+            const bool down = input->type == GDK_KEY_PRESS;
+            if (input->key.keyval == GDK_KEY_F4 && (event.mods & kModAlt)) return false;
+            const guint code = input->key.hardware_keycode;
+            GdkKeymapKey base{code, 0, 0};
+            const auto symbol = gdk_keymap_lookup_key(gdk_keymap_get_for_display(gtk_widget_get_display(area_)), &base);
+            event.key = linuxKeyFromKeysym(symbol ? symbol : input->key.keyval);
+            event.type = down ? EventType::KeyDown : EventType::KeyUp;
+            if (down) event.repeat = !pressed_.insert(code).second;
+            else pressed_.erase(code);
+            send_(event);
+            const auto character = gdk_keyval_to_unicode(input->key.keyval);
+            if (down && g_unichar_isprint(character) && !(event.mods & (kModCtrl | kModSuper))) {
+                event.type = EventType::Char;
+                event.codepoint = character;
+                send_(event);
+            }
+            return true;
+        }
         case GDK_BUTTON_PRESS:
         case GDK_BUTTON_RELEASE:
             if (input->button.button < 1 || input->button.button > 3) return false;
@@ -48,6 +69,7 @@ private:
             }
             break;
         case GDK_FOCUS_CHANGE:
+            pressed_.clear();
             positioned_ = false;
             event.type = input->focus_change.in ? EventType::FocusGained : EventType::FocusLost;
             send_(event);
@@ -66,6 +88,7 @@ private:
     GtkWidget* area_;
     std::function<void(const platform::Event&)> send_;
     gulong connection_;
+    std::set<guint> pressed_;
     bool positioned_ = false;
     double lastX_ = 0, lastY_ = 0;
 };
