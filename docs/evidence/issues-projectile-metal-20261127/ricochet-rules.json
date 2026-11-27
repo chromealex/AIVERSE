@@ -1,0 +1,84 @@
+{
+  "ai": {
+    "controller": "scripted"
+  },
+  "victory": "keyUnits",
+  "fogOfWar": {
+    "mode": "none"
+  },
+  "types": {
+    "launcher": {
+      "name": "Launcher",
+      "key": true,
+      "stance": "hold",
+      "move": {
+        "speed": 1
+      },
+      "health": {
+        "max": 10000
+      },
+      "sight": 15,
+      "weapons": [
+        {
+          "id": "bolt",
+          "range": 12,
+          "damage": 1,
+          "cooldown": 10,
+          "projectileSpeed": 4,
+          "flight": {
+            "homing": false,
+            "blockTerrain": false,
+            "maxDistance": 30,
+            "lifetime": 10,
+            "modifiers": [
+              {
+                "kind": "ricochet",
+                "count": 2,
+                "radius": 12
+              }
+            ]
+          }
+        }
+      ],
+      "view": {
+        "model": "models/launcher.obj",
+        "height": 3,
+        "projectileScale": 1.4,
+        "muzzle": {
+          "node": "Barrel",
+          "offset": [
+            1.1,
+            2.78,
+            0
+          ]
+        }
+      }
+    },
+    "low": {
+      "name": "Low target",
+      "key": true,
+      "stance": "passive",
+      "health": {
+        "max": 10000
+      },
+      "view": {
+        "model": "models/target.obj",
+        "height": 1,
+        "impactHeight": 0.5
+      }
+    },
+    "high": {
+      "name": "High target",
+      "key": true,
+      "stance": "passive",
+      "health": {
+        "max": 10000
+      },
+      "view": {
+        "model": "models/tall-target.obj",
+        "height": 4,
+        "impactHeight": 3.5
+      }
+    }
+  }
+}
