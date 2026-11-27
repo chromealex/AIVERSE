@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pause, Play, SkipBack } from 'lucide-react';
 import { invoke } from '../bridge';
 import type { StudioSnapshot } from '../types';
@@ -24,7 +24,7 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
   const [pose, setPose] = useState<SampledNode[]>([]);
   const [view, setView] = useState<'front' | 'side'>('front');
   const [error, setError] = useState('');
-  const inFlight = useRef(false);
+  const requestPose = useRef<((time: number) => void) | null>(null);
   useEffect(() => {
     if (!path) return;
     void op('modeling_list').then(r => { const m: string[] = r.models ?? []; setModels(m); setModel(x => x || m[0] || ''); }).catch(e => setError(message(e)));
@@ -46,14 +46,30 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
   },[route.request,path]);
   const current = doc?.clips?.find(c => c.id === clip);
   const duration = current ? clipDuration(current) : 0;
-  const sample = useCallback(async (t: number) => {
-    if (!model || inFlight.current) return;
-    inFlight.current = true;
-    try { setPose((await op('animation_sample', { name: model, clip, time: t })).nodes ?? []); setError(''); }
-    catch (e) { setError(message(e)); setPlaying(false); }
-    finally { inFlight.current = false; }
+  useEffect(() => {
+    setPose([]);
+    if (!model || !clip) return;
+    let active = true, sampling = false;
+    let pending: number | undefined;
+    requestPose.current = async target => {
+      pending = target;
+      if (sampling) return;
+      sampling = true;
+      while (active && pending !== undefined) {
+        const sampleTime = pending;
+        pending = undefined;
+        try {
+          const result = await op('animation_sample', { name: model, clip, time: sampleTime });
+          if (active) { setPose(result.nodes ?? []); setError(''); }
+        } catch (e) {
+          if (active) { setError(message(e)); setPlaying(false); }
+        }
+      }
+      sampling = false;
+    };
+    return () => { active = false; requestPose.current = null; };
   }, [model, clip]);
-  useEffect(() => { void sample(time); }, [time, sample]);
+  useEffect(() => { requestPose.current?.(time); }, [model, clip, time]);
   useEffect(() => {
     if (!playing || duration <= 0) return;
     let last = performance.now(), raf = 0;
