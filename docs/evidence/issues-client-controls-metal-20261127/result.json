@@ -1,6 +1,6 @@
 {
-  "source": "a23e90b4e",
-  "tested_tree": "ce7a7a1e3",
+  "source": "f5c921ddd",
+  "tested_tree": "bee186c86",
   "backend": "Metal",
   "platform": "macOS 15.6 x86_64/Rosetta",
   "result": "pass",
@@ -10,7 +10,10 @@
     "mouse target starts mobile movement",
     "F7 public view.select selects tower",
     "armed tower Attack/Stop without Move",
-    "pause Quit dispatches hosted platform termination"
+    "pause Quit dispatches hosted platform termination",
+    "F6 suppressed during text input and restored after blur",
+    "Stop then touch Move button and world tap starts movement",
+    "Passive aura disabled button exposes full description on hover"
   ],
   "captures": [
     {
@@ -20,8 +23,8 @@
     },
     {
       "file": "pause.png",
-      "scanline_sha256": "500b4df211c9836d8984c7977a2db5c6f7a3cbed5fbaa28fc089de1d3f552d98",
-      "bytes": 619876
+      "scanline_sha256": "ec1cbbc2a0960d3e28b4002f27e6012045b49098a14483b4dc89adbc208d3511",
+      "bytes": 640648
     },
     {
       "file": "scout.png",
@@ -29,10 +32,16 @@
       "bytes": 1034752
     },
     {
+      "file": "touch.png",
+      "scanline_sha256": "bd5d2ecc6e3c3919a721e5a8552e9ccb04dce72c7a3560ad886931708837ad3d",
+      "bytes": 1034243
+    },
+    {
       "file": "tower.png",
-      "scanline_sha256": "144590b2ba86ce71b1478c70d1f8b4b9c0882679bad66963cd143df174902fc7",
-      "bytes": 1010021
+      "scanline_sha256": "f50ecadddfd11d3932f0dafff4701115fe76be9efcbc788a2f353b20bf6d4c3e",
+      "bytes": 1011776
     }
   ],
-  "note": "PNG IDAT recompressed losslessly; decoded scanlines unchanged. Repeat focus visible in scout/move captures; no numeric focus assertion. Touch, text-focus suppression, passive aura, portrait and minimap-specific scenarios not covered by this fixture."
+  "note": "PNG IDAT recompressed losslessly. New touch/aura captures reviewed. Repeat focus visible in scout/move captures; no numeric focus assertion. Portrait/minimap-specific scenarios and final integrated gate remain pending.",
+  "binary_source": "530764e8e"
 }

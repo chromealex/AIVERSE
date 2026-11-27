@@ -302,3 +302,13 @@ actions. Fixture now hovers aura and captures visible tooltip. Corrected capture
 NOT RUN yet; next targeted rebuild and real client run. No issue closure.
 
 Tooltip run at 530764e8e passed behavior assertions, but tower capture failed visual acceptance: above-button popup clipped by card scrolling bounds. Correction f5c921ddda913589c03da4795b2d7eba0e891d96 expands description within the button and scrollable panel on hover/focus, leaves slot positions fixed. CSS-only; reuse fixture binary, no rebuild required. Next rerun and inspect tower capture.
+
+Corrected CSS source f5c921ddd / tested tree bee186c86, binary source 530764e8e:
+direct real client run passed (handle 95218 exit 0), 0 pipeline failures.
+Log client-tooltip2-run.log. Inspected final tower capture: complete aura
+text wraps inside expanded button and stays within card bounds. Previous touch
+capture was also inspected. Updated tracked evidence with five losslessly
+compressed captures and exact source/binary provenance. Text suppression,
+mouse/touch orders and passive aura behavior now verified. No processes live.
+Next: portrait and minimap visual acceptance, projectile visual acceptance,
+Windows #206, manifests/publishing and final integrated gate before squash/push.
