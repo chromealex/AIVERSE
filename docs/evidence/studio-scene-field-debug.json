@@ -1,0 +1,10 @@
+{
+  "sha": "445bd5e10dc1521d21b75bdad25789cbd9e3c43c",
+  "argv": [
+    "bash",
+    "../field-debug.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-scene-field-debug.log.txt",
+  "sha256": "63e522135fbd3a13d926dd9ac0f6073a421eec994c0b94fef2360292603ea720"
+}
