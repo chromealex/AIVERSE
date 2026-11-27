@@ -54,9 +54,12 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Built standalone MCP tools/list and mcp_registry audited. Isolated fixture actually saved selectionShortcut.hotkey, ui.portrait.background and minimap.bounds through game_info/set_manifest; read/reopen, exact-byte Project Undo/Redo, stale original, malformed/root and external-file conflicts verified. Raw 64-bit integer preserved. Native Studio path is separately evidenced.",
+      "evidence": [
+        "docs/evidence/issues-authoring-mcp-registry-20261127.json",
+        "docs/evidence/issues-project-settings-mcp-20261127/result.json"
+      ]
     },
     "studio": {
       "status": "pass",
