@@ -245,8 +245,8 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
   {creating&&<form className="graph-asset-form" onSubmit={e=>{e.preventDefault();void createGraph();}}>
    <label>Asset name<input required value={newName} pattern="[A-Za-z0-9_\-]{1,64}" maxLength={64}
     onChange={event=>setNewName(event.target.value)}/></label>
-   <label>Domain<select value={newDomain} onChange={e=>setNewDomain(e.target.value)}>
-    {['material','postfx','particle'].map(d=><option key={d}>{d}</option>)}</select></label>
+   <label>Domain<StudioSelect value={newDomain} onChange={e=>setNewDomain(e.target.value)}>
+    {['material','postfx','particle'].map(d=><option key={d}>{d}</option>)}</StudioSelect></label>
    <button disabled={busy||dirty||!newName}>Create graph</button>
   </form>}
   {(error||gpuError)&&<p className="graph-error" role="alert">{error||gpuError}</p>}
@@ -278,10 +278,10 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
        <button className="graph-tools-toggle" aria-expanded={toolsExpanded} onClick={()=>setToolsExpanded(!toolsExpanded)}>Editing tools</button>
        <div className="graph-edit-tools" data-expanded={toolsExpanded}>
        <StudioInput aria-label="Search node catalog" placeholder="Find node…" value={nodeQuery} onChange={e=>setNodeQuery(e.target.value)}/>
-       <select className="graph-add-select" aria-label="Graph node operation"
+       <StudioSelect className="graph-add-select" aria-label="Graph node operation"
          value={chosenOp?.id??''} onChange={event=>setSelectedOp(event.target.value)}>
          {compatibleOps.map(op=><option key={op.id} value={op.id}>{op.id}</option>)}
-       </select>
+       </StudioSelect>
        <button disabled={!draft||busy||!chosenOp} onClick={createNode}>+ Node</button>
        <StudioButton size="sm" disabled={!activeNode||busy} onClick={duplicate}>Duplicate</StudioButton>
        <StudioButton size="sm" disabled={!selectedIds.length||busy} onClick={copyNodes}>Copy</StudioButton>
@@ -347,24 +347,24 @@ export default function ShaderGraphPanel({projectPath,documentEpoch,mapPath}:{pr
       </StudioSection>}
       {draft&&<div className="graph-bindings">
        <details><summary>Graph settings</summary><fieldset>
-        <label>Domain<select value={draft.domain} onChange={event=>{
+        <label>Domain<StudioSelect value={draft.domain} onChange={event=>{
           editDraft(setShaderDomain(draft,event.target.value));setMessage('Domain changed. Validate node compatibility before saving.');setError('');
-        }}>{['material','particle','postfx'].map(d=><option key={d}>{d}</option>)}</select></label>
-        {draft.domain==='material'&&<label>Minimum quality<select value={draft.minQuality??'low'}
+        }}>{['material','particle','postfx'].map(d=><option key={d}>{d}</option>)}</StudioSelect></label>
+        {draft.domain==='material'&&<label>Minimum quality<StudioSelect value={draft.minQuality??'low'}
           onChange={e=>editDraft({...draft,minQuality:e.target.value})}>
-          {['low','medium','high'].map(q=><option key={q}>{q}</option>)}</select></label>}
+          {['low','medium','high'].map(q=><option key={q}>{q}</option>)}</StudioSelect></label>}
        </fieldset></details>
        <details><summary>Graph outputs</summary><fieldset>
         {[...new Set([...shaderOutputNames(draft.domain),...Object.keys(draft.outputs??{})])].map(channel=><label key={channel}>{channel}
-         <select value={draft.outputs?.[channel]??''} onChange={event=>{
+         <StudioSelect value={draft.outputs?.[channel]??''} onChange={event=>{
           editDraft(setShaderOutput(draft,channel,event.target.value));setMessage('');setError('');
-         }}><option value="" disabled={channel==='color'}>Unassigned</option>{sourceOptions}</select>
+         }}><option value="" disabled={channel==='color'}>Unassigned</option>{sourceOptions}</StudioSelect>
         </label>)}
        </fieldset></details>
        <details><summary>Apply to target</summary><form className="graph-asset-form"
          onSubmit={event=>{event.preventDefault();void save(true);}}>
-        {draft.domain==='postfx'?<label>Post effects<select value={scope} onChange={e=>setScope(e.target.value)}>
-         <option value="game">Game</option><option value="map">{mapName}</option></select></label>
+        {draft.domain==='postfx'?<label>Post effects<StudioSelect value={scope} onChange={e=>setScope(e.target.value)}>
+         <option value="game">Game</option><option value="map">{mapName}</option></StudioSelect></label>
         :<label>{draft.domain==='particle'?'Particle effect':'Material'}<input required value={target} onChange={e=>setTarget(e.target.value)}/></label>}
         {draft.domain==='particle'&&<label>Emitter index<input type="number" min="0" step="1" required
          value={Number.isFinite(emitter)?emitter:''} onChange={e=>setEmitter(e.target.valueAsNumber)}/></label>}
