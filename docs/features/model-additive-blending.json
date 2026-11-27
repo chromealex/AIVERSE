@@ -71,13 +71,17 @@
     },
     "studio": {
       "status": "not_run",
-      "note": "Prepared UI options passed isolated frontend tests/build; actual source integration and native Studio acceptance pending.",
-      "evidence": []
+      "note": "Native Studio built and real Materials UI saved/reloaded both additive modes; screenshots and disk inspection retained. Direct library edits retain existing explicit MapDoc-undo limitation.",
+      "evidence": [
+        "docs/evidence/issues-studio-materials-20261127/result.json"
+      ]
     },
     "inspector": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Existing Materials property selector offers both additive modes and preserves selected values after save/reload in native Studio.",
+      "evidence": [
+        "docs/evidence/issues-studio-materials-20261127/result.json"
+      ]
     },
     "persistence": {
       "status": "not_run",
@@ -141,8 +145,13 @@
       "material_set",
       "material_get"
     ],
-    "studio_panels": [],
-    "studio_methods": []
+    "studio_panels": [
+      "materials"
+    ],
+    "studio_methods": [
+      "studio.materials",
+      "studio.materialPatch"
+    ]
   },
   "test_reports": []
 }
