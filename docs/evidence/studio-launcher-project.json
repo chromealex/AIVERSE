@@ -1,0 +1,10 @@
+{
+  "sha": "83224ceed62c587bbaa013b60261d15713b6eed7",
+  "argv": [
+    "bash",
+    "../studio-launcher-check.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-launcher-project.log.txt",
+  "sha256": "02c69f6e5fabf30a6568bb318181375144d7c644b5fd18583ed0b7af354183ca"
+}
