@@ -168,3 +168,15 @@ under the common orthographic range (1200 units). Correction 5ae943c0bcd3b9141f3
 reduces the GLSL/MSL comparison tolerance to 0.000001 for numerical precision.
 This is shared display geometry behavior, no consumer exception.
 Corrected GPU result NOT RUN yet; remaining graph/fog/resize cases not reached.
+
+## Corrected additive GPU fixture passed
+
+Source 5ae943c0b, tested tree 821194ec6: focused build and
+`run-tests.sh --quick --no-build --filter ^additive_blend_frame$` both passed.
+Report `test-reports/20261127-095233-20231`; all 10 cases matched independent
+expected pixels, 0 pipeline failures. Inspected all ten captures, now retained
+in `docs/evidence/issues-additive-metal-20261127` with numeric result.json.
+Occluded display particle now gives 0.24951 vs expected 0.25. Graph, fog and
+resized output also passed. No live build/test process remains.
+Still pending: mesh/ribbon and graph-texture paths, remaining UI/capture
+acceptance for other issues, Windows #206, final full gate and integration.

@@ -47,8 +47,10 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Native build and focused persistence corrections verified. Adding real GPU pixel coverage for weighted/unweighted model blending and linear/display particle composition, depth and fog. Acceptance remains pending.",
-      "evidence": []
+      "note": "Metal pixel fixture passes all ten cases; fixed depth tolerance defect found by that fixture. Broader delivery acceptance remains pending.",
+      "evidence": [
+        "docs/evidence/issues-additive-metal-20261127/result.json"
+      ]
     },
     "architecture": {
       "status": "not_run",
