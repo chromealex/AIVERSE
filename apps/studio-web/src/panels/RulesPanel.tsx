@@ -18,6 +18,10 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged, ope
   const [busy, setBusy] = useState(false);
   const [section,setSection]=useState<'types'|'triggers'|'damageTable'|'global'|'document'>(openActorSettings ? 'document' : 'types');
   const [raw, setRaw] = useState<string | null>(null);
+ const syntaxError=useMemo(()=>{
+  if(raw===null)return '';
+  try{JSON.parse(raw);return '';}catch(e){return String(e);}
+ },[raw]);
   useEffect(() => {
     let live = true;
     setRules(null); setError(''); setRaw(null);
@@ -95,9 +99,10 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged, ope
       </>}
     </aside>
     {forestOpen ? <PlanetForestPanel key={projectPath} historyVersion={historyVersion} onChanged={onChanged}/> : <section className="rules__form" aria-label={section==='types'?'Type '+typeId:section}>
+      {syntaxError&&section!=='global'&&section!=='document'&&<div className="rules__error" role="alert">{syntaxError}</div>}
       {error && <div className="rules__error" role="alert">{error}<button type="button" aria-label="Dismiss" onClick={() => setError('')}>×</button></div>}
       {!rules ? <p className="rules__empty">Loading rules…</p> : section==='global'||section==='document' ? <RulesDocumentEditor key={projectPath+section}
-        section={section} projectPath={projectPath} raw={raw} setRaw={setRaw} onChanged={async()=>{
+        section={section} projectPath={projectPath} syntaxError={syntaxError} raw={raw} setRaw={setRaw} onChanged={async()=>{
           setRules(await invoke('studio.rules',{})); onChanged();
         }}/> : section!=='types' ? <>
         <h3>{section==='triggers'?'Triggers':'Damage matrix'}</h3>
@@ -108,10 +113,10 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged, ope
           </tr>)}</tbody>
         </table></div>}
         <div className="rules__rawbox">
-          <textarea disabled={busy} aria-label={section==='triggers'?'Trigger definitions':'Damage multipliers'} spellCheck={false}
+          <textarea disabled={busy} aria-invalid={!!syntaxError} aria-label={section==='triggers'?'Trigger definitions':'Damage multipliers'} spellCheck={false}
             value={raw??JSON.stringify(rules[section]??(section==='triggers'?[]:{}),null,2)}
-            onChange={event=>setRaw(event.target.value)}/>
-          <button disabled={busy||raw===null} onClick={()=>{
+            onChange={event=>{setError('');setRaw(event.target.value);}}/>
+          <button disabled={busy||raw===null||!!syntaxError} onClick={()=>{
             try{const value=JSON.parse(raw!);void write(section,value).then(saved=>{if(saved)setRaw(null);});}
             catch(e){setError(String(e));}
           }}>Validate &amp; save</button>
@@ -127,8 +132,8 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged, ope
         </div>
         <p className="rules__note">Changes are validated by the game loader and saved to rules.json at once. Blank = inherit / default.</p>
         {raw !== null ? <div className="rules__rawbox">
-          <textarea value={raw} onChange={e => setRaw(e.target.value)} spellCheck={false} aria-label={'JSON of ' + typeId}/>
-          <button type="button" disabled={busy} onClick={() => { try { void write('types.' + typeId, JSON.parse(raw)); } catch (e) { setError('JSON: ' + (e instanceof Error ? e.message : String(e))); } }}>Validate &amp; save</button>
+          <textarea disabled={busy} aria-invalid={!!syntaxError} value={raw} onChange={e => {setError('');setRaw(e.target.value);}} spellCheck={false} aria-label={'JSON of ' + typeId}/>
+          <button type="button" disabled={busy||!!syntaxError} onClick={() => { try { void write('types.' + typeId, JSON.parse(raw)); } catch (e) { setError('JSON: ' + (e instanceof Error ? e.message : String(e))); } }}>Validate &amp; save</button>
         </div> : RULE_GROUPS.map(group => {
           const rows = values.filter(v => v.field.group === group);
           if (!rows.length) return null;
@@ -141,8 +146,8 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged, ope
   </div></div>;
 }
 
-function RulesDocumentEditor({section,projectPath,raw,setRaw,onChanged}:{
- section:'global'|'document';projectPath:string;raw:string|null;setRaw:(v:string|null)=>void;onChanged:()=>Promise<void>;
+function RulesDocumentEditor({section,projectPath,syntaxError,raw,setRaw,onChanged}:{
+ section:'global'|'document';projectPath:string;syntaxError:string;raw:string|null;setRaw:(v:string|null)=>void;onChanged:()=>Promise<void>;
 }){
  const [original,setOriginal]=useState<string|null>(null);
  const [busy,setBusy]=useState(false);
@@ -155,10 +160,6 @@ function RulesDocumentEditor({section,projectPath,raw,setRaw,onChanged}:{
    .catch(e=>{if(live)setError(String(e));});
   return ()=>{live=false;};
  },[section,revision]);
- const syntaxError=useMemo(()=>{
-  if(raw===null)return '';
-  try{JSON.parse(raw);return '';}catch(e){return String(e);}
- },[raw]);
  async function save(){
   if(original===null||raw===null||busy||syntaxError)return;
   setBusy(true);setError('');
