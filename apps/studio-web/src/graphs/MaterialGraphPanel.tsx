@@ -49,7 +49,7 @@ export default function MaterialGraphPanel({documentEpoch,name,material,draft,pr
  return <div className="material-graph-modes">
   <div hidden={mode!=='dependencies'} className="material-dependency-view"><StudioSection title="Material dependencies">
   <div className="material-dependency-canvas">
-   <GraphCanvas view={view} selected={selected} label="Material dependency graph" readOnly onSelect={setSelected} onMove={()=>{}}/>
+   <GraphCanvas view={view} selected={selected} label="Material dependency graph" enhancedNavigation readOnly onSelect={setSelected} onMove={()=>{}}/>
   </div>
   {fields.map(f=><PropertyField key={f.key} property={f} disabled={disabled||busy} onChange={v=>onEdit(f.key,v)}/>)}
   <small>Dependency view of the material draft; edit channels using the existing asset picker. Shader evaluation remains in Shader Graph.</small>
