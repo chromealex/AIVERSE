@@ -260,9 +260,16 @@ CMake, Node.js; runs on the WebView2 Runtime and Vulkan).
 `studio_mac.command` builds the web UI and the native Studio and opens it. The engine alone:
 `cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release && cmake --build build/mac -j 8`.
 
-Linux: `cmake --preset linux-release && cmake --build build/linux-release`. If you'd rather not compile,
-the `builds` branch has a prebuilt editor and tools
-([details](docs/overview.md#prebuilt-engine-the-builds-branch-and-aiversemcp-without-a-compiler)).
+On Linux, HTML5 Studio uses WebKitGTK 4.1 (2.40 or newer), SQLite, X11 and Vulkan. With their development packages, Node.js, CMake and Ninja installed, build the web UI before configuring Studio.
+
+```bash
+(cd apps/studio-web && npm install && npm run build)
+cmake --preset linux-release -DAIVERSE_BUILD_STUDIO_HTML5=ON -DAIVERSE_BUILD_EDITOR=OFF
+cmake --build --preset linux-release --target aiverse_studio
+./build/linux-release/apps/studio-native/AiverseStudio
+```
+
+For an engine-only Linux build, use `cmake --preset linux-release -DAIVERSE_BUILD_STUDIO_HTML5=OFF -DAIVERSE_BUILD_EDITOR=OFF` and `cmake --build --preset linux-release`. The `builds` branch also provides prebuilt tools. [Prebuilt engine and tools](docs/overview.md#prebuilt-engine-the-builds-branch-and-aiversemcp-without-a-compiler)
 
 **2. Make a game.** In the hub, click **Make a game** or create a project from a template. You can
 play it with bots right away in the Game window.

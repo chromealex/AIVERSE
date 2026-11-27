@@ -88,12 +88,7 @@ elseif(AIVERSE_PLATFORM STREQUAL "linux" AND EXISTS "${AIVERSE_STUDIO_WEB_DIST}/
     endif()
 endif()
 option(AIVERSE_BUILD_STUDIO_HTML5 "Build the HTML5 Studio desktop editor" ${_aiverse_studio_default})
-set(_aiverse_legacy_editor_default ${AIVERSE_DESKTOP})
-if(AIVERSE_BUILD_STUDIO_HTML5 OR AIVERSE_PLATFORM MATCHES "^(macos|windows)$")
-    # Omitting the web bundle is also valid for runtime-only builds.
-    set(_aiverse_legacy_editor_default OFF)
-endif()
-option(AIVERSE_BUILD_EDITOR "Build the legacy ImGui map editor" ${_aiverse_legacy_editor_default})
+option(AIVERSE_BUILD_EDITOR "Build the legacy ImGui map editor for migration checks" OFF)
 if(APPLE AND AIVERSE_BUILD_STUDIO_HTML5)
     enable_language(OBJCXX)
 endif()
