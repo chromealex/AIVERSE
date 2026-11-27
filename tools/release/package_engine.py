@@ -106,9 +106,24 @@ def main():
             break
         else:
             sys.exit(f"missing AiverseStudio.exe in {a.bin}")
-    if a.platform == "linux" and not any(os.path.isfile(os.path.join(a.bin, name))
-                                         for name in ("aiverse_editor", "aiversemcp")):
-        sys.exit(f"no aiverse_editor / aiversemcp in {a.bin}")
+    if a.platform == "linux":
+        for directory in (a.bin, os.path.join(a.bin, "apps", "studio-native")):
+            if not os.path.isfile(os.path.join(directory, "AiverseStudio")):
+                continue
+            require_files(directory, ("aiversemcp",) + STUDIO_ASSETS)
+            resources = ["AiverseStudio", "studio-web", "engine/fonts", "engine/fx/physis"]
+            if os.path.isfile(os.path.join(directory, "aiverse_client")):
+                require_files(directory, ("content/engine/ui/theme.rcss",))
+                resources.extend(["aiverse_client", "content/engine"])
+            binaries.remove("aiverse_editor")
+            binaries.extend(resources)
+            studio_files.update(dict.fromkeys(resources + ["aiversemcp"], directory))
+            if os.path.isfile(os.path.join(directory, "aiversebuild")):
+                studio_files["aiversebuild"] = directory
+            break
+        else:
+            if not any(os.path.isfile(os.path.join(a.bin, name)) for name in ("aiverse_editor", "aiversemcp")):
+                sys.exit(f"no Linux Studio, editor or MCP server in {a.bin}")
     ver, commit, date = version()
     name = f"AIVERSE-{ver}-{commit}-{a.platform}.zip"
     os.makedirs(os.path.join(a.out, ".temp"), exist_ok=True)

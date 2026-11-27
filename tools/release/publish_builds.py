@@ -61,6 +61,8 @@ def package_entry(work, rel, repo, branch):
             names["editor"] = "AiverseStudioHTML5.app"
         if plat == "windows" and "AIVERSE/bin/AiverseStudio.exe" in listed:
             names["editor"] = "AiverseStudio.exe"
+        if plat == "linux" and "AIVERSE/bin/AiverseStudio" in listed:
+            names["editor"] = "AiverseStudio"
         for key, exe in names.items():
             inner = package_root + "/bin/" + exe
             if inner in listed or inner + "/" in listed or any(n.startswith(inner + "/") for n in listed):
