@@ -19,9 +19,18 @@ const refreshSnapshot = (ctx: Ctx) => void invoke('studio.snapshot', {}).then(ct
 /* ---------------- Fog of war (rules.json fogOfWar through rules_merge) ---------------- */
 function rgbHex(c: unknown, def: string): string {
   if (!Array.isArray(c) || c.length < 3) return def;
-  return '#' + c.slice(0, 3).map(v => { const n = Number(v); return Math.round(Math.min(255, Math.max(0, n <= 1 && n > 0 && !Number.isInteger(n) ? n * 255 : n))).toString(16).padStart(2, '0'); }).join('');
+  const channels = c.slice(0, 3).map(v => {
+    const n = Number(v);
+    const byte = n <= 1 ? n * 255 : n;
+    return Math.round(Math.min(255, Math.max(0, byte))).toString(16).padStart(2, '0');
+  });
+  return '#' + channels.join('');
 }
-const hexRgb = (h: string) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const hexRgb = (h: string) => [1, 3, 5].map(i => {
+  const byte = parseInt(h.slice(i, i + 2), 16);
+  // VisibilityField treats 1 as full intensity. Encode byte 1 in normalized form.
+  return byte === 1 ? 1 / 255 : byte;
+});
 
 function Slider({ label, value, min, max, step = .01, onCommit }: { label: string; value: number; min: number; max: number; step?: number; onCommit: (v: number) => void }) {
   const [v, setV] = useState(value);
