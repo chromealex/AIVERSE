@@ -5188,26 +5188,26 @@ Json StudioSession::dispatchImplCore(const Json& request) {
             out.set("dirty",Json::fromBool(ws_.map.dirty||ws_.project.rulesDirty||ws_.project.manifestDirty));
             out.set("sceneFrameMs",Json::number(sceneFrameMs_,2));out.set("sceneFrames",num(int64_t(sceneFrames_)));
             reply.set("result",std::move(out));
-        } else if (method == "studio.contextMenu" || method == "studio.contextAction") {
+        } else if (method == "studio.contextMenu" || method == "studio.contextAction" ||
+                   method == "studio.extensions" || method == "studio.extensionAction" || method == "studio.extensionCreate") {
             if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
-            const auto window = params.getStr("window"), element = params.getStr("element"), id = params.getStr("id");
-            const bool action = method == "studio.contextAction";
-            if (window.empty() || window.size() > 128 || element.size() > 4096 ||
-                (action && (id.empty() || id.size() > 128))) throw std::runtime_error("Invalid Lua menu context");
-            Json result = Json::object();
-            result.set(action ? "command" : "items", contextMenus_.contextMenu(ws_.project.dir, luaContext(), window, element, action ? &id : nullptr));
-            reply.set("result", std::move(result));
-        } else if (method == "studio.extensions" || method == "studio.extensionAction" || method == "studio.extensionCreate") {
-            // Extensions panel: the project's declarative Lua editor API (StudioLuaPanel.h).
-            if (ws_.project.dir.empty()) throw std::runtime_error("Open a project first");
+            const bool menu = method == "studio.contextMenu" || method == "studio.contextAction";
+            const auto window = params.getStr("window"), element = params.getStr("element");
+            if (menu && (window.empty() || window.size() > 128 || element.size() > 4096))
+                throw std::runtime_error("Invalid Lua menu context");
             if (method == "studio.extensionCreate") {
                 std::string err;
                 if (!StudioLuaPanel::createExample(ws_.project.dir,&err)) throw std::runtime_error(err);
             }
-            if (method == "studio.extensionAction") {
-                const std::string id=params.getStr("id");
-                if (id.empty()||id.size()>128) throw std::runtime_error("Invalid widget id");
-                Json command=lua_.action(ws_.project.dir,luaContext(),id,params.has("value")?&params["value"]:nullptr);
+            if (method == "studio.contextMenu") {
+                Json out = Json::object();
+                out.set("items", contextMenus_.contextMenu(ws_.project.dir, luaContext(), window, element, nullptr));
+                reply.set("result", std::move(out));
+            } else if (method == "studio.contextAction" || method == "studio.extensionAction") {
+                const auto id = params.getStr("id");
+                if (id.empty() || id.size() > 128) throw std::runtime_error("Invalid Lua action id");
+                Json command = menu ? contextMenus_.contextMenu(ws_.project.dir, luaContext(), window, element, &id)
+                                    : lua_.action(ws_.project.dir, luaContext(), id, params.has("value") ? &params["value"] : nullptr);
                 // select_entity names a map index; the panel selects by Studio id.
                 if (command.isObject() && command.getStr("command")=="select_entity") {
                     const int64_t index=command["index"].integer(-1);
