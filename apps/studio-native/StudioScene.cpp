@@ -2525,9 +2525,9 @@ Json StudioScene::textureReadback(const Json& params) {
     gfx::TextureReadbackDesc desc;
     desc.mipLevel = int(mip);
     desc.arrayLayer = int(layer);
-    auto decode = [completion](gfx::TextureReadbackResult image){
+    auto decode = [completion, preview2D = t.dimension == gfx::TextureDimension::Texture2D](gfx::TextureReadbackResult image){
         try {
-            const auto grid = render::texturePreviewGrid(image);
+            const auto grid = render::texturePreviewGrid(image, preview2D);
             if (!grid.error.empty()) throw std::runtime_error(grid.error);
             Json result = Json::object(), pixels = Json::array();
             for (const auto& rgb : grid.colors)

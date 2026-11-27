@@ -366,7 +366,7 @@ function TexturePixels({ project, texture, mip, layer }: { project: string; text
     {error && <p role="alert">{error}</p>}
     <canvas ref={canvas} hidden={!ready} aria-label="GPU pixel preview"
       style={{ aspectRatio: mipWidth + " / " + mipHeight, width: Math.max(1, 160 * Math.min(1, mipWidth / mipHeight)) }}/>
-    {ready && <p className="ptp__hint">Sampled preview up to 32 × 32 pixels.{texture.format === 'RGBA16F' && ' HDR colors use approximate tone mapping.'}</p>}
+    {ready && <p className="ptp__hint">Preview sample: {canvas.current?.width} × {canvas.current?.height} pixels.{texture.format === 'RGBA16F' && ' HDR colors use approximate tone mapping.'}</p>}
   </div>;
 }
 

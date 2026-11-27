@@ -15,7 +15,7 @@ struct TexturePreviewGrid {
     std::string error;
 };
 
-inline TexturePreviewGrid texturePreviewGrid(const gfx::TextureReadbackResult& image) {
+inline TexturePreviewGrid texturePreviewGrid(const gfx::TextureReadbackResult& image, bool preview2D = false) {
     TexturePreviewGrid grid;
     if (!image.success()) {
         grid.error = "GPU readback failed or resource was released.";
@@ -36,6 +36,11 @@ inline TexturePreviewGrid texturePreviewGrid(const gfx::TextureReadbackResult& i
     grid.height = image.height;
     grid.columns = std::min(32, image.width);
     grid.rows = std::min(32, image.height);
+    if (preview2D) {
+        const double scale = std::min(1.0, 160.0 / std::max(image.width, image.height));
+        grid.columns = std::max(1, int(std::round(image.width * scale)));
+        grid.rows = std::max(1, int(std::round(image.height * scale)));
+    }
     grid.colors.reserve(grid.columns * grid.rows);
     for (int y = 0; y < grid.rows; ++y) {
         const size_t sy = uint64_t(y) * grid.height / grid.rows;
