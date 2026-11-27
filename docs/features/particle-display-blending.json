@@ -35,6 +35,7 @@
     "engine/render/Renderer3D.cpp",
     "engine/render/Renderer3D.h",
     "tests/render/additive_blend_frame.cpp",
+    "tests/render/camera_sprite_vfx_prepared_api.cpp",
     "tests/tests.cpp",
     "tests/vfx_graph_runtime_test.cpp"
   ],

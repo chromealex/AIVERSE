@@ -6,13 +6,19 @@
     "apps/client/ClientUi.cpp",
     "apps/client/GameClient.cpp",
     "apps/client/GameClient.h",
+    "demos/client-command-controls/README.md",
+    "demos/client-command-controls/game.json",
+    "demos/client-command-controls/maps/controls.json",
+    "demos/client-command-controls/rules.json",
+    "demos/client-command-controls/scripts/view/controls.lua",
     "engine/assets/lang/en.json",
     "engine/assets/lang/ru.json",
     "engine/assets/ui/hud.rml",
     "engine/assets/ui/menu.rml",
+    "engine/assets/ui/theme.rcss",
     "engine/platform/EnhancedInputPresets.h",
     "tests/libraries/enhanced_input_config_tests.cpp",
-    "engine/assets/ui/theme.rcss"
+    "tests/render/client_controls_frame.cpp"
   ],
   "traits": {
     "editable": true,

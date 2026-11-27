@@ -4,6 +4,8 @@
   "owner": "build",
   "changed_paths": [
     "apps/client/Minimap.cpp",
+    "demos/client-command-controls/ui/minimap-probe.png",
+    "demos/client-command-controls/ui/shortcut-probe.png",
     "docs/agent-handoffs/minimap-background-packaging-initial.md",
     "docs/agents/feature-policy.json",
     "docs/devlog/systems.json",

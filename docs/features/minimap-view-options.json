@@ -3,13 +3,15 @@
   "id": "minimap-view-options",
   "owner": "gameplay",
   "changed_paths": [
-    "engine/view/MapProjection.h",
-    "tests/tests.cpp",
+    "apps/client/ClientUi.cpp",
     "apps/client/GameClient.h",
     "apps/client/Minimap.cpp",
     "apps/client/MinimapPlanet.cpp",
-    "apps/client/ClientUi.cpp",
-    "docs/game-format.md"
+    "demos/client-command-controls/game.json",
+    "demos/client-command-controls/rules.json",
+    "docs/game-format.md",
+    "engine/view/MapProjection.h",
+    "tests/tests.cpp"
   ],
   "traits": {
     "runtime": true,
