@@ -40,14 +40,13 @@ platform/    packaging templates (Info.plist, Gradle project, HTML shell)
 ## Início rápido (macOS)
 
 ```bash
-cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release      # requires Xcode and CMake
+./studio_mac.command
 cmake --build build/mac -j 8
-open build/mac/AiverseEditor.app                              # editor (project ~/.aiverse/packages/templates/skirmish)
 open build/mac/AiverseGame.app                                # game
 ./build/mac/aiverse_tests
 ```
 
-Outro jogo no editor: `AiverseEditor.app/Contents/MacOS/AiverseEditor --project ~/.aiverse/packages/templates/mushrooms`.
+Outro jogo no editor: `./studio_mac.command ~/.aiverse/packages/templates/mushrooms`.
 Para o jogo iniciar com outro conjunto de dados, passe `-DAIVERSE_CONTENT_DIR=~/.aiverse/packages/templates/mushrooms`.
 
 ### Vários editores ao mesmo tempo

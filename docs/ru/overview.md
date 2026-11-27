@@ -40,14 +40,13 @@ platform/    шаблоны упаковки (Info.plist, Gradle-проект, H
 ## Быстрый старт (macOS)
 
 ```bash
-cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release      # нужны Xcode и CMake
+./studio_mac.command
 cmake --build build/mac -j 8
-open build/mac/AiverseEditor.app                              # редактор (проект ~/.aiverse/packages/templates/skirmish)
 open build/mac/AiverseGame.app                                # игра
 ./build/mac/aiverse_tests
 ```
 
-Другую игру в редакторе: `AiverseEditor.app/Contents/MacOS/AiverseEditor --project ~/.aiverse/packages/templates/mushrooms`.
+Другую игру в редакторе: `./studio_mac.command ~/.aiverse/packages/templates/mushrooms`.
 Чтобы игра запускалась с другим набором данных, задайте `-DAIVERSE_CONTENT_DIR=~/.aiverse/packages/templates/mushrooms`.
 
 ### Несколько редакторов одновременно

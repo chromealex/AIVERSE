@@ -53,14 +53,13 @@ shared `apps/studio-native/StudioHost` (`mac/Main.mm` Cocoa + Metal, `win/Main.c
 Floating panel windows and drag-and-drop from Explorer are macOS-only for now.
 
 ```bash
-cmake -S . -B build/mac -DCMAKE_BUILD_TYPE=Release      # requires Xcode and CMake
+./studio_mac.command
 cmake --build build/mac -j 8
-open build/mac/AiverseEditor.app                              # editor (project ~/.aiverse/packages/templates/skirmish)
 open build/mac/AiverseGame.app                                # game
 ./build/mac/aiverse_tests
 ```
 
-Another game in the editor: `AiverseEditor.app/Contents/MacOS/AiverseEditor --project ~/.aiverse/packages/templates/mushrooms`.
+Another game in the editor: `./studio_mac.command ~/.aiverse/packages/templates/mushrooms`.
 To make the game start with a different data set, pass `-DAIVERSE_CONTENT_DIR=~/.aiverse/packages/templates/mushrooms`.
 
 ### Several editors at once
