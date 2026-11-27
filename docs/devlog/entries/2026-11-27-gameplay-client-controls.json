@@ -1,0 +1,51 @@
+{
+  "id": "2026-11-27-gameplay-client-controls",
+  "date": "2026-11-27",
+  "system": "gameplay",
+  "title": "Выбор, команды и портреты в игровом интерфейсе",
+  "summary": "Горячая клавиша выбирает юнита рядом с миникартой, Move задаёт точку движения, а вооружённые здания получают Attack и Stop. Портрет может отличаться от модели в мире.",
+  "body": [
+    "В демо F6 выбирает разведчика, M и щелчок по карте задают движение, F7 выбирает башню через view.select. Escape открывает паузу; Restart начинает сцену заново. У башни видны пассивная способность и Sell в назначенной ячейке.",
+    "Для портрета можно задать отдельную модель и фон. Миникарта показывает выбранную область фоновой картинки и скрывает типы с view.minimap=false. Изображение работает и после упаковки в атлас."
+  ],
+  "status": "in-progress",
+  "verified": "Сцена проверена в браузере и в нативном клиенте macOS: выбор, движение, портреты и фон миникарты показаны на реальных кадрах.",
+  "limits": "Звук отключён в этом web-демо. Выход закрывает нативный клиент; поведение вкладки браузера отличается. Windows и мобильные устройства пока не проверены.",
+  "branch": "codex/issue223-minimap-atlas-20261126",
+  "commit": "4d6f08f19",
+  "media": [
+    {
+      "src": "docs/evidence/issues-client-controls-web-20261127/selected.png",
+      "caption": "Разведчик выбран через F6: отдельный портрет, Move и фон миникарты.",
+      "captionEn": "Scout selected with F6: separate portrait, Move and the minimap background."
+    },
+    {
+      "src": "docs/evidence/issues-client-controls-web-20261127/tower.png",
+      "caption": "Башня выбрана через view.select: пассивная способность, Sell, Attack и Stop.",
+      "captionEn": "Tower selected through view.select: passive ability, Sell, Attack and Stop."
+    }
+  ],
+  "links": [
+    {
+      "title": "Play · Web",
+      "href": "https://chromealex.github.io/AIVERSE/demos/client-command-controls/?map=0"
+    },
+    {
+      "title": "Controls · source",
+      "href": "demos/client-command-controls/README.md"
+    },
+    {
+      "title": "Game format",
+      "href": "docs/game-format.md"
+    }
+  ],
+  "author": null,
+  "titleEn": "Selection, commands and portraits in the game HUD",
+  "summaryEn": "A shortcut selects a unit beside the minimap, Move targets a destination, and armed structures expose Attack and Stop. Portraits can use a model separate from the world model.",
+  "bodyEn": [
+    "In the demo, F6 selects the scout, M followed by a map click orders movement, and F7 selects the tower through view.select. Escape opens pause; Restart resets the scene. The tower shows a passive ability and Sell in its assigned cell.",
+    "A portrait can have its own model and background. The minimap displays a selected image region and hides types with view.minimap=false. The image also works after atlas packaging."
+  ],
+  "verifiedEn": "The scene was exercised in a browser and the native macOS client: selection, movement, portraits and the minimap background are shown in real captures.",
+  "limitsEn": "Audio is disabled in this web demo. Quit closes the native client; browser-tab behavior differs. Windows and mobile devices have not been verified."
+}

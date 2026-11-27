@@ -119,8 +119,12 @@
     },
     "publishing": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "note": "Browser-tested controls demo pinned in site/manifest.json; bilingual devlog prepared with real captures. Main integration and actual site publication pending.",
+      "evidence": [
+        "docs/evidence/issues-client-controls-web-20261127/result.json",
+        "docs/devlog/entries/2026-11-27-gameplay-client-controls.json",
+        "site/manifest.json"
+      ]
     }
   },
   "integrations": {
