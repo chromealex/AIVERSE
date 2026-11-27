@@ -22,6 +22,7 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged, ope
   if(raw===null)return '';
   try{JSON.parse(raw);return '';}catch(e){return String(e);}
  },[raw]);
+  const typeDraftDirty = section === 'types' && raw !== null && raw !== JSON.stringify(rules?.types[typeId], null, 2);
   const draftProject=useRef<string|null>(null);
   useEffect(()=>{
     draftProject.current=raw!==null&&(section==='global'||section==='document') ? projectPath : null;
@@ -44,12 +45,12 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged, ope
   }, [rules, query]);
   // Inspector → "Edit type in Rules" selects that type.
   useEffect(() => {
-    const pick = (e: Event) => { const id = String((e as CustomEvent<unknown>).detail ?? ''); if (id) { setSection('types');setForestOpen(false);setTypeId(id); setQuery(''); setRaw(null); } };
-    const forest=()=>setForestOpen(true);
+    const pick = (e: Event) => { const id = String((e as CustomEvent<unknown>).detail ?? ''); if (id && !typeDraftDirty && !busy) { setSection('types');setForestOpen(false);setTypeId(id); setQuery(''); setRaw(null); } };
+    const forest=()=>{if (!typeDraftDirty && !busy) setForestOpen(true);};
     window.addEventListener('studio:rules-type', pick);
     window.addEventListener('studio:rules-forest',forest);
     return () => {window.removeEventListener('studio:rules-type', pick);window.removeEventListener('studio:rules-forest',forest);};
-  }, []);
+  }, [typeDraftDirty,busy]);
   const values = useMemo(() => rules && typeId ? typeValues(typeId, rules.types[typeId], rules.resolved[typeId], rules.resources, rules.bodies?.[typeId]) : [], [rules, typeId]);
   const write = async (path: string, value: unknown) => {
     setBusy(true); setError('');
@@ -74,7 +75,7 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged, ope
         <StudioButton onClick={openActorSettings}>Open Actors &amp; Cameras</StudioButton>
       </div>}
       <label className="rules__section">Rule section
-        <select value={section} disabled={busy||(section!=='types'&&raw!==null)} onChange={event=>{
+        <select value={section} disabled={busy||typeDraftDirty||(section!=='types'&&raw!==null)} onChange={event=>{
           setForestOpen(false);setSection(event.target.value as typeof section); setRaw(null);setError('');
         }}>
           <option value="types">Unit types</option><option value="triggers">Triggers</option>
@@ -83,7 +84,7 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged, ope
         </select>
       </label>
       {section==='types'&&<>
-      <button type="button" className={'rules__type'+(forestOpen?' is-active':'')} onClick={()=>setForestOpen(true)}>Planet forest</button>
+      <button type="button" className={'rules__type'+(forestOpen?' is-active':'')} disabled={busy||typeDraftDirty} onClick={()=>setForestOpen(true)}>Planet forest</button>
       {rules && <StudioField label="Auto-target order" htmlFor="rules-acquire-order">
         <StudioSelect id="rules-acquire-order" value={rules.acquireOrder} disabled={busy}
           onChange={e => void write('targeting.acquireOrder', e.target.value)}>
@@ -95,7 +96,7 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged, ope
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search types" aria-label="Search unit types"/></label>
       <div role="listbox" aria-label="Unit types" className="rules__types">
         {ids.map(id => { const name = String((rules!.types[id] as { name?: unknown })?.name ?? id);
-          return <button key={id} type="button" role="option" aria-selected={id === typeId} draggable
+          return <button key={id} type="button" role="option" disabled={busy||typeDraftDirty} aria-selected={id === typeId} draggable
             title="Drag into the Scene to place a new object of this type"
             onDragStart={e => { e.dataTransfer.setData('text/plain', 'aiverse-type:' + id); e.dataTransfer.effectAllowed = 'copy'; }}
             className={'rules__type' + (id === typeId && !forestOpen ? ' is-active' : '')} onClick={() => { setForestOpen(false);setTypeId(id); setRaw(null); }}>
@@ -137,13 +138,14 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged, ope
           <h3>{typeId}</h3>
           {typeof extendsBase === 'string' && <span className="rules__extends">extends {extendsBase}</span>}
           <span className="rules__spacer"/>
-          <button type="button" className="rules__raw-toggle" onClick={() => setRaw(r => r === null ? JSON.stringify(rules.types[typeId], null, 2) : null)}>
+          <button type="button" className="rules__raw-toggle" disabled={busy||typeDraftDirty} onClick={() => setRaw(r => r === null ? JSON.stringify(rules.types[typeId], null, 2) : null)}>
             {raw === null ? 'Edit JSON' : 'Form'}</button>
         </div>
         <p className="rules__note">Changes are validated by the game loader and saved to rules.json at once. Blank = inherit / default.</p>
         {raw !== null ? <div className="rules__rawbox">
           <textarea disabled={busy} aria-invalid={!!syntaxError} value={raw} onChange={e => {setError('');setRaw(e.target.value);}} spellCheck={false} aria-label={'JSON of ' + typeId}/>
-          <button type="button" disabled={busy||!!syntaxError} onClick={() => { try { void write('types.' + typeId, JSON.parse(raw)); } catch (e) { setError('JSON: ' + (e instanceof Error ? e.message : String(e))); } }}>Validate &amp; save</button>
+          <button type="button" disabled={busy||!typeDraftDirty||!!syntaxError} onClick={() => { try { void write('types.' + typeId, JSON.parse(raw)).then(saved=>{if(saved)setRaw(null);}); } catch (e) { setError('JSON: ' + (e instanceof Error ? e.message : String(e))); } }}>Validate &amp; save</button>
+          {typeDraftDirty&&<button type="button" disabled={busy} onClick={()=>{setRaw(null);setError('');}}>Discard changes</button>}
         </div> : RULE_GROUPS.map(group => {
           const rows = values.filter(v => v.field.group === group);
           if (!rows.length) return null;
