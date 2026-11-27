@@ -23,7 +23,7 @@ cmake_flags=()
 usage() {
     cat <<'USAGE'
 Usage: tools/verify-texture-rhi.sh [--editor] [--vulkan] [--metal] [--jobs N] [--build-dir PATH] [-DCMAKE_VAR=value ...]
-  --editor    Build aiverse_editor after focused CPU tests
+  --editor    Build the desktop editor (macOS/Windows require configured HTML Studio assets)
   --vulkan    Build aiverse_vulkan_tests and run vulkan_backend (inspect skips)
   --metal     Build and RUN native Metal Texture3D/array/cube GPU readbacks (macOS only)
   --jobs N    Parallel compilation tasks (default 4)
@@ -114,7 +114,7 @@ targets=(
     aiverse_hdr_texture_test
     aiverse_exr_texture_test
 )
-if [[ "$want_editor" -eq 1 ]]; then targets+=(aiverse_editor); fi
+if [[ "$want_editor" -eq 1 ]]; then targets+=(aiverse_desktop_editor); fi
 if [[ "$want_vulkan" -eq 1 ]]; then targets+=(aiverse_vulkan_tests); fi
 if [[ "$want_metal" -eq 1 ]]; then targets+=(aiverse_metal_texture_gpu_test); fi
 

@@ -5539,6 +5539,13 @@ if(AIVERSE_BUILD_STUDIO_HTML5)
     endif()
 endif()
 
+# Verification scripts build the editor shipped for the configured target platform.
+if(TARGET aiverse_studio)
+    add_custom_target(aiverse_desktop_editor DEPENDS aiverse_studio)
+elseif(AIVERSE_PLATFORM STREQUAL "linux" AND TARGET aiverse_editor)
+    add_custom_target(aiverse_desktop_editor DEPENDS aiverse_editor)
+endif()
+
 # Main integration: exercise virtual material sampling and probe GI together.
 if(AIVERSE_BUILD_TESTS AND TARGET aiverse_hdr_scene AND AIVERSE_PLATFORM STREQUAL "macos")
     add_test(NAME lighting_virtual_material_gi_gpu COMMAND aiverse_hdr_scene)
