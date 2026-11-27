@@ -949,8 +949,21 @@ void authoredEntityWorkflow() {
    editor::MapDoc map;map.reset(16,16);editor::DocEntity e;e.id="first";e.type="tree";e.x=2;e.z=3;
    e.extra=Json::parse(R"({"components":{"Transform":{"y":4,"yaw":0,"scale":1},"StaticModel":{"asset":"content/tree.gltf"}}})");map.data.entities.push_back(e);e.id="second";map.data.entities.push_back(e);
    AIVERSE_TEST_CHECK(map.save((project/"maps/scene.json").string(),nullptr));
+   const auto occupied=project/"content/materials/basalt.material.json";
+   fs::create_directories(occupied.parent_path());
+   std::ofstream(occupied)<<R"({"roughness":0.9})";
+   std::ofstream(project/"materials.json")<<R"({"materials":{"existing":"content/materials/basalt.material.json","basalt":{"roughness":0.4}}})";
    studio::StudioSession session(root.string(),project.string());
    auto call=[&](const char* method,const char* params="{}") {auto request=Json::object();request.set("id",Json::number(int64_t(1)));request.set("method",Json::string(method));request.set("params",Json::parse(params));return session.dispatch(request);};
+   {
+       const auto entries=Json::parseFile((project/"materials.json").string())["materials"];
+       AIVERSE_TEST_CHECK(entries.getStr("existing")=="content/materials/basalt.material.json");
+       const auto migrated=entries.getStr("basalt");
+       AIVERSE_TEST_CHECK(migrated=="content/materials/basalt~1.material.json");
+       AIVERSE_TEST_CHECK(Json::parseFile(occupied.string())["roughness"].toDouble()==0.9);
+       AIVERSE_TEST_CHECK(Json::parseFile((project/migrated).string())["roughness"].toDouble()==0.4);
+       AIVERSE_TEST_CHECK(call("studio.assets")["result"]["files"].dump().find("materials/basalt~1.material.json")!=std::string::npos);
+   }
    AIVERSE_TEST_CHECK(!call("studio.select",R"({"id":"entity:@second"})").has("error"));
    AIVERSE_TEST_CHECK(!call("studio.setProperty",R"({"entityId":"entity:@second","key":"y","value":9})").has("error"));
    AIVERSE_TEST_CHECK(session.workspace().map.data.entities[1].extra["components"]["Transform"]["y"].integer()==9);
