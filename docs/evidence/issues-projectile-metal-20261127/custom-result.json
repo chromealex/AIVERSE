@@ -1,0 +1,30 @@
+{
+  "checkout": "d88e86901",
+  "client_build_source": "f3569b2896ba9440d055620d77caca53a72a5cea",
+  "backend": "Metal",
+  "cases": [
+    "straight",
+    "arc",
+    "ricochet",
+    "split"
+  ],
+  "model_source": "demos/client-command-controls/models/portrait-static.gltf",
+  "projectile_config": {
+    "model": "models/projectile.gltf",
+    "scale": 0.28,
+    "forward": "+x"
+  },
+  "exit_code": 0,
+  "pipeline_failures": 0,
+  "observed": "Imported green diamond models coincide with trail heads on straight and fitted arc paths, ricochet and timed split. Continuations start at contact/branch position. All four captures inspected; zero Metal pipeline failures.",
+  "limits": [
+    "Static frames, not a time-series proof for every trajectory.",
+    "Mac Metal only; main gate still running."
+  ],
+  "capture_frames": {
+    "straight": 120,
+    "arc": 120,
+    "ricochet": 210,
+    "split": 210
+  }
+}
