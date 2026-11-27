@@ -28,9 +28,12 @@ def main():
     build = args.build.resolve()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    studio = sys.platform == 'darwin' or os.name == 'nt'
+    cache = build / 'CMakeCache.txt'
+    linux_studio = sys.platform.startswith('linux') and cache.is_file() and (
+        'AIVERSE_BUILD_STUDIO_HTML5:BOOL=ON' in cache.read_text().splitlines())
+    studio = sys.platform == 'darwin' or os.name == 'nt' or linux_studio
     if studio:
-        name = Path('AiverseStudioHTML5.app/Contents/MacOS/AiverseStudioHTML5') if sys.platform == 'darwin' else Path('AiverseStudio.exe')
+        name = Path('AiverseStudioHTML5.app/Contents/MacOS/AiverseStudioHTML5') if sys.platform == 'darwin' else Path('AiverseStudio.exe' if os.name == 'nt' else 'AiverseStudio')
         directory = build / 'apps/studio-native'
         candidates = [directory / name] + [directory / config / name for config in ('Release', 'Debug', 'RelWithDebInfo')]
         editor = next((p for p in candidates if p.is_file()), None)

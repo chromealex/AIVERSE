@@ -1,4 +1,5 @@
 #include "StudioWebAssets.h"
+#include "apps/editor/core/Net.h"
 #include "StudioWebBridge.h"
 #include "StudioScenePointer.h"
 #include "StudioPreviewPointer.h"
@@ -48,9 +49,14 @@ int main(int argc,char** argv) {
     gdk_set_allowed_backends("x11");
     if (!gtk_init_check(&argc,&argv)) { std::cerr << "Studio requires an X11 display\n"; return 1; }
     std::string project=loadStudioLastProject(), root=AIVERSE_STUDIO_SOURCE_DIR;
+    int listenPort=0;
     for (int i=1;i<argc;++i) {
         const std::string option=argv[i];
         if (i+1<argc && option=="--project") project=argv[++i];
+        else if (i+1<argc && option=="--listen") {
+            listenPort=aiverse::editor::net::parseListenPort(argv[++i]);
+            if (!listenPort) { std::cerr << "Invalid Studio listener port\n"; return 2; }
+        }
         else if (i+1<argc && option=="--engine") root=argv[++i];
         else { std::cerr << "Unexpected Studio argument: " << option << '\n'; return 2; }
     }
@@ -68,6 +74,9 @@ int main(int argc,char** argv) {
         if (!std::filesystem::is_regular_file(dist/"index.html")) throw std::runtime_error("Studio HTML bundle missing");
         registerStudioWebAssets(webkit_web_view_get_context(web),dist);
         GtkStudio studio(overlay,window,web,root);
+        studio.host().session().setMcpTool((dist.parent_path()/"aiversemcp").string());
+        if (listenPort && !studio.host().session().listenForAgent(listenPort))
+            throw std::runtime_error("Could not start the authenticated Studio agent listener");
         studio.host().setPendingProject(project);
         g_signal_connect(web,"decide-policy",G_CALLBACK(+[](WebKitWebView*,WebKitPolicyDecision* decision,
             WebKitPolicyDecisionType type,gpointer)->gboolean {
