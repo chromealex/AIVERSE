@@ -55,3 +55,8 @@ Added engine/view/ProjectilePresentation.h with explicit segment origin, absolut
 
 Commit: 2fcd633f52d4e13e442dbf3290d3a0b83a8342c6
 GameViewDraw now evaluates ProjectilePresentation once and uses the sample for mesh/model placement. GameFx consumes the point callback or authoritative position, with no independent exponential convergence. Static diff check passed. Build/runtime tests NOT RUN (deferred final batch). Important remaining limitations: continuation is still a temporary boolean bridge based on the old heuristic; explicit shared simulation provenance and versioned persistence remain to implement. Terminal sample publication, light consumption and actor visual wiring remain pending. Generic fallback now follows the 3D simulation path instead of retaining muzzle height permanently; verify visual compatibility in final capture. No issue is complete yet.
+
+## Explicit provenance checkpoint
+
+Commit: 4f630610a5d00fab75df592cee51ab1d93aa8b7d
+Shared State now records Unknown/Emission/Split/Ricochet; common branch operations set child origin and leave timed-split parent origin intact. Heuristic removed from Components.h. Save v13 adds origin; v12 and older read Unknown, preserving historical checksum layout. GameCore and ActorHost select v13 when provenance exists; actor portable codec v2 registers a v1 migration. Added versioned archive and invalid-enum scenarios. Tests/build NOT RUN per final-batch instruction; diff check passed. Needs full simulation save/checksum and durable migration regression, legacy fixture validation, explicit view enum propagation, final contact event/sample publication and both-host visual integration. No issue closed.
