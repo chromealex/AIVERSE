@@ -390,7 +390,8 @@ Json StudioSession::inspectorFor(const std::string& entityId) const {
             const auto& light=*editor::documentLight(ws_.map,node.ref);
             result.set("kind",str("Light"));
             Json transform=Json::array(),lightFields=Json::array();
-            for(const auto& field:propertiesFor(entityId).items()) {
+            const auto properties = propertiesFor(entityId);
+            for(const auto& field:properties.items()) {
                 const auto key=field.getStr("key");
                 if(key=="name")continue;
                 if(key=="x"||key=="z"||key=="height")transform.push(field); else lightFields.push(field);
