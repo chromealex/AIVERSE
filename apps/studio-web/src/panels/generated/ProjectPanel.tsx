@@ -6,6 +6,7 @@ import type { StudioPanelContext } from '../StudioPanelRenderer';
 import { StudioPanel, StudioSection, StudioAlert, StudioEmptyState, StudioButton, StudioField, StudioInput, StudioSelect } from '../../ui';
 import typeBlocks from '../../../../editor/core/type-blocks.json';
 import './ProjectPanel.css';
+import { useLuaMenu } from '../useLuaMenu';
 import ProjectSettingsEditor from '../ProjectSettingsEditor';
 
 const blockGroups = [...new Set(Object.values(typeBlocks).map(block=>block.group))];
@@ -24,6 +25,8 @@ export default function ProjectPanel({projectRecord,snapshot,busy,connected,open
   const [name,setName]=useState('New map');
   const [width,setWidth]=useState('64'),[height,setHeight]=useState('48');
   const [error,setError]=useState('');
+  const [status,setStatus]=useState('');
+  const lua=useLuaMenu(updateSnapshot,showPanel,setStatus,setError);
   const [revision,setRevision]=useState(0);
   const request=useRef(0);
   const blockDetails=useRef<HTMLDetailsElement>(null);
@@ -90,6 +93,8 @@ export default function ProjectPanel({projectRecord,snapshot,busy,connected,open
     actions={<StudioButton disabled={!connected || busy} onClick={()=>void openProject()}><FolderOpen size={14}/>Open project</StudioButton>}>
     {!path ? <StudioEmptyState title="Open a project" description="Choose a project to browse its maps and rules."/> :
     <div className="project-page">
+      {lua.popup}
+      {status && <p role="status">{status}</p>}
       {error && <StudioAlert tone="danger">{error}</StudioAlert>}
       <ProjectSettingsEditor key={path} project={path} disabled={busy || !connected} updateSnapshot={updateSnapshot}/>
       {project?.rulesError && <StudioAlert tone="danger" title="Rules">{project.rulesError}</StudioAlert>}
@@ -136,6 +141,9 @@ export default function ProjectPanel({projectRecord,snapshot,busy,connected,open
           <StudioButton disabled={busy} onClick={()=>{if(leave())setDraft(null);}}>Close</StudioButton></div>
         </form></StudioSection>}
       <div className="project-items">{section==='maps'?maps.map(map=><button type="button" disabled={busy} key={map.file} aria-label={'Open '+map.file} aria-current={map.file===project?.currentMap?'page':undefined}
+        onContextMenu={event=>void lua.open(event,'project.map',map.file.split('/').pop() || map.file,[
+          {id:'open-map',label:'Open map',onSelect:()=>void run(()=>invoke('studio.openMap',{file:map.file}))}
+        ])}
         onClick={()=>void run(()=>invoke('studio.openMap',{file:map.file}))}><strong>{map.title}</strong>{map.file===project?.currentMap && <Check size={13}/>}<small>{map.file}</small></button>)
         :items.map(item=><button type="button" key={item.id} aria-label={'Edit '+item.id} disabled={busy} aria-pressed={draft?.id===item.id} onClick={()=>void edit(section,item.id)}><strong>{item.name}</strong><small>{item.id}</small></button>)}</div>
       {project && !(section==='maps'?maps.length:items.length) && <p className="project-empty">{term?'No matches.':'No '+sections[section].toLowerCase()+' yet.'}</p>}

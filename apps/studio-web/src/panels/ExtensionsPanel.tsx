@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { FilePlus2, RefreshCw } from 'lucide-react';
 import { invoke } from '../bridge';
-import type { LuaMenuEntry, StudioExtensionWidget, StudioExtensions, StudioSnapshot } from '../types';
+import type { StudioExtensionWidget, StudioExtensions, StudioSnapshot } from '../types';
 import type { StudioPanel } from '../nestedDock';
-import { extensionPanelFor } from './agentLogic';
-import { StudioContextMenu, type StudioMenuItem } from '../ui/StudioContextMenu';
+import { useLuaMenu } from './useLuaMenu';
 import './ToolPanel.css';
 import './ProjectToolPanels.css';
 
@@ -21,38 +20,13 @@ export default function ExtensionsPanel({ snapshot, commitSnapshot, showPanel }:
   const [error, setError] = useState('');
   const read = useCallback(() => void invoke('studio.extensions', {}).then(r => { setExt(r); setError(''); }).catch(e => setError(message(e))), []);
   useEffect(() => { if (path) read(); }, [path, snapshot, read]);
-  const [menu, setMenu] = useState<{ x: number; y: number; items: StudioMenuItem[] } | null>(null);
-  const run = async (id: string, value?: string | number | boolean, element?: string) => {
+  const lua = useLuaMenu(commitSnapshot, showPanel, setStatus, setError, read);
+  const run = async (id: string, value?: string | number | boolean) => {
     try {
-      const { command } = element !== undefined ? await invoke('studio.contextAction', { window: 'lua.widget', element, id }) : await invoke('studio.extensionAction', value === undefined ? { id } : { id, value });
-      if (command?.command === 'status' && command.text) setStatus(String(command.text));
-      else if (element !== undefined && (command?.command === 'undo' || command?.command === 'redo')) {
-        const game = await invoke('studio.gameState', {});
-        if (!game.active && !game.loading)
-          commitSnapshot(await invoke(command.command === 'undo' ? 'studio.undo' : 'studio.redo', {}));
-      }
-      else if (command?.command === 'focus_selection') await invoke('studio.viewportInput', { kind: 'focus' });
-      else if (command?.command === 'clear_selection') commitSnapshot(await invoke('studio.select', { id: null }));
-      else if (command?.command === 'select_entity' && command.entityId) commitSnapshot(await invoke('studio.select', { id: String(command.entityId) }));
-      else if (command?.command === 'open_window') { const p = extensionPanelFor(String(command.id ?? '')); if (p) showPanel(p as StudioPanel); }
+      const { command } = await invoke('studio.extensionAction', value === undefined ? { id } : { id, value });
+      await lua.dispatch(command);
       read();
     } catch (e) { setError(message(e)); }
-  };
-  const menuItems = (entries: LuaMenuEntry[], element: string): StudioMenuItem[] => {
-    const items: StudioMenuItem[] = [];
-    let separator = false;
-    for (const entry of entries) {
-      if (!entry || entry.visible === false || (entry.scope && !['*', 'lua.widget'].includes(entry.scope)) ||
-          (entry.element && entry.element !== element)) continue;
-      if (!entry.label && !entry.id) { separator = true; continue; }
-      if (!entry.label || entry.label.length > 160 || (entry.id?.length ?? 0) > 128) continue;
-      const children = Array.isArray(entry.children) ? menuItems(entry.children, element) : undefined;
-      items.push({ id: entry.id || String(items.length), label: entry.label, separator, checked: entry.checked,
-        disabled: entry.enabled === false, shortcut: entry.shortcut, children,
-        onSelect: () => { setMenu(null); if (entry.id) void run(entry.id, undefined, element); } });
-      separator = false;
-    }
-    return items;
   };
   const change = (id: string, value: string | number | boolean) => {
     setValues(previous => ({ ...previous, [id]: value }));
@@ -101,17 +75,10 @@ export default function ExtensionsPanel({ snapshot, commitSnapshot, showPanel }:
     </div>
     {(error || ext?.error) && <div className="tool__error" role="alert">Lua: {error || ext?.error}</div>}
     {status && <div className="ptp__status is-ok" role="status">{status}</div>}
-    {menu && <StudioContextMenu {...menu} onClose={() => setMenu(null)} />}
+    {lua.popup}
     <div className="ptp__scroll" onContextMenu={event => {
       const element = (event.target as Element).closest<HTMLElement>('[data-lua-widget]')?.dataset.luaWidget;
-      if (!element) return;
-      event.preventDefault();
-      const x = event.clientX, y = event.clientY;
-      setMenu(null);
-      void invoke('studio.contextMenu', { window: 'lua.widget', element }).then(result => {
-        const items = menuItems(result.items, element);
-        if (items.length) setMenu({ x, y, items });
-      }).catch(e => setError(message(e)));
+      if (element) void lua.open(event, 'lua.widget', element);
     }}>
       {!ext?.exists && <p className="ptp__hint">A project can add its own editor panel: editor/extensions.lua defines window(ctx) (widgets), on_action / on_change (commands) and scene_gizmos(ctx) (Scene shapes). Lua runs sandboxed and edits the editor only through commands.</p>}
       {(ext?.widgets ?? []).map((w, i) => widget(w, String(i), i))}
