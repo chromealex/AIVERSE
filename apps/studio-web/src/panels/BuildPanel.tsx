@@ -8,6 +8,7 @@ import { useBuildTranscript } from './useBuildTranscript';
 import './BuildPanel.css';
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
+const INSTALL_MISSING_KEY = 'aiverse.studio.build.installMissing';
 const MAX_LOG = 400_000; // characters kept in the panel (the full log is in the log file)
 
 function TextureSizeSelect({path,rule,disabled,onChange}: {
@@ -111,7 +112,15 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
     setPendingEstimate(null);
   },[projectPath]);
   const [audio, setAudio] = useState('auto');
-  const [installMissing, setInstallMissing] = useState(false);
+  const [installMissing, setInstallMissing] = useState(() => localStorage.getItem(INSTALL_MISSING_KEY) === 'true');
+  useEffect(() => {
+    const sync = (event: StorageEvent) => {
+      if (event.storageArea === localStorage && (event.key === INSTALL_MISSING_KEY || event.key === null))
+        setInstallMissing(localStorage.getItem(INSTALL_MISSING_KEY) === 'true');
+    };
+    window.addEventListener('storage',sync);
+    return () => window.removeEventListener('storage',sync);
+  },[]);
   const [toolchain, setToolchain] = useState<StudioToolchain | null>(null);
   const [checking, setChecking] = useState(false);
   const [estimate, setEstimate] = useState<StudioBuildEstimate | null>(null);
@@ -281,7 +290,13 @@ export default function BuildPanel({ snapshot, commitSnapshot }: {
       <StudioCheckbox label="Estimate size after changes" checked={autoEstimate}
         onChange={e=>{setAutoEstimate(e.currentTarget.checked);setPendingEstimate(null);}}/>
       <StudioCheckbox label="Install missing tools first" checked={installMissing} disabled={state.running}
-        onChange={e => setInstallMissing(e.target.checked)}/>
+        onChange={e => {
+          const enabled=e.currentTarget.checked;
+          try {
+            localStorage.setItem(INSTALL_MISSING_KEY,String(enabled));
+            setInstallMissing(enabled);
+          } catch { setError('Could not save the tool installation preference.'); }
+        }}/>
       <div className="build__actions">
         <StudioButton variant="primary" disabled={!info?.toolFound || state.running || !!info?.dirty} onClick={() => void start('build')}>
           {state.running && !run.estimate ? <StudioLoader size={17}/> : <Hammer size={14}/>}Build {selected?.name ?? target}</StudioButton>
