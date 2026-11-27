@@ -1,0 +1,10 @@
+{
+  "sha": "0d0cebca52afc185200aafd53357c76aca3cc9cb",
+  "argv": [
+    "bash",
+    "../region-debug.sh"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-scene-region-debug.log.txt",
+  "sha256": "6912ede18254b12f1ed92a4343d825476c8769b754539a14c0e665a22e5f668b"
+}
