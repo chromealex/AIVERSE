@@ -1792,3 +1792,7 @@ b0fec432c5d7d229e7c5fe466178d7e1b7120211 changes GraphCanvas.tsx and GraphCanvas
 ### SpectraFX preview controls while scrolling
 
 db0e120d6af74b572a412313b038031cbdb762c9 updates SpectraNativePreview.tsx and SpectraDockViewport.css and adds captures/mac-spectra-scrolled-capture.png. Production web build passed. In a detached 980 x 720 Mac window the first stacked control row still scrolled the surface away (stats-mac-_phjnjkp/live.log). With the side column, scrolling separately to Load graph and Capture Frame produced a decoded native 512 x 246 JPEG (stats-mac-_ku93ke4/live.log). Prior native CTest run passed studio_spectrafx_preview and studio_spectrafx_fire_smoke. Narrow fallback and remaining window parity still require verification.
+
+### SpectraFX narrow dock capture
+
+ba54858b8ae8fce4297bea809535f4a06d4c5c33 updates SpectraNativePreview.tsx and adds captures/mac-spectra-narrow-capture.png. A real WKWebView panel constrained to 250 CSS pixels reproduced the missing surface after scrolling to Load or Capture. Compact grid variants alone failed. Restored the original narrow layout and revealed the dedicated drawable before dispatch. Production build passed. stats-mac-d9s1jmem/live.log records a single 206px track and decoded 512x447 JPEG after scrolling separately to both buttons. Remaining work includes other graph controls and the window parity matrix.
