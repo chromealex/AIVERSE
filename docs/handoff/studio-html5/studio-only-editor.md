@@ -1860,3 +1860,7 @@ b59daa3766d05b83b55cb0b66f212bc07b64c60b updates InspectorPanel.tsx and adds cap
 ### Map player record rename in HTML Inspector
 
 b293126c0468e1c079046203ae72d7e833a078e5 adds captures/mac-map-player-rename.png. Detached Mac Inspector opened Players, discarded a draft name, applied Northern Patrol, undid and redid the edit, then saved. Parsing maps/courtyard.json confirmed both player names, Northern Patrol and unchanged Watch. Evidence: stats-mac-0615r0g_/live.log. The verified owner is studio.mapPlayer with document revision and one-based player slot. Direct Hierarchy entry for player records is still outstanding.
+
+### Select map player in Hierarchy and edit in detached Inspector
+
+dae6dd7e9ae8fac970ac3101eccf4473c3191256 updates HierarchyPanel.tsx, HierarchyPanel.css and StudioTools.h and adds captures/mac-hierarchy-player-inspector.png. The first Mac run exposed the Studio tools allowlist rejecting editor_select. After enabling the existing read-only operation and adding document revision and epoch preconditions, the native app rebuilt. From a detached Hierarchy selecting Watch opened slot 2 in a separate Inspector. Applying Western Watch and saving persisted both expected names in maps/courtyard.json. Evidence: stats-mac-xahcfmn9/live.log. Web production build, native aiverse_studio build and six hierarchy filter tests passed. Continue remaining legacy record entry points and overall migration checks.
