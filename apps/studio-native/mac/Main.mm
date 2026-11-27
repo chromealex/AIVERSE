@@ -122,7 +122,7 @@ namespace studio = aiverse::studio;
 }
 @end
 
-@interface StudioShell : NSObject <NSApplicationDelegate, NSWindowDelegate, WKScriptMessageHandler, WKNavigationDelegate> {
+@interface StudioShell : NSObject <NSApplicationDelegate, NSWindowDelegate, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate> {
 @public
     NSWindow* window_;
     WKWebView* web_;
@@ -775,6 +775,20 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
     return self;
 }
 - (studio::StudioHost*)core { return core_.get(); }
+- (void)webView:(WKWebView*)webView runOpenPanelWithParameters:(WKOpenPanelParameters*)parameters
+ initiatedByFrame:(WKFrameInfo*)frame completionHandler:(void (^)(NSArray<NSURL*>*))completionHandler {
+    if (!frame.mainFrame || ![self trusted:frame.request.URL] || !webView.window) {
+        completionHandler(nil);
+        return;
+    }
+    NSOpenPanel* panel = [NSOpenPanel openPanel];
+    panel.canChooseFiles = YES;
+    panel.canChooseDirectories = NO;
+    panel.allowsMultipleSelection = parameters.allowsMultipleSelection;
+    [panel beginSheetModalForWindow:webView.window completionHandler:^(NSModalResponse response) {
+        completionHandler(response == NSModalResponseOK ? panel.URLs : nil);
+    }];
+}
 - (BOOL)trusted:(NSURL*)url {
     if (!url) return NO;
     // file:// navigation is deliberately disallowed. All production assets
@@ -915,6 +929,7 @@ static NSString* studioDraggedAsset(id<NSDraggingInfo> sender) {
     ((StudioFileDropWebView*)web).shell=self;
     [web registerForDraggedTypes:@[NSPasteboardTypeFileURL]];
     web.navigationDelegate=self;
+    web.UIDelegate=self;
     web.autoresizingMask=NSViewWidthSizable|NSViewHeightSizable;
     return web;
 }

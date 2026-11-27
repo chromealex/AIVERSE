@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeftRight, RefreshCw } from 'lucide-react';
+import { ArrowLeftRight, FolderOpen, RefreshCw } from 'lucide-react';
 import { invoke } from '../bridge';
 import type { StudioGpuStats, StudioProjectState, StudioSnapshot, StudioStats } from '../types';
 import { formatBytes, frameSummary, jsonDiff, previewValue, type JsonChange } from './jsonDiff';
@@ -52,6 +52,7 @@ export function SnapshotDiffPanel({ snapshot }: Ctx) {
   const path = snapshot?.project.path ?? '';
   const [maps, setMaps] = useState<string[]>([]);
   const [a, setA] = useState(''), [b, setB] = useState('');
+  const [firstFile, setFirstFile] = useState<File | null>(null), [secondFile, setSecondFile] = useState<File | null>(null);
   const [notice, setNotice] = useState('');
   const [truncated, setTruncated] = useState(false);
   const [changes, setChanges] = useState<JsonChange[] | null>(null);
@@ -65,14 +66,19 @@ export function SnapshotDiffPanel({ snapshot }: Ctx) {
       setMaps(files); setA(x => x || files[0] || ''); setB(x => x || files[1] || files[0] || '');
     }).catch(e => setError(message(e)));
   }, [path]);
-  const read = async (file: string) => {
+  const read = async (file: string, external: File | null) => {
+    if (external) {
+      if (external.size > 16 * 1024 * 1024) throw new Error(external.name + ' exceeds 16 MiB');
+      const text = await external.text();
+      try { return JSON.parse(text); } catch { throw new Error(external.name + ' is not JSON'); }
+    }
     const r = (await invoke('studio.op', { op: 'game_file_read', params: { path: file } })).result as { text?: string };
     try { return JSON.parse(r.text ?? ''); } catch { throw new Error(file + ' is not JSON'); }
   };
   const compare = async () => {
     setBusy(true); setChanges(null); setNotice(''); setError('');
     try {
-      const [first, second] = await Promise.all([read(a.trim()), read(b.trim())]);
+      const [first, second] = await Promise.all([read(a.trim(), firstFile), read(b.trim(), secondFile)]);
       const rows = jsonDiff(first, second, 1e-6, 2001);
       setTruncated(rows.length > 2000);
       setChanges(rows.slice(0, 2000));
@@ -91,9 +97,25 @@ export function SnapshotDiffPanel({ snapshot }: Ctx) {
   if (!path) return <div className="tool__empty">Open a project to compare its snapshots.</div>;
   return <div className="ptp">
     <div className="ptp__edhead diff__head">
-      <input className="au-input" list="diff-maps" aria-label="First snapshot" disabled={busy} value={a} onChange={e => { setA(e.target.value); resetResult(); }} placeholder="maps/a.json"/>
-      <button type="button" className="au-button au-button--icon au-button--ghost au-button--sm" title="Swap" disabled={busy} onClick={() => { setA(b); setB(a); resetResult(); }}><ArrowLeftRight size={13}/></button>
-      <input className="au-input" list="diff-maps" aria-label="Second snapshot" disabled={busy} value={b} onChange={e => { setB(e.target.value); resetResult(); }} placeholder="maps/b.json"/>
+      <label className="au-button au-button--icon au-button--sm diff__browse" title="Choose first snapshot file">
+        <FolderOpen size={15}/>
+        <input type="file" accept=".json,application/json" disabled={busy} aria-label="Choose first snapshot file" onChange={event => {
+          const file = event.target.files?.[0];
+          if (file) { setFirstFile(file); setA(file.name); resetResult(); }
+          event.target.value = '';
+        }}/>
+      </label>
+      <input className="au-input" list="diff-maps" aria-label="First snapshot" disabled={busy} value={a} onChange={e => { setA(e.target.value); setFirstFile(null); resetResult(); }} placeholder="maps/a.json"/>
+      <button type="button" className="au-button au-button--icon au-button--ghost au-button--sm" title="Swap" disabled={busy} onClick={() => { setA(b); setB(a); setFirstFile(secondFile); setSecondFile(firstFile); resetResult(); }}><ArrowLeftRight size={13}/></button>
+      <label className="au-button au-button--icon au-button--sm diff__browse" title="Choose second snapshot file">
+        <FolderOpen size={15}/>
+        <input type="file" accept=".json,application/json" disabled={busy} aria-label="Choose second snapshot file" onChange={event => {
+          const file = event.target.files?.[0];
+          if (file) { setSecondFile(file); setB(file.name); resetResult(); }
+          event.target.value = '';
+        }}/>
+      </label>
+      <input className="au-input" list="diff-maps" aria-label="Second snapshot" disabled={busy} value={b} onChange={e => { setB(e.target.value); setSecondFile(null); resetResult(); }} placeholder="maps/b.json"/>
       <datalist id="diff-maps">{maps.map(m => <option key={m} value={m}/>)}</datalist>
       <button type="button" className="au-button au-button--sm au-button--primary" disabled={busy || !a || !b} onClick={() => void compare()}>
         {busy ? <StudioLoader size={16}/> : <RefreshCw size={13}/>}Compare</button>

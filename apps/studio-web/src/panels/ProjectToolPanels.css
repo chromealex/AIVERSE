@@ -69,6 +69,9 @@
 .stats__bar i{height:8px;border-radius:2px;background:var(--au-accent);opacity:.75;min-width:2px}
 .stats__bar b{text-align:right;font-weight:500;font-variant-numeric:tabular-nums}
 .diff__head .au-input{flex:1;min-width:0}
+.diff__browse{position:relative;overflow:hidden;flex-shrink:0}
+.diff__browse input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.diff__browse:focus-within{outline:2px solid currentColor}
 .diff__summary{display:flex;align-items:center;gap:10px;font-size:var(--au-font-xs);color:var(--au-text-muted)}
 .diff__summary .au-input{margin-left:auto;width:140px}
 .diff__added,.diff__summary .diff__added{color:#8ee6a0}.diff__removed{color:#ff9a8a}.diff__changed{color:#f3c873}
