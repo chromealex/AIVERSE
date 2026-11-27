@@ -1760,3 +1760,7 @@ f7df1420e05ef5291ea8598e5ed480d601f2b6e5 updates docs/studio-html5-parity.md. Ve
 ### Material dependency navigation
 
 ecc91722aa0dc84b83809ac3edc21b9696d2ef37 enables existing GraphCanvas enhanced navigation in apps/studio-web/src/graphs/MaterialGraphPanel.tsx. Screenshot captures/mac-material-dependency-navigation.png. Production web build and graph tests passed. In a detached Materials panel with a basalt fixture, opened Dependencies, verified visible minimap, zoomed to 125%, then used Fit and confirmed node coordinates were unchanged (stats-mac-qsih21du/live.log). Continue legacy window parity audit.
+
+### Keyboard graph overview
+
+b004f89bcd665079b550b896fb7cc8d2b57bab21 updates apps/studio-web/src/graphs/GraphCanvas.tsx. Home invokes Fit on the focused enhanced graph canvas. Zoom buttons expose action names and reset reports the current percentage. Web build and graph tests passed. Detached macOS Materials verified at 125% that a Home key event on a node retained zoom, Home on the focused SVG fitted the graph, and all node coordinates stayed unchanged. Evidence: stats-mac-ecm1nges/live.log and statistics.png. Continue the outstanding window workflow audit.
