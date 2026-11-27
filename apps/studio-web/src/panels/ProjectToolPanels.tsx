@@ -138,9 +138,13 @@ function ScriptPlayLog({playing}:{playing:boolean}) {
   const list = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   useEffect(() => { if(follow.current && list.current) list.current.scrollTop=list.current.scrollHeight; },[rows,errorsOnly]);
-  const shown = errorsOnly ? rows.filter(row=>row.error) : rows;
+  const errors = rows.filter(row=>row.error);
+  const shown = errorsOnly ? errors : rows;
   return <>
-    <div className="ptp__edhead"><b>Play-test log</b><label><input type="checkbox" checked={errorsOnly}
+    <div className="ptp__edhead"><b>Play-test log</b>
+      {playing && !failure && rows.length>0 && <span className="scripts-page__error-count" data-errors={errors.length>0}>
+        {errors.length} {errors.length===1?'error':'errors'}
+      </span>}<label><input type="checkbox" checked={errorsOnly}
       onChange={e=>setErrorsOnly(e.target.checked)}/> Errors only</label></div>
     <div ref={list} className="console__list transcript-lines" aria-label="Lua play-test log"
       onScroll={e=>{const el=e.currentTarget;follow.current=el.scrollHeight-el.clientHeight-el.scrollTop<24;}}>

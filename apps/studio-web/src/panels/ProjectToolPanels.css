@@ -145,3 +145,6 @@ tr.diff__added td:first-child{color:#8ee6a0}tr.diff__removed td:first-child{colo
   .scripts-page .scripts-files-collapsed>:not(.ptp__fileshead){display:none}
   .scripts-page .scripts-files-collapsed{padding-bottom:0}
 }
+
+.scripts-page__error-count{font-variant-numeric:tabular-nums;color:var(--au-text-muted)}
+.scripts-page__error-count[data-errors=true]{color:var(--au-danger)}
