@@ -1664,3 +1664,7 @@ d36ac0faed88182b8f29271a8271dbef4cdbec52 updates docs/studio-html5-parity.md and
 ### Explicit Frame Capture recording intervals
 
 f36c755b97cb50f9b9b6a14420e21ae40ee63ba4 updates InsightPanels.tsx. Packaged macOS Studio recorded 44 Scene frames after Start recording and 54 more after Resume recording. CSV first interval stayed fixed while paused; 51 intervening Scene frames were absent from the concatenated recording, and original frame IDs remained intact. Clear reset the paused recording. Web/native builds passed. Capture docs/handoff/studio-html5/captures/mac-frame-recording.png. Next verify clearing an active recording and scoped panel state.
+
+### Frame Capture active clear and project isolation
+
+26593485c104cb48f162c9970859cda111704973 updates InsightPanels.tsx. Web and native Mac builds passed. Mac Studio cleared a resumed recording with 99 previously retained frames, remained in recording mode and exported only 45 new frames. Verified first new frame against live native boundaries and no earlier IDs in the result. Switched to a second project in the same detached panel and verified fresh controls, no old slider or CSV. Capture: docs/handoff/studio-html5/captures/mac-frame-record-clear.png. Continue remaining legacy window coverage and Windows checks.
