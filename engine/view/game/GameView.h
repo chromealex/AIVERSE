@@ -58,6 +58,7 @@ namespace kingston { struct CabinResidentDraw; }
 #include "GameModelPreparationService.h"
 #include "GameTerrainRender.h"
 #include "ProjectileAppearance.h"
+#include "engine/view/ProjectilePresentation.h"
 #include "EntityFx.h"
 
 namespace aiverse::render { class CameraModelSnapshot; }
@@ -978,7 +979,7 @@ private:
         float prevTime[render::Animator::kLayers] = {0, 0, 0};
         float lodAccum = 0;                       // animation LOD: time not yet applied to the pose
         bool poseValid = false;
-        render::float3 launch;                    // projectiles: offset from the muzzle, decays
+        ::aiverse::view::ProjectilePresentation projectilePresentation;
         bool launched = false;
         bool straightImpact = false; // projectile last.pos is its rendered point, last.target the endpoint
         double lastSeenTime = -1;                 // previews keep their own clock

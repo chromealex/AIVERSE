@@ -468,18 +468,13 @@ void GameFx::update(Simulation& sim, const std::vector<SceneObject>* scene, floa
                 auto* su = pr && w.alive(pr->source) ? w.tryGet<Unit>(pr->source) : nullptr;
                 const Binding& b = pr && su && pr->weapon>=0 && size_t(su->type)<types_.size() && size_t(pr->weapon)<types_[su->type].weapons.size() && types_[su->type].weapons[size_t(pr->weapon)].trail.set ? types_[su->type].weapons[size_t(pr->weapon)].trail : trailFor(su ? int(su->type) : -1);
                 if (!b.valid()) { trails_[key] = {{}, frame_}; continue; }   // remembered: no lookup every frame
-                float3 offset{}, muzzle, dir;
-                if (!fitted && !place_ && pr && !projectileContinuesFromContact(*pr) && attackOrigin_ && attackOrigin_(pr->source, muzzle, dir)) {
-                    offset = muzzle - o.pos;
-                    if (render::length(offset) > 8) offset = {};   // stale pose: do not start from afar
-                }
-                trails_[key] = {ps_->play(b.effect, fitted ? point : o.pos + offset, up, b.scale), frame_, b.clear, offset};
+                // A visual host supplies the shared sample. Headless/culled
+                // consumers use authoritative position without a second solver.
+                trails_[key] = {ps_->play(b.effect, fitted ? point : o.pos, up, b.scale), frame_, b.clear, {}};
             } else {
                 Attached& a = it->second;
                 a.frame = frame_;
-                const float k = std::exp(-std::max(0.0f, dt) * 7.0f);   // GameView::drawProjectile's convergence
-                a.offset = {a.offset.x * k, a.offset.y, a.offset.z * k};
-                ps_->move(a.h, fitted ? point : o.pos + a.offset);
+                ps_->move(a.h, fitted ? point : o.pos);
             }
             continue;
         }

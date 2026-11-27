@@ -7,7 +7,7 @@
 namespace aiverse::view {
 // Host adapters supply an explicit segment transition. Simulation owns collision,
 // segment identity and origin; this object owns only visual convergence.
-enum class FlightOrigin : uint8_t { Emission, Split, Ricochet };
+enum class FlightOrigin : uint8_t { Emission, Split, Ricochet, Continuation };
 struct FlightSegment {
     uint64_t id = 0;
     FlightOrigin origin = FlightOrigin::Emission;
