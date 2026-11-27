@@ -318,11 +318,16 @@ export function FrameCapturePanel({ snapshot }: Ctx) {
 function TexturePixels({ project, texture, mip, layer }: { project: string; texture: StudioGpuTexture; mip: number; layer: number }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const active = useRef(false);
+  const reading = useRef(false);
+  const [live, setLive] = useState(texture.dimension === '2D');
+  const textureId = texture.id;
   const [pending, setPending] = useState(false), [ready, setReady] = useState(false), [error, setError] = useState('');
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
-  const readPixels = async () => {
-    setPending(true); setReady(false); setError('');
-    const request = { project, texture: texture.id, mip, layer, ticket: Date.now() + '-' + Math.random() };
+  const readPixels = useCallback(async () => {
+    if (reading.current || document.hidden) return;
+    reading.current = true;
+    setPending(true); setError('');
+    const request = { project, texture: textureId, mip, layer, ticket: Date.now() + '-' + Math.random() };
     try {
       await invoke('studio.textureReadback', request);
       const deadline = Date.now() + 15000;
@@ -341,9 +346,20 @@ function TexturePixels({ project, texture, mip, layer }: { project: string; text
       }
       if (active.current) throw new Error('Timed out waiting for the GPU');
     } catch (e) { if (active.current) setError(message(e)); }
-    finally { if (active.current) setPending(false); }
-  };
+    finally { reading.current = false; if (active.current) setPending(false); }
+  }, [project, textureId, mip, layer]);
+  useEffect(() => {
+    if (!live) return;
+    void readPixels();
+    const timer = window.setInterval(readPixels, 1000);
+    document.addEventListener('visibilitychange', readPixels);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', readPixels);
+    };
+  }, [live, readPixels]);
   return <div className="texture-resource__pixels">
+    {texture.dimension === '2D' && <label><input type="checkbox" checked={live} onChange={event => setLive(event.target.checked)}/> Live preview</label>}
     <button type="button" className="au-button au-button--sm" disabled={pending} onClick={() => void readPixels()}>{pending ? 'Reading pixels…' : 'Read GPU pixels'}</button>
     {error && <p role="alert">{error}</p>}
     <canvas ref={canvas} hidden={!ready} aria-label="GPU pixel preview"/>
