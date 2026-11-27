@@ -1,0 +1,14 @@
+{
+  "sha": "d228e9e62bac32c5947bf4e72e1553c3123ab6eb",
+  "argv": [
+    "python3",
+    "-B",
+    "apps/studio-native/tests/standalone_bundle.py",
+    "--files-only",
+    "--require-build-tool",
+    "../windows-cross/apps/studio-native"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-win-package-runtime-assets.log.txt",
+  "sha256": "34ca04a61b87e33c2d9c6fd5b43bbaca05f4a769b9ce89ac1308878f8db8c301"
+}
