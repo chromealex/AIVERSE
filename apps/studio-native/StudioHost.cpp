@@ -2035,14 +2035,15 @@ void StudioHost::focusLiveSelection() {
     const auto position = game_->selectedEntityPosition();
     if (!position) return;
     ensureScene();
-    if (session_->workspace().map.data.worldSpace) {
-        onScene([&] { preview_->requestSceneFocus(*position, 18.f); });
-    } else {
-        onScene([&] {
-            const auto camera = preview_->cameraState();
-            preview_->tweenCamera(*position, 18.f, camera.yaw, camera.pitch);
-        });
-    }
+    const bool worldSpace=session_->workspace().map.data.worldSpace;
+    onScene([&] {
+        if(worldSpace || !preview_->hasSceneCamera()) {
+            preview_->requestSceneFocus(*position,18.f);
+        } else {
+            const auto camera=preview_->cameraState();
+            preview_->tweenCamera(*position,18.f,camera.yaw,camera.pitch);
+        }
+    });
     sendEventPayload("ui.showPanel",Json::parse(R"({"panel":"scene"})"));
 }
 
