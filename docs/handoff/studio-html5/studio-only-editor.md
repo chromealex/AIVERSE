@@ -2042,3 +2042,5 @@ a63ec1f679a6286d58a9c1c2beeaff9b3f05f25d adds Open model graph to AnimationTimel
 f148a03f462da48797e3a8d9f9e924cdc564b68b adds Open timeline in ModelGraphPanel.tsx for saved models with clips. Unsaved graph edits keep the command disabled. Web build and 113 graph tests passed. Packaged macOS opened walker in Modeling, then its timeline via the new button and verified walker remained selected with Attack present. Evidence ../debug-keys-_q2zk7fu/live.log.
 
 d5b053869f07bca0dff1d0f4da548bfabee43c3c makes individual channel keys selectable in AnimationTimeline.tsx and AnimationTimeline.css. Web build passed. Packaged macOS selected body.translation key 2 during playback, paused at 0.25 s and displayed 0,1,0. Evidence ../debug-keys-hfqhw6os/live.log and restored.png. Next verify key editing parity and Windows.
+
+7eab09981f9cf2f99b6aeca15dcc1d3a67aa189e corrects cubic value indexing in AnimationTimeline.tsx and animLogic.ts. Web build passed. Packaged Mac selected cubic key 2 at 0.25 s and showed its value 0, 1, 0 between zero tangents. Capture and log in ../debug-keys-zy_ozpwa. Next implement revision-checked key editing.
