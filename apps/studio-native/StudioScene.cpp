@@ -4804,10 +4804,15 @@ void StudioScene::frame(int framebufferWidth, int framebufferHeight, const edito
                     return tiles?tiles->sample(x,z,base):base;
                 };
                 Overlay2D overlay{renderer_,view,float(framebufferWidth),float(framebufferHeight),view.ortho?.5f:view.zNear*1.4f};
-                editor::terrainSlopeArrows(tile?tile->x:view.target.x,tile?tile->z:view.target.z,
-                    natureLayers_.radius,natureLayers_.spacing,height,[&](float3 a,float3 b,float strength){
-                        overlay.arrow(a,b,1.8f,rgba(int(120+135*strength),int(220-150*strength),80,210));
-                    });
+                const auto drawSlope=[&](float x,float z){
+                    editor::terrainSlopeArrows(x,z,natureLayers_.radius,natureLayers_.spacing,height,
+                        [&](float3 a,float3 b,float strength){
+                            overlay.arrow(a,b,1.8f,rgba(int(120+135*strength),int(220-150*strength),80,210));
+                        });
+                };
+                if(tile)drawSlope(tile->x,tile->z);
+                if(natureLayers_.terraSlopeAtTarget && (!tile || tile->x!=view.target.x || tile->z!=view.target.z))
+                    drawSlope(view.target.x,view.target.z);
             }
         }
         if(natureLayers_.nereidFlow && !planetaryChart){
