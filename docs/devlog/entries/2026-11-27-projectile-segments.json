@@ -14,13 +14,13 @@
     "The demo has four scenes: straight, arc, ricochet and split. The launcher fires automatically; map=0…3 selects the scene.",
     "At retirement the trail receives the final endpoint, including projectiles born and removed between rendered frames."
   ],
-  "status": "in-progress",
+  "status": "done",
   "verified": "Четыре сцены проверены на Metal и загружены в WebGL. Сохранены настоящие кадры полёта и браузерные кадры рикошета и разделения.",
   "verifiedEn": "Four scenes checked on Metal and loaded in WebGL. Real flight frames and browser ricochet/split captures are retained.",
-  "limits": "Кадры не доказывают совпадение на каждом шаге. Итоговая проверка и интеграция продолжаются; Windows и Vulkan не проверены.",
-  "limitsEn": "Static frames do not prove every-frame alignment. Final verification and integration continue; Windows and Vulkan are untested.",
-  "branch": "codex/issue223-minimap-atlas-20261126",
-  "commit": "4d6f08f19",
+  "limits": "Кадры не доказывают совпадение на каждом шаге. Windows и Vulkan не проверены.",
+  "limitsEn": "Static frames do not prove every-frame alignment. Windows and Vulkan are untested.",
+  "branch": "main",
+  "commit": "25d057a5195f6b6ade1a6b2c38e25a48cf9d184b",
   "media": [
     {
       "src": "docs/evidence/issues-projectile-segments-web-20261127/ricochet.png",

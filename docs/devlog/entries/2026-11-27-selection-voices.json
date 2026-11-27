@@ -14,13 +14,13 @@
     "The demo has two objects with short tones: two normal 440 Hz responses followed by 660 and 880 Hz. Click one object with gaps longer than 0.3 seconds.",
     "Settings use ordinary audio.json data; a zero window retains the sequence across long pauses."
   ],
-  "status": "in-progress",
+  "status": "done",
   "verified": "Запись выхода нативного аудиомикшера подтвердила порядок и сброс после Stop и смены объекта. Три регрессионных теста: 119 проверок. WebGL-сцена загружена, повторный выбор работает.",
   "verifiedEn": "Native mixer output capture confirmed ordering and resets after Stop and switching objects. Three regressions: 119 checks. WebGL scene loading and repeated selection checked.",
-  "limits": "Звук браузера и физических динамиков не записан. Итоговая проверка и интеграция продолжаются.",
-  "limitsEn": "Browser audio and physical speaker output were not recorded. Final verification and integration continue.",
-  "branch": "codex/issue223-minimap-atlas-20261126",
-  "commit": "0ed8dddaa",
+  "limits": "Звук браузера и физических динамиков не записан.",
+  "limitsEn": "Browser audio and physical speaker output were not recorded.",
+  "branch": "main",
+  "commit": "25d057a5195f6b6ade1a6b2c38e25a48cf9d184b",
   "media": [
     {
       "src": "docs/evidence/issues-selection-voices-web-20261127/selected.png",

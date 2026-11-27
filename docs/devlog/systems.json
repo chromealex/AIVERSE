@@ -1503,6 +1503,12 @@
           "text": "Модули Unity ParticleSystem и импорт эффектов из Unity.",
           "nameEn": "Import",
           "textEn": "Unity ParticleSystem modules and effect import from Unity."
+        },
+        {
+          "name": "Материалы и тени эффектов",
+          "nameEn": "Effect materials and shadows",
+          "text": "Аддитивные материалы моделей, управление отбрасыванием тени и сложение частиц после тонального отображения.",
+          "textEn": "Additive model materials, shadow-casting control and particle addition after tone mapping."
         }
       ],
       "enables": [
@@ -1586,12 +1592,13 @@
         },
         {
           "id": "fx-model-shadow-option",
-          "status": "in-progress",
-          "title": "fx-model-shadow-option",
-          "titleEn": "fx-model-shadow-option",
+          "status": "done",
+          "title": "Тени моделей эффектов",
+          "titleEn": "Effect model shadows",
           "target": null,
-          "text": "Готовится общий пример модельных эффектов: тени, аддитивные материалы и цветовое пространство частиц.",
-          "textEn": "Preparing a shared model-effects example: shadows, additive materials and particle blend space."
+          "text": "Модельный эффект может отключить отбрасывание тени, сохранив материал.",
+          "textEn": "A model effect can disable shadow casting while preserving its material.",
+          "date": "2026-11-27"
         }
       ],
       "taglineEn": "Particle effects",
@@ -3414,10 +3421,13 @@
       "roadmap": [
         {
           "id": "minimap-background-packaging",
-          "status": "in-progress",
+          "status": "done",
           "target": null,
-          "title": "Сохранять фон миникарты в пакетах",
-          "titleEn": "Preserve minimap backgrounds in packaged builds"
+          "title": "Изображения из атласов в пакетах",
+          "titleEn": "Atlas images in packaged builds",
+          "date": "2026-11-27",
+          "text": "Загрузка логического изображения восстанавливает его из атласа; фон миникарты сохраняется в пакетах.",
+          "textEn": "Logical image loading reconstructs atlas entries, preserving minimap backgrounds in packaged builds."
         },
         {
           "id": "site-devlog-roadmap",
@@ -3594,30 +3604,33 @@
         },
         {
           "id": "projectile-trail-alignment",
-          "status": "in-progress",
-          "title": "Единое представление снарядов и следов",
-          "titleEn": "Shared projectile and trail presentation",
+          "status": "done",
+          "title": "Позиция снаряда и следа",
+          "titleEn": "Projectile and trail position",
           "target": null,
-          "text": "Общий образец позиции для модели, следа и света. Четыре сцены проверены на Metal; браузерная проверка и интеграция продолжаются.",
-          "textEn": "One position sample for model, trail and light. Four scenes checked on Metal; browser acceptance and integration remain in progress."
+          "text": "Модель, след и свет используют одну позицию; продолжения начинаются в точке контакта или разделения.",
+          "textEn": "Model, trail and light share one position; continuations start at contact or split positions.",
+          "date": "2026-11-27"
         },
         {
           "id": "model-additive-blending",
-          "status": "in-progress",
+          "status": "done",
           "title": "Аддитивные материалы моделей",
           "titleEn": "Additive model materials",
-          "text": "Готовится общий пример модельных эффектов: тени, аддитивные материалы и цветовое пространство частиц.",
-          "textEn": "Preparing a shared model-effects example: shadows, additive materials and particle blend space.",
-          "target": null
+          "text": "Сложение цвета с учётом alpha или без неё; импорт и переопределения материалов.",
+          "textEn": "Color addition with or without alpha weighting, through import and material overrides.",
+          "target": null,
+          "date": "2026-11-27"
         },
         {
           "id": "particle-display-blending",
-          "status": "in-progress",
-          "title": "Смешивание частиц в пространстве отображения",
-          "titleEn": "Display-space particle blending",
+          "status": "done",
+          "title": "Сложение частиц после тонального отображения",
+          "titleEn": "Particle addition after tone mapping",
           "target": null,
-          "text": "Готовится общий пример модельных эффектов: тени, аддитивные материалы и цветовое пространство частиц.",
-          "textEn": "Preparing a shared model-effects example: shadows, additive materials and particle blend space."
+          "text": "Аддитивные частицы и ленты могут складывать цвет в пространстве отображения.",
+          "textEn": "Additive particles and ribbons can add color in display space.",
+          "date": "2026-11-27"
         }
       ]
     },
@@ -3668,6 +3681,12 @@
           "text": "Карточные правила со стеком, тактическая сетка, поиск хода ботом, match-3, Sokoban и решатели.",
           "nameEn": "Cards, turns and puzzles",
           "textEn": "Card rules with a stack, tactical grids, bot move search, match-3, Sokoban and solvers."
+        },
+        {
+          "name": "Выбор и игровой интерфейс",
+          "nameEn": "Selection and game interface",
+          "text": "Выбор из скриптов, горячие клавиши, Move, карточки зданий, портреты и настройки миникарты.",
+          "textEn": "Script selection, hotkeys, Move, structure cards, portraits and minimap settings."
         }
       ],
       "enables": [
@@ -3799,49 +3818,63 @@
         },
         {
           "id": "client-command-controls",
-          "status": "in-progress",
-          "title": "Управление клиентом и общие настройки проекта",
-          "titleEn": "Client controls and shared project settings",
+          "status": "done",
+          "title": "Команды и настройки проекта",
+          "titleEn": "Client commands and project settings",
           "target": null,
-          "text": "Проверка клиентских команд; общий редактор game.json в Project через существующий Workspace с защитой от устаревшего сохранения.",
-          "textEn": "Client command acceptance; shared game.json editing in Project through the existing Workspace owner with stale-save protection."
+          "text": "Горячие клавиши, Move, команды зданий и выход; настройки проекта доступны в Studio с защитой от устаревшего сохранения.",
+          "textEn": "Hotkeys, Move, structure commands and quit; Studio project settings guard against stale saves.",
+          "date": "2026-11-27"
         },
         {
           "id": "view-selection-requests",
-          "status": "in-progress",
-          "title": "view-selection-requests",
-          "titleEn": "view-selection-requests",
-          "target": null
+          "status": "done",
+          "title": "Выбор объектов из скрипта представления",
+          "titleEn": "Selection from view scripts",
+          "target": null,
+          "date": "2026-11-27",
+          "text": "Скрипт представления меняет локальный выбор через view.select.",
+          "textEn": "View scripts update local selection through view.select."
         },
         {
           "id": "selection-voice-order",
-          "status": "in-progress",
-          "title": "Последовательные реплики при повторном выборе",
-          "titleEn": "Sequential repeated-selection voices",
+          "status": "done",
+          "title": "Последовательные реплики выбора",
+          "titleEn": "Sequential selection voices",
           "target": null,
-          "text": "Порядок и сброс подтверждены записью нативного клиента. Завершается общий редактор данных проекта в Studio и web-демо.",
-          "textEn": "Order and reset verified in captured native audio. Completing shared Studio project-data editing and the web demo."
+          "text": "Повторный выбор перебирает реплики по порядку; приказ или смена объекта сбрасывают последовательность.",
+          "textEn": "Repeated selection cycles voices in order; orders or changing objects reset the sequence.",
+          "date": "2026-11-27"
         },
         {
           "id": "precise-attack-phases",
-          "status": "in-progress",
+          "status": "done",
           "title": "Точное время фаз атаки",
           "titleEn": "Precise attack phase timing",
-          "target": null
+          "target": null,
+          "date": "2026-11-27",
+          "text": "Дробный остаток времени переносится между подготовкой удара и перезарядкой.",
+          "textEn": "Fractional time carries between windup and cooldown."
         },
         {
           "id": "minimap-view-options",
-          "status": "in-progress",
+          "status": "done",
           "title": "Область и отображение миникарты",
           "titleEn": "Minimap bounds and display",
-          "target": null
+          "target": null,
+          "date": "2026-11-27",
+          "text": "Видимость типов, прямоугольная рамка камеры и настраиваемая область плоской карты.",
+          "textEn": "Type visibility, rectangular camera frame and configurable flat-map bounds."
         },
         {
           "id": "portrait-appearance-options",
-          "status": "in-progress",
+          "status": "done",
           "title": "Модель и фон портрета",
           "titleEn": "Portrait model and background",
-          "target": null
+          "target": null,
+          "date": "2026-11-27",
+          "text": "Отдельная модель портрета, заданный цвет фона или цвет владельца.",
+          "textEn": "Separate portrait model, authored background or owner color."
         }
       ]
     }
