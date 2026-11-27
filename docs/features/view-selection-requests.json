@@ -51,19 +51,28 @@
       ]
     },
     "mcp": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Real script_write/read and viewScripts registration passed; built-server registry audit confirms all declared tools with no missing registrations.",
+      "evidence": [
+        "docs/evidence/issues-selection-authoring-20261127/result.json",
+        "docs/evidence/issues-selection-authoring-20261127/registry.log.txt"
+      ]
     },
     "studio": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Native Studio Scripts panel changed, saved and reopened the view.select source; disk matches. Actual selection behavior covered by native/browser client captures.",
+      "evidence": [
+        "docs/evidence/issues-selection-authoring-20261127/result.json",
+        "docs/evidence/issues-selection-authoring-20261127/studio.png"
+      ]
     },
     "inspector": {
-      "status": "not_run",
-      "note": "Pending implementation and verification.",
-      "evidence": []
+      "status": "pass",
+      "note": "Selection behavior is authored as Lua source in existing Scripts editor; no separate entity property was introduced. Editable source loaded, saved and read back in native Studio.",
+      "evidence": [
+        "docs/evidence/issues-selection-authoring-20261127/result.json",
+        "docs/evidence/issues-selection-authoring-20261127/studio.png"
+      ]
     },
     "persistence": {
       "status": "not_applicable",
@@ -140,9 +149,17 @@
     "skills": [
       "aiverse-view"
     ],
-    "mcp_tools": [],
-    "studio_panels": [],
-    "studio_methods": []
+    "mcp_tools": [
+      "script_write",
+      "script_read",
+      "rules_get"
+    ],
+    "studio_panels": [
+      "scripts"
+    ],
+    "studio_methods": [
+      "studio.op"
+    ]
   },
   "test_reports": []
 }
