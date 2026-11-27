@@ -11,7 +11,7 @@ import './ProjectToolPanels.css';
 import './AnimationTimeline.css';
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
-const op = async (name: string, params: Record<string, unknown> = {}) => (await invoke('studio.op', { op: name, params })).result as any;
+const op = async (expectedProject: string, name: string, params: Record<string, unknown> = {}) => (await invoke('studio.op', { expectedProject, op: name, params })).result as any;
 
 /** Animation: clips of the project's authoring models (modeling/*.model.json) on a timeline with a live skeleton preview. */
 export default function AnimationTimeline({ snapshot, showPanel, route }: { route:import('../types').AnimationAuthoringRoute; snapshot: StudioSnapshot | null; showPanel: (p: StudioPanel) => void }) {
@@ -34,7 +34,7 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
   const requestPose = useRef<((time: number) => void) | null>(null);
   useEffect(() => {
     if (!path) return;
-    void op('modeling_list').then(r => { const m: string[] = r.models ?? []; setModels(m); setModel(x => x || m[0] || ''); }).catch(e => setError(message(e)));
+    void op(path, 'modeling_list').then(r => { const m: string[] = r.models ?? []; setModels(m); setModel(x => x || m[0] || ''); }).catch(e => setError(message(e)));
   }, [path]);
   useEffect(() => {
     const requestedClip = preferredClip.current;
@@ -43,7 +43,7 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
     setLoaded(null); setPlaying(false); setClip(''); setTime(0); setError('');
     if (!model) return;
     let live=true;
-    void op('animation_get', { name: model }).then(r => {
+    void op(path, 'animation_get', { name: model }).then(r => {
       if(!live)return;
       const d = r.document as AnimDoc; setLoaded({model,revision:r.revision,document:d}); setClip(d.clips?.find(c => c.id === requestedClip)?.id ?? d.clips?.[0]?.id ?? ''); setTime(0); setError('');
     }).catch(e => {if(live)setError(message(e));});
@@ -72,7 +72,7 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
         const sampleTime = pending;
         pending = undefined;
         try {
-          const result = await op('animation_sample', { name: model, clip, time: sampleTime });
+          const result = await op(path, 'animation_sample', { name: model, clip, time: sampleTime });
           if (active) { setPose(result.nodes ?? []); setError(''); }
         } catch (e) {
           if (active) { setError(message(e)); setPlaying(false); }
@@ -81,7 +81,7 @@ export default function AnimationTimeline({ snapshot, showPanel, route }: { rout
       sampling = false;
     };
     return () => { active = false; requestPose.current = null; };
-  }, [model, clip, doc]);
+  }, [path, model, clip, doc]);
   useEffect(() => { requestPose.current?.(time); }, [model, clip, time, doc]);
   useEffect(() => {
     if (!playing || duration <= 0) return;
