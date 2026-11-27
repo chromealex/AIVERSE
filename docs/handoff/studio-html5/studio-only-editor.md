@@ -1708,3 +1708,7 @@ cd5056a300a6a0bfd7be469afe235ec71f438696 updates InsightPanels.tsx, docs/studio-
 ### Texture preview presentation respects mip dimensions
 
 6231bfc185938bf5a4d87e87f01dd5924824ab41 updates InsightPanels.tsx and ProjectToolPanels.css; capture mac-texture-preview-aspect.png. HTML uses the selected mip proportions to display the sampled canvas. Production web build passed. Detached Mac Studio rendered a real 898x452 RGBA16F target at 160x80.53125 CSS pixels (stats-mac-zfqjp98y/live.log). Next increase actual preview detail and extend native format coverage.
+
+### Display-resolution sampling for 2D textures
+
+779b0c3d94810d2dcd7ba2f4c386971a5028aeee updates engine/render/TexturePreviewGrid.h, StudioScene.cpp and InsightPanels.tsx. 2D reads now sample up to 160 pixels on the long side; layered diagnostics retain their 32x32 default. CPU checks passed for 898x452, transposed and 1x8192 inputs plus previous grid cases. Native Mac Studio and production web builds passed. Detached Metal panel validated canvas dimensions of 160x81 for an actual 898x452 target, with CSS dimensions 160x80.53. See stats-mac-v08xkq0v/live.log and captures/mac-texture-detailed-preview.png. Next extend uncompressed format support.
