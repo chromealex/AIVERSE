@@ -166,7 +166,8 @@ uint16_t ParticleSystem::Impl::batchFor(const FxTexture& t, FxBlend blend, const
     const std::string key = graphData.isNull() ? "" : graphData.dump(-1);
     for (size_t i = 0; i < batches.size(); ++i)
         if (batches[i].texId == t.tex.id && batches[i].blend == blend && batches[i].blendSpace == space && batches[i].graphKey == key) return uint16_t(i);
-    Batch batch{t.tex.id, blend, t.tex, key, {}, {}, {}, {}};
+    Batch batch{};
+    batch.texId=t.tex.id;batch.blend=blend;batch.tex=t.tex;batch.graphKey=key;
     batch.blendSpace=space;
     if (dev && !key.empty()) {
         try {

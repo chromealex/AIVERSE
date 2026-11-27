@@ -43,7 +43,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "note": "Final all-target Mac build passed. Full quick gate failed in projectile save composition and default trail roundtrip; correcting before acceptance. GPU acceptance remains pending.",
       "evidence": []
     },
     "architecture": {

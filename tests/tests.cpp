@@ -19026,6 +19026,10 @@ TEST(particle_blend_space_roundtrip_and_trail_override) {
     auto roundtrip=fxParse(fx::effectToJson(effect).dump().c_str());
     CHECK(roundtrip.emitters[0].blendSpace==effect.emitters[0].blendSpace);
     CHECK(roundtrip.emitters[0].trail==effect.emitters[0].trail);
+    CHECK(!fx::effectToJson(effect)["emitters"][size_t(0)]["trail"].has("time"));
+    effect=fxParse(R"({"emitters":[{"burst":1,"blendSpace":"display","trail":{"time":0.5,"blendSpace":"linear"}}]})");
+    roundtrip=fxParse(fx::effectToJson(effect).dump().c_str());
+    CHECK(roundtrip.emitters[0].trail==effect.emitters[0].trail);
     effect=fxParse(R"({"emitters":[{"burst":1,"blendSpace":"display","trail":{}}]})");
     CHECK(effect.emitters[0].trail.blendSpace==fx::FxBlendSpace::Display);
 }

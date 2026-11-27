@@ -836,7 +836,7 @@ void modulesToJson(const EmitterDef& d, Json& e,bool includeSdf) {
         const FxTrail& t = d.trail;
         Json o = Json::object();
         if (t.ribbon) { o.set("mode", Json::string("ribbon")); if (t.ribbons != 1) o.set("ribbons", Json::number(int64_t(t.ribbons))); }
-        o.set("time", numJ(t.time));
+        if(t.time!=tb.time)o.set("time", numJ(t.time));
         if (t.lifeFraction > 0) o.set("lifeFraction", numJ(t.lifeFraction));
         o.set("width", keysJ(t.width));
         o.set("color", colorKeysJ(t.color));

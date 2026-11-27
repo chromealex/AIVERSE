@@ -204,7 +204,7 @@ constexpr uint32_t kSaveMagic = 0x56535452;   // "RTSV"
 // Version 7 (agent-bw-skills): skill objects (Area goal / arrived / deaths, Pulled pool); 4..6 remain readable.
 // Version 8 (agent-bw-skills): effect budgets, transfers (Transfer pool), status groups, loadout slots.
 // Version 9: the RTS module's frozen match outcome (a load after the match end restored no result: bots stopped).
-constexpr uint32_t kSaveVersion = 13; // v11 stores seat controllers, v12 also stores edited terrain.
+constexpr uint32_t kSaveVersion = 13; // v11: seat controllers; v12: edited terrain; v13: projectile origin and optional terrain.
 void hashControllers(Hasher& h, const std::vector<PlayerInfo>& players) {
     for (const auto& p : players) if (p.controller != defaultController(p.slot)) {
         h.u32(0x53454154); h.u32(p.slot); h.u32(uint32_t(p.controller));

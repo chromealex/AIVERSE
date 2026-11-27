@@ -45,7 +45,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Common batch/graph/pool/volume adapters and native Studio connected. Added explicit GPU admission regression. Native compile, GPU capture and feature delivery acceptance remain pending.",
+      "note": "Final all-target Mac build passed. Full quick gate failed in projectile save composition and default trail roundtrip; correcting before acceptance. GPU acceptance remains pending.",
       "evidence": []
     },
     "architecture": {

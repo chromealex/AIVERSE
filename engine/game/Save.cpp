@@ -319,9 +319,13 @@ bool GameCore::serializeState(Simulation& sim, Archive& a) {
         });
     }
     ioState(a, gs);
-    // v12 is selected only when this module owns edited spherical terrain.
-    // Read the canonical corners before any native consumers or path rebuild.
-    if(a.formatVersion>=12 || a.legacyPlanetV11){
+    // v12 was selected only for edited spherical terrain. From v13, other
+    // capabilities can require the same outer version, so tag this payload.
+    // Read canonical corners before native consumers or path rebuilding.
+    bool hasPlanetTerrain=gs.planetTerrainRevision!=0;
+    if(a.formatVersion>=13)a(hasPlanetTerrain);
+    else hasPlanetTerrain=a.formatVersion==12 || a.legacyPlanetV11;
+    if(hasPlanetTerrain){
         if(!gs.authoredSurface||!gs.grid.hf){a.fail();return false;}
         uint64_t revision=gs.planetTerrainRevision;
         uint64_t recipe=planetSurfaceRecipeHash(*gs.authoredSurface);
