@@ -647,7 +647,7 @@ export default function App() {
     if (!project || event.defaultPrevented || !(event.target instanceof Element)) return;
     if (event.target.closest('input,textarea,select,[contenteditable="true"],[role=menu],canvas')) return;
     const panel=event.target.closest<HTMLElement>('[role=tabpanel][data-panel]')?.dataset.panel;
-    if (panel && panel!=='scene' && panel!=='hierarchy') void projectMenu.open(event,extensionWindowFor(panel),'');
+    if (panel && Object.hasOwn(STUDIO_PANEL_TITLES,panel) && panel!=='scene' && panel!=='hierarchy') void projectMenu.open(event,extensionWindowFor(panel as StudioPanel),'');
   };
   const projectMenuFeedback=<>{projectMenu.popup}{projectMenuStatus && <div className="demo-banner" role="status">
     {projectMenuStatus} <button type="button" aria-label="Dismiss status" onClick={()=>setProjectMenuStatus('')}>×</button>

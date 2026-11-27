@@ -47,7 +47,7 @@ test('choice fields start on their first option', () => {
   const [q] = schemaFields({ properties: { minQuality: { type: 'string', enum: ['low', 'high'] } } });
   assert.equal(fieldDraft(q), '');
 });
-import { agentLineKind } from '../src/panels/agentLogic.ts';
+import { agentLineKind, extensionPanelFor, extensionWindowFor } from '../src/panels/agentLogic.ts';
 test('agent transcript line kinds', () => {
   assert.equal(agentLineKind('› make a river'), 'user');
   assert.equal(agentLineKind('→ water_set {"id":1}'), 'tool');
@@ -112,4 +112,16 @@ test('splash sky pick is stable and in range', () => {
   assert.equal(pickSky('Iron and Gold', 6), pickSky('Iron and Gold', 6));
   for (const n of ['a', 'Iron and Gold', '', 'Kingston']) { const i = pickSky(n, 6); assert.ok(i >= 0 && i < 6); }
   assert.equal(pickSky('x', 0), -1);
+});
+
+test('Lua window names round-trip through the panel registry', async () => {
+  const { STUDIO_PANELS } = await import('../src/nestedDock.ts');
+  for (const panel of STUDIO_PANELS) {
+    assert.equal(extensionPanelFor(panel),panel);
+    assert.equal(extensionPanelFor(extensionWindowFor(panel)),panel);
+  }
+  assert.equal(extensionWindowFor('actor'),'actor');
+  assert.equal(extensionPanelFor('studio_camera_bookmarks'),'scene');
+  assert.equal(extensionPanelFor('spectrafx_graph'),'fx_graph');
+  assert.equal(extensionPanelFor('toString'),null);
 });
