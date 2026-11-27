@@ -65,3 +65,8 @@ Shared State now records Unknown/Emission/Split/Ricochet; common branch operatio
 
 Commit: f15f1432b86d12297738e8218df52cbc5f4f2cda
 FlightOrigin now lives in shared ProjectileData and passes directly through SceneObject to ProjectilePresentation. Removed the boolean continuation bridge and Components helper. Added shared branch tests for timed-split parent provenance and ricochet child provenance. Tests/build NOT RUN; diff check passed. Investigation of terminal path: ParticleSystem::move only changes Instance::pos; stop sets stopped before emitInstance, suppressing the final per-meter emission. Thus merely moving before stop cannot satisfy short-flight trail acceptance. Next implement a generic effect finish-at-position operation that consumes the final movement before retirement, then deliver terminal simulation samples to it. Remaining both-host visual/light wiring and persistence regression remain required.
+
+## Generic effect completion checkpoint
+
+Commit: d07a68ccb6c8221fdae6716f216fc91d43ac7c0b
+ParticleSystem::finish queues a terminal movement for the next update and then stops emission. Distance emitters place the final sample at the endpoint within existing limits. Duplicate finish and late move calls cannot overwrite it. Added particle snapshot regression and native API documentation. Tests/build NOT RUN; diff check passed. Next wire terminal projectile events into finish, including short flights, planets and both projectile hosts; no issue complete yet.
