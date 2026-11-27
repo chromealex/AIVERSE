@@ -1,0 +1,11 @@
+{
+  "sha": "4b1ee09f7ba74f85c0dbbc93e5274a94ce733738",
+  "argv": [
+    "python3.12",
+    "tools/skills/audit.py",
+    "--strict"
+  ],
+  "exit_code": 0,
+  "log": "docs/evidence/studio-4b1ee09f7-skill-audit.log.txt",
+  "sha256": "d7208f9f009f437d4af48bfdc29c67bbc0cf9663f9cea8c5ad46655a054e44e8"
+}
