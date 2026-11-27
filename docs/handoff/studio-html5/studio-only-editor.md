@@ -1772,3 +1772,7 @@ fc5d0076319dfaae6737c9e50c2d08b0cb9692d7 corrects GraphCanvas.tsx: Fit and Home 
 ### Dragging the graph minimap
 
 b0fec432c5d7d229e7c5fe466178d7e1b7120211 changes GraphCanvas.tsx and GraphCanvas.css to pan continuously with primary pointer capture. Web build and graph tests passed. Initial native event injection missed the minimap; scrolled it into view and used targeted foreground HID events after checking the window under the pointer. Detached Materials verified scrollLeft 8 after pointerdown and 334 after drag, with node coordinates unchanged. stats-mac-0ibdhso_/live.log and statistics.png. Mouse verified; touch input was not exercised.
+
+### Create a material from an empty content root
+
+1651e034c14c2b1d6ed78cd365aaf656aab60f20 updates AssetsPanel.tsx and AssetsPanel.css and adds captures/mac-assets-created-material.png. The empty native content root offers material creation alongside import, using the existing file-based workflow. Production web build and asset tests passed. Initial desktop assertion expected the full suffix in grid text, while the grid shows the material name. The repeated detached Mac test matched the card's actual full path and selected state and parsed the created content/materials/smoke_basalt.material.json on disk (stats-mac-mbxtlssa). Next verify reopening the created file through the split-window workflow.
