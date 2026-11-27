@@ -130,6 +130,9 @@ export default function ModelGraphPanel({documentEpoch,projectPath,openAttachmen
    <StudioButton size="sm" disabled={!dirty||busy} onClick={()=>reset(original,revision)}>Discard</StudioButton>
    <StudioButton size="sm" disabled={busy||!history.current?.canUndo()} onClick={()=>{if(history.current)setDraft(history.current.undo());setPending(null)}}>Undo</StudioButton>
    <StudioButton size="sm" disabled={busy||!history.current?.canRedo()} onClick={()=>{if(history.current)setDraft(history.current.redo());setPending(null)}}>Redo</StudioButton>
+   {draft&&Array.isArray(draft.clips)&&draft.clips.length>0&&<StudioButton size="sm" disabled={busy||dirty}
+     title={dirty?'Save or discard changes before opening the timeline':undefined}
+     onClick={()=>void run(async()=>{await op('animation_editor',{name,tab:'clips'});})}>Open timeline</StudioButton>}
    {draft&&openAttachments&&<StudioButton size="sm" disabled={busy} onClick={openAttachments}>Attachments</StudioButton>}
    {name&&<span>Revision {revision}{dirty?' · Draft':''}</span>}
   </div>
