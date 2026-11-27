@@ -105,3 +105,23 @@ Full quick gate handle 50170 remains live with only aiverse_tests pending.
 advanced from LENS initialization to AI determinism, so this is an active test,
 not evidence of a hang. Platform profile: macOS 15.6, x86-64 translated (Rosetta).
 Profiles: `aiverse-tests-live-sample.txt`, `aiverse-tests-live-sample-2.txt`.
+
+## Full gate failure and source correction
+
+Handle 50170 terminated with exit 1. CTest: 548 passed, 2 opt-in skips,
+1 failed (`aiverse_tests`). The core suite reported 275296 checks and 470
+failed assertions across 7 cases: six save/restore cases (including mech state
+and five projectile program cases) plus particle blend-space/trail roundtrip.
+Most assertions were cascading checksum mismatches after empty serialization.
+No quick-gate pass and no issue closure.
+
+Source correction b7ee98358abf48a5be338e0d8d9912fab3b81a4d: v13 requires an explicit optional-terrain
+presence flag in GameCore; the old >=12 test incorrectly required edited
+planet terrain for every provenance-bearing shot, even flat maps. v12 and
+legacy planet-v11 keep their byte layout. Trail serialization now omits
+default lifetime instead of quantizing default 0.3f via fixed-point JSON.
+The test keeps full trail equality and also covers authored 0.5 lifetime.
+Batch zero initialization removes the newly introduced missing-field warning.
+`git diff --check` passed. Corrections not yet compiled/tested.
+Next: cached focused rebuild, repeat failed scenarios and old planet save
+compatibility; then resume remaining GPU acceptance and final integrated gate.
