@@ -1616,3 +1616,7 @@ Stage f4bfc187840af26ed4fb91b37fea8cf114621a5e updates examples/native/world_pro
 ### Game geometry pool in Statistics
 
 b1ef64a5d2d9abcb9e8f74c18bc66272fde69fb9 reads the game device pool in StudioGameSurface.cpp; types.ts and PlayerHistory.tsx expose occupied and allocated MiB, page and model counts. npm run build and the Mac aiverse_studio target passed. An initial fixture waited for an already closed Scene. Replayed using its saved layout, checked four displayed values against the live native response, then verified pause/restart/stop. Watchtower Orders returned zero for all four counters. Capture: docs/handoff/studio-html5/captures/mac-game-geometry-pool.png. Next verify populated shared pages with pool-eligible models and port further memory diagnostics.
+
+### Populated Metal geometry pool
+
+911e7871658e58dceab9642fbfabfabf6cf2e5c2 adds docs/handoff/studio-html5/captures/mac-game-geometry-populated.png and updates docs/studio-html5-parity.md. In a disposable Watchtower Orders project the outpost used demos/model-triplanar/models/sculpt.glb. Default Metal reported zero pool counters. A separate supported CPU MDI run (AIVERSE_METAL_CPU_MDI=1) verified 1903416 occupied bytes, 2097152 allocated, one page and 28 pooled models. Compared all four DOM cards to the native response and verified pause, restart and stop. Full log: stats-mac-ldal_3ky/live.log on KINGSTON. Next address the legacy asset residency and retirement diagnostics.
