@@ -3786,6 +3786,13 @@
           "title": "Точное время фаз атаки",
           "titleEn": "Precise attack phase timing",
           "target": null
+        },
+        {
+          "id": "minimap-view-options",
+          "status": "in-progress",
+          "title": "Область и отображение миникарты",
+          "titleEn": "Minimap bounds and display",
+          "target": null
         }
       ]
     }

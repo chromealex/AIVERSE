@@ -427,6 +427,16 @@
       "api_paths": [
         "engine/mechanics/AttackTiming.h"
       ]
+    },
+    "minimap-view-options": {
+      "requires": [],
+      "roadmap": {
+        "system": "gameplay",
+        "id": "minimap-view-options"
+      },
+      "api_paths": [
+        "engine/view/MapProjection.h"
+      ]
     }
   },
   "claims": []

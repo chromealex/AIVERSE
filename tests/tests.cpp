@@ -18967,3 +18967,22 @@ TEST(precise_windup_cooldown_preserves_authored_period) {
     CHECK(sim->checksum()==expected);
 
 }
+
+#include "engine/view/MapProjection.h"
+TEST(map_projection_crop_roundtrip_and_frame) {
+    using namespace aiverse;
+    view::MapProjection projection;
+    CHECK(projection.set(10,20,30,60));
+    const auto point=projection.point(.25f,.75f);
+    const auto uv=projection.uv(point.x,point.z);
+    CHECK(std::abs(uv.x-.25f)<1e-6f&&std::abs(uv.y-.75f)<1e-6f);
+    CHECK(!projection.intersects(2,30,1));
+    CHECK(!projection.set(20,20,10,30));
+    CHECK(projection.left==10&&projection.bottom==60);
+    view::MapProjection grid; CHECK(grid.set(0,0,24,40));
+    CHECK(projection.clipTo(grid));
+    CHECK(projection.left==10&&projection.right==24&&projection.bottom==40);
+    const render::float3 quad[4]={{10,0,20},{20,0,20},{24,0,40},{8,0,40}};
+    const auto rectangle=view::MapProjection::rectangularFrame(quad);
+    CHECK(rectangle[0].x==8&&rectangle[1].x==24&&rectangle[2].z==40);
+}
