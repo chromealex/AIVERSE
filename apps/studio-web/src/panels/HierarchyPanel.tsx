@@ -199,7 +199,8 @@ export default function HierarchyPanel({ snapshot, busy, connected, search, setS
   const onKeyDown = (event: React.KeyboardEvent) => {
     if (event.target instanceof HTMLElement && event.target.closest('input,select,textarea')) {
       if (event.key === 'ArrowDown' && event.target === searchRef.current) {
-        event.preventDefault(); listRef.current?.querySelector<HTMLElement>('[role=option]')?.focus();
+        event.preventDefault();
+        listRef.current?.querySelector<HTMLElement>('.hier__group button[aria-expanded], [role=option], .hier-preview summary')?.focus();
       }
       return;
     }
