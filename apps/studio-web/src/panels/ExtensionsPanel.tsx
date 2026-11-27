@@ -37,8 +37,8 @@ export default function ExtensionsPanel({ snapshot, commitSnapshot, showPanel }:
   };
   const create = async () => { try { setExt(await invoke('studio.extensionCreate', {})); } catch (e) { setError(message(e)); } };
   if (!path) return <div className="tool__empty">Open a project to use its editor extensions.</div>;
-  const widget = (w: StudioExtensionWidget, key: string): ReactNode => {
-    const id = w.id ?? key, label = w.label ?? id;
+  const widget = (w: StudioExtensionWidget, key: string, index: number): ReactNode => {
+    const id = w.id ?? `item${index + 1}`, label = w.label ?? id;
     switch (w.kind) {
       case 'label': return <p key={key} className="ext__label">{label}</p>;
       case 'help': return <p key={key} className="ptp__hint">{label}</p>;
@@ -65,8 +65,8 @@ export default function ExtensionsPanel({ snapshot, commitSnapshot, showPanel }:
           <input className="au-input" value={v} onChange={e => change(id, e.currentTarget.value)}/></label>;
       }
       case 'group': case 'foldout': return <details key={key} open className="ext__group"><summary>{label}</summary>
-        {(w.children ?? []).map((c, i) => widget(c, key + '.' + i))}</details>;
-      case 'row': return <div key={key} className="ext__row">{(w.children ?? []).map((c, i) => widget(c, key + '.' + i))}</div>;
+        {(w.children ?? []).map((c, i) => widget(c, key + '.' + i, i))}</details>;
+      case 'row': return <div key={key} className="ext__row">{(w.children ?? []).map((c, i) => widget(c, key + '.' + i, i))}</div>;
       default: return null;
     }
   };
@@ -80,7 +80,7 @@ export default function ExtensionsPanel({ snapshot, commitSnapshot, showPanel }:
     {status && <div className="ptp__status is-ok" role="status">{status}</div>}
     <div className="ptp__scroll">
       {!ext?.exists && <p className="ptp__hint">A project can add its own editor panel: editor/extensions.lua defines window(ctx) (widgets), on_action / on_change (commands) and scene_gizmos(ctx) (Scene shapes). Lua runs sandboxed and edits the editor only through commands.</p>}
-      {(ext?.widgets ?? []).map((w, i) => widget(w, String(i)))}
+      {(ext?.widgets ?? []).map((w, i) => widget(w, String(i), i))}
       {!!ext?.gizmos?.length && <p className="ptp__hint">{ext.gizmos.length} Scene gizmo{ext.gizmos.length > 1 ? 's' : ''} drawn</p>}
     </div>
   </div>;
