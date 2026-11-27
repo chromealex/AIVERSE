@@ -2,6 +2,7 @@
 #include "engine/platform/EngineDir.h"
 #include "apps/editor/core/BuildTool.h"
 #include "apps/editor/core/ProjectFile.h"
+#include "apps/editor/core/FileAssoc.h"
 #include "apps/editor/core/Net.h"
 #include "StudioWebBridge.h"
 #include "StudioScenePointer.h"
@@ -234,7 +235,8 @@ int aiverseMain(int argc,char** argv) {
     gtk_widget_show_all(GTK_WIDGET(window));
     int status=0;
     try {
-        const auto dist=std::filesystem::read_symlink("/proc/self/exe").parent_path()/"studio-web";
+        const auto executable=std::filesystem::read_symlink("/proc/self/exe");
+        const auto dist=executable.parent_path()/"studio-web";
         if (!std::filesystem::is_regular_file(dist/"index.html")) throw std::runtime_error("Studio HTML bundle missing");
         registerStudioWebAssets(webkit_web_view_get_context(web),dist);
         aiverse::platform::setEngineAssetsDir((dist.parent_path()/"engine").string());
@@ -243,6 +245,8 @@ int aiverseMain(int argc,char** argv) {
         studio.host().session().setMcpTool((dist.parent_path()/"aiversemcp").string());
         if (listenPort && !studio.host().session().listenForAgent(listenPort))
             throw std::runtime_error("Could not start the authenticated Studio agent listener");
+        const auto association=aiverse::editor::ensureFileAssociation(executable.string());
+        if (!association.empty()) std::cerr << association << '\n';
         studio.host().setPendingProject(project);
         g_signal_connect(web,"load-failed",G_CALLBACK(+[](WebKitWebView*,WebKitLoadEvent,const gchar*,GError* error,gpointer data)->gboolean {
             std::cerr << "Studio page load failed: " << error->message << '\n';

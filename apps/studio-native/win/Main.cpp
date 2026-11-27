@@ -8,6 +8,7 @@
 #include "apps/studio-native/StudioGameInput.h"
 #include "apps/editor/core/BuildTool.h"
 #include "apps/editor/core/ProjectFile.h"
+#include "apps/editor/core/FileAssoc.h"
 #include "engine/platform/EngineDir.h"
 #include "engine/gfx/vulkan/Vulkan.h"
 #ifndef NOMINMAX
@@ -250,6 +251,8 @@ public:
         ShowWindow(main_, SW_SHOWDEFAULT);
         UpdateWindow(main_);
         if (!startWebView()) return 1;
+        const auto association = aiverse::editor::ensureFileAssociation(narrow((exeDir() / L"AiverseStudio.exe").c_str()));
+        if (!association.empty()) logLine(association);
         SetTimer(main_, kTickTimer, 15, nullptr); // ~60 Hz; WM_TIMER also runs inside modal move/resize loops
 
         MSG msg;

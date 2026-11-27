@@ -184,12 +184,11 @@ AssocStatus statusLinux(const std::string& exe) {
     const bool desk = readText(desktopFile()).find("X-AIVERSE-Exe=" + exe + "\n") != std::string::npos;
     const bool mime = readText(mimeXmlFile()).find("*.aiverse") != std::string::npos;   // installs before .aiverse re-register
     const std::string def = defaultHandler();
-    if (!mime || !fs::exists(desktopFile(), ec)) s.detail = "тип .aiverse не зарегистрирован";
+    s.otherDefault = !def.empty() && def != kEditorDesktopId;
+    if (s.otherDefault) s.detail = "по умолчанию .aiverse открывает " + def;
+    else if (!mime || !fs::exists(desktopFile(), ec)) s.detail = "тип .aiverse не зарегистрирован";
     else if (!desk) s.detail = ".aiverse открывает другой редактор: " + desktopFile().string();
-    else if (def != kEditorDesktopId) {
-        s.detail = def.empty() ? "редактор не выбран программой по умолчанию" : "по умолчанию .aiverse открывает " + def;
-        s.otherDefault = !def.empty();
-    }
+    else if (def.empty()) s.detail = "редактор не выбран программой по умолчанию";
     else {
         s.registered = true;
         s.detail = globsKnow() ? ".aiverse открывается этим редактором"
@@ -289,12 +288,12 @@ AssocStatus statusWindows() {
         const std::wstring c = regGet(L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\" + std::wstring(e) + L"\\UserChoice", L"ProgId");
         if (!c.empty() && c != progId() && choice.empty()) choice = c;
     }
-    if (!extOk || cmd.empty()) s.detail = "тип .aiverse не зарегистрирован";
-    else if (_wcsicmp(cmd.c_str(), openCommand().c_str()) != 0) s.detail = ".aiverse открывает другой редактор: " + wideToUtf8(cmd);
-    else if (!choice.empty() && choice != progId()) {
+    if (!choice.empty()) {
         s.otherDefault = true;
-        s.detail = "в Windows для файлов проекта выбрана другая программа (" + wideToUtf8(choice) + "): «Открыть с помощью» → AIVERSE Editor → «Всегда»";
+        s.detail = "в Windows выбрана другая программа: " + wideToUtf8(choice);
     }
+    else if (!extOk || cmd.empty()) s.detail = "тип .aiverse не зарегистрирован";
+    else if (_wcsicmp(cmd.c_str(), openCommand().c_str()) != 0) s.detail = ".aiverse открывает другой редактор: " + wideToUtf8(cmd);
     else { s.registered = true; s.detail = ".aiverse открывается этим редактором"; }
     return s;
 }
