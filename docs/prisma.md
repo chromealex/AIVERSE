@@ -4297,14 +4297,8 @@ Use the scene color as `scene`. To isolate objects, configure a LENS texture cam
 
 Declare 1–12 named targets and one producer per target. A target's optional divisor is 1, 2, 4 or 8. Declare one full-resolution output. A pass has an id, op, inputs and target. Supported operations are downsample, bright (amount is the threshold), blurX and blurY (amount is the radius multiplier), add (filtered first input multiplied by amount plus the second input), and shaderGraph (a nested postfx shader graph in graph, sampled primary input and optional asset textures). PRISMA compiles dependencies before drawing, and temporary targets with disjoint lifetimes share compatible storage. The graph executes after scene contributions and before screen-space lighting, metering and tonemapping. A missing camera source or shader preserves the incoming scene. `effectReport(viewId)->compositorPasses` reports encoded passes. Use `postfx_compositor_set` from MCP and `postfx_get` to read the stored document.
 
+## Display-space additive particles
 
-### Display-space additive particles — implementation in progress (#221)
+SpectraFX additive emitters and trails accept `blendSpace:"display"`; the default is `linear`. Renderer3D replays prepared particle geometry after PRISMA tone mapping and before HUD, using original scene depth. PRISMA remains the only tone-map owner. Source alpha, fog and opaque occlusion remain active; display contributions do not feed HDR bloom/exposure or temporal effects. Other blend modes reject display space. GPU-only execution must reject this mode; ordinary graph routing uses CPU presentation.
 
-The shared Renderer3D `addDisplayDraw` hook queues frame-local geometry draws
-after PRISMA resolve and before UI, exposing the original scene depth read-only.
-PRISMA remains the only tone-map/composition owner. SpectraFX will reuse its
-existing geometry and source textures for opted-in additive contributions; it
-will not introduce a second postprocessing pipeline. Emitter/trail `blendSpace`
-data currently distinguishes `linear` (default) and `display`; trail overrides
-inherit from their emitter. The draw path is now connected through shared native/client/editor adapters.
-Native compilation and GPU acceptance remain pending; this is not a verified release claim.
+Actual Metal pixel cases and the three-scene Metal/WebGL example are retained under `docs/evidence/issues-additive-metal-20261127` and `docs/evidence/issues-material-effects-{metal,web}-20261127`. Windows/Vulkan and mobile hardware remain unverified. Main integration and publication are separate final steps. See `demos/material-effects` and `docs/particles.md`.

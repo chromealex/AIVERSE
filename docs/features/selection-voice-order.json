@@ -175,12 +175,13 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Real native and Web captures retained; exact Web payload pinned and bilingual devlog prepared. Site check76entries0errors; main integration and actual publication pending.",
+      "status": "pass",
+      "note": "Pre-main publishing deliverables prepared: actual captures, bilingual devlog and browser-verified Web demo pinned by SHA-256. Full site built successfully and all112 demo files rehashed. Per release-site contract actual publish runs only AFTER main push; remote deployment remains an explicit integration task, not claimed complete here.",
       "evidence": [
         "docs/devlog/entries/2026-11-27-selection-voices.json",
         "site/manifest.json",
-        "docs/evidence/issues-selection-voices-web-20261127/result.json"
+        "docs/evidence/issues-selection-voices-web-20261127/result.json",
+        "docs/evidence/issues-site-preflight-20261127/result.json"
       ]
     }
   },

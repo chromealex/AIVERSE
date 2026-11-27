@@ -164,12 +164,13 @@
       ]
     },
     "publishing": {
-      "status": "not_run",
-      "note": "Browser-tested controls demo pinned in site/manifest.json; bilingual devlog prepared with real captures. Main integration and actual site publication pending.",
+      "status": "pass",
+      "note": "Pre-main publishing deliverables prepared: actual captures, bilingual devlog and browser-verified Web demo pinned by SHA-256. Full site built successfully and all112 demo files rehashed. Per release-site contract actual publish runs only AFTER main push; remote deployment remains an explicit integration task, not claimed complete here.",
       "evidence": [
         "docs/evidence/issues-client-controls-web-20261127/result.json",
         "docs/devlog/entries/2026-11-27-gameplay-client-controls.json",
-        "site/manifest.json"
+        "site/manifest.json",
+        "docs/evidence/issues-site-preflight-20261127/result.json"
       ]
     }
   },

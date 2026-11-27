@@ -3659,14 +3659,8 @@ Changing the source revision recreates the field. `world` keeps the original pla
 
 PR #190 tracks GCC compilation of the GPU-owned restore path and a Metal restore/readback check for all eight program parameters and all eight custom attributes in a live slot.
 
+## Display-space additive particles
 
-### Display-space additive particles — implementation in progress (#221)
+SpectraFX additive emitters and trails accept `blendSpace:"display"`; the default is `linear`. Renderer3D replays prepared particle geometry after PRISMA tone mapping and before HUD, using original scene depth. PRISMA remains the only tone-map owner. Source alpha, fog and opaque occlusion remain active; display contributions do not feed HDR bloom/exposure or temporal effects. Other blend modes reject display space. GPU-only execution must reject this mode; ordinary graph routing uses CPU presentation.
 
-The shared Renderer3D `addDisplayDraw` hook queues frame-local geometry draws
-after PRISMA resolve and before UI, exposing the original scene depth read-only.
-PRISMA remains the only tone-map/composition owner. SpectraFX will reuse its
-existing geometry and source textures for opted-in additive contributions; it
-will not introduce a second postprocessing pipeline. Emitter/trail `blendSpace`
-data currently distinguishes `linear` (default) and `display`; trail overrides
-inherit from their emitter. The draw path is now connected through shared native/client/editor adapters.
-Native compilation and GPU acceptance remain pending; this is not a verified release claim.
+Actual Metal pixel cases and the three-scene Metal/WebGL example are retained under `docs/evidence/issues-additive-metal-20261127` and `docs/evidence/issues-material-effects-{metal,web}-20261127`. Windows/Vulkan and mobile hardware remain unverified. Main integration and publication are separate final steps. See `demos/material-effects` and `docs/particles.md`.
