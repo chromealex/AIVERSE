@@ -1,3 +1,4 @@
+import { useLuaMenu } from './useLuaMenu';
 import RoadsPanel from './RoadsPanel';
 import AnimationAssetsPanel from './AnimationAssetsPanel';
 import BrandingPanel from './BrandingPanel';
@@ -5,10 +6,10 @@ import type { StudioScriptMessage } from '../types';
 // AI-friendly rendering surface: keep App.tsx as the application shell.
 // For a new editor panel, register a typed panel ID in nestedDock.ts,
 // then insert one render case below. All data mutations still use Studio Bridge.
-import { type ReactNode } from 'react';
+import { useState, type ReactNode, type MouseEvent } from 'react';
 import {
   Activity,
-  Focus, RotateCcw
+  Focus, RotateCcw, MoreHorizontal
 } from 'lucide-react';
 import type { StudioEntity, StudioInspector, StudioSnapshot } from '../types';
 import { invoke } from '../bridge';
@@ -126,9 +127,46 @@ function PlayInspector({ ctx }: { ctx: StudioPanelContext }) {
   return <LiveSwitch>{showLive ? <LiveInspector selection={ctx.liveSelection} key={ctx.snapshot?.project.path} project={ctx.snapshot?.project.path}/> : <EditInspector ctx={ctx}/>}</LiveSwitch>;
 }
 
-export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): ReactNode {
-  const {snapshot,connected,openProject,selected,select}=ctx;
+function ScenePanel({ctx}: {ctx: StudioPanelContext}) {
+  const {snapshot,connected,openProject,selected}=ctx;
   const sceneMode=studioSceneMode(connected,snapshot?.project.path);
+  const [status,setStatus]=useState('');
+  const lua=useLuaMenu(ctx.commitSnapshot,ctx.showPanel,setStatus,ctx.reportError);
+  const openActions=(event:MouseEvent)=>void lua.open(event,'scene','',[
+    {id:'focus',label:'Focus selected object',disabled:!selected,onSelect:()=>void invoke('studio.viewportInput',{kind:'focus'}).catch(e=>ctx.reportError(String(e)))},
+    {id:'reset',label:'Reset camera',onSelect:()=>void invoke('studio.viewportInput',{kind:'reset'}).catch(e=>ctx.reportError(String(e)))},
+  ],'Scene actions');
+  return <>
+          <div className="viewport-toolbar">
+            <div className="viewport-tools">
+              <SceneToolbar documentScope={snapshot?.graphDocument} enabled={connected && sceneMode !== 'welcome'} projectPath={snapshot?.project.path ?? ''}/>
+              {connected && sceneMode !== 'welcome' && snapshot?.scene.mapRegions && snapshot.graphDocument &&
+                <MovementRoadTool key={snapshot.graphDocument.epoch+snapshot.graphDocument.mapPath} scope={snapshot.graphDocument}/>}
+              <span className="toolbar-divider"/>
+              <button type="button" className="viewport-control" title="Focus selected object (F)"
+                aria-label="Focus selected Scene object" disabled={!connected || !selected}
+                onClick={()=>void invoke('studio.viewportInput',{kind:'focus'}).catch(console.warn)}>
+                <Focus size={15}/></button>
+              <button type="button" className="viewport-control" title="Reset Scene camera (Home)"
+                aria-label="Reset Scene camera" disabled={!connected}
+                onClick={()=>void invoke('studio.viewportInput',{kind:'reset'}).catch(console.warn)}>
+                <RotateCcw size={15}/></button>
+              {connected && sceneMode !== 'welcome' && <button type="button" className="viewport-control" aria-label="Scene actions" title="Scene actions (Shift + right click)" onClick={openActions}><MoreHorizontal size={15}/></button>}
+            </div>
+            <span className="render-badge"><Activity size={13}/>
+              {sceneMode === 'welcome' ? 'Open project to render' : 'Native Renderer3D (experimental)'}
+            </span>
+          </div>
+          {lua.popup}
+          {status && <div role="status">{status}</div>}
+          {sceneMode === 'welcome' ?
+            <ProjectHub onOpened={(next, openAgent, warning) => { ctx.commitSnapshot(next); if (openAgent) ctx.showPanel('agent'); if (warning) ctx.reportError(warning); }} openOther={() => void openProject()}/> :
+            <ViewportPlaceholder title="Scene viewport" active onSceneMenu={openActions}/>}
+        </>;
+}
+
+export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): ReactNode {
+  const {snapshot,select,connected}=ctx;
     switch (panel) {
       case 'hierarchy':
         return ctx.playing ? <PlayHierarchy ctx={ctx}/> : <HierarchyPanel {...ctx}/>;
@@ -175,31 +213,7 @@ export function renderStudioPanel(panel: StudioPanel, ctx: StudioPanelContext): 
         return <BuildPanel snapshot={snapshot} commitSnapshot={ctx.commitSnapshot}/>;
       case 'rules':
         return <RulesPanel openActorSettings={snapshot?.project.actorSession ? () => ctx.showPanel('actor') : undefined} key={snapshot?.project.path} projectPath={snapshot?.project.path ?? ''} historyVersion={snapshot?.project.historyVersion} onChanged={() => void invoke('studio.snapshot', {}).then(ctx.commitSnapshot).catch(() => {})}/>;
-      case 'scene':
-        return <>
-          <div className="viewport-toolbar">
-            <div className="viewport-tools">
-              <SceneToolbar documentScope={snapshot?.graphDocument} enabled={connected && sceneMode !== 'welcome'} projectPath={snapshot?.project.path ?? ''}/>
-              {connected && sceneMode !== 'welcome' && snapshot?.scene.mapRegions && snapshot.graphDocument &&
-                <MovementRoadTool key={snapshot.graphDocument.epoch+snapshot.graphDocument.mapPath} scope={snapshot.graphDocument}/>}
-              <span className="toolbar-divider"/>
-              <button type="button" className="viewport-control" title="Focus selected object (F)"
-                aria-label="Focus selected Scene object" disabled={!connected || !selected}
-                onClick={()=>void invoke('studio.viewportInput',{kind:'focus'}).catch(console.warn)}>
-                <Focus size={15}/></button>
-              <button type="button" className="viewport-control" title="Reset Scene camera (Home)"
-                aria-label="Reset Scene camera" disabled={!connected}
-                onClick={()=>void invoke('studio.viewportInput',{kind:'reset'}).catch(console.warn)}>
-                <RotateCcw size={15}/></button>
-            </div>
-            <span className="render-badge"><Activity size={13}/>
-              {sceneMode === 'welcome' ? 'Open project to render' : 'Native Renderer3D (experimental)'}
-            </span>
-          </div>
-          {sceneMode === 'welcome' ?
-            <ProjectHub onOpened={(next, openAgent, warning) => { ctx.commitSnapshot(next); if (openAgent) ctx.showPanel('agent'); if (warning) ctx.reportError(warning); }} openOther={() => void openProject()}/> :
-            <ViewportPlaceholder title="Scene viewport" active/>}
-        </>;
+      case 'scene': return <ScenePanel key={snapshot?.project.path} ctx={ctx}/>;
       case 'console':
         return <ConsolePanel openScript={ctx.openScript} key={snapshot?.project.path} project={snapshot?.project.path ?? ''} logs={snapshot?.logs ?? []} scriptErrors={ctx.scriptErrors} select={id => select(id)}/>;
       case 'lighting':

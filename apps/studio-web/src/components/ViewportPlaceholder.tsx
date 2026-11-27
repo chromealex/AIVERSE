@@ -16,7 +16,7 @@ const FLY_KEYS = new Set(['w', 'a', 's', 'd', 'q', 'e']);
 const ARROW_KEYS: Record<string, string> = { arrowup: 'w', arrowdown: 's', arrowleft: 'a', arrowright: 'd' };
 
 /** Layout source of truth for a real native GPU surface. Never streams raster frames to JS. */
-export default function ViewportPlaceholder({ title, active }: { title: string; active: boolean }) {
+export default function ViewportPlaceholder({ title, active, onSceneMenu }: { title: string; active: boolean; onSceneMenu: (event: React.MouseEvent) => void }) {
   const element = useRef<HTMLElement>(null);
   const drag = useRef<{ x: number; y: number; startX: number; startY: number; moved: boolean; mode: DragMode; button: number } | null>(null);
   const pendingDelta = useRef<{ x: number; y: number; raf: number; mode: Exclude<DragMode, 'select' | 'handle'> }>({ x: 0, y: 0, raf: 0, mode: 'orbit' });
@@ -249,9 +249,10 @@ export default function ViewportPlaceholder({ title, active }: { title: string; 
   return <section ref={element} className={'viewport' + (native && active && gpuReady ? ' viewport-native' : '')}
     aria-label={native && active ? 'Native Scene viewport' : 'Viewport placeholder'}
     tabIndex={0}
-    onContextMenu={event=>event.preventDefault()}
+    onContextMenu={event=>{ event.preventDefault(); if (native && active && event.shiftKey) onSceneMenu(event); }}
     onPointerDown={event => {
       if (!composite() || !active || !gpuReady) return;
+      if (event.button === 2 && event.shiftKey) return;
       event.currentTarget.focus();
       if(areaPointer.current || roadPointer.current || drag.current)return;
       if(roadToken.current && event.button===0 && !event.altKey && !event.ctrlKey && !event.metaKey){
