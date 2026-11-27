@@ -8,11 +8,11 @@
     "Откройте Materials, выберите материал и задайте Alpha mode: Additive (alpha weighted) или Additive (unweighted). Apply & save записывает режим в materials.json; Reload сохраняет сделанный выбор.",
     "Те же значения доступны через material_set в MCP. Ошибочное имя режима отклоняется до записи файла."
   ],
-  "status": "in-progress",
+  "status": "done",
   "verified": "В нативной Studio на macOS оба режима сохранены и повторно загружены. Через MCP материалы также прочитаны после перезапуска сервера.",
   "limits": "Редактирование библиотеки не входит в MapDoc Undo. Проверка Windows пока не выполнена. Это инструмент нативного редактора, отдельного браузерного демо нет.",
-  "branch": "codex/issue223-minimap-atlas-20261126",
-  "commit": "313dd7101",
+  "branch": "main",
+  "commit": "25d057a5195f6b6ade1a6b2c38e25a48cf9d184b",
   "media": [
     {
       "src": "docs/evidence/issues-studio-materials-20261127/weighted.png",
