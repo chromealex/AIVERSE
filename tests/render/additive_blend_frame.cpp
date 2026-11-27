@@ -105,15 +105,20 @@ int aiverseMain(int,char**) {
                     emitter.trail.width={{0,.5f},{1,.5f}};emitter.trail.sizeAffectsWidth=false;
                     emitter.trail.color={{0,{1,1,1,1}},{1,{1,1,1,1}}};
                     if(test.geometry==2){emitter.trail.ribbon=true;emitter.burst=0;emitter.perMeter={1,1};emitter.loop=true;}
-                    else emitter.velocity={200,0,0};
+                    else emitter.velocity={0,200,0}; // effect +Y follows the play direction
                 }
                 particles.setView(camera,renderer.viewProj(),width,height);
                 const int definition=particles.define(test.name,effect);require(definition>=0,"particle definition");
                 const float z=test.hidden?-1.f:1.f;
-                auto handle=particles.play(definition,{test.geometry>=2?-2.f:0.f,0,z});
+                auto handle=particles.play(definition,{test.geometry>=2?-2.f:0.f,0,z},
+                    test.geometry==3?float3{1,0,0}:float3{0,1,0});
                 if(test.geometry==2)particles.move(handle,{2,0,z});
                 particles.update(.01f);
-                if(test.geometry==3)particles.update(.02f);
+                if(test.geometry==3) {
+                    particles.update(.02f);
+                    std::vector<fx::FxParticleInfo> snapshot;particles.snapshot(snapshot);
+                    require(snapshot.size()==1 && snapshot[0].pos.x>0 && std::abs(snapshot[0].pos.z-z)<1e-5f,"trail fixture must cross the camera center");
+                }
             }else {
                 foreground->materials[0].alpha=test.mode;
                 ModelDraw fg;fg.model=foreground.get();fg.world=mat4::translate({0,0,1});renderer.drawModel(fg);
