@@ -3,6 +3,7 @@
   "id": "model-additive-blending",
   "owner": "rendering",
   "changed_paths": [
+    "CMakeLists.txt",
     "apps/studio-native/StudioScene.cpp",
     "docs/models.md",
     "engine/fx/AnimatedModelEffectView.h",
@@ -22,6 +23,7 @@
     "engine/render/Renderer3D.h",
     "engine/render/Renderer3DModels.cpp",
     "engine/view/AppearanceAuthoringService.h",
+    "tests/render/additive_blend_frame.cpp",
     "tests/tests.cpp",
     "tools/modeling/Export.cpp",
     "tools/modeling/SurfaceProxy.cpp"
@@ -35,7 +37,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Pending implementation and verification.",
+      "note": "Native build and focused persistence corrections verified. Adding real GPU pixel coverage for weighted/unweighted model blending and linear/display particle composition, depth and fog. Acceptance remains pending.",
       "evidence": []
     },
     "architecture": {

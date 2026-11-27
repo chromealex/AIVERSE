@@ -3,6 +3,7 @@
   "id": "particle-display-blending",
   "owner": "rendering",
   "changed_paths": [
+    "CMakeLists.txt",
     "apps/client/ClientFx.cpp",
     "apps/client/ClientFx.h",
     "apps/client/GameClient.cpp",
@@ -33,6 +34,7 @@
     "engine/fx/SpectraSceneVolumetricParticles.h",
     "engine/render/Renderer3D.cpp",
     "engine/render/Renderer3D.h",
+    "tests/render/additive_blend_frame.cpp",
     "tests/tests.cpp",
     "tests/vfx_graph_runtime_test.cpp"
   ],
@@ -45,7 +47,7 @@
   "checks": {
     "implementation": {
       "status": "not_run",
-      "note": "Final all-target Mac build passed. Full quick gate failed in projectile save composition and default trail roundtrip; correcting before acceptance. GPU acceptance remains pending.",
+      "note": "Native build and focused persistence corrections verified. Adding real GPU pixel coverage for weighted/unweighted model blending and linear/display particle composition, depth and fog. Acceptance remains pending.",
       "evidence": []
     },
     "architecture": {
