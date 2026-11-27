@@ -121,7 +121,8 @@ private:
             auto& self=*static_cast<GtkStudio*>(data);
             for (const auto& entry : self.floats_) {
                 if (GTK_WIDGET(entry.second.window)!=widget) continue;
-                int x,y;
+                int x;
+                int y;
                 gtk_window_get_position(entry.second.window,&x,&y);
                 Json frame=Json::object();
                 frame.set("window",Json::string(entry.first));
