@@ -36,7 +36,7 @@ export default function GameDevicePicker({ devices, selected, disabled, onSelect
     {open && <StudioDialog className="game-device-dialog" label="Choose a game device" onDismiss={() => setOpen(false)}>
       <div className="game-device-card">
         <header><h2>Choose a device</h2><StudioButton aria-label="Close device chooser" onClick={() => setOpen(false)}><X size={16}/></StudioButton></header>
-        <StudioInput autoFocus type="search" aria-label="Search devices" placeholder="Search devices or families"
+        <StudioInput data-dialog-autofocus type="search" aria-label="Search devices" placeholder="Search devices or families"
           value={query} onChange={event => setQuery(event.target.value)}
           onKeyDown={event => {
             if (event.key !== 'ArrowDown' && event.key !== 'Enter') return;

@@ -182,6 +182,7 @@ export function StudioDialog({ label, className, onDismiss, dismissOnBackdrop = 
   useLayoutEffect(() => {
     const dialog = ref.current;
     dialog?.showModal();
+    dialog?.querySelector<HTMLElement>('[data-dialog-autofocus]')?.focus();
     return () => dialog?.close();
   }, []);
   return <dialog ref={ref} className={classes('au-dialog', className)} role="dialog"
