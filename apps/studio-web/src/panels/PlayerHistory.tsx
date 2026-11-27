@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '../bridge';
-import type { StudioPlayerSample } from '../types';
+import type { StudioGameState, StudioPlayerSample } from '../types';
 
 function Trend({ label, values, ticks }: { label: string; values: number[]; ticks: number[] }) {
   const min = Math.min(0, ...values), max = Math.max(1, ...values);
@@ -36,7 +36,7 @@ function PlayerTrends({ player, samples, names, initiallyOpen }: {
 
 export default function PlayerHistory({ project }: { project: string }) {
   const [samples, setSamples] = useState<StudioPlayerSample[]>([]);
-  const [match, setMatch] = useState<{tick: number; seconds: number; units?: number; projectiles?: number} | null>(null);
+  const [match, setMatch] = useState<{tick: number; seconds: number; units?: number; projectiles?: number; pool?: NonNullable<StudioGameState['playerHistory']>['geometryPool']} | null>(null);
   const [names, setNames] = useState<Record<string,string>>({});
   const [error, setError] = useState('');
   useEffect(() => {
@@ -47,7 +47,7 @@ export default function PlayerHistory({ project }: { project: string }) {
         if (!active) return;
         const history = state.playerHistory;
         setMatch(state.inMatch && history?.tickRate ? {
-          tick: state.tick, seconds: state.tick / history.tickRate, units: history.units, projectiles: history.projectiles,
+          tick: state.tick, seconds: state.tick / history.tickRate, units: history.units, projectiles: history.projectiles, pool: history.geometryPool,
         } : null);
         if (!state.inMatch || !history) {
           afterTick = -1; epoch = ''; setSamples(previous => previous.length ? [] : previous);
@@ -79,6 +79,15 @@ export default function PlayerHistory({ project }: { project: string }) {
       {match.units !== undefined && <div><b>{match.units}</b><span>unit entities</span></div>}
       {match.projectiles !== undefined && <div><b>{match.projectiles}</b><span>projectiles</span></div>}
     </div>}
+    {match?.pool && <section aria-label="Game geometry pool">
+      <h4>Game geometry pool</h4>
+      <div className="stats__cards">
+        <div><b>{(match.pool.occupiedBytes / 1048576).toFixed(2)} MiB</b><span>occupied</span></div>
+        <div><b>{(match.pool.allocatedBytes / 1048576).toFixed(2)} MiB</b><span>allocated</span></div>
+        <div><b>{match.pool.pages}</b><span>pages</span></div>
+        <div><b>{match.pool.models}</b><span>pooled models</span></div>
+      </div>
+    </section>}
     {!latest && !match && !error && <p className="ptp__hint">Start a local match to track armies, structures and resources.</p>}
     {latest?.players.map((player, index) => <PlayerTrends key={player.slot} player={player}
       samples={samples} names={names} initiallyOpen={index < 2}/>)}

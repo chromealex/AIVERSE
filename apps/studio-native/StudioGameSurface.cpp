@@ -20,6 +20,7 @@
 #include "engine/sim/CommonComponents.h"
 #include "engine/game/GameCore.h"
 #include "engine/render/StaticGeometryReport.h"
+#include "engine/render/GlobalGeometryPool.h"
 #include "engine/game/Script.h"
 #include "engine/view/game/GameViewScript.h"
 #include "engine/world/WorldPersistenceDiagnostics.h"
@@ -646,6 +647,13 @@ Json StudioGameSurface::playerHistory(int64_t afterTick, const std::string& epoc
     out.set("epoch",Json::string(std::to_string(runtimeEpoch_)));
     const auto* sim = liveSimulation();
     if (sim && canControl() && playerSampleEpoch_ == runtimeEpoch_) {
+        const auto pool = render::geometryPoolStats(*device_);
+        Json geometry = Json::object();
+        geometry.set("allocatedBytes", Json::number(int64_t(pool.allocatedBytes)));
+        geometry.set("occupiedBytes", Json::number(int64_t(pool.occupiedBytes)));
+        geometry.set("pages", Json::number(int64_t(pool.pages)));
+        geometry.set("models", Json::number(int64_t(pool.liveModels)));
+        out.set("geometryPool", std::move(geometry));
         out.set("tickRate",Json::number(int64_t(sim->tickRate())));
         out.set("units",Json::number(int64_t(sim->world().countExisting<game::Unit>())));
         out.set("projectiles",Json::number(int64_t(sim->world().countExisting<game::Projectile>())));
