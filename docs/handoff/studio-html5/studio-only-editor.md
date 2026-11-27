@@ -1812,3 +1812,7 @@ ba54858b8ae8fce4297bea809535f4a06d4c5c33 updates SpectraNativePreview.tsx and ad
 ### Input binding device index
 
 d59d11903045978e8e031f4847331ba265e7cd65 updates apps/studio-web/src/panels/ProjectToolPanels.tsx and captures/mac-input-device-index.png. Production web build passed. Detached native Mac panel selected touch index 31, changed to gamepadButton, verified the reset to 0 and saved index 3. Revert reloaded 3 and the disk JSON contained deviceIndex 3. Evidence in stats-mac-k5koxatf/live.log. Remaining Input parity includes modifier and trigger authoring.
+
+### HTML Studio Input modifier editors
+
+9d2906145aca6612242480d49b797a3df91b3ae0 adds apps/studio-web/src/panels/InputModifiers.tsx, used by ProjectToolPanels.tsx with the existing codec shapes in apps/studio-web/src/types.ts. Action and mapping chains support scale, negate, deadzone, swizzle and normalize. npm --prefix apps/studio-web run build passed. Detached native Mac UI saved action scale X=2.5 and mapping swizzle [2,1,2], verified by independent JSON parse. Evidence in stats-mac-5n_9fa75/live.log and docs/handoff/studio-html5/captures/mac-input-modifiers.png. Remaining work includes trigger authoring and verification of the other modifier kinds.
