@@ -3512,9 +3512,10 @@
           "id": "studio-session-windows-fixtures",
           "title": "Проверка документов Studio на Windows",
           "titleEn": "Studio document verification on Windows",
-          "text": "Исправить переносы строк в тестовых файлах и проверить сохранность внешних правок и истории документов на Windows.",
-          "textEn": "Correct line endings in test files and verify preservation of external edits and document history on Windows.",
-          "status": "in-progress"
+          "text": "Тестовые файлы пишутся побайтно, журнал документов сравнивает права так, как их хранит Windows. Тест сессии Studio проходит на Windows и Mac.",
+          "textEn": "Test files are written byte for byte and the document journal compares permissions the way Windows stores them. The Studio session test passes on Windows and Mac.",
+          "status": "done",
+          "date": "2026-11-28"
         }
       ]
     },
