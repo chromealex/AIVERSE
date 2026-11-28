@@ -74,9 +74,11 @@ scene_variant() {
   fi
 }
 
+bash "$ROOT/tools/studio/build-validation-web.sh"
+
 if ! stage configure cmake -S "$ROOT" -B "$BUILD" \
      -DCMAKE_BUILD_TYPE=Release -DAIVERSE_BUILD_TESTS=ON \
-     -DAIVERSE_BUILD_EDITOR=ON -DAIVERSE_BUILD_HDR_TESTS=ON; then
+     -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_STUDIO_HTML5=ON -DAIVERSE_BUILD_HDR_TESTS=ON; then
   record build SKIP "configure failed"
   record ctest_full SKIP "configure failed"
   exit 1

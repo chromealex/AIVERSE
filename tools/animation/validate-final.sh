@@ -76,12 +76,14 @@ These cases CANNOT be inferred from CPU CTest results.
 - [ ] CPU and GPU profiling with representative 1,000/5,000 actor workloads
 CHECKLIST
 
+bash "$ROOT/tools/studio/build-validation-web.sh"
+
 BASE="$OUT/native"
 COMMON=(
     -DAIVERSE_BUILD_TESTS=ON
     -DAIVERSE_BUILD_TOOLS=ON
     -DAIVERSE_BUILD_CLIENT=ON
-    -DAIVERSE_BUILD_EDITOR=ON
+    -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_STUDIO_HTML5=ON
     -DAIVERSE_ENABLE_PHYSICS=ON
 )
 

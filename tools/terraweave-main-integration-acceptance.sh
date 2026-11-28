@@ -64,11 +64,13 @@ git merge-base --is-ancestor d7d9b3f4180dcba98b9238fd56eedc7ccb420bb1 HEAD || {
   exit 1
 }
 
+bash "$root/tools/studio/build-validation-web.sh"
+
 echo '========== configure merged native/editor/physics =========='
 cmake -S . -B "$build" \
   -DCMAKE_BUILD_TYPE=Debug \
   -DAIVERSE_BUILD_TESTS=ON \
-  -DAIVERSE_BUILD_EDITOR=ON \
+  -DAIVERSE_BUILD_EDITOR=OFF -DAIVERSE_BUILD_STUDIO_HTML5=ON \
   -DAIVERSE_BUILD_CLIENT=OFF \
   -DAIVERSE_BUILD_HEADLESS=ON \
   -DAIVERSE_BUILD_TOOLS=ON \
