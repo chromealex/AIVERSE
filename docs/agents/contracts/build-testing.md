@@ -45,6 +45,14 @@ couldn't be compiled are listed in the commit message as unverified.
 - A compiler cache such as `ccache` may be enabled through `CMAKE_C_COMPILER_LAUNCHER` and `CMAKE_CXX_COMPILER_LAUNCHER` when installed. Put its cache on KINGSTON and verify it is actually used. It supplements the retained CMake objects; never rely on cache hits as test evidence.
 - Disable unrelated `AIVERSE_BUILD_*` options only in a dedicated focused-build tree. Keep required consumers and tests enabled for the verification being claimed. `./run-tests.sh --quick --build-dir /Volumes/KINGSTON/AIVERSE-builds/<branch>/all-tests` on the exact merged tree remains mandatory before `main`; focused builds and filtered CTest do not replace it.
 
+### HTML5 fast startup
+
+Use staged loading by default for HTML5 exports. Keep the bootstrap limited to the runtime and assets required to interact with the first screen. For a game with a lobby, open the menu first, fetch shared gameplay assets during matchmaking and fetch the selected map once its identity is known. For direct-to-scene exports, start with the initial playable scene and defer unrelated scenes and optional content.
+
+Reuse the project’s pack loader. Give independently loadable packs stable, content-hashed URLs so the browser can reuse unchanged packs across launches and releases. Update the entry point and manifest together and keep referenced packs available during deployment.
+
+Verify the served Release build in a browser with an empty cache, then revisit the same URL with caching enabled. Record browser, network conditions, transferred bytes and elapsed time from navigation to a usable menu (or first playable scene) for both runs. Also measure selection-to-playable time. Inspect the requests to confirm that unselected maps were never fetched and unchanged pack bodies were reused on the repeat visit.
+
 ### Where build output goes (all agents)
 
 **Owner instruction (2026-11-20): all builds must run on KINGSTON.**
