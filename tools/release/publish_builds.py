@@ -30,13 +30,13 @@ def binary_arch(head):
     """CPU of an executable from its first bytes: x86_64, arm64, universal (Mach-O fat) or None."""
     if head[:2] == b"MZ" and len(head) >= 0x40:   # PE: machine after the PE signature
         off = struct.unpack_from("<I", head, 0x3C)[0]
-        if head[off:off + 4] == b"PE\0\0":
+        if off + 6 <= len(head) and head[off:off + 4] == b"PE\0\0":
             return {0x8664: "x86_64", 0xAA64: "arm64", 0x14C: "x86"}.get(struct.unpack_from("<H", head, off + 4)[0])
-    if head[:4] == b"\x7fELF":
+    if head[:4] == b"\x7fELF" and len(head) >= 20:
         return {62: "x86_64", 183: "arm64"}.get(struct.unpack_from("<H", head, 18)[0])
     if head[:4] == b"\xca\xfe\xba\xbe":
         return "universal"
-    if head[:4] == b"\xcf\xfa\xed\xfe":
+    if head[:4] == b"\xcf\xfa\xed\xfe" and len(head) >= 8:
         return {0x01000007: "x86_64", 0x0100000C: "arm64"}.get(struct.unpack_from("<I", head, 4)[0])
     return None
 
@@ -67,10 +67,17 @@ def package_entry(work, rel, repo, branch):
             inner = package_root + "/bin/" + exe
             if inner in listed or inner + "/" in listed or any(n.startswith(inner + "/") for n in listed):
                 found[key] = inner
-        for key in ("rtsmcp", "headless"):   # arch from a plain executable (the editor may be an .app)
-            if key in found and arch is None:
-                with z.open(found[key]) as f:
+        candidates = [found.get("rtsmcp"), found.get("headless")]
+        editor = found.get("editor", "")
+        if editor.endswith(".app"):
+            editor += "/Contents/MacOS/" + os.path.basename(editor)[:-4]
+        candidates.append(editor)
+        for executable in candidates:
+            if executable in listed:
+                with z.open(executable) as f:
                     arch = binary_arch(f.read(4096))
+                if arch is not None:
+                    break
     return {"platform": plat, "arch": arch, "version": ver, "commit": commit, "file": rel,
             "url": f"https://raw.githubusercontent.com/{repo}/{branch}/{rel}",
             "size": os.path.getsize(path), "sha256": h.hexdigest(),

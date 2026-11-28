@@ -60,7 +60,7 @@ def test_index():
                 "AIVERSE/bin/aiversemcp": fake_elf(62), "AIVERSE/bin/aiverse_headless": fake_elf(62)},
         }
         studio = "macos/AIVERSE-0.3.0-cccccccc-macos.zip"
-        pkgs[studio] = {"AIVERSE/bin/AiverseStudioHTML5.app/Contents/MacOS/AiverseStudioHTML5": b"x",
+        pkgs[studio] = {"AIVERSE/bin/AiverseStudioHTML5.app/Contents/MacOS/AiverseStudioHTML5": fake_macho(0x0100000C),
                        "AIVERSE/bin/AiverseEditor.app/Contents/MacOS/AiverseEditor": b"x"}
         gtk = "linux/AIVERSE-0.3.0-dddddddd-linux.zip"
         pkgs[gtk] = {"AIVERSE/bin/AiverseStudio": fake_elf(183), "AIVERSE/bin/aiverse_editor": b"x"}
@@ -79,6 +79,7 @@ def test_index():
         assert by[studio]["editor"] == "AIVERSE/bin/AiverseStudioHTML5.app"
         assert by[gtk]["editor"] == "AIVERSE/bin/AiverseStudio"
         assert by[win_studio]["editor"] == "AIVERSE/bin/AiverseStudio.exe"
+        assert [by[key]["arch"] for key in (studio, gtk, win_studio)] == ["arm64", "arm64", "x86_64"]
         w = by[order[0]]
         assert (w["platform"], w["arch"], w["version"], w["commit"]) == ("windows", "x86_64", "0.2.0", "aaaaaaaa"), w
         assert w["rtsmcp"] == "AIVERSE/bin/aiversemcp.exe" and w["editor"] == "AIVERSE/bin/aiverse_editor.exe", w
