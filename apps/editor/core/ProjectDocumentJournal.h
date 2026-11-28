@@ -86,6 +86,16 @@ inline void write(const fs::path& p,const std::string& bytes){
     out.close();if(!out)throw std::runtime_error("Cannot close staged project document: "+p.string());
     sync(p);
 }
+// Windows keeps only the read-only attribute: a file published with 0600
+// reads back as 0666. Compare what the platform can actually store.
+inline bool samePermissions(std::filesystem::perms actual,std::filesystem::perms expected){
+    using std::filesystem::perms;
+#if defined(_WIN32)
+    return ((actual&perms::owner_write)!=perms::none)==((expected&perms::owner_write)!=perms::none);
+#else
+    return (actual&perms::mask)==(expected&perms::mask);
+#endif
+}
 inline std::string digest(const std::string& bytes){
     const auto hash=pack::sha256(bytes.data(),bytes.size());
     return pack::toHex(hash.data(),hash.size());
@@ -321,7 +331,7 @@ private:
     void validateTarget(const Step& s)const{
         const auto path=project_file_detail::safeTarget(root_,s.path.lexically_relative(root_).generic_string(),s.createOnly);
         if(path!=s.path||(project_file_detail::journalExists(path)&&
-           (std::filesystem::status(path).permissions()&std::filesystem::perms::mask)!=s.permissions))
+           !project_file_detail::samePermissions(std::filesystem::status(path).permissions(),s.permissions)))
             throw std::runtime_error("Project document path or permissions changed: "+s.path.string());
     }
     bool matchesBefore(const Step& s)const{
