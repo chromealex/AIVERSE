@@ -49,12 +49,16 @@ Issue #206 (Windows `studio_session`, 0xc0000409), runs of `.github/workflows/im
   including the new `planar_minimap_shared_bounds_and_scene_guards`.
 - Linux `studio_session` (local-only CMake registration, not committed): passed.
 - Compile of every changed `.cpp` in the release diff (84 objects, Linux): 0 errors.
-- NOT RUN: merged-tree Mac quick gate (`./run-tests.sh --quick --build-dir /Volumes/KINGSTON/AIVERSE-builds/release-3.1.0/all-tests`),
-  full Linux CTest, Windows Studio, Android/web devices.
+- **Merged-tree Mac quick gate PASS** on 8e99f59b1 (worktree `/Volumes/KINGSTON/aiverse-worktrees/release-3.1.0`, fresh web
+  build): `./run-tests.sh --quick --build-dir /Volumes/KINGSTON/AIVERSE-builds/release-3.1.0/all-tests` — configure, build and
+  CTest passed, 100% of 597 tests (`aiverse_tests` 987 s), same 5 GPU-fixture skips as before (material_technique_frame,
+  model_triplanar_frame, prisma_compositor_metal, quake3_bsp_frame, lens_metal_frame); total test time 1128.96 s; report
+  `all-tests/test-reports/20261128-132344-50720`. Only this handoff changed after the tested commit.
+- NOT RUN: Android and browsers on devices.
 
 ## Next (MAIN integrator)
 
-1. Mac quick gate on `release/3.1.0` head; on pass, fast-forward `main` to it.
+1. Mac quick gate passed (2026-11-28); fast-forward `main` to this branch.
 2. Close PRs #226 #229 #231 #232 #233 #234 (and #230 if merged) with the integration commit; close issue #206 if the
    Windows run passes.
 3. Tag `v3.1.0`, GitHub release, add the entry below to the top of `docs/devlog/releases.json` with the tag commit
