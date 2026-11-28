@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools/site'))
-from web_demos import copy_web_demos, versioned_index
+from web_demos import copy_web_demos, unversioned_index, versioned_index
 
 
 class WebDemoPublication(unittest.TestCase):
@@ -55,6 +55,7 @@ class WebDemoPublication(unittest.TestCase):
         self.assertIn(f'var Module={{locateFile:function(p){{return p+"?v={version}"}},arguments:[]', text)
         self.assertIn('Module.setStatus("Error: "+(m||', text)
         self.assertEqual(versioned_index(page, files), versioned_index(page, files))
+        self.assertEqual(unversioned_index(versioned_index(page, files)), page)
 
 
 if __name__ == '__main__':
