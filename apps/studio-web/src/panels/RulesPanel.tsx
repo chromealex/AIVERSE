@@ -23,6 +23,7 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged, ope
   try{JSON.parse(raw);return '';}catch(e){return String(e);}
  },[raw]);
   const typeDraftDirty = section === 'types' && raw !== null && raw !== JSON.stringify(rules?.types[typeId], null, 2);
+  const navigationLocked = busy || (section === 'types' ? typeDraftDirty : raw !== null);
   const draftProject=useRef<string|null>(null);
   useEffect(()=>{
     draftProject.current=raw!==null&&(section==='global'||section==='document') ? projectPath : null;
@@ -45,12 +46,12 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged, ope
   }, [rules, query]);
   // Inspector → "Edit type in Rules" selects that type.
   useEffect(() => {
-    const pick = (e: Event) => { const id = String((e as CustomEvent<unknown>).detail ?? ''); if (id && !typeDraftDirty && !busy) { setSection('types');setForestOpen(false);setTypeId(id); setQuery(''); setRaw(null); } };
-    const forest=()=>{if (!typeDraftDirty && !busy) setForestOpen(true);};
+    const pick = (e: Event) => { const id = String((e as CustomEvent<unknown>).detail ?? ''); if (id && !navigationLocked) { setSection('types');setForestOpen(false);setTypeId(id); setQuery(''); setRaw(null); } };
+    const forest=()=>{if (!navigationLocked) setForestOpen(true);};
     window.addEventListener('studio:rules-type', pick);
     window.addEventListener('studio:rules-forest',forest);
     return () => {window.removeEventListener('studio:rules-type', pick);window.removeEventListener('studio:rules-forest',forest);};
-  }, [typeDraftDirty,busy]);
+  }, [navigationLocked]);
   const values = useMemo(() => rules && typeId ? typeValues(typeId, rules.types[typeId], rules.resolved[typeId], rules.resources, rules.bodies?.[typeId]) : [], [rules, typeId]);
   const write = async (path: string, value: unknown) => {
     setBusy(true); setError('');
@@ -75,7 +76,7 @@ export default function RulesPanel({ projectPath, historyVersion, onChanged, ope
         <StudioButton onClick={openActorSettings}>Open Actors &amp; Cameras</StudioButton>
       </div>}
       <label className="rules__section">Rule section
-        <select value={section} disabled={busy||typeDraftDirty||(section!=='types'&&raw!==null)} onChange={event=>{
+        <select value={section} disabled={navigationLocked} onChange={event=>{
           setForestOpen(false);setSection(event.target.value as typeof section); setRaw(null);setError('');
         }}>
           <option value="types">Unit types</option><option value="triggers">Triggers</option>
