@@ -2,6 +2,7 @@
 #include "apps/editor/PhysisDiagnosticDemo.h"
 #include "apps/editor/core/PhysisDiagnosticFrame.h"
 #include <cstdio>
+#include <set>
 #include "apps/editor/core/Workspace.h"
 using namespace aiverse;
 using namespace aiverse::editor;
@@ -40,8 +41,16 @@ void mcpAuthoring() {
     CHECK(w.map.loadJson(Json::parse(R"({"name":"FPS","colliders":[],"spawns":[]})"),nullptr));
     p.set("config",valid);p.set("expectedRevision",Json::number(int64_t(w.map.revision)));
     CHECK(w.call("physis_set",p).getBool("ok")); CHECK(w.map.toJson()["physis"]==valid);
-    int count=0;for(const auto& op:w.ops())if(op.name.rfind("physis_",0)==0)++count;
-    CHECK(count==6);
+    const std::set<std::string> expectedAuthoring{
+        "physis_demo", "physis_get", "physis_set", "physis_validate", "physis_zone", "physis_zone_group"
+    };
+    std::set<std::string> authoring, linked;
+    for (const auto& op : w.ops()) {
+        if (op.name.rfind("physis_", 0) == 0)
+            (op.studioLinkOnly ? linked : authoring).insert(op.name);
+    }
+    CHECK(authoring == expectedAuthoring);
+    CHECK(linked == std::set<std::string>{"physis_nature_preview"});
     const auto liveWorld=makePhysisDiagnosticDemo();
     const auto liveParams=Json::parse(R"({"cellX":3,"cellZ":2,"layer":8,"action":"step60"})");
     const auto captured=readPhysisGameFrame(liveWorld.get(),liveParams);
